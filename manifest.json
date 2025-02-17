@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "SoundCloud Track Downloader",
+  "version": "2025.2.17",
+  "permissions": [
+    "cookies",
+    "tabs",
+    "storage",
+    "scripting",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "https://soundcloud.com/*",
+    "https://api.soundcloud.com/*",
+    "https://api-v2.soundcloud.com/*",
+    "https://*.sndcdn.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon48.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://soundcloud.com/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
