@@ -5,7 +5,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (response) {
           title.textContent = response.title;
           artist.textContent = response.artist;
-          duration.textContent = `- ${response.duration} -`;
+          artistUrl.href = response.artistUrl;
+          artistArtwork.src = response.artistImageUrl;
+          duration.textContent = `${response.duration}`;
           artwork.style.backgroundImage = `url(${response.artwork_url})` || "placeholder.png";
 
           downloadBtn.addEventListener("click", async () => {
@@ -31,8 +33,10 @@ document.addEventListener("DOMContentLoaded", () => {
           });
         } else {
           title.textContent = "Error loading track data.";
-          artist.textContent = "";
+          artist.textContent = "You should be on the track main page!";
           duration.textContent = "";
+          downloadBtn.style.display = "none";
+          desiredPage.style.display = "flex";
         }
       }
     );

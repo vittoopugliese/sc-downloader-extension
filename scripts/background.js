@@ -1,7 +1,3 @@
-chrome.runtime.onInstalled.addListener(() => {
-  console.log("SoundCloud Scraper extension running!");
-});
-
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "GET_MP3_URL") {
     getFinalMp3Url(request.streamUrl)

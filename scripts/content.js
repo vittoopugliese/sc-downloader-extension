@@ -1,5 +1,4 @@
 let currentTrackData = null;
-let lastProcessedUrl = null;
 
 function isSoundCloudTrackPage() {
   return (
@@ -11,30 +10,26 @@ function isSoundCloudTrackPage() {
   );
 };
 
-function handleUrlChange() {
-  const currentUrl = window.location.href;
-
-  if (currentUrl !== lastProcessedUrl && isSoundCloudTrackPage()) {
-    lastProcessedUrl = currentUrl;
-    setTimeout(extractTrackData, 1500);
-  };
-}
-
 async function extractTrackData() {
   try {
     const html = document.documentElement.innerHTML;
 
     const hydrationMatch = html.match(/window\.__sc_hydration\s*=\s*(\[.*?\]);/);
-    if (!hydrationMatch) throw new Error("Hydration data not found");
+    if (!hydrationMatch) {
+      console.error("Hydration data not found... Retrying in 2 seconds.");
+      setTimeout(initScript, 2000);
+    }
 
     const hydrationData = JSON.parse(hydrationMatch[1]);
     const trackData = hydrationData.find((item) => item.hydratable === "sound");
-
+    
     if (!trackData || !trackData.data) throw new Error("Track data not found");
 
     currentTrackData = {
       title: trackData.data.title,
       artist: trackData.data.user.username,
+      artistUrl: trackData.data.user.permalink_url,
+      artistImageUrl: trackData.data.user.avatar_url,
       duration: formatDuration(trackData.data.duration),
       artwork_url: trackData.data.artwork_url?.replace("-large", "-t500x500"),
       description: trackData.data.description || "No Description.",
@@ -58,34 +53,19 @@ function extractStreamUrl(data) {
     const progressive = data.media.transcodings.find((t) => t.format.protocol === "progressive");
     return progressive?.url || null;
   };
+
   return null;
 };
 
-// Formatea la duración del track
 function formatDuration(ms) {
+  ms = ms - 1000;
   const minutes = Math.floor(ms / 60000);
-  const seconds = ((ms % 60000) / 1000).toFixed(0);
+  const seconds = (((ms % 60000) / 1000)).toFixed(0);
   return `${minutes}:${seconds.padStart(2, "0")}`;
 };
 
-// Configura el observador del DOM
-function setupDOMObserver() {
-  const observer = new MutationObserver((mutations) => {
-    if (window.location.href !== lastProcessedUrl && isSoundCloudTrackPage()) {
-      handleUrlChange();
-    }
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
-};
-
-// Maneja mensajes del popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "GET_TRACK_DATA") {
-
     if (currentTrackData && !request.forceRefresh) {
       sendResponse(currentTrackData);
     } else if (isSoundCloudTrackPage()) {
@@ -99,13 +79,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
 });
 
-// Inicialización
-(function init() {
-  setupUrlChangeListeners();
-  setupDOMObserver();
+function initScript() {
+  if (isSoundCloudTrackPage()) setTimeout(extractTrackData, 1254);
+};
 
-  if (isSoundCloudTrackPage()) {
-    lastProcessedUrl = window.location.href;
-    setTimeout(extractTrackData, 1500);
-  };
-})();
+initScript();
