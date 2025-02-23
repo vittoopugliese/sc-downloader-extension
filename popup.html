@@ -12,6 +12,7 @@
             color: white;
             position: relative;
             overflow: hidden;
+            user-select: none;
         }
 
         *::selection {
@@ -29,9 +30,7 @@
             justify-content: space-between;
         }
 
-        .track-info {
-            text-align: center;
-        }
+        .track-info { text-align: center; }
 
         .track-details {
             display: flex;
@@ -57,6 +56,8 @@
             font-size: 28px;
             margin-bottom: 8px;
         }
+
+        #artistArtwork{ border-radius: 50%; }
 
         #artistUrl {
             display: flex;
@@ -97,47 +98,39 @@
             border-radius: 100%;
             cursor: pointer;
             font-size: 18px;
-            transition: background-color 0.2s;
+            transition: all 254ms;
+            scale: 1.0;
         }
 
         #downloadBtn:hover {
             background-color: #ffffff;
+            scale: 1.1;
         }
 
-        a:link {
-            text-decoration: none;
-        }
-
-        a:visited {
-            text-decoration: none;
-        }
-
-        a:hover {
-            text-decoration: none;
-        }
-
-        a:active {
-            text-decoration: none;
-        }
+        a:link { text-decoration: none; }
+        a:visited { text-decoration: none; }
+        a:hover { text-decoration: none; }
+        a:active { text-decoration: none; }
     </style>
 </head>
 
 <body>
     <div id="artwork"></div>
     <div class="container">
+        <!-- <button id="reloadButton">Reload</button> -->
         <div class="track-info">
             <div class="track-details">
                 <h2 id="title"></h2>
-                <img id="desiredPage" src="./assets/desired_page.png" width="400px" style="display: none;margin-bottom: 12px;"></img>
+                <img id="desiredPage" src="./assets/desired_page.png" width="400px" style="display: none;margin-bottom: 12px;" draggable="false"></img>
                 <a id="artistUrl" target="_blank">
-                    <img id="artistArtwork" src="./assets/icon48.png" alt="artist_image" width="32px" height="32px" style="border-radius: 50%;">
+                    <img id="artistArtwork" src="./assets/icon48.png" alt="artist_image" width="32px" height="32px" draggable="false">
                     <h3 id="artist"></h3>
                 </a>
-                <p id="duration" style="text-decoration: none;"></p>
+                <p id="duration"></p>
             </div>
         </div>
         <div class="download-button-container">
-            <img id="downloadBtn" src="./assets/download.svg" alt="download_icon" width="30px" height="30px">
+            <img id="downloadBtn" src="./assets/download.svg" alt="download_icon" width="30px" height="30px" draggable="false">
         </div>
     </div>
     <script src="./scripts/popup.js"></script>
