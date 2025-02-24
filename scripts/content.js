@@ -15,13 +15,14 @@ function isSoundCloudTrackPage() {
 };
 
 async function extractTrackData() {
-  currentTrackData = null;
-
   try {
     let html = document.documentElement.innerHTML;
     // reconstructing the html variable because its not updating when the page url changes
-    html = await fetch(window.location.href).then((res) => res.text());
+    if (currentTrackData) html = await fetch(window.location.href).then((res) => res.text());
     // aparently fetching the page again is the only way to get the updated html lol 
+    // the condition above is to avoid fetching the page when the script is first loaded
+    // because the html variable is already up to date and the fetch is unnecessary, 
+    // the first extension track load is faster this way, might review this later to make it more efficient
 
     const hydrationMatch = html.match(/window\.__sc_hydration\s*=\s*(\[.*?\]);/);
     if (!hydrationMatch) {
