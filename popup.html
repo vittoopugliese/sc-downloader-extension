@@ -8,7 +8,6 @@
             margin: 0;
             padding: 0;
             width: 426px;
-            height: 312px;
             color: white;
             position: relative;
             overflow: hidden;
@@ -53,8 +52,8 @@
 
         #title {
             margin: 0;
-            font-size: 28px;
-            margin-bottom: 8px;
+            font-size: 26px;
+            margin-bottom: 6px;
         }
 
         #artistArtwork{ border-radius: 50%; }
@@ -71,7 +70,7 @@
 
         #artist {
             margin: 0;
-            font-size: 22px;
+            font-size: 20px;
             color: #cccccc;
             cursor: pointer;
             font-weight: bold;
@@ -81,7 +80,7 @@
         #duration {
             margin: 0;
             font-size: 18px;
-            color: #afafaf;
+            color: #c4c4c4;
         }
 
         .download-button-container {
@@ -92,19 +91,26 @@
         }
 
         #downloadBtn {
-            padding: 6px;
+            padding: 4px;
             background-color: #ffffffc7;
             border: none;
             border-radius: 100%;
             cursor: pointer;
-            font-size: 18px;
+            font-size: 14px;
             transition: all 254ms;
             scale: 1.0;
         }
 
         #downloadBtn:hover {
             background-color: #ffffff;
-            scale: 1.1;
+            scale: 1.054;
+        }
+
+        #waveformCanvas {
+            background: transparent;
+            width: 380px;
+            height: 80px;
+            display: block;
         }
 
         a:link { text-decoration: none; }
@@ -128,8 +134,11 @@
                 <p id="duration"></p>
             </div>
         </div>
+
+        <canvas id="waveformCanvas" width="380" height="80" style="display: none;"></canvas>
+
         <div class="download-button-container">
-            <img id="downloadBtn" src="./assets/download.svg" alt="download_icon" width="30px" height="30px" draggable="false">
+            <img id="downloadBtn" src="./assets/download.svg" alt="download_icon" width="26px" height="26px" draggable="false">
         </div>
     </div>
     <script src="./scripts/popup.js"></script>

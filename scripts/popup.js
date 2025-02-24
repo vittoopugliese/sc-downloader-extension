@@ -10,7 +10,9 @@ document.addEventListener("DOMContentLoaded", () => {
           duration.textContent = `${response.duration}`;
           artwork.style.backgroundImage = `url(${response.artwork_url})` || "placeholder.png";
 
-          if(!response.artwork_url) artwork.style.backgroundColor = "black";
+          if (!response.artwork_url) artwork.style.backgroundColor = "black";
+
+          if (response.waveform_url) await drawWaveform(response.waveform_url);
 
           downloadBtn.addEventListener("click", async () => {
             if (response.streamUrl) {
@@ -69,5 +71,39 @@ async function forceDownload(url, response) {
     URL.revokeObjectURL(blobUrl);
   } catch (error) {
     console.error("Error downloading file:", error);
+  };
+};
+
+
+async function drawWaveform(waveformUrl) {
+  const ctx = waveformCanvas.getContext('2d');
+
+  try {
+    const response = await fetch(waveformUrl);
+    const waveformData = await response.json();
+    
+    ctx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+    ctx.fillStyle = 'rgba(240, 240, 240, 0.5)';
+    
+    const samples = waveformData.samples || [];
+    const maxSample = Math.max(...samples.map(Math.abs));
+    
+    const canvasHeight = waveformCanvas.height;
+    const canvasWidth = waveformCanvas.width;
+    const barWidth = canvasWidth / samples.length;
+    
+    samples.forEach((sample, index) => {
+      const normalizedSample = sample / maxSample;
+      const barHeight = Math.abs(normalizedSample) * (canvasHeight / 2);
+      const x = index * barWidth;
+      const y = (canvasHeight / 2) - (barHeight / 2);
+      ctx.fillRect(x, y, barWidth - 1, barHeight);
+    });
+
+    // at the final step, show the waveform ... 
+    waveformCanvas.style.display = "flex";
+  } catch (error) {
+    console.error('Error drawing Waveform:', error);
+    waveformCanvas.style.display = "none";
   };
 };
