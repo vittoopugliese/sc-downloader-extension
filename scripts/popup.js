@@ -10,6 +10,8 @@ document.addEventListener("DOMContentLoaded", () => {
           duration.textContent = `${response.duration}`;
           artwork.style.backgroundImage = `url(${response.artwork_url})` || "placeholder.png";
 
+          if(!response.artwork_url) artwork.style.backgroundColor = "black";
+
           downloadBtn.addEventListener("click", async () => {
             if (response.streamUrl) {
               try {
