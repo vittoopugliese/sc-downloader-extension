@@ -2,6 +2,8 @@
 
 > A sleek browser extension for downloading your favorite SoundCloud tracks with just one click!
 
+![ImagePreview](./assets/readme_preview.png)
+
 ## ✨ Features
 
 - **Simple Track Data Display**
