@@ -25,14 +25,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (result.success && result.url) {
                   await forceDownload(result.url, response);
                 } else {
-                  alert("Error: " + (result.error || "Cannot obtain final file URL."));
+                  console.error("Error: " + (result.error || "Cannot obtain final file URL."));
+                  alert("Error code #11");
                 };
 
               } catch (error) {
-                alert("Error communicating with Background Script. " + error.message);
+                console.error("Error communicating with Background Script. " + error.message);
+                alert("Error code #22");
               };
             } else {
-              alert("Cannot obtain stream URL.");
+              console.error("Cannot obtain stream URL.");
+              alert("Error code #33");
             };
           });
         } else {

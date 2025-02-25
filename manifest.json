@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SoundCloud Track Downloader",
-  "version": "2025.2.24",
+  "version": "2025.2.25",
   "permissions": [ "cookies", "tabs", "storage", "scripting", "webRequest" ],
   "host_permissions": [
     "https://soundcloud.com/*",

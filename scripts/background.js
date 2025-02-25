@@ -36,19 +36,55 @@ function buildRequestData(oauthToken) {
   };
 };
 
+// STOPPED WORKING ...
+
+// async function getFinalMp3Url(streamUrl) {
+//   try {
+//     const oauthToken = await getOAuthToken();
+//     const authenticatedUrl = `${streamUrl}?oauth_token=${oauthToken}`;
+//     const response = await fetch(authenticatedUrl, buildRequestData(oauthToken));
+
+//     if (response.url) {
+//       const trackResponse = await fetch(response.url, buildRequestData(oauthToken));
+//       const trackDownloadResponse = await trackResponse.json();
+//       return trackDownloadResponse.url || null;
+//     };
+
+//     return null;
+//   } catch (error) {
+//     console.error("Error getting MP3 URL:", error);
+//     throw error;
+//   };
+// };
+
 async function getFinalMp3Url(streamUrl) {
   try {
     const oauthToken = await getOAuthToken();
-    const authenticatedUrl = `${streamUrl}?oauth_token=${oauthToken}`;
-    const response = await fetch(authenticatedUrl, buildRequestData(oauthToken));
 
-    if (response.url) {
-      const trackResponse = await fetch(response.url, buildRequestData(oauthToken));
-      const trackDownloadResponse = await trackResponse.json();
-      return trackDownloadResponse.url || null;
+    const requestOptions = {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Origin": "https://soundcloud.com",
+        "Referer": "https://soundcloud.com/",
+        "Authorization": `OAuth ${oauthToken}`,
+        "User-Agent": navigator.userAgent,
+        "sec-fetch-site": "same-site",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty"
+      }
     };
-
-    return null;
+    
+    const response = await fetch(streamUrl, requestOptions);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const streamData = await response.json();
+    return streamData.url || null;
   } catch (error) {
     console.error("Error getting MP3 URL:", error);
     throw error;
