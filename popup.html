@@ -3,11 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <style>
+        html {
+            margin: 0;
+            padding: 0;
+            background: #000000;
+        }
+
         body {
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
             width: 426px;
+            min-height: 254px;
             color: white;
             position: relative;
             overflow: hidden;
@@ -20,9 +27,11 @@
         }
 
         .container {
-            background: rgba(0, 0, 0, 0.4);
+            background: rgba(0, 0, 0, 0.54);
+            min-height: 254px;
             height: 100%;
-            padding: 20px;
+            padding: 12px;
+            padding-top: 16px;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
@@ -36,24 +45,156 @@
             justify-content: center;
             align-items: center;
             flex-direction: column;
+            gap: 4px;
         }
 
         #artwork {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            position: fixed;
+            top: -5px;
+            left: -5px;
+            right: -5px;
+            bottom: -5px;
             background-size: cover;
             background-position: center;
-            filter: brightness(0.754);
+            filter: brightness(0.754) blur(5px);
             z-index: -1;
+        }
+
+        #loadingOverlay {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            background: #000000;
+        }
+
+        #loadingOverlay.is-hidden {
+            display: none;
+        }
+
+        .spinner-ring {
+            position: relative;
+            width: 88px;
+            height: 88px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .spinner-ring::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.12);
+            border-top-color: #ff5500;
+            animation: spin 0.9s linear infinite;
+        }
+
+        .spinner-logo {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            position: relative;
+            z-index: 1;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #loadingText {
+            margin: 0;
+            font-size: 14px;
+            color: #cccccc;
+            text-align: center;
+            max-width: 280px;
+        }
+
+        #retryBtn {
+            display: none;
+            padding: 8px 18px;
+            border: none;
+            border-radius: 20px;
+            background: #ff5500;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 200ms, transform 200ms;
+        }
+
+        #retryBtn:hover {
+            background: #ff7733;
+            transform: scale(1.04);
+        }
+
+        #retryBtn.is-visible {
+            display: inline-block;
+        }
+
+        #errorOverlay {
+            position: absolute;
+            inset: 0;
+            z-index: 9;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            padding: 24px;
+            box-sizing: border-box;
+            text-align: center;
+            background: radial-gradient(circle at 50% 35%, #242424 0%, #000000 70%);
+        }
+
+        #errorOverlay.is-visible {
+            display: flex;
+        }
+
+        .error-logo {
+            width: 76px;
+            height: 76px;
+            border-radius: 20%;
+            opacity: 0.92;
+            animation: floaty 3s ease-in-out infinite;
+        }
+
+        @keyframes floaty {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+
+        #errorTitle {
+            margin: 0;
+            font-size: 22px;
+            font-weight: bold;
+            color: #ffffff;
+        }
+
+        #errorMessage {
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #b8b8b8;
+            max-width: 300px;
+        }
+
+        #errorHint {
+            margin: 0;
+            font-size: 12px;
+            color: #ff7733;
+            max-width: 300px;
         }
 
         #title {
             margin: 0;
-            font-size: 26px;
-            margin-bottom: 6px;
+            line-height: 30px;
+            font-size: 24px;
         }
 
         #artistArtwork{ border-radius: 50%; }
@@ -64,51 +205,139 @@
             align-items: center;
             flex-direction: row;
             gap: 10px;
-            margin: 6px 0;
-            padding: 8px;
+            padding: 12px 0px;
         }
 
         #artist {
             margin: 0;
-            font-size: 20px;
+            font-size: 16px;
             color: #cccccc;
             cursor: pointer;
             font-weight: bold;
             text-decoration: none;
         }
 
-        #duration {
-            margin: 0;
-            font-size: 18px;
-            color: #c4c4c4;
-        }
-
         .download-button-container {
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-direction: column;
+            gap: 8px;
             width: 100%;
         }
 
         #downloadBtn {
-            padding: 4px;
+            width: 37px;
+            height: 37px;
+            padding: 0;
             background-color: #ffffffc7;
             border: none;
-            border-radius: 100%;
+            border-radius: 50%;
             cursor: pointer;
-            font-size: 14px;
-            transition: all 254ms;
-            scale: 1.0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 254ms, transform 254ms;
         }
 
         #downloadBtn:hover {
             background-color: #ffffff;
-            scale: 1.054;
+            transform: scale(1.054);
+        }
+
+        #downloadBtn.is-disabled {
+            cursor: default;
+            pointer-events: none;
+        }
+
+        #downloadBtn.is-hidden {
+            display: none;
+        }
+
+        .dl-icon {
+            width: 26px;
+            height: 26px;
+            display: block;
+        }
+
+        .dl-spinner {
+            display: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 3px solid rgba(0, 0, 0, 0.15);
+            border-top-color: #ff5500;
+            animation: spin 0.8s linear infinite;
+        }
+
+        #downloadBtn.is-loading .dl-icon {
+            display: none;
+        }
+
+        #downloadBtn.is-loading .dl-spinner {
+            display: block;
+        }
+
+        .track-meta {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 7px;
+            color: #c4c4c4;
+            font-size: 14px;
+        }
+
+        .meta-sep {
+            color: #7e7e7e;
+            font-size: 20px;
+        }
+
+        #downloadLimit {
+            margin: 0;
+            padding: 4px 10px;
+            min-width: 0;
+            max-width: 54px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.12);
+            color: #e8e8e8;
+            font-size: 13px;
+            font-family: Arial, sans-serif;
+            cursor: pointer;
+            outline: none;
+            transition: background-color 200ms, border-color 200ms;
+        }
+
+        #downloadLimit:hover {
+            background: rgba(255, 255, 255, 0.18);
+            border-color: rgba(255, 255, 255, 0.28);
+        }
+
+        #downloadLimit:focus {
+            border-color: rgba(255, 85, 0, 0.65);
+        }
+
+        #downloadLimit.is-hidden {
+            display: none;
+        }
+
+        #downloadLimit option {
+            background: #1a1a1a;
+            color: #ffffff;
+        }
+
+        #downloadStatus {
+            margin: 0;
+            min-height: 16px;
+            font-size: 13px;
+            color: #c4c4c4;
+            text-align: center;
         }
 
         #waveformCanvas {
             background: transparent;
-            width: 380px;
+            width: 100%;
             height: 80px;
             display: block;
         }
@@ -121,26 +350,53 @@
 </head>
 
 <body>
+    <div id="loadingOverlay">
+        <div class="spinner-ring">
+            <img src="./assets/icon128.png" class="spinner-logo" alt="Loading" draggable="false">
+        </div>
+        <p id="loadingText">Loading track...</p>
+        <button id="retryBtn" type="button">Retry</button>
+    </div>
+
+    <div id="errorOverlay">
+        <img src="./assets/icon128.png" class="error-logo" alt="SoundCloud Downloader" draggable="false">
+        <h2 id="errorTitle">No track selected</h2>
+        <p id="errorMessage">Open a SoundCloud track page to download it.</p>
+        <p id="errorHint"></p>
+    </div>
+
     <div id="artwork"></div>
     <div class="container">
         <div class="track-info">
             <div class="track-details">
                 <h2 id="title"></h2>
-                <img id="desiredPage" src="./assets/desired_page.png" width="400px" style="display: none;margin-bottom: 12px;" draggable="false"></img>
                 <a id="artistUrl" target="_blank">
-                    <img id="artistArtwork" src="./assets/icon48.png" alt="artist_image" width="32px" height="32px" draggable="false">
+                    <img id="artistArtwork" src="./assets/icon48.png" alt="artist_image" width="30px" height="30px" draggable="false">
                     <h3 id="artist"></h3>
                 </a>
-                <p id="duration"></p>
+                <p class="track-meta">
+                    <span id="duration"></span>
+                    <span id="metaSep" class="meta-sep">&middot;</span>
+                    <span id="streamFormat"></span>
+                    <select id="downloadLimit" class="is-hidden" aria-label="Download amount">
+                        <option value="50">50</option>
+                    </select>
+                </p>
             </div>
         </div>
 
         <canvas id="waveformCanvas" width="380" height="80" style="display: none;"></canvas>
 
         <div class="download-button-container">
-            <img id="downloadBtn" src="./assets/download.svg" alt="download_icon" width="26px" height="26px" draggable="false">
+            <button id="downloadBtn" type="button" aria-label="Download" class="is-hidden">
+                <img class="dl-icon" src="./assets/download.svg" alt="" width="22" height="22" draggable="false">
+                <span class="dl-spinner" aria-hidden="true"></span>
+            </button>
+            <p id="downloadStatus">Ready to download</p>
         </div>
     </div>
+    <script src="./scripts/download-core.js"></script>
+    <script src="./scripts/vendor/jszip.min.js"></script>
     <script src="./scripts/popup.js"></script>
 </body>
 

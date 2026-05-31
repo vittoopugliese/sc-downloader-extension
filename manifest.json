@@ -1,32 +1,44 @@
 {
   "manifest_version": 3,
   "name": "SoundCloud Track Downloader",
-  "version": "2025.02.27",
+  "version": "2026.06.01",
   "permissions": ["cookies", "tabs"],
   "host_permissions": [
     "https://soundcloud.com/*",
     "https://api.soundcloud.com/*",
     "https://api-v2.soundcloud.com/*",
-    "https://*.sndcdn.com/*"
+    "https://*.sndcdn.com/*",
+    "https://*.media-streaming.soundcloud.cloud/*",
+    "https://playback.media-streaming.soundcloud.cloud/*"
   ],
   "background": {
-    "service_worker": "./scripts/background.js"
+    "service_worker": "scripts/background.js"
   },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "48": "./assets/icon48.png",
-      "128": "./assets/icon128.png"
+      "48": "assets/icon48.png",
+      "128": "assets/icon128.png"
     }
   },
   "icons": {
-    "48": "./assets/icon48.png",
-    "128": "./assets/icon128.png"
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
   },
   "content_scripts": [
     {
       "matches": ["https://soundcloud.com/*"],
-      "js": ["./scripts/content.js"]
+      "js": [
+        "scripts/download-core.js",
+        "scripts/content.js",
+        "scripts/inline-button.js"
+      ]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/icon48.png"],
+      "matches": ["https://soundcloud.com/*"]
     }
   ]
 }
