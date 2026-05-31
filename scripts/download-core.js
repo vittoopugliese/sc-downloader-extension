@@ -76,8 +76,8 @@ const SCDownload = (() => {
     return { initSegmentUrl, segmentUrls };
   }
 
-  async function fetchTextOrThrow(url, label) {
-    const response = await fetch(url);
+  async function fetchTextOrThrow(url, label, signal) {
+    const response = await fetch(url, { signal });
 
     if (!response.ok) {
       throw new Error(`${label} failed with status ${response.status}`);
@@ -86,8 +86,8 @@ const SCDownload = (() => {
     return response.text();
   }
 
-  async function fetchBufferOrThrow(url, label) {
-    const response = await fetch(url);
+  async function fetchBufferOrThrow(url, label, signal) {
+    const response = await fetch(url, { signal });
 
     if (!response.ok) {
       throw new Error(`${label} failed with status ${response.status}`);
@@ -96,8 +96,8 @@ const SCDownload = (() => {
     return response.arrayBuffer();
   }
 
-  async function resolveMediaPlaylist(url) {
-    const playlistText = await fetchTextOrThrow(url, "Playlist request");
+  async function resolveMediaPlaylist(url, signal) {
+    const playlistText = await fetchTextOrThrow(url, "Playlist request", signal);
 
     if (playlistText.includes("#EXT-X-STREAM-INF")) {
       const { segmentUrls } = parseHlsPlaylist(url, playlistText);
@@ -106,25 +106,30 @@ const SCDownload = (() => {
         throw new Error("HLS master playlist did not contain a media playlist.");
       }
 
-      return resolveMediaPlaylist(segmentUrls[0]);
+      return resolveMediaPlaylist(segmentUrls[0], signal);
     }
 
     return { baseUrl: url, playlistText };
   }
 
-  async function fetchSegmentsWithConcurrency(urls, concurrency, onProgress) {
+  async function fetchSegmentsWithConcurrency(urls, concurrency, onProgress, signal) {
     const results = new Array(urls.length);
     let nextIndex = 0;
     let completed = 0;
 
     async function worker() {
       while (nextIndex < urls.length) {
+        if (signal?.aborted) {
+          throw new DOMException("Download aborted.", "AbortError");
+        }
+
         const currentIndex = nextIndex;
         nextIndex += 1;
 
         const buffer = await fetchBufferOrThrow(
           urls[currentIndex],
-          `Segment ${currentIndex + 1}`
+          `Segment ${currentIndex + 1}`,
+          signal
         );
         results[currentIndex] = new Uint8Array(buffer);
         completed += 1;
@@ -151,13 +156,13 @@ const SCDownload = (() => {
     return combined;
   }
 
-  async function buildTrackBlob(streamUrl, trackData, onProgress) {
+  async function buildTrackBlob(streamUrl, trackData, onProgress, signal) {
     const extension = getFileExtension(trackData);
     const fileName = sanitizeFilename(trackData, extension);
 
     if (trackData.streamProtocol === "hls" || streamUrl.includes(".m3u8")) {
       onProgress?.("Loading playlist...");
-      const { baseUrl, playlistText } = await resolveMediaPlaylist(streamUrl);
+      const { baseUrl, playlistText } = await resolveMediaPlaylist(streamUrl, signal);
       const { initSegmentUrl, segmentUrls } = parseHlsPlaylist(
         baseUrl,
         playlistText
@@ -178,7 +183,8 @@ const SCDownload = (() => {
         4,
         (done, total) => {
           onProgress?.(`Downloading ${done}/${total} parts...`);
-        }
+        },
+        signal
       );
 
       onProgress?.("Preparing file...");
@@ -188,7 +194,7 @@ const SCDownload = (() => {
     }
 
     onProgress?.("Downloading file...");
-    const buffer = await fetchBufferOrThrow(streamUrl, "File download");
+    const buffer = await fetchBufferOrThrow(streamUrl, "File download", signal);
     const blob = new Blob([buffer], { type: getBlobType(trackData) });
     return { blob, fileName };
   }

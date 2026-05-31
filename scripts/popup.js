@@ -1,5 +1,6 @@
 const LOADING_TIMEOUT_MS = 10000;
 const POLL_INTERVAL_MS = 500;
+const JOB_POLL_INTERVAL_MS = 1000;
 const DEFAULT_DOWNLOAD_STATUS = "Ready to download";
 const DOWNLOAD_ERROR_STATUS = "Error, please retry";
 const DOWNLOAD_PRESETS = [10, 25, 50, 100, 150, 200, 300];
@@ -8,11 +9,13 @@ const DOWNLOAD_WARN_THRESHOLD = 200;
 let isDownloading = false;
 let activeTabId = null;
 let pollIntervalId = null;
+let jobPollIntervalId = null;
 let loadingStartTime = 0;
 let currentTrackData = null;
 let currentPlaylistData = null;
 let hasRenderedTrack = false;
 let downloadListenerAttached = false;
+let activeBulkJob = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   retryBtn.addEventListener("click", () => {
@@ -22,7 +25,42 @@ document.addEventListener("DOMContentLoaded", () => {
     startTrackFlow(true);
   });
 
+  pauseJobBtn.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ type: "PAUSE_BULK_JOB" }, (response) => {
+      if (response?.job) {
+        renderBulkJobState(response.job);
+      }
+    });
+  });
+
+  resumeJobBtn.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ type: "RESUME_BULK_JOB" }, (response) => {
+      if (response?.job) {
+        renderBulkJobState(response.job);
+      }
+    });
+  });
+
+  cancelJobBtn.addEventListener("click", () => {
+    const proceed = confirm("Cancel the background download? Files already saved will be kept.");
+    if (!proceed) {
+      return;
+    }
+
+    chrome.runtime.sendMessage({ type: "CANCEL_BULK_JOB" }, (response) => {
+      if (response?.job) {
+        renderBulkJobState(response.job);
+      }
+    });
+  });
+
   chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === "BULK_JOB_UPDATE" && message.job) {
+      activeBulkJob = message.job;
+      renderBulkJobState(message.job);
+      return;
+    }
+
     if (hasRenderedTrack) {
       return;
     }
@@ -37,12 +75,131 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+  chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     activeTabId = tabs[0]?.id ?? null;
+
+    const jobStatus = await requestJobStatus();
+    if (jobStatus?.job && ["running", "paused"].includes(jobStatus.job.status)) {
+      activeBulkJob = jobStatus.job;
+      renderBulkJobState(jobStatus.job);
+      startJobPolling();
+      return;
+    }
+
+    if (jobStatus?.job && ["completed", "cancelled", "failed"].includes(jobStatus.job.status)) {
+      activeBulkJob = jobStatus.job;
+      renderBulkJobSummary(jobStatus.job);
+    }
+
     showLoading();
     startTrackFlow(false);
   });
 });
+
+function requestJobStatus() {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: "GET_JOB_STATUS" }, (response) => {
+      resolve(response || { success: false, job: null });
+    });
+  });
+}
+
+function startJobPolling() {
+  stopJobPolling();
+  jobPollIntervalId = setInterval(async () => {
+    const status = await requestJobStatus();
+    if (!status?.job) {
+      stopJobPolling();
+      return;
+    }
+
+    activeBulkJob = status.job;
+    renderBulkJobState(status.job);
+
+    if (!["running", "paused"].includes(status.job.status)) {
+      stopJobPolling();
+    }
+  }, JOB_POLL_INTERVAL_MS);
+}
+
+function stopJobPolling() {
+  if (jobPollIntervalId) {
+    clearInterval(jobPollIntervalId);
+    jobPollIntervalId = null;
+  }
+}
+
+function renderBulkJobState(job) {
+  hasRenderedTrack = true;
+  stopPolling();
+  hideLoading();
+  hideRetryButton();
+  errorOverlay.classList.remove("is-visible");
+
+  title.textContent = job.playlistTitle || "Background download";
+  artist.textContent = job.artist || "SoundCloud Downloader";
+  artistUrl.href = job.artistUrl || "#";
+  artistArtwork.src = job.artistImageUrl || "./assets/icon48.png";
+  duration.textContent = `${job.total} tracks`;
+  streamFormat.style.display = "none";
+  hideDownloadLimitSelector();
+  metaSep.style.display = "none";
+  waveformCanvas.style.display = "none";
+
+  if (job.artworkUrl) {
+    artwork.style.backgroundImage = `url(${job.artworkUrl})`;
+    artwork.style.backgroundColor = "";
+  } else {
+    artwork.style.backgroundImage = "none";
+    artwork.style.backgroundColor = "#1a1a1a";
+  }
+
+  downloadBtn.classList.add("is-hidden");
+  jobControls.classList.add("is-visible");
+  jobHint.classList.remove("is-hidden");
+
+  pauseJobBtn.classList.toggle("is-hidden", job.status !== "running");
+  resumeJobBtn.classList.toggle("is-hidden", job.status !== "paused");
+  cancelJobBtn.classList.toggle("is-hidden", !["running", "paused"].includes(job.status));
+
+  if (job.status === "running" || job.status === "paused") {
+    isDownloading = true;
+    const statusPrefix = job.status === "paused" ? "Paused" : "Downloading";
+    downloadStatus.textContent =
+      job.currentTrackStatus ||
+      `${statusPrefix}: ${job.completed + job.failed.length}/${job.total}`;
+    failedSummary.classList.remove("is-visible");
+    failedSummary.textContent = "";
+    return;
+  }
+
+  renderBulkJobSummary(job);
+}
+
+function renderBulkJobSummary(job) {
+  isDownloading = false;
+  jobControls.classList.remove("is-visible");
+  jobHint.classList.add("is-hidden");
+  pauseJobBtn.classList.add("is-hidden");
+  resumeJobBtn.classList.add("is-hidden");
+  cancelJobBtn.classList.add("is-hidden");
+
+  if (job.status === "completed") {
+    downloadStatus.textContent = `Saved ${job.completed}/${job.total} tracks to Downloads/${job.folderName}`;
+  } else if (job.status === "cancelled") {
+    downloadStatus.textContent = `Cancelled after saving ${job.completed}/${job.total} tracks.`;
+  } else {
+    downloadStatus.textContent = job.error || DOWNLOAD_ERROR_STATUS;
+  }
+
+  if (job.failed?.length) {
+    failedSummary.textContent = `${job.failed.length} track(s) failed.`;
+    failedSummary.classList.add("is-visible");
+  } else {
+    failedSummary.classList.remove("is-visible");
+    failedSummary.textContent = "";
+  }
+}
 
 function startTrackFlow(forceRefresh) {
   stopPolling();
@@ -135,6 +292,9 @@ function showLoading() {
   hideRetryButton();
   downloadBtn.classList.add("is-hidden");
   hideDownloadLimitSelector();
+  jobControls.classList.remove("is-visible");
+  jobHint.classList.add("is-hidden");
+  failedSummary.classList.remove("is-visible");
   errorOverlay.classList.remove("is-visible");
 }
 
@@ -152,6 +312,10 @@ function hideRetryButton() {
 }
 
 async function renderTrack(trackData) {
+  if (activeBulkJob && ["running", "paused"].includes(activeBulkJob.status)) {
+    return;
+  }
+
   hasRenderedTrack = true;
   currentTrackData = trackData;
   currentPlaylistData = null;
@@ -189,6 +353,8 @@ async function renderTrack(trackData) {
 
   errorOverlay.classList.remove("is-visible");
   downloadBtn.classList.remove("is-hidden");
+  jobControls.classList.remove("is-visible");
+  jobHint.classList.add("is-hidden");
 
   if (trackData.waveform_url) {
     await drawWaveform(trackData.waveform_url);
@@ -248,6 +414,10 @@ function populateDownloadLimitOptions(total) {
 }
 
 async function renderPlaylist(playlistData) {
+  if (activeBulkJob && ["running", "paused"].includes(activeBulkJob.status)) {
+    return;
+  }
+
   hasRenderedTrack = true;
   currentPlaylistData = playlistData;
   currentTrackData = null;
@@ -274,12 +444,13 @@ async function renderPlaylist(playlistData) {
     artwork.style.backgroundColor = "black";
   }
 
-  downloadStatus.textContent = playlistData.clientId
-    ? DEFAULT_DOWNLOAD_STATUS
-    : "Tip: reload SoundCloud if download fails without login.";
+  downloadStatus.textContent =
+    "Saves individual files to a Downloads folder. You can close this popup while downloading.";
 
   errorOverlay.classList.remove("is-visible");
   downloadBtn.classList.remove("is-hidden");
+  jobControls.classList.remove("is-visible");
+  jobHint.classList.add("is-hidden");
 
   const firstTrackWaveform = playlistData.tracks?.[0]?.waveform_url;
   if (firstTrackWaveform) {
@@ -313,9 +484,7 @@ function attachDownloadListener() {
       const effectiveCount = limit ?? total;
 
       if (effectiveCount >= DOWNLOAD_WARN_THRESHOLD) {
-        const proceed = confirm(
-          `You're about to download ${effectiveCount} tracks in a single ZIP. This may take a long time and use a lot of memory. Continue?`
-        );
+        const proceed = confirm(`Download ${effectiveCount} tracks as individual files in your Downloads folder? You can close this popup and the download will continue. Or open the popup and select specific track count. Continue?`);
 
         if (!proceed) {
           return;
@@ -333,9 +502,29 @@ function attachDownloadListener() {
           return;
         }
 
-        await downloadAll(currentPlaylistData, bulkResult.tracks);
+        const startResult = await chrome.runtime.sendMessage({
+          type: "START_BULK_JOB",
+          tracks: bulkResult.tracks,
+          playlistTitle: currentPlaylistData.title,
+          playlistMeta: {
+            artworkUrl: currentPlaylistData.artwork_url || null,
+            artist: currentPlaylistData.artist || null,
+            artistImageUrl: currentPlaylistData.artistImageUrl || null,
+            artistUrl: currentPlaylistData.artistUrl || null,
+          },
+        });
+
+        if (!startResult?.success || !startResult.job) {
+          setDownloadState(false, DOWNLOAD_ERROR_STATUS);
+          alert(startResult?.error || "Could not start the background download.");
+          return;
+        }
+
+        activeBulkJob = startResult.job;
+        renderBulkJobState(startResult.job);
+        startJobPolling();
       } catch (error) {
-        console.error("Error fetching bulk tracks:", error);
+        console.error("Error starting bulk download:", error);
         setDownloadState(false, DOWNLOAD_ERROR_STATUS);
         alert(`Download failed: ${error.message}`);
       }
@@ -400,6 +589,8 @@ function showTrackLoadError(reason) {
   waveformCanvas.style.display = "none";
   artwork.style.backgroundImage = "none";
   artwork.style.backgroundColor = "#000000";
+  jobControls.classList.remove("is-visible");
+  jobHint.classList.add("is-hidden");
 
   if (reason === "load_failed") {
     errorTitle.textContent = "Couldn't load this track";
@@ -453,41 +644,6 @@ function formatResolveError(result) {
   return `Error #11: ${message}`;
 }
 
-function sanitizeZipEntryFilename(trackData, extension, index, total) {
-  const paddedIndex = String(index).padStart(String(total).length, "0");
-  const baseName = SCDownload.sanitizeFilename(trackData, extension).replace(/\.[^.]+$/, "");
-  return `${paddedIndex} - ${baseName}.${extension}`;
-}
-
-function sanitizeZipFilename(title) {
-  const sanitizedTitle = (title || "playlist")
-    .replace(/[^a-z0-9 -]/gi, " ")
-    .trim();
-  return `${sanitizedTitle || "playlist"}.zip`;
-}
-
-async function resolveStreamForTrack(trackData) {
-  if (!trackData.streamUrl) {
-    throw new Error("No downloadable stream was found for this track.");
-  }
-
-  const result = await chrome.runtime.sendMessage({
-    type: "GET_STREAM_URL",
-    streamUrl: trackData.streamUrl,
-    clientId: trackData.clientId,
-    trackAuthorization: trackData.trackAuthorization,
-    streamProtocol: trackData.streamProtocol,
-    streamPreset: trackData.streamPreset,
-    streamMimeType: trackData.streamMimeType,
-  });
-
-  if (!result?.success || !result.url) {
-    throw new Error(result?.error || "Cannot obtain final file URL.");
-  }
-
-  return result.url;
-}
-
 function requestBulkTracks(limit) {
   return new Promise((resolve) => {
     if (!activeTabId) {
@@ -511,61 +667,6 @@ function requestBulkTracks(limit) {
       }
     );
   });
-}
-
-async function downloadAll(playlistData, tracks) {
-  if (!tracks?.length) {
-    setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-    alert("No downloadable tracks were found in this playlist.");
-    return;
-  }
-
-  setDownloadState(true, "Preparing playlist...");
-
-  const zip = new JSZip();
-  let successCount = 0;
-  const total = tracks.length;
-
-  for (let index = 0; index < tracks.length; index += 1) {
-    const trackData = tracks[index];
-    const trackNumber = index + 1;
-
-    setDownloadState(
-      true,
-      `Track ${trackNumber}/${total} - ${trackData.title}`
-    );
-
-    try {
-      const streamUrl = await resolveStreamForTrack(trackData);
-      const { blob, fileName } = await SCDownload.buildTrackBlob(
-        streamUrl,
-        trackData,
-        (status) =>
-          setDownloadState(true, `Track ${trackNumber}/${total} - ${status}`)
-      );
-      const extension = SCDownload.getFileExtension(trackData);
-      const zipEntryName = sanitizeZipEntryFilename( trackData, extension, trackNumber, total );
-
-      zip.file(zipEntryName || fileName, blob);
-      successCount += 1;
-    } catch (error) {
-      console.error(`Failed to download track ${trackNumber}:`, error);
-    }
-  }
-
-  if (!successCount) {
-    setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-    alert("Could not download any tracks from this playlist.");
-    return;
-  }
-
-  setDownloadState(true, "Creating ZIP...");
-  const zipBlob = await zip.generateAsync({
-    type: "blob",
-    compression: "STORE",
-  });
-  SCDownload.triggerBlobDownload(zipBlob, sanitizeZipFilename(playlistData.title));
-  setDownloadState(false, `Downloaded ${successCount}/${total} tracks`);
 }
 
 async function drawWaveform(waveformUrl) {
@@ -606,4 +707,5 @@ async function drawWaveform(waveformUrl) {
 
 window.addEventListener("unload", () => {
   stopPolling();
+  stopJobPolling();
 });

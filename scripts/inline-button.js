@@ -1,6 +1,7 @@
 const INLINE_BUTTON_ID = "scdl-inline-download";
 const INLINE_STYLES_ID = "scdl-inline-styles";
 const SUCCESS_RESET_MS = 2000;
+const BULK_WARN_THRESHOLD = 200;
 
 let inlineTrackData = null;
 let isInlineDownloading = false;
@@ -74,6 +75,17 @@ function findActionButtonGroup() {
   );
 }
 
+function isInlineButtonPage() {
+  return (
+    window.SCDL?.isTrackPage?.() ||
+    window.SCDL?.isCollectionPage?.()
+  );
+}
+
+function isCollectionInlinePage() {
+  return window.SCDL?.isCollectionPage?.() === true;
+}
+
 function setInlineButtonState(state) {
   const button = document.getElementById(INLINE_BUTTON_ID);
   if (!button) {
@@ -82,17 +94,25 @@ function setInlineButtonState(state) {
 
   button.classList.remove("is-loading", "is-success", "is-error");
 
+  const collectionPage = isCollectionInlinePage();
+
   if (state === "loading") {
     button.classList.add("is-loading");
-    button.title = "Downloading...";
-    button.setAttribute("aria-label", "Downloading...");
+    button.title = collectionPage ? "Preparing download..." : "Downloading...";
+    button.setAttribute(
+      "aria-label",
+      collectionPage ? "Preparing download..." : "Downloading..."
+    );
     return;
   }
 
   if (state === "success") {
     button.classList.add("is-success");
-    button.title = "Downloaded!";
-    button.setAttribute("aria-label", "Downloaded!");
+    button.title = collectionPage ? "Download started!" : "Downloaded!";
+    button.setAttribute(
+      "aria-label",
+      collectionPage ? "Download started!" : "Downloaded!"
+    );
     return;
   }
 
@@ -103,8 +123,11 @@ function setInlineButtonState(state) {
     return;
   }
 
-  button.title = "Download";
-  button.setAttribute("aria-label", "Download");
+  button.title = collectionPage ? "Download playlist" : "Download";
+  button.setAttribute(
+    "aria-label",
+    collectionPage ? "Download playlist" : "Download"
+  );
 }
 
 function resetInlineButtonStateAfterSuccess() {
@@ -119,9 +142,71 @@ function resetInlineButtonStateAfterSuccess() {
   }, SUCCESS_RESET_MS);
 }
 
+async function handleInlineCollectionDownloadClick() {
+  const playlistData = window.SCDL?.getPlaylistData?.();
+  if (!playlistData?.title) {
+    setInlineButtonState("error");
+    isInlineDownloading = false;
+    return;
+  }
+
+  const total =
+    playlistData.totalCount ?? playlistData.tracks?.length ?? 0;
+
+  if (total >= BULK_WARN_THRESHOLD) {
+    const proceed = confirm(
+      `Download ${total} tracks as individual files in your Downloads folder? You can close this tab and the download will continue in the background. Or open the popup and select specific track count. Continue?`
+    );
+
+    if (!proceed) {
+      return;
+    }
+  }
+
+  isInlineDownloading = true;
+  setInlineButtonState("loading");
+
+  try {
+    const tracks = await window.SCDL.resolveBulkTracks(null);
+
+    if (!tracks?.length) {
+      throw new Error("No downloadable tracks were found.");
+    }
+
+    const startResult = await chrome.runtime.sendMessage({
+      type: "START_BULK_JOB",
+      tracks,
+      playlistTitle: playlistData.title,
+      playlistMeta: {
+        artworkUrl: playlistData.artwork_url || null,
+        artist: playlistData.artist || null,
+        artistImageUrl: playlistData.artistImageUrl || null,
+        artistUrl: playlistData.artistUrl || null,
+      },
+    });
+
+    if (!startResult?.success || !startResult.job) {
+      throw new Error(
+        startResult?.error || "Could not start the background download."
+      );
+    }
+
+    setInlineButtonState("success");
+    resetInlineButtonStateAfterSuccess();
+  } catch (error) {
+    console.error("SC Track Downloader inline bulk download error:", error);
+    isInlineDownloading = false;
+    setInlineButtonState("error");
+  }
+}
+
 async function handleInlineDownloadClick() {
   if (isInlineDownloading) {
     return;
+  }
+
+  if (isCollectionInlinePage()) {
+    return handleInlineCollectionDownloadClick();
   }
 
   const trackData = inlineTrackData || window.SCDL?.getTrackData?.();
@@ -188,12 +273,14 @@ function createInlineDownloadButton() {
 }
 
 function ensureInlineDownloadButton(trackData) {
-  if (!window.SCDL?.isTrackPage?.()) {
+  if (!isInlineButtonPage()) {
     removeInlineDownloadButton();
     return;
   }
 
-  inlineTrackData = trackData || window.SCDL?.getTrackData?.() || null;
+  inlineTrackData = window.SCDL?.isTrackPage?.()
+    ? trackData || window.SCDL?.getTrackData?.() || null
+    : null;
 
   const buttonGroup = findActionButtonGroup();
   if (!buttonGroup) {
@@ -236,7 +323,7 @@ function startToolbarObserver() {
   }
 
   toolbarObserver = new MutationObserver(() => {
-    if (!window.SCDL?.isTrackPage?.()) {
+    if (!isInlineButtonPage()) {
       return;
     }
 

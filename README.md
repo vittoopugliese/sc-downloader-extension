@@ -1,6 +1,6 @@
 # 🎵 SoundCloud Downloader
 
-> Download SoundCloud tracks, playlists, and likes ~ right from your browser. One extension, one click (or one ZIP).
+> Download SoundCloud tracks, playlists, and likes ~ right from your browser. One extension, one click.
 
 ![ImagePreview](./assets/readme_preview.jpeg)
 
@@ -12,13 +12,15 @@ This release is a **big one**. What started as a single-track downloader is now 
 
 **Highlights:**
 - **Inline download button** ~ download tracks directly from SoundCloud's action bar (Like/Repost/Share) without opening the popup
-- **Playlists, sets & albums** ~ download an entire collection as a single `.zip`
+- **Playlists, sets & albums** ~ download collections as numbered files in a folder
 - **Likes** ~ your own (`/you/likes`) or any user's public likes page
+- **Background bulk downloads** ~ close the popup or switch tabs; downloads keep running
+- **Low memory usage** ~ one track in memory at a time (no giant ZIP in RAM)
 - **Configurable batch size** ~ choose how many tracks to grab: `25`, `50`, `100`, `200`, or **All**
 - **No login required** for most public tracks (OAuth fallback when needed)
 - **Modern AAC HLS streaming** support ~ SoundCloud's current format, handled automatically
 - **SPA-friendly** ~ switch tracks, playlists, or pages without reloading SoundCloud
-- **Polished UI** ~ loading spinner, clear error states, download progress, and a unified popup for tracks & collections
+- **Polished UI** ~ loading spinner, clear error states, download progress, pause/cancel, badge, and notifications
 
 If you used an older version and ran into bugs ~ stale track data, blank screens, login-only downloads ~ this update was built to fix exactly that. 🎉
 
@@ -36,18 +38,21 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 ### Playlists, sets & albums
 - Open any `soundcloud.com/{user}/sets/{name}` page
 - See the collection title, artist, total track count, and waveform preview (first track)
-- Pick how many tracks to download from the inline preset selector
-- Download everything as a numbered `.zip` file
+- Pick how many tracks to download from the preset selector
+- Download everything as numbered files in `Downloads/{Playlist Name}/`
 
 ### Likes
 - **Your likes:** `soundcloud.com/you/likes` (requires being logged in)
 - **Anyone's likes:** `soundcloud.com/{username}/likes`
-- Same UI and ZIP download flow as playlists
+- Same folder-based bulk download flow as playlists
 
 ### Bulk download controls
-- Presets: **25 · 50 · 100 · 200 · All**
-- Options adapt to the actual collection size (e.g. a 30-track playlist shows `25` and `All (30)`)
-- Warning prompt before large downloads (200+ tracks) ~ because yes, you *can* download thousands, but your RAM might have opinions
+- Presets: **10 · 25 · 50 · 100 · 150 · 200 · 300 · All**
+- Options adapt to the actual collection size (e.g. a 30-track playlist shows `25` and `All`)
+- Warning prompt before large downloads (200+ tracks)
+- **Pause / resume / cancel** while a bulk job is running
+- **Extension badge** shows progress (e.g. `30/500`)
+- **Desktop notification** when the job finishes (even if the popup was closed)
 
 ### Reliability & UX
 - Deferred metadata loading ~ fast popup open, full resolution only when you hit download
@@ -55,6 +60,7 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 - Clear error screen when you're not on a supported page
 - Download progress: `Track 3/50 ~ Downloading 12/48 parts...`
 - SPA navigation detection ~ no more stale track data when browsing SoundCloud
+- Bulk jobs run in a background offscreen worker ~ safe for playlists with hundreds of tracks on modest hardware
 
 ---
 
@@ -71,7 +77,8 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 2. Click the extension icon
 3. Choose how many tracks to download from the dropdown next to the track count
 4. Hit the download button
-5. Grab your `.zip` when it's ready
+5. Files appear in `Downloads/{Collection Name}/` as they complete
+6. You may **close the popup** ~ the download continues in the background
 
 ---
 
@@ -83,7 +90,7 @@ One popup, two modes ~ same look, same feel:
 |---|---|
 | Title · artist · duration · format | Title · artist · `{N} tracks · [preset]` |
 | Waveform | Waveform (first track) |
-| Inline button + popup download | Download button → ZIP |
+| Inline button + popup download | Download button → folder in Downloads |
 
 Dark blurred artwork background, SoundCloud-orange accents, spinner states, and status text that actually tells you what's going on.
 
@@ -94,8 +101,9 @@ Dark blurred artwork background, SoundCloud-orange accents, spinner states, and 
 - **Manifest V3** Chrome extension
 - Streams resolved via SoundCloud's `api-v2` (public `client_id` + optional OAuth cookie)
 - HLS segments fetched and assembled client-side; output as `.m4a` / `.mp3` depending on source
-- ZIP built in-popup with JSZip (store compression ~ audio is already compressed)
-- Large collections: pagination handled automatically; choose your limit wisely
+- Bulk downloads use `chrome.downloads` + an offscreen document ~ one track at a time, minimal RAM
+- Job state stored in `chrome.storage.session` (survives popup close; cleared when Chrome exits)
+- Large collections: pagination handled automatically; stream URLs refreshed per track if they expire
 
 ---
 

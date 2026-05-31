@@ -26,6 +26,10 @@
             color: rgb(31, 31, 31);
         }
 
+        .is-hidden {
+            display: none !important;
+        }
+
         .container {
             background: rgba(0, 0, 0, 0.54);
             min-height: 254px;
@@ -333,6 +337,75 @@
             font-size: 13px;
             color: #c4c4c4;
             text-align: center;
+            max-width: 380px;
+            line-height: 1.4;
+        }
+
+        #jobControls {
+            display: none;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        #jobControls.is-visible {
+            display: flex;
+        }
+
+        .job-btn {
+            padding: 6px 14px;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #f0f0f0;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 200ms, border-color 200ms;
+        }
+
+        .job-btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+            border-color: rgba(255, 255, 255, 0.32);
+        }
+
+        .job-btn.is-primary {
+            background: #ff5500;
+            border-color: #ff5500;
+            color: #ffffff;
+        }
+
+        .job-btn.is-primary:hover {
+            background: #ff7733;
+            border-color: #ff7733;
+        }
+
+        .job-btn.is-danger {
+            border-color: rgba(255, 85, 0, 0.55);
+            color: #ffb899;
+        }
+
+        #jobHint {
+            margin: 0;
+            font-size: 11px;
+            color: #9a9a9a;
+            text-align: center;
+            max-width: 360px;
+        }
+
+        #failedSummary {
+            display: none;
+            margin: 0;
+            font-size: 11px;
+            color: #ffb899;
+            text-align: center;
+            max-width: 360px;
+            line-height: 1.35;
+        }
+
+        #failedSummary.is-visible {
+            display: block;
         }
 
         #waveformCanvas {
@@ -392,11 +465,17 @@
                 <img class="dl-icon" src="./assets/download.svg" alt="" width="22" height="22" draggable="false">
                 <span class="dl-spinner" aria-hidden="true"></span>
             </button>
+            <div id="jobControls">
+                <button id="pauseJobBtn" type="button" class="job-btn">Pause</button>
+                <button id="resumeJobBtn" type="button" class="job-btn is-primary is-hidden">Resume</button>
+                <button id="cancelJobBtn" type="button" class="job-btn is-danger">Cancel</button>
+            </div>
             <p id="downloadStatus">Ready to download</p>
+            <p id="jobHint" class="is-hidden">You can close this popup — the download continues in the background.</p>
+            <p id="failedSummary"></p>
         </div>
     </div>
     <script src="./scripts/download-core.js"></script>
-    <script src="./scripts/vendor/jszip.min.js"></script>
     <script src="./scripts/popup.js"></script>
 </body>
 

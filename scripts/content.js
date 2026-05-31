@@ -325,6 +325,7 @@ function buildTrackDataFromApiTrack(trackData, clientId, pageUrl) {
   const streamInfo = extractStreamInfo(trackData);
 
   return {
+    id: trackData.id || null,
     title: trackData.title,
     artist: trackData.user?.username || "Unknown Artist",
     artistUrl: trackData.user?.permalink_url || "",
@@ -657,6 +658,7 @@ async function extractLikesData(capturedExtractionId) {
       });
     }
 
+    ensureInlineDownloadButton();
     return currentPlaylistData;
   } catch (error) {
     console.error("SC Track Downloader Error:", error);
@@ -765,6 +767,7 @@ async function extractPlaylistData(capturedExtractionId) {
       });
     }
 
+    ensureInlineDownloadButton();
     return currentPlaylistData;
   } catch (error) {
     console.error("SC Track Downloader Error:", error);
@@ -1019,9 +1022,16 @@ function initScript() {
   }
 }
 
+function isSoundCloudCollectionPage() {
+  return isSoundCloudLikesPage() || isSoundCloudPlaylistPage();
+}
+
 window.SCDL = {
   getTrackData: () => currentTrackData,
+  getPlaylistData: () => currentPlaylistData,
   isTrackPage: () => isSoundCloudTrackPage(),
+  isCollectionPage: () => isSoundCloudCollectionPage(),
+  resolveBulkTracks: (limit) => resolveBulkTracks(limit),
 };
 
 initScript();

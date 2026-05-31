@@ -1,3 +1,23 @@
+importScripts("bulk-job-manager.js");
+
+chrome.runtime.onInstalled.addListener(() => {
+  BulkJobManager.recoverRunningJob();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  BulkJobManager.recoverRunningJob();
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === BulkJobManager.KEEPALIVE_ALARM) {
+    BulkJobManager.loadJob().then((job) => {
+      if (job && ["running", "paused"].includes(job.status)) {
+        BulkJobManager.updateBadge(job);
+      }
+    });
+  }
+});
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "GET_MP3_URL" || request.type === "GET_STREAM_URL") {
     resolveStreamUrl(
@@ -32,6 +52,48 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     return true;
   }
+
+  if (request.type === "START_BULK_JOB") {
+    BulkJobManager.createJob(
+      request.tracks,
+      request.playlistTitle,
+      request.playlistMeta || {}
+    )
+      .then((job) => sendResponse({ success: true, job }))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (request.type === "GET_JOB_STATUS") {
+    BulkJobManager.getStatus().then(sendResponse);
+    return true;
+  }
+
+  if (request.type === "PAUSE_BULK_JOB") {
+    BulkJobManager.pauseJob().then(sendResponse);
+    return true;
+  }
+
+  if (request.type === "RESUME_BULK_JOB") {
+    BulkJobManager.resumeJob().then(sendResponse);
+    return true;
+  }
+
+  if (request.type === "CANCEL_BULK_JOB") {
+    BulkJobManager.cancelJob().then(sendResponse);
+    return true;
+  }
+
+  if (request.type === "REFRESH_TRACK") {
+    refreshTrackMetadata(request.trackId, request.clientId)
+      .then((trackData) => sendResponse({ success: true, trackData }))
+      .catch((error) =>
+        sendResponse({ success: false, error: error.message })
+      );
+    return true;
+  }
+
+  return false;
 });
 
 function getOAuthToken() {
@@ -82,7 +144,7 @@ async function requestStreamUrl(streamUrl, options) {
     requestUrl.searchParams.set("client_id", clientId);
   } else {
     throw buildStreamError(
-      "No se pudo obtener client_id. Recargá la página de SoundCloud e intentá de nuevo.",
+      "Could not obtain client_id. Reload the SoundCloud page and try again.",
       "missing_client_id"
     );
   }
@@ -163,7 +225,7 @@ async function resolveStreamUrl(
 
   if (!attempts.length) {
     throw buildStreamError(
-      "No se pudo obtener client_id. Recargá la página de SoundCloud e intentá de nuevo.",
+      "Could not obtain client_id. Reload the SoundCloud page and try again.",
       "missing_client_id"
     );
   }
@@ -192,7 +254,7 @@ async function resolveStreamUrl(
 
   if (lastError?.status === 403) {
     throw buildStreamError(
-      "No se pudo descargar esta track. Puede ser privada, restringida por región o requerir login.",
+      "Could not download this track. It may be private, region-restricted, or require login.",
       "forbidden",
       403
     );
@@ -200,13 +262,109 @@ async function resolveStreamUrl(
 
   if (lastError?.status === 401) {
     throw buildStreamError(
-      "No se pudo acceder al stream sin login. Probá iniciar sesión en SoundCloud.",
+      "Could not access the stream without login. Try signing in to SoundCloud.",
       "unauthorized",
       401
     );
   }
 
   throw lastError || buildStreamError("Could not resolve stream URL.", "unknown_error");
+}
+
+function extractStreamInfoFromApiTrack(trackData) {
+  const transcodings = trackData.media?.transcodings || [];
+  if (!transcodings.length) {
+    return null;
+  }
+
+  const fullTranscodings = transcodings.filter((transcoding) => !transcoding.snipped);
+  const candidates = fullTranscodings.length ? fullTranscodings : transcodings;
+
+  const findHls = (predicate) =>
+    candidates.find(
+      (transcoding) =>
+        transcoding.format?.protocol === "hls" && predicate(transcoding)
+    );
+
+  const hlsAac160 = findHls(
+    (transcoding) =>
+      transcoding.preset === "aac_160k" || transcoding.preset?.startsWith("aac_160")
+  );
+  if (hlsAac160) {
+    return {
+      url: hlsAac160.url,
+      protocol: "hls",
+      preset: hlsAac160.preset || null,
+      mimeType: hlsAac160.format?.mime_type || null,
+    };
+  }
+
+  const progressive = candidates.find(
+    (transcoding) => transcoding.format?.protocol === "progressive"
+  );
+  if (progressive) {
+    return {
+      url: progressive.url,
+      protocol: "progressive",
+      preset: progressive.preset || null,
+      mimeType: progressive.format?.mime_type || null,
+    };
+  }
+
+  const anyHls = candidates.find(
+    (transcoding) => transcoding.format?.protocol === "hls"
+  );
+  if (anyHls) {
+    return {
+      url: anyHls.url,
+      protocol: "hls",
+      preset: anyHls.preset || null,
+      mimeType: anyHls.format?.mime_type || null,
+    };
+  }
+
+  return null;
+}
+
+async function refreshTrackMetadata(trackId, clientId) {
+  const requestUrl = new URL("https://api-v2.soundcloud.com/tracks");
+  requestUrl.searchParams.set("ids", String(trackId));
+  requestUrl.searchParams.set("client_id", clientId);
+
+  const response = await fetch(requestUrl.toString(), {
+    method: "GET",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+      Origin: "https://soundcloud.com",
+      Referer: "https://soundcloud.com/",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to refresh track metadata (${response.status}).`);
+  }
+
+  const tracks = await response.json();
+  const track = tracks?.[0];
+
+  if (!track) {
+    throw new Error("Track metadata was not found.");
+  }
+
+  const streamInfo = extractStreamInfoFromApiTrack(track);
+
+  return {
+    id: track.id,
+    title: track.title,
+    artist: track.user?.username || "Unknown Artist",
+    streamUrl: streamInfo?.url || null,
+    streamProtocol: streamInfo?.protocol || null,
+    streamPreset: streamInfo?.preset || null,
+    streamMimeType: streamInfo?.mimeType || null,
+    trackAuthorization: track.track_authorization || null,
+    clientId,
+  };
 }
 
 async function resolveLoggedInUserProfile(clientId) {
@@ -243,3 +401,8 @@ async function resolveLoggedInUserProfile(clientId) {
 
   return { user, oauthToken };
 }
+
+BulkJobManager.setStreamDependencies({
+  resolveStreamUrl,
+  refreshTrackMetadata,
+});
