@@ -5,8 +5,52 @@ const DEFAULT_DOWNLOAD_STATUS = "Ready to download";
 const DOWNLOAD_ERROR_STATUS = "Error, please retry";
 const DOWNLOAD_PRESETS = [10, 25, 50, 100, 150, 200, 300];
 const DOWNLOAD_WARN_THRESHOLD = 200;
+const SELECT_WARN_THRESHOLD = 1000;
+const ROW_HEIGHT = 40;
+const OVERSCAN = 6;
+
+const loadingOverlay = document.getElementById("loadingOverlay");
+const loadingText = document.getElementById("loadingText");
+const retryBtn = document.getElementById("retryBtn");
+const errorOverlay = document.getElementById("errorOverlay");
+const errorTitle = document.getElementById("errorTitle");
+const errorMessage = document.getElementById("errorMessage");
+const errorHint = document.getElementById("errorHint");
+const artwork = document.getElementById("artwork");
+const titleEl = document.getElementById("title");
+const artistUrl = document.getElementById("artistUrl");
+const artistArtwork = document.getElementById("artistArtwork");
+const artistEl = document.getElementById("artist");
+const durationEl = document.getElementById("duration");
+const metaSep = document.getElementById("metaSep");
+const streamFormat = document.getElementById("streamFormat");
+const downloadLimit = document.getElementById("downloadLimit");
+const waveformCanvas = document.getElementById("waveformCanvas");
+const downloadBtn = document.getElementById("downloadBtn");
+const jobControls = document.getElementById("jobControls");
+const pauseJobBtn = document.getElementById("pauseJobBtn");
+const resumeJobBtn = document.getElementById("resumeJobBtn");
+const cancelJobBtn = document.getElementById("cancelJobBtn");
+const downloadStatus = document.getElementById("downloadStatus");
+const jobHint = document.getElementById("jobHint");
+const failedSummary = document.getElementById("failedSummary");
+const selectionPanel = document.getElementById("selectionPanel");
+const selectionBackBtn = document.getElementById("selectionBackBtn");
+const selectionCount = document.getElementById("selectionCount");
+const selectAllBtn = document.getElementById("selectAllBtn");
+const clearAllBtn = document.getElementById("clearAllBtn");
+const selectionViewport = document.getElementById("selectionViewport");
+const selectionSpacer = document.getElementById("selectionSpacer");
+const selectionRows = document.getElementById("selectionRows");
 
 let isDownloading = false;
+let isSelectionMode = false;
+let isOpeningSelection = false;
+let selectionItems = [];
+let selectedIds = new Set();
+let previousDownloadLimitValue = "50";
+let selectionScrollRaf = null;
+let selectionRowsListenerAttached = false;
 let activeTabId = null;
 let pollIntervalId = null;
 let jobPollIntervalId = null;
@@ -61,7 +105,17 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    if (hasRenderedTrack) {
+    if (message.type === "BULK_FETCH_PROGRESS") {
+      if (isOpeningSelection || isDownloading) {
+        const loaded = message.loaded ?? 0;
+        const total = message.total ?? loaded;
+        loadingText.textContent = `Loading tracks ${loaded}/${total}...`;
+        downloadStatus.textContent = `Loading tracks ${loaded}/${total}...`;
+      }
+      return;
+    }
+
+    if (hasRenderedTrack || isOpeningSelection || isSelectionMode) {
       return;
     }
 
@@ -74,6 +128,33 @@ document.addEventListener("DOMContentLoaded", () => {
       renderPlaylist(message.data);
     }
   });
+
+  selectionBackBtn.addEventListener("click", () => {
+    exitSelectionMode();
+  });
+
+  selectAllBtn.addEventListener("click", () => {
+    selectedIds = new Set(selectionItems.map((item) => item.id));
+    updateSelectionCount();
+    renderVisibleSelectionRows();
+  });
+
+  clearAllBtn.addEventListener("click", () => {
+    selectedIds.clear();
+    updateSelectionCount();
+    renderVisibleSelectionRows();
+  });
+
+  downloadLimit.addEventListener("change", () => {
+    if (downloadLimit.value === "select") {
+      openSelectionPanel();
+    } else {
+      previousDownloadLimitValue = downloadLimit.value;
+    }
+  });
+
+  attachSelectionRowsListener();
+  selectionViewport.addEventListener("scroll", onSelectionScroll, { passive: true });
 
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     activeTabId = tabs[0]?.id ?? null;
@@ -130,17 +211,21 @@ function stopJobPolling() {
 }
 
 function renderBulkJobState(job) {
+  if (isSelectionMode) {
+    exitSelectionMode();
+  }
+
   hasRenderedTrack = true;
   stopPolling();
   hideLoading();
   hideRetryButton();
   errorOverlay.classList.remove("is-visible");
 
-  title.textContent = job.playlistTitle || "Background download";
-  artist.textContent = job.artist || "SoundCloud Downloader";
+  titleEl.textContent = job.playlistTitle || "Background download";
+  artistEl.textContent = job.artist || "SoundCloud Downloader";
   artistUrl.href = job.artistUrl || "#";
   artistArtwork.src = job.artistImageUrl || "./assets/icon48.png";
-  duration.textContent = `${job.total} tracks`;
+  durationEl.textContent = `${job.total} tracks`;
   streamFormat.style.display = "none";
   hideDownloadLimitSelector();
   metaSep.style.display = "none";
@@ -323,11 +408,11 @@ async function renderTrack(trackData) {
   hideLoading();
   hideRetryButton();
 
-  title.textContent = trackData.title;
-  artist.textContent = trackData.artist;
+  titleEl.textContent = trackData.title;
+  artistEl.textContent = trackData.artist;
   artistUrl.href = trackData.artistUrl;
   artistArtwork.src = trackData.artistImageUrl || "./assets/icon48.png";
-  duration.textContent = trackData.duration || "";
+  durationEl.textContent = trackData.duration || "";
 
   if (trackData.artwork_url) {
     artwork.style.backgroundImage = `url(${trackData.artwork_url})`;
@@ -367,6 +452,13 @@ function hideDownloadLimitSelector() {
   downloadLimit.classList.add("is-hidden");
 }
 
+function appendSelectOption() {
+  const selectOption = document.createElement("option");
+  selectOption.value = "select";
+  selectOption.textContent = "Select...";
+  downloadLimit.appendChild(selectOption);
+}
+
 function populateDownloadLimitOptions(total) {
   downloadLimit.innerHTML = "";
 
@@ -381,7 +473,9 @@ function populateDownloadLimitOptions(total) {
     allOption.value = "all";
     allOption.textContent = "All";
     downloadLimit.appendChild(allOption);
+    appendSelectOption();
     downloadLimit.value = "all";
+    previousDownloadLimitValue = "all";
     downloadLimit.classList.remove("is-hidden");
     metaSep.style.display = "";
     return;
@@ -401,6 +495,7 @@ function populateDownloadLimitOptions(total) {
   allOption.value = "all";
   allOption.textContent = "All";
   downloadLimit.appendChild(allOption);
+  appendSelectOption();
 
   if (total >= 50) {
     defaultValue = "50";
@@ -409,6 +504,7 @@ function populateDownloadLimitOptions(total) {
   }
 
   downloadLimit.value = defaultValue;
+  previousDownloadLimitValue = defaultValue;
   downloadLimit.classList.remove("is-hidden");
   metaSep.style.display = "";
 }
@@ -418,6 +514,10 @@ async function renderPlaylist(playlistData) {
     return;
   }
 
+  if (isSelectionMode) {
+    exitSelectionMode();
+  }
+
   hasRenderedTrack = true;
   currentPlaylistData = playlistData;
   currentTrackData = null;
@@ -425,14 +525,14 @@ async function renderPlaylist(playlistData) {
   hideLoading();
   hideRetryButton();
 
-  title.textContent = playlistData.title || "Untitled playlist";
-  artist.textContent = playlistData.artist || "Unknown artist";
+  titleEl.textContent = playlistData.title || "Untitled playlist";
+  artistEl.textContent = playlistData.artist || "Unknown artist";
   artistUrl.href = playlistData.artistUrl || "#";
   artistArtwork.src = playlistData.artistImageUrl || "./assets/icon48.png";
 
   const total =
     playlistData.totalCount ?? playlistData.tracks?.length ?? 0;
-  duration.textContent = `${total} tracks`;
+  durationEl.textContent = `${total} tracks`;
   streamFormat.style.display = "none";
   populateDownloadLimitOptions(total);
 
@@ -462,6 +562,252 @@ async function renderPlaylist(playlistData) {
   attachDownloadListener();
 }
 
+function attachSelectionRowsListener() {
+  if (selectionRowsListenerAttached) {
+    return;
+  }
+
+  selectionRowsListenerAttached = true;
+
+  selectionRows.addEventListener("change", (event) => {
+    const checkbox = event.target;
+    if (checkbox.type !== "checkbox") {
+      return;
+    }
+
+    const row = checkbox.closest(".selection-row");
+    const trackId = Number(row?.dataset?.id);
+    if (!trackId) {
+      return;
+    }
+
+    if (checkbox.checked) {
+      selectedIds.add(trackId);
+    } else {
+      selectedIds.delete(trackId);
+    }
+
+    updateSelectionCount();
+  });
+}
+
+function onSelectionScroll() {
+  if (selectionScrollRaf) {
+    cancelAnimationFrame(selectionScrollRaf);
+  }
+
+  selectionScrollRaf = requestAnimationFrame(() => {
+    selectionScrollRaf = null;
+    renderVisibleSelectionRows();
+  });
+}
+
+function renderVisibleSelectionRows() {
+  if (!selectionItems.length) {
+    selectionSpacer.style.height = "0px";
+    selectionRows.innerHTML = "";
+    return;
+  }
+
+  const scrollTop = selectionViewport.scrollTop;
+  const viewportHeight = selectionViewport.clientHeight || 360;
+  const total = selectionItems.length;
+  const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const visibleCount = Math.ceil(viewportHeight / ROW_HEIGHT);
+  const end = Math.min(total - 1, start + visibleCount + OVERSCAN * 2);
+
+  selectionSpacer.style.height = `${total * ROW_HEIGHT}px`;
+
+  const fragment = document.createDocumentFragment();
+
+  for (let index = start; index <= end; index += 1) {
+    const item = selectionItems[index];
+    const row = document.createElement("label");
+    row.className = "selection-row";
+    row.style.transform = `translateY(${index * ROW_HEIGHT}px)`;
+    row.dataset.index = String(index);
+    row.dataset.id = String(item.id);
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = selectedIds.has(item.id);
+
+    const indexSpan = document.createElement("span");
+    indexSpan.className = "selection-index";
+    indexSpan.textContent = item.indexLabel || String(item.index);
+
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "selection-title";
+    titleSpan.textContent = item.title;
+    titleSpan.title = item.title;
+
+    const durationSpan = document.createElement("span");
+    durationSpan.className = "selection-duration";
+    durationSpan.textContent = item.duration;
+
+    row.append(checkbox, indexSpan, titleSpan, durationSpan);
+    fragment.appendChild(row);
+  }
+
+  selectionRows.replaceChildren(fragment);
+}
+
+function updateSelectionCount() {
+  const count = selectedIds.size;
+  selectionCount.textContent =
+    count === 1 ? "1 selected" : `${count} selected`;
+  downloadStatus.textContent =
+    count === 0
+      ? "Select tracks to download"
+      : `${count} track${count === 1 ? "" : "s"} selected`;
+}
+
+function enterSelectionMode(items) {
+  isSelectionMode = true;
+  selectionItems = items;
+  selectedIds = new Set();
+  document.body.classList.add("selection-mode");
+  selectionPanel.classList.remove("is-hidden");
+  selectionPanel.classList.add("is-visible");
+  downloadLimit.classList.add("is-hidden");
+  metaSep.style.display = "none";
+  waveformCanvas.style.display = "none";
+  selectionViewport.scrollTop = 0;
+  updateSelectionCount();
+  renderVisibleSelectionRows();
+  downloadBtn.classList.remove("is-hidden");
+  downloadStatus.textContent = "Select tracks to download";
+}
+
+function exitSelectionMode() {
+  isSelectionMode = false;
+  selectionItems = [];
+  selectedIds.clear();
+  document.body.classList.remove("selection-mode");
+  selectionPanel.classList.add("is-hidden");
+  selectionPanel.classList.remove("is-visible");
+  selectionRows.replaceChildren();
+  selectionSpacer.style.height = "0px";
+  selectionViewport.scrollTop = 0;
+
+  if (currentPlaylistData) {
+    downloadLimit.value = previousDownloadLimitValue;
+    downloadLimit.classList.remove("is-hidden");
+    metaSep.style.display = "";
+    downloadStatus.textContent =
+      "Saves individual files to a Downloads folder. You can close this popup while downloading.";
+  }
+}
+
+async function openSelectionPanel() {
+  if (!currentPlaylistData || isOpeningSelection) {
+    return;
+  }
+
+  const total =
+    currentPlaylistData.totalCount ??
+    currentPlaylistData.tracks?.length ??
+    0;
+
+  if (total > SELECT_WARN_THRESHOLD) {
+    const proceed = confirm(
+      `This collection has ${total} tracks. Loading the full list may take a while. Continue?`
+    );
+
+    if (!proceed) {
+      downloadLimit.value = previousDownloadLimitValue;
+      return;
+    }
+  }
+
+  isOpeningSelection = true;
+  showLoading();
+  loadingText.textContent = "Loading track list...";
+
+  try {
+    const result = await requestBulkSelectionList(total);
+
+    if (!result?.success || !result.items?.length) {
+      hideLoading();
+      alert(result?.error || "Could not load the track list.");
+      downloadLimit.value = previousDownloadLimitValue;
+      return;
+    }
+
+    hideLoading();
+    enterSelectionMode(result.items);
+  } catch (error) {
+    console.error("Error opening selection panel:", error);
+    hideLoading();
+    alert(`Could not load tracks: ${error.message}`);
+    downloadLimit.value = previousDownloadLimitValue;
+  } finally {
+    isOpeningSelection = false;
+  }
+}
+
+async function startSelectedBulkDownload() {
+  if (!currentPlaylistData || selectedIds.size === 0) {
+    alert("Select at least one track to download.");
+    return;
+  }
+
+  const selectedCount = selectedIds.size;
+
+  if (selectedCount >= DOWNLOAD_WARN_THRESHOLD) {
+    const proceed = confirm(
+      `Download ${selectedCount} selected tracks as individual files in your Downloads folder? You can close this popup and the download will continue. Continue?`
+    );
+
+    if (!proceed) {
+      return;
+    }
+  }
+
+  const orderedIds = selectionItems
+    .filter((item) => selectedIds.has(item.id))
+    .map((item) => item.id);
+
+  setDownloadState(true, `Preparing ${selectedCount} selected tracks...`);
+
+  try {
+    const bulkResult = await requestBulkTracksByIds(orderedIds);
+
+    if (!bulkResult?.success || !bulkResult.tracks?.length) {
+      setDownloadState(false, DOWNLOAD_ERROR_STATUS);
+      alert(bulkResult?.error || "No downloadable tracks were found.");
+      return;
+    }
+
+    const startResult = await chrome.runtime.sendMessage({
+      type: "START_BULK_JOB",
+      tracks: bulkResult.tracks,
+      playlistTitle: currentPlaylistData.title,
+      playlistMeta: {
+        artworkUrl: currentPlaylistData.artwork_url || null,
+        artist: currentPlaylistData.artist || null,
+        artistImageUrl: currentPlaylistData.artistImageUrl || null,
+        artistUrl: currentPlaylistData.artistUrl || null,
+      },
+    });
+
+    if (!startResult?.success || !startResult.job) {
+      setDownloadState(false, DOWNLOAD_ERROR_STATUS);
+      alert(startResult?.error || "Could not start the background download.");
+      return;
+    }
+
+    exitSelectionMode();
+    activeBulkJob = startResult.job;
+    renderBulkJobState(startResult.job);
+    startJobPolling();
+  } catch (error) {
+    console.error("Error starting selected bulk download:", error);
+    setDownloadState(false, DOWNLOAD_ERROR_STATUS);
+    alert(`Download failed: ${error.message}`);
+  }
+}
+
 function attachDownloadListener() {
   if (downloadListenerAttached) {
     return;
@@ -475,6 +821,16 @@ function attachDownloadListener() {
     }
 
     if (currentPlaylistData) {
+      if (isSelectionMode) {
+        await startSelectedBulkDownload();
+        return;
+      }
+
+      if (downloadLimit.value === "select") {
+        await openSelectionPanel();
+        return;
+      }
+
       const total =
         currentPlaylistData.totalCount ??
         currentPlaylistData.tracks?.length ??
@@ -581,6 +937,10 @@ function attachDownloadListener() {
 }
 
 function showTrackLoadError(reason) {
+  if (isSelectionMode) {
+    exitSelectionMode();
+  }
+
   hideLoading();
   hideRetryButton();
   downloadBtn.classList.add("is-hidden");
@@ -614,10 +974,10 @@ function setDownloadState(downloading, statusText) {
 
   if (downloading) {
     downloadLimit.classList.add("is-hidden");
-    if (currentPlaylistData) {
+    if (currentPlaylistData && !isSelectionMode) {
       metaSep.style.display = "none";
     }
-  } else if (currentPlaylistData) {
+  } else if (currentPlaylistData && !isSelectionMode) {
     downloadLimit.classList.remove("is-hidden");
     metaSep.style.display = "";
   }
@@ -654,6 +1014,56 @@ function requestBulkTracks(limit) {
     chrome.tabs.sendMessage(
       activeTabId,
       { type: "GET_BULK_TRACKS", limit },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          resolve({
+            success: false,
+            error: chrome.runtime.lastError.message,
+          });
+          return;
+        }
+
+        resolve(response);
+      }
+    );
+  });
+}
+
+function requestBulkSelectionList(total) {
+  return new Promise((resolve) => {
+    if (!activeTabId) {
+      resolve({ success: false, error: "No active tab." });
+      return;
+    }
+
+    chrome.tabs.sendMessage(
+      activeTabId,
+      { type: "GET_BULK_SELECTION_LIST", total },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          resolve({
+            success: false,
+            error: chrome.runtime.lastError.message,
+          });
+          return;
+        }
+
+        resolve(response);
+      }
+    );
+  });
+}
+
+function requestBulkTracksByIds(ids) {
+  return new Promise((resolve) => {
+    if (!activeTabId) {
+      resolve({ success: false, error: "No active tab." });
+      return;
+    }
+
+    chrome.tabs.sendMessage(
+      activeTabId,
+      { type: "GET_BULK_TRACKS_BY_IDS", ids },
       (response) => {
         if (chrome.runtime.lastError) {
           resolve({

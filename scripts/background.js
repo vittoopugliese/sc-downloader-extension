@@ -1,4 +1,4 @@
-importScripts("bulk-job-manager.js");
+importScripts("format-utils.js", "bulk-job-manager.js");
 
 chrome.runtime.onInstalled.addListener(() => {
   BulkJobManager.recoverRunningJob();
@@ -10,11 +10,7 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === BulkJobManager.KEEPALIVE_ALARM) {
-    BulkJobManager.loadJob().then((job) => {
-      if (job && ["running", "paused"].includes(job.status)) {
-        BulkJobManager.updateBadge(job);
-      }
-    });
+    BulkJobManager.ensureJobRunning().catch(() => {});
   }
 });
 

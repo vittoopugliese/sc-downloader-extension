@@ -21,6 +21,20 @@
             user-select: none;
         }
 
+        body.selection-mode {
+            min-height: 560px;
+            max-height: 600px;
+        }
+
+        body.selection-mode .container {
+            min-height: 560px;
+        }
+
+        body.selection-mode .track-info,
+        body.selection-mode #waveformCanvas {
+            display: none !important;
+        }
+
         *::selection {
             background-color: #ffffffbb;
             color: rgb(31, 31, 31);
@@ -415,6 +429,116 @@
             display: block;
         }
 
+        #selectionPanel {
+            display: none;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            gap: 8px;
+        }
+
+        #selectionPanel.is-visible {
+            display: flex;
+        }
+
+        .selection-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 4px;
+        }
+
+        .selection-header-btn {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .selection-header-btn:hover {
+            background: rgba(255, 255, 255, 0.14);
+        }
+
+        #selectionCount {
+            flex: 1;
+            text-align: center;
+            font-size: 12px;
+            color: #ddd;
+        }
+
+        #selectionViewport {
+            height: 360px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.35);
+        }
+
+        #selectionSpacer {
+            position: relative;
+            width: 100%;
+        }
+
+        #selectionRows {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+        }
+
+        .selection-row {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 10px;
+            box-sizing: border-box;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .selection-row:hover {
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .selection-row input[type="checkbox"] {
+            flex-shrink: 0;
+            accent-color: #ff5500;
+            cursor: pointer;
+        }
+
+        .selection-index {
+            flex-shrink: 0;
+            width: 36px;
+            font-size: 11px;
+            color: #aaa;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .selection-title {
+            flex: 1;
+            min-width: 0;
+            font-size: 12px;
+            color: #f2f2f2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .selection-duration {
+            flex-shrink: 0;
+            font-size: 11px;
+            color: #aaa;
+            font-variant-numeric: tabular-nums;
+        }
+
         a:link { text-decoration: none; }
         a:visited { text-decoration: none; }
         a:hover { text-decoration: none; }
@@ -460,6 +584,20 @@
 
         <canvas id="waveformCanvas" width="380" height="80" style="display: none;"></canvas>
 
+        <div id="selectionPanel" class="is-hidden" aria-label="Track selection">
+            <div class="selection-header">
+                <button id="selectionBackBtn" type="button" class="selection-header-btn">Back</button>
+                <span id="selectionCount">0 selected</span>
+                <button id="selectAllBtn" type="button" class="selection-header-btn">All</button>
+                <button id="clearAllBtn" type="button" class="selection-header-btn">Clear</button>
+            </div>
+            <div id="selectionViewport">
+                <div id="selectionSpacer">
+                    <div id="selectionRows"></div>
+                </div>
+            </div>
+        </div>
+
         <div class="download-button-container">
             <button id="downloadBtn" type="button" aria-label="Download" class="is-hidden">
                 <img class="dl-icon" src="./assets/download.svg" alt="" width="22" height="22" draggable="false">
@@ -475,6 +613,7 @@
             <p id="failedSummary"></p>
         </div>
     </div>
+    <script src="./scripts/format-utils.js"></script>
     <script src="./scripts/download-core.js"></script>
     <script src="./scripts/popup.js"></script>
 </body>

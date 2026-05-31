@@ -130,6 +130,21 @@ function setInlineButtonState(state) {
   );
 }
 
+function setInlineButtonNotice(message) {
+  const button = document.getElementById(INLINE_BUTTON_ID);
+  if (!button) {
+    return;
+  }
+
+  button.classList.remove("is-loading", "is-success", "is-error");
+  button.title = message;
+  button.setAttribute("aria-label", message);
+}
+
+function isJobAlreadyRunningError(message) {
+  return /already in progress/i.test(message || "");
+}
+
 function resetInlineButtonStateAfterSuccess() {
   if (successResetTimeout) {
     clearTimeout(successResetTimeout);
@@ -186,9 +201,16 @@ async function handleInlineCollectionDownloadClick() {
     });
 
     if (!startResult?.success || !startResult.job) {
-      throw new Error(
-        startResult?.error || "Could not start the background download."
-      );
+      const errorMessage =
+        startResult?.error || "Could not start the background download.";
+
+      if (isJobAlreadyRunningError(errorMessage)) {
+        isInlineDownloading = false;
+        setInlineButtonNotice("A download is already in progress");
+        return;
+      }
+
+      throw new Error(errorMessage);
     }
 
     setInlineButtonState("success");
@@ -196,6 +218,12 @@ async function handleInlineCollectionDownloadClick() {
   } catch (error) {
     console.error("SC Track Downloader inline bulk download error:", error);
     isInlineDownloading = false;
+
+    if (isJobAlreadyRunningError(error.message)) {
+      setInlineButtonNotice("A download is already in progress");
+      return;
+    }
+
     setInlineButtonState("error");
   }
 }

@@ -1,6 +1,7 @@
 let currentTrackData = null;
 let currentPlaylistData = null;
 let bulkContext = null;
+let bulkSelectionCache = null;
 let lastUrl = location.href;
 let cachedClientId = null;
 let cachedClientIdAt = 0;
@@ -349,12 +350,14 @@ function buildTrackDataFromApiTrack(trackData, clientId, pageUrl) {
   };
 }
 
-async function fetchTracksByIds(trackIds, clientId) {
+async function fetchTracksByIds(trackIds, clientId, options = {}) {
   if (!trackIds.length) {
     return new Map();
   }
 
+  const { onProgress, progressOffset = 0, progressTotal } = options;
   const tracksById = new Map();
+  let loadedPartial = 0;
 
   for (const idChunk of chunkArray(trackIds, TRACKS_BATCH_SIZE)) {
     const requestUrl = new URL("https://api-v2.soundcloud.com/tracks");
@@ -382,14 +385,28 @@ async function fetchTracksByIds(trackIds, clientId) {
         tracksById.set(track.id, track);
       }
     }
+
+    loadedPartial += idChunk.length;
+    if (onProgress) {
+      onProgress(progressOffset + loadedPartial, progressTotal);
+    }
   }
 
   return tracksById;
 }
 
-async function resolvePlaylistTracksUpTo(orderedEntries, clientId, pageUrl, limit) {
+async function resolvePlaylistTracksUpTo(
+  orderedEntries,
+  clientId,
+  pageUrl,
+  limit,
+  options = {}
+) {
+  const { onProgress, progressTotal } = options;
   const cap = limit ?? orderedEntries.length;
   const entriesUpToCap = orderedEntries.slice(0, cap);
+  const total = progressTotal ?? cap;
+  const titledCount = entriesUpToCap.filter((track) => track.title).length;
   const partialTrackIds = entriesUpToCap
     .filter((track) => !track.title && track.id)
     .map((track) => track.id);
@@ -397,19 +414,29 @@ async function resolvePlaylistTracksUpTo(orderedEntries, clientId, pageUrl, limi
   let tracksById = new Map();
 
   if (partialTrackIds.length) {
-    tracksById = await fetchTracksByIds(partialTrackIds, clientId);
+    tracksById = await fetchTracksByIds(partialTrackIds, clientId, {
+      onProgress,
+      progressOffset: titledCount,
+      progressTotal: total,
+    });
+  } else if (onProgress) {
+    onProgress(titledCount, total);
   }
 
-  return entriesUpToCap
-    .map((track) => {
-      const fullTrack = track.title ? track : tracksById.get(track.id);
-      if (!fullTrack?.title) {
-        return null;
-      }
+  const resolved = [];
 
-      return buildTrackDataFromApiTrack(fullTrack, clientId, pageUrl);
-    })
-    .filter(Boolean);
+  for (const track of entriesUpToCap) {
+    const fullTrack = track.title ? track : tracksById.get(track.id);
+    if (fullTrack?.title) {
+      resolved.push(buildTrackDataFromApiTrack(fullTrack, clientId, pageUrl));
+    }
+
+    if (onProgress) {
+      onProgress(resolved.length, total);
+    }
+  }
+
+  return resolved;
 }
 
 async function fetchUserLikesPage(requestUrl, clientId, oauthToken) {
@@ -449,10 +476,13 @@ async function fetchLikesTracks(
   pageUrl,
   oauthToken,
   limit,
-  extractionId = null
+  extractionId = null,
+  options = {}
 ) {
+  const { onProgress, progressTotal } = options;
   const tracks = [];
   const cap = limit ?? Infinity;
+  const total = progressTotal ?? cap;
   let nextUrl = new URL(`https://api-v2.soundcloud.com/users/${userId}/likes`);
   nextUrl.searchParams.set("client_id", clientId);
   nextUrl.searchParams.set("limit", String(LIKES_PAGE_SIZE));
@@ -473,6 +503,9 @@ async function fetchLikesTracks(
       const track = item?.track;
       if (track?.title) {
         tracks.push(buildTrackDataFromApiTrack(track, clientId, pageUrl));
+        if (onProgress) {
+          onProgress(tracks.length, total);
+        }
       }
     }
 
@@ -487,10 +520,81 @@ async function fetchLikesTracks(
   return limit ? tracks.slice(0, limit) : tracks;
 }
 
-async function resolveBulkTracks(limit) {
+const BULK_PROGRESS_THROTTLE_MS = 150;
+let lastBulkProgressAt = 0;
+
+function emitBulkFetchProgress(loaded, total) {
+  chrome.runtime
+    .sendMessage({
+      type: "BULK_FETCH_PROGRESS",
+      loaded,
+      total: Number.isFinite(total) ? total : loaded,
+    })
+    .catch(() => {});
+}
+
+function reportBulkFetchProgress(loaded, total) {
+  const now = Date.now();
+  if (now - lastBulkProgressAt < BULK_PROGRESS_THROTTLE_MS) {
+    return;
+  }
+
+  lastBulkProgressAt = now;
+  emitBulkFetchProgress(loaded, total);
+}
+
+function buildSelectionListProjection(tracks) {
+  const indexWidth = String(tracks.length).length;
+
+  return tracks.map((track, index) => ({
+    id: track.id,
+    index: index + 1,
+    title: track.title || "Untitled",
+    duration: track.duration || "",
+    indexLabel: String(index + 1).padStart(indexWidth, "0"),
+  }));
+}
+
+function setBulkSelectionCache(tracks) {
+  bulkSelectionCache = {
+    pageUrl: getCurrentPageUrl(),
+    tracks: tracks || [],
+  };
+}
+
+function getBulkTracksByIds(ids) {
+  if (
+    !bulkSelectionCache ||
+    bulkSelectionCache.pageUrl !== getCurrentPageUrl() ||
+    !Array.isArray(ids)
+  ) {
+    return null;
+  }
+
+  const tracksById = new Map(
+    bulkSelectionCache.tracks.map((track) => [track.id, track])
+  );
+
+  return ids
+    .map((id) => tracksById.get(id))
+    .filter(Boolean);
+}
+
+async function resolveBulkTracks(limit, options = {}) {
   if (!bulkContext || bulkContext.pageUrl !== getCurrentPageUrl()) {
     throw new Error("Bulk download context is not available for this page.");
   }
+
+  const onProgress = options.onProgress ?? null;
+  const progressTotal =
+    options.progressTotal ??
+    (bulkContext.kind === "playlist"
+      ? bulkContext.orderedEntries.length
+      : currentPlaylistData?.totalCount ?? null);
+
+  const emitProgress = onProgress
+    ? (loaded, total) => onProgress(loaded, total ?? progressTotal ?? loaded)
+    : null;
 
   if (bulkContext.kind === "likes") {
     const tracks = await fetchLikesTracks(
@@ -498,7 +602,12 @@ async function resolveBulkTracks(limit) {
       bulkContext.clientId,
       bulkContext.pageUrl,
       bulkContext.oauthToken,
-      limit
+      limit,
+      null,
+      {
+        onProgress: emitProgress,
+        progressTotal: progressTotal ?? Infinity,
+      }
     );
 
     if (tracks === null) {
@@ -513,7 +622,11 @@ async function resolveBulkTracks(limit) {
       bulkContext.orderedEntries,
       bulkContext.clientId,
       bulkContext.pageUrl,
-      limit
+      limit,
+      {
+        onProgress: emitProgress,
+        progressTotal: progressTotal ?? bulkContext.orderedEntries.length,
+      }
     );
   }
 
@@ -954,6 +1067,67 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.type === "GET_BULK_SELECTION_LIST") {
+    const progressTotal =
+      request.total ?? currentPlaylistData?.totalCount ?? null;
+
+    resolveBulkTracks(null, {
+      onProgress: reportBulkFetchProgress,
+      progressTotal,
+    })
+      .then((tracks) => {
+        setBulkSelectionCache(tracks);
+        sendResponse({
+          success: true,
+          total: tracks.length,
+          items: buildSelectionListProjection(tracks),
+        });
+      })
+      .catch((error) =>
+        sendResponse({
+          success: false,
+          error: error.message,
+        })
+      );
+
+    return true;
+  }
+
+  if (request.type === "GET_BULK_TRACKS_BY_IDS") {
+    (async () => {
+      try {
+        const ids = request.ids || [];
+        let tracks = getBulkTracksByIds(ids);
+
+        if (!tracks || tracks.length !== ids.length) {
+          const allTracks = await resolveBulkTracks(null, {
+            onProgress: reportBulkFetchProgress,
+            progressTotal: currentPlaylistData?.totalCount ?? null,
+          });
+          setBulkSelectionCache(allTracks);
+          tracks = getBulkTracksByIds(ids);
+        }
+
+        if (!tracks?.length) {
+          sendResponse({
+            success: false,
+            error: "No matching tracks were found for the current selection.",
+          });
+          return;
+        }
+
+        sendResponse({ success: true, tracks });
+      } catch (error) {
+        sendResponse({
+          success: false,
+          error: error.message,
+        });
+      }
+    })();
+
+    return true;
+  }
+
   return true;
 });
 
@@ -964,6 +1138,7 @@ function handleUrlChange() {
     currentTrackData = null;
     currentPlaylistData = null;
     bulkContext = null;
+    bulkSelectionCache = null;
     extractionRetryCount = 0;
     isExtracting = false;
 

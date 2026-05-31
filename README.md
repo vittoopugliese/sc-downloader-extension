@@ -4,6 +4,18 @@
 
 ![ImagePreview](./assets/readme_preview.jpeg)
 
+## 🆕 Update ~ 2026.06.02
+
+This release hardens **bulk download reliability** and extends the **inline download button** to playlists and likes.
+
+**Highlights:**
+- **Inline download button** on track pages *and* playlist/set/likes action bars (next to Like/Repost/Share)
+- **Bulk job recovery** — if the background worker restarts mid-download, the job resumes without skipping tracks
+- **Accurate progress counters** under parallel downloads (2 tracks at a time)
+- **Download timeout safety** — stuck saves no longer freeze the entire job
+
+---
+
 ## 🆕 Update ~ 2026.06.01
 
 This release is a **big one**. What started as a single-track downloader is now a fully polished bulk-download tool ~ with a ton of bug fixes and UX improvements along the way.
@@ -34,6 +46,7 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 - Waveform visualization
 - One-click download ~ works on public tracks without signing in
 - **Inline download button** on the track page action bar (next to Like/Repost/Share) ~ same download flow, no popup needed
+- **Inline download button** on playlist/set and likes pages ~ starts a background bulk job for the full collection
 
 ### Playlists, sets & albums
 - Open any `soundcloud.com/{user}/sets/{name}` page
@@ -74,11 +87,11 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 
 ### Download a playlist or likes
 1. Go to a **playlist/set** page or a **likes** page
-2. Click the extension icon
-3. Choose how many tracks to download from the dropdown next to the track count
+2. Click the **inline download button** in the action bar, **or** click the extension icon and use the popup
+3. Choose how many tracks to download from the dropdown next to the track count (popup only)
 4. Hit the download button
 5. Files appear in `Downloads/{Collection Name}/` as they complete
-6. You may **close the popup** ~ the download continues in the background
+6. You may **close the popup or tab** ~ the download continues in the background
 
 ---
 
@@ -90,7 +103,7 @@ One popup, two modes ~ same look, same feel:
 |---|---|
 | Title · artist · duration · format | Title · artist · `{N} tracks · [preset]` |
 | Waveform | Waveform (first track) |
-| Inline button + popup download | Download button → folder in Downloads |
+| Inline button + popup download | Inline button (full list) or popup with preset selector |
 
 Dark blurred artwork background, SoundCloud-orange accents, spinner states, and status text that actually tells you what's going on.
 
@@ -102,7 +115,9 @@ Dark blurred artwork background, SoundCloud-orange accents, spinner states, and 
 - Streams resolved via SoundCloud's `api-v2` (public `client_id` + optional OAuth cookie)
 - HLS segments fetched and assembled client-side; output as `.m4a` / `.mp3` depending on source
 - Bulk downloads use `chrome.downloads` + an offscreen document ~ one track at a time, minimal RAM
-- Job state stored in `chrome.storage.session` (survives popup close; cleared when Chrome exits)
+- Bulk jobs survive popup/tab close; per-track state ensures recovery after service worker restarts
+- Job state stored in `chrome.storage.session` (cleared when Chrome exits)
+- Pause stops new tracks; in-flight downloads still finish and save
 - Large collections: pagination handled automatically; stream URLs refreshed per track if they expire
 
 ---

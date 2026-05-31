@@ -1,6 +1,7 @@
 const SESSION_KEY = "scdl_active_job";
 const KEEPALIVE_ALARM = "scdl_bulk_keepalive";
 const MAX_IN_FLIGHT = 2;
+const DOWNLOAD_COMPLETE_TIMEOUT_MS = 5 * 60 * 1000;
 
 let streamDeps = {
   resolveStreamUrl: null,
@@ -11,6 +12,16 @@ let jobControl = { jobId: null, state: "running" };
 let activeLoopPromise = null;
 let activeLoopJobId = null;
 let inFlightBuildIds = new Set();
+let stateQueue = Promise.resolve();
+
+function withJobState(fn) {
+  const run = stateQueue.then(fn);
+  stateQueue = run.then(
+    () => {},
+    () => {}
+  );
+  return run;
+}
 
 function sanitizeFolderName(title) {
   return (title || "SoundCloud Playlist")
@@ -29,26 +40,79 @@ function sleep(ms) {
 }
 
 function getFileExtension(trackData) {
-  const preset = trackData.streamPreset || "";
-  const mimeType = trackData.streamMimeType || "";
+  return SCFormat.getFileExtension(trackData);
+}
 
-  if (trackData.streamProtocol === "progressive") {
-    return "mp3";
+function createEmptyTrackStatus(trackCount) {
+  return new Array(trackCount).fill(null);
+}
+
+function syncJobCountersFromTrackStatus(job) {
+  if (!Array.isArray(job.trackStatus)) {
+    return;
   }
 
-  if (preset.startsWith("mp3") || mimeType.includes("audio/mpeg")) {
-    return "mp3";
+  job.completed = job.trackStatus.filter((status) => status === "done").length;
+  job.currentIndex = job.trackStatus.reduce(
+    (max, status, index) =>
+      status === "done" || status === "failed" ? Math.max(max, index + 1) : max,
+    0
+  );
+}
+
+function migrateJobTrackStatus(job) {
+  if (!job?.tracks?.length) {
+    return job;
   }
 
-  if (preset.includes("opus") || mimeType.includes("opus")) {
-    return "ogg";
+  if (
+    Array.isArray(job.trackStatus) &&
+    job.trackStatus.length === job.tracks.length
+  ) {
+    syncJobCountersFromTrackStatus(job);
+    return job;
   }
 
-  if (preset.startsWith("aac") || mimeType.includes("mp4")) {
-    return "m4a";
+  const trackStatus = createEmptyTrackStatus(job.tracks.length);
+
+  for (const failure of job.failed || []) {
+    const index = (failure.index || 0) - 1;
+    if (index >= 0 && index < trackStatus.length) {
+      trackStatus[index] = "failed";
+    }
   }
 
-  return "audio";
+  let doneMarked = 0;
+  for (
+    let index = 0;
+    index < trackStatus.length && doneMarked < (job.completed || 0);
+    index += 1
+  ) {
+    if (trackStatus[index] === "failed") {
+      continue;
+    }
+
+    trackStatus[index] = "done";
+    doneMarked += 1;
+  }
+
+  job.trackStatus = trackStatus;
+  syncJobCountersFromTrackStatus(job);
+  return job;
+}
+
+function getPendingTrackIndices(job) {
+  migrateJobTrackStatus(job);
+
+  const pending = [];
+  for (let index = 0; index < job.tracks.length; index += 1) {
+    const status = job.trackStatus[index];
+    if (status !== "done" && status !== "failed") {
+      pending.push(index);
+    }
+  }
+
+  return pending;
 }
 
 function slimTrackForJob(track) {
@@ -75,7 +139,8 @@ function sanitizeBulkFilename(trackData, extension, index, total) {
 
 async function loadJob() {
   const result = await chrome.storage.session.get(SESSION_KEY);
-  return result[SESSION_KEY] || null;
+  const job = result[SESSION_KEY] || null;
+  return job ? migrateJobTrackStatus(job) : null;
 }
 
 async function saveJob(job) {
@@ -90,6 +155,8 @@ function getPublicJobSnapshot(job) {
   if (!job) {
     return null;
   }
+
+  migrateJobTrackStatus(job);
 
   return {
     id: job.id,
@@ -124,6 +191,7 @@ async function updateBadge(job) {
     return;
   }
 
+  migrateJobTrackStatus(job);
   const done = job.completed + job.failed.length;
   const total = job.tracks.length;
   const text = total > 999 ? `${done}` : `${done}/${total}`;
@@ -258,39 +326,55 @@ async function waitWhilePaused(jobId) {
   }
 }
 
-function waitForDownloadComplete(downloadId) {
+function waitForDownloadComplete(
+  downloadId,
+  timeoutMs = DOWNLOAD_COMPLETE_TIMEOUT_MS
+) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+
+    function settle(onSettle, value) {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeoutId);
+      chrome.downloads.onChanged.removeListener(handleChange);
+      onSettle(value);
+    }
+
     function handleChange(delta) {
       if (delta.id !== downloadId || !delta.state) {
         return;
       }
 
       if (delta.state.current === "complete") {
-        chrome.downloads.onChanged.removeListener(handleChange);
-        resolve(downloadId);
+        settle(resolve, downloadId);
         return;
       }
 
       if (delta.state.current === "interrupted") {
-        chrome.downloads.onChanged.removeListener(handleChange);
-        reject(new Error("Download was interrupted."));
+        settle(reject, new Error("Download was interrupted."));
       }
     }
+
+    const timeoutId = setTimeout(() => {
+      settle(reject, new Error("Download timed out."));
+    }, timeoutMs);
 
     chrome.downloads.onChanged.addListener(handleChange);
 
     chrome.downloads.search({ id: downloadId }, (items) => {
-      if (chrome.runtime.lastError) {
+      if (chrome.runtime.lastError || settled) {
         return;
       }
 
       const item = items?.[0];
       if (item?.state === "complete") {
-        chrome.downloads.onChanged.removeListener(handleChange);
-        resolve(downloadId);
+        settle(resolve, downloadId);
       } else if (item?.state === "interrupted") {
-        chrome.downloads.onChanged.removeListener(handleChange);
-        reject(new Error("Download was interrupted."));
+        settle(reject, new Error("Download was interrupted."));
       }
     });
   });
@@ -377,78 +461,95 @@ async function abortInFlightBuilds() {
 }
 
 async function updateTrackProgress(jobId, trackIndex, total, title, statusText) {
-  const job = await loadJob();
-  if (!job || job.id !== jobId) {
-    return null;
-  }
+  return withJobState(async () => {
+    const job = await loadJob();
+    if (!job || job.id !== jobId) {
+      return null;
+    }
 
-  job.currentTrackTitle = title;
-  job.currentTrackStatus = statusText || `Track ${trackIndex + 1}/${total}`;
-  await saveJob(job);
-  broadcastJobUpdate(job);
-  return job;
+    job.currentTrackTitle = title;
+    job.currentTrackStatus = statusText || `Track ${trackIndex + 1}/${total}`;
+    await saveJob(job);
+    broadcastJobUpdate(job);
+    return job;
+  });
 }
 
 async function recordTrackSuccess(jobId, trackIndex) {
-  const job = await loadJob();
-  if (!job || job.id !== jobId || !["running", "paused"].includes(job.status)) {
-    return null;
-  }
+  return withJobState(async () => {
+    const job = await loadJob();
+    if (!job || job.id !== jobId || !["running", "paused"].includes(job.status)) {
+      return null;
+    }
 
-  job.completed += 1;
-  job.currentIndex = Math.max(job.currentIndex, trackIndex + 1);
-  job.currentTrackTitle = null;
-  job.currentTrackStatus = `Saved ${job.completed}/${job.tracks.length}`;
+    if (job.trackStatus[trackIndex] === "done") {
+      return job;
+    }
 
-  await saveJob(job);
-  await updateBadge(job);
-  broadcastJobUpdate(job);
-  return job;
+    job.trackStatus[trackIndex] = "done";
+    syncJobCountersFromTrackStatus(job);
+    job.currentTrackTitle = null;
+    job.currentTrackStatus = `Saved ${job.completed}/${job.tracks.length}`;
+
+    await saveJob(job);
+    await updateBadge(job);
+    broadcastJobUpdate(job);
+    return job;
+  });
 }
 
 async function recordTrackFailure(jobId, trackIndex, title, errorMessage) {
-  const job = await loadJob();
-  if (!job || job.id !== jobId || !["running", "paused"].includes(job.status)) {
-    return null;
-  }
+  return withJobState(async () => {
+    const job = await loadJob();
+    if (!job || job.id !== jobId || !["running", "paused"].includes(job.status)) {
+      return null;
+    }
 
-  job.failed = [
-    ...(job.failed || []),
-    {
-      index: trackIndex + 1,
-      title: title || "Unknown track",
-      error: errorMessage || "Unknown error",
-    },
-  ];
-  job.currentIndex = Math.max(job.currentIndex, trackIndex + 1);
-  job.currentTrackStatus = `Failed: ${title || "Unknown track"}`;
+    if (job.trackStatus[trackIndex] === "failed") {
+      return job;
+    }
 
-  await saveJob(job);
-  await updateBadge(job);
-  broadcastJobUpdate(job);
-  return job;
+    job.trackStatus[trackIndex] = "failed";
+    job.failed = [
+      ...(job.failed || []),
+      {
+        index: trackIndex + 1,
+        title: title || "Unknown track",
+        error: errorMessage || "Unknown error",
+      },
+    ];
+    syncJobCountersFromTrackStatus(job);
+    job.currentTrackStatus = `Failed: ${title || "Unknown track"}`;
+
+    await saveJob(job);
+    await updateBadge(job);
+    broadcastJobUpdate(job);
+    return job;
+  });
 }
 
 async function finalizeJob(jobId, status, error) {
-  const job = await loadJob();
-  if (!job || job.id !== jobId) {
-    return null;
-  }
+  return withJobState(async () => {
+    const job = await loadJob();
+    if (!job || job.id !== jobId) {
+      return null;
+    }
 
-  job.status = status;
-  job.finishedAt = Date.now();
-  job.error = error || null;
-  job.currentTrackTitle = null;
-  job.currentTrackStatus = null;
+    job.status = status;
+    job.finishedAt = Date.now();
+    job.error = error || null;
+    job.currentTrackTitle = null;
+    job.currentTrackStatus = null;
 
-  await saveJob(job);
-  await updateBadge(job);
-  await stopKeepalive();
-  await notifyJobFinished(job);
-  await closeOffscreenDocument();
+    await saveJob(job);
+    await updateBadge(job);
+    await stopKeepalive();
+    await notifyJobFinished(job);
+    await closeOffscreenDocument();
 
-  broadcastJobUpdate(job);
-  return job;
+    broadcastJobUpdate(job);
+    return job;
+  });
 }
 
 async function processTrack(jobId, trackIndex) {
@@ -555,11 +656,10 @@ async function runJobLoopInternal(jobId) {
 
   jobControl = { jobId, state: job.status === "paused" ? "paused" : "running" };
 
-  const inFlight = new Set();
-  let nextIndex = job.currentIndex;
+  const inFlight = new Map();
 
   try {
-    while (nextIndex < job.tracks.length) {
+    while (true) {
       await waitWhilePaused(jobId);
 
       if (jobControl.jobId === jobId && jobControl.state === "cancelled") {
@@ -572,11 +672,7 @@ async function runJobLoopInternal(jobId) {
       }
 
       while (inFlight.size >= MAX_IN_FLIGHT) {
-        if (!inFlight.size) {
-          break;
-        }
-
-        await Promise.race(inFlight);
+        await Promise.race(inFlight.values());
         await waitWhilePaused(jobId);
 
         if (jobControl.state === "cancelled") {
@@ -588,18 +684,29 @@ async function runJobLoopInternal(jobId) {
         break;
       }
 
-      const trackIndex = nextIndex;
-      nextIndex += 1;
+      job = await loadJob();
+      const pending = getPendingTrackIndices(job).filter(
+        (trackIndex) => !inFlight.has(trackIndex)
+      );
 
-      const trackPromise = processTrack(jobId, trackIndex);
-      const wrappedPromise = trackPromise.finally(() => {
-        inFlight.delete(wrappedPromise);
+      if (pending.length === 0) {
+        if (inFlight.size === 0) {
+          break;
+        }
+
+        await Promise.race(inFlight.values());
+        continue;
+      }
+
+      const trackIndex = pending[0];
+      const trackPromise = processTrack(jobId, trackIndex).finally(() => {
+        inFlight.delete(trackIndex);
       });
-      inFlight.add(wrappedPromise);
+      inFlight.set(trackIndex, trackPromise);
     }
 
     if (inFlight.size) {
-      await Promise.all(inFlight);
+      await Promise.all(inFlight.values());
     }
 
     job = await loadJob();
@@ -611,7 +718,7 @@ async function runJobLoopInternal(jobId) {
       return;
     }
 
-    if (job.status === "running") {
+    if (job.status === "running" && getPendingTrackIndices(job).length === 0) {
       const finalStatus = job.completed > 0 ? "completed" : "failed";
       await finalizeJob(
         jobId,
@@ -640,6 +747,10 @@ function runJobLoop(jobId) {
   return activeLoopPromise;
 }
 
+function isLoopActive(jobId) {
+  return activeLoopPromise !== null && activeLoopJobId === jobId;
+}
+
 const BulkJobManager = {
   SESSION_KEY,
   KEEPALIVE_ALARM,
@@ -649,6 +760,7 @@ const BulkJobManager = {
   getPublicJobSnapshot,
   sanitizeFolderName,
   updateBadge,
+  isLoopActive,
 
   setStreamDependencies(deps) {
     streamDeps = {
@@ -673,6 +785,7 @@ const BulkJobManager = {
       artistImageUrl: playlistMeta.artistImageUrl || tracks[0]?.artistImageUrl || null,
       artistUrl: playlistMeta.artistUrl || tracks[0]?.artistUrl || null,
       tracks: tracks.map(slimTrackForJob),
+      trackStatus: createEmptyTrackStatus(tracks.length),
       clientId: tracks[0]?.clientId || null,
       currentIndex: 0,
       completed: 0,
@@ -694,6 +807,7 @@ const BulkJobManager = {
   },
 
   async getStatus() {
+    await BulkJobManager.ensureJobRunning();
     const job = await loadJob();
     return { success: true, job: getPublicJobSnapshot(job) };
   },
@@ -704,6 +818,7 @@ const BulkJobManager = {
       return { success: false, error: "No running job to pause." };
     }
 
+    // Pause stops dispatching new tracks; in-flight downloads still finish and save.
     job.status = "paused";
     job.pausedAt = Date.now();
     jobControl = { jobId: job.id, state: "paused" };
@@ -762,5 +877,19 @@ const BulkJobManager = {
       state: job.status === "paused" ? "paused" : "running",
     };
     runJobLoop(job.id);
+  },
+
+  async ensureJobRunning() {
+    const job = await loadJob();
+    if (!job || !["running", "paused"].includes(job.status)) {
+      return;
+    }
+
+    if (isLoopActive(job.id)) {
+      await updateBadge(job);
+      return;
+    }
+
+    await BulkJobManager.recoverRunningJob();
   },
 };
