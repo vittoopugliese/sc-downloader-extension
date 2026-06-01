@@ -4,18 +4,6 @@
 
 ![ImagePreview](./assets/readme_preview.jpeg)
 
-## 🆕 Update ~ 2026.06.02
-
-This release hardens **bulk download reliability** and extends the **inline download button** to playlists and likes.
-
-**Highlights:**
-- **Inline download button** on track pages *and* playlist/set/likes action bars (next to Like/Repost/Share)
-- **Bulk job recovery** — if the background worker restarts mid-download, the job resumes without skipping tracks
-- **Accurate progress counters** under parallel downloads (2 tracks at a time)
-- **Download timeout safety** — stuck saves no longer freeze the entire job
-
----
-
 ## 🆕 Update ~ 2026.06.01
 
 This release is a **big one**. What started as a single-track downloader is now a fully polished bulk-download tool ~ with a ton of bug fixes and UX improvements along the way.
@@ -33,6 +21,7 @@ This release is a **big one**. What started as a single-track downloader is now 
 - **Modern AAC HLS streaming** support ~ SoundCloud's current format, handled automatically
 - **SPA-friendly** ~ switch tracks, playlists, or pages without reloading SoundCloud
 - **Polished UI** ~ loading spinner, clear error states, download progress, pause/cancel, badge, and notifications
+- **Real Audio** ~ when an artist enables downloads on SoundCloud, the extension grabs the uploaded file (WAV/FLAC/MP3) instead of the streamed transcode
 
 If you used an older version and ran into bugs ~ stale track data, blank screens, login-only downloads ~ this update was built to fix exactly that. 🎉
 
@@ -119,6 +108,24 @@ Dark blurred artwork background, SoundCloud-orange accents, spinner states, and 
 - Job state stored in `chrome.storage.session` (cleared when Chrome exits)
 - Pause stops new tracks; in-flight downloads still finish and save
 - Large collections: pagination handled automatically; stream URLs refreshed per track if they expire
+
+---
+
+## 🔧 Troubleshooting
+
+**Extension doesn't recognize the track page**
+- Make sure you're on a track URL like `soundcloud.com/artist/track-name` (not the home feed or search)
+- If you navigated from likes or another page and the popup stays blank, wait a few seconds or click **Retry** — a full page refresh is rarely needed now
+
+**Download fails or shows an error**
+- **Ad blockers** can block requests to `*.sndcdn.com`. Disable your ad blocker for `soundcloud.com` and try again
+- **Enable popups and redirects** for `soundcloud.com` in your browser settings (required for some download flows)
+- Sign in to SoundCloud if the track is private or requires login
+
+**Audio quality**
+- SoundCloud does not offer a 320 kbps stream — the best transcode available is typically **AAC 160k**
+- When the artist has enabled downloads, the extension automatically uses the **original uploaded file** (often WAV, FLAC, or high-quality MP3)
+- Otherwise, files are saved from SoundCloud's streaming transcode (~50–80 MB/hour)
 
 ---
 

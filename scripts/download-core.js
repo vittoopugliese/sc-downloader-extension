@@ -124,10 +124,25 @@ const SCDownload = (() => {
   }
 
   async function buildTrackBlob(streamUrl, trackData, onProgress, signal) {
+    const isHlsStream =
+      trackData.streamProtocol === "hls" || streamUrl.includes(".m3u8");
+    const isDirectDownload =
+      trackData.isOriginalDownload ||
+      trackData.streamProtocol === "progressive" ||
+      !isHlsStream;
+
     const extension = getFileExtension(trackData);
     const fileName = sanitizeFilename(trackData, extension);
 
-    if (trackData.streamProtocol === "hls" || streamUrl.includes(".m3u8")) {
+    if (isDirectDownload) {
+      onProgress?.("Downloading file...");
+      const buffer = await fetchBufferOrThrow(streamUrl, "File download", signal);
+      const blobType = getBlobType(trackData);
+      const blob = new Blob([buffer], { type: blobType });
+      return { blob, fileName };
+    }
+
+    if (isHlsStream) {
       onProgress?.("Loading playlist...");
       const { baseUrl, playlistText } = await resolveMediaPlaylist(streamUrl, signal);
       const { initSegmentUrl, segmentUrls } = parseHlsPlaylist(

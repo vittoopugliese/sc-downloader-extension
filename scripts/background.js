@@ -36,6 +36,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.type === "GET_ORIGINAL_DOWNLOAD") {
+    resolveOriginalDownload(request.trackId, request.clientId)
+      .then((result) => sendResponse({ success: true, ...result }))
+      .catch((error) =>
+        sendResponse({
+          success: false,
+          error: error.message,
+          code: error.code || "unknown_error",
+        })
+      );
+
+    return true;
+  }
+
   if (request.type === "GET_LOGGED_IN_USER") {
     resolveLoggedInUserProfile(request.clientId)
       .then((profile) => sendResponse({ success: true, profile }))
@@ -267,6 +281,128 @@ async function resolveStreamUrl(
   throw lastError || buildStreamError("Could not resolve stream URL.", "unknown_error");
 }
 
+async function requestOriginalDownloadUrl(trackId, options) {
+  const { clientId, oauthToken } = options;
+
+  if (!clientId && !oauthToken) {
+    throw buildStreamError(
+      "Could not obtain client_id. Reload the SoundCloud page and try again.",
+      "missing_client_id"
+    );
+  }
+
+  const requestUrl = new URL(
+    `https://api-v2.soundcloud.com/tracks/${trackId}/download`
+  );
+
+  if (clientId) {
+    requestUrl.searchParams.set("client_id", clientId);
+  }
+
+  const headers = {
+    Accept: "application/json",
+    Origin: "https://soundcloud.com",
+    Referer: "https://soundcloud.com/",
+  };
+
+  if (oauthToken) {
+    headers.Authorization = `OAuth ${oauthToken}`;
+  }
+
+  const response = await fetch(requestUrl.toString(), {
+    method: "GET",
+    credentials: "include",
+    headers,
+  });
+
+  if (!response.ok) {
+    throw buildStreamError(
+      getHttpErrorMessage(response.status),
+      response.status === 401
+        ? "unauthorized"
+        : response.status === 403
+          ? "forbidden"
+          : "http_error",
+      response.status
+    );
+  }
+
+  const downloadData = await response.json();
+  const url = downloadData.redirectUri || downloadData.redirect_uri;
+
+  if (!url) {
+    throw buildStreamError(
+      "SoundCloud did not return an original download URL.",
+      "empty_download_url"
+    );
+  }
+
+  return url;
+}
+
+async function resolveOriginalDownload(trackId, clientId) {
+  const attempts = [];
+
+  if (clientId) {
+    attempts.push({ clientId });
+  }
+
+  let oauthToken = null;
+  try {
+    oauthToken = await getOAuthToken();
+    attempts.push({
+      clientId,
+      oauthToken,
+    });
+  } catch {
+    // No logged-in session available.
+  }
+
+  if (!attempts.length) {
+    throw buildStreamError(
+      "Could not obtain client_id. Reload the SoundCloud page and try again.",
+      "missing_client_id"
+    );
+  }
+
+  let lastError = null;
+
+  for (const attempt of attempts) {
+    try {
+      const url = await requestOriginalDownloadUrl(trackId, attempt);
+
+      return {
+        url,
+        original: true,
+      };
+    } catch (error) {
+      lastError = error;
+
+      if (![401, 403].includes(error.status)) {
+        throw error;
+      }
+    }
+  }
+
+  if (lastError?.status === 403) {
+    throw buildStreamError(
+      "Original download is not available for this track.",
+      "forbidden",
+      403
+    );
+  }
+
+  if (lastError?.status === 401) {
+    throw buildStreamError(
+      "Original download requires login. Sign in to SoundCloud and try again.",
+      "unauthorized",
+      401
+    );
+  }
+
+  throw lastError || buildStreamError("Could not resolve original download.", "unknown_error");
+}
+
 function extractStreamInfoFromApiTrack(trackData) {
   const transcodings = trackData.media?.transcodings || [];
   if (!transcodings.length) {
@@ -359,6 +495,8 @@ async function refreshTrackMetadata(trackId, clientId) {
     streamPreset: streamInfo?.preset || null,
     streamMimeType: streamInfo?.mimeType || null,
     trackAuthorization: track.track_authorization || null,
+    downloadable: track.downloadable === true,
+    hasDownloadsLeft: track.has_downloads_left !== false,
     clientId,
   };
 }
@@ -400,5 +538,6 @@ async function resolveLoggedInUserProfile(clientId) {
 
 BulkJobManager.setStreamDependencies({
   resolveStreamUrl,
+  resolveOriginalDownload,
   refreshTrackMetadata,
 });

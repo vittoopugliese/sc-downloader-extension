@@ -45,14 +45,20 @@ function isSoundCloudPlaylistPage() {
   return segments.length === 3 && segments[1].toLowerCase() === "sets";
 }
 
-function isSoundCloudTrackPage() {
+function looksLikeTrackPathPage() {
   if (!window.location.hostname.includes("soundcloud.com")) return false;
   if (isSoundCloudLikesPage()) return false;
   if (isSoundCloudPlaylistPage()) return false;
   const segments = window.location.pathname.split("/").filter(Boolean);
   if (segments.length < 2 || segments.length > 3) return false;
-  if (segments.some((segment) =>NON_TRACK_PATHS.includes(`/${segment.toLowerCase()}`))) return false;
+  if (segments.some((segment) => NON_TRACK_PATHS.includes(`/${segment.toLowerCase()}`))) {
+    return false;
+  }
   return true;
+}
+
+function isSoundCloudTrackPage() {
+  return looksLikeTrackPathPage();
 }
 
 function getCurrentPageUrl() {
@@ -168,7 +174,11 @@ async function extractClientId(html) {
   return null;
 }
 
-function getStreamFormatLabel(streamInfo) {
+function getStreamFormatLabel(streamInfo, trackData) {
+  if (trackData?.downloadable === true && trackData?.has_downloads_left !== false) {
+    return "Original file";
+  }
+
   if (!streamInfo) {
     return null;
   }
@@ -338,7 +348,9 @@ function buildTrackDataFromApiTrack(trackData, clientId, pageUrl) {
     streamProtocol: streamInfo?.protocol || null,
     streamPreset: streamInfo?.preset || null,
     streamMimeType: streamInfo?.mimeType || null,
-    streamFormatLabel: getStreamFormatLabel(streamInfo),
+    streamFormatLabel: getStreamFormatLabel(streamInfo, trackData),
+    downloadable: trackData.downloadable === true,
+    hasDownloadsLeft: trackData.has_downloads_left !== false,
     clientId,
     trackAuthorization: trackData.track_authorization || null,
     permalink: trackData.permalink_url,
@@ -1041,7 +1053,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
 
-    if (isSoundCloudTrackPage()) {
+    if (looksLikeTrackPathPage()) {
       if (request.forceRefresh || !isExtracting) {
         extractTrackData();
       }

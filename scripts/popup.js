@@ -1,6 +1,8 @@
-const LOADING_TIMEOUT_MS = 10000;
+const LOADING_TIMEOUT_MS = 15000;
 const POLL_INTERVAL_MS = 500;
 const JOB_POLL_INTERVAL_MS = 1000;
+const NOT_TRACK_RETRY_DELAY_MS = 600;
+const MAX_NOT_TRACK_RETRIES = 2;
 const DEFAULT_DOWNLOAD_STATUS = "Ready to download";
 const DOWNLOAD_ERROR_STATUS = "Error, please retry";
 const DOWNLOAD_PRESETS = [10, 25, 50, 100];
@@ -60,10 +62,12 @@ let currentPlaylistData = null;
 let hasRenderedTrack = false;
 let downloadListenerAttached = false;
 let activeBulkJob = null;
+let notTrackRetryCount = 0;
 
 document.addEventListener("DOMContentLoaded", () => {
   retryBtn.addEventListener("click", () => {
     hasRenderedTrack = false;
+    notTrackRetryCount = 0;
     hideRetryButton();
     showLoading();
     startTrackFlow(true);
@@ -112,6 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
         loadingText.textContent = `Loading tracks ${loaded}/${total}...`;
         downloadStatus.textContent = `Loading tracks ${loaded}/${total}...`;
       }
+      loadingStartTime = Date.now();
       return;
     }
 
@@ -120,6 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (message.type === "TRACK_DATA" && message.data) {
+      loadingStartTime = Date.now();
       renderTrack(message.data);
       return;
     }
@@ -288,6 +294,7 @@ function renderBulkJobSummary(job) {
 
 function startTrackFlow(forceRefresh) {
   stopPolling();
+  notTrackRetryCount = 0;
   loadingStartTime = Date.now();
   requestTrackState(forceRefresh).then(handleTrackState);
 
@@ -351,6 +358,7 @@ function handleTrackState(state) {
   }
 
   if (state.status === "loaded") {
+    notTrackRetryCount = 0;
     if (state.kind === "playlist") {
       renderPlaylist(state.data);
     } else {
@@ -360,6 +368,20 @@ function handleTrackState(state) {
   }
 
   if (state.status === "not_track") {
+    if (notTrackRetryCount < MAX_NOT_TRACK_RETRIES) {
+      notTrackRetryCount += 1;
+      loadingStartTime = Date.now();
+      setTimeout(async () => {
+        if (hasRenderedTrack) {
+          return;
+        }
+
+        const retryState = await requestTrackState(true);
+        handleTrackState(retryState);
+      }, NOT_TRACK_RETRY_DELAY_MS);
+      return;
+    }
+
     stopPolling();
     hideLoading();
     showTrackLoadError("not_track");
@@ -388,8 +410,58 @@ function hideLoading() {
 }
 
 function showLoadingTimeout() {
-  loadingText.textContent = "Could not load track.";
+  loadingText.textContent = "Still loading track data...";
   retryBtn.classList.add("is-visible");
+}
+
+async function resolveTrackDownloadUrl(trackData) {
+  if (trackData.downloadable && trackData.hasDownloadsLeft && trackData.id) {
+    try {
+      const original = await chrome.runtime.sendMessage({
+        type: "GET_ORIGINAL_DOWNLOAD",
+        trackId: trackData.id,
+        clientId: trackData.clientId,
+      });
+
+      if (original?.success && original.url) {
+        return {
+          url: original.url,
+          trackData: {
+            ...trackData,
+            isOriginalDownload: true,
+            originalDownloadUrl: original.url,
+          },
+        };
+      }
+    } catch {
+      // Fall back to the streaming transcode.
+    }
+  }
+
+  if (!trackData.streamUrl) {
+    throw new Error("No downloadable stream was found for this track.");
+  }
+
+  const result = await chrome.runtime.sendMessage({
+    type: "GET_STREAM_URL",
+    streamUrl: trackData.streamUrl,
+    clientId: trackData.clientId,
+    trackAuthorization: trackData.trackAuthorization,
+    streamProtocol: trackData.streamProtocol,
+    streamPreset: trackData.streamPreset,
+    streamMimeType: trackData.streamMimeType,
+  });
+
+  if (!result?.success || !result.url) {
+    const error = new Error(result?.error || "Cannot obtain final file URL.");
+    error.result = result;
+    throw error;
+  }
+
+  return {
+    url: result.url,
+    trackData,
+  };
 }
 
 function hideRetryButton() {
@@ -894,7 +966,7 @@ function attachDownloadListener() {
       return;
     }
 
-    if (!trackData.streamUrl) {
+    if (!trackData.streamUrl && !(trackData.downloadable && trackData.hasDownloadsLeft)) {
       console.error("Cannot obtain stream URL.");
       setDownloadState(false, DOWNLOAD_ERROR_STATUS);
       alert("Error #33: No downloadable stream was found for this track.");
@@ -904,34 +976,24 @@ function attachDownloadListener() {
     setDownloadState(true, "Resolving stream...");
 
     try {
-      const result = await chrome.runtime.sendMessage({
-        type: "GET_STREAM_URL",
-        streamUrl: trackData.streamUrl,
-        clientId: trackData.clientId,
-        trackAuthorization: trackData.trackAuthorization,
-        streamProtocol: trackData.streamProtocol,
-        streamPreset: trackData.streamPreset,
-        streamMimeType: trackData.streamMimeType,
-      });
+      const resolved = await resolveTrackDownloadUrl(trackData);
 
-      if (result?.success && result.url) {
-        try {
-          await SCDownload.forceDownload(result.url, trackData, (status) => setDownloadState(true, status));
-          setDownloadState(false, "Download completed, enjoy");
-        } catch (downloadError) {
-          console.error("Error downloading file:", downloadError);
-          setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-          alert(`Download failed: ${downloadError.message}`);
-        }
-      } else {
-        console.error("Error: " + (result?.error || "Cannot obtain final file URL."));
+      try {
+        await SCDownload.forceDownload(
+          resolved.url,
+          resolved.trackData,
+          (status) => setDownloadState(true, status)
+        );
+        setDownloadState(false, "Download completed, enjoy");
+      } catch (downloadError) {
+        console.error("Error downloading file:", downloadError);
         setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-        alert(formatResolveError(result));
+        alert(`Download failed: ${downloadError.message}`);
       }
     } catch (error) {
-      console.error("Error communicating with Background Script. " + error.message);
+      console.error("Error resolving download URL:", error);
       setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-      alert(`Error #22: ${error.message}`);
+      alert(formatResolveError(error.result || { error: error.message }));
     }
   });
 }
@@ -959,8 +1021,7 @@ function showTrackLoadError(reason) {
     errorHint.textContent = "Try reloading the SoundCloud page.";
   } else {
     errorTitle.textContent = "No track selected";
-    errorMessage.textContent =
-      "Open a SoundCloud track or playlist page to download it. You're currently on the home or another page.";
+    errorMessage.textContent = "Open a Track, Playlist or Likes page to download it";
     errorHint.textContent = "";
   }
 

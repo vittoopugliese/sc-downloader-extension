@@ -125,6 +125,8 @@ function slimTrackForJob(track) {
     streamPreset: track.streamPreset,
     streamMimeType: track.streamMimeType,
     trackAuthorization: track.trackAuthorization,
+    downloadable: track.downloadable === true,
+    hasDownloadsLeft: track.hasDownloadsLeft !== false,
     clientId: track.clientId,
   };
 }
@@ -406,6 +408,33 @@ async function resolveStreamForTrack(trackData) {
     throw new Error("Stream resolver is not initialized.");
   }
 
+  if (
+    trackData.downloadable &&
+    trackData.hasDownloadsLeft &&
+    trackData.id &&
+    streamDeps.resolveOriginalDownload
+  ) {
+    try {
+      const original = await streamDeps.resolveOriginalDownload(
+        trackData.id,
+        trackData.clientId
+      );
+
+      if (original?.url) {
+        return {
+          streamUrl: original.url,
+          trackData: {
+            ...trackData,
+            isOriginalDownload: true,
+            originalDownloadUrl: original.url,
+          },
+        };
+      }
+    } catch {
+      // Fall back to the streaming transcode.
+    }
+  }
+
   let currentTrack = trackData;
   let lastError = null;
 
@@ -424,7 +453,10 @@ async function resolveStreamForTrack(trackData) {
         currentTrack.streamMimeType
       );
 
-      return result.url;
+      return {
+        streamUrl: result.url,
+        trackData: currentTrack,
+      };
     } catch (error) {
       lastError = error;
       const shouldRefresh =
@@ -572,7 +604,7 @@ async function processTrack(jobId, trackIndex) {
   );
 
   try {
-    const streamUrl = await resolveStreamForTrack(trackData);
+    const resolved = await resolveStreamForTrack(trackData);
 
     await updateTrackProgress(
       jobId,
@@ -588,8 +620,8 @@ async function processTrack(jobId, trackIndex) {
     const buildResult = await sendOffscreenMessage({
       type: "OFFSCREEN_BUILD",
       buildId,
-      trackData,
-      streamUrl,
+      trackData: resolved.trackData,
+      streamUrl: resolved.streamUrl,
     });
 
     inFlightBuildIds.delete(buildId);
@@ -765,6 +797,7 @@ const BulkJobManager = {
   setStreamDependencies(deps) {
     streamDeps = {
       resolveStreamUrl: deps.resolveStreamUrl,
+      resolveOriginalDownload: deps.resolveOriginalDownload,
       refreshTrackMetadata: deps.refreshTrackMetadata,
     };
   },

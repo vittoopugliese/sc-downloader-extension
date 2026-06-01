@@ -228,6 +228,54 @@ async function handleInlineCollectionDownloadClick() {
   }
 }
 
+async function resolveTrackDownloadUrl(trackData) {
+  if (trackData.downloadable && trackData.hasDownloadsLeft && trackData.id) {
+    try {
+      const original = await chrome.runtime.sendMessage({
+        type: "GET_ORIGINAL_DOWNLOAD",
+        trackId: trackData.id,
+        clientId: trackData.clientId,
+      });
+
+      if (original?.success && original.url) {
+        return {
+          url: original.url,
+          trackData: {
+            ...trackData,
+            isOriginalDownload: true,
+            originalDownloadUrl: original.url,
+          },
+        };
+      }
+    } catch {
+      // Fall back to the streaming transcode.
+    }
+  }
+
+  if (!trackData.streamUrl) {
+    throw new Error("No downloadable stream was found for this track.");
+  }
+
+  const result = await chrome.runtime.sendMessage({
+    type: "GET_STREAM_URL",
+    streamUrl: trackData.streamUrl,
+    clientId: trackData.clientId,
+    trackAuthorization: trackData.trackAuthorization,
+    streamProtocol: trackData.streamProtocol,
+    streamPreset: trackData.streamPreset,
+    streamMimeType: trackData.streamMimeType,
+  });
+
+  if (!result?.success || !result.url) {
+    throw new Error(result?.error || "Cannot obtain final file URL.");
+  }
+
+  return {
+    url: result.url,
+    trackData,
+  };
+}
+
 async function handleInlineDownloadClick() {
   if (isInlineDownloading) {
     return;
@@ -238,7 +286,10 @@ async function handleInlineDownloadClick() {
   }
 
   const trackData = inlineTrackData || window.SCDL?.getTrackData?.();
-  if (!trackData?.streamUrl) {
+  if (
+    !trackData?.streamUrl &&
+    !(trackData?.downloadable && trackData?.hasDownloadsLeft)
+  ) {
     setInlineButtonState("error");
     isInlineDownloading = false;
     return;
@@ -248,23 +299,10 @@ async function handleInlineDownloadClick() {
   setInlineButtonState("loading");
 
   try {
-    const result = await chrome.runtime.sendMessage({
-      type: "GET_STREAM_URL",
-      streamUrl: trackData.streamUrl,
-      clientId: trackData.clientId,
-      trackAuthorization: trackData.trackAuthorization,
-      streamProtocol: trackData.streamProtocol,
-      streamPreset: trackData.streamPreset,
-      streamMimeType: trackData.streamMimeType,
-    });
-
-    if (!result?.success || !result.url) {
-      throw new Error(result?.error || "Cannot obtain final file URL.");
-    }
-
+    const resolved = await resolveTrackDownloadUrl(trackData);
     const { blob, fileName } = await SCDownload.buildTrackBlob(
-      result.url,
-      trackData
+      resolved.url,
+      resolved.trackData
     );
     SCDownload.triggerBlobDownload(blob, fileName);
     setInlineButtonState("success");
