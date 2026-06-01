@@ -3,7 +3,7 @@ const POLL_INTERVAL_MS = 500;
 const JOB_POLL_INTERVAL_MS = 1000;
 const DEFAULT_DOWNLOAD_STATUS = "Ready to download";
 const DOWNLOAD_ERROR_STATUS = "Error, please retry";
-const DOWNLOAD_PRESETS = [10, 25, 50, 100, 150, 200, 300];
+const DOWNLOAD_PRESETS = [10, 25, 50, 100];
 const DOWNLOAD_WARN_THRESHOLD = 200;
 const SELECT_WARN_THRESHOLD = 1000;
 const ROW_HEIGHT = 40;
@@ -455,7 +455,7 @@ function hideDownloadLimitSelector() {
 function appendSelectOption() {
   const selectOption = document.createElement("option");
   selectOption.value = "select";
-  selectOption.textContent = "Select...";
+  selectOption.textContent = "Select ";
   downloadLimit.appendChild(selectOption);
 }
 
