@@ -115,7 +115,7 @@ function getPendingTrackIndices(job) {
   return pending;
 }
 
-function slimTrackForJob(track) {
+function slimTrackForJob(track, fallbackAlbum) {
   return {
     id: track.id || null,
     title: track.title,
@@ -128,6 +128,10 @@ function slimTrackForJob(track) {
     downloadable: track.downloadable === true,
     hasDownloadsLeft: track.hasDownloadsLeft !== false,
     clientId: track.clientId,
+    coverUrl: track.coverUrl || track.artwork_url || null,
+    album: track.album || fallbackAlbum || null,
+    genre: track.genre || null,
+    year: track.year || null,
   };
 }
 
@@ -403,82 +407,32 @@ function downloadBlobUrl(blobUrl, filename) {
   });
 }
 
-async function resolveStreamForTrack(trackData) {
+async function resolveStreamForTrack(trackData, formatPreference = "auto") {
   if (!streamDeps.resolveStreamUrl) {
     throw new Error("Stream resolver is not initialized.");
   }
 
-  if (
-    trackData.downloadable &&
-    trackData.hasDownloadsLeft &&
-    trackData.id &&
-    streamDeps.resolveOriginalDownload
-  ) {
-    try {
-      const original = await streamDeps.resolveOriginalDownload(
-        trackData.id,
-        trackData.clientId
-      );
-
-      if (original?.url) {
-        return {
-          streamUrl: original.url,
-          trackData: {
-            ...trackData,
-            isOriginalDownload: true,
-            originalDownloadUrl: original.url,
-          },
-        };
-      }
-    } catch {
-      // Fall back to the streaming transcode.
-    }
-  }
-
-  let currentTrack = trackData;
-  let lastError = null;
-
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      if (!currentTrack?.streamUrl) {
-        throw new Error("No downloadable stream was found for this track.");
-      }
-
-      const result = await streamDeps.resolveStreamUrl(
+  return SCStreamSelector.resolveDownloadSource(trackData, {
+    formatPreference,
+    urlKey: "streamUrl",
+    getOriginal: streamDeps.resolveOriginalDownload
+      ? (trackId, clientId) =>
+          streamDeps.resolveOriginalDownload(trackId, clientId)
+      : null,
+    getStream: (currentTrack) =>
+      streamDeps.resolveStreamUrl(
         currentTrack.streamUrl,
         currentTrack.clientId,
         currentTrack.trackAuthorization,
         currentTrack.streamProtocol,
         currentTrack.streamPreset,
         currentTrack.streamMimeType
-      );
-
-      return {
-        streamUrl: result.url,
-        trackData: currentTrack,
-      };
-    } catch (error) {
-      lastError = error;
-      const shouldRefresh =
-        attempt === 0 &&
-        currentTrack?.id &&
-        currentTrack?.clientId &&
-        streamDeps.refreshTrackMetadata &&
-        /403|404|401|stream|URL/i.test(error.message || "");
-
-      if (!shouldRefresh) {
-        throw error;
-      }
-
-      const refreshed = await streamDeps.refreshTrackMetadata(
-        currentTrack.id,
-        currentTrack.clientId
-      );
-      currentTrack = { ...currentTrack, ...refreshed };
-    }
-  }
-
-  throw lastError || new Error("Could not resolve stream URL.");
+      ),
+    refreshTrack: streamDeps.refreshTrackMetadata
+      ? (trackId, clientId, preference) =>
+          streamDeps.refreshTrackMetadata(trackId, clientId, preference)
+      : null,
+  });
 }
 
 async function abortInFlightBuilds() {
@@ -604,7 +558,7 @@ async function processTrack(jobId, trackIndex) {
   );
 
   try {
-    const resolved = await resolveStreamForTrack(trackData);
+    const resolved = await resolveStreamForTrack(trackData, job.formatPreference || "auto");
 
     await updateTrackProgress(
       jobId,
@@ -640,8 +594,8 @@ async function processTrack(jobId, trackIndex) {
       return;
     }
 
-    const extension = getFileExtension(trackData);
-    const filename = sanitizeBulkFilename(trackData, extension, trackIndex, total);
+    const paddedIndex = String(trackNumber).padStart(String(total).length, "0");
+    const filename = `${paddedIndex} - ${buildResult.fileName}`;
 
     await updateTrackProgress(
       jobId,
@@ -802,11 +756,13 @@ const BulkJobManager = {
     };
   },
 
-  async createJob(tracks, playlistTitle, playlistMeta = {}) {
+  async createJob(tracks, playlistTitle, playlistMeta = {}, formatPreference = "auto") {
     const existing = await loadJob();
     if (existing && ["running", "paused"].includes(existing.status)) {
       throw new Error("A bulk download is already in progress.");
     }
+
+    const fallbackAlbum = playlistTitle || "Untitled playlist";
 
     const job = {
       id: createJobId(),
@@ -817,7 +773,8 @@ const BulkJobManager = {
       artist: playlistMeta.artist || tracks[0]?.artist || null,
       artistImageUrl: playlistMeta.artistImageUrl || tracks[0]?.artistImageUrl || null,
       artistUrl: playlistMeta.artistUrl || tracks[0]?.artistUrl || null,
-      tracks: tracks.map(slimTrackForJob),
+      tracks: tracks.map((track) => slimTrackForJob(track, fallbackAlbum)),
+      formatPreference: formatPreference || "auto",
       trackStatus: createEmptyTrackStatus(tracks.length),
       clientId: tracks[0]?.clientId || null,
       currentIndex: 0,

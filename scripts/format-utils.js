@@ -76,6 +76,10 @@ const SCFormat = (() => {
   }
 
   function getBlobType(trackData) {
+    if (!trackData.isOriginalDownload) {
+      return "application/octet-stream";
+    }
+
     const extension = getFileExtension(trackData);
 
     if (extension === "mp3") {
@@ -105,10 +109,59 @@ const SCFormat = (() => {
     return "application/octet-stream";
   }
 
+  function readAscii(bytes, offset, length) {
+    let value = "";
+    for (let index = 0; index < length; index += 1) {
+      value += String.fromCharCode(bytes[offset + index] || 0);
+    }
+    return value;
+  }
+
+  function detectContainerFromBytes(bytes) {
+    if (!bytes || bytes.length < 4) {
+      return null;
+    }
+
+    if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+      return "mp3";
+    }
+
+    if (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) {
+      return "mp3";
+    }
+
+    if (bytes.length >= 8 && readAscii(bytes, 4, 4) === "ftyp") {
+      return "m4a";
+    }
+
+    if (bytes.length >= 8 && readAscii(bytes, 0, 4) === "fLaC") {
+      return "flac";
+    }
+
+    if (
+      bytes.length >= 12 &&
+      readAscii(bytes, 0, 4) === "RIFF" &&
+      readAscii(bytes, 8, 4) === "WAVE"
+    ) {
+      return "wav";
+    }
+
+    if (bytes.length >= 8 && readAscii(bytes, 0, 4) === "FORM") {
+      return "aiff";
+    }
+
+    if (bytes.length >= 4 && readAscii(bytes, 0, 4) === "OggS") {
+      return "ogg";
+    }
+
+    return null;
+  }
+
   return {
     getExtensionFromUrl,
     getExtensionFromMimeType,
     getFileExtension,
     getBlobType,
+    detectContainerFromBytes,
   };
 })();

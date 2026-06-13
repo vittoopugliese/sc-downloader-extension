@@ -13,6 +13,88 @@ const SCDownload = (() => {
     return SCFormat.getBlobType(trackData);
   }
 
+  function resolveFilename(trackData, buffer) {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    const detectedExtension = SCFormat.detectContainerFromBytes(bytes);
+    const metadataExtension = getFileExtension(trackData);
+    const extension = detectedExtension || metadataExtension;
+
+    if (!detectedExtension && bytes.length < 16) {
+      throw new Error("Downloaded file is empty or unreadable.");
+    }
+
+    if (detectedExtension && detectedExtension !== metadataExtension) {
+      console.warn(
+        `SC Downloader: corrected extension from .${metadataExtension} to .${detectedExtension}`
+      );
+    }
+
+    return {
+      fileName: sanitizeFilename(trackData, extension),
+      extension,
+      bytes,
+    };
+  }
+
+  async function fetchCoverBuffer(coverUrl, signal) {
+    if (!coverUrl) {
+      return null;
+    }
+
+    try {
+      const response = await fetch(coverUrl, { signal });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      return new Uint8Array(await response.arrayBuffer());
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw error;
+      }
+
+      return null;
+    }
+  }
+
+  async function finalizeTrackBlob(trackData, buffer, onProgress, signal) {
+    const { fileName, extension, bytes } = resolveFilename(trackData, buffer);
+    let finalBytes = bytes;
+
+    const shouldTag =
+      (extension === "mp3" || extension === "m4a") &&
+      typeof SCMetadata !== "undefined" &&
+      (trackData.coverUrl ||
+        trackData.artwork_url ||
+        trackData.title ||
+        trackData.artist);
+
+    if (shouldTag) {
+      onProgress?.("Adding metadata...");
+      const coverUrl = trackData.coverUrl || trackData.artwork_url || null;
+      const coverBuffer = coverUrl ? await fetchCoverBuffer(coverUrl, signal) : null;
+
+      finalBytes = SCMetadata.embedMetadata(
+        finalBytes,
+        extension,
+        {
+          title: trackData.title,
+          artist: trackData.artist,
+          album: trackData.album,
+          genre: trackData.genre,
+          year: trackData.year,
+        },
+        coverBuffer
+      );
+    }
+
+    return {
+      blob: new Blob([finalBytes], { type: getBlobType(trackData) }),
+      fileName,
+    };
+  }
+
   function resolvePlaylistUrl(baseUrl, line) {
     if (line.startsWith("http")) {
       return line;
@@ -131,15 +213,10 @@ const SCDownload = (() => {
       trackData.streamProtocol === "progressive" ||
       !isHlsStream;
 
-    const extension = getFileExtension(trackData);
-    const fileName = sanitizeFilename(trackData, extension);
-
     if (isDirectDownload) {
       onProgress?.("Downloading file...");
       const buffer = await fetchBufferOrThrow(streamUrl, "File download", signal);
-      const blobType = getBlobType(trackData);
-      const blob = new Blob([buffer], { type: blobType });
-      return { blob, fileName };
+      return finalizeTrackBlob(trackData, buffer, onProgress, signal);
     }
 
     if (isHlsStream) {
@@ -171,14 +248,12 @@ const SCDownload = (() => {
 
       onProgress?.("Preparing file...");
       const combined = combineChunks(chunks);
-      const blob = new Blob([combined], { type: getBlobType(trackData) });
-      return { blob, fileName };
+      return finalizeTrackBlob(trackData, combined, onProgress, signal);
     }
 
     onProgress?.("Downloading file...");
     const buffer = await fetchBufferOrThrow(streamUrl, "File download", signal);
-    const blob = new Blob([buffer], { type: getBlobType(trackData) });
-    return { blob, fileName };
+    return finalizeTrackBlob(trackData, buffer, onProgress, signal);
   }
 
   function triggerBlobDownload(blob, fileName) {

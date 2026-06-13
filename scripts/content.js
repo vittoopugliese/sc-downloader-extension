@@ -1,5 +1,7 @@
 let currentTrackData = null;
 let currentPlaylistData = null;
+let lastRawTrackApiData = null;
+let cachedFormatPreference = SCStreamSelector.DEFAULT_PREFERENCE;
 let bulkContext = null;
 let bulkSelectionCache = null;
 let lastUrl = location.href;
@@ -174,154 +176,6 @@ async function extractClientId(html) {
   return null;
 }
 
-function getStreamFormatLabel(streamInfo, trackData) {
-  if (trackData?.downloadable === true && trackData?.has_downloads_left !== false) {
-    return "Original file";
-  }
-
-  if (!streamInfo) {
-    return null;
-  }
-
-  const preset = streamInfo.preset || "";
-
-  if (streamInfo.protocol === "progressive") {
-    return "Progressive MP3";
-  }
-
-  if (preset === "aac_160k" || preset.startsWith("aac_160")) {
-    return "AAC HLS 160k";
-  }
-
-  if (preset === "aac_96k" || preset.startsWith("aac_96")) {
-    return "AAC HLS 96k";
-  }
-
-  if (preset.startsWith("mp3") || streamInfo.mimeType?.includes("audio/mpeg")) {
-    return "MP3 HLS";
-  }
-
-  if (preset.includes("opus") || streamInfo.mimeType?.includes("opus")) {
-    return "Opus HLS";
-  }
-
-  if (streamInfo.protocol === "hls") {
-    return "HLS";
-  }
-
-  return streamInfo.protocol || null;
-}
-
-function extractStreamInfo(data) {
-  const transcodings = data.media?.transcodings || [];
-  if (!transcodings.length) {
-    return null;
-  }
-
-  const fullTranscodings = transcodings.filter((transcoding) => !transcoding.snipped);
-  const candidates = fullTranscodings.length ? fullTranscodings : transcodings;
-
-  const findHls = (predicate) =>
-    candidates.find(
-      (transcoding) =>
-        transcoding.format?.protocol === "hls" && predicate(transcoding)
-    );
-
-  const hlsAac160 = findHls(
-    (transcoding) =>
-      transcoding.preset === "aac_160k" || transcoding.preset?.startsWith("aac_160")
-  );
-  if (hlsAac160) {
-    return {
-      url: hlsAac160.url,
-      protocol: "hls",
-      preset: hlsAac160.preset || null,
-      mimeType: hlsAac160.format?.mime_type || null,
-    };
-  }
-
-  const hlsAac96 = findHls(
-    (transcoding) =>
-      transcoding.preset === "aac_96k" || transcoding.preset?.startsWith("aac_96")
-  );
-  if (hlsAac96) {
-    return {
-      url: hlsAac96.url,
-      protocol: "hls",
-      preset: hlsAac96.preset || null,
-      mimeType: hlsAac96.format?.mime_type || null,
-    };
-  }
-
-  const hlsAac = findHls(
-    (transcoding) =>
-      transcoding.preset?.startsWith("aac") ||
-      transcoding.format?.mime_type?.includes("mp4")
-  );
-  if (hlsAac) {
-    return {
-      url: hlsAac.url,
-      protocol: "hls",
-      preset: hlsAac.preset || null,
-      mimeType: hlsAac.format?.mime_type || null,
-    };
-  }
-
-  const hlsMp3 = findHls(
-    (transcoding) =>
-      transcoding.format?.mime_type?.includes("audio/mpeg") ||
-      transcoding.preset?.startsWith("mp3")
-  );
-  if (hlsMp3) {
-    return {
-      url: hlsMp3.url,
-      protocol: "hls",
-      preset: hlsMp3.preset || null,
-      mimeType: hlsMp3.format?.mime_type || null,
-    };
-  }
-
-  const hlsOpus = findHls(
-    (transcoding) =>
-      transcoding.preset?.includes("opus") ||
-      transcoding.format?.mime_type?.includes("opus")
-  );
-  if (hlsOpus) {
-    return {
-      url: hlsOpus.url,
-      protocol: "hls",
-      preset: hlsOpus.preset || null,
-      mimeType: hlsOpus.format?.mime_type || null,
-    };
-  }
-
-  const progressive = candidates.find(
-    (transcoding) => transcoding.format?.protocol === "progressive"
-  );
-  if (progressive) {
-    return {
-      url: progressive.url,
-      protocol: "progressive",
-      preset: progressive.preset || null,
-      mimeType: progressive.format?.mime_type || null,
-    };
-  }
-
-  const anyHls = candidates.find(
-    (transcoding) => transcoding.format?.protocol === "hls"
-  );
-  if (anyHls) {
-    return {
-      url: anyHls.url,
-      protocol: "hls",
-      preset: anyHls.preset || null,
-      mimeType: anyHls.format?.mime_type || null,
-    };
-  }
-
-  return null;
-}
-
 function chunkArray(items, size) {
   const chunks = [];
 
@@ -332,8 +186,13 @@ function chunkArray(items, size) {
   return chunks;
 }
 
-function buildTrackDataFromApiTrack(trackData, clientId, pageUrl) {
-  const streamInfo = extractStreamInfo(trackData);
+function buildTrackDataFromApiTrack(
+  trackData,
+  clientId,
+  pageUrl,
+  formatPreference = cachedFormatPreference
+) {
+  const streamInfo = SCStreamSelector.extractStreamInfo(trackData, formatPreference);
 
   return {
     id: trackData.id || null,
@@ -343,12 +202,27 @@ function buildTrackDataFromApiTrack(trackData, clientId, pageUrl) {
     artistImageUrl: trackData.user?.avatar_url || null,
     duration: formatDuration(trackData.duration),
     artwork_url: trackData.artwork_url?.replace("-large", "-t500x500") || null,
+    coverUrl: trackData.artwork_url?.replace("-large", "-t500x500") || null,
+    album: trackData.publisher_metadata?.album_title || null,
+    genre: trackData.genre || null,
+    year:
+      trackData.release_year ||
+      (trackData.created_at
+        ? new Date(trackData.created_at).getFullYear()
+        : null),
+    isrc: trackData.publisher_metadata?.isrc || null,
     description: trackData.description || "No Description.",
     streamUrl: streamInfo?.url || null,
     streamProtocol: streamInfo?.protocol || null,
     streamPreset: streamInfo?.preset || null,
     streamMimeType: streamInfo?.mimeType || null,
-    streamFormatLabel: getStreamFormatLabel(streamInfo, trackData),
+    streamFormatLabel: SCStreamSelector.getStreamFormatLabel(
+      streamInfo,
+      trackData,
+      formatPreference
+    ),
+    availableFormats: SCStreamSelector.getAvailableFormats(trackData, trackData),
+    formatPreference,
     downloadable: trackData.downloadable === true,
     hasDownloadsLeft: trackData.has_downloads_left !== false,
     clientId,
@@ -361,6 +235,27 @@ function buildTrackDataFromApiTrack(trackData, clientId, pageUrl) {
       : null,
   };
 }
+
+function rebuildCurrentTrackData(formatPreference = cachedFormatPreference) {
+  if (!lastRawTrackApiData || !currentTrackData?.pageUrl) {
+    return null;
+  }
+
+  const rebuilt = buildTrackDataFromApiTrack(
+    lastRawTrackApiData,
+    currentTrackData.clientId,
+    currentTrackData.pageUrl,
+    formatPreference
+  );
+
+  currentTrackData = rebuilt;
+  ensureInlineDownloadButton(currentTrackData);
+  return rebuilt;
+}
+
+SCStreamSelector.getStoredFormatPreference().then((preference) => {
+  cachedFormatPreference = preference;
+});
 
 async function fetchTracksByIds(trackIds, clientId, options = {}) {
   if (!trackIds.length) {
@@ -596,6 +491,8 @@ async function resolveBulkTracks(limit, options = {}) {
   if (!bulkContext || bulkContext.pageUrl !== getCurrentPageUrl()) {
     throw new Error("Bulk download context is not available for this page.");
   }
+
+  cachedFormatPreference = await SCStreamSelector.getStoredFormatPreference();
 
   const onProgress = options.onProgress ?? null;
   const progressTotal =
@@ -961,10 +858,13 @@ async function extractTrackData(capturedExtractionId) {
       return null;
     }
 
+    lastRawTrackApiData = trackData.data;
+
     const newTrackData = buildTrackDataFromApiTrack(
       trackData.data,
       clientId,
-      pageUrl
+      pageUrl,
+      cachedFormatPreference
     );
 
     if (JSON.stringify(currentTrackData) !== JSON.stringify(newTrackData)) {
@@ -1105,6 +1005,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.type === "APPLY_FORMAT_PREFERENCE") {
+    cachedFormatPreference = request.formatPreference || SCStreamSelector.DEFAULT_PREFERENCE;
+    const rebuilt = rebuildCurrentTrackData(cachedFormatPreference);
+
+    if (rebuilt) {
+      chrome.runtime.sendMessage({
+        type: "TRACK_DATA",
+        data: rebuilt,
+      });
+      sendResponse({ success: true, data: rebuilt });
+      return true;
+    }
+
+    sendResponse({ success: true, data: null });
+    return true;
+  }
+
   if (request.type === "GET_BULK_TRACKS_BY_IDS") {
     (async () => {
       try {
@@ -1149,6 +1066,7 @@ function handleUrlChange() {
     activeExtractionId += 1;
     currentTrackData = null;
     currentPlaylistData = null;
+    lastRawTrackApiData = null;
     bulkContext = null;
     bulkSelectionCache = null;
     extractionRetryCount = 0;

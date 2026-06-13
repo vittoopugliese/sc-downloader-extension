@@ -188,6 +188,8 @@ async function handleInlineCollectionDownloadClick() {
       throw new Error("No downloadable tracks were found.");
     }
 
+    const formatPreference = await SCStreamSelector.getStoredFormatPreference();
+
     const startResult = await chrome.runtime.sendMessage({
       type: "START_BULK_JOB",
       tracks,
@@ -198,6 +200,7 @@ async function handleInlineCollectionDownloadClick() {
         artistImageUrl: playlistData.artistImageUrl || null,
         artistUrl: playlistData.artistUrl || null,
       },
+      formatPreference,
     });
 
     if (!startResult?.success || !startResult.job) {
@@ -229,51 +232,43 @@ async function handleInlineCollectionDownloadClick() {
 }
 
 async function resolveTrackDownloadUrl(trackData) {
-  if (trackData.downloadable && trackData.hasDownloadsLeft && trackData.id) {
-    try {
-      const original = await chrome.runtime.sendMessage({
+  const formatPreference =
+    trackData.formatPreference ||
+    (await SCStreamSelector.getStoredFormatPreference());
+
+  return SCStreamSelector.resolveDownloadSource(trackData, {
+    formatPreference,
+    getOriginal: async (trackId, clientId) => {
+      const result = await chrome.runtime.sendMessage({
         type: "GET_ORIGINAL_DOWNLOAD",
-        trackId: trackData.id,
-        clientId: trackData.clientId,
+        trackId,
+        clientId,
       });
 
-      if (original?.success && original.url) {
-        return {
-          url: original.url,
-          trackData: {
-            ...trackData,
-            isOriginalDownload: true,
-            originalDownloadUrl: original.url,
-          },
-        };
+      if (!result?.success) {
+        throw new Error(result?.error || "Original download failed.");
       }
-    } catch {
-      // Fall back to the streaming transcode.
-    }
-  }
 
-  if (!trackData.streamUrl) {
-    throw new Error("No downloadable stream was found for this track.");
-  }
+      return result;
+    },
+    getStream: async (currentTrack) => {
+      const result = await chrome.runtime.sendMessage({
+        type: "GET_STREAM_URL",
+        streamUrl: currentTrack.streamUrl,
+        clientId: currentTrack.clientId,
+        trackAuthorization: currentTrack.trackAuthorization,
+        streamProtocol: currentTrack.streamProtocol,
+        streamPreset: currentTrack.streamPreset,
+        streamMimeType: currentTrack.streamMimeType,
+      });
 
-  const result = await chrome.runtime.sendMessage({
-    type: "GET_STREAM_URL",
-    streamUrl: trackData.streamUrl,
-    clientId: trackData.clientId,
-    trackAuthorization: trackData.trackAuthorization,
-    streamProtocol: trackData.streamProtocol,
-    streamPreset: trackData.streamPreset,
-    streamMimeType: trackData.streamMimeType,
+      if (!result?.success || !result.url) {
+        throw new Error(result?.error || "Cannot obtain final file URL.");
+      }
+
+      return result;
+    },
   });
-
-  if (!result?.success || !result.url) {
-    throw new Error(result?.error || "Cannot obtain final file URL.");
-  }
-
-  return {
-    url: result.url,
-    trackData,
-  };
 }
 
 async function handleInlineDownloadClick() {

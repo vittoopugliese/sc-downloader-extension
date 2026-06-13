@@ -340,9 +340,39 @@
             display: none;
         }
 
-        #downloadLimit option {
+        #downloadLimit option,
+        #downloadFormat option {
             background: #1a1a1a;
             color: #ffffff;
+        }
+
+        #downloadFormat {
+            margin: 0;
+            padding: 4px 10px;
+            min-width: 0;
+            max-width: 150px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.12);
+            color: #e8e8e8;
+            font-size: 13px;
+            font-family: Arial, sans-serif;
+            cursor: pointer;
+            outline: none;
+            transition: background-color 200ms, border-color 200ms;
+        }
+
+        #downloadFormat:hover {
+            background: rgba(255, 255, 255, 0.18);
+            border-color: rgba(255, 255, 255, 0.28);
+        }
+
+        #downloadFormat:focus {
+            border-color: rgba(255, 85, 0, 0.65);
+        }
+
+        #downloadFormat.is-hidden {
+            display: none;
         }
 
         #downloadStatus {
@@ -577,6 +607,13 @@
                     <span id="duration"></span>
                     <span id="metaSep" class="meta-sep">&middot;</span>
                     <span id="streamFormat"></span>
+                    <select id="downloadFormat" class="is-hidden" aria-label="Download format">
+                        <option value="auto">Auto</option>
+                        <option value="original">Original</option>
+                        <option value="mp3">MP3</option>
+                        <option value="m4a">M4A</option>
+                        <option value="opus">Opus</option>
+                    </select>
                     <select id="downloadLimit" class="is-hidden" aria-label="Download amount">
                         <option value="50">50</option>
                     </select>
@@ -616,6 +653,9 @@
         </div>
     </div>
     <script src="./scripts/format-utils.js"></script>
+    <script src="./scripts/stream-selector.js"></script>
+    <script src="./scripts/vendor/id3-writer.js"></script>
+    <script src="./scripts/metadata.js"></script>
     <script src="./scripts/download-core.js"></script>
     <script src="./scripts/popup.js"></script>
 </body>

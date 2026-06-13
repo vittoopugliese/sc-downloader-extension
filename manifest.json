@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SoundCloud Track Downloader",
-  "version": "2026.06.04",
+  "version": "2026.06.16",
   "permissions": ["cookies", "tabs", "downloads", "offscreen", "notifications", "storage", "alarms"],
   "host_permissions": [
     "https://soundcloud.com/*",
@@ -30,6 +30,9 @@
       "matches": ["https://soundcloud.com/*"],
       "js": [
         "scripts/format-utils.js",
+        "scripts/stream-selector.js",
+        "scripts/vendor/id3-writer.js",
+        "scripts/metadata.js",
         "scripts/download-core.js",
         "scripts/content.js",
         "scripts/inline-button.js"

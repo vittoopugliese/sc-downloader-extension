@@ -1,4 +1,4 @@
-importScripts("format-utils.js", "bulk-job-manager.js");
+importScripts("format-utils.js", "stream-selector.js", "bulk-job-manager.js");
 
 chrome.runtime.onInstalled.addListener(() => {
   BulkJobManager.recoverRunningJob();
@@ -67,7 +67,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     BulkJobManager.createJob(
       request.tracks,
       request.playlistTitle,
-      request.playlistMeta || {}
+      request.playlistMeta || {},
+      request.formatPreference || "auto"
     )
       .then((job) => sendResponse({ success: true, job }))
       .catch((error) => sendResponse({ success: false, error: error.message }));
@@ -95,7 +96,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === "REFRESH_TRACK") {
-    refreshTrackMetadata(request.trackId, request.clientId)
+    refreshTrackMetadata(
+      request.trackId,
+      request.clientId,
+      request.formatPreference || "auto"
+    )
       .then((trackData) => sendResponse({ success: true, trackData }))
       .catch((error) =>
         sendResponse({ success: false, error: error.message })
@@ -374,6 +379,7 @@ async function resolveOriginalDownload(trackId, clientId) {
       return {
         url,
         original: true,
+        mimeType: null,
       };
     } catch (error) {
       lastError = error;
@@ -403,62 +409,7 @@ async function resolveOriginalDownload(trackId, clientId) {
   throw lastError || buildStreamError("Could not resolve original download.", "unknown_error");
 }
 
-function extractStreamInfoFromApiTrack(trackData) {
-  const transcodings = trackData.media?.transcodings || [];
-  if (!transcodings.length) {
-    return null;
-  }
-
-  const fullTranscodings = transcodings.filter((transcoding) => !transcoding.snipped);
-  const candidates = fullTranscodings.length ? fullTranscodings : transcodings;
-
-  const findHls = (predicate) =>
-    candidates.find(
-      (transcoding) =>
-        transcoding.format?.protocol === "hls" && predicate(transcoding)
-    );
-
-  const hlsAac160 = findHls(
-    (transcoding) =>
-      transcoding.preset === "aac_160k" || transcoding.preset?.startsWith("aac_160")
-  );
-  if (hlsAac160) {
-    return {
-      url: hlsAac160.url,
-      protocol: "hls",
-      preset: hlsAac160.preset || null,
-      mimeType: hlsAac160.format?.mime_type || null,
-    };
-  }
-
-  const progressive = candidates.find(
-    (transcoding) => transcoding.format?.protocol === "progressive"
-  );
-  if (progressive) {
-    return {
-      url: progressive.url,
-      protocol: "progressive",
-      preset: progressive.preset || null,
-      mimeType: progressive.format?.mime_type || null,
-    };
-  }
-
-  const anyHls = candidates.find(
-    (transcoding) => transcoding.format?.protocol === "hls"
-  );
-  if (anyHls) {
-    return {
-      url: anyHls.url,
-      protocol: "hls",
-      preset: anyHls.preset || null,
-      mimeType: anyHls.format?.mime_type || null,
-    };
-  }
-
-  return null;
-}
-
-async function refreshTrackMetadata(trackId, clientId) {
+async function refreshTrackMetadata(trackId, clientId, formatPreference = "auto") {
   const requestUrl = new URL("https://api-v2.soundcloud.com/tracks");
   requestUrl.searchParams.set("ids", String(trackId));
   requestUrl.searchParams.set("client_id", clientId);
@@ -484,12 +435,19 @@ async function refreshTrackMetadata(trackId, clientId) {
     throw new Error("Track metadata was not found.");
   }
 
-  const streamInfo = extractStreamInfoFromApiTrack(track);
+  const streamInfo = SCStreamSelector.extractStreamInfo(track, formatPreference);
 
   return {
     id: track.id,
     title: track.title,
     artist: track.user?.username || "Unknown Artist",
+    coverUrl: track.artwork_url?.replace("-large", "-t500x500") || null,
+    album: track.publisher_metadata?.album_title || null,
+    genre: track.genre || null,
+    year:
+      track.release_year ||
+      (track.created_at ? new Date(track.created_at).getFullYear() : null),
+    isrc: track.publisher_metadata?.isrc || null,
     streamUrl: streamInfo?.url || null,
     streamProtocol: streamInfo?.protocol || null,
     streamPreset: streamInfo?.preset || null,

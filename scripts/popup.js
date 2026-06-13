@@ -26,6 +26,7 @@ const artistEl = document.getElementById("artist");
 const durationEl = document.getElementById("duration");
 const metaSep = document.getElementById("metaSep");
 const streamFormat = document.getElementById("streamFormat");
+const downloadFormat = document.getElementById("downloadFormat");
 const downloadLimit = document.getElementById("downloadLimit");
 const waveformCanvas = document.getElementById("waveformCanvas");
 const downloadBtn = document.getElementById("downloadBtn");
@@ -63,6 +64,7 @@ let hasRenderedTrack = false;
 let downloadListenerAttached = false;
 let activeBulkJob = null;
 let notTrackRetryCount = 0;
+let currentFormatPreference = SCStreamSelector.DEFAULT_PREFERENCE;
 
 document.addEventListener("DOMContentLoaded", () => {
   retryBtn.addEventListener("click", () => {
@@ -157,6 +159,45 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       previousDownloadLimitValue = downloadLimit.value;
     }
+  });
+
+  downloadFormat.addEventListener("change", async () => {
+    currentFormatPreference = downloadFormat.value;
+    await SCStreamSelector.setStoredFormatPreference(currentFormatPreference);
+
+    if (!activeTabId) {
+      return;
+    }
+
+    chrome.tabs.sendMessage(
+      activeTabId,
+      {
+        type: "APPLY_FORMAT_PREFERENCE",
+        formatPreference: currentFormatPreference,
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          return;
+        }
+
+        if (response?.success && response.data) {
+          currentTrackData = response.data;
+          const label =
+            response.data.streamFormatLabel ||
+            (response.data.streamProtocol
+              ? response.data.streamProtocol.toUpperCase()
+              : "");
+          streamFormat.textContent = label;
+          streamFormat.style.display = label ? "" : "none";
+          configureFormatDropdown(response.data);
+        }
+      }
+    );
+  });
+
+  SCStreamSelector.getStoredFormatPreference().then((preference) => {
+    currentFormatPreference = preference;
+    downloadFormat.value = preference;
   });
 
   attachSelectionRowsListener();
@@ -414,54 +455,82 @@ function showLoadingTimeout() {
   retryBtn.classList.add("is-visible");
 }
 
+async function getFormatPreference() {
+  return currentFormatPreference || SCStreamSelector.DEFAULT_PREFERENCE;
+}
+
+function configureFormatDropdown(trackData) {
+  const available = trackData?.availableFormats || {};
+
+  for (const option of downloadFormat.options) {
+    if (option.value === "auto") {
+      option.disabled = false;
+      continue;
+    }
+
+    if (option.value === "original") {
+      option.disabled = !available.original;
+      continue;
+    }
+
+    option.disabled = !available[option.value];
+  }
+
+  downloadFormat.value = trackData?.formatPreference || currentFormatPreference;
+  downloadFormat.classList.remove("is-hidden");
+}
+
+function showFormatDropdownForBulk() {
+  for (const option of downloadFormat.options) {
+    option.disabled = false;
+  }
+
+  downloadFormat.value = currentFormatPreference;
+  downloadFormat.classList.remove("is-hidden");
+}
+
+function hideFormatDropdown() {
+  downloadFormat.classList.add("is-hidden");
+}
+
 async function resolveTrackDownloadUrl(trackData) {
-  if (trackData.downloadable && trackData.hasDownloadsLeft && trackData.id) {
-    try {
-      const original = await chrome.runtime.sendMessage({
+  const formatPreference = trackData.formatPreference || (await getFormatPreference());
+
+  return SCStreamSelector.resolveDownloadSource(trackData, {
+    formatPreference,
+    getOriginal: async (trackId, clientId) => {
+      const result = await chrome.runtime.sendMessage({
         type: "GET_ORIGINAL_DOWNLOAD",
-        trackId: trackData.id,
-        clientId: trackData.clientId,
+        trackId,
+        clientId,
       });
 
-      if (original?.success && original.url) {
-        return {
-          url: original.url,
-          trackData: {
-            ...trackData,
-            isOriginalDownload: true,
-            originalDownloadUrl: original.url,
-          },
-        };
+      if (!result?.success) {
+        throw new Error(result?.error || "Original download failed.");
       }
-    } catch {
-      // Fall back to the streaming transcode.
-    }
-  }
 
-  if (!trackData.streamUrl) {
-    throw new Error("No downloadable stream was found for this track.");
-  }
+      return result;
+    },
+    getStream: async (currentTrack) => {
+      const result = await chrome.runtime.sendMessage({
+        type: "GET_STREAM_URL",
+        streamUrl: currentTrack.streamUrl,
+        clientId: currentTrack.clientId,
+        trackAuthorization: currentTrack.trackAuthorization,
+        streamProtocol: currentTrack.streamProtocol,
+        streamPreset: currentTrack.streamPreset,
+        streamMimeType: currentTrack.streamMimeType,
+      });
 
-  const result = await chrome.runtime.sendMessage({
-    type: "GET_STREAM_URL",
-    streamUrl: trackData.streamUrl,
-    clientId: trackData.clientId,
-    trackAuthorization: trackData.trackAuthorization,
-    streamProtocol: trackData.streamProtocol,
-    streamPreset: trackData.streamPreset,
-    streamMimeType: trackData.streamMimeType,
+      if (!result?.success || !result.url) {
+        const error = new Error(result?.error || "Cannot obtain final file URL.");
+        error.result = result;
+        throw error;
+      }
+
+      return result;
+    },
   });
-
-  if (!result?.success || !result.url) {
-    const error = new Error(result?.error || "Cannot obtain final file URL.");
-    error.result = result;
-    throw error;
-  }
-
-  return {
-    url: result.url,
-    trackData,
-  };
 }
 
 function hideRetryButton() {
@@ -499,10 +568,10 @@ async function renderTrack(trackData) {
     (trackData.streamProtocol ? trackData.streamProtocol.toUpperCase() : "");
 
   streamFormat.textContent = formatLabel;
-  const showSeparator = Boolean(trackData.duration) && Boolean(formatLabel);
   streamFormat.style.display = formatLabel ? "" : "none";
   hideDownloadLimitSelector();
-  metaSep.style.display = showSeparator ? "" : "none";
+  configureFormatDropdown(trackData);
+  metaSep.style.display = trackData.duration ? "" : "none";
 
   downloadStatus.textContent = trackData.clientId
     ? DEFAULT_DOWNLOAD_STATUS
@@ -522,6 +591,11 @@ async function renderTrack(trackData) {
 
 function hideDownloadLimitSelector() {
   downloadLimit.classList.add("is-hidden");
+}
+
+function hideFormatAndLimitSelectors() {
+  hideDownloadLimitSelector();
+  hideFormatDropdown();
 }
 
 function appendSelectOption() {
@@ -606,6 +680,7 @@ async function renderPlaylist(playlistData) {
     playlistData.totalCount ?? playlistData.tracks?.length ?? 0;
   durationEl.textContent = `${total} tracks`;
   streamFormat.style.display = "none";
+  showFormatDropdownForBulk();
   populateDownloadLimitOptions(total);
 
   if (playlistData.artwork_url) {
@@ -861,6 +936,7 @@ async function startSelectedBulkDownload() {
         artistImageUrl: currentPlaylistData.artistImageUrl || null,
         artistUrl: currentPlaylistData.artistUrl || null,
       },
+      formatPreference: await getFormatPreference(),
     });
 
     if (!startResult?.success || !startResult.job) {
@@ -940,6 +1016,7 @@ function attachDownloadListener() {
             artistImageUrl: currentPlaylistData.artistImageUrl || null,
             artistUrl: currentPlaylistData.artistUrl || null,
           },
+          formatPreference: await getFormatPreference(),
         });
 
         if (!startResult?.success || !startResult.job) {
@@ -1035,12 +1112,16 @@ function setDownloadState(downloading, statusText) {
 
   if (downloading) {
     downloadLimit.classList.add("is-hidden");
+    hideFormatDropdown();
     if (currentPlaylistData && !isSelectionMode) {
       metaSep.style.display = "none";
     }
   } else if (currentPlaylistData && !isSelectionMode) {
     downloadLimit.classList.remove("is-hidden");
+    showFormatDropdownForBulk();
     metaSep.style.display = "";
+  } else if (currentTrackData) {
+    configureFormatDropdown(currentTrackData);
   }
 
   downloadStatus.textContent = statusText || DEFAULT_DOWNLOAD_STATUS;
