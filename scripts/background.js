@@ -30,6 +30,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           success: false,
           error: error.message,
           code: error.code || "unknown_error",
+          status: error.status,
         })
       );
 
@@ -44,6 +45,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           success: false,
           error: error.message,
           code: error.code || "unknown_error",
+          status: error.status,
         })
       );
 
@@ -143,7 +145,7 @@ function getHttpErrorMessage(status) {
   }
 
   if (status === 404) {
-    return "Stream not found (404). Reload the SoundCloud page and try again.";
+    return "Stream link expired (404). Play the track on SoundCloud, then try again.";
   }
 
   return `HTTP error! status: ${status}`;
@@ -153,11 +155,9 @@ async function requestStreamUrl(streamUrl, options) {
   const { clientId, oauthToken, trackAuthorization } = options;
   const requestUrl = new URL(streamUrl);
 
-  if (oauthToken) {
-    // OAuth path: SoundCloud accepts Authorization header.
-  } else if (clientId) {
+  if (clientId) {
     requestUrl.searchParams.set("client_id", clientId);
-  } else {
+  } else if (!oauthToken) {
     throw buildStreamError(
       "Could not obtain client_id. Reload the SoundCloud page and try again.",
       "missing_client_id"
@@ -191,7 +191,9 @@ async function requestStreamUrl(streamUrl, options) {
         ? "unauthorized"
         : response.status === 403
           ? "forbidden"
-          : "http_error",
+          : response.status === 404
+            ? "not_found"
+            : "http_error",
       response.status
     );
   }
@@ -232,6 +234,7 @@ async function resolveStreamUrl(
     attempts.push({
       label: "oauth",
       oauthToken,
+      clientId,
       trackAuthorization,
     });
   } catch {
@@ -261,10 +264,18 @@ async function resolveStreamUrl(
     } catch (error) {
       lastError = error;
 
-      if (![401, 403].includes(error.status)) {
+      if (![401, 403, 404].includes(error.status)) {
         throw error;
       }
     }
+  }
+
+  if (lastError?.status === 404) {
+    throw buildStreamError(
+      "Stream link expired (404). Play the track on SoundCloud, then try again.",
+      "not_found",
+      404
+    );
   }
 
   if (lastError?.status === 403) {
@@ -410,53 +421,105 @@ async function resolveOriginalDownload(trackId, clientId) {
 }
 
 async function refreshTrackMetadata(trackId, clientId, formatPreference = "auto") {
-  const requestUrl = new URL("https://api-v2.soundcloud.com/tracks");
-  requestUrl.searchParams.set("ids", String(trackId));
-  requestUrl.searchParams.set("client_id", clientId);
+  const attempts = [];
 
-  const response = await fetch(requestUrl.toString(), {
-    method: "GET",
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-      Origin: "https://soundcloud.com",
-      Referer: "https://soundcloud.com/",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to refresh track metadata (${response.status}).`);
+  if (clientId) {
+    attempts.push({ clientId });
   }
 
-  const tracks = await response.json();
-  const track = tracks?.[0];
-
-  if (!track) {
-    throw new Error("Track metadata was not found.");
+  try {
+    const oauthToken = await getOAuthToken();
+    attempts.push({ clientId, oauthToken });
+  } catch {
+    // No logged-in session available.
   }
 
-  const streamInfo = SCStreamSelector.extractStreamInfo(track, formatPreference);
+  if (!attempts.length) {
+    throw new Error("Could not obtain client_id for track refresh.");
+  }
 
-  return {
-    id: track.id,
-    title: track.title,
-    artist: track.user?.username || "Unknown Artist",
-    coverUrl: track.artwork_url?.replace("-large", "-t500x500") || null,
-    album: track.publisher_metadata?.album_title || null,
-    genre: track.genre || null,
-    year:
-      track.release_year ||
-      (track.created_at ? new Date(track.created_at).getFullYear() : null),
-    isrc: track.publisher_metadata?.isrc || null,
-    streamUrl: streamInfo?.url || null,
-    streamProtocol: streamInfo?.protocol || null,
-    streamPreset: streamInfo?.preset || null,
-    streamMimeType: streamInfo?.mimeType || null,
-    trackAuthorization: track.track_authorization || null,
-    downloadable: track.downloadable === true,
-    hasDownloadsLeft: track.has_downloads_left !== false,
-    clientId,
-  };
+  let lastError = null;
+
+  for (const attempt of attempts) {
+    try {
+      const requestUrl = new URL("https://api-v2.soundcloud.com/tracks");
+      requestUrl.searchParams.set("ids", String(trackId));
+
+      if (attempt.clientId) {
+        requestUrl.searchParams.set("client_id", attempt.clientId);
+      }
+
+      const headers = {
+        Accept: "application/json",
+        Origin: "https://soundcloud.com",
+        Referer: "https://soundcloud.com/",
+      };
+
+      if (attempt.oauthToken) {
+        headers.Authorization = `OAuth ${attempt.oauthToken}`;
+      }
+
+      const response = await fetch(requestUrl.toString(), {
+        method: "GET",
+        credentials: "include",
+        headers,
+      });
+
+      if (!response.ok) {
+        const error = new Error(
+          `Failed to refresh track metadata (${response.status}).`
+        );
+        error.status = response.status;
+
+        if ([401, 403, 404].includes(response.status) && attempts.length > 1) {
+          lastError = error;
+          continue;
+        }
+
+        throw error;
+      }
+
+      const tracks = await response.json();
+      const track = tracks?.[0];
+
+      if (!track) {
+        throw new Error("Track metadata was not found.");
+      }
+
+      const streamInfo = SCStreamSelector.extractStreamInfo(track, formatPreference);
+
+      return {
+        id: track.id,
+        title: track.title,
+        artist: track.user?.username || "Unknown Artist",
+        coverUrl: track.artwork_url?.replace("-large", "-t500x500") || null,
+        album: track.publisher_metadata?.album_title || null,
+        genre: track.genre || null,
+        year:
+          track.release_year ||
+          (track.created_at ? new Date(track.created_at).getFullYear() : null),
+        isrc: track.publisher_metadata?.isrc || null,
+        streamUrl: streamInfo?.url || null,
+        streamProtocol: streamInfo?.protocol || null,
+        streamPreset: streamInfo?.preset || null,
+        streamMimeType: streamInfo?.mimeType || null,
+        trackAuthorization: track.track_authorization || null,
+        downloadable: track.downloadable === true,
+        hasDownloadsLeft: track.has_downloads_left !== false,
+        clientId: attempt.clientId || clientId,
+      };
+    } catch (error) {
+      lastError = error;
+
+      if ([401, 403, 404].includes(error.status) && attempts.length > 1) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastError || new Error("Could not refresh track metadata.");
 }
 
 async function resolveLoggedInUserProfile(clientId) {

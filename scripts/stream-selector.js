@@ -226,6 +226,36 @@ const SCStreamSelector = (() => {
     await chrome.storage.local.set({ [STORAGE_KEY]: preference });
   }
 
+  async function refreshTrackFromApi(trackId, clientId, formatPreference = DEFAULT_PREFERENCE) {
+    const result = await chrome.runtime.sendMessage({
+      type: "REFRESH_TRACK",
+      trackId,
+      clientId,
+      formatPreference,
+    });
+
+    if (!result?.success || !result.trackData) {
+      throw new Error(result?.error || "Could not refresh track metadata.");
+    }
+
+    return result.trackData;
+  }
+
+  function shouldRetryWithRefresh(error) {
+    const retryableCodes = new Set([
+      "forbidden",
+      "unauthorized",
+      "not_found",
+      "http_error",
+    ]);
+
+    if (retryableCodes.has(error?.result?.code)) {
+      return true;
+    }
+
+    return /403|404|401|stream|URL/i.test(error?.message || "");
+  }
+
   async function resolveDownloadSource(trackData, options = {}) {
     const {
       formatPreference = trackData.formatPreference || DEFAULT_PREFERENCE,
@@ -299,7 +329,7 @@ const SCStreamSelector = (() => {
           attempt === 0 &&
           currentTrack?.id &&
           currentTrack?.clientId &&
-          /403|404|401|stream|URL/i.test(error.message || "");
+          shouldRetryWithRefresh(error);
 
         if (!shouldRefresh) {
           throw error;
@@ -327,6 +357,7 @@ const SCStreamSelector = (() => {
     shouldUseOriginalOnly,
     getStoredFormatPreference,
     setStoredFormatPreference,
+    refreshTrackFromApi,
     resolveDownloadSource,
   };
 })();

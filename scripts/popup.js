@@ -493,11 +493,30 @@ function hideFormatDropdown() {
   downloadFormat.classList.add("is-hidden");
 }
 
+async function refreshTrackDataBeforeDownload(trackData, formatPreference) {
+  if (!trackData?.id || !trackData?.clientId) {
+    return trackData;
+  }
+
+  try {
+    const refreshed = await SCStreamSelector.refreshTrackFromApi(
+      trackData.id,
+      trackData.clientId,
+      formatPreference
+    );
+    return { ...trackData, ...refreshed, formatPreference };
+  } catch {
+    return trackData;
+  }
+}
+
 async function resolveTrackDownloadUrl(trackData) {
   const formatPreference = trackData.formatPreference || (await getFormatPreference());
 
   return SCStreamSelector.resolveDownloadSource(trackData, {
     formatPreference,
+    refreshTrack: (trackId, clientId, preference) =>
+      SCStreamSelector.refreshTrackFromApi(trackId, clientId, preference),
     getOriginal: async (trackId, clientId) => {
       const result = await chrome.runtime.sendMessage({
         type: "GET_ORIGINAL_DOWNLOAD",
@@ -1053,7 +1072,14 @@ function attachDownloadListener() {
     setDownloadState(true, "Resolving stream...");
 
     try {
-      const resolved = await resolveTrackDownloadUrl(trackData);
+      const formatPreference =
+        trackData.formatPreference || (await getFormatPreference());
+      const refreshedTrack = await refreshTrackDataBeforeDownload(
+        trackData,
+        formatPreference
+      );
+      currentTrackData = refreshedTrack;
+      const resolved = await resolveTrackDownloadUrl(refreshedTrack);
 
       try {
         await SCDownload.forceDownload(
@@ -1140,6 +1166,10 @@ function formatResolveError(result) {
   }
 
   if (code === "unauthorized") {
+    return `Error #11: ${message}`;
+  }
+
+  if (code === "not_found") {
     return `Error #11: ${message}`;
   }
 

@@ -231,6 +231,23 @@ async function handleInlineCollectionDownloadClick() {
   }
 }
 
+async function refreshTrackDataBeforeDownload(trackData, formatPreference) {
+  if (!trackData?.id || !trackData?.clientId) {
+    return trackData;
+  }
+
+  try {
+    const refreshed = await SCStreamSelector.refreshTrackFromApi(
+      trackData.id,
+      trackData.clientId,
+      formatPreference
+    );
+    return { ...trackData, ...refreshed, formatPreference };
+  } catch {
+    return trackData;
+  }
+}
+
 async function resolveTrackDownloadUrl(trackData) {
   const formatPreference =
     trackData.formatPreference ||
@@ -238,6 +255,8 @@ async function resolveTrackDownloadUrl(trackData) {
 
   return SCStreamSelector.resolveDownloadSource(trackData, {
     formatPreference,
+    refreshTrack: (trackId, clientId, preference) =>
+      SCStreamSelector.refreshTrackFromApi(trackId, clientId, preference),
     getOriginal: async (trackId, clientId) => {
       const result = await chrome.runtime.sendMessage({
         type: "GET_ORIGINAL_DOWNLOAD",
@@ -263,7 +282,9 @@ async function resolveTrackDownloadUrl(trackData) {
       });
 
       if (!result?.success || !result.url) {
-        throw new Error(result?.error || "Cannot obtain final file URL.");
+        const error = new Error(result?.error || "Cannot obtain final file URL.");
+        error.result = result;
+        throw error;
       }
 
       return result;
@@ -294,7 +315,14 @@ async function handleInlineDownloadClick() {
   setInlineButtonState("loading");
 
   try {
-    const resolved = await resolveTrackDownloadUrl(trackData);
+    const formatPreference =
+      trackData.formatPreference ||
+      (await SCStreamSelector.getStoredFormatPreference());
+    const refreshedTrack = await refreshTrackDataBeforeDownload(
+      trackData,
+      formatPreference
+    );
+    const resolved = await resolveTrackDownloadUrl(refreshedTrack);
     const { blob, fileName } = await SCDownload.buildTrackBlob(
       resolved.url,
       resolved.trackData
