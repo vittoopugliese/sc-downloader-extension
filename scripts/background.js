@@ -1,4 +1,9 @@
-importScripts("format-utils.js", "stream-selector.js", "bulk-job-manager.js");
+importScripts(
+  "format-utils.js",
+  "directory-storage.js",
+  "stream-selector.js",
+  "bulk-job-manager.js"
+);
 
 chrome.runtime.onInstalled.addListener(() => {
   BulkJobManager.recoverRunningJob();
@@ -15,6 +20,41 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === "OPEN_EXTENSION_POPUP") {
+    if (typeof chrome.action.openPopup !== "function") {
+      sendResponse({
+        success: false,
+        error: "This browser cannot open the extension popup automatically.",
+      });
+      return false;
+    }
+
+    const popupOptions = sender.tab?.windowId
+      ? { windowId: sender.tab.windowId }
+      : undefined;
+
+    try {
+      const openPopup = popupOptions
+        ? chrome.action.openPopup(popupOptions)
+        : chrome.action.openPopup();
+
+      Promise.resolve(openPopup)
+        .then(() => sendResponse({ success: true }))
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error: error.message || "Could not open the extension popup.",
+          })
+        );
+    } catch (error) {
+      sendResponse({
+        success: false,
+        error: error.message || "Could not open the extension popup.",
+      });
+    }
+    return true;
+  }
+
   if (request.type === "GET_MP3_URL" || request.type === "GET_STREAM_URL") {
     resolveStreamUrl(
       request.streamUrl,
@@ -70,10 +110,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       request.tracks,
       request.playlistTitle,
       request.playlistMeta || {},
-      request.formatPreference || "auto"
+      request.formatPreference || "auto",
+      request.downloadDestination ?? null
     )
       .then((job) => sendResponse({ success: true, job }))
       .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (request.type === "DOWNLOAD_SINGLE_TRACK") {
+    BulkJobManager.downloadSingleTrack(
+      request.trackData,
+      request.formatPreference || "auto",
+      request.downloadDestination ?? null
+    )
+      .then((result) => sendResponse(result))
+      .catch((error) =>
+        sendResponse({
+          success: false,
+          error: error.message || "Download failed.",
+        })
+      );
     return true;
   }
 

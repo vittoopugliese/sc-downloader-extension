@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture review · sc-downloader-extension</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      body { background: #f5f5f4; }
+      .seam { border-style: dashed; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .schematic { min-height: 310px; }
+      .mass { position: relative; min-height: 276px; }
+      .mass-box { position: absolute; border-radius: 12px; padding: 14px; }
+      .mass-label { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; }
+      .arrow { color: #94a3b8; font-size: 22px; line-height: 1; }
+      .leak-arrow { color: #dc2626; }
+      .tiny { font-size: 11px; line-height: 1.35; }
+    </style>
+  </head>
+  <body class="text-slate-900 font-sans">
+    <main class="max-w-6xl mx-auto px-6 py-12 space-y-10">
+      <header class="space-y-5">
+        <div class="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p class="text-xs uppercase tracking-[.22em] text-orange-700 font-semibold">Architecture review</p>
+            <h1 class="mt-2 text-4xl font-serif tracking-tight">sc-downloader-extension</h1>
+          </div>
+          <div class="text-right text-sm text-slate-500"><p>4 septiembre 2026</p><p class="font-mono text-xs">HEAD 574b222 · working tree review</p></div>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-4">
+          <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs uppercase tracking-wider text-slate-500">Hot spot</p><p class="mt-1 font-semibold">Download execution</p><p class="tiny mt-1 text-slate-500">Recent fixes cross 4 runtime modules.</p></div>
+          <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs uppercase tracking-wider text-slate-500">Hot spot</p><p class="mt-1 font-semibold">Page intake</p><p class="tiny mt-1 text-slate-500">content.js has 1,421 lines.</p></div>
+          <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs uppercase tracking-wider text-slate-500">Validation</p><p class="mt-1 font-semibold text-emerald-700">6 checks pass</p><p class="tiny mt-1 text-slate-500">Syntax checks pass too.</p></div>
+          <div class="rounded-xl border border-amber-200 bg-amber-50 p-4"><p class="text-xs uppercase tracking-wider text-amber-700">Domain record</p><p class="mt-1 font-semibold">Missing</p><p class="tiny mt-1 text-amber-800">No CONTEXT.md or ADRs found.</p></div>
+        </div>
+        <div class="flex flex-wrap gap-x-6 gap-y-2 border-y border-slate-200 py-3 text-xs text-slate-600"><span><i class="inline-block h-3 w-3 rounded border border-slate-400 bg-white align-[-1px]"></i> module</span><span><i class="inline-block w-5 border-t-2 border-dashed border-slate-400 align-[3px]"></i> seam</span><span><i class="inline-block text-red-600 font-bold align-[-1px]">→</i> leakage</span><span><i class="inline-block h-3 w-5 rounded bg-slate-800 align-[-1px]"></i> deep module</span></div>
+      </header>
+
+      <section id="candidates" class="space-y-8">
+        <article id="candidate-track-execution" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+          <div class="flex flex-wrap items-start justify-between gap-4"><div><p class="text-xs uppercase tracking-[.18em] text-orange-700 font-semibold">01 · deepening</p><h2 class="mt-1 text-2xl font-serif">Unificar la ejecución de una pista</h2></div><div class="flex flex-wrap gap-2"><span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Strong</span><span class="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">ports &amp; adapters</span></div></div>
+          <div><p class="text-xs uppercase tracking-wider text-slate-500">Files</p><p class="mt-1 font-mono text-sm text-slate-700">scripts/bulk-job-manager.js:562-664, 790-870 · scripts/stream-selector.js:259-348 · scripts/offscreen.js · scripts/download-core.js</p></div>
+          <div class="grid gap-5 lg:grid-cols-2">
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 schematic"><p class="mass-label text-slate-500">Before · two critical paths</p><pre class="mermaid mt-3">flowchart LR
+  UI[Popup / inline] --> S[downloadSingleTrack]
+  J[Bulk loop] --> P[processTrack]
+  S --> R[resolveStreamForTrack]
+  P --> R
+  R --> O[offscreen build]
+  S --> D[destination branch]
+  P --> D
+  D -. leakage .-> X[downloads / directory]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class X leak;</pre></div>
+            <div class="rounded-xl border border-slate-700 deep p-4 schematic text-white"><p class="mass-label text-slate-300">After · one deep module</p><div class="mt-7 grid grid-cols-[1fr_auto_1fr] items-center gap-3"><div class="space-y-4"><div class="rounded-lg border border-slate-500 p-3 text-center text-sm">single command</div><div class="rounded-lg border border-slate-500 p-3 text-center text-sm">bulk loop</div></div><div class="space-y-5 text-center"><div class="arrow text-slate-300">→</div><div class="arrow text-slate-300">→</div></div><div class="rounded-xl border-2 border-orange-400 bg-slate-900 p-5 text-center"><p class="mass-label text-orange-300">deep module</p><p class="mt-2 font-semibold">Track download execution</p><p class="tiny mt-2 text-slate-300">source · build · save · cleanup</p></div></div><div class="mt-7 flex justify-center"><span class="rounded-full border border-dashed border-slate-500 px-4 py-2 text-xs text-slate-300">one download seam</span></div></div>
+          </div>
+          <div class="grid gap-5 md:grid-cols-3"><div><p class="text-xs uppercase tracking-wider text-slate-500">Problem</p><p class="mt-2 text-sm leading-6">`processTrack` y `downloadSingleTrack` repiten resolución, construcción, guardado, revocación y lifecycle de keepalive dentro de un `BulkJobManager` que además posee el estado del job.</p></div><div><p class="text-xs uppercase tracking-wider text-slate-500">Solution</p><p class="mt-2 text-sm leading-6">Extraer un deep module interno para la ejecución de una pista. El loop bulk y el comando single delegan la secuencia completa; el estado del job queda fuera.</p></div><div><p class="text-xs uppercase tracking-wider text-slate-500">Benefits</p><ul class="mt-2 space-y-2 text-sm text-slate-700"><li>locality: cleanup y retries viven una vez</li><li>leverage: dos flujos comparten una implementation</li><li>tests cruzan un solo interface</li><li>deletion test: la secuencia reaparece en dos callers</li></ul></div></div>
+        </article>
+
+        <article id="candidate-destination" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+          <div class="flex flex-wrap items-start justify-between gap-4"><div><p class="text-xs uppercase tracking-[.18em] text-orange-700 font-semibold">02 · deepening</p><h2 class="mt-1 text-2xl font-serif">Dar profundidad al seam del destino</h2></div><div class="flex flex-wrap gap-2"><span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Strong</span><span class="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">ports &amp; adapters</span></div></div>
+          <div><p class="text-xs uppercase tracking-wider text-slate-500">Files</p><p class="mt-1 font-mono text-sm text-slate-700">scripts/bulk-job-manager.js:135-146, 395-428, 629-638, 810-841 · scripts/directory-storage.js:29-153 · scripts/offscreen.js:9-52</p></div>
+          <div class="grid gap-5 lg:grid-cols-2"><div class="rounded-xl border border-slate-200 bg-slate-50 p-4 schematic"><p class="mass-label text-slate-500">Before · choice leaks into execution</p><div class="relative mt-5 h-60"><div class="mass-box left-0 top-8 w-[30%] border border-slate-300 bg-white text-center"><p class="mass-label text-slate-500">bulk</p><p class="mt-2 text-sm">destination branch</p></div><div class="mass-box left-0 bottom-3 w-[30%] border border-slate-300 bg-white text-center"><p class="mass-label text-slate-500">single</p><p class="mt-2 text-sm">destination branch</p></div><div class="absolute left-[34%] top-[92px] text-2xl text-red-600">→</div><div class="absolute left-[34%] bottom-[45px] text-2xl text-red-600">→</div><div class="mass-box right-0 top-0 w-[45%] border border-dashed border-red-300 bg-red-50 text-center"><p class="mass-label text-red-600">leakage</p><p class="mt-2 text-sm">chrome.downloads</p><p class="text-sm">or offscreen + folder handle</p><p class="tiny mt-2 text-red-700">name policy and cleanup are split</p></div></div></div><div class="rounded-xl border border-slate-700 deep p-4 schematic text-white"><p class="mass-label text-slate-300">After · real seam, two adapters</p><div class="mt-10 flex items-center justify-between gap-3"><div class="rounded-lg border border-slate-500 p-3 text-center text-sm">track execution</div><div class="arrow text-orange-300">→</div><div class="rounded-xl border-2 border-orange-400 bg-slate-900 p-5 text-center"><p class="mass-label text-orange-300">deep module</p><p class="mt-2 font-semibold">destination handling</p><p class="tiny mt-2 text-slate-300">selection · naming · persistence</p></div></div><div class="mt-10 grid grid-cols-2 gap-3"><div class="rounded-lg border border-slate-500 p-3 text-center text-xs">browser downloads adapter</div><div class="rounded-lg border border-slate-500 p-3 text-center text-xs">selected directory adapter</div></div></div></div>
+          <div class="grid gap-5 md:grid-cols-3"><div><p class="text-xs uppercase tracking-wider text-slate-500">Problem</p><p class="mt-2 text-sm leading-6">La elección entre `chrome.downloads` y File System Access aparece en los dos paths de ejecución. `directory-storage.js` conoce nombres y handles, pero el caller conoce el transporte y el momento de revocar.</p></div><div><p class="text-xs uppercase tracking-wider text-slate-500">Solution</p><p class="mt-2 text-sm leading-6">Concentrar selección, naming, persistencia y errores del destino en un deep module. Mantener cada mecanismo concreto como adapter detrás del seam.</p></div><div><p class="text-xs uppercase tracking-wider text-slate-500">Benefits</p><ul class="mt-2 space-y-2 text-sm text-slate-700"><li>locality: permisos y nombres cambian juntos</li><li>leverage: single y bulk comparten la decisión</li><li>tests sustituyen cada adapter</li><li>two adapters make the seam real</li></ul></div></div>
+        </article>
+
+        <article id="candidate-page-intake" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+          <div class="flex flex-wrap items-start justify-between gap-4"><div><p class="text-xs uppercase tracking-[.18em] text-orange-700 font-semibold">03 · deepening</p><h2 class="mt-1 text-2xl font-serif">Separar el page intake de la vida de la página</h2></div><div class="flex flex-wrap gap-2"><span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Worth exploring</span><span class="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">in-process</span></div></div>
+          <div><p class="text-xs uppercase tracking-wider text-slate-500">Files</p><p class="mt-1 font-mono text-sm text-slate-700">scripts/content.js:31-272, 272-681, 726-1048, 1050-1134, 1143-1421 · scripts/inline-button.js:418-451</p></div>
+          <div class="grid gap-5 lg:grid-cols-2"><div class="rounded-xl border border-slate-200 bg-slate-50 p-4 schematic"><p class="mass-label text-slate-500">Before · one wide module</p><div class="mt-5 grid grid-cols-2 gap-2 text-xs"><div class="rounded border border-slate-300 bg-white p-3">route classification</div><div class="rounded border border-slate-300 bg-white p-3">hydration parsing</div><div class="rounded border border-slate-300 bg-white p-3">client id cache</div><div class="rounded border border-slate-300 bg-white p-3">playlist pagination</div><div class="rounded border border-slate-300 bg-white p-3">likes pagination</div><div class="rounded border border-slate-300 bg-white p-3">user tracks pagination</div><div class="rounded border border-red-300 bg-red-50 p-3 text-red-800">retry + stale page guard</div><div class="rounded border border-red-300 bg-red-50 p-3 text-red-800">state + messages</div></div><div class="mt-5 flex items-center justify-center gap-3 text-xs"><span class="rounded border border-slate-300 bg-white px-3 py-2">content.js · 1,421 lines</span><span class="leak-arrow text-xl">→</span><span class="rounded border border-slate-300 bg-white px-3 py-2">popup + inline</span></div></div><div class="rounded-xl border border-slate-700 deep p-4 schematic text-white"><p class="mass-label text-slate-300">After · deep page intake module</p><div class="mt-8 flex items-center justify-center gap-4"><div class="rounded-lg border border-slate-500 p-3 text-center text-xs">SPA observer</div><div class="arrow text-orange-300">→</div><div class="rounded-xl border-2 border-orange-400 bg-slate-900 p-5 text-center"><p class="mass-label text-orange-300">deep module</p><p class="mt-2 font-semibold">page intake</p><p class="tiny mt-2 text-slate-300">identity · hydration · pagination · freshness</p></div></div><div class="mt-10 grid grid-cols-3 gap-2 text-center text-xs"><div class="rounded-lg border border-slate-500 p-3">playlist adapter</div><div class="rounded-lg border border-slate-500 p-3">likes adapter</div><div class="rounded-lg border border-slate-500 p-3">user tracks adapter</div></div><div class="mt-6 text-center"><span class="rounded-full border border-dashed border-slate-500 px-4 py-2 text-xs text-slate-300">normalized track / collection data</span></div></div></div>
+          <div class="grid gap-5 md:grid-cols-3"><div><p class="text-xs uppercase tracking-wider text-slate-500">Problem</p><p class="mt-2 text-sm leading-6">`content.js` mezcla clasificación, HTML hydration, client id, tres formas de paginación, freshness por URL, retries, estado SPA y mensajería. Los extractores de likes, playlist y user tracks repiten fetch, validación y publicación.</p></div><div><p class="text-xs uppercase tracking-wider text-slate-500">Solution</p><p class="mt-2 text-sm leading-6">Dar profundidad a un page intake module que posea identidad, hydration, paginación y freshness. El observer sólo coordina el cambio de página; popup e inline consumen el mismo resultado.</p></div><div><p class="text-xs uppercase tracking-wider text-slate-500">Benefits</p><ul class="mt-2 space-y-2 text-sm text-slate-700"><li>locality: bugs de stale data se concentran</li><li>leverage: un normalizador cubre tres kinds</li><li>tests ejercitan datos sin DOM completo</li><li>deletion test: el guard de freshness no reaparece en cada extractor</li></ul></div></div>
+        </article>
+
+        <article id="candidate-stream-seam" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+          <div class="flex flex-wrap items-start justify-between gap-4"><div><p class="text-xs uppercase tracking-[.18em] text-orange-700 font-semibold">04 · deepening</p><h2 class="mt-1 text-2xl font-serif">Completar el seam de selección de streams</h2></div><div class="flex flex-wrap gap-2"><span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Worth exploring</span><span class="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">mock</span></div></div>
+          <div><p class="text-xs uppercase tracking-wider text-slate-500">Files</p><p class="mt-1 font-mono text-sm text-slate-700">scripts/stream-selector.js:93-348 · scripts/background.js:211-580 · scripts/bulk-job-manager.js:431-457 · scripts/popup.js:1098-1117 · scripts/inline-button.js:349-382</p></div>
+          <div class="grid gap-5 lg:grid-cols-2"><div class="rounded-xl border border-slate-200 bg-slate-50 p-4 schematic"><p class="mass-label text-slate-500">Before · policy and transport split</p><pre class="mermaid mt-3">flowchart LR
+  P[popup] --> M1[GET_STREAM_URL]
+  I[inline] --> M1
+  P --> M2[GET_ORIGINAL_DOWNLOAD]
+  I --> M2
+  B[background] --> A[public attempt]
+  B --> O[OAuth attempt]
+  B --> F[refresh metadata]
+  M1 --> B
+  M2 --> B
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class M1,M2 leak;</pre></div><div class="rounded-xl border border-slate-700 deep p-4 schematic text-white"><p class="mass-label text-slate-300">After · source policy behind one seam</p><div class="mt-7 flex items-center justify-center gap-3"><div class="space-y-3"><div class="rounded-lg border border-slate-500 p-3 text-center text-xs">popup</div><div class="rounded-lg border border-slate-500 p-3 text-center text-xs">inline</div><div class="rounded-lg border border-slate-500 p-3 text-center text-xs">bulk loop</div></div><div class="arrow text-orange-300">→</div><div class="rounded-xl border-2 border-orange-400 bg-slate-900 p-5 text-center"><p class="mass-label text-orange-300">deep module</p><p class="mt-2 font-semibold">source selection</p><p class="tiny mt-2 text-slate-300">format · original fallback · refresh policy</p></div><div class="arrow text-orange-300">→</div><div class="space-y-3"><div class="rounded-lg border border-slate-500 p-3 text-center text-xs">public HTTP adapter</div><div class="rounded-lg border border-slate-500 p-3 text-center text-xs">OAuth HTTP adapter</div></div></div><div class="mt-8 text-center"><span class="rounded-full border border-dashed border-slate-500 px-4 py-2 text-xs text-slate-300">401 / 403 / 404 decisions stay local</span></div></div></div>
+          <div class="grid gap-5 md:grid-cols-3"><div><p class="text-xs uppercase tracking-wider text-slate-500">Problem</p><p class="mt-2 text-sm leading-6">`SCStreamSelector` concentra parte de la policy, pero background todavía expone operaciones separadas para stream, original y refresh. El commit de 404 tocó cuatro archivos porque la decisión de retry cruza el seam.</p></div><div><p class="text-xs uppercase tracking-wider text-slate-500">Solution</p><p class="mt-2 text-sm leading-6">Hacer que un solo deep module posea selección de formato, preferencia por original, fallback y refresh. Dejar public y OAuth como adapters de transporte concretos.</p></div><div><p class="text-xs uppercase tracking-wider text-slate-500">Benefits</p><ul class="mt-2 space-y-2 text-sm text-slate-700"><li>locality: 401/403/404 se decide una vez</li><li>leverage: callers no conocen la policy</li><li>tests sustituyen transportes con mock adapters</li><li>menos mensajes con significado duplicado</li></ul></div></div>
+        </article>
+      </section>
+
+      <section id="top-recommendation" class="rounded-2xl border-2 border-orange-300 bg-orange-50 p-7 shadow-sm"><p class="text-xs uppercase tracking-[.2em] text-orange-700 font-semibold">Top recommendation</p><h2 class="mt-2 text-3xl font-serif"><a class="underline decoration-orange-400 underline-offset-4" href="#candidate-track-execution">Unificar la ejecución de una pista</a></h2><p class="mt-3 max-w-3xl text-slate-700">Es el seam con mayor leverage inmediato: el mismo trabajo ya existe en el path single y en el loop bulk, y concentra construcción, destino y cleanup. Profundizarlo reduce duplicación justo donde el historial muestra más cambios y hace que los tests crucen una sola interface.</p></section>
+    </main>
+  </body>
+</html>

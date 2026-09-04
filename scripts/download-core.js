@@ -1,8 +1,25 @@
 const SCDownload = (() => {
   function sanitizeFilename(trackData, extension) {
-    const fileName = `${trackData.artist} - ${trackData.title}`;
-    const sanitizedFileName = fileName.replace(/[^a-z0-9 -]/gi, " ").trim();
-    return `${sanitizedFileName}.${extension}`;
+    const artist = SCFormat.sanitizePathComponent(
+      trackData?.artist,
+      "Unknown Artist",
+      80
+    );
+    const title = SCFormat.sanitizePathComponent(
+      trackData?.title,
+      "Untitled",
+      160
+    );
+    const baseName = SCFormat.sanitizePathComponent(
+      `${artist} - ${title}`,
+      "Unknown Artist - Untitled",
+      220
+    );
+    const safeExtension = String(extension || "audio")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "") || "audio";
+
+    return `${baseName}.${safeExtension}`;
   }
 
   function getFileExtension(trackData) {

@@ -22,17 +22,28 @@
         }
 
         body.selection-mode {
-            min-height: 560px;
-            max-height: 600px;
+            min-height: 520px;
+            max-height: 520px;
         }
 
         body.selection-mode .container {
-            min-height: 560px;
+            min-height: 520px;
         }
 
-        body.selection-mode .track-info,
         body.selection-mode #waveformCanvas {
             display: none !important;
+        }
+
+        body.selection-mode .track-details > h2,
+        body.selection-mode #artistUrl,
+        body.selection-mode #duration,
+        body.selection-mode #metaSep,
+        body.selection-mode #downloadLimit {
+            display: none !important;
+        }
+
+        body.selection-mode .track-details {
+            gap: 0;
         }
 
         *::selection {
@@ -375,6 +386,37 @@
             display: none;
         }
 
+        #chooseDownloadFolder {
+            margin: 0;
+            padding: 4px 10px;
+            max-width: 112px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.12);
+            color: #e8e8e8;
+            font: 13px Arial, sans-serif;
+            cursor: pointer;
+            outline: none;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            transition: background-color 200ms, border-color 200ms;
+        }
+
+        #chooseDownloadFolder:hover {
+            background: rgba(255, 255, 255, 0.18);
+            border-color: rgba(255, 255, 255, 0.28);
+        }
+
+        #chooseDownloadFolder:focus {
+            border-color: rgba(255, 85, 0, 0.65);
+        }
+
+        #chooseDownloadFolder:disabled {
+            cursor: default;
+            opacity: 0.55;
+        }
+
         #downloadStatus {
             margin: 0;
             min-height: 16px;
@@ -502,7 +544,7 @@
         }
 
         #selectionViewport {
-            height: 420px;
+            height: 320px;
             overflow-y: auto;
             overflow-x: hidden;
             border: 1px solid rgba(255, 255, 255, 0.12);
@@ -617,6 +659,7 @@
                     <select id="downloadLimit" class="is-hidden" aria-label="Download amount">
                         <option value="50">50</option>
                     </select>
+                    <button id="chooseDownloadFolder" type="button" class="is-hidden" aria-label="Choose download folder" title="Choose download folder">Folder</button>
                 </p>
             </div>
         </div>
@@ -653,10 +696,8 @@
         </div>
     </div>
     <script src="./scripts/format-utils.js"></script>
+    <script src="./scripts/directory-storage.js"></script>
     <script src="./scripts/stream-selector.js"></script>
-    <script src="./scripts/vendor/id3-writer.js"></script>
-    <script src="./scripts/metadata.js"></script>
-    <script src="./scripts/download-core.js"></script>
     <script src="./scripts/popup.js"></script>
 </body>
 

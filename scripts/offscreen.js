@@ -6,6 +6,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "OFFSCREEN_SAVE_TO_DIRECTORY") {
+    handleDirectorySave(message, sendResponse);
+    return true;
+  }
+
   if (message.type === "OFFSCREEN_REVOKE") {
     try {
       if (message.blobUrl) {
@@ -28,6 +33,28 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   return false;
 });
+
+async function handleDirectorySave(message, sendResponse) {
+  try {
+    const response = await fetch(message.blobUrl);
+    if (!response.ok) {
+      throw new Error(`Could not read the prepared audio file (${response.status}).`);
+    }
+
+    const blob = await response.blob();
+    const fileName = await SCDownloadDirectory.saveBlob(
+      message.directoryId,
+      message.fileName,
+      blob
+    );
+    sendResponse({ success: true, fileName });
+  } catch (error) {
+    sendResponse({
+      success: false,
+      error: error.message || "Could not save to the selected folder.",
+    });
+  }
+}
 
 async function handleBuild(message, sendResponse) {
   const controller = new AbortController();

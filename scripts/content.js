@@ -18,6 +18,8 @@ const MAX_EXTRACTION_RETRIES = 3;
 const TRACKS_BATCH_SIZE = 50;
 const PREVIEW_LIMIT = 50;
 const LIKES_PAGE_SIZE = 50;
+const USER_TRACKS_PAGE_SIZE = 200;
+const API_RETRY_LIMIT = 3;
 const CLIENT_ID_TTL_MS = 60 * 60 * 1000;
 const CLIENT_ID_PATTERNS = [
   /client_id[=:]["']([A-Za-z0-9_-]{20,})["']/g,
@@ -45,6 +47,16 @@ function isSoundCloudPlaylistPage() {
   if (!window.location.hostname.includes("soundcloud.com")) return false;
   const segments = window.location.pathname.split("/").filter(Boolean);
   return segments.length === 3 && segments[1].toLowerCase() === "sets";
+}
+
+function isSoundCloudUserTracksPage() {
+  if (!window.location.hostname.includes("soundcloud.com")) return false;
+  const segments = window.location.pathname.split("/").filter(Boolean);
+  if (segments.length !== 2 || segments[1].toLowerCase() !== "tracks") {
+    return false;
+  }
+
+  return !NON_TRACK_PATHS.includes(`/${segments[0].toLowerCase()}`);
 }
 
 function looksLikeTrackPathPage() {
@@ -95,13 +107,13 @@ function isExtractionStillActive(extractionId) {
   return extractionId === activeExtractionId;
 }
 
-function scheduleExtractRetry(delay, extractionId) {
+function scheduleExtractRetry(delay, extractionId, extractor = extractTrackData) {
   if (pendingRetryTimeout) clearTimeout(pendingRetryTimeout);
 
   pendingRetryTimeout = setTimeout(() => {
     pendingRetryTimeout = null;
     if (isExtractionStillActive(extractionId)) {
-      extractTrackData(extractionId);
+      extractor(extractionId);
     }
   }, delay);
 }
@@ -377,6 +389,113 @@ async function fetchUserLikesPage(requestUrl, clientId, oauthToken) {
   return response.json();
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchUserTracksPage(requestUrl, clientId, attempt = 0) {
+  const url =
+    typeof requestUrl === "string" ? new URL(requestUrl) : new URL(requestUrl.href);
+
+  if (!url.searchParams.has("client_id")) {
+    url.searchParams.set("client_id", clientId);
+  }
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+      Origin: "https://soundcloud.com",
+      Referer: "https://soundcloud.com/",
+    },
+  });
+
+  if (response.status === 429 && attempt < API_RETRY_LIMIT) {
+    const retryAfterHeader = response.headers.get("Retry-After");
+    const retryAfterSeconds = retryAfterHeader
+      ? Number(retryAfterHeader)
+      : Number.NaN;
+    const retryDelay = Number.isFinite(retryAfterSeconds)
+      ? Math.min(retryAfterSeconds * 1000, 10000)
+      : 1000 * 2 ** attempt;
+    await wait(retryDelay);
+    return fetchUserTracksPage(url, clientId, attempt + 1);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch user tracks (${response.status}).`);
+  }
+
+  return response.json();
+}
+
+async function fetchUserTracks(
+  userId,
+  clientId,
+  pageUrl,
+  limit,
+  extractionId = null,
+  options = {}
+) {
+  const { onProgress, progressTotal } = options;
+  const tracks = [];
+  const seenTrackIds = new Set();
+  const visitedPages = new Set();
+  const cap = limit ?? Infinity;
+  const total = progressTotal ?? cap;
+  let nextUrl = new URL(`https://api-v2.soundcloud.com/users/${userId}/tracks`);
+  nextUrl.searchParams.set("client_id", clientId);
+  nextUrl.searchParams.set(
+    "limit",
+    String(Number.isFinite(cap) ? Math.min(USER_TRACKS_PAGE_SIZE, cap) : USER_TRACKS_PAGE_SIZE)
+  );
+  nextUrl.searchParams.set("linked_partitioning", "1");
+
+  while (nextUrl && tracks.length < cap) {
+    if (extractionId !== null && !isExtractionStillActive(extractionId)) {
+      return null;
+    }
+
+    if (getCurrentPageUrl() !== pageUrl) {
+      return null;
+    }
+
+    const pageKey = nextUrl.toString();
+    if (visitedPages.has(pageKey)) {
+      break;
+    }
+    visitedPages.add(pageKey);
+
+    const page = await fetchUserTracksPage(nextUrl, clientId);
+    const pageTracks = Array.isArray(page) ? page : page.collection || [];
+
+    for (const track of pageTracks) {
+      if (tracks.length >= cap) {
+        break;
+      }
+
+      if (!track?.id || !track.title || seenTrackIds.has(track.id)) {
+        continue;
+      }
+
+      seenTrackIds.add(track.id);
+      tracks.push(buildTrackDataFromApiTrack(track, clientId, pageUrl));
+      onProgress?.(tracks.length, total);
+    }
+
+    const nextHref = Array.isArray(page) ? null : page.next_href;
+    if (!nextHref || tracks.length >= cap) {
+      break;
+    }
+
+    nextUrl = new URL(nextHref);
+    nextUrl.searchParams.set("client_id", clientId);
+  }
+
+  return Number.isFinite(cap) ? tracks.slice(0, cap) : tracks;
+}
+
 async function fetchLikesTracks(
   userId,
   clientId,
@@ -539,6 +658,26 @@ async function resolveBulkTracks(limit, options = {}) {
     );
   }
 
+  if (bulkContext.kind === "user_tracks") {
+    const tracks = await fetchUserTracks(
+      bulkContext.userId,
+      bulkContext.clientId,
+      bulkContext.pageUrl,
+      limit,
+      null,
+      {
+        onProgress: emitProgress,
+        progressTotal: progressTotal ?? Infinity,
+      }
+    );
+
+    if (tracks === null) {
+      throw new Error("User track fetch was interrupted.");
+    }
+
+    return tracks;
+  }
+
   throw new Error("Unknown bulk download context.");
 }
 
@@ -660,6 +799,7 @@ async function extractLikesData(capturedExtractionId) {
 
     const username = user.username || "Unknown user";
     const newPlaylistData = {
+      kind: "likes",
       title: `${username} - Likes`,
       trackCount: tracks?.length || 0,
       totalCount,
@@ -711,7 +851,7 @@ async function extractPlaylistData(capturedExtractionId) {
     if (!hydrationData) {
       if (extractionRetryCount < MAX_EXTRACTION_RETRIES) {
         extractionRetryCount += 1;
-        scheduleExtractRetry(2000, extractionId);
+        scheduleExtractRetry(2000, extractionId, extractPlaylistData);
       }
 
       return null;
@@ -765,6 +905,7 @@ async function extractPlaylistData(capturedExtractionId) {
     );
 
     const newPlaylistData = {
+      kind: "playlist",
       title: playlist.title,
       trackCount: resolvedTracks.length,
       totalCount,
@@ -779,6 +920,111 @@ async function extractPlaylistData(capturedExtractionId) {
       artistUrl: playlist.user?.permalink_url || resolvedTracks[0]?.artistUrl || "",
       artistImageUrl:
         playlist.user?.avatar_url || resolvedTracks[0]?.artistImageUrl || null,
+    };
+
+    if (JSON.stringify(currentPlaylistData) !== JSON.stringify(newPlaylistData)) {
+      currentPlaylistData = newPlaylistData;
+      chrome.runtime.sendMessage({
+        type: "PLAYLIST_DATA",
+        data: currentPlaylistData,
+      });
+    }
+
+    ensureInlineDownloadButton();
+    return currentPlaylistData;
+  } catch (error) {
+    console.error("SC Track Downloader Error:", error);
+    return null;
+  } finally {
+    if (isExtractionStillActive(extractionId)) {
+      isExtracting = false;
+    }
+  }
+}
+
+function scheduleUserTracksExtractRetry(delay, extractionId) {
+  if (pendingRetryTimeout) {
+    clearTimeout(pendingRetryTimeout);
+  }
+
+  pendingRetryTimeout = setTimeout(() => {
+    pendingRetryTimeout = null;
+    if (isExtractionStillActive(extractionId)) {
+      extractUserTracksData(extractionId);
+    }
+  }, delay);
+}
+
+async function extractUserTracksData(capturedExtractionId) {
+  const extractionId = capturedExtractionId ?? ++activeExtractionId;
+  isExtracting = true;
+
+  try {
+    const pageUrl = getCurrentPageUrl();
+    const html = await fetch(window.location.href, {
+      cache: "no-store",
+      credentials: "include",
+    }).then((response) => response.text());
+
+    if (!isExtractionStillActive(extractionId)) {
+      return null;
+    }
+
+    const hydrationData = parseHydrationData(html);
+    const user = hydrationData?.find(
+      (item) => item.hydratable === "user"
+    )?.data;
+
+    if (!user?.id) {
+      if (extractionRetryCount < MAX_EXTRACTION_RETRIES) {
+        extractionRetryCount += 1;
+        scheduleUserTracksExtractRetry(2000, extractionId);
+      }
+      return null;
+    }
+
+    const clientId = await extractClientId(html);
+    if (!clientId || !isExtractionStillActive(extractionId)) {
+      return null;
+    }
+
+    bulkContext = {
+      kind: "user_tracks",
+      userId: user.id,
+      clientId,
+      pageUrl,
+    };
+
+    const tracks = await fetchUserTracks(
+      user.id,
+      clientId,
+      pageUrl,
+      PREVIEW_LIMIT,
+      extractionId
+    );
+
+    if (!tracks || !isExtractionStillActive(extractionId)) {
+      return null;
+    }
+
+    extractionRetryCount = 0;
+    const username = user.username || "Unknown user";
+    const totalCount = Math.max(Number(user.track_count) || 0, tracks.length);
+    const newPlaylistData = {
+      kind: "user_tracks",
+      title: `${username} - Tracks`,
+      trackCount: tracks.length,
+      totalCount,
+      clientId,
+      tracks,
+      pageUrl,
+      artwork_url:
+        user.avatar_url?.replace("-large", "-t500x500") ||
+        tracks[0]?.artwork_url ||
+        null,
+      artist: username,
+      artistUrl: user.permalink_url || "",
+      artistImageUrl: user.avatar_url || null,
     };
 
     if (JSON.stringify(currentPlaylistData) !== JSON.stringify(newPlaylistData)) {
@@ -896,6 +1142,28 @@ function formatDuration(ms) {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "GET_TRACK_DATA") {
+    if (isSoundCloudUserTracksPage()) {
+      if (
+        currentPlaylistData &&
+        !request.forceRefresh &&
+        isCurrentPlaylistDataForPage()
+      ) {
+        sendResponse({
+          status: "loaded",
+          kind: "playlist",
+          data: currentPlaylistData,
+        });
+        return true;
+      }
+
+      if (request.forceRefresh || !isExtracting) {
+        extractUserTracksData();
+      }
+
+      sendResponse({ status: "loading" });
+      return true;
+    }
+
     if (isSoundCloudLikesPage()) {
       if (
         currentPlaylistData &&
@@ -1082,7 +1350,10 @@ function handleUrlChange() {
     }
 
     window.urlChangeTimeout = setTimeout(async () => {
-      if (isSoundCloudLikesPage()) {
+      if (isSoundCloudUserTracksPage()) {
+        removeInlineDownloadButton();
+        await extractUserTracksData();
+      } else if (isSoundCloudLikesPage()) {
         removeInlineDownloadButton();
         await extractLikesData();
       } else if (isSoundCloudPlaylistPage()) {
@@ -1109,6 +1380,7 @@ function initScript() {
     urlCheckInterval = setInterval(() => {
       if (
         isSoundCloudLikesPage() ||
+        isSoundCloudUserTracksPage() ||
         isSoundCloudTrackPage() ||
         isSoundCloudPlaylistPage() ||
         location.href !== lastUrl
@@ -1118,7 +1390,9 @@ function initScript() {
     }, 750);
   }
 
-  if (isSoundCloudLikesPage()) {
+  if (isSoundCloudUserTracksPage()) {
+    setTimeout(extractUserTracksData, 1254);
+  } else if (isSoundCloudLikesPage()) {
     setTimeout(extractLikesData, 1254);
   } else if (isSoundCloudPlaylistPage()) {
     setTimeout(extractPlaylistData, 1254);
@@ -1128,7 +1402,11 @@ function initScript() {
 }
 
 function isSoundCloudCollectionPage() {
-  return isSoundCloudLikesPage() || isSoundCloudPlaylistPage();
+  return (
+    isSoundCloudLikesPage() ||
+    isSoundCloudPlaylistPage() ||
+    isSoundCloudUserTracksPage()
+  );
 }
 
 window.SCDL = {
@@ -1136,6 +1414,7 @@ window.SCDL = {
   getPlaylistData: () => currentPlaylistData,
   isTrackPage: () => isSoundCloudTrackPage(),
   isCollectionPage: () => isSoundCloudCollectionPage(),
+  isProfileTracksPage: () => isSoundCloudUserTracksPage(),
   resolveBulkTracks: (limit) => resolveBulkTracks(limit),
 };
 

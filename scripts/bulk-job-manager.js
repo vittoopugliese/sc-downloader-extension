@@ -13,6 +13,7 @@ let activeLoopPromise = null;
 let activeLoopJobId = null;
 let inFlightBuildIds = new Set();
 let stateQueue = Promise.resolve();
+let singleDownloadsInFlight = 0;
 
 function withJobState(fn) {
   const run = stateQueue.then(fn);
@@ -24,11 +25,11 @@ function withJobState(fn) {
 }
 
 function sanitizeFolderName(title) {
-  return (title || "SoundCloud Playlist")
-    .replace(/[^a-z0-9 -]/gi, " ")
-    .trim()
-    .replace(/\s+/g, " ")
-    .slice(0, 120) || "SoundCloud Playlist";
+  return SCFormat.sanitizePathComponent(
+    title,
+    "SoundCloud Playlist",
+    120
+  );
 }
 
 function createJobId() {
@@ -37,10 +38,6 @@ function createJobId() {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function getFileExtension(trackData) {
-  return SCFormat.getFileExtension(trackData);
 }
 
 function createEmptyTrackStatus(trackCount) {
@@ -135,12 +132,17 @@ function slimTrackForJob(track, fallbackAlbum) {
   };
 }
 
-function sanitizeBulkFilename(trackData, extension, index, total) {
-  const paddedIndex = String(index + 1).padStart(String(total).length, "0");
-  const baseName = `${trackData.artist || "Unknown Artist"} - ${trackData.title || "Untitled"}`
-    .replace(/[^a-z0-9 -]/gi, " ")
-    .trim();
-  return `${paddedIndex} - ${baseName}.${extension}`;
+async function resolveDownloadDestination(downloadDestination = null) {
+  const candidate = downloadDestination || (await SCDownloadDirectory.getCurrent());
+  if (
+    !candidate ||
+    typeof candidate.id !== "string" ||
+    typeof candidate.name !== "string"
+  ) {
+    return null;
+  }
+
+  return { id: candidate.id, name: candidate.name };
 }
 
 async function loadJob() {
@@ -169,6 +171,7 @@ function getPublicJobSnapshot(job) {
     status: job.status,
     playlistTitle: job.playlistTitle,
     folderName: job.folderName,
+    destinationName: job.downloadDestination?.name || null,
     total: job.tracks.length,
     currentIndex: job.currentIndex,
     completed: job.completed,
@@ -235,10 +238,13 @@ async function safeCreateNotification(title, message) {
 async function notifyJobFinished(job) {
   if (job.status === "completed") {
     const failedCount = job.failed.length;
+    const destination = job.downloadDestination?.name
+      ? job.downloadDestination.name
+      : `Downloads/${job.folderName}`;
     const message =
       failedCount > 0
-        ? `${job.completed}/${job.tracks.length} tracks saved to Downloads/${job.folderName}. ${failedCount} failed.`
-        : `${job.completed}/${job.tracks.length} tracks saved to Downloads/${job.folderName}.`;
+        ? `${job.completed}/${job.tracks.length} tracks saved to ${destination}. ${failedCount} failed.`
+        : `${job.completed}/${job.tracks.length} tracks saved to ${destination}.`;
 
     await safeCreateNotification("Download complete", message);
     return;
@@ -280,7 +286,7 @@ async function ensureOffscreenDocument() {
   await chrome.offscreen.createDocument({
     url: "offscreen.html",
     reasons: ["BLOBS"],
-    justification: "Assemble HLS audio tracks and save them to the Downloads folder.",
+    justification: "Assemble HLS audio tracks and save them to the selected destination.",
   });
 }
 
@@ -405,6 +411,21 @@ function downloadBlobUrl(blobUrl, filename) {
       }
     );
   });
+}
+
+async function saveBlobToDirectory(blobUrl, fileName, downloadDestination) {
+  const result = await sendOffscreenMessage({
+    type: "OFFSCREEN_SAVE_TO_DIRECTORY",
+    blobUrl,
+    fileName,
+    directoryId: downloadDestination.id,
+  });
+
+  if (!result?.success) {
+    throw new Error(result?.error || "Could not save to the selected folder.");
+  }
+
+  return result.fileName || fileName;
 }
 
 async function resolveStreamForTrack(trackData, formatPreference = "auto") {
@@ -605,12 +626,22 @@ async function processTrack(jobId, trackIndex) {
       `Track ${trackNumber}/${total} - Saving...`
     );
 
-    await downloadBlobUrl(buildResult.blobUrl, `${job.folderName}/${filename}`);
-
-    await sendOffscreenMessage({
-      type: "OFFSCREEN_REVOKE",
-      blobUrl: buildResult.blobUrl,
-    }).catch(() => {});
+    try {
+      if (job.downloadDestination?.id) {
+        await saveBlobToDirectory(
+          buildResult.blobUrl,
+          filename,
+          job.downloadDestination
+        );
+      } else {
+        await downloadBlobUrl(buildResult.blobUrl, `${job.folderName}/${filename}`);
+      }
+    } finally {
+      await sendOffscreenMessage({
+        type: "OFFSCREEN_REVOKE",
+        blobUrl: buildResult.blobUrl,
+      }).catch(() => {});
+    }
 
     await recordTrackSuccess(jobId, trackIndex);
   } catch (error) {
@@ -756,19 +787,116 @@ const BulkJobManager = {
     };
   },
 
-  async createJob(tracks, playlistTitle, playlistMeta = {}, formatPreference = "auto") {
+  async downloadSingleTrack(
+    trackData,
+    formatPreference = "auto",
+    downloadDestination = null
+  ) {
+    const activeJobBeforeDownload = await loadJob();
+    if (
+      activeJobBeforeDownload &&
+      ["running", "paused"].includes(activeJobBeforeDownload.status)
+    ) {
+      throw new Error("A bulk download is already in progress.");
+    }
+
+    const buildId = `single_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    let blobUrl = null;
+    let buildRequested = false;
+
+    singleDownloadsInFlight += 1;
+
+    try {
+      const resolvedDestination = await resolveDownloadDestination(
+        downloadDestination
+      );
+      await startKeepalive();
+      await ensureOffscreenDocument();
+      const resolved = await resolveStreamForTrack(
+        trackData,
+        formatPreference || "auto"
+      );
+      buildRequested = true;
+      const buildResult = await sendOffscreenMessage({
+        type: "OFFSCREEN_BUILD",
+        buildId,
+        trackData: resolved.trackData,
+        streamUrl: resolved.streamUrl,
+      });
+
+      if (!buildResult?.success || !buildResult.blobUrl) {
+        throw new Error(buildResult?.error || "Failed to build audio file.");
+      }
+
+      blobUrl = buildResult.blobUrl;
+      let savedFileName = buildResult.fileName;
+      if (resolvedDestination) {
+        savedFileName = await saveBlobToDirectory(
+          blobUrl,
+          buildResult.fileName,
+          resolvedDestination
+        );
+      } else {
+        await downloadBlobUrl(blobUrl, buildResult.fileName);
+      }
+
+      return {
+        success: true,
+        fileName: savedFileName,
+        destinationName: resolvedDestination?.name || "Downloads",
+      };
+    } finally {
+      if (blobUrl) {
+        await sendOffscreenMessage({
+          type: "OFFSCREEN_REVOKE",
+          blobUrl,
+        }).catch(() => {});
+      } else if (buildRequested) {
+        await sendOffscreenMessage({
+          type: "OFFSCREEN_ABORT",
+          buildId,
+        }).catch(() => {});
+      }
+
+      singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);
+      const activeJob = await loadJob().catch(() => null);
+      const hasActiveBulkJob =
+        activeJob && ["running", "paused"].includes(activeJob.status);
+      if (!hasActiveBulkJob && singleDownloadsInFlight === 0) {
+        await stopKeepalive().catch(() => {});
+        await closeOffscreenDocument().catch(() => {});
+      }
+    }
+  },
+
+  async createJob(
+    tracks,
+    playlistTitle,
+    playlistMeta = {},
+    formatPreference = "auto",
+    downloadDestination = null
+  ) {
     const existing = await loadJob();
     if (existing && ["running", "paused"].includes(existing.status)) {
       throw new Error("A bulk download is already in progress.");
     }
 
+    if (singleDownloadsInFlight > 0) {
+      throw new Error("A track download is already in progress.");
+    }
+
     const fallbackAlbum = playlistTitle || "Untitled playlist";
+    const resolvedDestination = await resolveDownloadDestination(
+      downloadDestination
+    );
+    const collectionFolder = sanitizeFolderName(playlistTitle);
 
     const job = {
       id: createJobId(),
       status: "running",
       playlistTitle: playlistTitle || "Untitled playlist",
-      folderName: sanitizeFolderName(playlistTitle),
+      folderName: collectionFolder,
+      downloadDestination: resolvedDestination,
       artworkUrl: playlistMeta.artworkUrl || tracks[0]?.artwork_url || null,
       artist: playlistMeta.artist || tracks[0]?.artist || null,
       artistImageUrl: playlistMeta.artistImageUrl || tracks[0]?.artistImageUrl || null,

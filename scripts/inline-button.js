@@ -26,6 +26,31 @@ function injectInlineStyles() {
       border-radius: 4px;
     }
 
+    #${INLINE_BUTTON_ID}.scdl-profile-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    #${INLINE_BUTTON_ID}.scdl-profile-download .scdl-inline-icon {
+      width: 16px;
+      height: 16px;
+    }
+
+    #${INLINE_BUTTON_ID}.scdl-profile-floating {
+      position: fixed;
+      right: 24px;
+      bottom: 92px;
+      z-index: 10000;
+      min-height: 36px;
+      padding: 0 14px;
+      color: #fff;
+      background: #f50;
+      border-color: #f50;
+      border-radius: 4px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+    }
+
     #${INLINE_BUTTON_ID}.is-loading {
       opacity: 0.65;
       cursor: wait;
@@ -67,6 +92,28 @@ function injectInlineStyles() {
 }
 
 function findActionButtonGroup() {
+  if (window.SCDL?.isProfileTracksPage?.()) {
+    const profileSelectors = [
+      ".userInfoBar__buttons .sc-button-group",
+      ".userInfoBar__buttons",
+      ".profileHeaderInfo__buttons .sc-button-group",
+      ".profileHeaderInfo__buttons",
+      ".userMain__headerButtons .sc-button-group",
+      ".userMain__headerButtons",
+      ".soundHeader__actions .sc-button-group",
+      ".header__actions .sc-button-group",
+    ];
+
+    for (const selector of profileSelectors) {
+      const group = document.querySelector(selector);
+      if (group) {
+        return group;
+      }
+    }
+
+    return null;
+  }
+
   return (
     document.querySelector(
       ".listenEngagement__actions .sc-button-group"
@@ -86,6 +133,10 @@ function isCollectionInlinePage() {
   return window.SCDL?.isCollectionPage?.() === true;
 }
 
+function isProfileTracksInlinePage() {
+  return window.SCDL?.isProfileTracksPage?.() === true;
+}
+
 function setInlineButtonState(state) {
   const button = document.getElementById(INLINE_BUTTON_ID);
   if (!button) {
@@ -95,24 +146,40 @@ function setInlineButtonState(state) {
   button.classList.remove("is-loading", "is-success", "is-error");
 
   const collectionPage = isCollectionInlinePage();
+  const profileTracksPage = isProfileTracksInlinePage();
+  const profileLabel = button.querySelector(".scdl-profile-download-label");
 
   if (state === "loading") {
     button.classList.add("is-loading");
-    button.title = collectionPage ? "Preparing download..." : "Downloading...";
+    button.title = profileTracksPage
+      ? "Loading track selector..."
+      : collectionPage
+        ? "Preparing download..."
+        : "Downloading...";
     button.setAttribute(
       "aria-label",
-      collectionPage ? "Preparing download..." : "Downloading..."
+      button.title
     );
+    if (profileLabel) {
+      profileLabel.textContent = "Opening selector...";
+    }
     return;
   }
 
   if (state === "success") {
     button.classList.add("is-success");
-    button.title = collectionPage ? "Download started!" : "Downloaded!";
+    button.title = profileTracksPage
+      ? "Track selector opened"
+      : collectionPage
+        ? "Download started!"
+        : "Downloaded!";
     button.setAttribute(
       "aria-label",
-      collectionPage ? "Download started!" : "Downloaded!"
+      button.title
     );
+    if (profileLabel) {
+      profileLabel.textContent = "Selector opened";
+    }
     return;
   }
 
@@ -123,11 +190,18 @@ function setInlineButtonState(state) {
     return;
   }
 
-  button.title = collectionPage ? "Download playlist" : "Download";
+  button.title = profileTracksPage
+    ? "Select user tracks"
+    : collectionPage
+      ? "Download playlist"
+      : "Download";
   button.setAttribute(
     "aria-label",
-    collectionPage ? "Download playlist" : "Download"
+    button.title
   );
+  if (profileLabel) {
+    profileLabel.textContent = "Download tracks";
+  }
 }
 
 function setInlineButtonNotice(message) {
@@ -231,70 +305,41 @@ async function handleInlineCollectionDownloadClick() {
   }
 }
 
-async function refreshTrackDataBeforeDownload(trackData, formatPreference) {
-  if (!trackData?.id || !trackData?.clientId) {
-    return trackData;
-  }
+async function handleProfileTracksClick() {
+  isInlineDownloading = true;
+  setInlineButtonState("loading");
 
   try {
-    const refreshed = await SCStreamSelector.refreshTrackFromApi(
-      trackData.id,
-      trackData.clientId,
-      formatPreference
+    const result = await chrome.runtime.sendMessage({
+      type: "OPEN_EXTENSION_POPUP",
+    });
+
+    if (!result?.success) {
+      throw new Error(result?.error || "Could not open the extension popup.");
+    }
+
+    setInlineButtonState("success");
+    resetInlineButtonStateAfterSuccess();
+  } catch (error) {
+    console.error("SC Track Downloader profile selector error:", error);
+    isInlineDownloading = false;
+    setInlineButtonNotice("Open the extension to select user tracks");
+    const label = document.querySelector(
+      `#${INLINE_BUTTON_ID} .scdl-profile-download-label`
     );
-    return { ...trackData, ...refreshed, formatPreference };
-  } catch {
-    return trackData;
+    if (label) {
+      label.textContent = "Open extension icon";
+    }
   }
-}
-
-async function resolveTrackDownloadUrl(trackData) {
-  const formatPreference =
-    trackData.formatPreference ||
-    (await SCStreamSelector.getStoredFormatPreference());
-
-  return SCStreamSelector.resolveDownloadSource(trackData, {
-    formatPreference,
-    refreshTrack: (trackId, clientId, preference) =>
-      SCStreamSelector.refreshTrackFromApi(trackId, clientId, preference),
-    getOriginal: async (trackId, clientId) => {
-      const result = await chrome.runtime.sendMessage({
-        type: "GET_ORIGINAL_DOWNLOAD",
-        trackId,
-        clientId,
-      });
-
-      if (!result?.success) {
-        throw new Error(result?.error || "Original download failed.");
-      }
-
-      return result;
-    },
-    getStream: async (currentTrack) => {
-      const result = await chrome.runtime.sendMessage({
-        type: "GET_STREAM_URL",
-        streamUrl: currentTrack.streamUrl,
-        clientId: currentTrack.clientId,
-        trackAuthorization: currentTrack.trackAuthorization,
-        streamProtocol: currentTrack.streamProtocol,
-        streamPreset: currentTrack.streamPreset,
-        streamMimeType: currentTrack.streamMimeType,
-      });
-
-      if (!result?.success || !result.url) {
-        const error = new Error(result?.error || "Cannot obtain final file URL.");
-        error.result = result;
-        throw error;
-      }
-
-      return result;
-    },
-  });
 }
 
 async function handleInlineDownloadClick() {
   if (isInlineDownloading) {
     return;
+  }
+
+  if (isProfileTracksInlinePage()) {
+    return handleProfileTracksClick();
   }
 
   if (isCollectionInlinePage()) {
@@ -318,16 +363,16 @@ async function handleInlineDownloadClick() {
     const formatPreference =
       trackData.formatPreference ||
       (await SCStreamSelector.getStoredFormatPreference());
-    const refreshedTrack = await refreshTrackDataBeforeDownload(
+    const result = await chrome.runtime.sendMessage({
+      type: "DOWNLOAD_SINGLE_TRACK",
       trackData,
-      formatPreference
-    );
-    const resolved = await resolveTrackDownloadUrl(refreshedTrack);
-    const { blob, fileName } = await SCDownload.buildTrackBlob(
-      resolved.url,
-      resolved.trackData
-    );
-    SCDownload.triggerBlobDownload(blob, fileName);
+      formatPreference,
+    });
+
+    if (!result?.success) {
+      throw new Error(result?.error || "Download failed.");
+    }
+
     setInlineButtonState("success");
     resetInlineButtonStateAfterSuccess();
   } catch (error) {
@@ -345,8 +390,10 @@ function createInlineDownloadButton() {
   button.type = "button";
   button.title = "Download";
   button.setAttribute("aria-label", "Download");
-  button.className =
-    "sc-button sc-button-secondary sc-button-medium sc-button-icon sc-button-responsive";
+  const profileTracksPage = isProfileTracksInlinePage();
+  button.className = profileTracksPage
+    ? "sc-button sc-button-secondary sc-button-medium sc-button-responsive scdl-profile-download"
+    : "sc-button sc-button-secondary sc-button-medium sc-button-icon sc-button-responsive";
 
   const iconWrap = document.createElement("div");
   const icon = document.createElement("img");
@@ -356,6 +403,13 @@ function createInlineDownloadButton() {
   icon.draggable = false;
   iconWrap.appendChild(icon);
   button.appendChild(iconWrap);
+
+  if (profileTracksPage) {
+    const label = document.createElement("span");
+    label.className = "scdl-profile-download-label";
+    label.textContent = "Download tracks";
+    button.appendChild(label);
+  }
 
   button.addEventListener("click", handleInlineDownloadClick);
   return button;
@@ -372,15 +426,19 @@ function ensureInlineDownloadButton(trackData) {
     : null;
 
   const buttonGroup = findActionButtonGroup();
-  if (!buttonGroup) {
+  const profileTracksPage = isProfileTracksInlinePage();
+  if (!buttonGroup && !profileTracksPage) {
     return;
   }
 
   let button = document.getElementById(INLINE_BUTTON_ID);
   if (!button) {
     button = createInlineDownloadButton();
-    const moreButton = buttonGroup.querySelector(".sc-button-more");
-    if (moreButton) {
+    const moreButton = buttonGroup?.querySelector(".sc-button-more");
+    if (!buttonGroup) {
+      button.classList.add("scdl-profile-floating");
+      document.body.appendChild(button);
+    } else if (moreButton) {
       buttonGroup.insertBefore(button, moreButton);
     } else {
       buttonGroup.appendChild(button);
@@ -420,7 +478,7 @@ function startToolbarObserver() {
       return;
     }
 
-    if (!findActionButtonGroup()) {
+    if (!findActionButtonGroup() && !isProfileTracksInlinePage()) {
       return;
     }
 

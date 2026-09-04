@@ -1,4 +1,33 @@
 const SCFormat = (() => {
+  const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
+  const INVALID_PATH_CHARACTERS = /[<>:"/\\|?*\u0000-\u001f\u007f]/g;
+
+  function truncateUnicode(value, maxLength) {
+    const characters = Array.from(value);
+    return characters.length > maxLength
+      ? characters.slice(0, maxLength).join("")
+      : value;
+  }
+
+  function sanitizePathComponent(value, fallback = "Untitled", maxLength = 120) {
+    const normalized = String(value || "")
+      .normalize("NFC")
+      .replace(INVALID_PATH_CHARACTERS, " ")
+      .replace(/\s+/gu, " ")
+      .replace(/^[. ]+|[. ]+$/g, "");
+
+    let safeValue = normalized || fallback;
+    if (WINDOWS_RESERVED_NAME.test(safeValue)) {
+      safeValue = `_${safeValue}`;
+    }
+
+    safeValue = truncateUnicode(safeValue, maxLength)
+      .replace(/[. ]+$/g, "")
+      .trim();
+
+    return safeValue || fallback;
+  }
+
   const EXTENSION_BY_MIME = {
     "audio/wav": "wav",
     "audio/x-wav": "wav",
@@ -158,6 +187,7 @@ const SCFormat = (() => {
   }
 
   return {
+    sanitizePathComponent,
     getExtensionFromUrl,
     getExtensionFromMimeType,
     getFileExtension,
