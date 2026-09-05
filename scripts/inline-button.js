@@ -13,9 +13,7 @@ let successResetTimeout = null;
 let playerSuccessResetTimeout = null;
 
 function injectInlineStyles() {
-  if (document.getElementById(INLINE_STYLES_ID)) {
-    return;
-  }
+  if (document.getElementById(INLINE_STYLES_ID)) return;
 
   const style = document.createElement("style");
   style.id = INLINE_STYLES_ID;
@@ -116,7 +114,6 @@ function injectInlineStyles() {
     #${INLINE_BUTTON_ID}.scdl-profile-download {
       display: inline-flex;
       align-items: center;
-      gap: 7px;
     }
 
     #${INLINE_BUTTON_ID}.scdl-profile-download .scdl-inline-icon {
@@ -167,6 +164,10 @@ function injectInlineStyles() {
       opacity: 0.45;
     }
 
+    .scdl-filtered {
+      filter: invert(1);
+    }
+
     #${INLINE_BUTTON_ID}.is-error .scdl-inline-icon {
       opacity: 0.45;
     }
@@ -207,7 +208,8 @@ function findActionButtonGroup() {
     document.querySelector(
       ".listenEngagement__actions .sc-button-group"
     ) ||
-    document.querySelector(".soundActions .sc-button-group")
+    document.querySelector(".soundActions .sc-button-group") ||
+    document.querySelector(".sound__soundActions .sc-button-group")
   );
 }
 
@@ -689,8 +691,8 @@ function createInlineDownloadButton() {
     : "sc-button sc-button-secondary sc-button-medium sc-button-icon sc-button-responsive";
 
   const icon = document.createElement("img");
-  icon.className = "scdl-inline-icon";
-  icon.src = chrome.runtime.getURL("assets/icon48.png");
+  icon.className = "scdl-inline-icon scdl-filtered";
+  icon.src = chrome.runtime.getURL("assets/download.svg");
   icon.alt = "";
   icon.draggable = false;
   button.appendChild(icon);
