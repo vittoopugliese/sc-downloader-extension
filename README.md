@@ -12,6 +12,7 @@ This release is a **big one**. What started as a single-track downloader is now 
 
 **Highlights:**
 - **Inline download button** ~ download tracks directly from SoundCloud's action bar (Like/Repost/Share) without opening the popup
+- **Player download button** ~ download the track currently playing from SoundCloud's persistent bottom player without opening the popup
 - **Playlists, sets & albums** ~ download collections as numbered files in a folder
 - **International filenames** ~ preserves Cyrillic, accented, CJK, and emoji titles while keeping paths safe on Windows, macOS, and Linux
 - **Remembered download folder** ~ use the native folder picker once, then change the destination beside the quality and amount selectors whenever needed
@@ -37,6 +38,7 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 - Waveform visualization
 - One-click download ~ works on public tracks without signing in
 - **Inline download button** on the track page action bar (next to Like/Repost/Share) ~ same download flow, no popup needed
+- **Player download button** in the persistent bottom player ~ downloads the track that is currently playing, even when the open page is a feed, playlist, or another track
 - **Inline download button** on playlist/set and likes pages ~ starts a background bulk job for the full collection
 - **User profile downloads** ~ open `soundcloud.com/{user}/tracks`, choose from every public upload, and download the selection as one background job
 
@@ -73,7 +75,7 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 
 ### Download a single track
 1. Go to any SoundCloud **track** page
-2. Click the **inline download button** in the action bar (next to Like/Repost/Share), **or** click the extension icon and use the popup download button
+2. Click the **player download icon** in the persistent bottom player, the **inline download button** in the action bar (next to Like/Repost/Share), **or** click the extension icon and use the popup download button
 3. Wait for the track info to load (popup only)
 4. Hit download ~ the file saves to your browser's default download folder
 

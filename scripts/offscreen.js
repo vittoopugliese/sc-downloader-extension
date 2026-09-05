@@ -1,4 +1,5 @@
 const activeBuilds = new Map();
+const SERVICE_WORKER_KEEPALIVE_MS = 10000;
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "OFFSCREEN_BUILD") {
@@ -58,6 +59,14 @@ async function handleDirectorySave(message, sendResponse) {
 
 async function handleBuild(message, sendResponse) {
   const controller = new AbortController();
+  const keepaliveId = setInterval(() => {
+    chrome.runtime
+      .sendMessage({
+        type: "OFFSCREEN_KEEPALIVE",
+        buildId: message.buildId,
+      })
+      .catch(() => {});
+  }, SERVICE_WORKER_KEEPALIVE_MS);
   activeBuilds.set(message.buildId, controller);
 
   try {
@@ -76,6 +85,7 @@ async function handleBuild(message, sendResponse) {
       sendResponse({ success: false, error: error.message || "Build failed." });
     }
   } finally {
+    clearInterval(keepaliveId);
     activeBuilds.delete(message.buildId);
   }
 }

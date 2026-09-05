@@ -20,6 +20,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === "OFFSCREEN_KEEPALIVE") {
+    sendResponse({ success: true });
+    return false;
+  }
+
   if (request.type === "OPEN_EXTENSION_POPUP") {
     if (typeof chrome.action.openPopup !== "function") {
       sendResponse({

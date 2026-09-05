@@ -25,6 +25,7 @@ const CLIENT_ID_PATTERNS = [
   /client_id[=:]["']([A-Za-z0-9_-]{20,})["']/g,
   /["']client_id["']\s*:\s*["']([A-Za-z0-9_-]{20,})["']/g,
 ];
+const PLAYER_REQUEST_TIMEOUT_MS = 15000;
 
 const NON_TRACK_PATHS = [ "/discover", "/search", "/stream", "/upload", "/feed", "/you", "/sets", "/likes", "/albums", "/tracks", "/reposts", "/comments", "/popular-tracks", "/following", "/followers", "/library", "/notifications", "/messages", "/settings", "/signin", "/signup", "/pages", "/stations", "/charts", "/terms-of-use", "/privacy", ];
 
@@ -154,6 +155,21 @@ function isClientIdCacheValid() {
   );
 }
 
+async function fetchWithTimeout(
+  url,
+  options = {},
+  timeoutMs = PLAYER_REQUEST_TIMEOUT_MS
+) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function extractClientId(html) {
   if (isClientIdCacheValid()) {
     return cachedClientId;
@@ -171,7 +187,7 @@ async function extractClientId(html) {
 
   for (const scriptUrl of scriptUrls) {
     try {
-      const scriptContent = await fetch(scriptUrl, { cache: "force-cache" }).then(
+      const scriptContent = await fetchWithTimeout(scriptUrl, { cache: "force-cache" }).then(
         (response) => response.text()
       );
       const clientId = findClientIdInText(scriptContent);
@@ -263,6 +279,102 @@ function rebuildCurrentTrackData(formatPreference = cachedFormatPreference) {
   currentTrackData = rebuilt;
   ensureInlineDownloadButton(currentTrackData);
   return rebuilt;
+}
+
+async function resolvePlayerTrackData(trackUrl) {
+  const normalizedUrl = normalizeTrackUrl(trackUrl);
+  if (!normalizedUrl) {
+    throw new Error("The current player track could not be identified.");
+  }
+
+  if (
+    currentTrackData &&
+    normalizeTrackUrl(currentTrackData.permalink) === normalizedUrl &&
+    lastRawTrackApiData
+  ) {
+    return buildTrackDataFromApiTrack(
+      lastRawTrackApiData,
+      currentTrackData.clientId,
+      normalizedUrl,
+      "auto"
+    );
+  }
+
+  const clientId = await extractClientId(
+    document.documentElement?.innerHTML || ""
+  );
+
+  if (clientId) {
+    try {
+      const resolveUrl = new URL("https://api-v2.soundcloud.com/resolve");
+      resolveUrl.searchParams.set("url", normalizedUrl);
+      resolveUrl.searchParams.set("client_id", clientId);
+
+      const apiResponse = await fetchWithTimeout(resolveUrl.toString(), {
+        cache: "no-store",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+          Origin: "https://soundcloud.com",
+          Referer: "https://soundcloud.com/",
+        },
+      });
+
+      if (apiResponse.ok) {
+        const apiTrack = await apiResponse.json();
+        if (
+          apiTrack?.id &&
+          apiTrack?.title &&
+          (apiTrack.media?.transcodings?.length || apiTrack.downloadable)
+        ) {
+          return buildTrackDataFromApiTrack(
+            apiTrack,
+            clientId,
+            normalizedUrl,
+            "auto"
+          );
+        }
+      }
+    } catch {
+      // Fall back to the page hydration data below.
+    }
+  }
+
+  const response = await fetchWithTimeout(normalizedUrl, {
+    cache: "no-store",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Could not load the current track (${response.status}).`);
+  }
+
+  const html = await response.text();
+  const hydrationData = parseHydrationData(html);
+  const soundEntry = hydrationData?.find((item) => {
+    if (item?.hydratable !== "sound" || !item.data) {
+      return false;
+    }
+
+    const permalink = normalizeTrackUrl(item.data.permalink_url);
+    return !permalink || permalink === normalizedUrl;
+  });
+
+  if (!soundEntry?.data) {
+    throw new Error("The current player item is not a downloadable track.");
+  }
+
+  const hydrationClientId = clientId || (await extractClientId(html));
+  if (!hydrationClientId) {
+    throw new Error("SoundCloud client information is unavailable.");
+  }
+
+  return buildTrackDataFromApiTrack(
+    soundEntry.data,
+    hydrationClientId,
+    normalizedUrl,
+    "auto"
+  );
 }
 
 SCStreamSelector.getStoredFormatPreference().then((preference) => {
@@ -1412,6 +1524,7 @@ function isSoundCloudCollectionPage() {
 window.SCDL = {
   getTrackData: () => currentTrackData,
   getPlaylistData: () => currentPlaylistData,
+  resolvePlayerTrackData,
   isTrackPage: () => isSoundCloudTrackPage(),
   isCollectionPage: () => isSoundCloudCollectionPage(),
   isProfileTracksPage: () => isSoundCloudUserTracksPage(),
