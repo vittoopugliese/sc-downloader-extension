@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f5ef">
+  <meta name="description" content="Download SoundCloud tracks, playlists, likes and artist uploads for free. Choose your folder, keep cover art and metadata, and download in the background.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="SoundCloud Track Downloader — Your favorites. Your files.">
+  <meta property="og:description" content="Tracks, entire playlists, likes and artist uploads. A free Chrome extension that brings the download button to SoundCloud.">
+  <meta name="twitter:card" content="summary">
+  <title>SoundCloud Track Downloader — Free tracks & playlist downloads</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23eb4b18'/%3E%3Cpath d='M20 9v18m-7-7 7 7 7-7M11 31h18' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <style>
+    :root { color-scheme: light; --paper:#f7f5ef; --ink:#242620; --muted:#686a61; --orange:#d93e10; --line:#deded4; --soft:#eaece2; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--paper); color:var(--ink); font-family:Arial,Helvetica,sans-serif; -webkit-font-smoothing:antialiased; }
+    a { color:inherit; text-decoration:none; }
+    button,select { font:inherit; }
+    button,a,select { -webkit-tap-highlight-color:transparent; }
+    button { cursor:pointer; }
+    button:disabled { cursor:default; }
+    :focus-visible { outline:3px solid var(--orange); outline-offset:5px; }
+    ::selection { background:#f4b49d; color:var(--ink); }
+    .shell { width:min(1160px,calc(100% - 80px)); margin-inline:auto; }
+    .icon { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
+    .symbol-library { position:absolute; width:0; height:0; overflow:hidden; }
+    .skip-link { position:fixed; top:8px; left:8px; padding:12px; background:var(--paper); z-index:20; transform:translateY(-150%); }
+    .skip-link:focus { transform:translateY(0); }
+    header { height:98px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); gap:20px; }
+    .brand { display:flex; align-items:center; gap:11px; font-size:14px; font-weight:700; line-height:1.25; letter-spacing:-.25px; }
+    .brand small { display:block; color:var(--muted); font-size:11px; font-weight:400; letter-spacing:.2px; margin-top:3px; }
+    .brand-mark { display:grid; place-items:center; width:39px; height:39px; border-radius:11px; background:var(--orange); color:white; }
+    nav { display:flex; align-items:center; gap:29px; font-size:13px; }
+    nav > a:first-child:hover { color:var(--orange); }
+    .nav-install { display:flex; align-items:center; gap:14px; font-weight:700; border:1px solid #bfc1b6; padding:12px 16px; border-radius:7px; transition:background .2s; }
+    .nav-install:hover { background:var(--soft); }
+    .nav-install .icon { width:17px; height:17px; }
+    .hero { padding:76px 0 61px; display:grid; grid-template-columns:1fr 1fr; align-items:center; gap:58px; }
+    .eyebrow { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:11px; font-weight:500; letter-spacing:1.8px; text-transform:uppercase; display:flex; align-items:center; gap:9px; }
+    .status-dot { width:7px; height:7px; border-radius:50%; background:var(--orange); }
+    h1 { font-size:clamp(52px,5.5vw,76px); line-height:1.025; font-weight:750; letter-spacing:-4.4px; margin:25px 0 24px; }
+    h1 em { color:var(--orange); font-style:normal; }
+    .intro { max-width:410px; color:var(--muted); font-size:17px; line-height:1.7; margin:0 0 27px; }
+    .intro strong { color:var(--ink); font-weight:400; }
+    .cta { display:inline-flex; justify-content:center; align-items:center; gap:12px; padding:17px 23px; background:var(--orange); color:white; font-size:14px; font-weight:700; border:1px solid transparent; border-radius:7px; box-shadow:0 4px 0 #ab310d; transition:transform .2s,background .2s; }
+    .cta:hover { background:#bd340d; transform:translateY(-2px); }
+    .cta .icon { width:21px; height:21px; }
+    .cta-note { margin:15px 0 0; font-size:11px; color:var(--muted); }
+    .cta-note span { padding:0 6px; color:#9a9d90; }
+    .mobile-note { display:none; }
+    .social-proof { display:flex; gap:11px; align-items:flex-start; margin:32px 0 0; max-width:380px; }
+    .quote-mark { color:var(--orange); font-family:Georgia,serif; font-size:42px; line-height:.9; }
+    blockquote { margin:0; font-size:12px; line-height:1.55; }
+    blockquote p { margin:0 0 5px; }
+    blockquote cite { color:var(--muted); font-size:10px; font-style:normal; }
+    .demo-stage { position:relative; min-width:0; background:var(--soft); border:1px solid #e0e3d7; border-radius:15px; padding:24px 22px 19px; }
+    .demo-stage::before { content:""; position:absolute; inset:0; border-radius:inherit; opacity:.33; background-image:radial-gradient(#a9ae99 .7px,transparent .7px); background-size:12px 12px; pointer-events:none; }
+    .demo-stage > * { position:relative; }
+    .demo-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:21px; }
+    .demo-top .eyebrow { font-size:9px; letter-spacing:1.3px; color:#62685a; }
+    .demo-badge { border:1px solid #bec6b2; border-radius:4px; padding:4px 7px; color:#4f5944; background:#eef0e7; font-family:ui-monospace,monospace; font-size:9px; }
+    .demo-tabs { display:flex; padding:4px; gap:3px; border:1px solid #d2d6c8; border-radius:7px; background:#dfe3d6; width:fit-content; margin:0 auto 22px; }
+    .demo-tabs button { border:0; background:transparent; padding:8px 15px; color:#555c4d; border-radius:4px; font-size:11px; }
+    .demo-tabs button[aria-pressed="true"] { color:var(--ink); background:var(--paper); box-shadow:0 1px 3px #2933221a; font-weight:700; }
+    .browser { border:1px solid #41453e; border-radius:9px; background:#191c19; overflow:hidden; box-shadow:0 17px 32px -16px #27372066; }
+    .browser-bar { background:#30332e; display:flex; align-items:center; gap:12px; padding:11px 12px; }
+    .dots { display:flex; gap:4px; }
+    .dots i { display:block; width:5px; height:5px; background:#83877c; border-radius:50%; }
+    .address { display:flex; gap:7px; align-items:center; background:#232621; color:#aeb5a6; border-radius:4px; padding:5px 8px; font-size:9px; flex:1; min-width:0; }
+    .address .icon { width:10px; height:10px; }
+    #demo-url { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+    .extension-pin { color:#ff8753; width:15px; height:15px; }
+    .extension-preview { position:relative; text-align:center; padding:29px 20px 23px; overflow:hidden; background:#30342a; color:#f5f5f1; isolation:isolate; min-height:277px; }
+    .extension-preview::before { content:""; position:absolute; inset:-30px; background:radial-gradient(ellipse at 80% 10%,#ada675 0%,transparent 45%),radial-gradient(ellipse at 18% 75%,#8d9b6a 0%,transparent 43%),linear-gradient(150deg,#1b2c23,#655f41 50%,#1d2720); filter:blur(15px); z-index:-2; }
+    .extension-preview::after { content:""; position:absolute; inset:0; background:#0006; z-index:-1; }
+    .extension-preview h2 { font-size:24px; line-height:1.2; letter-spacing:-.65px; margin:0 0 12px; }
+    .artist { display:flex; align-items:center; justify-content:center; gap:9px; color:#d6d9d0; font-size:13px; font-weight:700; }
+    .avatar { display:block; width:25px; height:25px; border-radius:50%; background:repeating-radial-gradient(ellipse at 80% 90%,#c5c6a0 0 2px,#6e795e 3px 5px,#414c3a 6px 8px); }
+    .preview-meta { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:7px; margin:14px 0 13px; color:#d2d4ce; font-size:11px; }
+    .preview-meta select,.folder-pill { appearance:auto; background:#ffffff17; border:1px solid #ffffff3d; border-radius:14px; padding:4px 8px; color:#f2f2eb; font-size:10px; }
+    .preview-meta select option { background:#252b24; color:white; }
+    .folder-pill { display:flex; align-items:center; gap:4px; }
+    .folder-pill .icon { width:11px; height:11px; }
+    .waveform { width:100%; height:58px; display:block; margin:7px 0 12px; color:#dfdfd3; }
+    .download-demo { display:grid; place-items:center; margin:0 auto; border:0; width:34px; height:34px; border-radius:50%; color:#252b24; background:#e4e7db; transition:transform .2s,background .2s; }
+    .download-demo:hover { transform:translateY(-2px); background:white; }
+    .download-demo:focus-visible { outline-color:#ffb28f; }
+    .preview-status { font-size:10px; margin:9px 0 0; color:#d4d7cd; min-height:14px; }
+    .preview-status.complete { color:#c0e0ad; }
+    .demo-caption { margin:20px 0 0; text-align:center; color:#565e4e; font-size:10px; line-height:1.55; }
+    .demo-caption .arrow { display:inline-block; transform:rotate(-25deg); margin-right:4px; font-size:16px; }
+    .demo-disclaimer { display:block; margin-top:4px; font-size:9px; color:#69705f; }
+    .benefit-strip { border-block:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:18px; padding:21px 0; }
+    .benefit-strip span { display:flex; align-items:center; gap:8px; font-size:11px; color:#51564b; }
+    .benefit-strip .icon { width:16px; height:16px; color:#717d60; }
+    .features { padding:51px 0 43px; scroll-margin-top:25px; }
+    .section-heading { display:flex; align-items:baseline; justify-content:space-between; gap:20px; margin-bottom:29px; }
+    .section-heading h2 { font-size:29px; letter-spacing:-1.2px; margin:0; }
+    .section-heading p { font-size:12px; color:var(--muted); margin:0; }
+    .feature-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:35px; }
+    .feature { padding-top:19px; border-top:1px solid var(--line); }
+    .feature-title { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+    .feature-title .icon { color:#68745a; }
+    .feature-index { font-family:ui-monospace,monospace; font-size:10px; color:#858a7c; }
+    .feature h3 { font-size:16px; letter-spacing:-.3px; margin:0 0 9px; }
+    .feature p { font-size:12px; line-height:1.75; color:var(--muted); margin:0; max-width:310px; }
+    .closing { display:flex; justify-content:space-between; align-items:center; gap:25px; margin:0 0 34px; padding:28px 31px; background:#edeee5; border:1px solid #e0e3d6; border-radius:9px; }
+    .closing h2 { font-size:25px; letter-spacing:-.9px; margin:0 0 7px; }
+    .closing p { font-size:12px; color:var(--muted); margin:0; line-height:1.6; }
+    .closing .cta { flex-shrink:0; padding:14px 20px; font-size:12px; }
+    footer { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:0 0 25px; font-size:10px; color:var(--muted); }
+    footer p { margin:0; line-height:1.7; }
+    footer a { text-decoration:underline; text-underline-offset:3px; }
+    .footer-links { display:flex; gap:16px; flex-shrink:0; }
+    @media (min-width:1450px) { .hero { padding-top:94px; padding-bottom:79px; } }
+    @media (max-width:1000px) { .shell { width:calc(100% - 48px); } .hero { gap:28px; padding:55px 0; } h1 { font-size:58px; letter-spacing:-3px; } .demo-stage { padding:19px 14px 16px; } .intro { font-size:15px; } .demo-tabs button { padding:8px 11px; } .preview-meta { gap:5px; } .extension-preview { padding-inline:12px; } }
+    @media (max-width:760px) { header { height:80px; } nav > a:first-child { display:none; } .nav-install { font-size:11px; padding:10px 12px; gap:8px; } .hero { grid-template-columns:1fr; padding-top:42px; gap:32px; } .hero-copy { text-align:center; } .eyebrow { justify-content:center; } h1 { font-size:66px; margin-top:22px; } .intro { margin-inline:auto; max-width:440px; } .social-proof { margin:26px auto 0; width:fit-content; text-align:left; } .demo-stage { max-width:490px; width:100%; margin-inline:auto; padding:21px; } .extension-preview { padding:29px 20px 23px; } .benefit-strip { flex-wrap:wrap; justify-content:center; column-gap:28px; row-gap:15px; } .section-heading { display:block; text-align:center; } .section-heading p { margin-top:10px; } .feature-grid { gap:22px; } .closing { padding:26px; } .closing h2 { font-size:22px; } footer { align-items:flex-start; } }
+    @media (max-width:540px) { .shell { width:calc(100% - 36px); } .brand { font-size:12px; gap:8px; } .brand small { font-size:9px; } .brand-mark { width:33px; height:33px; border-radius:9px; } .nav-install { padding:9px 10px; } .nav-install .icon { display:none; } h1 { font-size:58px; letter-spacing:-3.6px; } .intro { font-size:15px; } .eyebrow { font-size:10px; letter-spacing:1.35px; } .mobile-note { display:block; font-size:10px; color:var(--muted); margin:12px 0 0; } .hero { padding-bottom:32px; } .demo-stage { padding:17px 13px; } .demo-top { margin-bottom:16px; } .demo-tabs { margin-bottom:16px; } .demo-tabs button { padding:8px 14px; } .extension-preview h2 { font-size:23px; } .benefit-strip { justify-content:flex-start; display:grid; grid-template-columns:1fr 1fr; gap:16px 8px; } .benefit-strip span { font-size:10px; gap:6px; } .features { padding:35px 0; } .section-heading h2 { font-size:26px; } .feature-grid { grid-template-columns:1fr; gap:22px; } .feature { display:grid; grid-template-columns:35px 1fr; column-gap:12px; } .feature-title { grid-row:span 2; display:block; margin:0; } .feature-index { display:block; margin-top:8px; } .feature h3 { font-size:16px; margin-bottom:6px; } .feature p { max-width:none; } .closing { flex-direction:column; text-align:center; gap:19px; margin-bottom:24px; } footer { flex-direction:column; gap:12px; text-align:center; align-items:center; } }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*::before,*::after { transition:none !important; animation:none !important; } }
+  </style>
+</head>
+<body>
+  <svg class="symbol-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7V5h7l2 3h9v12H3V7Z"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m3 7 9-4 9 4-9 4-9-4Zm0 5 9 4 9-4M3 17l9 4 9-4"/></symbol>
+    <symbol id="i-background" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8m-4-4v4m-4-11 3 3 5-5"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-chrome" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/><path d="M12 8.4h8.2M8.9 13.8 4.8 6.5m10.3 7.3L11 21"/></symbol>
+  </svg>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="shell">
+    <header>
+      <a class="brand" href="#" aria-label="SoundCloud Track Downloader home">
+        <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></span>
+        <span>SoundCloud<small>Track Downloader</small></span>
+      </a>
+      <nav aria-label="Main navigation">
+        <a href="#features">What you can download</a>
+        <a class="nav-install" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb">Get it free <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </nav>
+    </header>
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span> A free extension for SoundCloud</div>
+          <h1 id="hero-title">Your favorites.<br><em>Your files.</em></h1>
+          <p class="intro">That one track. The whole playlist. Every upload from an artist. <strong>Download them right from SoundCloud, for free.</strong></p>
+          <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb"><svg class="icon" aria-hidden="true"><use href="#i-chrome"/></svg> Add to Chrome — it’s free</a>
+          <p class="cta-note">No subscription <span>·</span> No signup <span>·</span> No redirects</p>
+          <p class="mobile-note">Install on your desktop browser to start downloading.</p>
+          <figure class="social-proof">
+            <span class="quote-mark" aria-hidden="true">“</span>
+            <blockquote><p>Fast! and downloads playlists like crazy!</p><cite>Dimitri Rozomashvili · Chrome Web Store review</cite></blockquote>
+          </figure>
+        </div>
+        <div class="demo-stage" aria-label="Interactive extension preview">
+          <div class="demo-top"><span class="eyebrow">Small popup. Whole collection.</span><span class="demo-badge">INTERACTIVE PREVIEW</span></div>
+          <div class="demo-tabs" role="group" aria-label="Preview a download type">
+            <button type="button" data-mode="track" aria-pressed="false">Track</button>
+            <button type="button" data-mode="playlist" aria-pressed="true">Playlist</button>
+            <button type="button" data-mode="artist" aria-pressed="false">Artist uploads</button>
+          </div>
+          <div class="browser">
+            <div class="browser-bar" aria-hidden="true">
+              <span class="dots"><i></i><i></i><i></i></span>
+              <span class="address"><svg class="icon"><use href="#i-lock"/></svg><span id="demo-url">soundcloud.com/field-notes/sets/slow-sundays</span></span>
+              <svg class="icon extension-pin"><use href="#i-download"/></svg>
+            </div>
+            <!-- An illustrative recreation of popup.html, with sample content only.
+                 This preview never requests SoundCloud data or downloads a file. -->
+            <div class="extension-preview">
+              <h2 id="preview-title">Slow Sundays</h2>
+              <div class="artist"><span class="avatar" aria-hidden="true"></span><span id="preview-artist">Field Notes</span></div>
+              <div class="preview-meta">
+                <span id="preview-count">24 tracks</span><span aria-hidden="true">·</span>
+                <select id="preview-format" aria-label="Preview audio format"><option value="auto">Auto</option><option value="mp3">MP3</option><option value="m4a">M4A</option></select>
+                <select id="preview-amount" aria-label="Preview number of tracks"><option value="all">All</option><option value="10">10</option></select>
+                <span class="folder-pill"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>Folder</span>
+              </div>
+              <svg class="waveform" id="waveform" viewBox="0 0 380 58" preserveAspectRatio="none" aria-hidden="true"><path d="M0 29H380" stroke="currentColor" opacity=".3"/></svg>
+              <button class="download-demo" id="preview-download" type="button" aria-label="Try the download animation"><svg class="icon" aria-hidden="true"><use id="download-icon" href="#i-download"/></svg></button>
+              <p class="preview-status" id="preview-status" role="status" aria-live="polite">Ready to download</p>
+            </div>
+          </div>
+          <p class="demo-caption"><span class="arrow" aria-hidden="true">↖</span> Pick a view. Press download. See how it feels.<span class="demo-disclaimer">Illustrative demo · Sample tracks · No files downloaded</span></p>
+          <noscript><p class="demo-caption">This is a sample playlist preview. Install the extension to download from SoundCloud.</p></noscript>
+        </div>
+      </section>
+      <div class="benefit-strip" aria-label="At a glance">
+        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>All features are free</span>
+        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Download from the player</span>
+        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Keep cover art & metadata</span>
+        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Choose your download folder</span>
+      </div>
+      <section class="features" id="features" aria-labelledby="features-title">
+        <div class="section-heading"><h2 id="features-title">More music. Fewer clicks.</h2><p>Open SoundCloud. Find your favorites. Hit download.</p></div>
+        <div class="feature-grid">
+          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg><span class="feature-index">01 / COLLECT</span></div><h3>One track or the whole collection.</h3><p>Save playlists, albums, likes and an artist’s public uploads. Pick the tracks you want, or grab them all in one batch.</p></article>
+          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-background"/></svg><span class="feature-index">02 / KEEP BROWSING</span></div><h3>Close the popup. It keeps going.</h3><p>Downloads run in the background. Pause, resume or cancel your batch, and get a notification when it’s done.</p></article>
+          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg><span class="feature-index">03 / MAKE IT YOURS</span></div><h3>Your format. Your folder.</h3><p>Choose from available audio formats, with tags and artwork in MP3 and M4A files. Get the original file when the artist enables downloads.</p></article>
+        </div>
+      </section>
+      <section class="closing" aria-labelledby="closing-title">
+        <div><h2 id="closing-title">Good music deserves a save button.</h2><p>Free to install. Free to use. Built by an independent developer.</p></div>
+        <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb">Get the free extension <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </section>
+    </main>
+    <footer>
+      <p>Independent extension, not affiliated with SoundCloud.<br>Download only content you own or have permission to save.</p>
+      <div class="footer-links"><a href="mailto:vittokpo@gmail.com">Help & feedback</a><a href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb">Chrome Web Store ↗</a></div>
+    </footer>
+  </div>
+  <script>
+    (() => {
+      const modes = {
+        track: { title: 'A little further', artist: 'Field Notes', count: '4:32', total: 1, url: 'soundcloud.com/field-notes/a-little-further' },
+        playlist: { title: 'Slow Sundays', artist: 'Field Notes', count: '24 tracks', total: 24, url: 'soundcloud.com/field-notes/sets/slow-sundays' },
+        artist: { title: 'Field Notes — Tracks', artist: 'Field Notes', count: '48 tracks', total: 48, url: 'soundcloud.com/field-notes/tracks' }
+      };
+      const tabs = [...document.querySelectorAll('[data-mode]')];
+      const status = document.getElementById('preview-status');
+      const amount = document.getElementById('preview-amount');
+      const format = document.getElementById('preview-format');
+      const download = document.getElementById('preview-download');
+      const downloadIcon = document.getElementById('download-icon');
+      const waveform = document.getElementById('waveform');
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      let mode = 'playlist';
+      let timer;
+      const bars = [];
+      for (let i = 0; i < 95; i++) {
+        const height = Math.round(7 + Math.abs(Math.sin(i * 1.73) * Math.cos(i * .23)) * 30 + Math.sin(i * .064) ** 2 * 16);
+        const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        for (const [key, value] of Object.entries({ x: i * 4, y: (58 - height) / 2, width: 2.8, height, rx: .6, fill: 'currentColor' })) bar.setAttribute(key, value);
+        waveform.appendChild(bar);
+        bars.push(bar);
+      }
+      function reset() {
+        window.clearInterval(timer);
+        download.disabled = false;
+        downloadIcon.setAttribute('href', '#i-download');
+        download.setAttribute('aria-label', 'Try the download animation');
+        status.classList.remove('complete');
+        status.textContent = 'Ready to download';
+        bars.forEach(bar => bar.setAttribute('fill', 'currentColor'));
+      }
+      tabs.forEach(tab => tab.addEventListener('click', () => {
+        mode = tab.dataset.mode;
+        reset();
+        const sample = modes[mode];
+        tabs.forEach(button => button.setAttribute('aria-pressed', String(button === tab)));
+        document.getElementById('preview-title').textContent = sample.title;
+        document.getElementById('preview-artist').textContent = sample.artist;
+        document.getElementById('preview-count').textContent = sample.count;
+        document.getElementById('demo-url').textContent = sample.url;
+        amount.hidden = mode === 'track';
+        amount.value = 'all';
+        status.textContent = mode === 'track' ? 'Ready to download this track' : `Ready to download ${sample.total} tracks`;
+      }));
+      amount.addEventListener('change', reset);
+      format.addEventListener('change', reset);
+      download.addEventListener('click', () => {
+        reset();
+        download.disabled = true;
+        const total = mode === 'track' ? 1 : amount.value === 'all' ? modes[mode].total : Number(amount.value);
+        const finish = () => {
+          window.clearInterval(timer);
+          bars.forEach(bar => bar.setAttribute('fill', '#b7d6a1'));
+          downloadIcon.setAttribute('href', '#i-check');
+          download.disabled = false;
+          download.setAttribute('aria-label', 'Replay the download animation');
+          status.classList.add('complete');
+          status.textContent = `Demo complete · ${total === 1 ? '1 track' : `${total} tracks`} · No files downloaded`;
+        };
+        if (reducedMotion.matches) { finish(); return; }
+        status.textContent = 'Demo: downloading in the background…';
+        let step = 0;
+        timer = window.setInterval(() => {
+          step++;
+          bars.forEach((bar, i) => bar.setAttribute('fill', i / bars.length < step / 14 ? '#ff965f' : 'currentColor'));
+          if (step >= 14) finish();
+        }, 100);
+      });
+    })();
+  </script>
+</body>
+</html>
