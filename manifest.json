@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SoundCloud Track Downloader",
-  "version": "2026.09.04",
+  "version": "2026.9.5",
   "permissions": ["cookies", "tabs", "downloads", "offscreen", "notifications", "storage", "alarms"],
   "host_permissions": [
     "https://soundcloud.com/*",
@@ -28,6 +28,14 @@
   "content_scripts": [
     {
       "matches": ["https://soundcloud.com/*"],
+      "all_frames": true,
+      "match_origin_as_fallback": true,
+      "run_at": "document_start",
+      "world": "MAIN",
+      "js": ["scripts/looper-main-bridge.js"]
+    },
+    {
+      "matches": ["https://soundcloud.com/*"],
       "js": [
         "scripts/format-utils.js",
         "scripts/soundcloud-http.js",
@@ -37,6 +45,14 @@
         "scripts/content.js",
         "scripts/download-intent.js",
         "scripts/inline-button.js"
+      ]
+    },
+    {
+      "matches": ["https://soundcloud.com/*"],
+      "all_frames": true,
+      "js": [
+        "scripts/looper-core.js",
+        "scripts/looper.js"
       ]
     }
   ],

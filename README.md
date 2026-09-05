@@ -39,6 +39,7 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 - One-click download ~ works on public tracks without signing in
 - **Inline download button** on the track page action bar (next to Like/Repost/Share) ~ same download flow, no popup needed
 - **Player download button** in the persistent bottom player ~ downloads the track that is currently playing, even when the open page is a feed, playlist, or another track
+- **Experimental A-B looper** on individual track pages ~ drag the A/B markers over the waveform and repeat the selected section without starting paused audio
 - **Inline download button** on playlist/set and likes pages ~ starts a background bulk job for the full collection
 - **User profile downloads** ~ open `soundcloud.com/{user}/tracks`, choose from every public upload, and download the selection as one background job
 
@@ -81,6 +82,15 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 
 Use the compact **Folder** button beside the format selector to open the system folder picker. The chosen directory is remembered and used as the final destination; create any new folder directly in that picker. If no folder is selected, the browser's default Downloads directory is used.
 
+### Loop part of a track
+
+1. Open an individual track page and load or play the track
+2. Press the loop button immediately before **More actions**
+3. Drag A and B on the waveform; use the arrow keys for 100 ms adjustments or Shift + arrow for 1 second
+4. Press the cross or `Escape` to remove the temporary loop
+
+The loop uses SoundCloud's current player and lives only in memory. Navigating or changing tracks removes it. Speed, pitch, saved loops, and loop downloads are intentionally reserved for later versions.
+
 ### Download a playlist, likes, or user uploads
 1. Go to a **playlist/set**, **likes**, or `soundcloud.com/{user}/tracks` page
 2. Click the **inline download button** in the action bar, **or** click the extension icon and use the popup
@@ -119,6 +129,8 @@ Dark blurred artwork background, SoundCloud-orange accents, spinner states, and 
 - Job state stored in `chrome.storage.session` (cleared when Chrome exits)
 - Pause stops new tracks; in-flight downloads still finish and save
 - Large collections: pagination handled automatically; stream URLs refreshed per track if they expire
+- The A-B looper keeps its timing rules in a DOM-free module so a future precise audio/download adapter can reuse the same range
+- SoundCloud's detached `Audio` player is captured by a minimal MAIN-world bridge; the looper UI only exchanges player state and seek commands with it
 
 ---
 
