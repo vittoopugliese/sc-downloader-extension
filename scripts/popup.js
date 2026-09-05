@@ -9,6 +9,7 @@ const DOWNLOAD_PRESETS = [10, 25, 50, 100, 150, 200, 300];
 const DOWNLOAD_WARN_THRESHOLD = 200;
 const SELECT_WARN_THRESHOLD = 1000;
 const ROW_HEIGHT = 40;
+const MAX_SELECTION_HEIGHT = 8 * ROW_HEIGHT;
 const OVERSCAN = 6;
 
 const loadingOverlay = document.getElementById("loadingOverlay");
@@ -38,9 +39,11 @@ const downloadStatus = document.getElementById("downloadStatus");
 const jobHint = document.getElementById("jobHint");
 const failedSummary = document.getElementById("failedSummary");
 const chooseDownloadFolder = document.getElementById("chooseDownloadFolder");
+const downloadFormatSlot = document.getElementById("downloadFormatSlot");
+const downloadFolderSlot = document.getElementById("downloadFolderSlot");
 const selectionPanel = document.getElementById("selectionPanel");
 const selectionBackBtn = document.getElementById("selectionBackBtn");
-const selectionCount = document.getElementById("selectionCount");
+const selectionHeaderOptions = document.getElementById("selectionHeaderOptions");
 const selectAllBtn = document.getElementById("selectAllBtn");
 const clearAllBtn = document.getElementById("clearAllBtn");
 const selectionViewport = document.getElementById("selectionViewport");
@@ -262,7 +265,6 @@ function getDownloadDestinationLabel() {
 
 function renderDownloadDestination() {
   const folderName = currentDownloadDestination?.name || "Folder";
-  chooseDownloadFolder.textContent = folderName;
   chooseDownloadFolder.title = currentDownloadDestination
     ? `Download to ${folderName}. Click to change folder.`
     : "Choose download folder";
@@ -777,6 +779,7 @@ function onSelectionScroll() {
 
 function renderVisibleSelectionRows() {
   if (!selectionItems.length) {
+    selectionViewport.style.height = "0px";
     selectionSpacer.style.height = "0px";
     selectionRows.innerHTML = "";
     return;
@@ -789,6 +792,10 @@ function renderVisibleSelectionRows() {
   const visibleCount = Math.ceil(viewportHeight / ROW_HEIGHT);
   const end = Math.min(total - 1, start + visibleCount + OVERSCAN * 2);
 
+  selectionViewport.style.height = `${Math.min(
+    total * ROW_HEIGHT + 2,
+    MAX_SELECTION_HEIGHT
+  )}px`;
   selectionSpacer.style.height = `${total * ROW_HEIGHT}px`;
 
   const fragment = document.createDocumentFragment();
@@ -827,12 +834,19 @@ function renderVisibleSelectionRows() {
 
 function updateSelectionCount() {
   const count = selectedIds.size;
-  selectionCount.textContent =
-    count === 1 ? "1 selected" : `${count} selected`;
   downloadStatus.textContent =
     count === 0
       ? "Select tracks to download"
       : `${count} track${count === 1 ? "" : "s"} selected`;
+}
+
+function moveDownloadControlsToSelectionHeader() {
+  selectionHeaderOptions.append(downloadFormat, chooseDownloadFolder);
+}
+
+function restoreDownloadControlsToTrackMeta() {
+  downloadFormatSlot.append(downloadFormat);
+  downloadFolderSlot.append(chooseDownloadFolder);
 }
 
 function enterSelectionMode(items, selectAllByDefault = false) {
@@ -844,6 +858,7 @@ function enterSelectionMode(items, selectAllByDefault = false) {
   document.body.classList.add("selection-mode");
   selectionPanel.classList.remove("is-hidden");
   selectionPanel.classList.add("is-visible");
+  moveDownloadControlsToSelectionHeader();
   downloadLimit.classList.add("is-hidden");
   metaSep.style.display = "none";
   waveformCanvas.style.display = "none";
@@ -861,7 +876,9 @@ function exitSelectionMode() {
   document.body.classList.remove("selection-mode");
   selectionPanel.classList.add("is-hidden");
   selectionPanel.classList.remove("is-visible");
+  restoreDownloadControlsToTrackMeta();
   selectionRows.replaceChildren();
+  selectionViewport.style.height = "320px";
   selectionSpacer.style.height = "0px";
   selectionViewport.scrollTop = 0;
 
