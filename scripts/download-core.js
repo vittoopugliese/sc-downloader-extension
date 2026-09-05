@@ -82,14 +82,13 @@ const SCDownload = (() => {
     const shouldTag =
       (extension === "mp3" || extension === "m4a") &&
       typeof SCMetadata !== "undefined" &&
-      (trackData.coverUrl ||
-        trackData.artwork_url ||
+      (trackData.artworkUrl ||
         trackData.title ||
         trackData.artist);
 
     if (shouldTag) {
       onProgress?.("Adding metadata...");
-      const coverUrl = trackData.coverUrl || trackData.artwork_url || null;
+      const coverUrl = trackData.artworkUrl || null;
       const coverBuffer = coverUrl ? await fetchCoverBuffer(coverUrl, signal) : null;
 
       finalBytes = SCMetadata.embedMetadata(

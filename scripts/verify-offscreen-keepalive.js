@@ -35,7 +35,13 @@ const context = vm.createContext({
     },
   },
   SCDownload: {
-    buildTrackBlob() {
+    buildTrackBlob(_streamUrl, _trackData, onProgress) {
+      assert.equal(
+        typeof onProgress,
+        "function",
+        "Offscreen must wire build progress"
+      );
+      onProgress("Downloading 1/2 parts...");
       return new Promise(() => {});
     },
   },
@@ -59,9 +65,12 @@ messageListener(
 
 assert.equal(typeof intervalCallback, "function", "Long builds must schedule a service-worker keepalive");
 assert.ok(intervalDelay <= 15000, `Keepalive interval is too slow: ${intervalDelay}ms`);
-intervalCallback();
-assert.equal(messages.length, 1);
-assert.equal(messages[0].type, "OFFSCREEN_KEEPALIVE");
+assert.equal(messages[0].type, "OFFSCREEN_BUILD_PROGRESS");
 assert.equal(messages[0].buildId, "long-track");
+assert.equal(messages[0].statusText, "Downloading 1/2 parts...");
+intervalCallback();
+assert.equal(messages.length, 2);
+assert.equal(messages[1].type, "OFFSCREEN_KEEPALIVE");
+assert.equal(messages[1].buildId, "long-track");
 
 console.log("Offscreen keepalive verification passed.");

@@ -1,18 +1,14 @@
-const fs = require("fs");
-const path = require("path");
-const vm = require("vm");
-
-const contentPath = path.resolve(__dirname, "content.js");
-const contentCode = fs
-  .readFileSync(contentPath, "utf8")
-  .replace(/\ninitScript\(\);\s*$/, "\n");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
 
 const location = {
+  origin: "https://soundcloud.com",
   hostname: "soundcloud.com",
   pathname: "/tttorio/tracks",
   href: "https://soundcloud.com/tttorio/tracks",
 };
-
 const pages = [
   {
     collection: [
@@ -30,22 +26,31 @@ const pages = [
   },
 ];
 let pageIndex = 0;
+const hydration = JSON.stringify([
+  {
+    hydratable: "user",
+    data: { id: 10, username: "tttorio", track_count: 3 },
+  },
+]);
 
 const context = vm.createContext({
   console,
   URL,
-  window: { location },
+  AbortController,
+  setTimeout,
+  clearTimeout,
+  setInterval,
   location,
+  window: { location },
   document: {
+    documentElement: { innerHTML: "" },
     querySelectorAll: () => [],
   },
-  MutationObserver: class {
-    observe() {}
-  },
+  MutationObserver: class { observe() {} },
   chrome: {
     runtime: {
       onMessage: { addListener() {} },
-      sendMessage: () => Promise.resolve(),
+      sendMessage: () => Promise.resolve({ success: true }),
     },
   },
   SCStreamSelector: {
@@ -57,7 +62,14 @@ const context = vm.createContext({
   },
   ensureInlineDownloadButton() {},
   removeInlineDownloadButton() {},
-  fetch: async () => {
+  fetch: async (url) => {
+    if (String(url).startsWith("https://soundcloud.com/")) {
+      return {
+        ok: true,
+        text: async () =>
+          `<script>window.__sc_hydration = ${hydration};</script><script>client_id=\"client-test-12345678901234567890\"</script>`,
+      };
+    }
     const page = pages[pageIndex++];
     return {
       ok: true,
@@ -66,38 +78,41 @@ const context = vm.createContext({
       json: async () => page,
     };
   },
-  setTimeout,
-  clearTimeout,
-  setInterval,
 });
 
-vm.runInContext(contentCode, context, { filename: contentPath });
-
-function evaluate(expression) {
-  return vm.runInContext(expression, context);
+for (const name of ["soundcloud-http.js", "download-track.js", "page-intake.js"]) {
+  const file = path.resolve(__dirname, name);
+  vm.runInContext(fs.readFileSync(file, "utf8"), context, { filename: file });
 }
-
-function assert(condition, message) {
-  if (!condition) {
-    throw new Error(message);
-  }
-}
-
-assert(evaluate("isSoundCloudUserTracksPage()") === true, "Expected a user tracks page");
-location.pathname = "/you/tracks";
-assert(evaluate("isSoundCloudUserTracksPage()") === false, "Reserved routes must be excluded");
-location.pathname = "/tttorio/sets/demo";
-assert(evaluate("isSoundCloudUserTracksPage()") === false, "Playlist routes are not profiles");
-location.pathname = "/tttorio/tracks";
+const contentPath = path.resolve(__dirname, "content.js");
+const content = fs
+  .readFileSync(contentPath, "utf8")
+  .replace(/\ninitScript\(\);\s*$/, "\n");
+vm.runInContext(content, context, { filename: contentPath });
 
 (async () => {
-  const tracks = await evaluate(
-    `fetchUserTracks(10, "client", "https://soundcloud.com/tttorio/tracks", null)`
+  assert.equal(vm.runInContext("isSoundCloudUserTracksPage()", context), true);
+  location.pathname = "/you/tracks";
+  location.href = "https://soundcloud.com/you/tracks";
+  assert.equal(vm.runInContext("isSoundCloudUserTracksPage()", context), false);
+  location.pathname = "/tttorio/tracks";
+  location.href = "https://soundcloud.com/tttorio/tracks";
+
+  await vm.runInContext("intake.extractCurrent()", context);
+  const preview = vm.runInContext("window.SCDL.getPlaylistData()", context);
+  assert.equal(preview.totalCount, 3);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(preview.tracks.map((track) => track.id))),
+    [1, 2, 3]
   );
 
-  assert(tracks.length === 3, "Pagination should collect and deduplicate every track");
-  assert(tracks.map((track) => track.id).join(",") === "1,2,3", "Track order changed");
-  assert(pageIndex === 2, "Pagination did not follow next_href exactly once");
+  pageIndex = 0;
+  const tracks = await vm.runInContext("window.SCDL.resolveBulkTracks(null)", context);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(tracks.map((track) => track.id))),
+    [1, 2, 3]
+  );
+  assert.equal(pageIndex, 2, "Pagination should follow next_href exactly once");
   console.log("Profile support verification passed.");
 })().catch((error) => {
   console.error(error);

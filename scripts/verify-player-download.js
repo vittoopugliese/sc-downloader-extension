@@ -75,6 +75,12 @@ const context = vm.createContext({
   },
 });
 
+for (const name of ["soundcloud-http.js", "download-track.js", "page-intake.js"]) {
+  const sourcePath = path.resolve(__dirname, name);
+  vm.runInContext(fs.readFileSync(sourcePath, "utf8"), context, {
+    filename: sourcePath,
+  });
+}
 vm.runInContext(contentCode, context, { filename: contentPath });
 
 const playerButton = {
@@ -85,6 +91,10 @@ context.document.getElementById = (id) =>
   id === "scdl-player-download" ? playerButton : null;
 
 const inlinePath = path.resolve(__dirname, "inline-button.js");
+const intentPath = path.resolve(__dirname, "download-intent.js");
+vm.runInContext(fs.readFileSync(intentPath, "utf8"), context, {
+  filename: intentPath,
+});
 const inlineCode = fs
   .readFileSync(inlinePath, "utf8")
   .replace(/\nstartToolbarObserver\(\);\s*ensurePlayerDownloadButton\(\);\s*$/, "\n");
@@ -92,7 +102,7 @@ vm.runInContext(inlineCode, context, { filename: inlinePath });
 
 (async () => {
   const track = await vm.runInContext(
-    `resolvePlayerTrackData("https://soundcloud.com/artist/current-track")`,
+    `window.SCDL.resolvePlayerTrackData("https://soundcloud.com/artist/current-track")`,
     context
   );
 

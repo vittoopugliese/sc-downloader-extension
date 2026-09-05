@@ -69,11 +69,21 @@ async function handleBuild(message, sendResponse) {
   }, SERVICE_WORKER_KEEPALIVE_MS);
   activeBuilds.set(message.buildId, controller);
 
+  const reportProgress = (statusText) => {
+    chrome.runtime
+      .sendMessage({
+        type: "OFFSCREEN_BUILD_PROGRESS",
+        buildId: message.buildId,
+        statusText,
+      })
+      .catch(() => {});
+  };
+
   try {
     const { blob, fileName } = await SCDownload.buildTrackBlob(
       message.streamUrl,
       message.trackData,
-      null,
+      reportProgress,
       controller.signal
     );
     const blobUrl = URL.createObjectURL(blob);

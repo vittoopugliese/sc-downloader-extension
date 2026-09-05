@@ -4,6 +4,7 @@ const INLINE_STYLES_ID = "scdl-inline-styles";
 const SUCCESS_RESET_MS = 2000;
 const BULK_WARN_THRESHOLD = 200;
 const PLAYER_DOWNLOAD_TIMEOUT_MS = 120000;
+const inlineDownloadIntent = SCDownloadIntent.create(chrome.runtime);
 
 let inlineTrackData = null;
 let isInlineDownloading = false;
@@ -307,7 +308,7 @@ function setInlineButtonNotice(message) {
 }
 
 function isJobAlreadyRunningError(message) {
-  return /already in progress/i.test(message || "");
+  return SCDownloadIntent.isJobAlreadyRunning(message);
 }
 
 function resetInlineButtonStateAfterSuccess() {
@@ -355,31 +356,9 @@ async function handleInlineCollectionDownloadClick() {
 
     const formatPreference = await SCStreamSelector.getStoredFormatPreference();
 
-    const startResult = await chrome.runtime.sendMessage({
-      type: "START_BULK_JOB",
-      tracks,
-      playlistTitle: playlistData.title,
-      playlistMeta: {
-        artworkUrl: playlistData.artwork_url || null,
-        artist: playlistData.artist || null,
-        artistImageUrl: playlistData.artistImageUrl || null,
-        artistUrl: playlistData.artistUrl || null,
-      },
+    await inlineDownloadIntent.downloadCollection(tracks, playlistData, {
       formatPreference,
     });
-
-    if (!startResult?.success || !startResult.job) {
-      const errorMessage =
-        startResult?.error || "Could not start the background download.";
-
-      if (isJobAlreadyRunningError(errorMessage)) {
-        isInlineDownloading = false;
-        setInlineButtonNotice("A download is already in progress");
-        return;
-      }
-
-      throw new Error(errorMessage);
-    }
 
     setInlineButtonState("success");
     resetInlineButtonStateAfterSuccess();
@@ -438,10 +417,7 @@ async function handleInlineDownloadClick() {
   }
 
   const trackData = inlineTrackData || window.SCDL?.getTrackData?.();
-  if (
-    !trackData?.streamUrl &&
-    !(trackData?.downloadable && trackData?.hasDownloadsLeft)
-  ) {
+  if (!SCDownloadTrack.canDownload(trackData)) {
     setInlineButtonState("error");
     isInlineDownloading = false;
     return;
@@ -454,15 +430,9 @@ async function handleInlineDownloadClick() {
     const formatPreference =
       trackData.formatPreference ||
       (await SCStreamSelector.getStoredFormatPreference());
-    const result = await chrome.runtime.sendMessage({
-      type: "DOWNLOAD_SINGLE_TRACK",
-      trackData,
+    await inlineDownloadIntent.downloadTrack(trackData, {
       formatPreference,
     });
-
-    if (!result?.success) {
-      throw new Error(result?.error || "Download failed.");
-    }
 
     setInlineButtonState("success");
     resetInlineButtonStateAfterSuccess();
@@ -638,17 +608,12 @@ async function handlePlayerDownloadClick() {
       "Timed out while resolving the current track."
     );
 
-    if (
-      !trackData?.streamUrl &&
-      !(trackData?.downloadable && trackData?.hasDownloadsLeft)
-    ) {
+    if (!SCDownloadTrack.canDownload(trackData)) {
       throw new Error("The current track has no downloadable source.");
     }
 
     const result = await withPlayerDownloadTimeout(
-      chrome.runtime.sendMessage({
-        type: "DOWNLOAD_SINGLE_TRACK",
-        trackData,
+      inlineDownloadIntent.downloadTrack(trackData, {
         formatPreference: "auto",
       }),
       "The download did not finish in time."

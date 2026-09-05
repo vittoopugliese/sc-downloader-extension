@@ -1,17 +1,40 @@
 const SESSION_KEY = "scdl_active_job";
 const KEEPALIVE_ALARM = "scdl_bulk_keepalive";
 const MAX_IN_FLIGHT = 2;
-const DOWNLOAD_COMPLETE_TIMEOUT_MS = 5 * 60 * 1000;
+const JOB_STATUS = Object.freeze({
+  RUNNING: "running",
+  PAUSED: "paused",
+  CANCELLED: "cancelled",
+  COMPLETED: "completed",
+  FAILED: "failed",
+});
+const TRACK_STATUS = Object.freeze({
+  DONE: "done",
+  FAILED: "failed",
+});
+const ACTIVE_JOB_STATUSES = Object.freeze([
+  JOB_STATUS.RUNNING,
+  JOB_STATUS.PAUSED,
+]);
+const TERMINAL_JOB_STATUSES = Object.freeze([
+  JOB_STATUS.CANCELLED,
+  JOB_STATUS.COMPLETED,
+  JOB_STATUS.FAILED,
+]);
+const JOB_TRANSITIONS = Object.freeze({
+  [JOB_STATUS.RUNNING]: new Set([
+    JOB_STATUS.PAUSED,
+    ...TERMINAL_JOB_STATUSES,
+  ]),
+  [JOB_STATUS.PAUSED]: new Set([
+    JOB_STATUS.RUNNING,
+    ...TERMINAL_JOB_STATUSES,
+  ]),
+});
 
-let streamDeps = {
-  resolveStreamUrl: null,
-  refreshTrackMetadata: null,
-};
-
-let jobControl = { jobId: null, state: "running" };
+let jobControl = { jobId: null, state: null };
 let activeLoopPromise = null;
 let activeLoopJobId = null;
-let inFlightBuildIds = new Set();
 let stateQueue = Promise.resolve();
 let singleDownloadsInFlight = 0;
 
@@ -32,50 +55,62 @@ function sanitizeFolderName(title) {
   );
 }
 
-function createJobId() {
-  return `job_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function createEmptyTrackStatus(trackCount) {
-  return new Array(trackCount).fill(null);
+function isActiveJobStatus(status) {
+  return ACTIVE_JOB_STATUSES.includes(status);
+}
+
+function transitionJob(job, nextStatus, options = {}) {
+  if (!JOB_TRANSITIONS[job.status]?.has(nextStatus)) {
+    throw new Error(`Illegal bulk job transition: ${job.status} -> ${nextStatus}`);
+  }
+
+  job.status = nextStatus;
+  if (nextStatus === JOB_STATUS.PAUSED) job.pausedAt = Date.now();
+  if (nextStatus === JOB_STATUS.RUNNING) job.pausedAt = null;
+  if (TERMINAL_JOB_STATUSES.includes(nextStatus)) {
+    job.finishedAt = Date.now();
+    if (Object.hasOwn(options, "error")) job.error = options.error || null;
+    job.currentTrackTitle = null;
+    job.currentTrackStatus = null;
+  }
 }
 
 function syncJobCountersFromTrackStatus(job) {
-  if (!Array.isArray(job.trackStatus)) {
-    return;
-  }
-
-  job.completed = job.trackStatus.filter((status) => status === "done").length;
+  if (!Array.isArray(job.trackStatus)) return;
+  job.completed = job.trackStatus.filter(
+    (status) => status === TRACK_STATUS.DONE
+  ).length;
   job.currentIndex = job.trackStatus.reduce(
     (max, status, index) =>
-      status === "done" || status === "failed" ? Math.max(max, index + 1) : max,
+      status === TRACK_STATUS.DONE || status === TRACK_STATUS.FAILED
+        ? Math.max(max, index + 1)
+        : max,
     0
   );
 }
 
 function migrateJobTrackStatus(job) {
-  if (!job?.tracks?.length) {
-    return job;
-  }
+  if (!job?.tracks?.length) return job;
 
-  if (
-    Array.isArray(job.trackStatus) &&
-    job.trackStatus.length === job.tracks.length
-  ) {
+  job.tracks = job.tracks.map((track) =>
+    SCDownloadTrack.toDurable(track, job.playlistTitle)
+  );
+
+  if (job.trackStatus?.length === job.tracks.length) {
     syncJobCountersFromTrackStatus(job);
     return job;
   }
 
-  const trackStatus = createEmptyTrackStatus(job.tracks.length);
+  const trackStatus = new Array(job.tracks.length).fill(null);
 
   for (const failure of job.failed || []) {
     const index = (failure.index || 0) - 1;
     if (index >= 0 && index < trackStatus.length) {
-      trackStatus[index] = "failed";
+      trackStatus[index] = TRACK_STATUS.FAILED;
     }
   }
 
@@ -85,11 +120,8 @@ function migrateJobTrackStatus(job) {
     index < trackStatus.length && doneMarked < (job.completed || 0);
     index += 1
   ) {
-    if (trackStatus[index] === "failed") {
-      continue;
-    }
-
-    trackStatus[index] = "done";
+    if (trackStatus[index] === TRACK_STATUS.FAILED) continue;
+    trackStatus[index] = TRACK_STATUS.DONE;
     doneMarked += 1;
   }
 
@@ -100,49 +132,13 @@ function migrateJobTrackStatus(job) {
 
 function getPendingTrackIndices(job) {
   migrateJobTrackStatus(job);
-
-  const pending = [];
-  for (let index = 0; index < job.tracks.length; index += 1) {
-    const status = job.trackStatus[index];
-    if (status !== "done" && status !== "failed") {
-      pending.push(index);
-    }
-  }
-
-  return pending;
-}
-
-function slimTrackForJob(track, fallbackAlbum) {
-  return {
-    id: track.id || null,
-    title: track.title,
-    artist: track.artist,
-    streamUrl: track.streamUrl,
-    streamProtocol: track.streamProtocol,
-    streamPreset: track.streamPreset,
-    streamMimeType: track.streamMimeType,
-    trackAuthorization: track.trackAuthorization,
-    downloadable: track.downloadable === true,
-    hasDownloadsLeft: track.hasDownloadsLeft !== false,
-    clientId: track.clientId,
-    coverUrl: track.coverUrl || track.artwork_url || null,
-    album: track.album || fallbackAlbum || null,
-    genre: track.genre || null,
-    year: track.year || null,
-  };
-}
-
-async function resolveDownloadDestination(downloadDestination = null) {
-  const candidate = downloadDestination || (await SCDownloadDirectory.getCurrent());
-  if (
-    !candidate ||
-    typeof candidate.id !== "string" ||
-    typeof candidate.name !== "string"
-  ) {
-    return null;
-  }
-
-  return { id: candidate.id, name: candidate.name };
+  return job.trackStatus
+    .map((status, index) => ({ status, index }))
+    .filter(
+      ({ status }) =>
+        status !== TRACK_STATUS.DONE && status !== TRACK_STATUS.FAILED
+    )
+    .map(({ index }) => index);
 }
 
 async function loadJob() {
@@ -152,11 +148,7 @@ async function loadJob() {
 }
 
 async function saveJob(job) {
-  if (job) {
-    await chrome.storage.session.set({ [SESSION_KEY]: job });
-  } else {
-    await chrome.storage.session.remove(SESSION_KEY);
-  }
+  await chrome.storage.session.set({ [SESSION_KEY]: job });
 }
 
 function getPublicJobSnapshot(job) {
@@ -188,6 +180,26 @@ function getPublicJobSnapshot(job) {
   };
 }
 
+async function mutateJob(jobId, options, change) {
+  return withJobState(async () => {
+    const job = await loadJob();
+    if (
+      !job ||
+      (jobId && job.id !== jobId) ||
+      (options.statuses && !options.statuses.includes(job.status))
+    ) {
+      return null;
+    }
+
+    const changed = await change(job);
+    if (changed === false) return job;
+    await saveJob(job);
+    if (options.badge !== false) await updateBadge(job);
+    if (options.broadcast !== false) broadcastJobUpdate(job);
+    return job;
+  });
+}
+
 function broadcastJobUpdate(job) {
   chrome.runtime
     .sendMessage({ type: "BULK_JOB_UPDATE", job: getPublicJobSnapshot(job) })
@@ -195,7 +207,7 @@ function broadcastJobUpdate(job) {
 }
 
 async function updateBadge(job) {
-  if (!job || !["running", "paused"].includes(job.status)) {
+  if (!job || !isActiveJobStatus(job.status)) {
     await chrome.action.setBadgeText({ text: "" });
     return;
   }
@@ -210,25 +222,15 @@ async function updateBadge(job) {
 
 async function safeCreateNotification(title, message) {
   const notificationId = `scdl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-
   try {
     await new Promise((resolve, reject) => {
-      chrome.notifications.create(
-        notificationId,
-        {
-          type: "basic",
-          title,
-          message,
-        },
-        () => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
-
+      chrome.notifications.create(notificationId, { type: "basic", title, message }, () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
           resolve();
         }
-      );
+      });
     });
   } catch {
     // Notifications are optional; never block or throw after a download job.
@@ -236,40 +238,31 @@ async function safeCreateNotification(title, message) {
 }
 
 async function notifyJobFinished(job) {
-  if (job.status === "completed") {
+  let title = null;
+  let message = null;
+  if (job.status === JOB_STATUS.COMPLETED) {
     const failedCount = job.failed.length;
     const destination = job.downloadDestination?.name
       ? job.downloadDestination.name
       : `Downloads/${job.folderName}`;
-    const message =
+    title = "Download complete";
+    message =
       failedCount > 0
         ? `${job.completed}/${job.tracks.length} tracks saved to ${destination}. ${failedCount} failed.`
         : `${job.completed}/${job.tracks.length} tracks saved to ${destination}.`;
-
-    await safeCreateNotification("Download complete", message);
-    return;
+  } else if (job.status === JOB_STATUS.CANCELLED) {
+    title = "Download cancelled";
+    message = `${job.completed} tracks were saved before cancellation.`;
+  } else if (job.status === JOB_STATUS.FAILED) {
+    title = "Download failed";
+    message = job.error || "The bulk download could not be completed.";
   }
-
-  if (job.status === "cancelled") {
-    await safeCreateNotification(
-      "Download cancelled",
-      `${job.completed} tracks were saved before cancellation.`
-    );
-    return;
-  }
-
-  if (job.status === "failed") {
-    await safeCreateNotification(
-      "Download failed",
-      job.error || "The bulk download could not be completed."
-    );
-  }
+  if (title) await safeCreateNotification(title, message);
 }
 
 async function startKeepalive() {
   await chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.5 });
 }
-
 async function stopKeepalive() {
   await chrome.alarms.clear(KEEPALIVE_ALARM);
 }
@@ -278,11 +271,7 @@ async function ensureOffscreenDocument() {
   const existingContexts = await chrome.runtime.getContexts({
     contextTypes: ["OFFSCREEN_DOCUMENT"],
   });
-
-  if (existingContexts.length > 0) {
-    return;
-  }
-
+  if (existingContexts.length > 0) return;
   await chrome.offscreen.createDocument({
     url: "offscreen.html",
     reasons: ["BLOBS"],
@@ -294,12 +283,14 @@ async function closeOffscreenDocument() {
   const existingContexts = await chrome.runtime.getContexts({
     contextTypes: ["OFFSCREEN_DOCUMENT"],
   });
+  if (existingContexts.length > 0) await chrome.offscreen.closeDocument();
+}
 
-  if (existingContexts.length === 0) {
-    return;
-  }
-
-  await chrome.offscreen.closeDocument();
+async function finishJobResources(job) {
+  await updateBadge(job);
+  await stopKeepalive();
+  await notifyJobFinished(job);
+  await closeOffscreenDocument();
 }
 
 async function sendOffscreenMessage(message, retries = 12) {
@@ -333,190 +324,66 @@ async function sendOffscreenMessage(message, retries = 12) {
 }
 
 async function waitWhilePaused(jobId) {
-  while (jobControl.jobId === jobId && jobControl.state === "paused") {
+  while (
+    jobControl.jobId === jobId &&
+    jobControl.state === JOB_STATUS.PAUSED
+  ) {
     await sleep(400);
   }
 }
 
-function waitForDownloadComplete(
-  downloadId,
-  timeoutMs = DOWNLOAD_COMPLETE_TIMEOUT_MS
-) {
-  return new Promise((resolve, reject) => {
-    let settled = false;
+const destinationHandler = SCDownloadDestination.create({
+  chromeApi: chrome,
+  getRememberedDirectory: () => SCDownloadDirectory.getCurrent(),
+  sendOffscreenMessage,
+});
 
-    function settle(onSettle, value) {
-      if (settled) {
-        return;
-      }
+const trackDownloadExecution = SCTrackDownloadExecution.create({
+  resolveSource: (trackData, formatPreference) =>
+    SCDownloadSource.resolve(trackData, formatPreference),
+  buildTrack: ({ buildId, trackData, streamUrl }) =>
+    sendOffscreenMessage({
+      type: "OFFSCREEN_BUILD",
+      buildId,
+      trackData,
+      streamUrl,
+    }),
+  saveOutput: (output) => destinationHandler.save(output),
+  revokeBlob: (blobUrl) =>
+    sendOffscreenMessage({ type: "OFFSCREEN_REVOKE", blobUrl }),
+  abortBuild: (buildId) =>
+    sendOffscreenMessage({ type: "OFFSCREEN_ABORT", buildId }),
+});
 
-      settled = true;
-      clearTimeout(timeoutId);
-      chrome.downloads.onChanged.removeListener(handleChange);
-      onSettle(value);
+async function updateTrackProgress(jobId, trackIndex, total, title, statusText) {
+  return mutateJob(
+    jobId,
+    { statuses: ACTIVE_JOB_STATUSES, badge: false },
+    (job) => {
+      job.currentTrackTitle = title;
+      job.currentTrackStatus = statusText || `Track ${trackIndex + 1}/${total}`;
     }
-
-    function handleChange(delta) {
-      if (delta.id !== downloadId || !delta.state) {
-        return;
-      }
-
-      if (delta.state.current === "complete") {
-        settle(resolve, downloadId);
-        return;
-      }
-
-      if (delta.state.current === "interrupted") {
-        settle(reject, new Error("Download was interrupted."));
-      }
-    }
-
-    const timeoutId = setTimeout(() => {
-      settle(reject, new Error("Download timed out."));
-    }, timeoutMs);
-
-    chrome.downloads.onChanged.addListener(handleChange);
-
-    chrome.downloads.search({ id: downloadId }, (items) => {
-      if (chrome.runtime.lastError || settled) {
-        return;
-      }
-
-      const item = items?.[0];
-      if (item?.state === "complete") {
-        settle(resolve, downloadId);
-      } else if (item?.state === "interrupted") {
-        settle(reject, new Error("Download was interrupted."));
-      }
-    });
-  });
-}
-
-function downloadBlobUrl(blobUrl, filename) {
-  return new Promise((resolve, reject) => {
-    chrome.downloads.download(
-      {
-        url: blobUrl,
-        filename,
-        saveAs: false,
-        conflictAction: "uniquify",
-      },
-      (downloadId) => {
-        if (chrome.runtime.lastError || !downloadId) {
-          reject(new Error(chrome.runtime.lastError?.message || "Download failed."));
-          return;
-        }
-
-        waitForDownloadComplete(downloadId).then(resolve).catch(reject);
-      }
-    );
-  });
-}
-
-async function saveBlobToDirectory(blobUrl, fileName, downloadDestination) {
-  const result = await sendOffscreenMessage({
-    type: "OFFSCREEN_SAVE_TO_DIRECTORY",
-    blobUrl,
-    fileName,
-    directoryId: downloadDestination.id,
-  });
-
-  if (!result?.success) {
-    throw new Error(result?.error || "Could not save to the selected folder.");
-  }
-
-  return result.fileName || fileName;
-}
-
-async function resolveStreamForTrack(trackData, formatPreference = "auto") {
-  if (!streamDeps.resolveStreamUrl) {
-    throw new Error("Stream resolver is not initialized.");
-  }
-
-  return SCStreamSelector.resolveDownloadSource(trackData, {
-    formatPreference,
-    urlKey: "streamUrl",
-    getOriginal: streamDeps.resolveOriginalDownload
-      ? (trackId, clientId) =>
-          streamDeps.resolveOriginalDownload(trackId, clientId)
-      : null,
-    getStream: (currentTrack) =>
-      streamDeps.resolveStreamUrl(
-        currentTrack.streamUrl,
-        currentTrack.clientId,
-        currentTrack.trackAuthorization,
-        currentTrack.streamProtocol,
-        currentTrack.streamPreset,
-        currentTrack.streamMimeType
-      ),
-    refreshTrack: streamDeps.refreshTrackMetadata
-      ? (trackId, clientId, preference) =>
-          streamDeps.refreshTrackMetadata(trackId, clientId, preference)
-      : null,
-  });
-}
-
-async function abortInFlightBuilds() {
-  const buildIds = [...inFlightBuildIds];
-  inFlightBuildIds.clear();
-
-  await Promise.all(
-    buildIds.map((buildId) =>
-      sendOffscreenMessage({ type: "OFFSCREEN_ABORT", buildId }).catch(() => {})
-    )
   );
 }
 
-async function updateTrackProgress(jobId, trackIndex, total, title, statusText) {
-  return withJobState(async () => {
-    const job = await loadJob();
-    if (!job || job.id !== jobId) {
-      return null;
-    }
-
-    job.currentTrackTitle = title;
-    job.currentTrackStatus = statusText || `Track ${trackIndex + 1}/${total}`;
-    await saveJob(job);
-    broadcastJobUpdate(job);
-    return job;
-  });
-}
-
 async function recordTrackSuccess(jobId, trackIndex) {
-  return withJobState(async () => {
-    const job = await loadJob();
-    if (!job || job.id !== jobId || !["running", "paused"].includes(job.status)) {
-      return null;
+  return mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, (job) => {
+    if (job.trackStatus[trackIndex] === TRACK_STATUS.DONE) {
+      return false;
     }
-
-    if (job.trackStatus[trackIndex] === "done") {
-      return job;
-    }
-
-    job.trackStatus[trackIndex] = "done";
+    job.trackStatus[trackIndex] = TRACK_STATUS.DONE;
     syncJobCountersFromTrackStatus(job);
     job.currentTrackTitle = null;
     job.currentTrackStatus = `Saved ${job.completed}/${job.tracks.length}`;
-
-    await saveJob(job);
-    await updateBadge(job);
-    broadcastJobUpdate(job);
-    return job;
   });
 }
 
 async function recordTrackFailure(jobId, trackIndex, title, errorMessage) {
-  return withJobState(async () => {
-    const job = await loadJob();
-    if (!job || job.id !== jobId || !["running", "paused"].includes(job.status)) {
-      return null;
+  return mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, (job) => {
+    if (job.trackStatus[trackIndex] === TRACK_STATUS.FAILED) {
+      return false;
     }
-
-    if (job.trackStatus[trackIndex] === "failed") {
-      return job;
-    }
-
-    job.trackStatus[trackIndex] = "failed";
+    job.trackStatus[trackIndex] = TRACK_STATUS.FAILED;
     job.failed = [
       ...(job.failed || []),
       {
@@ -527,40 +394,26 @@ async function recordTrackFailure(jobId, trackIndex, title, errorMessage) {
     ];
     syncJobCountersFromTrackStatus(job);
     job.currentTrackStatus = `Failed: ${title || "Unknown track"}`;
-
-    await saveJob(job);
-    await updateBadge(job);
-    broadcastJobUpdate(job);
-    return job;
   });
 }
 
 async function finalizeJob(jobId, status, error) {
-  return withJobState(async () => {
-    const job = await loadJob();
-    if (!job || job.id !== jobId) {
-      return null;
+  const job = await mutateJob(
+    jobId,
+    { statuses: ACTIVE_JOB_STATUSES, badge: false, broadcast: false },
+    (value) => {
+      transitionJob(value, status, { error });
     }
+  );
+  if (!job) return null;
 
-    job.status = status;
-    job.finishedAt = Date.now();
-    job.error = error || null;
-    job.currentTrackTitle = null;
-    job.currentTrackStatus = null;
-
-    await saveJob(job);
-    await updateBadge(job);
-    await stopKeepalive();
-    await notifyJobFinished(job);
-    await closeOffscreenDocument();
-
-    broadcastJobUpdate(job);
-    return job;
-  });
+  await finishJobResources(job);
+  broadcastJobUpdate(job);
+  return job;
 }
 
 async function processTrack(jobId, trackIndex) {
-  let job = await loadJob();
+  const job = await loadJob();
   if (!job || job.id !== jobId) {
     return;
   }
@@ -568,89 +421,59 @@ async function processTrack(jobId, trackIndex) {
   const trackData = job.tracks[trackIndex];
   const trackNumber = trackIndex + 1;
   const total = job.tracks.length;
-  let buildId = null;
-
-  await updateTrackProgress(
-    jobId,
-    trackIndex,
-    total,
-    trackData.title,
-    `Track ${trackNumber}/${total} - Resolving stream...`
-  );
 
   try {
-    const resolved = await resolveStreamForTrack(trackData, job.formatPreference || "auto");
-
-    await updateTrackProgress(
-      jobId,
-      trackIndex,
-      total,
-      trackData.title,
-      `Track ${trackNumber}/${total} - Downloading...`
-    );
-
-    buildId = `build_${jobId}_${trackIndex}_${Date.now()}`;
-    inFlightBuildIds.add(buildId);
-
-    const buildResult = await sendOffscreenMessage({
-      type: "OFFSCREEN_BUILD",
-      buildId,
-      trackData: resolved.trackData,
-      streamUrl: resolved.streamUrl,
+    const result = await trackDownloadExecution.execute({
+      trackData,
+      formatPreference: job.formatPreference || "auto",
+      destination: job.downloadDestination,
+      collection: {
+        folderName: job.folderName,
+        trackNumber,
+        totalTracks: total,
+      },
+      isCancelled: async () => {
+        const currentJob = await loadJob();
+        return (
+          !currentJob ||
+          currentJob.id !== jobId ||
+          jobControl.state === JOB_STATUS.CANCELLED
+        );
+      },
+      onStage: (stage) => {
+        const statusByStage = {
+          resolving: "Resolving stream...",
+          building: "Downloading...",
+          saving: "Saving...",
+        };
+        return updateTrackProgress(
+          jobId,
+          trackIndex,
+          total,
+          trackData.title,
+          `Track ${trackNumber}/${total} - ${statusByStage[stage]}`
+        );
+      },
+      onProgress: (statusText) =>
+        updateTrackProgress(
+          jobId,
+          trackIndex,
+          total,
+          trackData.title,
+          `Track ${trackNumber}/${total} - ${statusText}`
+        ),
     });
 
-    inFlightBuildIds.delete(buildId);
-    buildId = null;
-
-    if (!buildResult?.success || !buildResult.blobUrl) {
-      throw new Error(buildResult?.error || "Failed to build audio file.");
-    }
-
-    job = await loadJob();
-    if (!job || job.id !== jobId || jobControl.state === "cancelled") {
-      await sendOffscreenMessage({
-        type: "OFFSCREEN_REVOKE",
-        blobUrl: buildResult.blobUrl,
-      }).catch(() => {});
+    if (result.cancelled) {
       return;
-    }
-
-    const paddedIndex = String(trackNumber).padStart(String(total).length, "0");
-    const filename = `${paddedIndex} - ${buildResult.fileName}`;
-
-    await updateTrackProgress(
-      jobId,
-      trackIndex,
-      total,
-      trackData.title,
-      `Track ${trackNumber}/${total} - Saving...`
-    );
-
-    try {
-      if (job.downloadDestination?.id) {
-        await saveBlobToDirectory(
-          buildResult.blobUrl,
-          filename,
-          job.downloadDestination
-        );
-      } else {
-        await downloadBlobUrl(buildResult.blobUrl, `${job.folderName}/${filename}`);
-      }
-    } finally {
-      await sendOffscreenMessage({
-        type: "OFFSCREEN_REVOKE",
-        blobUrl: buildResult.blobUrl,
-      }).catch(() => {});
     }
 
     await recordTrackSuccess(jobId, trackIndex);
   } catch (error) {
-    if (buildId) {
-      inFlightBuildIds.delete(buildId);
-      await sendOffscreenMessage({ type: "OFFSCREEN_ABORT", buildId }).catch(() => {});
-    }
-
-    if (jobControl.jobId === jobId && jobControl.state === "cancelled") {
+    if (
+      jobControl.jobId === jobId &&
+      jobControl.state === JOB_STATUS.CANCELLED
+    ) {
       return;
     }
 
@@ -667,11 +490,11 @@ async function runJobLoopInternal(jobId) {
   await ensureOffscreenDocument();
 
   let job = await loadJob();
-  if (!job || job.id !== jobId || !["running", "paused"].includes(job.status)) {
+  if (!job || job.id !== jobId || !isActiveJobStatus(job.status)) {
     return;
   }
 
-  jobControl = { jobId, state: job.status === "paused" ? "paused" : "running" };
+  jobControl = { jobId, state: job.status };
 
   const inFlight = new Map();
 
@@ -679,12 +502,15 @@ async function runJobLoopInternal(jobId) {
     while (true) {
       await waitWhilePaused(jobId);
 
-      if (jobControl.jobId === jobId && jobControl.state === "cancelled") {
+      if (
+        jobControl.jobId === jobId &&
+        jobControl.state === JOB_STATUS.CANCELLED
+      ) {
         break;
       }
 
       job = await loadJob();
-      if (!job || job.id !== jobId || job.status === "cancelled") {
+      if (!job || job.id !== jobId || job.status === JOB_STATUS.CANCELLED) {
         break;
       }
 
@@ -692,12 +518,12 @@ async function runJobLoopInternal(jobId) {
         await Promise.race(inFlight.values());
         await waitWhilePaused(jobId);
 
-        if (jobControl.state === "cancelled") {
+        if (jobControl.state === JOB_STATUS.CANCELLED) {
           break;
         }
       }
 
-      if (jobControl.state === "cancelled") {
+      if (jobControl.state === JOB_STATUS.CANCELLED) {
         break;
       }
 
@@ -731,12 +557,19 @@ async function runJobLoopInternal(jobId) {
       return;
     }
 
-    if (jobControl.jobId === jobId && jobControl.state === "cancelled") {
+    if (
+      jobControl.jobId === jobId &&
+      jobControl.state === JOB_STATUS.CANCELLED
+    ) {
       return;
     }
 
-    if (job.status === "running" && getPendingTrackIndices(job).length === 0) {
-      const finalStatus = job.completed > 0 ? "completed" : "failed";
+    if (
+      job.status === JOB_STATUS.RUNNING &&
+      getPendingTrackIndices(job).length === 0
+    ) {
+      const finalStatus =
+        job.completed > 0 ? JOB_STATUS.COMPLETED : JOB_STATUS.FAILED;
       await finalizeJob(
         jobId,
         finalStatus,
@@ -744,7 +577,11 @@ async function runJobLoopInternal(jobId) {
       );
     }
   } catch (error) {
-    await finalizeJob(jobId, "failed", error.message || "Bulk download failed.");
+    await finalizeJob(
+      jobId,
+      JOB_STATUS.FAILED,
+      error.message || "Bulk download failed."
+    );
   }
 }
 
@@ -764,27 +601,12 @@ function runJobLoop(jobId) {
   return activeLoopPromise;
 }
 
-function isLoopActive(jobId) {
-  return activeLoopPromise !== null && activeLoopJobId === jobId;
-}
-
 const BulkJobManager = {
   SESSION_KEY,
   KEEPALIVE_ALARM,
 
-  loadJob,
-  saveJob,
-  getPublicJobSnapshot,
-  sanitizeFolderName,
-  updateBadge,
-  isLoopActive,
-
-  setStreamDependencies(deps) {
-    streamDeps = {
-      resolveStreamUrl: deps.resolveStreamUrl,
-      resolveOriginalDownload: deps.resolveOriginalDownload,
-      refreshTrackMetadata: deps.refreshTrackMetadata,
-    };
+  reportBuildProgress(buildId, statusText) {
+    return trackDownloadExecution.reportProgress(buildId, statusText);
   },
 
   async downloadSingleTrack(
@@ -792,76 +614,34 @@ const BulkJobManager = {
     formatPreference = "auto",
     downloadDestination = null
   ) {
-    const activeJobBeforeDownload = await loadJob();
-    if (
-      activeJobBeforeDownload &&
-      ["running", "paused"].includes(activeJobBeforeDownload.status)
-    ) {
-      throw new Error("A bulk download is already in progress.");
-    }
+    await withJobState(async () => {
+      const activeJobBeforeDownload = await loadJob();
+      if (
+        activeJobBeforeDownload &&
+        isActiveJobStatus(activeJobBeforeDownload.status)
+      ) {
+        throw new Error("A bulk download is already in progress.");
+      }
 
-    const buildId = `single_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    let blobUrl = null;
-    let buildRequested = false;
-
-    singleDownloadsInFlight += 1;
+      singleDownloadsInFlight += 1;
+    });
 
     try {
-      const resolvedDestination = await resolveDownloadDestination(
+      const resolvedDestination = await destinationHandler.resolve(
         downloadDestination
       );
       await startKeepalive();
       await ensureOffscreenDocument();
-      const resolved = await resolveStreamForTrack(
+      return await trackDownloadExecution.execute({
         trackData,
-        formatPreference || "auto"
-      );
-      buildRequested = true;
-      const buildResult = await sendOffscreenMessage({
-        type: "OFFSCREEN_BUILD",
-        buildId,
-        trackData: resolved.trackData,
-        streamUrl: resolved.streamUrl,
+        formatPreference: formatPreference || "auto",
+        destination: resolvedDestination,
       });
-
-      if (!buildResult?.success || !buildResult.blobUrl) {
-        throw new Error(buildResult?.error || "Failed to build audio file.");
-      }
-
-      blobUrl = buildResult.blobUrl;
-      let savedFileName = buildResult.fileName;
-      if (resolvedDestination) {
-        savedFileName = await saveBlobToDirectory(
-          blobUrl,
-          buildResult.fileName,
-          resolvedDestination
-        );
-      } else {
-        await downloadBlobUrl(blobUrl, buildResult.fileName);
-      }
-
-      return {
-        success: true,
-        fileName: savedFileName,
-        destinationName: resolvedDestination?.name || "Downloads",
-      };
     } finally {
-      if (blobUrl) {
-        await sendOffscreenMessage({
-          type: "OFFSCREEN_REVOKE",
-          blobUrl,
-        }).catch(() => {});
-      } else if (buildRequested) {
-        await sendOffscreenMessage({
-          type: "OFFSCREEN_ABORT",
-          buildId,
-        }).catch(() => {});
-      }
-
       singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);
       const activeJob = await loadJob().catch(() => null);
       const hasActiveBulkJob =
-        activeJob && ["running", "paused"].includes(activeJob.status);
+        activeJob && isActiveJobStatus(activeJob.status);
       if (!hasActiveBulkJob && singleDownloadsInFlight === 0) {
         await stopKeepalive().catch(() => {});
         await closeOffscreenDocument().catch(() => {});
@@ -876,52 +656,60 @@ const BulkJobManager = {
     formatPreference = "auto",
     downloadDestination = null
   ) {
-    const existing = await loadJob();
-    if (existing && ["running", "paused"].includes(existing.status)) {
-      throw new Error("A bulk download is already in progress.");
-    }
-
-    if (singleDownloadsInFlight > 0) {
-      throw new Error("A track download is already in progress.");
-    }
-
-    const fallbackAlbum = playlistTitle || "Untitled playlist";
-    const resolvedDestination = await resolveDownloadDestination(
+    const resolvedDestination = await destinationHandler.resolve(
       downloadDestination
     );
-    const collectionFolder = sanitizeFolderName(playlistTitle);
 
-    const job = {
-      id: createJobId(),
-      status: "running",
-      playlistTitle: playlistTitle || "Untitled playlist",
-      folderName: collectionFolder,
-      downloadDestination: resolvedDestination,
-      artworkUrl: playlistMeta.artworkUrl || tracks[0]?.artwork_url || null,
-      artist: playlistMeta.artist || tracks[0]?.artist || null,
-      artistImageUrl: playlistMeta.artistImageUrl || tracks[0]?.artistImageUrl || null,
-      artistUrl: playlistMeta.artistUrl || tracks[0]?.artistUrl || null,
-      tracks: tracks.map((track) => slimTrackForJob(track, fallbackAlbum)),
-      formatPreference: formatPreference || "auto",
-      trackStatus: createEmptyTrackStatus(tracks.length),
-      clientId: tracks[0]?.clientId || null,
-      currentIndex: 0,
-      completed: 0,
-      failed: [],
-      currentTrackTitle: null,
-      currentTrackStatus: null,
-      startedAt: Date.now(),
-      finishedAt: null,
-      error: null,
-    };
+    return withJobState(async () => {
+      const existing = await loadJob();
+      if (existing && isActiveJobStatus(existing.status)) {
+        throw new Error("A bulk download is already in progress.");
+      }
 
-    await saveJob(job);
-    await updateBadge(job);
-    await startKeepalive();
-    jobControl = { jobId: job.id, state: "running" };
-    runJobLoop(job.id);
+      if (singleDownloadsInFlight > 0) {
+        throw new Error("A track download is already in progress.");
+      }
 
-    return getPublicJobSnapshot(job);
+      const fallbackAlbum = playlistTitle || "Untitled playlist";
+      const collectionFolder = sanitizeFolderName(playlistTitle);
+      const job = {
+        id: `job_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        status: JOB_STATUS.RUNNING,
+        playlistTitle: playlistTitle || "Untitled playlist",
+        folderName: collectionFolder,
+        downloadDestination: resolvedDestination,
+        artworkUrl:
+          playlistMeta.artworkUrl ||
+          SCDownloadTrack.migrate(tracks[0])?.artworkUrl ||
+          null,
+        artist: playlistMeta.artist || tracks[0]?.artist || null,
+        artistImageUrl:
+          playlistMeta.artistImageUrl || tracks[0]?.artistImageUrl || null,
+        artistUrl: playlistMeta.artistUrl || tracks[0]?.artistUrl || null,
+        tracks: tracks.map((track) =>
+          SCDownloadTrack.toDurable(track, fallbackAlbum)
+        ),
+        formatPreference: formatPreference || "auto",
+        trackStatus: new Array(tracks.length).fill(null),
+        clientId: tracks[0]?.clientId || null,
+        currentIndex: 0,
+        completed: 0,
+        failed: [],
+        currentTrackTitle: null,
+        currentTrackStatus: null,
+        startedAt: Date.now(),
+        finishedAt: null,
+        error: null,
+      };
+
+      await saveJob(job);
+      await updateBadge(job);
+      await startKeepalive();
+      jobControl = { jobId: job.id, state: JOB_STATUS.RUNNING };
+      runJobLoop(job.id);
+
+      return getPublicJobSnapshot(job);
+    });
   },
 
   async getStatus() {
@@ -931,32 +719,32 @@ const BulkJobManager = {
   },
 
   async pauseJob() {
-    const job = await loadJob();
-    if (!job || job.status !== "running") {
+    const job = await mutateJob(
+      null,
+      { statuses: [JOB_STATUS.RUNNING] },
+      (value) => {
+        transitionJob(value, JOB_STATUS.PAUSED);
+        jobControl = { jobId: value.id, state: JOB_STATUS.PAUSED };
+      }
+    );
+    if (!job) {
       return { success: false, error: "No running job to pause." };
     }
-
-    // Pause stops dispatching new tracks; in-flight downloads still finish and save.
-    job.status = "paused";
-    job.pausedAt = Date.now();
-    jobControl = { jobId: job.id, state: "paused" };
-    await saveJob(job);
-    await updateBadge(job);
-    broadcastJobUpdate(job);
     return { success: true, job: getPublicJobSnapshot(job) };
   },
 
   async resumeJob() {
-    const job = await loadJob();
-    if (!job || job.status !== "paused") {
+    const job = await mutateJob(
+      null,
+      { statuses: [JOB_STATUS.PAUSED], broadcast: false },
+      (value) => {
+        transitionJob(value, JOB_STATUS.RUNNING);
+        jobControl = { jobId: value.id, state: JOB_STATUS.RUNNING };
+      }
+    );
+    if (!job) {
       return { success: false, error: "No paused job to resume." };
     }
-
-    job.status = "running";
-    job.pausedAt = null;
-    jobControl = { jobId: job.id, state: "running" };
-    await saveJob(job);
-    await updateBadge(job);
     await startKeepalive();
     runJobLoop(job.id);
     broadcastJobUpdate(job);
@@ -964,46 +752,42 @@ const BulkJobManager = {
   },
 
   async cancelJob() {
-    const job = await loadJob();
-    if (!job || !["running", "paused"].includes(job.status)) {
+    const job = await mutateJob(
+      null,
+      { statuses: ACTIVE_JOB_STATUSES, badge: false, broadcast: false },
+      (value) => {
+        transitionJob(value, JOB_STATUS.CANCELLED);
+        jobControl = { jobId: value.id, state: JOB_STATUS.CANCELLED };
+      }
+    );
+    if (!job) {
       return { success: false, error: "No active job to cancel." };
     }
-
-    jobControl = { jobId: job.id, state: "cancelled" };
-    job.status = "cancelled";
-    job.finishedAt = Date.now();
-    await saveJob(job);
-    await abortInFlightBuilds();
-    await updateBadge(job);
-    await stopKeepalive();
-    await notifyJobFinished(job);
-    await closeOffscreenDocument();
+    await trackDownloadExecution.abortAll();
+    await finishJobResources(job);
     broadcastJobUpdate(job);
     return { success: true, job: getPublicJobSnapshot(job) };
   },
 
   async recoverRunningJob() {
     const job = await loadJob();
-    if (!job || !["running", "paused"].includes(job.status)) {
+    if (!job || !isActiveJobStatus(job.status)) {
       return;
     }
 
     await updateBadge(job);
     await startKeepalive();
-    jobControl = {
-      jobId: job.id,
-      state: job.status === "paused" ? "paused" : "running",
-    };
+    jobControl = { jobId: job.id, state: job.status };
     runJobLoop(job.id);
   },
 
   async ensureJobRunning() {
     const job = await loadJob();
-    if (!job || !["running", "paused"].includes(job.status)) {
+    if (!job || !isActiveJobStatus(job.status)) {
       return;
     }
 
-    if (isLoopActive(job.id)) {
+    if (activeLoopPromise !== null && activeLoopJobId === job.id) {
       await updateBadge(job);
       return;
     }

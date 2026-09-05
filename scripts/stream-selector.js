@@ -1,363 +1,184 @@
 const SCStreamSelector = (() => {
   const STORAGE_KEY = "downloadFormatPreference";
   const DEFAULT_PREFERENCE = "auto";
+  const PREFERENCE = Object.freeze({
+    AUTO: DEFAULT_PREFERENCE,
+    ORIGINAL: "original",
+    MP3: "mp3",
+    M4A: "m4a",
+    OPUS: "opus",
+  });
+  const TRANSCODE_PREFERENCES = Object.freeze([
+    PREFERENCE.MP3,
+    PREFERENCE.M4A,
+    PREFERENCE.OPUS,
+  ]);
+  const VALID_PREFERENCES = new Set(Object.values(PREFERENCE));
+  const FORMAT_MATCHERS = Object.freeze({
+    [PREFERENCE.MP3]: (preset, mime) =>
+      preset.startsWith("mp3") || mime.includes("audio/mpeg"),
+    [PREFERENCE.M4A]: (preset, mime) =>
+      preset.startsWith("aac") || mime.includes("mp4"),
+    [PREFERENCE.OPUS]: (preset, mime) =>
+      preset.includes("opus") || mime.includes("opus"),
+  });
 
-  function getTranscodingCandidates(data) {
-    const transcodings = data?.media?.transcodings || [];
-    if (!transcodings.length) {
-      return [];
-    }
-
-    const fullTranscodings = transcodings.filter((transcoding) => !transcoding.snipped);
-    return fullTranscodings.length ? fullTranscodings : transcodings;
+  function candidates(data) {
+    const values = data?.media?.transcodings || [];
+    const full = values.filter((value) => !value.snipped);
+    return full.length ? full : values;
   }
 
-  function findHls(candidates, predicate) {
-    return candidates.find(
-      (transcoding) =>
-        transcoding.format?.protocol === "hls" && predicate(transcoding)
-    );
+  function matches(value, format) {
+    const preset = value.preset || "";
+    const mime = value.format?.mime_type || "";
+    return FORMAT_MATCHERS[format]?.(preset, mime) || false;
   }
 
-  function findProgressive(candidates, predicate) {
-    return candidates.find(
-      (transcoding) =>
-        transcoding.format?.protocol === "progressive" && predicate(transcoding)
-    );
-  }
-
-  function toStreamInfo(transcoding) {
-    return {
-      url: transcoding.url,
-      protocol: transcoding.format?.protocol || null,
-      preset: transcoding.preset || null,
-      mimeType: transcoding.format?.mime_type || null,
-    };
-  }
-
-  function findMp3Transcoding(candidates) {
-    const progressive = findProgressive(
-      candidates,
-      (transcoding) =>
-        transcoding.format?.mime_type?.includes("audio/mpeg") ||
-        transcoding.preset?.startsWith("mp3")
-    );
-    if (progressive) {
-      return progressive;
-    }
-
-    return findHls(
-      candidates,
-      (transcoding) =>
-        transcoding.format?.mime_type?.includes("audio/mpeg") ||
-        transcoding.preset?.startsWith("mp3")
+  function first(values, protocol, predicate) {
+    return values.find(
+      (value) => value.format?.protocol === protocol && predicate(value)
     );
   }
 
-  function findAacTranscoding(candidates) {
-    const hlsAac160 = findHls(
-      candidates,
-      (transcoding) =>
-        transcoding.preset === "aac_160k" || transcoding.preset?.startsWith("aac_160")
-    );
-    if (hlsAac160) {
-      return hlsAac160;
+  const FORMAT_RULES = Object.freeze({
+    [PREFERENCE.MP3]: Object.freeze([
+      (value) =>
+        value.format?.protocol === "progressive" &&
+        matches(value, PREFERENCE.MP3),
+      (value) =>
+        value.format?.protocol === "hls" && matches(value, PREFERENCE.MP3),
+    ]),
+    [PREFERENCE.M4A]: Object.freeze([
+      (value) =>
+        value.format?.protocol === "hls" && value.preset?.startsWith("aac_160"),
+      (value) =>
+        value.format?.protocol === "hls" && value.preset?.startsWith("aac_96"),
+      (value) =>
+        value.format?.protocol === "hls" && matches(value, PREFERENCE.M4A),
+    ]),
+    [PREFERENCE.OPUS]: Object.freeze([
+      (value) =>
+        value.format?.protocol === "hls" && matches(value, PREFERENCE.OPUS),
+    ]),
+  });
+
+  function selectFormat(values, preference) {
+    for (const rule of FORMAT_RULES[preference] || []) {
+      const match = values.find(rule);
+      if (match) return match;
     }
-
-    const hlsAac96 = findHls(
-      candidates,
-      (transcoding) =>
-        transcoding.preset === "aac_96k" || transcoding.preset?.startsWith("aac_96")
-    );
-    if (hlsAac96) {
-      return hlsAac96;
-    }
-
-    return findHls(
-      candidates,
-      (transcoding) =>
-        transcoding.preset?.startsWith("aac") ||
-        transcoding.format?.mime_type?.includes("mp4")
-    );
-  }
-
-  function findOpusTranscoding(candidates) {
-    return findHls(
-      candidates,
-      (transcoding) =>
-        transcoding.preset?.includes("opus") ||
-        transcoding.format?.mime_type?.includes("opus")
-    );
-  }
-
-  function extractStreamInfo(data, formatPreference = DEFAULT_PREFERENCE) {
-    const candidates = getTranscodingCandidates(data);
-    if (!candidates.length) {
-      return null;
-    }
-
-    if (formatPreference === "mp3") {
-      const mp3 = findMp3Transcoding(candidates);
-      return mp3 ? toStreamInfo(mp3) : null;
-    }
-
-    if (formatPreference === "m4a") {
-      const aac = findAacTranscoding(candidates);
-      return aac ? toStreamInfo(aac) : null;
-    }
-
-    if (formatPreference === "opus") {
-      const opus = findOpusTranscoding(candidates);
-      return opus ? toStreamInfo(opus) : null;
-    }
-
-    const mp3 = findMp3Transcoding(candidates);
-    if (mp3) {
-      return toStreamInfo(mp3);
-    }
-
-    const aac = findAacTranscoding(candidates);
-    if (aac) {
-      return toStreamInfo(aac);
-    }
-
-    const opus = findOpusTranscoding(candidates);
-    if (opus) {
-      return toStreamInfo(opus);
-    }
-
-    const progressive = candidates.find(
-      (transcoding) => transcoding.format?.protocol === "progressive"
-    );
-    if (progressive) {
-      return toStreamInfo(progressive);
-    }
-
-    const anyHls = candidates.find(
-      (transcoding) => transcoding.format?.protocol === "hls"
-    );
-    if (anyHls) {
-      return toStreamInfo(anyHls);
-    }
-
     return null;
   }
 
-  function getAvailableFormats(data, trackData) {
-    const candidates = getTranscodingCandidates(data);
+  function normalizePreference(preference) {
+    return VALID_PREFERENCES.has(preference) ? preference : DEFAULT_PREFERENCE;
+  }
 
+  function prefersOriginal(preference) {
+    const normalized = normalizePreference(preference);
+    return normalized === PREFERENCE.AUTO || normalized === PREFERENCE.ORIGINAL;
+  }
+
+  function isOriginalAvailable(trackData) {
+    const hasDownloadsLeft =
+      trackData?.hasDownloadsLeft !== undefined
+        ? trackData.hasDownloadsLeft !== false
+        : trackData?.has_downloads_left !== false;
+    return trackData?.downloadable === true && hasDownloadsLeft;
+  }
+
+  function shouldPreferOriginal(trackData, preference) {
+    return Boolean(
+      prefersOriginal(preference) &&
+        isOriginalAvailable(trackData) &&
+        trackData?.id
+    );
+  }
+
+  function streamInfo(value) {
+    return value
+      ? {
+          url: value.url,
+          protocol: value.format?.protocol || null,
+          preset: value.preset || null,
+          mimeType: value.format?.mime_type || null,
+        }
+      : null;
+  }
+
+  function extractStreamInfo(data, preference = DEFAULT_PREFERENCE) {
+    const values = candidates(data);
+    if (!values.length) return null;
+    const normalized = normalizePreference(preference);
+    if (TRANSCODE_PREFERENCES.includes(normalized)) {
+      return streamInfo(selectFormat(values, normalized));
+    }
+    return streamInfo(
+      TRANSCODE_PREFERENCES.map((format) =>
+        selectFormat(values, format)
+      ).find(Boolean) ||
+        first(values, "progressive", () => true) ||
+        first(values, "hls", () => true)
+    );
+  }
+
+  function getAvailableFormats(data, trackData) {
+    const values = candidates(data);
     return {
-      original:
-        trackData?.downloadable === true && trackData?.has_downloads_left !== false,
-      mp3: Boolean(findMp3Transcoding(candidates)),
-      m4a: Boolean(findAacTranscoding(candidates)),
-      opus: Boolean(findOpusTranscoding(candidates)),
+      original: isOriginalAvailable(trackData),
+      mp3: Boolean(selectFormat(values, PREFERENCE.MP3)),
+      m4a: Boolean(selectFormat(values, PREFERENCE.M4A)),
+      opus: Boolean(selectFormat(values, PREFERENCE.OPUS)),
     };
   }
 
-  function shouldPreferOriginal(formatPreference) {
-    return formatPreference === "auto" || formatPreference === "original";
-  }
-
-  function shouldUseOriginalOnly(formatPreference) {
-    return formatPreference === "original";
-  }
-
-  function getStreamFormatLabel(streamInfo, trackData, formatPreference = DEFAULT_PREFERENCE) {
-    if (
-      shouldUseOriginalOnly(formatPreference) &&
-      trackData?.downloadable === true &&
-      trackData?.has_downloads_left !== false
-    ) {
+  function getStreamFormatLabel(
+    stream,
+    trackData,
+    preference = DEFAULT_PREFERENCE
+  ) {
+    if (prefersOriginal(preference) && isOriginalAvailable(trackData)) {
       return "Original file";
     }
-
-    if (
-      formatPreference === "auto" &&
-      trackData?.downloadable === true &&
-      trackData?.has_downloads_left !== false
-    ) {
-      return "Original file";
+    if (!stream) {
+      return normalizePreference(preference) === PREFERENCE.ORIGINAL
+        ? "Original file"
+        : null;
     }
-
-    if (!streamInfo) {
-      if (formatPreference === "original") {
-        return "Original file";
-      }
-      return null;
-    }
-
-    const preset = streamInfo.preset || "";
-
-    if (streamInfo.protocol === "progressive") {
-      return "Progressive MP3";
-    }
-
-    if (preset === "aac_160k" || preset.startsWith("aac_160")) {
-      return "AAC HLS 160k";
-    }
-
-    if (preset === "aac_96k" || preset.startsWith("aac_96")) {
-      return "AAC HLS 96k";
-    }
-
-    if (preset.startsWith("mp3") || streamInfo.mimeType?.includes("audio/mpeg")) {
+    const preset = stream.preset || "";
+    if (stream.protocol === "progressive") return "Progressive MP3";
+    if (preset.startsWith("aac_160")) return "AAC HLS 160k";
+    if (preset.startsWith("aac_96")) return "AAC HLS 96k";
+    if (preset.startsWith("mp3") || stream.mimeType?.includes("audio/mpeg")) {
       return "MP3 HLS";
     }
-
-    if (preset.includes("opus") || streamInfo.mimeType?.includes("opus")) {
+    if (preset.includes("opus") || stream.mimeType?.includes("opus")) {
       return "Opus HLS";
     }
-
-    if (streamInfo.protocol === "hls") {
-      return "HLS";
-    }
-
-    return streamInfo.protocol || null;
+    return stream.protocol === "hls" ? "HLS" : stream.protocol || null;
   }
 
   async function getStoredFormatPreference() {
     const result = await chrome.storage.local.get(STORAGE_KEY);
-    const preference = result[STORAGE_KEY];
-    return preference || DEFAULT_PREFERENCE;
+    return normalizePreference(result[STORAGE_KEY]);
   }
 
   async function setStoredFormatPreference(preference) {
-    await chrome.storage.local.set({ [STORAGE_KEY]: preference });
-  }
-
-  async function refreshTrackFromApi(trackId, clientId, formatPreference = DEFAULT_PREFERENCE) {
-    const result = await chrome.runtime.sendMessage({
-      type: "REFRESH_TRACK",
-      trackId,
-      clientId,
-      formatPreference,
+    await chrome.storage.local.set({
+      [STORAGE_KEY]: normalizePreference(preference),
     });
-
-    if (!result?.success || !result.trackData) {
-      throw new Error(result?.error || "Could not refresh track metadata.");
-    }
-
-    return result.trackData;
-  }
-
-  function shouldRetryWithRefresh(error) {
-    const retryableCodes = new Set([
-      "forbidden",
-      "unauthorized",
-      "not_found",
-      "http_error",
-    ]);
-
-    if (retryableCodes.has(error?.result?.code)) {
-      return true;
-    }
-
-    return /403|404|401|stream|URL/i.test(error?.message || "");
-  }
-
-  async function resolveDownloadSource(trackData, options = {}) {
-    const {
-      formatPreference = trackData.formatPreference || DEFAULT_PREFERENCE,
-      getOriginal = null,
-      getStream,
-      refreshTrack = null,
-      urlKey = "url",
-    } = options;
-
-    if (!getStream) {
-      throw new Error("Stream resolver is not available.");
-    }
-
-    const preferOriginal = shouldPreferOriginal(formatPreference);
-
-    if (
-      preferOriginal &&
-      trackData.downloadable &&
-      trackData.hasDownloadsLeft &&
-      trackData.id &&
-      getOriginal
-    ) {
-      try {
-        const original = await getOriginal(trackData.id, trackData.clientId);
-
-        if (original?.url) {
-          return {
-            [urlKey]: original.url,
-            trackData: {
-              ...trackData,
-              isOriginalDownload: true,
-              originalDownloadUrl: original.url,
-              originalMimeType: original.mimeType || null,
-            },
-          };
-        }
-      } catch {
-        // Original unavailable; fall back to the best stream below.
-      }
-    }
-
-    let currentTrack = trackData;
-    let lastError = null;
-    const maxAttempts = refreshTrack ? 2 : 1;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      try {
-        if (!currentTrack?.streamUrl) {
-          throw new Error("No downloadable stream was found for this track.");
-        }
-
-        const result = await getStream(currentTrack);
-        const resolvedUrl = result?.url;
-
-        if (!resolvedUrl) {
-          const error = new Error(result?.error || "Cannot obtain final file URL.");
-          if (result) {
-            error.result = result;
-          }
-          throw error;
-        }
-
-        return {
-          [urlKey]: resolvedUrl,
-          trackData: currentTrack,
-        };
-      } catch (error) {
-        lastError = error;
-        const shouldRefresh =
-          refreshTrack &&
-          attempt === 0 &&
-          currentTrack?.id &&
-          currentTrack?.clientId &&
-          shouldRetryWithRefresh(error);
-
-        if (!shouldRefresh) {
-          throw error;
-        }
-
-        const refreshed = await refreshTrack(
-          currentTrack.id,
-          currentTrack.clientId,
-          formatPreference
-        );
-        currentTrack = { ...currentTrack, ...refreshed };
-      }
-    }
-
-    throw lastError || new Error("Could not resolve stream URL.");
   }
 
   return {
     STORAGE_KEY,
     DEFAULT_PREFERENCE,
+    normalizePreference,
+    shouldPreferOriginal,
     extractStreamInfo,
     getAvailableFormats,
     getStreamFormatLabel,
-    shouldPreferOriginal,
-    shouldUseOriginalOnly,
     getStoredFormatPreference,
     setStoredFormatPreference,
-    refreshTrackFromApi,
-    resolveDownloadSource,
   };
 })();

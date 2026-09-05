@@ -5,7 +5,7 @@ const NOT_TRACK_RETRY_DELAY_MS = 600;
 const MAX_NOT_TRACK_RETRIES = 2;
 const DEFAULT_DOWNLOAD_STATUS = "Ready to download";
 const DOWNLOAD_ERROR_STATUS = "Error, please retry";
-const DOWNLOAD_PRESETS = [10, 25, 50, 100];
+const DOWNLOAD_PRESETS = [10, 25, 50, 100, 150, 200, 300];
 const DOWNLOAD_WARN_THRESHOLD = 200;
 const SELECT_WARN_THRESHOLD = 1000;
 const ROW_HEIGHT = 40;
@@ -67,6 +67,7 @@ let activeBulkJob = null;
 let notTrackRetryCount = 0;
 let currentFormatPreference = SCStreamSelector.DEFAULT_PREFERENCE;
 let currentDownloadDestination = null;
+const popupDownloadIntent = SCDownloadIntent.create(chrome.runtime);
 
 document.addEventListener("DOMContentLoaded", async () => {
   await loadDownloadDestination();
@@ -569,8 +570,8 @@ async function renderTrack(trackData) {
   artistArtwork.src = trackData.artistImageUrl || "./assets/icon48.png";
   durationEl.textContent = trackData.duration || "";
 
-  if (trackData.artwork_url) {
-    artwork.style.backgroundImage = `url(${trackData.artwork_url})`;
+  if (trackData.artworkUrl) {
+    artwork.style.backgroundImage = `url(${trackData.artworkUrl})`;
     artwork.style.backgroundColor = "";
   } else {
     artwork.style.backgroundImage = "none";
@@ -597,8 +598,8 @@ async function renderTrack(trackData) {
   jobHint.classList.add("is-hidden");
   showDownloadDestination();
 
-  if (trackData.waveform_url) {
-    await drawWaveform(trackData.waveform_url);
+  if (trackData.waveformUrl) {
+    await drawWaveform(trackData.waveformUrl);
   }
 
   attachDownloadListener();
@@ -698,8 +699,8 @@ async function renderPlaylist(playlistData) {
   showFormatDropdownForBulk();
   populateDownloadLimitOptions(total);
 
-  if (playlistData.artwork_url) {
-    artwork.style.backgroundImage = `url(${playlistData.artwork_url})`;
+  if (playlistData.artworkUrl) {
+    artwork.style.backgroundImage = `url(${playlistData.artworkUrl})`;
     artwork.style.backgroundColor = "";
   } else {
     artwork.style.backgroundImage = "none";
@@ -718,7 +719,7 @@ async function renderPlaylist(playlistData) {
   const firstTrackWaveform =
     playlistData.kind === "user_tracks"
       ? null
-      : playlistData.tracks?.[0]?.waveform_url;
+      : playlistData.tracks?.[0]?.waveformUrl;
   if (firstTrackWaveform) {
     await drawWaveform(firstTrackWaveform);
   } else {
@@ -967,25 +968,14 @@ async function startSelectedBulkDownload() {
       return;
     }
 
-    const startResult = await chrome.runtime.sendMessage({
-      type: "START_BULK_JOB",
-      tracks: bulkResult.tracks,
-      playlistTitle: currentPlaylistData.title,
-      playlistMeta: {
-        artworkUrl: currentPlaylistData.artwork_url || null,
-        artist: currentPlaylistData.artist || null,
-        artistImageUrl: currentPlaylistData.artistImageUrl || null,
-        artistUrl: currentPlaylistData.artistUrl || null,
-      },
-      formatPreference: await getFormatPreference(),
-      downloadDestination: currentDownloadDestination,
-    });
-
-    if (!startResult?.success || !startResult.job) {
-      setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-      alert(startResult?.error || "Could not start the background download.");
-      return;
-    }
+    const startResult = await popupDownloadIntent.downloadCollection(
+      bulkResult.tracks,
+      currentPlaylistData,
+      {
+        formatPreference: await getFormatPreference(),
+        downloadDestination: currentDownloadDestination,
+      }
+    );
 
     exitSelectionMode();
     activeBulkJob = startResult.job;
@@ -1048,25 +1038,14 @@ function attachDownloadListener() {
           return;
         }
 
-        const startResult = await chrome.runtime.sendMessage({
-          type: "START_BULK_JOB",
-          tracks: bulkResult.tracks,
-          playlistTitle: currentPlaylistData.title,
-          playlistMeta: {
-            artworkUrl: currentPlaylistData.artwork_url || null,
-            artist: currentPlaylistData.artist || null,
-            artistImageUrl: currentPlaylistData.artistImageUrl || null,
-            artistUrl: currentPlaylistData.artistUrl || null,
-          },
-          formatPreference: await getFormatPreference(),
-          downloadDestination: currentDownloadDestination,
-        });
-
-        if (!startResult?.success || !startResult.job) {
-          setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-          alert(startResult?.error || "Could not start the background download.");
-          return;
-        }
+        const startResult = await popupDownloadIntent.downloadCollection(
+          bulkResult.tracks,
+          currentPlaylistData,
+          {
+            formatPreference: await getFormatPreference(),
+            downloadDestination: currentDownloadDestination,
+          }
+        );
 
         activeBulkJob = startResult.job;
         renderBulkJobState(startResult.job);
@@ -1086,7 +1065,7 @@ function attachDownloadListener() {
       return;
     }
 
-    if (!trackData.streamUrl && !(trackData.downloadable && trackData.hasDownloadsLeft)) {
+    if (!SCDownloadTrack.canDownload(trackData)) {
       console.error("Cannot obtain stream URL.");
       setDownloadState(false, DOWNLOAD_ERROR_STATUS);
       alert("Error #33: No downloadable stream was found for this track.");
@@ -1098,16 +1077,10 @@ function attachDownloadListener() {
     try {
       const formatPreference =
         trackData.formatPreference || (await getFormatPreference());
-      const result = await chrome.runtime.sendMessage({
-        type: "DOWNLOAD_SINGLE_TRACK",
-        trackData,
+      await popupDownloadIntent.downloadTrack(trackData, {
         formatPreference,
         downloadDestination: currentDownloadDestination,
       });
-
-      if (!result?.success) {
-        throw new Error(result?.error || "Download failed.");
-      }
 
       setDownloadState(false, "Download completed, enjoy");
     } catch (error) {
@@ -1173,79 +1146,32 @@ function setDownloadState(downloading, statusText) {
   downloadStatus.textContent = statusText || DEFAULT_DOWNLOAD_STATUS;
 }
 
-function requestBulkTracks(limit) {
+function requestFromActiveTab(message) {
   return new Promise((resolve) => {
     if (!activeTabId) {
       resolve({ success: false, error: "No active tab." });
       return;
     }
-
-    chrome.tabs.sendMessage(
-      activeTabId,
-      { type: "GET_BULK_TRACKS", limit },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          resolve({
-            success: false,
-            error: chrome.runtime.lastError.message,
-          });
-          return;
-        }
-
-        resolve(response);
-      }
-    );
+    chrome.tabs.sendMessage(activeTabId, message, (response) => {
+      resolve(
+        chrome.runtime.lastError
+          ? { success: false, error: chrome.runtime.lastError.message }
+          : response
+      );
+    });
   });
+}
+
+function requestBulkTracks(limit) {
+  return requestFromActiveTab({ type: "GET_BULK_TRACKS", limit });
 }
 
 function requestBulkSelectionList(total) {
-  return new Promise((resolve) => {
-    if (!activeTabId) {
-      resolve({ success: false, error: "No active tab." });
-      return;
-    }
-
-    chrome.tabs.sendMessage(
-      activeTabId,
-      { type: "GET_BULK_SELECTION_LIST", total },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          resolve({
-            success: false,
-            error: chrome.runtime.lastError.message,
-          });
-          return;
-        }
-
-        resolve(response);
-      }
-    );
-  });
+  return requestFromActiveTab({ type: "GET_BULK_SELECTION_LIST", total });
 }
 
 function requestBulkTracksByIds(ids) {
-  return new Promise((resolve) => {
-    if (!activeTabId) {
-      resolve({ success: false, error: "No active tab." });
-      return;
-    }
-
-    chrome.tabs.sendMessage(
-      activeTabId,
-      { type: "GET_BULK_TRACKS_BY_IDS", ids },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          resolve({
-            success: false,
-            error: chrome.runtime.lastError.message,
-          });
-          return;
-        }
-
-        resolve(response);
-      }
-    );
-  });
+  return requestFromActiveTab({ type: "GET_BULK_TRACKS_BY_IDS", ids });
 }
 
 async function drawWaveform(waveformUrl) {

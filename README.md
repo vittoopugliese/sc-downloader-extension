@@ -19,7 +19,7 @@ This release is a **big one**. What started as a single-track downloader is now 
 - **Likes** ~ your own (`/you/likes`) or any user's public likes page
 - **Background bulk downloads** ~ close the popup or switch tabs; downloads keep running
 - **Low memory usage** ~ at most two tracks in memory at a time (no giant ZIP in RAM)
-- **Configurable batch size** ~ choose how many tracks to grab: `25`, `50`, `100`, `200`, or **All**
+- **Configurable batch size** ~ choose how many tracks to grab: `10`, `25`, `50`, `100`, `150`, `200`, `300`, or **All**
 - **No login required** for most public tracks (OAuth fallback when needed)
 - **Modern AAC HLS streaming** support ~ SoundCloud's current format, handled automatically
 - **SPA-friendly** ~ switch tracks, playlists, or pages without reloading SoundCloud

@@ -30,8 +30,12 @@
       "matches": ["https://soundcloud.com/*"],
       "js": [
         "scripts/format-utils.js",
+        "scripts/soundcloud-http.js",
         "scripts/stream-selector.js",
+        "scripts/download-track.js",
+        "scripts/page-intake.js",
         "scripts/content.js",
+        "scripts/download-intent.js",
         "scripts/inline-button.js"
       ]
     }

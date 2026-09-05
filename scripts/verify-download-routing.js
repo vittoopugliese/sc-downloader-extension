@@ -16,10 +16,14 @@ const context = vm.createContext({
     getCurrent: async () => storedDestination,
   },
   SCStreamSelector: {
-    resolveDownloadSource: async (trackData) => ({
-      streamUrl: "https://example.com/audio.mp3",
-      trackData,
-    }),
+    extractStreamInfo: () => null,
+    getStreamFormatLabel: () => null,
+    getAvailableFormats: () => ({}),
+    shouldPreferOriginal: (track, preference = "auto") =>
+      (preference === "auto" || preference === "original") &&
+      track.downloadable === true &&
+      track.hasDownloadsLeft !== false &&
+      Boolean(track.id),
   },
   chrome: {
     runtime: {
@@ -75,7 +79,15 @@ const context = vm.createContext({
   },
 });
 
-for (const relativePath of ["scripts/format-utils.js", "scripts/bulk-job-manager.js"]) {
+for (const relativePath of [
+  "scripts/format-utils.js",
+  "scripts/soundcloud-http.js",
+  "scripts/download-track.js",
+  "scripts/download-source.js",
+  "scripts/download-destination.js",
+  "scripts/track-download-execution.js",
+  "scripts/bulk-job-manager.js",
+]) {
   const filePath = path.join(root, relativePath);
   vm.runInContext(fs.readFileSync(filePath, "utf8"), context, {
     filename: filePath,
@@ -93,14 +105,13 @@ function assertEqual(actual, expected, label) {
 }
 
 (async () => {
-  evaluate(`BulkJobManager.setStreamDependencies({
-    resolveStreamUrl: async () => ({ url: "https://example.com/audio.mp3" }),
-    resolveOriginalDownload: async () => null,
-    refreshTrackMetadata: async (trackData) => trackData
+  evaluate(`SCDownloadSource.configure({
+    request: async () => ({ ok: true, json: async () => ({ url: "https://example.com/audio.mp3" }) }),
+    getOAuthToken: async () => { throw new Error("No session"); }
   })`);
 
   await evaluate(`BulkJobManager.downloadSingleTrack(
-    { id: 1, artist: "Исполнитель", title: "Песня" },
+    { id: 1, artist: "Исполнитель", title: "Песня", streamUrl: "https://api.test/stream", clientId: "client" },
     "auto",
     { id: "chosen-id", name: "Chosen Music" }
   )`);
@@ -113,7 +124,7 @@ function assertEqual(actual, expected, label) {
 
   offscreenMessages.length = 0;
   await evaluate(`BulkJobManager.downloadSingleTrack(
-    { id: 2, artist: "Artist", title: "Title" },
+    { id: 2, artist: "Artist", title: "Title", streamUrl: "https://api.test/stream", clientId: "client" },
     "auto"
   )`);
   const storedSave = offscreenMessages.find(
@@ -123,7 +134,7 @@ function assertEqual(actual, expected, label) {
 
   storedDestination = null;
   await evaluate(`BulkJobManager.downloadSingleTrack(
-    { id: 3, artist: "Artist", title: "Title" },
+    { id: 3, artist: "Artist", title: "Title", streamUrl: "https://api.test/stream", clientId: "client" },
     "auto"
   )`);
   assertEqual(downloadCalls.length, 1, "Default Downloads fallback");
