@@ -43,6 +43,41 @@ function respond(promise, sendResponse, project = (value) => value) {
   return true;
 }
 
+async function requestTopFrameLoopTrack(tabId, trackUrl) {
+  if (!Number.isInteger(tabId)) {
+    throw new Error("Could not identify the SoundCloud tab.");
+  }
+
+  const response = await new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(
+      tabId,
+      { type: "RESOLVE_LOOP_TRACK_DATA", trackUrl: trackUrl || null },
+      { frameId: 0 },
+      (result) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve(result);
+      }
+    );
+  });
+
+  if (!response?.success || !SCDownloadTrack.canDownload(response.trackData)) {
+    throw new Error(
+      response?.error || "Could not resolve the selected loop track."
+    );
+  }
+  return response.trackData;
+}
+
+async function resolveLoopTrack(request, sender) {
+  if (SCDownloadTrack.canDownload(request.trackData)) {
+    return SCDownloadTrack.migrate(request.trackData);
+  }
+  return requestTopFrameLoopTrack(sender.tab?.id, request.trackUrl);
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   BulkJobManager.recoverRunningJob().catch(() => {});
 });
@@ -146,6 +181,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       request.formatPreference || "auto",
       request.downloadDestination ?? null
     )
+      .then(sendResponse)
+      .catch((error) => sendResponse(errorResponse(error)));
+    return true;
+  }
+
+  if (request.type === "DOWNLOAD_LOOP") {
+    resolveLoopTrack(request, sender)
+      .then((trackData) =>
+        BulkJobManager.downloadLoop(
+          trackData,
+          request.formatPreference || trackData.formatPreference || "auto",
+          request.trimRange,
+          request.downloadDestination ?? null
+        )
+      )
       .then(sendResponse)
       .catch((error) => sendResponse(errorResponse(error)));
     return true;

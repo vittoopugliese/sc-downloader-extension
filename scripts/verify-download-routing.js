@@ -142,6 +142,18 @@ function assertEqual(actual, expected, label) {
   assertEqual(downloadCalls[0].saveAs, false, "Default download must not prompt per file");
   assertEqual(downloadCalls[0].conflictAction, "uniquify", "Duplicates must be preserved");
 
+  offscreenMessages.length = 0;
+  await evaluate(`BulkJobManager.downloadLoop(
+    { id: 4, artist: "Artist", title: "Loop Track", streamUrl: "https://api.test/stream", clientId: "client" },
+    "auto",
+    { startMs: 1500, endMs: 7250, durationMs: 10000 }
+  )`);
+  const loopBuild = offscreenMessages.find(
+    (message) => message.type === "OFFSCREEN_BUILD"
+  );
+  assertEqual(loopBuild.trimRange.startMs, 1500, "Loop start forwarded to builder");
+  assertEqual(loopBuild.trimRange.endMs, 7250, "Loop end forwarded to builder");
+
   console.log("Download routing verification passed.");
 })().catch((error) => {
   console.error(error);

@@ -65,6 +65,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.type === "RESOLVE_LOOP_TRACK_DATA") {
+    const pendingTrack = request.trackUrl
+      ? intake.resolvePlayerTrack(request.trackUrl)
+      : Promise.resolve(intake.getTrack() || intake.extractCurrent());
+    pendingTrack
+      .then((trackData) => {
+        if (!SCDownloadTrack.canDownload(trackData)) {
+          throw new Error("The selected loop track has no downloadable source.");
+        }
+        sendResponse({ success: true, trackData });
+      })
+      .catch((error) =>
+        sendResponse({
+          success: false,
+          error: error?.message || "Could not resolve the selected loop track.",
+        })
+      );
+    return true;
+  }
+
   if (request.type === "GET_BULK_TRACKS") {
     intake
       .resolveBulk(request.limit ?? null)

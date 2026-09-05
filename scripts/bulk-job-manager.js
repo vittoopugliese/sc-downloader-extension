@@ -341,12 +341,13 @@ const destinationHandler = SCDownloadDestination.create({
 const trackDownloadExecution = SCTrackDownloadExecution.create({
   resolveSource: (trackData, formatPreference) =>
     SCDownloadSource.resolve(trackData, formatPreference),
-  buildTrack: ({ buildId, trackData, streamUrl }) =>
+  buildTrack: ({ buildId, trackData, streamUrl, trimRange }) =>
     sendOffscreenMessage({
       type: "OFFSCREEN_BUILD",
       buildId,
       trackData,
       streamUrl,
+      trimRange: trimRange || null,
     }),
   saveOutput: (output) => destinationHandler.save(output),
   revokeBlob: (blobUrl) =>
@@ -636,6 +637,48 @@ const BulkJobManager = {
         trackData,
         formatPreference: formatPreference || "auto",
         destination: resolvedDestination,
+      });
+    } finally {
+      singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);
+      const activeJob = await loadJob().catch(() => null);
+      const hasActiveBulkJob =
+        activeJob && isActiveJobStatus(activeJob.status);
+      if (!hasActiveBulkJob && singleDownloadsInFlight === 0) {
+        await stopKeepalive().catch(() => {});
+        await closeOffscreenDocument().catch(() => {});
+      }
+    }
+  },
+
+  async downloadLoop(
+    trackData,
+    formatPreference = "auto",
+    trimRange,
+    downloadDestination = null
+  ) {
+    await withJobState(async () => {
+      const activeJobBeforeDownload = await loadJob();
+      if (
+        activeJobBeforeDownload &&
+        isActiveJobStatus(activeJobBeforeDownload.status)
+      ) {
+        throw new Error("A bulk download is already in progress.");
+      }
+
+      singleDownloadsInFlight += 1;
+    });
+
+    try {
+      const resolvedDestination = await destinationHandler.resolve(
+        downloadDestination
+      );
+      await startKeepalive();
+      await ensureOffscreenDocument();
+      return await trackDownloadExecution.execute({
+        trackData,
+        formatPreference: formatPreference || "auto",
+        destination: resolvedDestination,
+        trimRange,
       });
     } finally {
       singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);

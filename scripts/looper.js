@@ -1,5 +1,6 @@
 const SCLooper = (() => {
   const BUTTON_ATTRIBUTE = "data-scdl-looper";
+  const DOWNLOAD_ATTRIBUTE = "data-scdl-loop-download";
   const OVERLAY_ATTRIBUTE = "data-scdl-loop-overlay";
   const STATUS_ATTRIBUTE = "data-scdl-looper-debug";
   const STYLES_ID = "scdl-looper-styles";
@@ -32,6 +33,9 @@ const SCLooper = (() => {
   let started = false;
   let lastDebugStatus = null;
   let mediaBridgeRequestId = 0;
+  let isLoopDownloading = false;
+  let downloadResetTimeout = null;
+  let selectionDrag = null;
 
   function setDebugStatus(status) {
     if (status === lastDebugStatus) return;
@@ -463,6 +467,46 @@ const SCLooper = (() => {
         height: 24px;
         pointer-events: none;
       }
+      [${DOWNLOAD_ATTRIBUTE}][hidden] {
+        display: none !important;
+      }
+      [${DOWNLOAD_ATTRIBUTE}] {
+        position: relative;
+        color: #ff5500 !important;
+      }
+      [${DOWNLOAD_ATTRIBUTE}] .scdl-loop-download-icon {
+        display: block;
+        width: 22px;
+        height: 22px;
+        object-fit: contain;
+        pointer-events: none;
+        filter: invert(42%) sepia(99%) saturate(3297%) hue-rotate(359deg)
+          brightness(101%) contrast(106%);
+      }
+      [${DOWNLOAD_ATTRIBUTE}].scdl-loop-download-loading {
+        cursor: wait;
+        opacity: 0.65;
+      }
+      [${DOWNLOAD_ATTRIBUTE}].scdl-loop-download-loading
+        .scdl-loop-download-icon {
+        visibility: hidden;
+      }
+      [${DOWNLOAD_ATTRIBUTE}].scdl-loop-download-loading::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        width: 16px;
+        height: 16px;
+        margin: auto;
+        border: 2px solid rgba(255, 85, 0, 0.28);
+        border-top-color: #ff5500;
+        border-radius: 50%;
+        box-sizing: border-box;
+        animation: scdl-loop-spin 0.8s linear infinite;
+      }
+      @keyframes scdl-loop-spin {
+        to { transform: rotate(360deg); }
+      }
       [${OVERLAY_ATTRIBUTE}] {
         position: absolute;
         inset: 0;
@@ -486,8 +530,47 @@ const SCLooper = (() => {
         border-bottom: 1px solid rgba(255, 85, 0, 0.9);
         box-sizing: border-box;
       }
+      .scdl-loop-selection-drag {
+        position: absolute;
+        z-index: 1;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 24px;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        outline: 0;
+        color: #fff;
+        background: transparent;
+        cursor: grab;
+        touch-action: none;
+        pointer-events: auto;
+      }
+      .scdl-loop-selection-drag::after {
+        content: "";
+        position: absolute;
+        top: 6px;
+        left: 50%;
+        width: 22px;
+        height: 3px;
+        transform: translateX(-50%);
+        border-top: 1px solid rgba(255, 255, 255, 0.9);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.65);
+        opacity: 0.75;
+      }
+      .scdl-loop-selection-drag:hover::after,
+      .scdl-loop-selection-drag:focus-visible::after,
+      .scdl-loop-selection-drag.scdl-loop-dragging::after {
+        opacity: 1;
+      }
+      .scdl-loop-selection-drag.scdl-loop-dragging {
+        cursor: grabbing;
+      }
       .scdl-loop-marker {
         position: absolute;
+        z-index: 2;
         top: 0;
         bottom: 0;
         width: 18px;
@@ -610,6 +693,41 @@ const SCLooper = (() => {
     button.setAttribute("aria-disabled", String(!available && !active));
   }
 
+  function setDownloadButtonState(button, state = "idle", detail = "") {
+    if (!button) return;
+    const labels = {
+      idle: "Descargar loop",
+      loading: "Preparando loop...",
+      success: "Loop descargado",
+      error: "No se pudo descargar el loop. Reintentar",
+    };
+    button.classList.toggle(
+      "scdl-loop-download-loading",
+      state === "loading"
+    );
+    button.dataset.scdlLoopDownloadState = state;
+    button.disabled = state === "loading";
+    button.hidden = !range;
+    button.title = detail || labels[state] || labels.idle;
+    button.setAttribute("aria-label", button.title);
+  }
+
+  function createDownloadButton(menuButton) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = menuButton.className;
+    button.setAttribute(DOWNLOAD_ATTRIBUTE, "true");
+    const icon = document.createElement("img");
+    icon.className = "scdl-loop-download-icon";
+    icon.src = chrome.runtime.getURL("assets/download.svg");
+    icon.alt = "";
+    icon.draggable = false;
+    button.appendChild(icon);
+    button.addEventListener("click", handleDownloadClick);
+    setDownloadButtonState(button);
+    return button;
+  }
+
   function formatTime(timeMs) {
     const totalMs = Math.max(0, Math.round(timeMs));
     const minutes = Math.floor(totalMs / 60000);
@@ -637,6 +755,20 @@ const SCLooper = (() => {
     return element;
   }
 
+  function createSelectionDragHandle() {
+    const element = document.createElement("button");
+    element.type = "button";
+    element.className = "scdl-loop-selection-drag";
+    element.setAttribute("aria-label", "Mover selección completa del loop");
+    element.addEventListener("pointerdown", handleSelectionPointerDown);
+    element.addEventListener("pointermove", handleSelectionPointerMove);
+    element.addEventListener("pointerup", handleSelectionPointerEnd);
+    element.addEventListener("pointercancel", handleSelectionPointerEnd);
+    element.addEventListener("keydown", handleSelectionKeyDown);
+    element.addEventListener("click", stopMarkerEvent);
+    return element;
+  }
+
   function createOverlay() {
     const overlay = document.createElement("div");
     overlay.setAttribute(OVERLAY_ATTRIBUTE, "true");
@@ -644,6 +776,7 @@ const SCLooper = (() => {
     before.className = "scdl-loop-dim scdl-loop-before";
     const selection = document.createElement("div");
     selection.className = "scdl-loop-selection";
+    selection.appendChild(createSelectionDragHandle());
     const after = document.createElement("div");
     after.className = "scdl-loop-dim scdl-loop-after";
     overlay.append(
@@ -667,6 +800,11 @@ const SCLooper = (() => {
     before.style.width = `${start}%`;
     selection.style.left = `${start}%`;
     selection.style.width = `${end - start}%`;
+    const dragHandle = selection.querySelector(".scdl-loop-selection-drag");
+    dragHandle?.setAttribute(
+      "aria-valuetext",
+      `${formatTime(range.startMs)} a ${formatTime(range.endMs)}`
+    );
     after.style.left = `${end}%`;
     after.style.right = "0";
 
@@ -693,10 +831,13 @@ const SCLooper = (() => {
 
   function removeView() {
     if (!view) return;
+    selectionDrag = null;
     resizeObserver?.disconnect();
     resizeObserver = null;
     view.button?.removeEventListener("click", handleButtonClick);
+    view.downloadButton?.removeEventListener("click", handleDownloadClick);
     view.button?.remove();
+    view.downloadButton?.remove();
     view.overlay?.remove();
     restoreWrapperPosition(view);
     view = null;
@@ -707,16 +848,20 @@ const SCLooper = (() => {
     injectStyles();
 
     const button = createButton(target.menuButton);
+    const downloadButton = createDownloadButton(target.menuButton);
     target.menuButton.parentElement.insertBefore(button, target.menuButton);
+    target.menuButton.parentElement.insertBefore(downloadButton, target.menuButton);
     view = {
       ...target,
       button,
+      downloadButton,
       overlay: null,
       pageUrl: window.location.href,
     };
 
     if (range) mountOverlay();
     updateButtonAvailability();
+    setDownloadButtonState(downloadButton, isLoopDownloading ? "loading" : "idle");
     setDebugStatus("mounted");
   }
 
@@ -743,6 +888,10 @@ const SCLooper = (() => {
     if (!view?.button) return;
     if (range) {
       setButtonState(view.button, true, true);
+      setDownloadButtonState(
+        view.downloadButton,
+        isLoopDownloading ? "loading" : "idle"
+      );
       return;
     }
     if (view.durationMs === null) {
@@ -753,11 +902,161 @@ const SCLooper = (() => {
     const available = probe.isAvailable();
     probe.destroy();
     setButtonState(view.button, false, available);
+    setDownloadButtonState(view.downloadButton);
+  }
+
+  function identityUrl(identity) {
+    return typeof identity === "string" && identity.startsWith("url:")
+      ? normalizeUrl(identity.slice(4))
+      : null;
+  }
+
+  async function resolveLoopTrackData(identity) {
+    const expectedUrl = identityUrl(identity);
+    const currentTrack = window.SCDL?.getTrackData?.() || null;
+    const currentUrl = normalizeUrl(
+      currentTrack?.permalink || currentTrack?.pageUrl
+    );
+
+    if (currentTrack && (!expectedUrl || currentUrl === expectedUrl)) {
+      return currentTrack;
+    }
+
+    if (
+      expectedUrl &&
+      typeof window.SCDL?.resolvePlayerTrackData === "function"
+    ) {
+      return window.SCDL.resolvePlayerTrackData(expectedUrl);
+    }
+
+    throw new Error("No se pudo identificar el track activo.");
+  }
+
+  async function handleDownloadClick(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!range || isLoopDownloading) return;
+
+    const button = event.currentTarget;
+    const trimRange = {
+      startMs: range.startMs,
+      endMs: range.endMs,
+      durationMs: range.durationMs,
+    };
+    const trackIdentity = initialTrackIdentity;
+    isLoopDownloading = true;
+    if (downloadResetTimeout) clearTimeout(downloadResetTimeout);
+    setDownloadButtonState(button, "loading");
+
+    try {
+      let trackData = null;
+      try {
+        trackData = await resolveLoopTrackData(trackIdentity);
+      } catch {
+        // The looper can live in SoundCloud's player frame. The background
+        // asks the top-frame intake for track data when it is unavailable here.
+      }
+      const result = await chrome.runtime.sendMessage({
+        type: "DOWNLOAD_LOOP",
+        trackData,
+        trackUrl: identityUrl(trackIdentity),
+        formatPreference: trackData?.formatPreference || "auto",
+        trimRange,
+      });
+      if (!result?.success) {
+        throw new Error(result?.error || "No se pudo descargar el loop.");
+      }
+      setDownloadButtonState(button, "success");
+      downloadResetTimeout = setTimeout(() => {
+        downloadResetTimeout = null;
+        if (button.isConnected) setDownloadButtonState(button);
+      }, 2500);
+    } catch (error) {
+      console.error("SC Downloader loop download error:", error);
+      setDownloadButtonState(
+        button,
+        "error",
+        error?.message || "No se pudo descargar el loop."
+      );
+    } finally {
+      isLoopDownloading = false;
+      if (
+        button.isConnected &&
+        button.dataset.scdlLoopDownloadState === "loading"
+      ) {
+        setDownloadButtonState(button);
+      }
+    }
   }
 
   function stopMarkerEvent(event) {
     event.preventDefault();
     event.stopPropagation();
+  }
+
+  function updateSelectionFromPointer(clientX) {
+    if (!selectionDrag || !range || !view) return;
+    const rect = view.waveform.getBoundingClientRect();
+    if (!Number.isFinite(rect.width) || rect.width <= 0) return;
+    const deltaMs =
+      ((clientX - selectionDrag.startClientX) / rect.width) *
+      selectionDrag.initialRange.durationMs;
+    range = SCLooperCore.moveRange(selectionDrag.initialRange, deltaMs);
+    updateOverlay();
+  }
+
+  function handleSelectionPointerDown(event) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    stopMarkerEvent(event);
+    selectionDrag = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      initialRange: { ...range },
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.classList.add("scdl-loop-dragging");
+  }
+
+  function handleSelectionPointerMove(event) {
+    if (
+      !selectionDrag ||
+      selectionDrag.pointerId !== event.pointerId ||
+      !event.currentTarget.hasPointerCapture(event.pointerId)
+    ) {
+      return;
+    }
+    stopMarkerEvent(event);
+    updateSelectionFromPointer(event.clientX);
+  }
+
+  function handleSelectionPointerEnd(event) {
+    if (
+      !selectionDrag ||
+      selectionDrag.pointerId !== event.pointerId ||
+      !event.currentTarget.hasPointerCapture(event.pointerId)
+    ) {
+      return;
+    }
+    stopMarkerEvent(event);
+    if (event.type !== "pointercancel") {
+      updateSelectionFromPointer(event.clientX);
+    }
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    event.currentTarget.classList.remove("scdl-loop-dragging");
+    selectionDrag = null;
+    seekIfOutsideRange();
+  }
+
+  function handleSelectionKeyDown(event) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    stopMarkerEvent(event);
+    const amount = event.shiftKey ? 1000 : 100;
+    range = SCLooperCore.moveRange(
+      range,
+      event.key === "ArrowLeft" ? -amount : amount
+    );
+    updateOverlay();
+    seekIfOutsideRange();
   }
 
   function updateMarkerFromPointer(marker, clientX) {
@@ -920,6 +1219,7 @@ const SCLooper = (() => {
     document.addEventListener("keydown", handleDocumentKeyDown, true);
     mountOverlay();
     setButtonState(view.button, true, true);
+    setDownloadButtonState(view.downloadButton);
     frameId = requestAnimationFrame(loopFrame);
     return true;
   }
@@ -955,7 +1255,7 @@ const SCLooper = (() => {
     removeView();
 
     for (const node of document.querySelectorAll(
-      `[${BUTTON_ATTRIBUTE}], [${OVERLAY_ATTRIBUTE}]`
+      `[${BUTTON_ATTRIBUTE}], [${DOWNLOAD_ATTRIBUTE}], [${OVERLAY_ATTRIBUTE}]`
     )) {
       node.remove();
     }

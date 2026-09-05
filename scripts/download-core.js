@@ -221,7 +221,155 @@ const SCDownload = (() => {
     return combined;
   }
 
-  async function buildTrackBlob(streamUrl, trackData, onProgress, signal) {
+  function normalizeTrimRange(trimRange) {
+    if (!trimRange) return null;
+
+    const startMs = Number(trimRange.startMs);
+    const endMs = Number(trimRange.endMs);
+    if (
+      !Number.isFinite(startMs) ||
+      !Number.isFinite(endMs) ||
+      startMs < 0 ||
+      endMs <= startMs
+    ) {
+      throw new Error("The selected loop range is invalid.");
+    }
+
+    return { startMs, endMs };
+  }
+
+  function throwIfAborted(signal) {
+    if (!signal?.aborted) return;
+    const error = new Error("Download aborted.");
+    error.name = "AbortError";
+    throw error;
+  }
+
+  function writeAscii(view, offset, value) {
+    for (let index = 0; index < value.length; index += 1) {
+      view.setUint8(offset + index, value.charCodeAt(index));
+    }
+  }
+
+  function encodeWavSegment(audioBuffer, trimRange, signal) {
+    const sampleRate = audioBuffer.sampleRate;
+    const channelCount = Math.min(Math.max(audioBuffer.numberOfChannels, 1), 2);
+    const startFrame = Math.max(
+      0,
+      Math.floor((trimRange.startMs / 1000) * sampleRate)
+    );
+    const endFrame = Math.min(
+      audioBuffer.length,
+      Math.ceil((trimRange.endMs / 1000) * sampleRate)
+    );
+    const frameCount = endFrame - startFrame;
+
+    if (frameCount <= 0) {
+      throw new Error("The selected loop starts after the available audio ends.");
+    }
+
+    const bytesPerSample = 2;
+    const dataLength = frameCount * channelCount * bytesPerSample;
+    const output = new ArrayBuffer(44 + dataLength);
+    const view = new DataView(output);
+
+    writeAscii(view, 0, "RIFF");
+    view.setUint32(4, 36 + dataLength, true);
+    writeAscii(view, 8, "WAVE");
+    writeAscii(view, 12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, channelCount, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * channelCount * bytesPerSample, true);
+    view.setUint16(32, channelCount * bytesPerSample, true);
+    view.setUint16(34, 16, true);
+    writeAscii(view, 36, "data");
+    view.setUint32(40, dataLength, true);
+
+    const channels = Array.from({ length: channelCount }, (_, index) =>
+      audioBuffer.getChannelData(index)
+    );
+    let outputOffset = 44;
+    for (let frame = 0; frame < frameCount; frame += 1) {
+      if (frame % sampleRate === 0) throwIfAborted(signal);
+      for (let channel = 0; channel < channelCount; channel += 1) {
+        const sample = Math.max(
+          -1,
+          Math.min(1, channels[channel][startFrame + frame] || 0)
+        );
+        view.setInt16(
+          outputOffset,
+          sample < 0 ? sample * 0x8000 : sample * 0x7fff,
+          true
+        );
+        outputOffset += bytesPerSample;
+      }
+    }
+
+    return new Uint8Array(output);
+  }
+
+  async function finalizeLoopBlob(
+    trackData,
+    buffer,
+    trimRange,
+    onProgress,
+    signal
+  ) {
+    throwIfAborted(signal);
+    const AudioContextConstructor =
+      globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (typeof AudioContextConstructor !== "function") {
+      throw new Error("This browser cannot decode audio to export the loop.");
+    }
+
+    onProgress?.("Decoding audio...");
+    const audioContext = new AudioContextConstructor();
+    try {
+      const sourceBuffer =
+        buffer instanceof ArrayBuffer
+          ? buffer.slice(0)
+          : buffer.buffer.slice(
+              buffer.byteOffset,
+              buffer.byteOffset + buffer.byteLength
+            );
+      const decoded = await audioContext.decodeAudioData(sourceBuffer);
+      throwIfAborted(signal);
+      onProgress?.("Cutting selected loop...");
+      const wavBytes = encodeWavSegment(decoded, trimRange, signal);
+      const loopTrack = {
+        ...trackData,
+        title: `${trackData?.title || "Untitled"} (loop)`,
+      };
+      return {
+        blob: new Blob([wavBytes], { type: "audio/wav" }),
+        fileName: sanitizeFilename(loopTrack, "wav"),
+      };
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      throw new Error(
+        error?.message === "The selected loop starts after the available audio ends."
+          ? error.message
+          : "The downloaded audio could not be decoded to export this loop."
+      );
+    } finally {
+      try {
+        await audioContext.close?.();
+      } catch {
+        // Closing the decoder is best-effort after the output has been built.
+      }
+    }
+  }
+
+  async function buildTrackBlob(
+    streamUrl,
+    trackData,
+    onProgress,
+    signal,
+    trimRange = null
+  ) {
+    const normalizedTrimRange = normalizeTrimRange(trimRange);
     const isHlsStream =
       trackData.streamProtocol === "hls" || streamUrl.includes(".m3u8");
     const isDirectDownload =
@@ -232,6 +380,15 @@ const SCDownload = (() => {
     if (isDirectDownload) {
       onProgress?.("Downloading file...");
       const buffer = await fetchBufferOrThrow(streamUrl, "File download", signal);
+      if (normalizedTrimRange) {
+        return finalizeLoopBlob(
+          trackData,
+          buffer,
+          normalizedTrimRange,
+          onProgress,
+          signal
+        );
+      }
       return finalizeTrackBlob(trackData, buffer, onProgress, signal);
     }
 
@@ -264,11 +421,29 @@ const SCDownload = (() => {
 
       onProgress?.("Preparing file...");
       const combined = combineChunks(chunks);
+      if (normalizedTrimRange) {
+        return finalizeLoopBlob(
+          trackData,
+          combined,
+          normalizedTrimRange,
+          onProgress,
+          signal
+        );
+      }
       return finalizeTrackBlob(trackData, combined, onProgress, signal);
     }
 
     onProgress?.("Downloading file...");
     const buffer = await fetchBufferOrThrow(streamUrl, "File download", signal);
+    if (normalizedTrimRange) {
+      return finalizeLoopBlob(
+        trackData,
+        buffer,
+        normalizedTrimRange,
+        onProgress,
+        signal
+      );
+    }
     return finalizeTrackBlob(trackData, buffer, onProgress, signal);
   }
 

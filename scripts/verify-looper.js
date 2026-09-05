@@ -45,6 +45,26 @@ assert.equal(core.moveMarker(base, "end", 9000).endMs, 5000);
 assert.equal(core.normalizeRange({ startMs: 4900, endMs: 4901, durationMs: 5000 }).endMs, 5000);
 assert.equal(core.normalizeRange({ startMs: 4900, endMs: 4901, durationMs: 5000 }).startMs, 4750);
 
+assert.deepEqual(plain(core.moveRange(base, 750)), {
+  startMs: 1750,
+  endMs: 3750,
+  durationMs: 5000,
+});
+assert.deepEqual(plain(core.moveRange(base, -5000)), {
+  startMs: 0,
+  endMs: 2000,
+  durationMs: 5000,
+});
+assert.deepEqual(plain(core.moveRange(base, 5000)), {
+  startMs: 3000,
+  endMs: 5000,
+  durationMs: 5000,
+});
+assert.equal(
+  core.moveRange(base, 5000).endMs - core.moveRange(base, 5000).startMs,
+  base.endMs - base.startMs
+);
+
 assert.equal(core.positionToTime(50, 0, 100, 10000), 5000);
 assert.equal(core.positionToTime(-50, 0, 100, 10000), 0);
 assert.equal(core.positionToTime(150, 0, 100, 10000), 10000);

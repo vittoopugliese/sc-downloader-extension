@@ -84,7 +84,8 @@ async function handleBuild(message, sendResponse) {
       message.streamUrl,
       message.trackData,
       reportProgress,
-      controller.signal
+      controller.signal,
+      message.trimRange || null
     );
     const blobUrl = URL.createObjectURL(blob);
     sendResponse({ success: true, blobUrl, fileName });

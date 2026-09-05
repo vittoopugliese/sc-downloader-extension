@@ -90,6 +90,24 @@ const SCLooperCore = (() => {
     return normalized;
   }
 
+  function moveRange(range, deltaMs) {
+    const normalized = normalizeRange(range);
+    if (!normalized || !isFiniteNumber(deltaMs)) return normalized;
+
+    const spanMs = normalized.endMs - normalized.startMs;
+    const startMs = clamp(
+      normalized.startMs + deltaMs,
+      0,
+      normalized.durationMs - spanMs
+    );
+
+    return {
+      ...normalized,
+      startMs,
+      endMs: startMs + spanMs,
+    };
+  }
+
   function positionToTime(clientX, left, width, durationMs) {
     const duration = normalizeDuration(durationMs);
     if (
@@ -126,6 +144,7 @@ const SCLooperCore = (() => {
     normalizeRange,
     createInitialRange,
     moveMarker,
+    moveRange,
     positionToTime,
     timeToPercent,
     getSeekTarget,
