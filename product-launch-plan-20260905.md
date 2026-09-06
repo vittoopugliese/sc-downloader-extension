@@ -106,7 +106,7 @@ Cada entrega termina con diff acotado, verificadores relevantes y prueba manual.
 - Contenido: explicación de descargar desde popup/player; seleccionar playlist/perfil; elegir carpeta; significado de Auto/original/formatos; estado de tareas y errores; soporte y reseña; explicación de Looper. Sin prometer calidad original que el stream no tenga.
 - Reutilizar controles existentes de carpeta. Licencia/restauración se incorporan en E6; no mostrar controles sin funcionalidad.
 - Fuera de SoundCloud: explicación y enlace útil, sin promocionar el pago como arreglo de una página incompatible.
-- Guía inicial descartable al abrir por primera vez; no abrir pestañas en cada actualización.
+- No mostrar guía inicial: el flujo existente se considera suficientemente intuitivo. La explicación equivalente vive solamente en Help, accesible desde el engranaje; no abrir pestañas en actualizaciones.
 - Extraer **todos** los textos visibles existentes: títulos, labels accesibles, tooltips, estados, errores, selección, jobs, formatos explicados y textos del looper. No dejar una migración parcial donde solo lo nuevo se traduzca.
 - Usar el mecanismo estándar `chrome.i18n` con `_locales/<locale>/messages.json`: un archivo central por idioma y claves semánticas compartidas por popup/content/looper. `default_locale` inglés en manifest. No duplicar diccionarios dentro de cada handler.
 - Resolver idioma automáticamente desde Chrome; fallback inglés para clave o locale desconocidos. No agregar selector manual de idioma en E1.
@@ -331,7 +331,7 @@ La siguiente tabla es la frontera entre lo decidido y lo que se difiere. Una ses
 | D06 | cerrada                        | Landing muestra todas las reseñas originales de `reviews.txt`, sin traducir, en JSON inline dentro del script, y CTA para dejar review en Web Store   |
 | D07 | cerrada                        | Encuesta web voluntaria al desinstalar con motivos, comentario/email opcionales y recepción privada                                                   |
 | D08 | cerrada                        | Idioma automático del navegador; cobertura de todo copy actual y nuevo; archivos de locale centralizados con fallback inglés                          |
-| D09 | abierta para inicio de E1      | Confirmar locales de lanzamiento. Default propuesto: EN, ES, RU, PT-BR y DE                                                                           |
+| D09 | cerrada                        | Locales de lanzamiento: EN, ES rioplatense, RU, PT-BR y DE; idioma automático de Chrome con fallback inglés                                           |
 | D10 | diferida a E5A                 | Prueba local sin cuenta o prueba registrada por email/backend                                                                                         |
 | D11 | diferida a E5A                 | Antes del primer export: limitar prueba a un track/sesión o permitir Looper hasta que se guarde el WAV. Default propuesto: un track, sin timer oculto |
 | D12 | diferida a E5A                 | País/entidad que vende y cuentas comerciales ya habilitadas; nunca pedir credenciales en chat/repo                                                    |
@@ -356,7 +356,7 @@ Presentarlas juntas al iniciar esa etapa; sus respuestas no son necesarias para 
 8. Si hay USDT, ¿qué red(es) y wallet/exchange de recepción querés evaluar?
 9. ¿Looper llegó alguna vez a usuarios públicos del Store? Si sí, ¿quién conserva acceso?
 
-Al comenzar E1 solo confirmar D09 si el usuario quiere cambiar el set propuesto. Si no lo cambia, usar EN/ES/RU/PT-BR/DE y dejar traducciones listas para revisión humana antes de publicación.
+E1 no incluye onboarding. Usar EN/ES/RU/PT-BR/DE, con español rioplatense, y dejar las traducciones listas para revisión humana antes de publicación.
 
 ## Orden de commits y gates de publicación
 

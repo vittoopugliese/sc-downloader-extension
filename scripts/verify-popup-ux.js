@@ -8,6 +8,30 @@ const buttonTags = [...popup.matchAll(/<button\b[^>]*>/g)].map(
   ([tag]) => tag
 );
 
+assert(
+  /id="helpBtn"[^>]*data-i18n-aria-label="settings_and_help"/.test(popup) &&
+    /id="helpPanel"[^>]*role="dialog"/.test(popup) &&
+    /id="helpBackBtn"/.test(popup),
+  "The popup must provide an internal, keyboard-accessible Help view."
+);
+assert(
+  /\.action-row\s*\{[^}]*position:\s*relative/s.test(popup) &&
+    /#downloadBtn\s*\{[^}]*left:\s*50%;[^}]*translateX\(-50%\)/s.test(popup) &&
+    /id="looperActionSlot"[^>]*aria-hidden="true"/.test(popup),
+  "Download must remain absolutely centered with a hidden reserved Looper slot."
+);
+assert(
+  /function openHelp\(\)[\s\S]*helpPanel\.classList\.add\("is-visible"\)/.test(
+    popupScript
+  ) &&
+    /function closeHelp\(\)[\s\S]*selectionViewport\.scrollTop = helpSelectionScrollTop/.test(
+      popupScript
+    ) &&
+    /event\.key === "Escape"/.test(popupScript) &&
+    /function trapHelpFocus\(event\)/.test(popupScript),
+  "Help must preserve selection scroll, trap keyboard focus, and close with Escape."
+);
+
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message);

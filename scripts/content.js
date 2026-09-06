@@ -1,4 +1,5 @@
 let lastUrl = location.href;
+const t = globalThis.SCDLI18n?.t || ((key) => key);
 let observerRegistered = false;
 let urlCheckInterval = null;
 let urlChangeTimeout = null;
@@ -72,14 +73,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     pendingTrack
       .then((trackData) => {
         if (!SCDownloadTrack.canDownload(trackData)) {
-          throw new Error("The selected loop track has no downloadable source.");
+          throw new Error(t("selected_loop_no_source"));
         }
         sendResponse({ success: true, trackData });
       })
       .catch((error) =>
         sendResponse({
           success: false,
-          error: error?.message || "Could not resolve the selected loop track.",
+          error: error?.message || t("resolve_selected_loop_failed"),
         })
       );
     return true;
@@ -114,7 +115,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (!tracks.length) {
           sendResponse({
             success: false,
-            error: "No matching tracks were found for the current selection.",
+            error: t("no_matching_tracks"),
           });
           return;
         }

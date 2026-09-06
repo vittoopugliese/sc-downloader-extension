@@ -105,7 +105,7 @@ const download = vm.runInContext("SCDownload", context);
     path.resolve(__dirname, "looper.js"),
     "utf8"
   );
-  assert.match(looperSource, /Descargar loop/);
+  assert.match(looperSource, /t\("looper_download"\)/);
   assert.match(looperSource, /type: "DOWNLOAD_LOOP"/);
 
   console.log("Loop download verification passed.");

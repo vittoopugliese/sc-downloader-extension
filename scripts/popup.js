@@ -98,6 +98,23 @@ function closeHelp() {
   helpReturnFocus = null;
 }
 
+function trapHelpFocus(event) {
+  if (event.key !== "Tab" || !helpPanel.classList.contains("is-visible")) return;
+  const focusable = [...helpPanel.querySelectorAll(
+    'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+  )];
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (!first || !last) return;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   SCDLI18n.localizeDocument();
   await loadDownloadDestination();
@@ -109,6 +126,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       event.preventDefault();
       closeHelp();
     }
+    trapHelpFocus(event);
   });
 
   retryBtn.addEventListener("click", () => {

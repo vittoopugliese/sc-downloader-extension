@@ -1,4 +1,5 @@
 importScripts(
+  "i18n.js",
   "format-utils.js",
   "directory-storage.js",
   "soundcloud-http.js",
@@ -9,6 +10,8 @@ importScripts(
   "track-download-execution.js",
   "bulk-job-manager.js"
 );
+
+const t = globalThis.SCDLI18n?.t || ((key) => key);
 
 function getOAuthToken() {
   return new Promise((resolve, reject) => {
@@ -27,7 +30,7 @@ const downloadSource = SCDownloadSource.configure({
   getOAuthToken,
 });
 
-function errorResponse(error, fallback = "Download failed.") {
+function errorResponse(error, fallback = t("download_failed")) {
   return {
     success: false,
     error: error?.message || fallback,
@@ -45,7 +48,7 @@ function respond(promise, sendResponse, project = (value) => value) {
 
 async function requestTopFrameLoopTrack(tabId, trackUrl) {
   if (!Number.isInteger(tabId)) {
-    throw new Error("Could not identify the SoundCloud tab.");
+    throw new Error(t("soundcloud_tab_not_found"));
   }
 
   const response = await new Promise((resolve, reject) => {
@@ -65,7 +68,7 @@ async function requestTopFrameLoopTrack(tabId, trackUrl) {
 
   if (!response?.success || !SCDownloadTrack.canDownload(response.trackData)) {
     throw new Error(
-      response?.error || "Could not resolve the selected loop track."
+      response?.error || t("resolve_selected_loop_failed")
     );
   }
   return response.trackData;
@@ -110,7 +113,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (typeof chrome.action.openPopup !== "function") {
       sendResponse({
         success: false,
-        error: "This browser cannot open the extension popup automatically.",
+        error: t("open_popup_unsupported"),
       });
       return false;
     }
