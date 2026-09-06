@@ -526,8 +526,6 @@ const SCLooper = (() => {
       }
       .scdl-loop-selection {
         background: rgba(255, 85, 0, 0.28);
-        border-top: 1px solid rgba(255, 85, 0, 0.9);
-        border-bottom: 1px solid rgba(255, 85, 0, 0.9);
         box-sizing: border-box;
       }
       .scdl-loop-selection-drag {
@@ -558,12 +556,12 @@ const SCLooper = (() => {
         transform: translateX(-50%);
         border-top: 1px solid rgba(255, 255, 255, 0.9);
         border-bottom: 1px solid rgba(255, 255, 255, 0.65);
-        opacity: 0.75;
+        opacity: 0.72;
       }
       .scdl-loop-selection-drag:hover::after,
       .scdl-loop-selection-drag:focus-visible::after,
       .scdl-loop-selection-drag.scdl-loop-dragging::after {
-        opacity: 1;
+        opacity: 0.72;
       }
       .scdl-loop-selection-drag.scdl-loop-dragging {
         cursor: grabbing;
@@ -592,23 +590,23 @@ const SCLooper = (() => {
         left: 50%;
         top: 0;
         bottom: 0;
-        width: 2px;
+        width: 1px;
         transform: translateX(-50%);
         background: #ff5500;
-        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.24);
       }
       .scdl-loop-marker-label {
         position: absolute;
         z-index: 2;
-        top: 4px;
+        top: 28px;
         left: 50%;
-        min-width: 18px;
-        padding: 2px 4px;
+        width: 22px;
+        height: 22px;
+        padding: 0;
         transform: translateX(-50%);
-        border-radius: 3px;
+        border-radius: 50%;
         color: #fff;
         background: #ff5500;
-        font: 700 11px/14px Arial, sans-serif;
+        font: 700 8px/22px Arial, sans-serif;
         text-align: center;
         box-sizing: border-box;
       }
