@@ -124,7 +124,7 @@ Orden interno de E1:
 5. Crear Help view y un pequeño controlador de vistas (`main`, `selection`, `help`) que guarde vista previa, `selectionViewport.scrollTop` y elemento de foco. Los listeners de progreso siguen vivos. **Terminado:** abrir/cerrar Help durante un job actualiza el estado y devuelve exactamente al contexto previo.
 6. Ejecutar verificadores dirigidos y matriz manual. **Terminado:** criterios de E1 completos y diff limitado a i18n/help/layout/tests; sin CTA comercial funcional ni código de licencia.
 
-**Aceptación:** Download continúa centrado y dominante; ayuda accesible por teclado en track/colección/selección/error; volver no reinicia descargas ni preferencias; el selector conserva scroll y checks; todas las strings visibles tienen clave/locale/fallback; sin recortes en ruso, alemán o estados de progreso.
+**Aceptación:** Download continúa centrado y dominante; ayuda accesible por teclado en track/colección/selección/error; volver no reinicia descargas ni preferencias; el selector conserva scroll y checks; todas las strings visibles tienen clave/locale/fallback; sin recortes en ruso, alemán o estados de progreso. **Validación manual realizada por el usuario el 2026-09-06:** Chrome real, comportamiento correcto. Queda fuera del código configurar el buzón de soporte antes de convertir su aviso temporal en un enlace `mailto:`.
 
 ### E2 — P03: entrada comercial y estados de UI (S/M)
 
@@ -340,6 +340,7 @@ La siguiente tabla es la frontera entre lo decidido y lo que se difiere. Una ses
 | D15 | diferida a E5A                 | Recuperación, dispositivos (default: 3), reemplazo de activaciones, gracia offline (default: 30 días), refunds y updates incluidos                    |
 | D16 | diferida a E5A                 | Redes USDT y wallet/exchange receptor si se ofrece crypto; guardar únicamente nombres/redes, nunca claves/seed                                        |
 | D17 | abierta antes de publicar gate | Confirmar si una versión con Looper ya estuvo disponible en Web Store o solo local/testers; definir transición para acceso existente                  |
+| D18 | diferida manualmente           | Configurar un buzón de soporte no personal en `vpugliese.online` y reemplazar el aviso temporal de Help por su enlace `mailto:` antes de publicar   |
 
 
 ### Preguntas que debe responder el usuario cuando llegue E5A
