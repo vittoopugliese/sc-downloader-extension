@@ -425,9 +425,10 @@ const SCLooper = (() => {
       getTrackIdentity() {
         const permalink = currentPlayerPermalink();
         if (permalink) return `url:${permalink}`;
+        const pagePermalink = currentPagePermalink();
+        if (isTrackPage() && pagePermalink) return `url:${pagePermalink}`;
         const source = mediaSource(resolve());
         if (source) return `media:${source}`;
-        const pagePermalink = currentPagePermalink();
         return pagePermalink ? `url:${pagePermalink}` : null;
       },
       subscribe(listener) {
@@ -602,10 +603,10 @@ const SCLooper = (() => {
       .scdl-loop-marker-label {
         position: absolute;
         z-index: 2;
-        top: 24px;
+        top: 50px;
         left: 50%;
-        width: 14px;
-        height: 14px;
+        width: 10px;
+        height: 10px;
         padding: 0;
         transform: translateX(-50%);
         border-radius: 50%;
