@@ -89,6 +89,30 @@
     return runStoreRequest("readonly", (store) => store.get(directoryId));
   }
 
+  async function ensurePermission(directoryId) {
+    const directoryHandle = await getHandle(directoryId);
+    if (!directoryHandle) {
+      throw new Error("The selected folder is no longer available. Choose it again in the popup.");
+    }
+
+    const options = { mode: "readwrite" };
+    let permission = await directoryHandle.queryPermission(options);
+    if (permission === "granted") {
+      return true;
+    }
+
+    if (typeof directoryHandle.requestPermission !== "function") {
+      throw new Error("Folder access expired. Open the popup and choose the folder again.");
+    }
+
+    permission = await directoryHandle.requestPermission(options);
+    if (permission !== "granted") {
+      throw new Error("Folder access was not granted. Choose the folder again to download.");
+    }
+
+    return true;
+  }
+
   async function findAvailableName(directoryHandle, requestedName) {
     const safeName = SCFormat.sanitizePathComponent(requestedName, "SoundCloud track", 180);
     const lastDot = safeName.lastIndexOf(".");
@@ -147,6 +171,7 @@
   globalScope.SCDownloadDirectory = {
     CURRENT_KEY,
     chooseDirectory,
+    ensurePermission,
     getCurrent,
     getHandle,
     saveBlob,

@@ -64,6 +64,10 @@ assert(
   "The folder-picker icon asset is missing."
 );
 assert(
+  /id="downloadFolderName">Downloads<\/span>/.test(popup),
+  "The active download destination must be visible next to the folder icon."
+);
+assert(
   /\.folder-icon\s*,\s*\.back-icon\s*\{[^}]*filter:\s*invert\(1\);/s.test(
     popup
   ),
@@ -98,6 +102,31 @@ assert(
 assert(
   buttonTags.length > 0 && buttonTags.every((tag) => /\btitle="[^"]+"/.test(tag)),
   "Every popup button should have a tooltip."
+);
+assert(
+  /async function ensureDownloadDestinationPermission\(\)[\s\S]*SCDownloadDirectory\.ensurePermission\(currentDownloadDestination\.id\)/.test(
+    popupScript
+  ),
+  "The popup must restore access to a remembered folder from the download click."
+);
+const permissionChecks = popupScript.match(
+  /await ensureDownloadDestinationPermission\(\);/g
+);
+assert(
+  permissionChecks?.length === 3,
+  "Single, bulk, and selected downloads must all restore folder access."
+);
+assert(
+  /function formatDownloadSuccess\(result\)[\s\S]*result\?\.fileName[\s\S]*result\?\.destinationName/.test(
+    popupScript
+  ),
+  "A completed download must identify the file and the destination it actually used."
+);
+assert(
+  /const result = await popupDownloadIntent\.downloadTrack\([\s\S]*setDownloadState\(false, formatDownloadSuccess\(result\)\)/.test(
+    popupScript
+  ),
+  "The popup must not report a generic success without showing the resolved destination."
 );
 
 const presets = popupScript.match(/const DOWNLOAD_PRESETS = \[([^\]]+)\]/);

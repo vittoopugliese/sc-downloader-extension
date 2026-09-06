@@ -43,9 +43,16 @@ const indexedDB = {
 
 const files = new Map([["Artist - Song.mp3", { existing: true }]]);
 let pickerOptions = null;
+let directoryPermission = "granted";
+let permissionRequests = 0;
 const directoryHandle = {
   name: "My Music",
-  queryPermission: async () => "granted",
+  queryPermission: async () => directoryPermission,
+  async requestPermission() {
+    permissionRequests += 1;
+    directoryPermission = "granted";
+    return directoryPermission;
+  },
   async getFileHandle(name, options = {}) {
     if (!files.has(name) && !options.create) {
       const error = new Error("Missing file");
@@ -130,6 +137,26 @@ function evaluate(expression) {
   }
   if (!files.get(savedName)?.blob) {
     throw new Error("The audio blob was not written to the selected directory.");
+  }
+
+  // Chromium can return "prompt" for a persisted handle after the extension
+  // restarts. The popup must restore permission from the download click before
+  // the offscreen document attempts to write the prepared audio file.
+  directoryPermission = "prompt";
+  const authorized = await evaluate(
+    'SCDownloadDirectory.ensurePermission("directory-id")'
+  );
+  if (!authorized || permissionRequests !== 1) {
+    throw new Error("A remembered directory was not re-authorized after restart.");
+  }
+
+  const restartedSaveName = await evaluate(`SCDownloadDirectory.saveBlob(
+    "directory-id",
+    "Restarted track.m4a",
+    new Blob(["audio"], { type: "audio/mp4" })
+  )`);
+  if (!files.get(restartedSaveName)?.blob) {
+    throw new Error("The track was not saved after restoring folder access.");
   }
 
   console.log("Directory storage verification passed.");

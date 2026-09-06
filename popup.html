@@ -366,12 +366,18 @@
 
         #chooseDownloadFolder,
         #selectionBackBtn {
-            width: 28px;
             min-width: 28px;
             padding: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
+        }
+
+        #chooseDownloadFolder {
+            width: auto;
+            max-width: 150px;
+            gap: 5px;
+            padding-right: 7px;
         }
 
         #chooseDownloadFolder:disabled {
@@ -390,6 +396,13 @@
         .back-icon {
             width: 16px;
             height: 16px;
+        }
+
+        #downloadFolderName {
+            max-width: 108px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .selection-action-icon {
@@ -665,6 +678,7 @@
                     <span id="downloadFolderSlot" class="control-slot">
                         <button id="chooseDownloadFolder" type="button" class="popup-control-btn is-hidden" aria-label="Choose download folder" title="Choose download folder">
                             <img class="folder-icon" src="./assets/folder-icon.svg" alt="" width="20" height="20" draggable="false">
+                            <span id="downloadFolderName">Downloads</span>
                         </button>
                     </span>
                 </p>

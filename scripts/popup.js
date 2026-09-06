@@ -39,6 +39,7 @@ const downloadStatus = document.getElementById("downloadStatus");
 const jobHint = document.getElementById("jobHint");
 const failedSummary = document.getElementById("failedSummary");
 const chooseDownloadFolder = document.getElementById("chooseDownloadFolder");
+const downloadFolderName = document.getElementById("downloadFolderName");
 const downloadFormatSlot = document.getElementById("downloadFormatSlot");
 const downloadFolderSlot = document.getElementById("downloadFolderSlot");
 const selectionPanel = document.getElementById("selectionPanel");
@@ -170,6 +171,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       currentDownloadDestination = await SCDownloadDirectory.chooseDirectory();
       renderDownloadDestination();
+      downloadStatus.textContent = `Downloads will be saved to ${getDownloadDestinationLabel()}`;
     } catch (error) {
       if (error?.name !== "AbortError") {
         alert(`Could not select folder: ${error.message}`);
@@ -263,8 +265,23 @@ function getDownloadDestinationLabel() {
   return currentDownloadDestination?.name || "Downloads";
 }
 
+function formatDownloadSuccess(result) {
+  const fileName = result?.fileName || "Track";
+  const destinationName = result?.destinationName || getDownloadDestinationLabel();
+  return `Saved ${fileName} to ${destinationName}`;
+}
+
+async function ensureDownloadDestinationPermission() {
+  if (!currentDownloadDestination) {
+    return;
+  }
+
+  await SCDownloadDirectory.ensurePermission(currentDownloadDestination.id);
+}
+
 function renderDownloadDestination() {
   const folderName = currentDownloadDestination?.name || "Folder";
+  downloadFolderName.textContent = currentDownloadDestination?.name || "Downloads";
   chooseDownloadFolder.title = currentDownloadDestination
     ? `Download to ${folderName}. Click to change folder.`
     : "Choose download folder";
@@ -977,6 +994,7 @@ async function startSelectedBulkDownload() {
   setDownloadState(true, `Preparing ${selectedCount} selected tracks...`);
 
   try {
+    await ensureDownloadDestinationPermission();
     const bulkResult = await requestBulkTracksByIds(orderedIds);
 
     if (!bulkResult?.success || !bulkResult.tracks?.length) {
@@ -1047,6 +1065,7 @@ function attachDownloadListener() {
       setDownloadState(true, "Fetching track list...");
 
       try {
+        await ensureDownloadDestinationPermission();
         const bulkResult = await requestBulkTracks(limit);
 
         if (!bulkResult?.success || !bulkResult.tracks?.length) {
@@ -1092,14 +1111,15 @@ function attachDownloadListener() {
     setDownloadState(true, "Resolving stream...");
 
     try {
+      await ensureDownloadDestinationPermission();
       const formatPreference =
         trackData.formatPreference || (await getFormatPreference());
-      await popupDownloadIntent.downloadTrack(trackData, {
+      const result = await popupDownloadIntent.downloadTrack(trackData, {
         formatPreference,
         downloadDestination: currentDownloadDestination,
       });
 
-      setDownloadState(false, "Download completed, enjoy");
+      setDownloadState(false, formatDownloadSuccess(result));
     } catch (error) {
       console.error("Error downloading file:", error);
       setDownloadState(false, DOWNLOAD_ERROR_STATUS);
