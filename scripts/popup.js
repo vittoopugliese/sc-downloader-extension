@@ -39,6 +39,7 @@ const downloadStatus = document.getElementById("downloadStatus");
 const jobHint = document.getElementById("jobHint");
 const failedSummary = document.getElementById("failedSummary");
 const chooseDownloadFolder = document.getElementById("chooseDownloadFolder");
+const resetDownloadFolder = document.getElementById("resetDownloadFolder");
 const downloadFolderName = document.getElementById("downloadFolderName");
 const downloadFormatSlot = document.getElementById("downloadFormatSlot");
 const downloadFolderSlot = document.getElementById("downloadFolderSlot");
@@ -181,6 +182,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  resetDownloadFolder.addEventListener("click", async () => {
+    if (isDownloading) {
+      return;
+    }
+
+    resetDownloadFolder.disabled = true;
+    try {
+      await SCDownloadDirectory.clearCurrent();
+      currentDownloadDestination = null;
+      renderDownloadDestination();
+      downloadStatus.textContent = "Downloads will be saved to the browser Downloads folder";
+    } catch (error) {
+      console.error("Error restoring browser Downloads folder:", error);
+      alert(`Could not restore the Downloads folder: ${error.message}`);
+    } finally {
+      resetDownloadFolder.disabled = false;
+    }
+  });
+
   downloadLimit.addEventListener("change", () => {
     if (downloadLimit.value === "select") {
       openSelectionPanel();
@@ -282,6 +302,7 @@ async function ensureDownloadDestinationPermission() {
 function renderDownloadDestination() {
   const folderName = currentDownloadDestination?.name || "Folder";
   downloadFolderName.textContent = currentDownloadDestination?.name || "Downloads";
+  resetDownloadFolder.classList.toggle("is-hidden", !currentDownloadDestination);
   chooseDownloadFolder.title = currentDownloadDestination
     ? `Download to ${folderName}. Click to change folder.`
     : "Choose download folder";
@@ -858,12 +879,16 @@ function updateSelectionCount() {
 }
 
 function moveDownloadControlsToSelectionHeader() {
-  selectionHeaderOptions.append(downloadFormat, chooseDownloadFolder);
+  selectionHeaderOptions.append(
+    downloadFormat,
+    chooseDownloadFolder,
+    resetDownloadFolder
+  );
 }
 
 function restoreDownloadControlsToTrackMeta() {
   downloadFormatSlot.append(downloadFormat);
-  downloadFolderSlot.append(chooseDownloadFolder);
+  downloadFolderSlot.append(chooseDownloadFolder, resetDownloadFolder);
 }
 
 function enterSelectionMode(items, selectAllByDefault = false) {
@@ -1165,6 +1190,7 @@ function setDownloadState(downloading, statusText) {
   downloadBtn.classList.toggle("is-disabled", downloading);
   downloadBtn.classList.toggle("is-loading", downloading);
   chooseDownloadFolder.disabled = downloading;
+  resetDownloadFolder.disabled = downloading;
 
   if (downloading) {
     downloadLimit.classList.add("is-hidden");

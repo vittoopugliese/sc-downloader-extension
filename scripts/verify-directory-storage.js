@@ -97,6 +97,9 @@ const context = vm.createContext({
         async set(values) {
           Object.assign(localStorage, values);
         },
+        async remove(key) {
+          delete localStorage[key];
+        },
       },
     },
   },
@@ -125,6 +128,12 @@ function evaluate(expression) {
   const remembered = await evaluate("SCDownloadDirectory.getCurrent()");
   if (remembered.id !== destination.id) {
     throw new Error("The current directory setting was not restored.");
+  }
+
+  await evaluate("SCDownloadDirectory.clearCurrent()");
+  const cleared = await evaluate("SCDownloadDirectory.getCurrent()");
+  if (cleared !== null) {
+    throw new Error("The remembered directory was not cleared for browser Downloads.");
   }
 
   const savedName = await evaluate(`SCDownloadDirectory.saveBlob(

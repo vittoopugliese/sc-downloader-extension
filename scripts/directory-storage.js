@@ -81,6 +81,10 @@
     return normalizeDestination(stored[CURRENT_KEY]);
   }
 
+  async function clearCurrent() {
+    await chrome.storage.local.remove(CURRENT_KEY);
+  }
+
   async function getHandle(directoryId) {
     if (!directoryId) {
       return null;
@@ -171,6 +175,7 @@
   globalScope.SCDownloadDirectory = {
     CURRENT_KEY,
     chooseDirectory,
+    clearCurrent,
     ensurePermission,
     getCurrent,
     getHandle,
