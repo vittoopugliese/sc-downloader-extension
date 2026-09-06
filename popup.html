@@ -86,6 +86,11 @@
             justify-content: flex-start;
         }
 
+        body.looper-explainer-mode,
+        body.looper-explainer-mode .container {
+            min-height: 580px;
+        }
+
         .track-info { text-align: center; }
 
         .track-details {
@@ -365,7 +370,9 @@
         }
 
         #chooseDownloadFolder,
-        #selectionBackBtn {
+        #selectionBackBtn,
+        #helpBackBtn,
+        #looperBackBtn {
             min-width: 28px;
             padding: 4px;
             display: flex;
@@ -395,7 +402,13 @@
 
         #downloadBtn { left: 50%; transform: translateX(-50%); }
         #downloadBtn:hover { transform: translateX(-50%) scale(1.054); }
-        #looperActionSlot { position: absolute; right: 0; top: 0; width: 32px; height: 32px; pointer-events: none; }
+        #looperActionSlot { position: absolute; right: 0; top: 0; display: flex; justify-content: flex-end; min-width: 120px; height: 32px; }
+        #looperEntryBtn {
+            min-width: 0;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        .looper-entry-icon { font-size: 16px; line-height: 1; margin-right: 4px; }
 
         #helpPanel {
             position: absolute;
@@ -417,6 +430,28 @@
         .help-section p { margin: 0; color: #c4c4c4; font-size: 12px; line-height: 1.45; }
         .help-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
         .help-link { color: #fff; font-size: 11px; }
+
+        #looperPanel {
+            position: absolute;
+            inset: 0;
+            z-index: 8;
+            display: none;
+            overflow-y: auto;
+            padding: 14px;
+            box-sizing: border-box;
+            background: radial-gradient(circle at 50% 0%, #2d211b 0%, #111 68%);
+        }
+
+        #looperPanel.is-visible { display: block; }
+        .looper-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .looper-header h2 { flex: 1; margin: 0; font-size: 18px; }
+        .looper-copy { margin: 0 0 12px; color: #d0d0d0; font-size: 12px; line-height: 1.45; }
+        .looper-promo-image { display: block; width: min(100%, 260px); margin: 0 auto 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14); }
+        .looper-price { margin: 12px 0 7px; color: #ff9a62; font-size: 12px; font-weight: 700; text-align: center; }
+        .looper-guarantee { margin: 0 0 12px; color: #f2f2f2; font-size: 12px; line-height: 1.45; text-align: center; }
+        .looper-purchase-btn { display: block; width: auto; margin: 0 auto; font-size: 11px; }
+        .looper-checkout-note { margin: 8px 0 0; color: #d0d0d0; font-size: 11px; line-height: 1.4; text-align: center; }
+        .looper-later-btn { display: block; margin: 10px auto 0; font-size: 11px; }
 
         #chooseDownloadFolder {
             width: auto;
@@ -768,7 +803,9 @@
                     <img class="dl-icon" src="./assets/icons/download.svg" alt="" width="22" height="22" draggable="false">
                     <span class="dl-spinner" aria-hidden="true"></span>
                 </button>
-                <span id="looperActionSlot" aria-hidden="true"></span>
+                <span id="looperActionSlot">
+                    <button id="looperEntryBtn" type="button" class="popup-control-btn" aria-label="Try Looper" title="Try Looper" data-i18n-aria-label="looper_entry" data-i18n-title="looper_entry"><span class="looper-entry-icon" aria-hidden="true">↻</span><span data-i18n="looper_entry">Try Looper</span></button>
+                </span>
             </div>
             <div id="jobControls">
                 <button id="pauseJobBtn" type="button" class="job-btn" title="Pause download" data-i18n="pause" data-i18n-title="pause">Pause</button>
@@ -780,7 +817,7 @@
             <p id="failedSummary"></p>
         </div>
         <section id="helpPanel" aria-labelledby="helpTitle" aria-modal="true" role="dialog">
-            <div class="help-header"><button id="helpBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back">←</button><h2 id="helpTitle" data-i18n="help_title">How it works</h2></div>
+            <div class="help-header"><button id="helpBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button><h2 id="helpTitle" data-i18n="help_title">How it works</h2></div>
             <p class="help-copy" data-i18n="help_intro">Download tracks you own or have permission to download.</p>
             <div class="help-section"><h3 data-i18n="help_getting_started_title">Download from SoundCloud</h3><p data-i18n="help_getting_started">Open a track, playlist, Likes, or a user's Tracks page. Use the Download button here or the download button on the SoundCloud page.</p></div>
             <div class="help-section"><h3 data-i18n="help_collection_title">Choose a collection</h3><p data-i18n="help_collection">For playlists, Likes, and user tracks, choose a preset or Select to pick individual tracks. Downloads keep running if you close this popup.</p></div>
@@ -789,6 +826,16 @@
             <div class="help-section"><h3 data-i18n="help_progress_title">Progress and errors</h3><p data-i18n="help_progress">The status shows progress and saved files. If a track cannot be read or saved, retry after reloading SoundCloud or choosing the folder again.</p></div>
             <div class="help-section"><h3 data-i18n="help_looper_title">Looper</h3><p data-i18n="help_looper">On a compatible individual track, Looper lets you repeat an A–B section and export that selected range as WAV. It does not change full-track downloads.</p></div>
             <div class="help-section"><h3 data-i18n="help_support_title">Support and reviews</h3><p data-i18n="help_support">Need help or want to share feedback? Use the links below.</p><div class="help-links"><a class="popup-control-btn help-link" href="https://soundcloud.com/" target="_blank" data-i18n="open_soundcloud">Open SoundCloud</a><a class="popup-control-btn help-link" href="https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews" target="_blank" data-i18n="write_review">Write a Chrome Web Store review</a><span class="popup-control-btn help-link" data-i18n="support_email_pending">Support email is being set up</span></div></div>
+        </section>
+        <section id="looperPanel" aria-labelledby="looperTitle" aria-modal="true" role="dialog">
+            <div class="looper-header"><button id="looperBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button><h2 id="looperTitle" data-i18n="looper_title">Loop the part you need.</h2></div>
+            <p class="looper-copy" data-i18n="looper_intro">Repeat any section while you listen, then save only that selected range as WAV.</p>
+            <img class="looper-promo-image" src="./assets/promos/four.png" alt="Looper A–B range and WAV export example" data-i18n-alt="looper_promo_image_alt">
+            <p class="looper-price" data-i18n="looper_price">Early access · USD 2.99 one-time</p>
+            <p class="looper-guarantee" data-i18n="looper_free_guarantee">Every full-track download feature is free — and always will be. You only pay for Looper Pro.</p>
+            <button id="looperPurchaseBtn" type="button" class="popup-control-btn is-primary looper-purchase-btn" title="Unlock Looper · USD 2.99 once" data-i18n="looper_purchase_cta" data-i18n-title="looper_purchase_cta">Unlock Looper · USD 2.99 once</button>
+            <p id="looperCheckoutNote" class="looper-checkout-note is-hidden" aria-live="polite" data-i18n="looper_checkout_coming_soon">Checkout will be available in a future update.</p>
+            <button id="looperLaterBtn" type="button" class="popup-control-btn looper-later-btn" title="Maybe later" data-i18n="looper_maybe_later" data-i18n-title="looper_maybe_later">Maybe later</button>
         </section>
     </div>
     <script src="./scripts/i18n.js"></script>

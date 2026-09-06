@@ -27,6 +27,9 @@
     root.querySelectorAll("[data-i18n-placeholder]").forEach((element) => {
       element.placeholder = t(element.dataset.i18nPlaceholder);
     });
+    root.querySelectorAll("[data-i18n-alt]").forEach((element) => {
+      element.alt = t(element.dataset.i18nAlt);
+    });
   }
 
   globalThis.SCDLI18n = { t, localizeDocument };

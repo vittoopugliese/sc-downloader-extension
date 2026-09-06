@@ -96,11 +96,11 @@ if (fs.existsSync(reviewSourcePath)) {
 assert(!html.includes('All features are free'), 'Outdated all-features-free promise remains');
 for (const requiredCopy of [
   'Full-track downloads stay free',
-  'One free Looper WAV export',
   'A–B repeat',
   '$2.99',
   'one time',
   'Purchases open soon',
+  'Looper Pro is planned as a one-time add-on',
   'Download only content you own or have permission to save.'
 ]) {
   assert(html.includes(requiredCopy), `Missing required landing copy: ${requiredCopy}`);
@@ -113,6 +113,10 @@ assert(
 assert(/reviewLabels[\s\S]*de:[\s\S]*en:[\s\S]*es:[\s\S]*pt:[\s\S]*ru:/.test(html), 'Review CTA locales are incomplete');
 assert(!/(href|action)=["'][^"']*(checkout|stripe|paddle|lemonsqueezy)/i.test(html), 'Checkout must not be active yet');
 assert(html.includes("text.textContent = review.text"), 'Review text must be rendered with textContent');
+assert(html.includes("badge.textContent = 'ALREADY IMPLEMENTED'"), 'Implemented review requests need their badge');
+assert(html.includes('review-card:nth-child(n + 4) { display:none; }'), 'Only three reviews should show before expansion');
+assert(html.includes('assets/promos/four.png'), 'The approved Looper promo image is missing');
+assert(html.includes('mailto:it@vpugliese.online'), 'The configured support email is missing');
 assert(!/reviews\.txt/i.test(html), 'Production landing must not fetch the Desktop review source');
 
 const inlineScripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];

@@ -17,8 +17,21 @@ assert(
 assert(
   /\.action-row\s*\{[^}]*position:\s*relative/s.test(popup) &&
     /#downloadBtn\s*\{[^}]*left:\s*50%;[^}]*translateX\(-50%\)/s.test(popup) &&
-    /id="looperActionSlot"[^>]*aria-hidden="true"/.test(popup),
-  "Download must remain absolutely centered with a hidden reserved Looper slot."
+    /id="looperActionSlot"[\s\S]*id="looperEntryBtn"/.test(popup),
+  "Download must remain absolutely centered with a visible Looper entry."
+);
+assert(
+  /id="looperPanel"[^>]*role="dialog"/.test(popup) &&
+    /assets\/promos\/four\.png/.test(popup) &&
+    /id="looperPurchaseBtn"/.test(popup) &&
+    /id="looperCheckoutNote"/.test(popup),
+  "The popup must provide a localized Looper explainer with the approved promo image and no checkout link."
+);
+assert(
+  /body\.looper-explainer-mode,[\s\S]*min-height:\s*580px/.test(popup) &&
+    /id="helpBackBtn"[^>]*>[\s\S]*class="back-icon"[^>]*src="\.\/assets\/icons\/back-arrow\.svg"/.test(popup) &&
+    /id="looperBackBtn"[^>]*>[\s\S]*class="back-icon"[^>]*src="\.\/assets\/icons\/back-arrow\.svg"/.test(popup),
+  "Help and Looper must reuse the compact existing back-arrow icon, and Looper must expand the popup."
 );
 assert(
   /function openHelp\(\)[\s\S]*helpPanel\.classList\.add\("is-visible"\)/.test(
@@ -30,6 +43,25 @@ assert(
     /event\.key === "Escape"/.test(popupScript) &&
     /function trapHelpFocus\(event\)/.test(popupScript),
   "Help must preserve selection scroll, trap keyboard focus, and close with Escape."
+);
+assert(
+  /function openLooperExplainer\(\)[\s\S]*looperPanel\.classList\.add\("is-visible"\)/.test(
+    popupScript
+  ) &&
+    /function openLooperExplainer\(\)[\s\S]*document\.body\.classList\.add\("looper-explainer-mode"\)/.test(
+      popupScript
+    ) &&
+    /function closeLooperExplainer\(\)[\s\S]*document\.body\.classList\.remove\("looper-explainer-mode"\)/.test(
+      popupScript
+    ) &&
+    /function closeLooperExplainer\(\)[\s\S]*selectionViewport\.scrollTop = looperSelectionScrollTop/.test(
+      popupScript
+    ) &&
+    /looperPurchaseBtn\.addEventListener\("click", \(\) => \{[\s\S]*looperCheckoutNote\.classList\.remove\("is-hidden"\)/.test(
+      popupScript
+    ) &&
+    !/ACTIVATE_LOOPER|DOWNLOAD_LOOP/.test(popupScript),
+  "The Looper explainer must preserve selection state and must not activate Looper or a checkout."
 );
 
 function assert(condition, message) {

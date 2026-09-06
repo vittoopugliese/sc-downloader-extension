@@ -55,6 +55,12 @@ const selectionRows = document.getElementById("selectionRows");
 const helpBtn = document.getElementById("helpBtn");
 const helpPanel = document.getElementById("helpPanel");
 const helpBackBtn = document.getElementById("helpBackBtn");
+const looperEntryBtn = document.getElementById("looperEntryBtn");
+const looperPanel = document.getElementById("looperPanel");
+const looperBackBtn = document.getElementById("looperBackBtn");
+const looperPurchaseBtn = document.getElementById("looperPurchaseBtn");
+const looperCheckoutNote = document.getElementById("looperCheckoutNote");
+const looperLaterBtn = document.getElementById("looperLaterBtn");
 
 let isDownloading = false;
 let isSelectionMode = false;
@@ -78,6 +84,8 @@ let currentFormatPreference = SCStreamSelector.DEFAULT_PREFERENCE;
 let currentDownloadDestination = null;
 let helpReturnFocus = null;
 let helpSelectionScrollTop = 0;
+let looperReturnFocus = null;
+let looperSelectionScrollTop = 0;
 const popupDownloadIntent = SCDownloadIntent.create(chrome.runtime);
 
 function openHelp() {
@@ -115,18 +123,66 @@ function trapHelpFocus(event) {
   }
 }
 
+function openLooperExplainer() {
+  looperReturnFocus = document.activeElement;
+  looperSelectionScrollTop = selectionViewport.scrollTop;
+  looperCheckoutNote.classList.add("is-hidden");
+  document.body.classList.add("looper-explainer-mode");
+  looperPanel.classList.add("is-visible");
+  looperBackBtn.focus();
+}
+
+function closeLooperExplainer() {
+  if (!looperPanel.classList.contains("is-visible")) return;
+  looperPanel.classList.remove("is-visible");
+  document.body.classList.remove("looper-explainer-mode");
+  if (isSelectionMode) {
+    selectionViewport.scrollTop = looperSelectionScrollTop;
+    renderVisibleSelectionRows();
+  }
+  looperReturnFocus?.focus?.();
+  looperReturnFocus = null;
+}
+
+function trapPanelFocus(event, panel) {
+  if (event.key !== "Tab" || !panel.classList.contains("is-visible")) return;
+  const focusable = [...panel.querySelectorAll(
+    'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+  )];
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (!first || !last) return;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   SCDLI18n.localizeDocument();
   await loadDownloadDestination();
 
   helpBtn.addEventListener("click", openHelp);
   helpBackBtn.addEventListener("click", closeHelp);
+  looperEntryBtn.addEventListener("click", openLooperExplainer);
+  looperBackBtn.addEventListener("click", closeLooperExplainer);
+  looperLaterBtn.addEventListener("click", closeLooperExplainer);
+  looperPurchaseBtn.addEventListener("click", () => {
+    looperCheckoutNote.classList.remove("is-hidden");
+  });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && helpPanel.classList.contains("is-visible")) {
+    if (event.key === "Escape" && looperPanel.classList.contains("is-visible")) {
+      event.preventDefault();
+      closeLooperExplainer();
+    } else if (event.key === "Escape" && helpPanel.classList.contains("is-visible")) {
       event.preventDefault();
       closeHelp();
     }
     trapHelpFocus(event);
+    trapPanelFocus(event, looperPanel);
   });
 
   retryBtn.addEventListener("click", () => {

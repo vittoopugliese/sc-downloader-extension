@@ -126,7 +126,7 @@ Orden interno de E1:
 
 **Aceptación:** Download continúa centrado y dominante; ayuda accesible por teclado en track/colección/selección/error; volver no reinicia descargas ni preferencias; el selector conserva scroll y checks; todas las strings visibles tienen clave/locale/fallback; sin recortes en ruso, alemán o estados de progreso. **Validación manual realizada por el usuario el 2026-09-06:** Chrome real, comportamiento correcto. Queda fuera del código configurar el buzón de soporte antes de convertir su aviso temporal en un enlace `mailto:`.
 
-### E2 — P03: entrada comercial y estados de UI (S/M)
+### E2 — P03: entrada comercial y explicación visual (S/M)
 
 **Ubicación confirmada:** CTA llamativo pero compacto a la derecha del botón Download, visible tanto en el popup principal como en el selector de tracks. Download permanece en el centro geométrico de la ventana.
 
@@ -139,31 +139,29 @@ Orden interno de E1:
 
 Implementación visual sugerida: action row de ancho completo, Download posicionado en el eje central y CTA anclado a la derecha. No usar una fila flex que centre la suma de ambos botones. Reservar separación suficiente para foco/hover y textos localizados; en ancho insuficiente, conservar icono + copy corto y tooltip/`aria-label` completo, sin superposición.
 
-- Antes de probar: icono de loop + `Try Looper`. El detalle `1 free loop + WAV export` vive en la vista siguiente para no recargar el popup.
-- Prueba agotada: `Unlock Looper · $2.99 once`.
-- Comprador: `Open Looper`, con restauración/estado en ayuda.
-- Click abre una sección interna de venta/prueba, no checkout directo. Debe sentirse parte del popup y tener Back, foco inicial correcto y restauración del estado anterior.
+- El CTA lleva icono de loop + `Try Looper`; por ahora solo abre una explicación visual interna. No activa el Looper actual, no crea una prueba ni modifica descargas.
+- Click abre una sección interna de presentación, no checkout directo. Debe sentirse parte del popup y tener Back, foco inicial correcto y restauración del estado anterior.
 - Jerarquía propuesta para esa sección:
   1. `Loop the part you need.`
   2. `Repeat any section while you listen, then save only that loop as WAV.`
-  3. `Try one loop and one WAV export free.`
+  3. Usar `assets/promos/four.png` como explicación visual de A–B y WAV, reducido dentro de la vista sin deformarlo ni prometer funciones fuera del producto.
   4. Sello: `Early access · $2.99 one-time`.
   5. Garantía central: `Every full-track download feature is free — and always will be. You only pay for Looper Pro.`
-  6. CTA primario `Try Looper free`; secundario `Maybe later`. Después de la prueba, primario `Unlock for $2.99 once`.
+  6. CTA visual `Unlock Looper · $2.99 once`; al pulsarlo informa claramente que el checkout estará disponible en una actualización futura. No pedir datos, abrir URL ni simular una compra.
 - Localizar el copy, preservando el énfasis semántico en que todas las funcionalidades de descarga completa son y seguirán siendo gratuitas. Evitar “all downloads” porque exportar el fragmento sí es premium después de la prueba.
 - Mostrar WAV explícitamente. Explicar que exporta el rango seleccionado; no prometer calidad superior a la fuente, edición destructiva del track completo, pitch, velocidad, live recording ni seamless looping.
-- Mostrar precio y límite ANTES de iniciar la prueba. No abrir checkout automáticamente cuando termina la exportación gratis.
-- Si no hay una página individual compatible, guiar a ella preservando intención. No insinuar que todo el listado se puede loopear simultáneamente.
-- Durante construcción se prueban todos los estados, pero no se publica una oferta que no pueda cumplirse. Activación pública del CTA de prueba y compra junto con E5–E6.
+- Mostrar el precio y que es compra única, junto con que el checkout todavía no está disponible. No mostrar un límite de prueba hasta que E5A–E6 lo definan e implementen.
+- La misma vista se abre desde track, playlist, perfil o selector; no intenta elegir ni abrir automáticamente un track de una colección.
+- Durante construcción se verifica la geometría y accesibilidad de la entrada. El trial real, estados de licencia y checkout se activan junto con E5–E6.
 
-**Aceptación:** centro de Download no cambia entre vista principal y selector; CTA no invade cantidad/status/errores; Back recupera scroll/selección; textos localizados; pagados ven `Open Looper`; cualquier descarga de track completo ignora el estado comercial.
+**Aceptación:** centro de Download no cambia entre vista principal y selector; CTA no invade cantidad/status/errores; Back recupera scroll/selección; textos localizados; la imagen explica A–B/WAV sin alegaciones de calidad no comprobadas; el precio es visible, pero no hay checkout, trial ni cambio de acceso; cualquier descarga de track completo ignora el estado comercial.
 
 ### E3 — P04/P07: landing completa y reseñas auténticas (M)
 
 **Alcance:** `index.html` y sus assets. La fuente humana es `C:\Users\torib\Desktop\reviews.txt`; producción no depende de esa ruta.
 
 - Mantener hero + UI representada. Añadir estado Looper a la demo sin convertir la landing en una página larga.
-- Explicar en pocos bloques: tracks/colecciones/perfiles gratis; selección, carpeta, background y metadata; Looper A–B + export WAV, una prueba y USD 2,99 una vez.
+- Explicar en pocos bloques: tracks/colecciones/perfiles gratis; selección, carpeta, background y metadata; Looper A–B + export WAV y USD 2,99 una vez. Hasta E5–E6, informar que checkout y prueba funcional no están disponibles; no sugerir que una función visual ya se puede usar.
 - Reemplazar `All features are free` por una promesa específica sobre descargas completas. No prometer pitch, grabación en vivo, WAV que restaura calidad perdida ni loops sin cortes.
 - Mostrar **todas** las reseñas originales disponibles, incluidos elogios, pedidos de funciones y críticas. Mantener la landing corta mediante carrusel/lista compacta y `Show all reviews`, no mediante selección editorial que oculte opiniones.
 - Guardar los datos como JSON válido dentro de una única variable del script de `index.html`, por ejemplo `const webStoreReviews = [...]`. No cargar en runtime el archivo del Desktop ni crear una base de datos pública para esto.
@@ -172,6 +170,9 @@ Implementación visual sugerida: action row de ancho completo, Download posicion
 - El texto copiado no siempre contiene estrellas: no inventarlas. No corregir gramática, transliterar, resumir ni traducir. Renderizar siempre en idioma original y permitir al navegador aplicar dirección/escritura correctamente.
 - Estas reseñas corresponden al downloader, NO a compras de Looper. No llamarlas compras verificadas. Cifras agregadas de usuarios/estrellas solo con fuente y fecha; instalaciones no equivalen a usuarios activos.
 - Debajo de la sección, botón localizado `Write a Chrome Web Store review` que abre la superficie oficial adecuada de la ficha. Resolver y probar el enlace real antes de publicar; no enviar una review automáticamente ni sugerir cinco estrellas.
+- Localizar todo el copy de landing para EN, ES rioplatense, RU, PT-BR y DE según el idioma del navegador, con fallback inglés y sin selector manual. Las reseñas se conservan literalmente en su idioma original.
+- Mostrar tres reseñas al inicio y revelar las demás con `Show all reviews`. Añadir badge visual `ALREADY IMPLEMENTED` solo a solicitudes de funciones comprobablemente resueltas, sin marcar críticas de calidad, errores o contextos que sigan sin soporte.
+- Usar `assets/promos/four.png` para explicar Looper; no reutilizar imágenes que prometan calidad superior a la fuente.
 - FAQ breve: qué sigue gratis, una exportación de prueba, compra única, restaurar acceso y uso con contenido propio/autorizado. Privacidad y soporte accesibles sin agregar bloques comerciales extensos.
 
 **Aceptación:** cantidad renderizada coincide con las reseñas (no respuestas) de la fuente; orden y texto coinciden; cirílico intacto; todas son alcanzables por teclado/mobile; botón de review abre el Store; la demo no descarga audio ajeno; no hay compra activa antes del checkout listo.
@@ -339,8 +340,8 @@ La siguiente tabla es la frontera entre lo decidido y lo que se difiere. Una ses
 | D14 | diferida a E5A                 | Hosting, runtime backend, DB, email, dominio/API y responsable de operación/backups                                                                   |
 | D15 | diferida a E5A                 | Recuperación, dispositivos (default: 3), reemplazo de activaciones, gracia offline (default: 30 días), refunds y updates incluidos                    |
 | D16 | diferida a E5A                 | Redes USDT y wallet/exchange receptor si se ofrece crypto; guardar únicamente nombres/redes, nunca claves/seed                                        |
-| D17 | abierta antes de publicar gate | Confirmar si una versión con Looper ya estuvo disponible en Web Store o solo local/testers; definir transición para acceso existente                  |
-| D18 | diferida manualmente           | Configurar un buzón de soporte no personal en `vpugliese.online` y reemplazar el aviso temporal de Help por su enlace `mailto:` antes de publicar   |
+| D17 | cerrada                        | Looper nunca fue enviado a Chrome Web Store; la versión pública previa no lo incluye y no requiere transición de acceso                            |
+| D18 | cerrada                        | Buzón de soporte disponible: `it@vpugliese.online`; reemplazar el aviso temporal de Help por su enlace `mailto:` antes de publicar                 |
 
 
 ### Preguntas que debe responder el usuario cuando llegue E5A
@@ -364,14 +365,14 @@ E1 no incluye onboarding. Usar EN/ES/RU/PT-BR/DE, con español rioplatense, y de
 El orden de trabajo es E1 → E2 → E3 → E4 → E5A → E5B → E6 → E7. E8 queda posterior. Mantener commits separados:
 
 1. `help and extension localization foundation` — E1.
-2. `add Looper entry and trial sales view` — E2, todavía sin venta pública.
+2. `add Looper entry and sales explainer` — E2, todavía sin trial ni venta pública.
 3. `update landing and import Web Store reviews` — E3.
 4. `add uninstall feedback flow` — E4, incluyendo endpoint elegido.
 5. Documento/decisión E5A; después commits propios de backend/licencias E5B.
 6. `gate Looper after free trial export` — E6, cuando compra/restauración ya funcionan.
 7. Calidad, retries y traducciones comerciales finales — E7.
 
-Gate 1: E1–E3 pueden probarse localmente sin sistema de pago. Gate 2: E4 requiere endpoint real antes de publicar la URL de desinstalación. Gate 3: CTA puede informar/mostrar trial solo cuando E6 garantice el límite; el botón de compra se activa únicamente con E5B listo. Gate 4: ninguna release bloquea Looper existente hasta resolver D17 y probar restore/refund/offline. Gate 5: antes de Store, actualizar landing, README, privacidad y ficha con el mismo límite/precio/copy.
+Gate 1: E1–E3 pueden probarse localmente sin sistema de pago. Gate 2: E4 requiere endpoint real antes de publicar la URL de desinstalación. Gate 3: E2 puede informar sobre Looper y su precio; trial y compra se activan solo cuando E6 garantice el límite y E5B tenga checkout listo. Gate 4: antes de bloquear Looper, probar restore/refund/offline. Gate 5: antes de Store, actualizar landing, README, privacidad y ficha con el mismo límite/precio/copy.
 
 ## Fuentes y límites de la investigación
 
