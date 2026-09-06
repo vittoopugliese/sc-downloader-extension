@@ -1,6 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SoundCloud Track Downloader",
+  "default_locale": "en",
   "version": "2026.9.5",
   "permissions": ["cookies", "tabs", "downloads", "offscreen", "notifications", "storage", "alarms"],
   "host_permissions": [
@@ -37,6 +38,7 @@
     {
       "matches": ["https://soundcloud.com/*"],
       "js": [
+        "scripts/i18n.js",
         "scripts/format-utils.js",
         "scripts/soundcloud-http.js",
         "scripts/stream-selector.js",
@@ -51,6 +53,7 @@
       "matches": ["https://soundcloud.com/*"],
       "all_frames": true,
       "js": [
+        "scripts/i18n.js",
         "scripts/looper-core.js",
         "scripts/looper.js"
       ]

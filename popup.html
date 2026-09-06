@@ -373,6 +373,51 @@
             justify-content: center;
         }
 
+        .action-row {
+            position: relative;
+            width: 100%;
+            height: 38px;
+        }
+
+        .action-row > button {
+            position: absolute;
+            top: 0;
+        }
+
+        #helpBtn {
+            left: 0;
+            width: 32px;
+            min-width: 32px;
+            padding: 0;
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        #downloadBtn { left: 50%; transform: translateX(-50%); }
+        #downloadBtn:hover { transform: translateX(-50%) scale(1.054); }
+        #looperActionSlot { position: absolute; right: 0; top: 0; width: 32px; height: 32px; pointer-events: none; }
+
+        #helpPanel {
+            position: absolute;
+            inset: 0;
+            z-index: 8;
+            display: none;
+            overflow-y: auto;
+            padding: 14px;
+            box-sizing: border-box;
+            background: radial-gradient(circle at 50% 0%, #2a2a2a 0%, #111 68%);
+        }
+
+        #helpPanel.is-visible { display: block; }
+        .help-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .help-header h2 { flex: 1; margin: 0; font-size: 18px; }
+        .help-copy { margin: 0 0 14px; color: #d0d0d0; font-size: 12px; line-height: 1.45; }
+        .help-section { border-top: 1px solid rgba(255,255,255,.13); padding: 10px 0; }
+        .help-section h3 { margin: 0 0 4px; font-size: 13px; }
+        .help-section p { margin: 0; color: #c4c4c4; font-size: 12px; line-height: 1.45; }
+        .help-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+        .help-link { color: #fff; font-size: 11px; }
+
         #chooseDownloadFolder {
             width: auto;
             max-width: 150px;
@@ -644,14 +689,14 @@
         <div class="spinner-ring">
             <img src="./assets/icon128.png" class="spinner-logo" alt="Loading" draggable="false">
         </div>
-        <p id="loadingText">Loading track...</p>
-        <button id="retryBtn" type="button" title="Retry">Retry</button>
+        <p id="loadingText" data-i18n="loading_track">Loading track…</p>
+        <button id="retryBtn" type="button" title="Retry" data-i18n="retry" data-i18n-title="retry">Retry</button>
     </div>
 
     <div id="errorOverlay">
         <img src="./assets/icon128.png" class="error-logo" alt="SoundCloud Downloader" draggable="false">
-        <h2 id="errorTitle">No track selected</h2>
-        <p id="errorMessage">Open a SoundCloud track page to download it.</p>
+        <h2 id="errorTitle" data-i18n="no_track_selected">No track selected</h2>
+        <p id="errorMessage" data-i18n="open_soundcloud_page">Open a SoundCloud track page to download it.</p>
         <p id="errorHint"></p>
     </div>
 
@@ -669,23 +714,23 @@
                     <span id="metaSep" class="meta-sep">&middot;</span>
                     <span id="streamFormat"></span>
                     <span id="downloadFormatSlot" class="control-slot">
-                        <select id="downloadFormat" class="popup-control-btn is-hidden" aria-label="Download format">
-                            <option value="auto">Auto</option>
-                            <option value="original">Original</option>
+                        <select id="downloadFormat" class="popup-control-btn is-hidden" aria-label="Download format" data-i18n-aria-label="download_format">
+                            <option value="auto" data-i18n="auto">Auto</option>
+                            <option value="original" data-i18n="original">Original</option>
                             <option value="mp3">MP3</option>
                             <option value="m4a">M4A</option>
                             <option value="opus">Opus</option>
                         </select>
                     </span>
-                    <select id="downloadLimit" class="popup-control-btn is-hidden" aria-label="Download amount">
+                    <select id="downloadLimit" class="popup-control-btn is-hidden" aria-label="Download amount" data-i18n-aria-label="download_amount">
                         <option value="50">50</option>
                     </select>
                     <span id="downloadFolderSlot" class="control-slot">
-                        <button id="chooseDownloadFolder" type="button" class="popup-control-btn is-hidden" aria-label="Choose download folder" title="Choose download folder">
+                        <button id="chooseDownloadFolder" type="button" class="popup-control-btn is-hidden" aria-label="Choose download folder" title="Choose download folder" data-i18n-aria-label="choose_folder" data-i18n-title="choose_folder">
                             <img class="folder-icon" src="./assets/icons/folder-icon.svg" alt="" width="20" height="20" draggable="false">
-                            <span id="downloadFolderName">Downloads</span>
+                            <span id="downloadFolderName" data-i18n="downloads_folder">Downloads</span>
                         </button>
-                        <button id="resetDownloadFolder" type="button" class="popup-control-btn is-hidden" aria-label="Use browser Downloads folder" title="Use browser Downloads folder">Downloads</button>
+                        <button id="resetDownloadFolder" type="button" class="popup-control-btn is-hidden" aria-label="Use browser Downloads folder" title="Use browser Downloads folder" data-i18n-aria-label="use_downloads_folder" data-i18n-title="use_downloads_folder" data-i18n="downloads_folder">Downloads</button>
                     </span>
                 </p>
             </div>
@@ -693,18 +738,18 @@
 
         <canvas id="waveformCanvas" width="380" height="80" style="display: none;"></canvas>
 
-        <div id="selectionPanel" class="is-hidden" aria-label="Track selection">
+        <div id="selectionPanel" class="is-hidden" aria-label="Track selection" data-i18n-aria-label="track_selection">
             <div class="selection-header">
-                <button id="selectionBackBtn" type="button" class="selection-header-btn popup-control-btn" aria-label="Back" title="Back">
+                <button id="selectionBackBtn" type="button" class="selection-header-btn popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back">
                     <img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false">
                 </button>
                 <div id="selectionHeaderOptions" class="selection-header-group"></div>
                 <span class="selection-header-spacer"></span>
                 <div class="selection-header-actions">
-                    <button id="clearAllBtn" type="button" class="selection-header-btn popup-control-btn" aria-label="Clear selected tracks" title="Clear selected tracks">
+                    <button id="clearAllBtn" type="button" class="selection-header-btn popup-control-btn" aria-label="Clear selected tracks" title="Clear selected tracks" data-i18n-aria-label="clear_selected_tracks" data-i18n-title="clear_selected_tracks">
                         <img class="selection-action-icon" src="./assets/icons/deselect-all.svg" alt="" width="20" height="20" draggable="false">
                     </button>
-                    <button id="selectAllBtn" type="button" class="selection-header-btn popup-control-btn" aria-label="Select all tracks" title="Select all tracks">
+                    <button id="selectAllBtn" type="button" class="selection-header-btn popup-control-btn" aria-label="Select all tracks" title="Select all tracks" data-i18n-aria-label="select_all_tracks" data-i18n-title="select_all_tracks">
                         <img class="selection-action-icon" src="./assets/icons/select-all.svg" alt="" width="20" height="20" draggable="false">
                     </button>
                 </div>
@@ -717,20 +762,36 @@
         </div>
 
         <div class="download-button-container">
-            <button id="downloadBtn" type="button" aria-label="Download" title="Download" class="is-hidden">
-                <img class="dl-icon" src="./assets/icons/download.svg" alt="" width="22" height="22" draggable="false">
-                <span class="dl-spinner" aria-hidden="true"></span>
-            </button>
-            <div id="jobControls">
-                <button id="pauseJobBtn" type="button" class="job-btn" title="Pause download">Pause</button>
-                <button id="resumeJobBtn" type="button" class="job-btn is-primary is-hidden" title="Resume download">Resume</button>
-                <button id="cancelJobBtn" type="button" class="job-btn is-danger" title="Cancel download">Cancel</button>
+            <div class="action-row">
+                <button id="helpBtn" type="button" class="popup-control-btn" aria-label="Help and settings" title="Help and settings" data-i18n-aria-label="settings_and_help" data-i18n-title="settings_and_help">&#9881;</button>
+                <button id="downloadBtn" type="button" aria-label="Download" title="Download" data-i18n-aria-label="download" data-i18n-title="download" class="is-hidden">
+                    <img class="dl-icon" src="./assets/icons/download.svg" alt="" width="22" height="22" draggable="false">
+                    <span class="dl-spinner" aria-hidden="true"></span>
+                </button>
+                <span id="looperActionSlot" aria-hidden="true"></span>
             </div>
-            <p id="downloadStatus">Ready to download</p>
-            <p id="jobHint" class="is-hidden">You can close this popup — the download continues in the background.</p>
+            <div id="jobControls">
+                <button id="pauseJobBtn" type="button" class="job-btn" title="Pause download" data-i18n="pause" data-i18n-title="pause">Pause</button>
+                <button id="resumeJobBtn" type="button" class="job-btn is-primary is-hidden" title="Resume download" data-i18n="resume" data-i18n-title="resume">Resume</button>
+                <button id="cancelJobBtn" type="button" class="job-btn is-danger" title="Cancel download" data-i18n="cancel" data-i18n-title="cancel">Cancel</button>
+            </div>
+            <p id="downloadStatus" data-i18n="ready_to_download">Ready to download</p>
+            <p id="jobHint" class="is-hidden" data-i18n="background_download_hint">You can close this popup — the download continues in the background.</p>
             <p id="failedSummary"></p>
         </div>
+        <section id="helpPanel" aria-labelledby="helpTitle" aria-modal="true" role="dialog">
+            <div class="help-header"><button id="helpBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back">←</button><h2 id="helpTitle" data-i18n="help_title">How it works</h2></div>
+            <p class="help-copy" data-i18n="help_intro">Download tracks you own or have permission to download.</p>
+            <div class="help-section"><h3 data-i18n="help_getting_started_title">Download from SoundCloud</h3><p data-i18n="help_getting_started">Open a track, playlist, Likes, or a user's Tracks page. Use the Download button here or the download button on the SoundCloud page.</p></div>
+            <div class="help-section"><h3 data-i18n="help_collection_title">Choose a collection</h3><p data-i18n="help_collection">For playlists, Likes, and user tracks, choose a preset or Select to pick individual tracks. Downloads keep running if you close this popup.</p></div>
+            <div class="help-section"><h3 data-i18n="help_folder_title">Choose a folder</h3><p data-i18n="help_folder">Use the folder button to select where files are saved. Choose Downloads to return to Chrome's normal Downloads folder.</p></div>
+            <div class="help-section"><h3 data-i18n="help_format_title">Formats and quality</h3><p data-i18n="help_format">Auto selects the available stream. Original is available only when the artist has enabled an original download. Source quality varies by track.</p></div>
+            <div class="help-section"><h3 data-i18n="help_progress_title">Progress and errors</h3><p data-i18n="help_progress">The status shows progress and saved files. If a track cannot be read or saved, retry after reloading SoundCloud or choosing the folder again.</p></div>
+            <div class="help-section"><h3 data-i18n="help_looper_title">Looper</h3><p data-i18n="help_looper">On a compatible individual track, Looper lets you repeat an A–B section and export that selected range as WAV. It does not change full-track downloads.</p></div>
+            <div class="help-section"><h3 data-i18n="help_support_title">Support and reviews</h3><p data-i18n="help_support">Need help or want to share feedback? Use the links below.</p><div class="help-links"><a class="popup-control-btn help-link" href="https://soundcloud.com/" target="_blank" data-i18n="open_soundcloud">Open SoundCloud</a><a class="popup-control-btn help-link" href="https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews" target="_blank" data-i18n="write_review">Write a Chrome Web Store review</a><span class="popup-control-btn help-link" data-i18n="support_email_pending">Support email is being set up</span></div></div>
+        </section>
     </div>
+    <script src="./scripts/i18n.js"></script>
     <script src="./scripts/format-utils.js"></script>
     <script src="./scripts/directory-storage.js"></script>
     <script src="./scripts/stream-selector.js"></script>

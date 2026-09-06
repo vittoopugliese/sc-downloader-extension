@@ -69,7 +69,7 @@ assert(
   "The folder-picker icon asset is missing."
 );
 assert(
-  /id="downloadFolderName">Downloads<\/span>/.test(popup),
+  /id="downloadFolderName"[^>]*>Downloads<\/span>/.test(popup),
   "The active download destination must be visible next to the folder icon."
 );
 assert(

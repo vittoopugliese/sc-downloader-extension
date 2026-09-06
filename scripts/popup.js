@@ -3,8 +3,9 @@ const POLL_INTERVAL_MS = 500;
 const JOB_POLL_INTERVAL_MS = 1000;
 const NOT_TRACK_RETRY_DELAY_MS = 600;
 const MAX_NOT_TRACK_RETRIES = 2;
-const DEFAULT_DOWNLOAD_STATUS = "Ready to download";
-const DOWNLOAD_ERROR_STATUS = "Error, please retry";
+const t = globalThis.SCDLI18n?.t || ((key) => key);
+const DEFAULT_DOWNLOAD_STATUS = t("ready_to_download");
+const DOWNLOAD_ERROR_STATUS = t("error_retry");
 const DOWNLOAD_PRESETS = [10, 25, 50, 100, 150, 200, 300];
 const DOWNLOAD_WARN_THRESHOLD = 200;
 const SELECT_WARN_THRESHOLD = 1000;
@@ -51,6 +52,9 @@ const clearAllBtn = document.getElementById("clearAllBtn");
 const selectionViewport = document.getElementById("selectionViewport");
 const selectionSpacer = document.getElementById("selectionSpacer");
 const selectionRows = document.getElementById("selectionRows");
+const helpBtn = document.getElementById("helpBtn");
+const helpPanel = document.getElementById("helpPanel");
+const helpBackBtn = document.getElementById("helpBackBtn");
 
 let isDownloading = false;
 let isSelectionMode = false;
@@ -72,10 +76,40 @@ let activeBulkJob = null;
 let notTrackRetryCount = 0;
 let currentFormatPreference = SCStreamSelector.DEFAULT_PREFERENCE;
 let currentDownloadDestination = null;
+let helpReturnFocus = null;
+let helpSelectionScrollTop = 0;
 const popupDownloadIntent = SCDownloadIntent.create(chrome.runtime);
 
+function openHelp() {
+  helpReturnFocus = document.activeElement;
+  helpSelectionScrollTop = selectionViewport.scrollTop;
+  helpPanel.classList.add("is-visible");
+  helpBackBtn.focus();
+}
+
+function closeHelp() {
+  if (!helpPanel.classList.contains("is-visible")) return;
+  helpPanel.classList.remove("is-visible");
+  if (isSelectionMode) {
+    selectionViewport.scrollTop = helpSelectionScrollTop;
+    renderVisibleSelectionRows();
+  }
+  helpReturnFocus?.focus?.();
+  helpReturnFocus = null;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
+  SCDLI18n.localizeDocument();
   await loadDownloadDestination();
+
+  helpBtn.addEventListener("click", openHelp);
+  helpBackBtn.addEventListener("click", closeHelp);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && helpPanel.classList.contains("is-visible")) {
+      event.preventDefault();
+      closeHelp();
+    }
+  });
 
   retryBtn.addEventListener("click", () => {
     hasRenderedTrack = false;
@@ -102,7 +136,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   cancelJobBtn.addEventListener("click", () => {
-    const proceed = confirm("Cancel the background download? Files already saved will be kept.");
+    const proceed = confirm(t("cancel_background_download"));
     if (!proceed) {
       return;
     }
@@ -125,8 +159,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (isOpeningSelection || isDownloading) {
         const loaded = message.loaded ?? 0;
         const total = message.total ?? loaded;
-        loadingText.textContent = `Loading tracks ${loaded}/${total}...`;
-        downloadStatus.textContent = `Loading tracks ${loaded}/${total}...`;
+        loadingText.textContent = t("loading_tracks_progress", [loaded, total]);
+        downloadStatus.textContent = t("loading_tracks_progress", [loaded, total]);
       }
       loadingStartTime = Date.now();
       return;
@@ -172,10 +206,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       currentDownloadDestination = await SCDownloadDirectory.chooseDirectory();
       renderDownloadDestination();
-      downloadStatus.textContent = `Downloads will be saved to ${getDownloadDestinationLabel()}`;
+      downloadStatus.textContent = t("saving_to_folder", getDownloadDestinationLabel());
     } catch (error) {
       if (error?.name !== "AbortError") {
-        alert(`Could not select folder: ${error.message}`);
+        alert(t("choose_folder_failed", error.message));
       }
     } finally {
       chooseDownloadFolder.disabled = isDownloading;
@@ -192,10 +226,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       await SCDownloadDirectory.clearCurrent();
       currentDownloadDestination = null;
       renderDownloadDestination();
-      downloadStatus.textContent = "Downloads will be saved to the browser Downloads folder";
+      downloadStatus.textContent = t("saving_to_downloads");
     } catch (error) {
       console.error("Error restoring browser Downloads folder:", error);
-      alert(`Could not restore the Downloads folder: ${error.message}`);
+      alert(t("restore_downloads_failed", error.message));
     } finally {
       resetDownloadFolder.disabled = false;
     }
@@ -282,13 +316,13 @@ async function loadDownloadDestination() {
 }
 
 function getDownloadDestinationLabel() {
-  return currentDownloadDestination?.name || "Downloads";
+  return currentDownloadDestination?.name || t("downloads_folder");
 }
 
 function formatDownloadSuccess(result) {
-  const fileName = result?.fileName || "Track";
+  const fileName = result?.fileName || t("track");
   const destinationName = result?.destinationName || getDownloadDestinationLabel();
-  return `Saved ${fileName} to ${destinationName}`;
+  return t("saved_file_to", [fileName, destinationName]);
 }
 
 async function ensureDownloadDestinationPermission() {
@@ -300,12 +334,12 @@ async function ensureDownloadDestinationPermission() {
 }
 
 function renderDownloadDestination() {
-  const folderName = currentDownloadDestination?.name || "Folder";
-  downloadFolderName.textContent = currentDownloadDestination?.name || "Downloads";
+  const folderName = currentDownloadDestination?.name || t("folder");
+  downloadFolderName.textContent = currentDownloadDestination?.name || t("downloads_folder");
   resetDownloadFolder.classList.toggle("is-hidden", !currentDownloadDestination);
   chooseDownloadFolder.title = currentDownloadDestination
-    ? `Download to ${folderName}. Click to change folder.`
-    : "Choose download folder";
+    ? t("change_download_folder", folderName)
+    : t("choose_folder");
 }
 
 function showDownloadDestination() {
@@ -360,11 +394,11 @@ function renderBulkJobState(job) {
   hideRetryButton();
   errorOverlay.classList.remove("is-visible");
 
-  titleEl.textContent = job.playlistTitle || "Background download";
-  artistEl.textContent = job.artist || "SoundCloud Downloader";
+  titleEl.textContent = job.playlistTitle || t("background_download");
+  artistEl.textContent = job.artist || t("app_name");
   artistUrl.href = job.artistUrl || "#";
   artistArtwork.src = job.artistImageUrl || "./assets/icon48.png";
-  durationEl.textContent = `${job.total} tracks`;
+  durationEl.textContent = t("tracks", job.total);
   streamFormat.style.display = "none";
   hideDownloadLimitSelector();
   metaSep.style.display = "none";
@@ -389,10 +423,10 @@ function renderBulkJobState(job) {
 
   if (job.status === "running" || job.status === "paused") {
     isDownloading = true;
-    const statusPrefix = job.status === "paused" ? "Paused" : "Downloading";
+    const statusPrefix = job.status === "paused" ? t("paused") : t("downloading");
     downloadStatus.textContent =
       job.currentTrackStatus ||
-      `${statusPrefix}: ${job.completed + job.failed.length}/${job.total}`;
+      t("job_progress", [statusPrefix, job.completed + job.failed.length, job.total]);
     failedSummary.classList.remove("is-visible");
     failedSummary.textContent = "";
     return;
@@ -410,16 +444,16 @@ function renderBulkJobSummary(job) {
   cancelJobBtn.classList.add("is-hidden");
 
   if (job.status === "completed") {
-    const destination = job.destinationName || `Downloads/${job.folderName}`;
-    downloadStatus.textContent = `Saved ${job.completed}/${job.total} tracks to ${destination}`;
+    const destination = job.destinationName || `${t("downloads_folder")}/${job.folderName}`;
+    downloadStatus.textContent = t("saved_tracks_to", [job.completed, job.total, destination]);
   } else if (job.status === "cancelled") {
-    downloadStatus.textContent = `Cancelled after saving ${job.completed}/${job.total} tracks.`;
+    downloadStatus.textContent = t("cancelled_after_saving", [job.completed, job.total]);
   } else {
     downloadStatus.textContent = job.error || DOWNLOAD_ERROR_STATUS;
   }
 
   if (job.failed?.length) {
-    failedSummary.textContent = `${job.failed.length} track(s) failed.`;
+    failedSummary.textContent = t("tracks_failed", job.failed.length);
     failedSummary.classList.add("is-visible");
   } else {
     failedSummary.classList.remove("is-visible");
@@ -530,7 +564,7 @@ function handleTrackState(state) {
 
 function showLoading() {
   loadingOverlay.classList.remove("is-hidden");
-  loadingText.textContent = "Loading...";
+  loadingText.textContent = t("loading");
   hideRetryButton();
   downloadBtn.classList.add("is-hidden");
   hideDownloadLimitSelector();
@@ -546,7 +580,7 @@ function hideLoading() {
 }
 
 function showLoadingTimeout() {
-  loadingText.textContent = "Still loading track data...";
+  loadingText.textContent = t("loading_track_data");
   retryBtn.classList.add("is-visible");
 }
 
@@ -630,7 +664,7 @@ async function renderTrack(trackData) {
 
   downloadStatus.textContent = trackData.clientId
     ? DEFAULT_DOWNLOAD_STATUS
-    : "Tip: reload SoundCloud if download fails without login.";
+    : t("reload_if_download_fails");
 
   errorOverlay.classList.remove("is-visible");
   downloadBtn.classList.remove("is-hidden");
@@ -657,7 +691,7 @@ function hideFormatAndLimitSelectors() {
 function appendSelectOption() {
   const selectOption = document.createElement("option");
   selectOption.value = "select";
-  selectOption.textContent = "Select ";
+  selectOption.textContent = t("select");
   downloadLimit.appendChild(selectOption);
 }
 
@@ -673,7 +707,7 @@ function populateDownloadLimitOptions(total) {
   if (total <= 25) {
     const allOption = document.createElement("option");
     allOption.value = "all";
-    allOption.textContent = "All";
+    allOption.textContent = t("all");
     downloadLimit.appendChild(allOption);
     appendSelectOption();
     downloadLimit.value = "all";
@@ -695,7 +729,7 @@ function populateDownloadLimitOptions(total) {
 
   const allOption = document.createElement("option");
   allOption.value = "all";
-  allOption.textContent = "All";
+  allOption.textContent = t("all");
   downloadLimit.appendChild(allOption);
   appendSelectOption();
 
@@ -727,14 +761,14 @@ async function renderPlaylist(playlistData) {
   hideLoading();
   hideRetryButton();
 
-  titleEl.textContent = playlistData.title || "Untitled playlist";
-  artistEl.textContent = playlistData.artist || "Unknown artist";
+  titleEl.textContent = playlistData.title || t("untitled_playlist");
+  artistEl.textContent = playlistData.artist || t("unknown_artist");
   artistUrl.href = playlistData.artistUrl || "#";
   artistArtwork.src = playlistData.artistImageUrl || "./assets/icon48.png";
 
   const total =
     playlistData.totalCount ?? playlistData.tracks?.length ?? 0;
-  durationEl.textContent = `${total} tracks`;
+  durationEl.textContent = t("tracks", total);
   streamFormat.style.display = "none";
   showFormatDropdownForBulk();
   populateDownloadLimitOptions(total);
@@ -748,7 +782,7 @@ async function renderPlaylist(playlistData) {
   }
 
   downloadStatus.textContent =
-    "Saves individual files to the chosen folder. You can close this popup while downloading.";
+    t("collection_download_hint");
 
   errorOverlay.classList.remove("is-visible");
   downloadBtn.classList.remove("is-hidden");
@@ -874,8 +908,8 @@ function updateSelectionCount() {
   const count = selectedIds.size;
   downloadStatus.textContent =
     count === 0
-      ? "Select tracks to download"
-      : `${count} track${count === 1 ? "" : "s"} selected`;
+      ? t("select_tracks_to_download")
+      : count === 1 ? t("track_selected", count) : t("tracks_selected", count);
 }
 
 function moveDownloadControlsToSelectionHeader() {
@@ -928,8 +962,7 @@ function exitSelectionMode() {
     downloadLimit.value = previousDownloadLimitValue;
     downloadLimit.classList.remove("is-hidden");
     metaSep.style.display = "";
-    downloadStatus.textContent =
-      "Saves individual files to the chosen folder. You can close this popup while downloading.";
+    downloadStatus.textContent = t("collection_download_hint");
   }
 }
 
@@ -940,8 +973,7 @@ function restoreCollectionAfterSelectionError() {
   showFormatDropdownForBulk();
   showDownloadDestination();
   metaSep.style.display = "";
-  downloadStatus.textContent =
-    "Could not load the selector. Choose an amount or try Select again.";
+  downloadStatus.textContent = t("load_selector_failed");
 }
 
 async function openSelectionPanel(options = {}) {
@@ -956,7 +988,7 @@ async function openSelectionPanel(options = {}) {
 
   if (total > SELECT_WARN_THRESHOLD) {
     const proceed = confirm(
-      `This collection has ${total} tracks. Loading the full list may take a while. Continue?`
+      t("load_collection_confirm", total)
     );
 
     if (!proceed) {
@@ -967,14 +999,14 @@ async function openSelectionPanel(options = {}) {
 
   isOpeningSelection = true;
   showLoading();
-  loadingText.textContent = "Loading track list...";
+  loadingText.textContent = t("loading_track_list");
 
   try {
     const result = await requestBulkSelectionList(total);
 
     if (!result?.success || !result.items?.length) {
       hideLoading();
-      alert(result?.error || "Could not load the track list.");
+      alert(result?.error || t("load_track_list_failed"));
       restoreCollectionAfterSelectionError();
       return;
     }
@@ -987,7 +1019,7 @@ async function openSelectionPanel(options = {}) {
   } catch (error) {
     console.error("Error opening selection panel:", error);
     hideLoading();
-    alert(`Could not load tracks: ${error.message}`);
+    alert(t("load_tracks_failed", error.message));
     restoreCollectionAfterSelectionError();
   } finally {
     isOpeningSelection = false;
@@ -996,7 +1028,7 @@ async function openSelectionPanel(options = {}) {
 
 async function startSelectedBulkDownload() {
   if (!currentPlaylistData || selectedIds.size === 0) {
-    alert("Select at least one track to download.");
+    alert(t("select_at_least_one_track"));
     return;
   }
 
@@ -1004,7 +1036,7 @@ async function startSelectedBulkDownload() {
 
   if (selectedCount >= DOWNLOAD_WARN_THRESHOLD) {
     const proceed = confirm(
-      `Download ${selectedCount} selected tracks as individual files to ${getDownloadDestinationLabel()}? You can close this popup and the download will continue. Continue?`
+      t("download_selected_confirm", [selectedCount, getDownloadDestinationLabel()])
     );
 
     if (!proceed) {
@@ -1016,7 +1048,7 @@ async function startSelectedBulkDownload() {
     .filter((item) => selectedIds.has(item.id))
     .map((item) => item.id);
 
-  setDownloadState(true, `Preparing ${selectedCount} selected tracks...`);
+  setDownloadState(true, t("preparing_selected_tracks", selectedCount));
 
   try {
     await ensureDownloadDestinationPermission();
@@ -1024,7 +1056,7 @@ async function startSelectedBulkDownload() {
 
     if (!bulkResult?.success || !bulkResult.tracks?.length) {
       setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-      alert(bulkResult?.error || "No downloadable tracks were found.");
+      alert(bulkResult?.error || t("no_downloadable_tracks"));
       return;
     }
 
@@ -1044,7 +1076,7 @@ async function startSelectedBulkDownload() {
   } catch (error) {
     console.error("Error starting selected bulk download:", error);
     setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-    alert(`Download failed: ${error.message}`);
+    alert(t("download_failed_detail", error.message));
   }
 }
 
@@ -1080,14 +1112,14 @@ function attachDownloadListener() {
       const effectiveCount = limit ?? total;
 
       if (effectiveCount >= DOWNLOAD_WARN_THRESHOLD) {
-        const proceed = confirm(`Download ${effectiveCount} tracks as individual files to ${getDownloadDestinationLabel()}? You can close this popup and the download will continue. Or open the popup and select specific track count. Continue?`);
+        const proceed = confirm(t("download_collection_confirm", [effectiveCount, getDownloadDestinationLabel()]));
 
         if (!proceed) {
           return;
         }
       }
 
-      setDownloadState(true, "Fetching track list...");
+      setDownloadState(true, t("fetching_track_list"));
 
       try {
         await ensureDownloadDestinationPermission();
@@ -1095,7 +1127,7 @@ function attachDownloadListener() {
 
         if (!bulkResult?.success || !bulkResult.tracks?.length) {
           setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-          alert(bulkResult?.error || "No downloadable tracks were found.");
+          alert(bulkResult?.error || t("no_downloadable_tracks"));
           return;
         }
 
@@ -1114,7 +1146,7 @@ function attachDownloadListener() {
       } catch (error) {
         console.error("Error starting bulk download:", error);
         setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-        alert(`Download failed: ${error.message}`);
+        alert(t("download_failed_detail", error.message));
       }
 
       return;
@@ -1129,11 +1161,11 @@ function attachDownloadListener() {
     if (!SCDownloadTrack.canDownload(trackData)) {
       console.error("Cannot obtain stream URL.");
       setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-      alert("Error #33: No downloadable stream was found for this track.");
+      alert(t("no_downloadable_stream"));
       return;
     }
 
-    setDownloadState(true, "Resolving stream...");
+    setDownloadState(true, t("resolving_stream"));
 
     try {
       await ensureDownloadDestinationPermission();
@@ -1148,7 +1180,7 @@ function attachDownloadListener() {
     } catch (error) {
       console.error("Error downloading file:", error);
       setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-      alert(`Download failed: ${error.message}`);
+      alert(t("download_failed_detail", error.message));
     }
   });
 }
@@ -1171,14 +1203,12 @@ function showTrackLoadError(reason) {
   hideDownloadDestination();
 
   if (reason === "load_failed") {
-    errorTitle.textContent = "Couldn't load this track";
-    errorMessage.textContent =
-      "Something went wrong while reading the track data.";
-    errorHint.textContent = "Try reloading the SoundCloud page.";
+    errorTitle.textContent = t("track_load_failed");
+    errorMessage.textContent = t("track_load_failed_detail");
+    errorHint.textContent = t("reload_soundcloud");
   } else {
-    errorTitle.textContent = "No track selected";
-    errorMessage.textContent =
-      "Open a Track, Playlist, Likes or User Tracks page to download it";
+    errorTitle.textContent = t("no_track_selected");
+    errorMessage.textContent = t("open_soundcloud_page");
     errorHint.textContent = "";
   }
 

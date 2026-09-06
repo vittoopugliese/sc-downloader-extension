@@ -4,6 +4,7 @@ const INLINE_STYLES_ID = "scdl-inline-styles";
 const SUCCESS_RESET_MS = 2000;
 const BULK_WARN_THRESHOLD = 200;
 const PLAYER_DOWNLOAD_TIMEOUT_MS = 120000;
+const t = globalThis.SCDLI18n?.t || ((key) => key);
 const inlineDownloadIntent = SCDownloadIntent.create(chrome.runtime);
 
 let inlineTrackData = null;
@@ -244,16 +245,16 @@ function setInlineButtonState(state) {
   if (state === "loading") {
     button.classList.add("is-loading");
     button.title = profileTracksPage
-      ? "Loading track selector..."
+      ? t("inline_loading_selector")
       : collectionPage
-        ? "Preparing download..."
-        : "Downloading...";
+        ? t("inline_preparing")
+        : t("inline_downloading");
     button.setAttribute(
       "aria-label",
       button.title
     );
     if (profileLabel) {
-      profileLabel.textContent = "Opening selector...";
+      profileLabel.textContent = t("inline_opening_selector");
     }
     return;
   }
@@ -261,38 +262,38 @@ function setInlineButtonState(state) {
   if (state === "success") {
     button.classList.add("is-success");
     button.title = profileTracksPage
-      ? "Track selector opened"
+      ? t("inline_selector_opened")
       : collectionPage
-        ? "Download started!"
-        : "Downloaded!";
+        ? t("inline_download_started")
+        : t("inline_downloaded");
     button.setAttribute(
       "aria-label",
       button.title
     );
     if (profileLabel) {
-      profileLabel.textContent = "Selector opened";
+      profileLabel.textContent = t("inline_selector_opened");
     }
     return;
   }
 
   if (state === "error") {
     button.classList.add("is-error");
-    button.title = "Error, please retry";
-    button.setAttribute("aria-label", "Error, please retry");
+    button.title = t("error_retry");
+    button.setAttribute("aria-label", t("error_retry"));
     return;
   }
 
   button.title = profileTracksPage
-    ? "Select user tracks"
+    ? t("inline_select_user_tracks")
     : collectionPage
-      ? "Download playlist"
-      : "Download";
+      ? t("inline_download_playlist")
+      : t("download");
   button.setAttribute(
     "aria-label",
     button.title
   );
   if (profileLabel) {
-    profileLabel.textContent = "Download tracks";
+    profileLabel.textContent = t("inline_download_tracks");
   }
 }
 
@@ -336,7 +337,7 @@ async function handleInlineCollectionDownloadClick() {
 
   if (total >= BULK_WARN_THRESHOLD) {
     const proceed = confirm(
-      `Download ${total} tracks as individual files in your Downloads folder? You can close this tab and the download will continue in the background. Or open the popup and select specific track count. Continue?`
+      t("inline_collection_confirm", total)
     );
 
     if (!proceed) {
@@ -351,7 +352,7 @@ async function handleInlineCollectionDownloadClick() {
     const tracks = await window.SCDL.resolveBulkTracks(null);
 
     if (!tracks?.length) {
-      throw new Error("No downloadable tracks were found.");
+      throw new Error(t("no_downloadable_tracks"));
     }
 
     const formatPreference = await SCStreamSelector.getStoredFormatPreference();
@@ -385,7 +386,7 @@ async function handleProfileTracksClick() {
     });
 
     if (!result?.success) {
-      throw new Error(result?.error || "Could not open the extension popup.");
+      throw new Error(result?.error || t("open_popup_failed"));
     }
 
     setInlineButtonState("success");
@@ -398,7 +399,7 @@ async function handleProfileTracksClick() {
       `#${INLINE_BUTTON_ID} .scdl-profile-download-label`
     );
     if (label) {
-      label.textContent = "Open extension icon";
+      label.textContent = t("open_extension_icon");
     }
   }
 }
@@ -468,33 +469,33 @@ function setPlayerButtonState(state, message = null) {
 
   if (state === "loading") {
     button.classList.add("is-loading");
-    button.title = "Downloading current track...";
+    button.title = t("inline_current_downloading");
     button.setAttribute("aria-label", button.title);
     return;
   }
 
   if (state === "success") {
     button.classList.add("is-success");
-    button.title = "Current track downloaded";
+    button.title = t("inline_current_downloaded");
     button.setAttribute("aria-label", button.title);
     return;
   }
 
   if (state === "error") {
     button.classList.add("is-error");
-    button.title = message || "Could not download the current track";
+    button.title = message || t("inline_download_failed");
     button.setAttribute("aria-label", button.title);
     return;
   }
 
   if (state === "disabled") {
     button.classList.add("is-disabled");
-    button.title = message || "No downloadable track is playing";
+    button.title = message || t("inline_no_track");
     button.setAttribute("aria-label", button.title);
     return;
   }
 
-  button.title = "Download current track";
+  button.title = t("inline_current_track");
   button.setAttribute("aria-label", button.title);
 }
 
@@ -542,7 +543,7 @@ function createPlayerDownloadButton() {
   button.type = "button";
   button.className =
     "sc-button sc-button-secondary sc-button-small sc-button-icon sc-button-responsive scdl-player-download";
-  button.title = "Download current track";
+  button.title = t("inline_current_track");
   button.setAttribute("aria-label", button.title);
 
   const icon = document.createElement("img");
@@ -605,22 +606,22 @@ async function handlePlayerDownloadClick() {
   try {
     const trackData = await withPlayerDownloadTimeout(
       window.SCDL?.resolvePlayerTrackData?.(requestedTrackUrl),
-      "Timed out while resolving the current track."
+      t("resolve_current_track_timeout")
     );
 
     if (!SCDownloadTrack.canDownload(trackData)) {
-      throw new Error("The current track has no downloadable source.");
+      throw new Error(t("current_track_no_source"));
     }
 
     const result = await withPlayerDownloadTimeout(
       inlineDownloadIntent.downloadTrack(trackData, {
         formatPreference: "auto",
       }),
-      "The download did not finish in time."
+      t("download_timeout")
     );
 
     if (!result?.success) {
-      throw new Error(result?.error || "Download failed.");
+      throw new Error(result?.error || t("download_failed"));
     }
 
     if (playerTrackUrl !== requestedTrackUrl) {
@@ -648,8 +649,8 @@ function createInlineDownloadButton() {
   const button = document.createElement("button");
   button.id = INLINE_BUTTON_ID;
   button.type = "button";
-  button.title = "Download";
-  button.setAttribute("aria-label", "Download");
+  button.title = t("download");
+  button.setAttribute("aria-label", t("download"));
   const profileTracksPage = isProfileTracksInlinePage();
   button.className = profileTracksPage
     ? "sc-button sc-button-secondary sc-button-medium sc-button-responsive scdl-profile-download"
@@ -665,7 +666,7 @@ function createInlineDownloadButton() {
   if (profileTracksPage) {
     const label = document.createElement("span");
     label.className = "scdl-profile-download-label";
-    label.textContent = "Download tracks";
+    label.textContent = t("inline_download_tracks");
     button.appendChild(label);
   }
 

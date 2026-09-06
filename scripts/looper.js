@@ -1,4 +1,5 @@
 const SCLooper = (() => {
+  const t = globalThis.SCDLI18n?.t || ((key) => key);
   const BUTTON_ATTRIBUTE = "data-scdl-looper";
   const DOWNLOAD_ATTRIBUTE = "data-scdl-loop-download";
   const OVERLAY_ATTRIBUTE = "data-scdl-loop-overlay";
@@ -740,10 +741,10 @@ const SCLooper = (() => {
       button.replaceChildren(loopIcon(active));
       button.dataset.scdlLoopState = visualState;
     }
-    const label = active ? "Desactivar loop" : "Activar loop A-B";
+    const label = active ? t("looper_disable") : t("looper_enable");
     button.title = available || active
       ? label
-      : "Reproduce o carga este track para activar el loop";
+      : t("looper_play_track");
     button.setAttribute("aria-label", button.title);
     button.setAttribute("aria-pressed", String(active));
     button.setAttribute("aria-disabled", String(!available && !active));
@@ -752,10 +753,10 @@ const SCLooper = (() => {
   function setDownloadButtonState(button, state = "idle", detail = "") {
     if (!button) return;
     const labels = {
-      idle: "Descargar loop",
-      loading: "Preparando loop...",
-      success: "Loop descargado",
-      error: "No se pudo descargar el loop. Reintentar",
+      idle: t("looper_download"),
+      loading: t("looper_preparing"),
+      success: t("looper_downloaded"),
+      error: t("looper_download_failed"),
     };
     button.classList.toggle(
       "scdl-loop-download-loading",
@@ -815,7 +816,7 @@ const SCLooper = (() => {
     const element = document.createElement("button");
     element.type = "button";
     element.className = "scdl-loop-selection-drag";
-    element.setAttribute("aria-label", "Mover selección completa del loop");
+    element.setAttribute("aria-label", t("looper_move_selection"));
     element.addEventListener("pointerdown", handleSelectionPointerDown);
     element.addEventListener("pointermove", handleSelectionPointerMove);
     element.addEventListener("pointerup", handleSelectionPointerEnd);
@@ -859,7 +860,7 @@ const SCLooper = (() => {
     const dragHandle = selection.querySelector(".scdl-loop-selection-drag");
     dragHandle?.setAttribute(
       "aria-valuetext",
-      `${formatTime(range.startMs)} a ${formatTime(range.endMs)}`
+      t("looper_range", [formatTime(range.startMs), formatTime(range.endMs)])
     );
     after.style.left = `${end}%`;
     after.style.right = "0";
@@ -870,7 +871,7 @@ const SCLooper = (() => {
       marker.style.left = `${isStart ? start : end}%`;
       marker.setAttribute(
         "aria-label",
-        isStart ? "Inicio del loop A" : "Final del loop B"
+        isStart ? t("looper_start") : t("looper_end")
       );
       marker.setAttribute("aria-valuemin", "0");
       marker.setAttribute("aria-valuemax", String(Math.round(range.durationMs)));
@@ -985,7 +986,7 @@ const SCLooper = (() => {
       return window.SCDL.resolvePlayerTrackData(expectedUrl);
     }
 
-    throw new Error("No se pudo identificar el track activo.");
+    throw new Error(t("looper_identify_track_failed"));
   }
 
   async function handleDownloadClick(event) {
@@ -1020,7 +1021,7 @@ const SCLooper = (() => {
         trimRange,
       });
       if (!result?.success) {
-        throw new Error(result?.error || "No se pudo descargar el loop.");
+        throw new Error(result?.error || t("looper_download_failed"));
       }
       setDownloadButtonState(button, "success");
       downloadResetTimeout = setTimeout(() => {
@@ -1032,7 +1033,7 @@ const SCLooper = (() => {
       setDownloadButtonState(
         button,
         "error",
-        error?.message || "No se pudo descargar el loop."
+        error?.message || t("looper_download_failed")
       );
     } finally {
       isLoopDownloading = false;
