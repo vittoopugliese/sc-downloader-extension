@@ -54,13 +54,13 @@ assert(
   "The compact folder-picker button is missing."
 );
 assert(
-  /id="selectionBackBtn"[^>]*aria-label="Back"[^>]*>[\s\S]*class="back-icon"[^>]*src="\.\/assets\/back-arrow\.svg"/.test(
+  /id="selectionBackBtn"[^>]*aria-label="Back"[^>]*>[\s\S]*class="back-icon"[^>]*src="\.\/assets\/icons\/back-arrow\.svg"/.test(
     popup
   ),
   "The selection back button should use the compact back-arrow icon."
 );
 assert(
-  /class="folder-icon"[^>]*src="\.\/assets\/folder-icon\.svg"/.test(popup),
+  /class="folder-icon"[^>]*src="\.\/assets\/icons\/folder-icon\.svg"/.test(popup),
   "The folder-picker icon asset is missing."
 );
 assert(
@@ -81,10 +81,10 @@ assert(
   "The folder icon should use 20px and the back icon should use 16px."
 );
 assert(
-  /id="selectAllBtn"[^>]*aria-label="Select all tracks"[^>]*>[\s\S]*src="\.\/assets\/select-all\.svg"/.test(
+  /id="selectAllBtn"[^>]*aria-label="Select all tracks"[^>]*>[\s\S]*src="\.\/assets\/icons\/select-all\.svg"/.test(
     popup
   ) &&
-    /id="clearAllBtn"[^>]*aria-label="Clear selected tracks"[^>]*>[\s\S]*src="\.\/assets\/deselect-all\.svg"/.test(
+    /id="clearAllBtn"[^>]*aria-label="Clear selected tracks"[^>]*>[\s\S]*src="\.\/assets\/icons\/deselect-all\.svg"/.test(
       popup
     ),
   "The selection action buttons should use their icon assets."

@@ -2,13 +2,18 @@
 
 > Download SoundCloud tracks, playlists, and likes ~ right from your browser. One extension, one click.
 
-![ImagePreview](./assets/readme_preview.jpeg)
+<p align="center">
+  <img src="./assets/icon128.png" width="128" alt="SoundCloud Downloader 128-pixel extension icon">
+  <img src="./assets/icon48.png" width="48" alt="SoundCloud Downloader 48-pixel extension icon">
+</p>
+
+![SoundCloud Downloader popup with format and folder controls](./assets/images/readme_preview.png)
 
 ## 🆕 Update ~ 2026.06.01
 
 This release is a **big one**. What started as a single-track downloader is now a fully polished bulk-download tool ~ with a ton of bug fixes and UX improvements along the way.
 
-![ImagePreview](./assets/readme_inline_download.jpeg)
+![Inline download button in the SoundCloud action bar](./assets/images/readme_inline_download.jpeg)
 
 **Highlights:**
 - **Inline download button** ~ download tracks directly from SoundCloud's action bar (Like/Repost/Share) without opening the popup
@@ -69,6 +74,34 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 - Download progress: `Track 3/50 ~ Downloading 12/48 parts...`
 - SPA navigation detection ~ no more stale track data when browsing SoundCloud
 - Bulk jobs run in a background offscreen worker ~ safe for playlists with hundreds of tracks on modest hardware
+
+### Screenshots
+
+#### Choose tracks from a playlist
+
+![Playlist track selector](./assets/images/playlist-selector.png)
+
+#### Download from the persistent player
+
+![Player download button](./assets/images/player-download-demo.png)
+
+#### Create an A-B loop and download the selected range
+
+![A-B loop selection and download controls](./assets/images/looping-download-demo.png)
+
+#### Open the looper from the SoundCloud action bar
+
+![Looper add-on button](./assets/images/looper-addon-button.png)
+
+### Promotional images
+
+![Playlist and single-track download features](./assets/promos/one.png)
+
+![WAV download and A-B looping add-on](./assets/promos/two.png)
+
+![Playlist selection and download options](./assets/promos/three.png)
+
+![A-B looper promotional image](./assets/promos/four.png)
 
 ---
 

@@ -476,8 +476,8 @@ const SCLooper = (() => {
       }
       [${DOWNLOAD_ATTRIBUTE}] .scdl-loop-download-icon {
         display: block;
-        width: 22px;
-        height: 22px;
+        width: 20px;
+        height: 20px;
         object-fit: contain;
         pointer-events: none;
         filter: invert(42%) sepia(99%) saturate(3297%) hue-rotate(359deg)
@@ -525,7 +525,12 @@ const SCLooper = (() => {
         background: rgba(0, 0, 0, 0.22);
       }
       .scdl-loop-selection {
-        background: rgba(255, 85, 0, 0.28);
+        background: linear-gradient(
+          to right,
+          rgba(255, 85, 0, 0.24) 0%,
+          rgba(255, 85, 0, 0.12) 50%,
+          rgba(255, 85, 0, 0.24) 100%
+        );
         box-sizing: border-box;
       }
       .scdl-loop-selection-drag {
@@ -597,16 +602,16 @@ const SCLooper = (() => {
       .scdl-loop-marker-label {
         position: absolute;
         z-index: 2;
-        top: 28px;
+        top: 24px;
         left: 50%;
-        width: 22px;
-        height: 22px;
+        width: 14px;
+        height: 14px;
         padding: 0;
         transform: translateX(-50%);
         border-radius: 50%;
         color: #fff;
-        background: #ff5500;
-        font: 700 8px/22px Arial, sans-serif;
+        background: #ff5500ff;
+        font: 600 10px/18px Arial, sans-serif;
         text-align: center;
         box-sizing: border-box;
       }
@@ -717,7 +722,7 @@ const SCLooper = (() => {
     button.setAttribute(DOWNLOAD_ATTRIBUTE, "true");
     const icon = document.createElement("img");
     icon.className = "scdl-loop-download-icon";
-    icon.src = chrome.runtime.getURL("assets/download.svg");
+    icon.src = chrome.runtime.getURL("assets/icons/download.svg");
     icon.alt = "";
     icon.draggable = false;
     button.appendChild(icon);
@@ -736,14 +741,14 @@ const SCLooper = (() => {
     ).padStart(3, "0")}`;
   }
 
-  function createMarker(marker, label) {
+  function createMarker(marker) {
     const element = document.createElement("button");
     element.type = "button";
     element.className = "scdl-loop-marker";
     element.dataset.marker = marker;
     element.setAttribute("role", "slider");
     element.setAttribute("aria-orientation", "horizontal");
-    element.innerHTML = `<span class="scdl-loop-marker-label">${label}</span><span class="scdl-loop-marker-time"></span>`;
+    element.innerHTML = `<span class="scdl-loop-marker-label" aria-hidden="true"></span><span class="scdl-loop-marker-time"></span>`;
     element.addEventListener("pointerdown", handleMarkerPointerDown);
     element.addEventListener("pointermove", handleMarkerPointerMove);
     element.addEventListener("pointerup", handleMarkerPointerEnd);

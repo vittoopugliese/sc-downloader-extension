@@ -126,7 +126,7 @@ const button = {
     path.resolve(__dirname, "looper.js"),
     "utf8"
   );
-  assert.match(looperSource, /assets\/download\.svg/);
+  assert.match(looperSource, /assets\/icons\/download\.svg/);
   console.log("Loop click verification passed.");
 })().catch((error) => {
   console.error(error);

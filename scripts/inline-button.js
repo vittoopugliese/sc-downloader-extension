@@ -657,7 +657,7 @@ function createInlineDownloadButton() {
 
   const icon = document.createElement("img");
   icon.className = "scdl-inline-icon scdl-filtered";
-  icon.src = chrome.runtime.getURL("assets/download.svg");
+  icon.src = chrome.runtime.getURL("assets/icons/download.svg");
   icon.alt = "";
   icon.draggable = false;
   button.appendChild(icon);
