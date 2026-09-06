@@ -1,0 +1,16 @@
+{
+  "name": "sc-downloader-extension",
+  "version": "2026.9.5",
+  "private": true,
+  "description": "SoundCloud downloader browser extension",
+  "scripts": {
+    "test": "node scripts/run-verifications.js",
+    "test:e2e": "node scripts/verify-loop-browser.js",
+    "test:e2e:download": "node scripts/verify-download-browser.js",
+    "test:live": "node scripts/verify-live-looper.js",
+    "browser:live": "node scripts/open-live-browser.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

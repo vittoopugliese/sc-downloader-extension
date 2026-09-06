@@ -28,7 +28,9 @@ async function waitForDownloadedFile(downloadDirectory, timeoutMs) {
   await fs.mkdir(downloads);
   const context = await chromium.launchPersistentContext(profile, {
     headless: true,
-    executablePath: process.env.SCDL_CHROME_PATH,
+    ...(process.env.SCDL_CHROME_PATH
+      ? { executablePath: process.env.SCDL_CHROME_PATH }
+      : { channel: "chromium" }),
     args: [`--disable-extensions-except=${root}`, `--load-extension=${root}`],
     acceptDownloads: true,
   });

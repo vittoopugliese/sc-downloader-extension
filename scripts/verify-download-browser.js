@@ -12,7 +12,9 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
   await fs.mkdir(downloads);
   const context = await chromium.launchPersistentContext(profile, {
     headless: true,
-    ...(process.env.SCDL_CHROME_PATH ? { executablePath: process.env.SCDL_CHROME_PATH } : {}),
+    ...(process.env.SCDL_CHROME_PATH
+      ? { executablePath: process.env.SCDL_CHROME_PATH }
+      : { channel: "chromium" }),
     args: [`--disable-extensions-except=${root}`, `--load-extension=${root}`],
     acceptDownloads: true,
   });

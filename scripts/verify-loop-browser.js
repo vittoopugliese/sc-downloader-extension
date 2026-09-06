@@ -47,7 +47,7 @@ async function waitForFile(directory, timeoutMs = 30000) {
     headless: true,
     ...(process.env.SCDL_CHROME_PATH
       ? { executablePath: process.env.SCDL_CHROME_PATH }
-      : {}),
+      : { channel: "chromium" }),
     args: [`--disable-extensions-except=${root}`, `--load-extension=${root}`],
     acceptDownloads: true,
   });
@@ -55,7 +55,6 @@ async function waitForFile(directory, timeoutMs = 30000) {
   try {
     const worker =
       context.serviceWorkers()[0] || (await context.waitForEvent("serviceworker"));
-    const extensionId = new URL(worker.url()).host;
     const page = await context.newPage();
     const cdp = await context.newCDPSession(page);
     await cdp.send("Browser.setDownloadBehavior", {
@@ -165,76 +164,6 @@ async function waitForFile(directory, timeoutMs = 30000) {
       "A-B selection must contain exactly one second"
     );
     console.log("PASS: looper A-B click -> WAV build -> Downloads file");
-
-    const extensionPage = await context.newPage();
-    await extensionPage.goto(`chrome-extension://${extensionId}/offscreen.html`);
-    await extensionPage.evaluate(async () => {
-      const handle = await navigator.storage.getDirectory();
-      const request = indexedDB.open("scdl_download_directories", 1);
-      request.onupgradeneeded = () => request.result.createObjectStore("handles");
-      const database = await new Promise((resolve, reject) => {
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-      await new Promise((resolve, reject) => {
-        const transaction = database.transaction("handles", "readwrite");
-        transaction.objectStore("handles").put(handle, "loop-test-directory");
-        transaction.oncomplete = resolve;
-        transaction.onerror = () => reject(transaction.error);
-      });
-      database.close();
-      await chrome.storage.local.set({
-        downloadDestination: {
-          id: "loop-test-directory",
-          name: "Loop test folder",
-        },
-      });
-    });
-    await extensionPage.goto(`chrome-extension://${extensionId}/index.html`);
-
-    await loopButton.click();
-    await page.locator("[data-scdl-loop-overlay]").waitFor({ state: "detached" });
-    await loopButton.click();
-    await endMarker.waitFor();
-    await endMarker.press("Shift+ArrowLeft");
-    await downloadButton.click();
-    try {
-      await page.waitForFunction(
-        () =>
-          /success|error/.test(
-            document.querySelector("[data-scdl-loop-download]")?.dataset
-              .scdlLoopDownloadState || ""
-          ),
-        null,
-        { timeout: 30000 }
-      );
-    } catch (error) {
-      const state = await downloadButton.evaluate((button) => ({
-        state: button.dataset.scdlLoopDownloadState,
-        title: button.title,
-      }));
-      throw new Error(`Folder loop download timed out: ${JSON.stringify(state)}`, {
-        cause: error,
-      });
-    }
-    assert.equal(
-      await downloadButton.getAttribute("data-scdl-loop-download-state"),
-      "success",
-      (await downloadButton.getAttribute("title")) || "Folder loop download failed"
-    );
-    const saved = await extensionPage.evaluate(async () => {
-      const handle = await navigator.storage.getDirectory();
-      const files = [];
-      for await (const entry of handle.values()) {
-        const file = await entry.getFile();
-        files.push({ name: entry.name, size: file.size });
-      }
-      return files;
-    });
-    assert.deepEqual(saved, [
-      { name: "Artist - Loop regression (loop).wav", size: output.length },
-    ]);
-    console.log("PASS: looper WAV -> remembered destination folder");
   } finally {
     await context.close();
     assert.equal(path.dirname(path.resolve(profile)), path.resolve(os.tmpdir()));

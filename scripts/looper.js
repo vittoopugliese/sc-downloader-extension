@@ -7,6 +7,10 @@ const SCLooper = (() => {
   const MEDIA_BRIDGE_EVENT = "scdl-looper:command";
   const MEDIA_BRIDGE_COMMAND_ATTRIBUTE = "data-scdl-looper-command";
   const MEDIA_BRIDGE_RESPONSE_ATTRIBUTE = "data-scdl-looper-response";
+  const WAVEFORM_SELECTORS = [
+    '[role="slider"][aria-label="Waveform"]',
+    ".fullHero__waveform .waveformWrapper__waveform",
+  ];
   const SEEK_RETRY_MS = 250;
   const STICKY_MEDIA_BRIDGE_SCORE = 30;
   const MEDIA_EVENTS = [
@@ -70,6 +74,8 @@ const SCLooper = (() => {
       button.getAttribute("aria-label") || button.getAttribute("title")
     );
     return (
+      label === "more" ||
+      label === "mas" ||
       label === "more actions" ||
       label === "mas acciones" ||
       label.endsWith(" acciones")
@@ -113,9 +119,35 @@ const SCLooper = (() => {
 
   function readWaveformDuration(waveform) {
     const durationMs = Number(waveform?.getAttribute("aria-valuemax"));
-    return Number.isFinite(durationMs) && durationMs >= SCLooperCore.MIN_RANGE_MS
-      ? durationMs
-      : null;
+    if (Number.isFinite(durationMs) && durationMs >= SCLooperCore.MIN_RANGE_MS) {
+      return durationMs;
+    }
+
+    const durationText = String(
+      window.SCDL?.getTrackData?.()?.duration || ""
+    ).trim();
+    const parts = durationText.split(":").map(Number);
+    if (
+      parts.length >= 2 &&
+      parts.length <= 3 &&
+      parts.every((part) => Number.isFinite(part) && part >= 0)
+    ) {
+      const parsedMs =
+        parts.reduce((total, part) => total * 60 + part, 0) * 1000;
+      if (parsedMs >= SCLooperCore.MIN_RANGE_MS) return parsedMs;
+    }
+
+    return null;
+  }
+
+  function queryWaveforms(container = document) {
+    return Array.from(
+      new Set(
+        WAVEFORM_SELECTORS.flatMap((selector) =>
+          Array.from(container?.querySelectorAll?.(selector) || [])
+        )
+      )
+    );
   }
 
   function findMoreActionsWithin(container) {
@@ -156,9 +188,7 @@ const SCLooper = (() => {
   }
 
   function discoverTarget() {
-    const waveforms = Array.from(
-      document.querySelectorAll('[role="slider"][aria-label="Waveform"]')
-    ).filter(
+    const waveforms = queryWaveforms().filter(
       (waveform) => readWaveformDuration(waveform) !== null && isVisible(waveform)
     );
 
@@ -167,6 +197,28 @@ const SCLooper = (() => {
       if (track) {
         return {
           ...track,
+          waveform,
+          wrapper: findWaveformWrapper(waveform),
+          durationMs: readWaveformDuration(waveform),
+        };
+      }
+    }
+
+    if (isTrackPage() && waveforms.length > 0) {
+      const menuButtons = Array.from(
+        document.querySelectorAll('button[aria-haspopup="true"]')
+      ).filter((button) => isMoreActionsButton(button) && isVisible(button));
+      const menuButton =
+        menuButtons.find((button) =>
+          String(button.className || "")
+            .split(/\s+/)
+            .includes("sc-button-medium")
+        ) || menuButtons[0];
+      if (menuButton) {
+        const waveform = waveforms[0];
+        return {
+          root: menuButton.parentElement || document.body,
+          menuButton,
           waveform,
           wrapper: findWaveformWrapper(waveform),
           durationMs: readWaveformDuration(waveform),
@@ -1270,9 +1322,7 @@ const SCLooper = (() => {
   }
 
   function mountingDiagnostics() {
-    const waveforms = Array.from(
-      document.querySelectorAll('[role="slider"][aria-label="Waveform"]')
-    );
+    const waveforms = queryWaveforms();
     const validWaveforms = waveforms.filter(
       (waveform) => readWaveformDuration(waveform) !== null
     );
