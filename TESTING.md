@@ -26,6 +26,7 @@ Run against a real public SoundCloud track:
 
 ```powershell
 npm run test:live
+npm run test:live:folder
 ```
 
 Override the target or show the automated browser when needed:

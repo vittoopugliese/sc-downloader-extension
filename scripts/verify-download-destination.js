@@ -121,7 +121,7 @@ function plain(value) {
     /Download was interrupted/
   );
 
-  const rejectedDirectory = vm.runInContext(
+  const unavailableDirectory = vm.runInContext(
     "SCDownloadDestination.create",
     context
   )({
@@ -132,14 +132,21 @@ function plain(value) {
       error: "Folder access expired.",
     }),
   });
-  await assert.rejects(
-    rejectedDirectory.save({
-      blobUrl: "blob:directory-error",
-      fileName: "Track.mp3",
-      destination: { id: "expired", name: "Expired" },
-    }),
-    /Folder access expired/
-  );
+  const fallbackResult = await unavailableDirectory.save({
+    blobUrl: "blob:directory-error",
+    fileName: "Track.mp3",
+    destination: { id: "expired", name: "Expired" },
+  });
+  assert.deepEqual(plain(downloadCalls[1]), {
+    url: "blob:directory-error",
+    filename: "Track.mp3",
+    saveAs: false,
+    conflictAction: "uniquify",
+  });
+  assert.deepEqual(plain(fallbackResult), {
+    fileName: "Track.mp3",
+    destinationName: "Downloads (folder unavailable)",
+  });
 
   console.log("Download destination verification passed.");
 })().catch((error) => {

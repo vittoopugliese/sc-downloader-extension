@@ -104,6 +104,13 @@ const SCDownloadDestination = (() => {
     return { save };
   }
 
+  function isUnavailableDirectoryError(error) {
+    const message = String(error?.message || error || "");
+    return /(?:folder|directory).*(?:unavailable|expired|permission|access|no longer available)|(?:permission|access).*(?:folder|directory)/i.test(
+      message
+    );
+  }
+
   function createCollectionFileName(fileName, collection) {
     if (!collection) {
       return fileName;
@@ -142,12 +149,24 @@ const SCDownloadDestination = (() => {
       const selected = normalize(destination);
 
       if (selected) {
-        const savedFileName = await selectedDirectory.save(
-          blobUrl,
-          outputFileName,
-          selected
-        );
-        return { fileName: savedFileName, destinationName: selected.name };
+        try {
+          const savedFileName = await selectedDirectory.save(
+            blobUrl,
+            outputFileName,
+            selected
+          );
+          return { fileName: savedFileName, destinationName: selected.name };
+        } catch (error) {
+          if (!isUnavailableDirectoryError(error)) {
+            throw error;
+          }
+
+          await browserDownloads.save(blobUrl, outputFileName);
+          return {
+            fileName: outputFileName,
+            destinationName: "Downloads (folder unavailable)",
+          };
+        }
       }
 
       const browserFileName = collection?.folderName

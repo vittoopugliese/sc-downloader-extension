@@ -7,6 +7,8 @@ const { chromium } = require("playwright");
 const TRACK_URL =
   process.env.SCDL_LIVE_TRACK_URL || "https://soundcloud.com/forss/flickermood";
 const DOWNLOAD_TIMEOUT_MS = 4 * 60 * 1000;
+const useSelectedDirectory = process.argv.includes("--folder");
+const SELECTED_DIRECTORY_ID = "live-loop-directory";
 
 function redactUrl(value) {
   try {
@@ -28,6 +30,46 @@ async function waitForDownloadedFile(directory, timeoutMs) {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   throw new Error("No completed loop WAV appeared before timeout.");
+}
+
+async function configureSelectedDirectory(extensionPage) {
+  await extensionPage.evaluate(async (directoryId) => {
+    const handle = await navigator.storage.getDirectory();
+    const request = indexedDB.open("scdl_download_directories", 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains("handles")) {
+        request.result.createObjectStore("handles");
+      }
+    };
+    const database = await new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction("handles", "readwrite");
+      transaction.objectStore("handles").put(handle, directoryId);
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+    database.close();
+    await chrome.storage.local.set({
+      downloadDestination: { id: directoryId, name: "Live test folder" },
+    });
+  }, SELECTED_DIRECTORY_ID);
+}
+
+async function readSelectedDirectoryWav(extensionPage) {
+  return extensionPage.evaluate(async () => {
+    const directory = await navigator.storage.getDirectory();
+    for await (const [name, handle] of directory.entries()) {
+      if (handle.kind !== "file" || !name.endsWith(".wav")) continue;
+      const file = await handle.getFile();
+      const header = new Uint8Array(await file.slice(0, 44).arrayBuffer());
+      return { name, size: file.size, header: Array.from(header) };
+    }
+    return null;
+  });
 }
 
 async function describeLooper(page) {
@@ -162,6 +204,7 @@ async function startTrackPlayback(page) {
     acceptDownloads: true,
   });
   let page = null;
+  let extensionPage = null;
   let passed = false;
   const diagnostics = [];
 
@@ -172,6 +215,15 @@ async function startTrackPlayback(page) {
     worker.on("console", (message) => {
       if (message.type() === "error") diagnostics.push(`worker: ${message.text()}`);
     });
+
+    if (useSelectedDirectory) {
+      const extensionId = new URL(worker.url()).host;
+      extensionPage = await context.newPage();
+      await extensionPage.goto(`chrome-extension://${extensionId}/offscreen.html`);
+      await configureSelectedDirectory(extensionPage);
+      // Avoid keeping a second offscreen listener alive while the download runs.
+      await extensionPage.goto(`chrome-extension://${extensionId}/index.html`);
+    }
 
     page = await context.newPage();
     page.on("console", (message) => {
@@ -188,11 +240,13 @@ async function startTrackPlayback(page) {
       }
     });
 
-    const cdp = await context.newCDPSession(page);
-    await cdp.send("Browser.setDownloadBehavior", {
-      behavior: "allow",
-      downloadPath: downloads,
-    });
+    if (!useSelectedDirectory) {
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("Browser.setDownloadBehavior", {
+        behavior: "allow",
+        downloadPath: downloads,
+      });
+    }
     await page.goto(TRACK_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
 
     const consent = page.locator("#onetrust-consent-sdk");
@@ -257,8 +311,19 @@ async function startTrackPlayback(page) {
       (await downloadButton.getAttribute("title")) || "Live loop download failed."
     );
 
-    const downloadedFile = await waitForDownloadedFile(downloads, DOWNLOAD_TIMEOUT_MS);
-    const wav = await fs.readFile(downloadedFile);
+    let downloadedName;
+    let wav;
+    if (useSelectedDirectory) {
+      const savedFile = await readSelectedDirectoryWav(extensionPage);
+      assert.ok(savedFile, "No completed loop WAV appeared in the selected folder.");
+      downloadedName = savedFile.name;
+      wav = Buffer.from(savedFile.header);
+      assert.ok(savedFile.size >= 44, "The selected-folder WAV is incomplete.");
+    } else {
+      const downloadedFile = await waitForDownloadedFile(downloads, DOWNLOAD_TIMEOUT_MS);
+      downloadedName = path.basename(downloadedFile);
+      wav = await fs.readFile(downloadedFile);
+    }
     assert.equal(wav.toString("ascii", 0, 4), "RIFF");
     assert.equal(wav.toString("ascii", 8, 12), "WAVE");
     const sampleRate = wav.readUInt32LE(24);
@@ -272,7 +337,7 @@ async function startTrackPlayback(page) {
 
     passed = true;
     console.log(
-      `Live looper passed: ${path.basename(downloadedFile)} (${actualDurationMs} ms)`
+      `Live looper${useSelectedDirectory ? " selected-folder" : ""} passed: ${downloadedName} (${actualDurationMs} ms)`
     );
   } catch (error) {
     if (page) {

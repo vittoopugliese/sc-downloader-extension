@@ -8,6 +8,7 @@
     "test:e2e": "node scripts/verify-loop-browser.js",
     "test:e2e:download": "node scripts/verify-download-browser.js",
     "test:live": "node scripts/verify-live-looper.js",
+    "test:live:folder": "node scripts/verify-live-looper.js --folder",
     "browser:live": "node scripts/open-live-browser.js"
   },
   "devDependencies": {

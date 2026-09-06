@@ -104,6 +104,19 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
     assert.ok(saved[0] >= audio.length);
     console.log("PASS: remembered directory handle → persisted audio bytes");
 
+    await extensionPage.evaluate(async () => {
+      await chrome.storage.local.set({
+        downloadDestination: { id: "expired-directory", name: "Expired folder" },
+      });
+    });
+    await page.waitForFunction(() => !document.getElementById("scdl-player-download").classList.contains("is-success"));
+    await button.click();
+    await page.waitForFunction(() => /is-success|is-error/.test(document.getElementById("scdl-player-download").className), null, { timeout: 25000 });
+    assert.match(await button.getAttribute("class"), /is-success/, await button.getAttribute("title"));
+    const fallbackFiles = await fs.readdir(downloads);
+    assert.equal(fallbackFiles.length, 2, "An unavailable folder must fall back to browser Downloads");
+    console.log("PASS: unavailable remembered folder → browser Downloads fallback");
+
     const centers = await button.evaluate(element => {
       const button = element.getBoundingClientRect();
       const icon = element.querySelector("img").getBoundingClientRect();
