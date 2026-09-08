@@ -1545,9 +1545,6 @@ const SCLooper = (() => {
       !Number.isFinite(event.deltaY) ||
       event.deltaY === 0
     ) return;
-    if (event.target.closest?.(".scdl-loop-marker, .scdl-loop-selection-drag")) {
-      return;
-    }
 
     const rect = pendingZoomRect || view.waveform.getBoundingClientRect();
     if (
@@ -1560,6 +1557,9 @@ const SCLooper = (() => {
     ) {
       return;
     }
+
+    event.preventDefault();
+    event.stopPropagation();
 
     const currentZoomWindow = hasPendingZoomWindow
       ? pendingZoomWindow
@@ -1576,7 +1576,6 @@ const SCLooper = (() => {
       visibleWindow
     );
     if (focusMs === null) return;
-    if (focusMs < range.startMs || focusMs > range.endMs) return;
 
     const nextWindow = SCLooperCore.zoomWindowAt(
       currentZoomWindow,
@@ -1592,7 +1591,6 @@ const SCLooper = (() => {
       return;
     }
 
-    event.preventDefault();
     pendingZoomRect = rect;
     scheduleZoomRender(nextWindow);
   }

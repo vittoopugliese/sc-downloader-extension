@@ -175,6 +175,38 @@ async function waitForFile(directory, timeoutMs = 30000) {
       x: selectionBox.x + selectionBox.width / 2,
       y: selectionBox.y + selectionBox.height * 0.8,
     };
+    const wheelRouting = await page.evaluate(({ waveformPoint, selectionPoint }) => {
+      const waveformElement = document.querySelector('[role="slider"][aria-label="Waveform"]');
+      const selectionElement = document.querySelector(".scdl-loop-selection-drag");
+      const outsideElement = document.querySelector(".actions");
+      const dispatchWheel = (element, point) => {
+        const event = new WheelEvent("wheel", {
+          bubbles: true,
+          cancelable: true,
+          clientX: point.x,
+          clientY: point.y,
+          deltaY: 100,
+        });
+        element.dispatchEvent(event);
+        return event.defaultPrevented;
+      };
+      return {
+        waveform: dispatchWheel(waveformElement, waveformPoint),
+        loopControl: dispatchWheel(selectionElement, selectionPoint),
+        outside: dispatchWheel(outsideElement, { x: 0, y: 0 }),
+      };
+    }, {
+      waveformPoint: {
+        x: waveformBox.x + waveformBox.width * 0.95,
+        y: waveformBox.y + waveformBox.height * 0.75,
+      },
+      selectionPoint: selectionClickPoint,
+    });
+    assert.deepEqual(
+      wheelRouting,
+      { waveform: true, loopControl: true, outside: false },
+      "Looper mode must consume wheel input across the whole waveform only"
+    );
     await page.mouse.click(selectionClickPoint.x, selectionClickPoint.y);
     assert.equal(
       await page.evaluate(() => window.commentModeOpenCount),

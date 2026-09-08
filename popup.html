@@ -463,7 +463,7 @@
         .looper-guarantee { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.48; }
         .looper-purchase-btn { width: 100%; min-height: 36px; margin-top: 12px; font-size: 12px; font-weight: 700; }
         .looper-checkout-note { margin: 9px 0 0; color: var(--muted); font-size: 11px; line-height: 1.4; text-align: center; }
-        .looper-later-btn { display: flex; margin: 10px auto 0; font-size: 11px; }
+        .looper-later-btn { display: flex; margin: 10px auto 0; border-color: transparent; background: transparent; color: var(--muted); font-size: 11px; text-decoration: underline; }
 
         #chooseDownloadFolder {
             width: auto;
@@ -518,7 +518,9 @@
             border-radius: 4px;
             background: rgba(255, 255, 255, 0.08);
             color: #ffffff;
-            font: 11px inherit;
+            font-size: 11px;
+            font-family: inherit;
+            font-weight: 400;
             cursor: pointer;
             outline: none;
             transition: background-color 200ms, border-color 200ms;
@@ -861,12 +863,12 @@
             <div class="help-section"><h3 data-i18n="help_format_title">Formats and quality</h3><p data-i18n="help_format">Auto selects the available stream. Original is available only when the artist has enabled an original download. Source quality varies by track.</p></div>
             <div class="help-section"><h3 data-i18n="help_progress_title">Progress and errors</h3><p data-i18n="help_progress">The status shows progress and saved files. If a track cannot be read or saved, retry after reloading SoundCloud or choosing the folder again.</p></div>
             <div class="help-section"><h3 data-i18n="help_looper_title">Looper</h3><p data-i18n="help_looper">On a compatible individual track, Looper lets you repeat an A–B section and export that selected range as WAV. It does not change full-track downloads.</p></div>
-            <div class="help-section"><h3 data-i18n="help_support_title">Support and reviews</h3><p data-i18n="help_support">Need help or want to share feedback? Use the links below.</p><div class="help-links"><a class="popup-control-btn help-link" href="https://soundcloud.com/" target="_blank" data-i18n="open_soundcloud">Open SoundCloud</a><a class="popup-control-btn help-link" href="https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews" target="_blank" data-i18n="write_review">Write a Chrome Web Store review</a><span class="popup-control-btn help-link" data-i18n="support_email_pending">Support email is being set up</span></div></div>
+            <div class="help-section"><h3 data-i18n="help_support_title">Support and reviews</h3><p data-i18n="help_support">Need help or want to share feedback? Use the links below.</p><div class="help-links"><a class="popup-control-btn help-link" href="https://soundcloud.com/" target="_blank" data-i18n="open_soundcloud">Open SoundCloud</a><a class="popup-control-btn help-link" href="https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews" target="_blank" data-i18n="write_review">Write a Chrome Web Store review</a></div></div>
         </section>
         <section id="looperPanel" aria-labelledby="looperTitle" aria-modal="true" role="dialog">
             <div class="looper-header"><button id="looperBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button><h2 id="looperTitle" data-i18n="looper_title">Loop the part you need.</h2></div>
-            <p class="looper-copy" data-i18n="looper_intro">Repeat any section while you listen, then save only that selected range as WAV.</p>
             <img class="looper-promo-image" src="./assets/promos/four.png" alt="Looper A–B range and WAV export example" data-i18n-alt="looper_promo_image_alt">
+            <p class="looper-copy" data-i18n="looper_intro">Repeat any section while you listen, then save only that selected range as WAV.</p>
             <div class="looper-offer">
                 <p class="looper-price" data-i18n="looper_price">Early access · USD 2.99 one-time</p>
                 <p class="looper-guarantee" data-i18n="looper_free_guarantee">Every full-track download feature is free — and always will be. You only pay for Looper Pro.</p>
