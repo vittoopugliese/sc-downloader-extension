@@ -22,15 +22,20 @@ assert(
 );
 assert(
   /id="looperPanel"[^>]*role="dialog"/.test(popup) &&
-    /id="looperPurchaseBtn"/.test(popup) &&
-    /id="looperCheckoutNote"/.test(popup),
-  "The popup must provide a localized Looper explainer without a checkout link."
+    /class="looper-tutorial"/.test(popup) &&
+    /id="looperDoneBtn"/.test(popup) &&
+    !/looperPurchaseBtn|looperCheckoutNote|USD 2\.99|LOOPER PRO/.test(popup),
+  "The popup must provide a free, localized Looper tutorial without payment UI."
 );
 assert(
-  /body\.looper-explainer-mode,[\s\S]*min-height:\s*468px/.test(popup) &&
+  /body\.looper-explainer-mode,[\s\S]*min-height:\s*580px/.test(popup) &&
     /id="helpBackBtn"[^>]*>[\s\S]*class="back-icon"[^>]*src="\.\/assets\/icons\/back-arrow\.svg"/.test(popup) &&
     /id="looperBackBtn"[^>]*>[\s\S]*class="back-icon"[^>]*src="\.\/assets\/icons\/back-arrow\.svg"/.test(popup),
   "Help and Looper must reuse the compact existing back-arrow icon, and Looper must expand the popup."
+);
+assert(
+  /data-i18n="looper_step_zoom_title"[\s\S]*data-i18n="looper_step_zoom"/.test(popup),
+  "The free Looper tutorial must explain waveform zoom for precise A–B selection."
 );
 assert(
   /function openHelp\(\)[\s\S]*helpPanel\.classList\.add\("is-visible"\)/.test(
@@ -56,11 +61,9 @@ assert(
     /function closeLooperExplainer\(\)[\s\S]*selectionViewport\.scrollTop = looperSelectionScrollTop/.test(
       popupScript
     ) &&
-    /looperPurchaseBtn\.addEventListener\("click", \(\) => \{[\s\S]*looperCheckoutNote\.classList\.remove\("is-hidden"\)/.test(
-      popupScript
-    ) &&
-    !/ACTIVATE_LOOPER|DOWNLOAD_LOOP/.test(popupScript),
-  "The Looper explainer must preserve selection state and must not activate Looper or a checkout."
+    /looperDoneBtn\.addEventListener\("click", closeLooperExplainer\)/.test(popupScript) &&
+    !/ACTIVATE_LOOPER|DOWNLOAD_LOOP|looperPurchaseBtn|looperCheckoutNote/.test(popupScript),
+  "The Looper tutorial must preserve selection state and must not activate Looper or a checkout."
 );
 
 function assert(condition, message) {
@@ -187,6 +190,12 @@ assert(
     popupScript
   ),
   "The popup must not report a generic success without showing the resolved destination."
+);
+assert(
+  /id="failedDetails"[^>]*aria-live="polite"/.test(popup) &&
+    /job\.failed\.map\(\(failed\)/.test(popupScript) &&
+    /reason\.textContent = failed\.error/.test(popupScript),
+  "Failed tracks must show their individual save or download reason before retrying."
 );
 
 const presets = popupScript.match(/const DOWNLOAD_PRESETS = \[([^\]]+)\]/);

@@ -6,6 +6,7 @@ const { chromium } = require("playwright");
 
 const TRACK_URL =
   process.env.SCDL_LIVE_TRACK_URL || "https://soundcloud.com/forss/flickermood";
+const profileOverride = process.env.SCDL_LIVE_PROFILE;
 const DOWNLOAD_TIMEOUT_MS = 4 * 60 * 1000;
 const useSelectedDirectory = process.argv.includes("--folder");
 const SELECTED_DIRECTORY_ID = "live-loop-directory";
@@ -191,10 +192,12 @@ async function startTrackPlayback(page) {
 
 (async () => {
   const root = path.resolve(__dirname, "..");
-  const profile = await fs.mkdtemp(path.join(os.tmpdir(), "scdl-live-loop-"));
-  const downloads = path.join(profile, "downloads");
+  const profile = profileOverride
+    ? path.resolve(profileOverride)
+    : await fs.mkdtemp(path.join(os.tmpdir(), "scdl-live-loop-"));
+  const removeProfileAfterTest = !profileOverride;
+  const downloads = await fs.mkdtemp(path.join(os.tmpdir(), "scdl-live-download-"));
   const artifactDirectory = path.join(root, "test-results", "live-looper");
-  await fs.mkdir(downloads);
   await fs.mkdir(artifactDirectory, { recursive: true });
 
   const context = await chromium.launchPersistentContext(profile, {
@@ -249,14 +252,13 @@ async function startTrackPlayback(page) {
     }
     await page.goto(TRACK_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
 
-    const consent = page.locator("#onetrust-consent-sdk");
-    if (await consent.isVisible({ timeout: 10000 }).catch(() => false)) {
-      const cookieButton = consent
-        .locator("button")
-        .filter({ hasText: /^(Acepto|Accept All|Aceptar todo)$/i })
-        .first();
+    const cookieButton = page
+      .locator("button")
+      .filter({ hasText: /^(Acepto|Accept All|Aceptar todo)$/i })
+      .first();
+    if (await cookieButton.isVisible({ timeout: 10000 }).catch(() => false)) {
       await cookieButton.click({ force: true, timeout: 10000 });
-      await consent.waitFor({ state: "hidden", timeout: 10000 }).catch(() => {});
+      await cookieButton.waitFor({ state: "hidden", timeout: 10000 }).catch(() => {});
     }
 
     const modalCloseButton = page
@@ -464,7 +466,8 @@ async function startTrackPlayback(page) {
       )
       .catch(() => {});
     await context.close();
-    await fs.rm(profile, { recursive: true, force: true });
+    await fs.rm(downloads, { recursive: true, force: true });
+    if (removeProfileAfterTest) await fs.rm(profile, { recursive: true, force: true });
   }
 })().catch((error) => {
   console.error(error);

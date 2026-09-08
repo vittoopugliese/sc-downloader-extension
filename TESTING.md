@@ -20,7 +20,12 @@ separate download browser test covers both Downloads and a remembered folder:
 ```powershell
 npm run test:e2e
 npm run test:e2e:download
+npm run test:feedback
 ```
+
+`test:feedback` covers the local validation, Turnstile gate, duplicate handling,
+rate limit and retention cleanup for the optional uninstall-feedback Worker. It
+does not send data to a production service.
 
 Run against a real public SoundCloud track:
 
@@ -34,6 +39,17 @@ Override the target or show the automated browser when needed:
 ```powershell
 $env:SCDL_LIVE_TRACK_URL="https://soundcloud.com/artist/track"
 $env:SCDL_HEADED="1"
+npm run test:live
+```
+
+SoundCloud may require a signed-in session before it allows playback. To reuse
+the persistent profile created by the interactive browser, sign in there once,
+close it, then run the smoke test with that profile:
+
+```powershell
+npm run browser:live -- "https://soundcloud.com/artist/track"
+# Sign in in the opened browser, then close it.
+$env:SCDL_LIVE_PROFILE=".playwright-profile"
 npm run test:live
 ```
 
@@ -53,3 +69,9 @@ npm run browser:live -- "https://soundcloud.com/artist/track"
 
 The terminal prints a CDP command that can inspect the live page. The profile is
 stored in `.playwright-profile/`, so a SoundCloud login survives browser restarts.
+
+Create the Store-ready extension ZIP after the automated checks pass:
+
+```powershell
+npm run package:extension
+```

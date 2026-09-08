@@ -9,6 +9,8 @@ const landingPath = path.join(projectRoot, 'index.html');
 const defaultReviewSource = 'C:\\Users\\torib\\Desktop\\reviews.txt';
 const reviewSourcePath = process.env.REVIEW_SOURCE || defaultReviewSource;
 const html = fs.readFileSync(landingPath, 'utf8');
+const i18nPath = path.join(projectRoot, 'scripts', 'landing-i18n.js');
+const i18nSource = fs.readFileSync(i18nPath, 'utf8');
 
 function parseInlineReviews(markup) {
   const declaration = markup.match(/const webStoreReviews\s*=\s*(\[[\s\S]*?\n\s*\]);/);
@@ -105,15 +107,24 @@ assert(
   html.includes('https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews'),
   'Review CTA must link to the official review page'
 );
-assert(/reviewLabels[\s\S]*de:[\s\S]*en:[\s\S]*es:[\s\S]*pt:[\s\S]*ru:/.test(html), 'Review CTA locales are incomplete');
+assert(html.includes('./scripts/landing-i18n.js'), 'Landing must load its localization script');
+for (const locale of ['en', 'es', 'pt', 'de', 'ru']) {
+  assert(new RegExp(`\\b${locale}:\\s*\\{`).test(i18nSource), `Landing locale ${locale} is missing`);
+}
+assert(i18nSource.includes('write_review') && i18nSource.includes('reviews_show_all'), 'Review CTA locales are incomplete');
 assert(!/(href|action)=["'][^"']*(checkout|stripe|paddle|lemonsqueezy)/i.test(html), 'Checkout must not be active yet');
+assert(!/USD\s*2[.,]99|Looper Pro|Early access|Purchases open soon/i.test(html), 'The free Looper landing must not retain payment copy');
 assert(html.includes("text.textContent = review.text"), 'Review text must be rendered with textContent');
-assert(html.includes("badge.textContent = 'ALREADY IMPLEMENTED'"), 'Implemented review requests need their badge');
+assert(html.includes("badge.textContent = t('implemented_badge')"), 'Implemented review requests need their localized badge');
 assert(html.includes('review-card:nth-child(n + 4) { display:none; }'), 'Only three reviews should show before expansion');
 assert(!html.includes('looper-player'), 'The retired standalone Looper player must be absent');
 assert(!/<button[^>]+id="loop-export"/.test(html), 'The retired WAV-export UI must be absent');
 assert(/data-loop-handle="start"[\s\S]*data-loop-handle="end"/.test(html), 'The hero Looper preview needs draggable A and B markers');
 assert(html.includes("handle.addEventListener('pointerdown'"), 'The hero Looper markers must support pointer dragging');
+assert(
+  /class="looper-guide"[\s\S]*Open one track[\s\S]*Turn on A–B[\s\S]*Set the range[\s\S]*Zoom in for precise edits[\s\S]*Save the loop/.test(html),
+  'The landing must explain the free Looper workflow, including precision zoom.'
+);
 assert(html.includes('mailto:it@vpugliese.online'), 'The configured support email is missing');
 assert(!/reviews\.txt/i.test(html), 'Production landing must not fetch the Desktop review source');
 

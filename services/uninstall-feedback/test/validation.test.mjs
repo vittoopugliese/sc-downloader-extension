@@ -8,6 +8,38 @@ const valid = {
   submissionId: "4ca2e6f1-9c80-44ca-b80c-1d4d5f111111", locale: "en-US", extensionVersion: "2026.9.5", turnstileToken: "token",
 };
 
+function createDatabase({ count = 0, insertChanges = 1 } = {}) {
+  const calls = [];
+  return {
+    calls,
+    prepare(sql) {
+      return {
+        bind(...values) {
+          calls.push({ sql, values });
+          return {
+            first: async () => ({ count }),
+            run: async () => ({ meta: { changes: sql.startsWith("INSERT") ? insertChanges : 1 } }),
+          };
+        },
+      };
+    },
+  };
+}
+
+async function postFeedback(database, options = {}) {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ success: options.human ?? true }), { status: 200 });
+  try {
+    return await worker.fetch(new Request("https://sctd.vpugliese.online/api/uninstall-feedback", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.9" },
+      body: JSON.stringify({ ...valid, ...options.feedback }),
+    }), { FEEDBACK_DB: database, TURNSTILE_SECRET: "secret" });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
 test("accepts bounded optional uninstall feedback", () => {
   const result = validateFeedback(valid);
   assert.equal(result.ok, true);
@@ -28,4 +60,36 @@ test("exposes only health and the public Turnstile configuration", async () => {
   assert.deepEqual(await config.json(), { turnstileSiteKey: "site-key" });
   const missing = await worker.fetch(new Request("https://sctd.vpugliese.online/private"), env);
   assert.equal(missing.status, 404);
+});
+
+test("stores verified feedback and reports an idempotent duplicate", async () => {
+  const acceptedDatabase = createDatabase();
+  const accepted = await postFeedback(acceptedDatabase);
+  assert.deepEqual(await accepted.json(), { accepted: true, duplicate: false });
+  assert.equal(acceptedDatabase.calls.length, 2);
+  assert.match(acceptedDatabase.calls[1].sql, /^INSERT INTO uninstall_feedback/);
+  assert.equal(acceptedDatabase.calls[1].values[6], "203.0.113.9");
+
+  const duplicate = await postFeedback(createDatabase({ insertChanges: 0 }));
+  assert.deepEqual(await duplicate.json(), { accepted: true, duplicate: true });
+});
+
+test("rejects bots and limits a source address before inserting", async () => {
+  const botDatabase = createDatabase();
+  const bot = await postFeedback(botDatabase, { human: false });
+  assert.deepEqual(await bot.json(), { error: "verification_failed" });
+  assert.equal(botDatabase.calls.length, 0);
+
+  const limitedDatabase = createDatabase({ count: 5 });
+  const limited = await postFeedback(limitedDatabase);
+  assert.deepEqual(await limited.json(), { error: "rate_limited" });
+  assert.equal(limitedDatabase.calls.length, 1);
+});
+
+test("scheduled cleanup removes feedback after the documented retention deadline", async () => {
+  const database = createDatabase();
+  await worker.scheduled({}, { FEEDBACK_DB: database });
+  assert.equal(database.calls.length, 1);
+  assert.match(database.calls[0].sql, /^DELETE FROM uninstall_feedback/);
+  assert.equal(typeof database.calls[0].values[0], "number");
 });

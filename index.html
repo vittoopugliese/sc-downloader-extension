@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f5ef">
-  <meta name="description" content="Download SoundCloud tracks, playlists, likes and artist uploads for free. Keep cover art and metadata, choose a folder, and preview an A–B loop.">
+  <meta name="description" content="Download SoundCloud tracks, playlists, likes and artist uploads for free. Keep cover art and metadata, choose a folder, and loop or export an A–B range as WAV.">
   <meta property="og:type" content="website">
   <meta property="og:title" content="SoundCloud Track Downloader — Your favorites. Your files.">
-  <meta property="og:description" content="Free full-track and collection downloads, plus an interactive A–B Looper preview. A focused Chrome extension built for SoundCloud.">
+  <meta property="og:description" content="Free full-track and collection downloads, plus a free A–B Looper with WAV export. A focused Chrome extension built for SoundCloud.">
   <meta name="twitter:card" content="summary">
   <title>SoundCloud Track Downloader — Free tracks, playlists & artist uploads</title>
   <link rel="icon" type="image/png" href="./assets/app-icon-logo-transparent-xl.png">
@@ -127,6 +127,16 @@
     .feature p { font-size:12px; line-height:1.75; color:var(--muted); margin:0; max-width:450px; }
     .free-label { display:inline-flex; align-items:center; gap:5px; margin-top:12px; color:#58664c; font:700 9px/1 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.8px; text-transform:uppercase; }
     .free-label::before { content:""; width:5px; height:5px; border-radius:50%; background:#6d7b60; }
+    .looper-guide { max-width:920px; margin:0 auto 55px; padding:34px; border:1px solid #f0b396; border-radius:14px; background:linear-gradient(135deg,#fff4ed,#f4f3eb); }
+    .looper-guide .section-heading { margin-bottom:25px; }
+    .looper-steps { display:grid; grid-template-columns:repeat(5,1fr); gap:0; margin:0; padding:0; list-style:none; border-top:1px solid #e6c8b8; counter-reset:looper-step; }
+    .looper-steps li { position:relative; min-height:138px; padding:21px 20px 4px 0; border-right:1px solid #e6c8b8; counter-increment:looper-step; }
+    .looper-steps li:not(:first-child) { padding-left:20px; }
+    .looper-steps li:last-child { border-right:0; }
+    .looper-steps li::before { content:counter(looper-step, decimal-leading-zero); display:block; margin-bottom:14px; color:var(--orange); font:700 10px/1 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.08em; }
+    .looper-steps h3 { margin:0 0 7px; font-size:14px; }
+    .looper-steps p { margin:0; color:var(--muted); font-size:11px; line-height:1.65; }
+    .looper-guide-note { margin:21px 0 0; color:#6c5347; font-size:11px; line-height:1.6; }
     .reviews { padding:49px 0 45px; border-top:1px solid var(--line); scroll-margin-top:24px; }
     .reviews .section-heading { margin-bottom:20px; }
     .reviews-summary { max-width:510px; line-height:1.6 !important; text-align:right; }
@@ -215,6 +225,7 @@
     .feature p { font-size:13px; line-height:1.65; }
     .free-label { font-family:"Roboto",Arial,sans-serif; font-weight:700; }
     .reviews,.faq { display:none; }
+    .looper-guide { display:block; }
     .closing { max-width:920px; margin:0 auto 34px; padding:34px; border-radius:14px; background:#242620; border:0; color:white; }
     .closing h2 { font-size:27px; }
     .closing p { color:#d2d3cd; font-size:13px; }
@@ -232,7 +243,7 @@
     .feature:last-child { display:block; }
     .reviews,.faq { display:block; }
     @media (max-width:1000px) { .hero { gap:28px; } }
-    @media (max-width:760px) { .hero { display:block; padding:48px 0; text-align:center; } .hero-copy { display:flex; } .hero-icon { width:104px; height:104px; border-radius:23px; margin-bottom:23px; } .eyebrow { justify-content:center; } .intro { margin-inline:auto; } .demo-stage { display:block; } .feature-grid { grid-template-columns:1fr; } .feature { border-right:0; border-bottom:1px solid var(--line); padding:23px 0; } .feature:last-child { display:block; } .closing { margin-inline:0; } nav > a:not(.nav-install) { display:none; } }
+    @media (max-width:760px) { .hero { display:block; padding:48px 0; text-align:center; } .hero-copy { display:flex; } .hero-icon { width:104px; height:104px; border-radius:23px; margin-bottom:23px; } .eyebrow { justify-content:center; } .intro { margin-inline:auto; } .demo-stage { display:block; } .feature-grid { grid-template-columns:1fr; } .feature { border-right:0; border-bottom:1px solid var(--line); padding:23px 0; } .feature:last-child { display:block; } .looper-guide { padding:26px 21px; text-align:left; } .looper-steps { grid-template-columns:1fr; } .looper-steps li,.looper-steps li:not(:first-child) { min-height:0; padding:17px 0 17px 42px; border-right:0; border-bottom:1px solid #e6c8b8; } .looper-steps li:last-child { border-bottom:0; } .looper-steps li::before { position:absolute; top:19px; left:0; } .closing { margin-inline:0; } nav > a:not(.nav-install) { display:none; } }
     @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*::before,*::after { transition:none !important; animation:none !important; } }
   </style>
 </head>
@@ -252,27 +263,27 @@
   <a class="skip-link" href="#main">Skip to content</a>
   <div class="shell">
     <header>
-      <a class="brand" href="#" aria-label="SoundCloud Track Downloader home">
+      <a class="brand" href="#" aria-label="SoundCloud Track Downloader home" data-l10n-aria="brand_home">
         <img class="brand-logo" src="./assets/app-icon-logo-transparent-xl.png" alt="" width="116" height="38">
         <span>SoundCloud<small>Track Downloader</small></span>
       </a>
-      <nav aria-label="Main navigation">
-        <a href="#features">Features</a>
-        <a href="#reviews">Reviews</a>
-        <a href="#faq">FAQ</a>
-        <a class="nav-install" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb">Get it free <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      <nav aria-label="Main navigation" data-l10n-aria="main_navigation">
+        <a href="#features" data-l10n="nav_features">Features</a>
+        <a href="#reviews" data-l10n="nav_reviews">Reviews</a>
+        <a href="#faq" data-l10n="nav_faq">FAQ</a>
+        <a class="nav-install" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb"><span data-l10n="nav_install">Get it free</span> <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
       </nav>
     </header>
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <img class="hero-icon" src="./assets/app-icon-logo-with-background-xl.png" width="128" height="128" alt="SoundCloud Track Downloader icon">
-          <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span> Free bulk downloader for Chrome</div>
-          <h1 id="hero-title">Whole collections.<br><em>One click.</em></h1>
-          <p class="intro">Download individual tracks, playlists, likes and complete artist uploads without leaving SoundCloud. <strong>Choose what you need and let the batch finish in the background.</strong></p>
-          <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb"><svg class="icon" aria-hidden="true"><use href="#i-chrome"/></svg> Add to Chrome — it’s free</a>
-          <p class="cta-note">Full-track downloads stay free <span>·</span> No signup <span>·</span> No redirects</p>
-          <p class="mobile-note">Install on your desktop browser to start downloading.</p>
+          <img class="hero-icon" src="./assets/app-icon-logo-with-background-xl.png" width="128" height="128" alt="SoundCloud Track Downloader icon" data-l10n-alt="hero_icon_alt">
+          <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span> <span data-l10n="hero_eyebrow">Free bulk downloader for Chrome</span></div>
+          <h1 id="hero-title"><span data-l10n="hero_title_first">Whole collections.</span><br><em data-l10n="hero_title_second">One click.</em></h1>
+          <p class="intro"><span data-l10n="hero_intro_first">Download individual tracks, playlists, likes and complete artist uploads without leaving SoundCloud.</span> <strong data-l10n="hero_intro_second">Choose what you need and let the batch finish in the background.</strong></p>
+          <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb"><svg class="icon" aria-hidden="true"><use href="#i-chrome"/></svg> <span data-l10n="hero_cta">Add to Chrome — it’s free</span></a>
+          <p class="cta-note"><span data-l10n="cta_free">Full-track downloads stay free</span> <span>·</span> <span data-l10n="cta_no_signup">No signup</span> <span>·</span> <span data-l10n="cta_no_redirects">No redirects</span></p>
+          <p class="mobile-note" data-l10n="mobile_note">Install on your desktop browser to start downloading.</p>
           <div class="store-proof" aria-label="Chrome Web Store snapshot">
             <div class="store-stat"><strong>20,000+</strong><span>public Store users</span></div>
             <div class="store-stat"><strong>47</strong><span>public ratings</span></div>
@@ -323,62 +334,75 @@
           <noscript><p class="demo-caption">This is a sample playlist preview. Install the extension to download from SoundCloud.</p></noscript>
         </div>
       </section>
-      <div class="benefit-strip" aria-label="At a glance">
-        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Full-track downloads stay free</span>
-        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Tracks, playlists, likes & profiles</span>
-        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Cover art, metadata & folders</span>
+      <div class="benefit-strip" aria-label="At a glance" data-l10n-aria="at_a_glance">
+        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span data-l10n="benefit_free">Full-track downloads stay free</span></span>
+        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span data-l10n="benefit_sources">Tracks, playlists, likes & profiles</span></span>
+        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span data-l10n="benefit_files">Cover art, metadata & folders</span></span>
       </div>
       <section class="features" id="features" aria-labelledby="features-title">
-        <div class="section-heading"><h2 id="features-title">Everything around the file is handled.</h2><p>One focused workflow, from SoundCloud to your folder.</p></div>
+        <div class="section-heading"><h2 id="features-title" data-l10n="features_title">Everything around the file is handled.</h2><p data-l10n="features_intro">One focused workflow, from SoundCloud to your folder.</p></div>
         <div class="feature-grid">
-          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg><span class="feature-index">01 / BULK</span></div><h3>One track or the whole collection.</h3><p>Save playlists, albums, likes and every public upload on an artist’s tracks page. Select specific tracks or start one complete batch.</p><span class="free-label">Always free</span></article>
-          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span class="feature-index">02 / IN PLACE</span></div><h3>Download where you’re already listening.</h3><p>Use the popup, the track action bar or the persistent player. No link copying, converter tab or redirect in the middle.</p><span class="free-label">Always free</span></article>
-          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-background"/></svg><span class="feature-index">03 / BACKGROUND</span></div><h3>Close the popup. It keeps going.</h3><p>Pause, resume or cancel a batch. Progress stays visible on the extension badge and a desktop notification tells you when it finishes.</p><span class="free-label">Always free</span></article>
+          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg><span class="feature-index">01 / BULK</span></div><h3 data-l10n="feature_bulk_title">One track or the whole collection.</h3><p data-l10n="feature_bulk_copy">Save playlists, albums, likes and every public upload on an artist’s tracks page. Select specific tracks or start one complete batch.</p><span class="free-label" data-l10n="always_free">Always free</span></article>
+          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span class="feature-index">02 / IN PLACE</span></div><h3 data-l10n="feature_place_title">Download where you’re already listening.</h3><p data-l10n="feature_place_copy">Use the popup, the track action bar or the persistent player. No link copying, converter tab or redirect in the middle.</p><span class="free-label" data-l10n="always_free">Always free</span></article>
+          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-background"/></svg><span class="feature-index">03 / BACKGROUND</span></div><h3 data-l10n="feature_background_title">Close the popup. It keeps going.</h3><p data-l10n="feature_background_copy">Pause, resume or cancel a batch. Progress stays visible on the extension badge and a desktop notification tells you when it finishes.</p><span class="free-label" data-l10n="always_free">Always free</span></article>
           <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg><span class="feature-index">04 / ORGANIZED</span></div><h3>Files ready for your library.</h3><p>Choose an available format and destination folder. MP3 and M4A keep artwork and metadata, while Unicode filenames remain intact.</p><span class="free-label">Always free</span></article>
         </div>
       </section>
+      <section class="looper-guide" id="looper" aria-labelledby="looper-title">
+        <div class="section-heading"><h2 id="looper-title" data-l10n="looper_web_title">Looper is included. Free.</h2><p data-l10n="looper_web_intro">Repeat the part you need and export only that range as WAV.</p></div>
+        <ol class="looper-steps">
+          <li><h3 data-l10n="looper_web_open_title">Open one track</h3><p data-l10n="looper_web_open">Go to a compatible individual SoundCloud track and wait for it to load or start playing.</p></li>
+          <li><h3 data-l10n="looper_web_enable_title">Turn on A–B</h3><p data-l10n="looper_web_enable">Press the loop button immediately before More actions on the track page.</p></li>
+          <li><h3 data-l10n="looper_web_range_title">Set the range</h3><p data-l10n="looper_web_range">Drag A and B over the waveform. Arrow keys move a marker 100 ms; Shift + Arrow moves it one second.</p></li>
+          <li><h3 data-l10n="looper_web_zoom_title">Zoom in for precise edits</h3><p data-l10n="looper_web_zoom">Scroll up over the waveform to zoom toward the cursor, then scroll down to zoom back out. Fine A–B edits stay easy even on a long track.</p></li>
+          <li><h3 data-l10n="looper_web_save_title">Save the loop</h3><p data-l10n="looper_web_save">Choose Download loop to save the selected A–B range as a WAV file.</p></li>
+        </ol>
+        <p class="looper-guide-note" data-l10n="looper_web_note">Looper is temporary: close it with the cross or Escape; opening another track removes it. WAV reflects the available source and does not restore quality that is not there.</p>
+      </section>
       <section class="reviews" id="reviews" aria-labelledby="reviews-title">
         <div class="section-heading">
-          <h2 id="reviews-title">Every written review. No cherry-picking.</h2>
-          <p class="reviews-summary"><span id="review-count">39</span> original written reviews imported from the Chrome Web Store—praise, requests and criticism, shown in their original language.</p>
+          <h2 id="reviews-title" data-l10n="reviews_title">Every written review. No cherry-picking.</h2>
+          <p class="reviews-summary"><span id="review-count">39</span> <span data-l10n="reviews_summary">original written reviews imported from the Chrome Web Store—praise, requests and criticism, shown in their original language.</span></p>
         </div>
-        <div class="review-viewport" id="review-viewport" tabindex="0" aria-label="Chrome Web Store reviews">
+        <div class="review-viewport" id="review-viewport" tabindex="0" aria-label="Chrome Web Store reviews" data-l10n-aria="reviews_aria">
           <ol class="review-list" id="review-list"></ol>
         </div>
         <div class="review-controls">
           <button class="text-button" id="review-toggle" type="button" aria-expanded="false">Show all 39 reviews</button>
         </div>
         <div class="review-cta">
-          <p><strong>Already using the extension?</strong>Share an honest review—it helps other people decide whether it fits their workflow.</p>
-          <a class="nav-install" id="review-link" data-review-cta href="https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews" target="_blank" rel="noopener noreferrer">Write a Chrome Web Store review <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          <p><strong data-l10n="reviews_cta_title">Already using the extension?</strong><span data-l10n="reviews_cta_copy">Share an honest review—it helps other people decide whether it fits their workflow.</span></p>
+          <a class="nav-install" id="review-link" data-review-cta href="https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews" target="_blank" rel="noopener noreferrer"><span data-l10n="write_review">Write a Chrome Web Store review</span> <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
         </div>
         <noscript><p class="demo-caption">Enable JavaScript to browse all written reviews, or read them directly on the Chrome Web Store.</p></noscript>
       </section>
       <section class="faq" id="faq" aria-labelledby="faq-title">
         <div class="faq-grid">
-          <div class="faq-intro"><h2 id="faq-title">Straight answers.</h2><p class="faq-lead">No blurred lines between the free downloader and the optional creative tool.</p></div>
+          <div class="faq-intro"><h2 id="faq-title" data-l10n="faq_title">Straight answers.</h2><p class="faq-lead" data-l10n="faq_intro">A free downloader and a free creative tool—no hidden tier.</p></div>
           <div class="faq-list">
-            <details><summary>What can I download?</summary><p>Use the extension only for content you own or have permission to save. It is an independent tool and is not affiliated with, approved by or maintained by SoundCloud.</p></details>
-            <details id="privacy"><summary>What about privacy?</summary><p>The current extension processes audio and downloads in your browser and its Chrome Web Store disclosure states that it does not collect or sell user data. This landing has no analytics or form submission. <a href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb" target="_blank" rel="noopener noreferrer">View the current Store disclosure</a>.</p></details>
+            <details><summary data-l10n="faq_rights_title">What can I download?</summary><p data-l10n="faq_rights_copy">Use the extension only for content you own or have permission to save. It is an independent tool and is not affiliated with, approved by or maintained by SoundCloud.</p></details>
+            <details id="privacy"><summary data-l10n="faq_privacy_title">What about privacy?</summary><p><span data-l10n="faq_privacy_copy">The current extension processes audio and downloads in your browser. This landing has no analytics. The optional uninstall-feedback form sends only what you choose to submit and is retained for up to 180 days.</span> <a href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb" target="_blank" rel="noopener noreferrer" data-l10n="faq_privacy_link">View the current Store disclosure</a>.</p></details>
           </div>
         </div>
       </section>
       <section class="closing" aria-labelledby="closing-title">
-        <div><h2 id="closing-title">Good music deserves a save button.</h2><p>Free to install. Free to use. Built by an independent developer.</p></div>
-        <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb">Get the free extension <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <div><h2 id="closing-title" data-l10n="closing_title">Good music deserves a save button.</h2><p data-l10n="closing_copy">Free to install. Free to use. Built by an independent developer.</p></div>
+        <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb"><span data-l10n="closing_cta">Get the free extension</span> <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
       </section>
     </main>
     <footer>
-      <p>Independent extension, not affiliated with SoundCloud.<br>Download only content you own or have permission to save.</p>
-      <div class="footer-links"><a href="#privacy">Privacy</a><a href="mailto:it@vpugliese.online">Support</a><a href="https://github.com/vittoopugliese/sc-downloader-extension">Source</a><a href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb">Chrome Web Store ↗</a></div>
+      <p><span data-l10n="footer_independent">Independent extension, not affiliated with SoundCloud.</span><br><span data-l10n="footer_rights">Download only content you own or have permission to save.</span></p>
+      <div class="footer-links"><a href="#privacy" data-l10n="footer_privacy">Privacy</a><a href="mailto:it@vpugliese.online" data-l10n="footer_support">Support</a><a href="https://github.com/vittoopugliese/sc-downloader-extension" data-l10n="footer_source">Source</a><a href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb">Chrome Web Store ↗</a></div>
     </footer>
   </div>
-  <div class="mobile-install" aria-label="Install the free extension">
-    <span><strong>Whole collections. One click.</strong>Full-track downloads stay free.</span>
-    <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb">Add free <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+  <div class="mobile-install" aria-label="Install the free extension" data-l10n-aria="mobile_install_aria">
+    <span><strong data-l10n="mobile_title">Whole collections. One click.</strong><span data-l10n="mobile_copy">Full-track downloads stay free.</span></span>
+    <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb"><span data-l10n="mobile_cta">Add free</span> <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
   </div>
+  <script src="./scripts/landing-i18n.js"></script>
   <script>
     (() => {
+      const { t } = window.SCDLLandingI18n;
       const goodbyeView = new URLSearchParams(location.search).get('view') === 'goodbye';
       if (goodbyeView) {
         document.title = 'SoundCloud Track Downloader — Feedback';
@@ -569,7 +593,7 @@
       const reviewToggle = document.getElementById('review-toggle');
       const reviewCount = document.getElementById('review-count');
       reviewCount.textContent = String(webStoreReviews.length);
-      reviewToggle.textContent = `Show all ${webStoreReviews.length} reviews`;
+      reviewToggle.textContent = t('reviews_show_all', webStoreReviews.length);
 
       webStoreReviews.forEach(review => {
         const item = document.createElement('li');
@@ -597,7 +621,7 @@
         if (review.implemented) {
           const badge = document.createElement('span');
           badge.className = 'review-implemented';
-          badge.textContent = 'ALREADY IMPLEMENTED';
+          badge.textContent = t('implemented_badge');
           authorWrap.append(badge);
         }
         meta.append(authorWrap, date);
@@ -609,19 +633,10 @@
       reviewToggle.addEventListener('click', () => {
         const expanded = reviewSection.classList.toggle('is-expanded');
         reviewToggle.setAttribute('aria-expanded', String(expanded));
-        reviewToggle.textContent = expanded ? 'Show fewer reviews' : `Show all ${webStoreReviews.length} reviews`;
+        reviewToggle.textContent = expanded
+          ? t('reviews_show_fewer')
+          : t('reviews_show_all', webStoreReviews.length);
       });
-
-      const reviewLabels = {
-        de: 'Eine Chrome Web Store-Rezension schreiben',
-        en: 'Write a Chrome Web Store review',
-        es: 'Escribir una reseña en Chrome Web Store',
-        pt: 'Escrever uma avaliação na Chrome Web Store',
-        ru: 'Написать отзыв в Интернет-магазине Chrome'
-      };
-      const browserLanguage = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
-      const reviewLabel = reviewLabels[browserLanguage.toLowerCase().split('-')[0]] || reviewLabels.en;
-      document.querySelector('[data-review-cta]').firstChild.textContent = `${reviewLabel} `;
 
       const revealHashDetails = () => {
         const target = document.getElementById(window.location.hash.slice(1));
@@ -629,86 +644,6 @@
       };
       window.addEventListener('hashchange', revealHashDetails);
       revealHashDetails();
-    })();
-  </script>
-  <script>
-    (() => {
-      const start = null;
-      const end = document.getElementById('loop-end');
-      const selection = document.getElementById('looper-selection-live');
-      const playhead = document.getElementById('looper-playhead');
-      const timeLabel = document.getElementById('loop-time');
-      const status = document.getElementById('loop-status');
-      const play = document.getElementById('loop-play');
-      if (!start || !end || !play) return;
-      const totalSeconds = 8;
-      let timer = 0;
-      let playing = false;
-      let audioContext;
-      const value = input => Number(input.value);
-      const range = () => {
-        let a = value(start) / 100 * totalSeconds;
-        let b = value(end) / 100 * totalSeconds;
-        if (b <= a + .2) b = Math.min(totalSeconds, a + .2);
-        return { a, b };
-      };
-      const update = () => {
-        const a = value(start), b = value(end);
-        selection.style.left = `${a}%`;
-        selection.style.width = `${Math.max(2, b - a)}%`;
-        const r = range();
-        timeLabel.textContent = `A ${r.a.toFixed(1)}s · B ${r.b.toFixed(1)}s`;
-      };
-      const stop = () => {
-        playing = false;
-        window.clearInterval(timer);
-        play.textContent = 'Play loop';
-        playhead.style.left = `${value(start)}%`;
-      };
-      const note = (when, frequency, duration = .18) => {
-        if (!audioContext) return;
-        const oscillator = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        oscillator.type = 'sine'; oscillator.frequency.value = frequency;
-        gain.gain.setValueAtTime(.0001, when); gain.gain.exponentialRampToValueAtTime(.12, when + .02); gain.gain.exponentialRampToValueAtTime(.0001, when + duration);
-        oscillator.connect(gain).connect(audioContext.destination); oscillator.start(when); oscillator.stop(when + duration + .03);
-      };
-      const playLoop = async () => {
-        if (playing) { stop(); return; }
-        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextCtor) { status.textContent = 'Your browser does not support audio preview.'; return; }
-        audioContext ||= new AudioContextCtor();
-        await audioContext.resume();
-        const r = range(); const length = r.b - r.a; const started = performance.now(); let lastNote = -1;
-        playing = true; play.textContent = 'Stop loop'; status.textContent = 'Playing the selected A–B range…';
-        timer = window.setInterval(() => {
-          const elapsed = ((performance.now() - started) / 1000) % length;
-          const progress = (r.a + elapsed) / totalSeconds * 100;
-          playhead.style.left = `${progress}%`;
-          const currentNote = Math.floor(elapsed * 4);
-          if (currentNote !== lastNote) { lastNote = currentNote; note(audioContext.currentTime, [220, 277.18, 329.63, 440][currentNote % 4]); }
-        }, 70);
-      };
-      const encodeWav = buffer => {
-        const samples = buffer.getChannelData(0); const bytes = new ArrayBuffer(44 + samples.length * 2); const view = new DataView(bytes);
-        const write = (offset, text) => [...text].forEach((char, i) => view.setUint8(offset + i, char.charCodeAt(0)));
-        write(0, 'RIFF'); view.setUint32(4, 36 + samples.length * 2, true); write(8, 'WAVE'); write(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, buffer.sampleRate, true); view.setUint32(28, buffer.sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); write(36, 'data'); view.setUint32(40, samples.length * 2, true);
-        samples.forEach((sample, i) => view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, sample)) * 0x7fff, true));
-        return new Blob([bytes], { type: 'audio/wav' });
-      };
-      const exportLoop = async () => {
-        const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-        if (!Offline) { status.textContent = 'WAV export is not supported in this browser.'; return; }
-        const r = range(); const duration = r.b - r.a; const offline = new Offline(1, Math.ceil(44100 * duration), 44100); const oscillator = offline.createOscillator(); const gain = offline.createGain();
-        oscillator.type = 'sine'; oscillator.frequency.value = 330; gain.gain.value = .1; oscillator.connect(gain).connect(offline.destination); oscillator.start(); oscillator.stop(duration); status.textContent = 'Rendering your loop…';
-        const buffer = await offline.startRendering(); const link = document.createElement('a'); link.href = URL.createObjectURL(encodeWav(buffer)); link.download = 'soundcloud-loop.wav'; link.click(); URL.revokeObjectURL(link.href); status.textContent = 'WAV exported. Try another A–B range!';
-      };
-      [start, end].forEach(input => input.addEventListener('input', update));
-      play.addEventListener('click', playLoop);
-      document.getElementById('loop-set-a').addEventListener('click', () => { start.value = Math.min(value(end) - 5, 50); update(); status.textContent = 'A point set.'; });
-      document.getElementById('loop-set-b').addEventListener('click', () => { end.value = Math.max(value(start) + 5, 70); update(); status.textContent = 'B point set.'; });
-      document.getElementById('loop-export').addEventListener('click', exportLoop);
-      update();
     })();
   </script>
 </body>

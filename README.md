@@ -120,9 +120,11 @@ Use the compact **Folder** button beside the format selector to open the system 
 1. Open an individual track page and load or play the track
 2. Press the loop button immediately before **More actions**
 3. Drag A and B on the waveform; use the arrow keys for 100 ms adjustments or Shift + arrow for 1 second
-4. Press the cross or `Escape` to remove the temporary loop
+4. Scroll **up** over the waveform to zoom toward the cursor, or scroll **down** to zoom back out. This makes it easy to place a precise A-B range even on a long track.
+5. Press **Download loop** to save the selected A-B range as a WAV file
+6. Press the cross or `Escape` to remove the temporary loop
 
-The loop uses SoundCloud's current player and lives only in memory. Navigating or changing tracks removes it. Speed, pitch, saved loops, and loop downloads are intentionally reserved for later versions.
+Looper is included for free. It uses SoundCloud's current player and lives only in memory: navigating or changing tracks removes it. The WAV reflects the available source; speed, pitch and saved loops are future ideas, not part of the current tool.
 
 ### Download a playlist, likes, or user uploads
 1. Go to a **playlist/set**, **likes**, or `soundcloud.com/{user}/tracks` page
@@ -188,7 +190,7 @@ Dark blurred artwork background, SoundCloud-orange accents, spinner states, and 
 ## 💡 Feedback
 
 Something not working? A feature you'd love to see next?
-- Open a Pull Request, send me an email, or drop a message ~ I'd love to hear from you.
+- Open a Pull Request or email [it@vpugliese.online](mailto:it@vpugliese.online) ~ I'd love to hear from you.
 
 ---
 

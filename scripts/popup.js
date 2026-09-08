@@ -40,6 +40,7 @@ const cancelJobBtn = document.getElementById("cancelJobBtn");
 const downloadStatus = document.getElementById("downloadStatus");
 const jobHint = document.getElementById("jobHint");
 const failedSummary = document.getElementById("failedSummary");
+const failedDetails = document.getElementById("failedDetails");
 const chooseDownloadFolder = document.getElementById("chooseDownloadFolder");
 const resetDownloadFolder = document.getElementById("resetDownloadFolder");
 const downloadFolderName = document.getElementById("downloadFolderName");
@@ -59,9 +60,7 @@ const helpBackBtn = document.getElementById("helpBackBtn");
 const looperEntryBtn = document.getElementById("looperEntryBtn");
 const looperPanel = document.getElementById("looperPanel");
 const looperBackBtn = document.getElementById("looperBackBtn");
-const looperPurchaseBtn = document.getElementById("looperPurchaseBtn");
-const looperCheckoutNote = document.getElementById("looperCheckoutNote");
-const looperLaterBtn = document.getElementById("looperLaterBtn");
+const looperDoneBtn = document.getElementById("looperDoneBtn");
 
 let isDownloading = false;
 let isSelectionMode = false;
@@ -127,7 +126,6 @@ function trapHelpFocus(event) {
 function openLooperExplainer() {
   looperReturnFocus = document.activeElement;
   looperSelectionScrollTop = selectionViewport.scrollTop;
-  looperCheckoutNote.classList.add("is-hidden");
   document.body.classList.add("looper-explainer-mode");
   looperPanel.classList.add("is-visible");
   looperBackBtn.focus();
@@ -170,10 +168,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   helpBackBtn.addEventListener("click", closeHelp);
   looperEntryBtn.addEventListener("click", openLooperExplainer);
   looperBackBtn.addEventListener("click", closeLooperExplainer);
-  looperLaterBtn.addEventListener("click", closeLooperExplainer);
-  looperPurchaseBtn.addEventListener("click", () => {
-    looperCheckoutNote.classList.remove("is-hidden");
-  });
+  looperDoneBtn.addEventListener("click", closeLooperExplainer);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && looperPanel.classList.contains("is-visible")) {
       event.preventDefault();
@@ -515,6 +510,8 @@ function renderBulkJobState(job) {
       t("job_progress", [statusPrefix, job.completed + job.failed.length, job.total]);
     failedSummary.classList.remove("is-visible");
     failedSummary.textContent = "";
+    failedDetails.classList.remove("is-visible");
+    failedDetails.replaceChildren();
     return;
   }
 
@@ -543,9 +540,25 @@ function renderBulkJobSummary(job) {
   if (job.failed?.length) {
     failedSummary.textContent = t("tracks_failed", job.failed.length);
     failedSummary.classList.add("is-visible");
+    failedDetails.replaceChildren(
+      ...job.failed.map((failed) => {
+        const item = document.createElement("li");
+        const title = document.createElement("strong");
+        const reason = document.createElement("span");
+        item.className = "failed-detail";
+        title.textContent = failed.title || t("unknown_track");
+        title.title = title.textContent;
+        reason.textContent = failed.error || t("error_retry");
+        item.append(title, reason);
+        return item;
+      })
+    );
+    failedDetails.classList.add("is-visible");
   } else {
     failedSummary.classList.remove("is-visible");
     failedSummary.textContent = "";
+    failedDetails.classList.remove("is-visible");
+    failedDetails.replaceChildren();
   }
 }
 
