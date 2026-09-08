@@ -1,10 +1,10 @@
 # Plan de lanzamiento: ayuda, prueba de Looper, compra única y web
 
-Fecha inicial: 2026-09-05. Última consolidación: 2026-09-06.
+Fecha inicial: 2026-09-05. Última consolidación: 2026-09-07.
 
-Estado: fuente de verdad para retomar el trabajo en una sesión sin contexto. **E1 queda listo para implementar en la próxima sesión**. Las decisiones todavía abiertas bloquean E5–E6, no E1–E4. Esta sesión solo consolida el plan; no autoriza publicación, creación de cuentas ni contacto con proveedores.
+Estado: fuente de verdad para retomar el trabajo en una sesión sin contexto. E1 y E2 están cerradas en código; E3 está parcialmente cerrada; E4 no se implementó ni desplegó. E5A/E5B se pueden preparar de forma privada, pero no habrá cobro, checkout público ni paywall hasta que esté terminado el producto v1. Esta sesión no autoriza publicación, creación de cuentas ni contacto con proveedores.
 
-Este archivo es autocontenido y prevalece para el lanzamiento comercial. `product-roadmap-20260905.md`, `.cursor/plans/soundcloud_looper_v1.plan.md` y `payment-options-20260905.md` son antecedentes y evidencia ampliada; no hace falta leerlos para saber qué hacer. En particular, quedan superadas la propuesta de demo sin prueba, la duda sobre compra única y el cierre del export como siguiente tarea.
+Este archivo es autocontenido y prevalece para el lanzamiento comercial. `product-roadmap-20260905.md`, `.cursor/plans/soundcloud_looper_v1.plan.md` y `payment-options-20260905.md` son antecedentes históricos; `payment-provider-research-20260907.md` es la evidencia comercial vigente de E5A. No hace falta leer los antecedentes para saber qué hacer. En particular, quedan superadas la propuesta de demo sin prueba, la duda sobre compra única y el cierre del export como siguiente tarea.
 
 ## Resultado buscado
 
@@ -18,6 +18,40 @@ Convertir la extensión actual en el mejor producto gratuito posible para descar
 - Analytics de comportamiento se implementa más adelante; pagos, licencias y feedback conservan solamente los datos operativos necesarios.
 
 El producto NO se presenta como afiliado, aprobado o mantenido por SoundCloud. El copy debe orientar a descargar contenido propio o para el cual la persona tenga permiso. La publicación y cada proveedor externo se revisan contra sus políticas vigentes antes de activarse.
+
+## Estado operativo y estrategia acordada (2026-09-07)
+
+La estrategia cambió: primero se termina el producto v1; recién al final se activa el cobro y el acceso de pago. Esto no impide construir E5A/E5B en privado: permite dejar la integración lista, probada en sandbox y aislada, sin exponer un checkout ni limitar Looper hasta el gate final.
+
+| Entrega | Estado actual | Pendiente concreto antes de release público |
+| --- | --- | --- |
+| E1 — Help/i18n | Cerrada en código y validada manualmente en Chrome el 2026-09-06. | Reemplazar el aviso temporal por `mailto:it@vpugliese.online` antes del release. Revisión visual final de locales largos queda dentro de la matriz de release. |
+| E2 — vista visual de Looper | Cerrada en código: CTA, explicación con `promos/four.png`, estilo y Back existente; no hay trial, checkout ni cambio de acceso. | Smoke test final en Chrome de popup/selector después de los últimos ajustes de altura/estilo. |
+| E3 — landing/reseñas | Cerrado: landing, 39 reseñas originales, tres iniciales, `Show all`, badges `ALREADY IMPLEMENTED`, CTA al Store y soporte en landing. | Localizar **todo** el copy de landing para EN/ES/RU/PT-BR/DE (hoy sólo el CTA de reseña tiene cobertura parcial) y revisar teclado/mobile con esos locales. No desplegarla hasta poder validar dominio/HTTPS. |
+| E4 — feedback de desinstalación | Decisiones y arquitectura Cloudflare cerradas. | Crear la vista goodbye, Function, D1/migración, Turnstile, alertas, limpieza y pruebas; desplegar en `sctd.vpugliese.online`; recién entonces registrar `setUninstallURL` y probar una desinstalación real. |
+| E5A — decisión comercial | En curso: candidato de tarjeta definido, pendiente de aprobación y onboarding. | Confirmar que Lemon Squeezy acepta **por escrito** el producto real; KYC/payout y sandbox. Resolver prueba, recuperación, reembolsos y gracia offline. |
+| E5B — licencia/pago | En curso sólo como infraestructura privada. | Worker/D1, contrato de entitlement, checkout sandbox, webhook idempotente, restauración, firma y pruebas. Ningún secreto ni backend viaja en el ZIP. |
+| E6 — trial/paywall | No iniciado deliberadamente. | Sólo después del gate de producto y E5B probado: aplicar límite de prueba y gate de Looper, sin tocar descargas completas. |
+| E7 — calidad/reintentos/i18n comercial | No iniciado. | Resumen de resultados, retry de fallidas, destino real y todos los textos de E2–E6 localizados. Forma parte del “producto v1 terminado”. |
+| E8 — analytics y backlog evolutivo | Diferido. | No bloquea v1 ni el primer cobro. P10–P12 (historial/rangos, nuevos contextos, pitch/velocidad) son mejoras futuras, no promesas de v1. |
+
+**Gate “producto v1 terminado”:** E3 localizado y validado, E4 desplegado/probado, E7 terminado, regresiones de descarga/Looper en Chrome real y documentación/privacidad coherentes. En ese punto se podrá activar E6 sobre una E5B ya probada. E8 y las mejoras de backlog no retrasan indefinidamente el primer release comercial.
+
+### Límite de paquetes y estructura futura
+
+Mientras la extensión conserve sus fuentes en la raíz, `npm run package:extension` genera `dist/soundcloud-track-downloader-<versión>.zip` con una allow-list explícita. El ZIP deja `manifest.json` en su raíz e incluye sólo popup, offscreen, assets, locales y scripts de runtime; excluye `node_modules`, pruebas, herramientas, documentación, landing y cualquier servicio. Antes de subir, cargar ese ZIP descomprimido como extensión temporal y revisar que el manifest no muestre archivos faltantes.
+
+No moveremos ahora las fuentes ya estables: sería un refactor transversal sin beneficio para el release actual. Al añadir los componentes externos, el destino será este monorepo, con límites de despliegue claros:
+
+```text
+extension/                 # futura raíz del ZIP MV3; nunca secretos ni node_modules
+web/                       # Cloudflare Pages: landing y functions de feedback
+services/license-worker/   # Cloudflare Worker + D1 para licencias/webhooks
+scripts/                   # verificadores y empaquetado, nunca se sube al Store
+dist/                      # ZIP generado e ignorado por Git
+```
+
+`web/` y `services/license-worker/` se despliegan a Cloudflare por separado; no se empaquetan para Chrome. Las claves de proveedor, el secreto HMAC de webhooks y la clave privada de los comprobantes viven como Worker Secrets, nunca en Git, `manifest.json`, storage de la extensión ni el ZIP. Esta separación es el seam: la extensión conoce un contrato de licencia pequeño y el Worker oculta D1, correos y el proveedor de pago detrás de un adapter.
 
 ## Arranque en frío: procedimiento obligatorio
 
@@ -96,7 +130,7 @@ Una falla del servidor comercial jamás debe bloquear `DOWNLOAD_SINGLE_TRACK` ni
 
 Cada entrega termina con diff acotado, verificadores relevantes y prueba manual. No commitear cambios ajenos ni publicar automáticamente. Los tamaños son relativos, no estimaciones horarias.
 
-### E1 — P02 + base de P09: ayuda, ajustes pequeños e i18n completa (M) — PRÓXIMA
+### E1 — P02 + base de P09: ayuda, ajustes pequeños e i18n completa (M) — CERRADA
 
 **Alcance:** `popup.html`, `scripts/popup.js`, mensajes locales y manifest si corresponde.
 
@@ -126,7 +160,7 @@ Orden interno de E1:
 
 **Aceptación:** Download continúa centrado y dominante; ayuda accesible por teclado en track/colección/selección/error; volver no reinicia descargas ni preferencias; el selector conserva scroll y checks; todas las strings visibles tienen clave/locale/fallback; sin recortes en ruso, alemán o estados de progreso. **Validación manual realizada por el usuario el 2026-09-06:** Chrome real, comportamiento correcto. Queda fuera del código configurar el buzón de soporte antes de convertir su aviso temporal en un enlace `mailto:`.
 
-### E2 — P03: entrada comercial y explicación visual (S/M)
+### E2 — P03: entrada comercial y explicación visual (S/M) — CERRADA
 
 **Ubicación confirmada:** CTA llamativo pero compacto a la derecha del botón Download, visible tanto en el popup principal como en el selector de tracks. Download permanece en el centro geométrico de la ventana.
 
@@ -156,7 +190,7 @@ Implementación visual sugerida: action row de ancho completo, Download posicion
 
 **Aceptación:** centro de Download no cambia entre vista principal y selector; CTA no invade cantidad/status/errores; Back recupera scroll/selección; textos localizados; la imagen explica A–B/WAV sin alegaciones de calidad no comprobadas; el precio es visible, pero no hay checkout, trial ni cambio de acceso; cualquier descarga de track completo ignora el estado comercial.
 
-### E3 — P04/P07: landing completa y reseñas auténticas (M)
+### E3 — P04/P07: landing completa y reseñas auténticas (M) — PARCIAL
 
 **Alcance:** `index.html` y sus assets. La fuente humana es `C:\Users\torib\Desktop\reviews.txt`; producción no depende de esa ruta.
 
@@ -177,9 +211,9 @@ Implementación visual sugerida: action row de ancho completo, Download posicion
 
 **Aceptación:** cantidad renderizada coincide con las reseñas (no respuestas) de la fuente; orden y texto coinciden; cirílico intacto; todas son alcanzables por teclado/mobile; botón de review abre el Store; la demo no descarga audio ajeno; no hay compra activa antes del checkout listo.
 
-### E4 — P04 ampliado: feedback de desinstalación (M)
+### E4 — P04 ampliado: feedback de desinstalación (M) — PENDIENTE DE IMPLEMENTACIÓN/DEPLOY
 
-- Dirección de producto confirmada por el usuario: implementar encuesta de desinstalación, motivos + comentario opcional + email opcional, y entregar las respuestas a un destino privado. La tecnología concreta queda ligada al hosting elegido en E5A.
+- Dirección de producto confirmada por el usuario: implementar encuesta de desinstalación, motivos + comentario opcional + email opcional, y entregar las respuestas a un destino privado. Cloudflare Pages/Functions + D1 es la tecnología elegida; E4 no depende del proveedor de cobro.
 - Preparar vista web `?view=goodbye`, por ejemplo en el dominio de `CNAME`, una vez verificado despliegue/HTTPS. Registro mediante `chrome.runtime.setUninstallURL` al instalar/actualizar, cubriendo instalaciones existentes.
 - No se ejecuta código de la extensión después de borrarla: Chrome abre una URL registrada previamente. La página debe funcionar sola.
 - Modal propuesto: `Sorry to see you go.` / `What could we do better?`.
@@ -190,34 +224,23 @@ Implementación visual sugerida: action row de ancho completo, Download posicion
 - Sin tracking de apertura del modal en esta fase. Documentar acceso web/logs operativos y retención, no prometer que no se transmite nada al abrir el sitio.
 - Desinstalar no elimina una compra ni inicia un reembolso; la licencia se puede restaurar.
 
-**Dependencia:** confirmar hosting y canal donde recibir feedback. Preferencia operativa: tabla privada exportable a CSV y aviso por email opcional; un HTML estático puede mostrar el modal, pero no guardar respuestas ni procesar pagos por sí solo.
+**Dependencia resuelta:** Cloudflare alojará Pages, la Function de feedback, D1, Turnstile, cron de limpieza y el envío de alertas. El sitio y endpoint usarán `sctd.vpugliese.online`; las alertas llegan a `it@vpugliese.online`. Una cuenta/dominio de correo configurado no prueba que Pages o la Function estén desplegados: no registrar `setUninstallURL` hasta probar en producción el formulario, Turnstile, D1 y una alerta. La tabla privada D1 será exportable a CSV; un HTML estático por sí solo no guarda respuestas.
 
 **Aceptación:** desinstalar en Chrome real abre la vista correcta; una respuesta llega al destino; spam/reintentos no duplican sin límite; una visita normal conserva landing normal.
 
-### E5 — P05: decidir y construir cobro/licencia recuperable (L) — ETAPA AISLADA
+### E5 — P05: decisión y licencia recuperable, privada hasta el final (L)
 
-E5 se abre recién después de E1–E4. Sus decisiones comerciales y de infraestructura no bloquean ayuda, i18n, CTA/vista informativa, reviews ni modal de desinstalación. Dividirla en dos hitos:
+E5 puede avanzar en paralelo al cierre de producto, pero se mantiene en **test/private mode**. No abre checkout público, no cobra, no registra una licencia de producción y no conecta E6 hasta superar el gate “producto v1 terminado”. Se divide en dos hitos:
 
-- **E5A — decisión técnica/comercial:** resolver identidad del vendedor, proveedor, medio principal/secundario, hosting, datos, recuperación, dispositivos, reembolsos y offline. Resultado: ADR/contrato de integración aprobado, sin checkout productivo.
-- **E5B — implementación:** backend, checkout sandbox, webhooks/confirmación on-chain, licencia firmada, restauración, privacidad y soporte. Resultado: flujo completo probado antes de conectar E6.
+- **E5A — decisión técnica/comercial:** el candidato es Lemon Squeezy como Merchant of Record para una persona física argentina, tarjetas y posible payout Wise USD. No necesita una LLC estadounidense; Wise sirve como destino potencial de payout, no como elegibilidad para Stripe. Stripe directo queda descartado mientras el vendedor resida en Argentina sin entidad elegible. Paddle y Dodo quedan descartados por políticas expresas contra streaming downloaders/descargas; Gumroad sólo sería plan B si se acepta payout ARS a banco argentino, no Wise.
+- **Condición no negociable de E5A:** antes de crear un checkout real, pedir a Lemon Squeezy aprobación expresa y veraz del producto concreto: downloader de SoundCloud, Looper/export WAV, contenido propio o autorizado y manejo de reclamos. No ocultar la naturaleza del producto ni intentar sortear una política. Si no aprueba, no se activa venta con tarjeta; se rediseña el producto o se pausa el cobro.
+- **Economía conocida:** la tarifa publicada de Lemon Squeezy es 5% + USD 0,50, más 1% de payout bancario no estadounidense y posibles extras para tarjetas internacionales. En USD 2,99, el neto base aproximado es USD 2,3405 y USD 2,3171 con ese payout, antes de impuestos, conversión o cargos de Wise. No es compatible con “retener 95%” en cada microventa. Revalidar tarifas y condiciones al abrir la cuenta.
+- **E5A pendiente:** completar honestamente KYC/W-8 y probar que acepta los datos específicos de Wise; fijar reembolso, actualizaciones incluidas, 3 dispositivos con reemplazo self-service, 30 días de gracia offline, recuperación por email/licencia y modelo de prueba. Resultado: ADR/contrato de integración aprobado, sin checkout productivo.
+- **E5B — implementación privada:** Worker de Cloudflare, D1, contratos de entitlement, checkout **sandbox**, webhook HMAC idempotente, restauración, comprobante firmado y pruebas de refund/revocación/offline. El Worker contiene un adapter de proveedor; `entitlement-core` no conoce Lemon Squeezy. Resultado: flujo de prueba completo antes de conectar E6, sin secretos en la extensión.
 
-Hechos investigados al 2026-09-05 que una sesión fría debe conocer:
+El informe con evidencia primaria y enlaces vigentes está en `payment-provider-research-20260907.md`. No sustituye asesoramiento fiscal argentino ni una aprobación del proveedor.
 
-
-| Opción                   | Tarifa pública usada en el cálculo | Neto aprox. por USD 2,99 | Restricción relevante                                                                                 |
-| ------------------------ | ---------------------------------- | ------------------------: | ----------------------------------------------------------------------------------------------------- |
-| Stripe US doméstico      | 2,9% + USD 0,30                    | USD 2,6033 / 87,07%      | Argentina no figura como merchant directo; solo evaluar si ya existe entidad legítima elegible        |
-| Lemon Squeezy base       | 5% + USD 0,50                      | USD 2,3405 / 78,28%      | Argentina admite payout, pero el producto real requiere aprobación; hay extras internacionales/payout |
-| Paddle base              | 5% + USD 0,50                      | USD 2,3405 / 78,28%      | Su AUP 2026 menciona expresamente `streaming downloaders`; descartarlo como opción predeterminada     |
-| NOWPayments misma crypto | 1% + red                           | USD 2,9601 menos red     | Restricciones geográficas amplias, mínimos/red y aceptación del producto pendientes                   |
-| USDT directo             | Sin fee de gateway                 | Indeterminado            | Requiere backend/on-chain, red, RPC, wallet/exchange y operación; no garantiza 95% final              |
-
-
-Conclusión: no existe una opción verificada que combine precio USD 2,99 + tarjeta fácil + vendedor argentino + conservar 95%. El fee fijo se cobra por cada licencia: 34 ventas de USD 2,99 son USD 101,66 brutos, pero con Stripe US doméstico dejarían cerca de USD 88,51 antes de retiro/impuestos. Tratar 95% como definición pendiente, no como promesa. Revalidar tarifas y políticas al abrir E5A.
-
-USDT directo, si se elige, necesita crear una orden inequívoca y verificar red, contrato de token, destinatario, importe y finalidad/confirmaciones; impedir reutilizar una transacción y resolver pagos incompletos/tardíos. Pegar un hash público no prueba por sí solo que ese usuario compró. Claves privadas y secretos viven fuera de extensión/landing.
-
-Flujo propuesto:
+Flujo de implementación propuesto:
 
 ```text
 Extensión/web → orden en backend → checkout alojado
@@ -285,7 +308,7 @@ E5A también decide la experiencia del botón Looper sobre SoundCloud cuando est
 
 **Aceptación:** checkout de pruebas, retorno sin popup, webhooks duplicados/falsos, compra desde web, restauración en otro perfil, offline y devolución. Nada premium público hasta superar estas pruebas y validar condiciones del proveedor.
 
-### E6 — P06: una exportación gratis y acceso de pago (M/L)
+### E6 — P06: una exportación gratis y acceso de pago (M/L) — BLOQUEADA HASTA EL GATE FINAL
 
 El código actual permite contar éxito tras `saveOutput`: la ruta del navegador espera `chrome.downloads` en `complete` y la carpeta elegida espera el guardado. No hay todavía cuota ni licencia. Esto identifica el punto de integración, no certifica una prueba ya implementada.
 
@@ -302,20 +325,75 @@ El código actual permite contar éxito tras `saveOutput`: la ruta del navegador
 
 **Aceptación:** primera sesión respeta el límite elegido; primer guardado consume exactamente una vez en el flujo normal; error/cancel no consumen; doble click/dos pestañas/reinicio/reintento no duplican concesiones; después se bloquea Looper entero; comprador lo usa/exporta sin cuota; tracks/bulk siguen gratis incluso sin internet comercial.
 
-### E7 — P08/P09: calidad gratuita y completar idiomas (M)
+### E7 — P08/P09: calidad gratuita y completar idiomas (M) — PENDIENTE
 
 - Resumen de éxitos/fallos; reintentar solo tracks fallidos preservando orden, formato y destino, sin duplicar éxitos.
 - Mostrar destino real. Para `chrome.downloads.show`, propagar ID guardado; con carpeta File System Access mostrar nombre/gestión disponible, no prometer abrir Explorer arbitrariamente.
 - E1 traduce toda la superficie actual; E7 agrega y audita los textos nacidos en E2–E6: trial, compra, restauración, feedback y errores del backend. Browser locale con fallback inglés; en web usar locale del navegador, con inglés disponible. La vista goodbye tiene copy inglés pulido y reutiliza el mismo glosario.
 - Probar jobs con popup cerrado, carpeta revocada, nombres Unicode y límites de texto en ruso.
 
-### E8 — A01/A02, P10–P12 y marketing: después
+### E8 — A01/A02, P10–P12 y marketing: después — BACKLOG
 
 - Analytics separado: exposiciones/clicks CTA por superficie, aperturas popup, jobs y archivos guardados, trial iniciado/consumido, checkout/compra/activación. No confundir una playlist de 100 archivos con 100 usuarios.
 - Conservar el ratio solicitado clicks CTA / (aperturas + jobs completados) como índice de actividad, no conversión de personas. Añadir CTR real clicks/exposiciones y compra/checkouts deduplicados.
 - Definir consentimiento, minimización y retención antes de transmitir comportamiento. Recibos/licencias y feedback voluntario sí existen antes y no se presentan como analytics anónimo.
 - Luego: historial local opcional para evitar duplicados y selección por rango (gratis), otros contextos por demanda; pitch/velocidad como trabajo separado, sin prometerlos en venta inicial.
-- Mantener tareas manuales M01–M08 del roadmap: video de 60 s y corte Looper de 20 s, capturas de UI real, ficha/privacidad, respuestas a reviews y difusión. Guion muestra primero descargas gratuitas y después prueba/compra única; producir al estabilizar UI, no antes.
+- Mantener tareas manuales M01–M08 del roadmap: las cuatro piezas promocionales ya existen; queda grabar el video de 60 s y el corte Looper de 20 s al estabilizar UI. Antes de subir, verificar requisitos del Store para esas imágenes, además de ficha/privacidad, respuestas a reviews y difusión. El guion muestra primero descargas gratuitas y después prueba/compra única.
+
+## Auditoría de estado y trabajo restante — 2026-09-07
+
+Esta sección registra el estado observado en el repositorio después de revisar todos los `.md`, `.txt` y `.html` propios del proyecto, el código actual, el working tree y los verificadores disponibles. Es el resumen operativo para continuar el trabajo; los planes de `.cursor/plans/` y el apéndice histórico de este archivo no deben interpretarse como checklists actuales.
+
+### Estado confirmado
+
+- **E1 implementada:** Help interno, action row con Download centrado, preservación de selección/scroll/job y localización Chrome con `en`, `es`, `ru`, `pt_BR` y `de`. Hay 138 claves y las cinco locales tienen cobertura completa.
+- **E2 implementada:** CTA de Looper en popup principal y selector, vista explicativa, imagen A–B/WAV, precio de compra única y garantía de que las descargas completas siguen gratis. No activa trial, checkout ni paywall.
+- **E3 implementada localmente:** landing corta, demo interactiva, FAQ, CTA de reviews, soporte y 39 reviews inline originales. La fuente externa `reviews.txt` no está disponible en el repo ni en la ruta Desktop documentada; la verificación de landing pasa, pero omite la comparación contra esa fuente.
+- **Descargas gratuitas existentes:** tracks, playlists, likes, perfiles `/tracks`, selección, player/inline, formatos, metadata, artwork, carpetas elegidas, jobs en background y recuperación local.
+- **Looper existente:** A–B, reproducción y exportación WAV están implementados y cubiertos por verificadores. El E2E usa datos deterministas; todavía no certifica todos los codecs, fuentes ni el audio real de SoundCloud.
+
+### Pendientes bloqueantes o de release
+
+1. **E4 — feedback de desinstalación:** crear la vista `?view=goodbye`, Function de Cloudflare, D1 privado, Turnstile, límites antiabuso, cron de limpieza, alertas y pruebas de recepción. Agregar `chrome.runtime.setUninstallURL()` solo después de probar el deploy real con HTTPS, formulario, D1 y alerta. Reemplazar también el texto temporal `Support email is being set up` por el enlace `mailto:it@vpugliese.online`.
+2. **Cierre real del export WAV:** probar progressive, HLS y original; mono/estéreo; tracks cortos y mixes largos; duración audible; errores de decodificación; cancelación; navegación; carpeta revocada; concurrencia con bulk; tiempo y memoria. Documentar límites reales.
+3. **E5 — pago/licencia:** queda fuera de esta auditoría de implementación porque otro agente lo está trabajando. Al recibirlo, revisar por separado E5A (decisiones/ADR) y E5B (checkout sandbox, webhooks idempotentes, licencia firmada, restauración, privacidad y soporte).
+4. **E6 — trial y paywall:** después de E5, implementar `trial_available → reserved → consumed`; reservar y serializar en background; consumir solo después de confirmar el guardado WAV; bloquear activación, reproducción A–B y nuevas exportaciones tras consumir; conservar intactas todas las descargas completas.
+5. **Release:** revisar versión/manifest, generar el ZIP, excluir helpers de desarrollo del paquete, validar DNS/HTTPS/deploy, actualizar privacidad y ficha del Store, probar enlaces, ejecutar Chrome real y recién entonces publicar.
+
+### Verificación ejecutada en esta auditoría
+
+- `npm test`: 27 verificaciones locales pasadas.
+- `npm run test:e2e`: exportación WAV determinista pasada.
+- `npm run test:e2e:download`: Downloads, carpeta recordada, fallback de carpeta revocada y geometría del botón pasados.
+- `node --check`: todos los JavaScript del directorio `scripts/` pasan sintaxis.
+- Pendiente: `test:live` contra un track público real y la matriz manual completa de SoundCloud.
+
+### Deuda documental que debe cerrarse
+
+- Actualizar README para describir que el export WAV de Looper ya existe, manteniendo claro que velocidad, pitch, loops guardados y audio sin cortes siguen fuera de alcance.
+- Actualizar las frases históricas de este documento que todavía dicen que Help o landing no estaban implementados.
+- Cambiar los estados `pending` de los planes históricos o marcarlos explícitamente como archivados; no usarlos para decidir el trabajo actual.
+- Mantener la procedencia de las 39 reviews: si aparece nuevamente `reviews.txt`, ejecutar la comparación UTF-8 y revisar el diff antes de modificar la landing.
+
+### Backlog arquitectónico no bloqueante
+
+- **Ya encaminado:** Track canónico, ejecución de una pista, destinos y Page Intake separado (`content.js` ya quedó pequeño y `page-intake.js` concentra la extracción).
+- **Pendiente parcial:** todavía conviven `download-source.js` y `stream-selector.js`; terminar la migración del seam de streams y eliminar solo la implementación legacy cuando no queden callers.
+- **Pendiente:** profundizar `bulk-job-manager.js` como state machine durable; conserva más líneas y API pública de las metas del plan.
+- **Pendiente parcial:** reducir duplicación restante entre popup e inline mediante la intención de descarga compartida, sin mover DOM ni estilos al módulo común.
+- **Safety net pendiente:** agregar fixtures y escenarios reales para todos los tipos de página, fuentes public/OAuth, progressive/HLS/original, errores 401/403/404, SPA rápida y recovery del job. No confundir los mocks actuales con certificación de SoundCloud real.
+
+### Marketing y operación después de estabilizar el producto
+
+- Grabar el video principal de 55–60 segundos y el corte de Looper de 15–20 segundos.
+- Preparar cinco capturas actuales de la ficha; las cuatro promos existentes sirven como assets de apoyo, pero no sustituyen necesariamente las capturas del Store.
+- Exportar el CSV del dashboard, responder reviews con versión concreta, actualizar ficha/privacidad/soporte y verificar identidad del publisher.
+- Evaluar Edge Add-ons después de probar carpeta, offscreen y restauración.
+- Dejar analytics, historial, selección por rangos 51–100, reposts, `/user/albums`, velocidad/pitch y mejoras de audio para después del primer release estable.
+
+### Orden operativo recomendado
+
+Mientras E5 continúa en paralelo: cerrar E4, ejecutar la validación real del WAV y limpiar README/planes. Luego revisar E5A/E5B, implementar E6, completar textos comerciales y hacer el release. No iniciar el refactor arquitectónico completo antes de superar estos gates, salvo que una regresión lo exija.
 
 ## Registro de decisiones
 
@@ -335,44 +413,41 @@ La siguiente tabla es la frontera entre lo decidido y lo que se difiere. Una ses
 | D09 | cerrada                        | Locales de lanzamiento: EN, ES rioplatense, RU, PT-BR y DE; idioma automático de Chrome con fallback inglés                                           |
 | D10 | diferida a E5A                 | Prueba local sin cuenta o prueba registrada por email/backend                                                                                         |
 | D11 | diferida a E5A                 | Antes del primer export: limitar prueba a un track/sesión o permitir Looper hasta que se guarde el WAV. Default propuesto: un track, sin timer oculto |
-| D12 | diferida a E5A                 | País/entidad que vende y cuentas comerciales ya habilitadas; nunca pedir credenciales en chat/repo                                                    |
-| D13 | diferida a E5A                 | Tarjeta principal + USDT opcional, USDT principal o requisito 95% estricto; definir neto hasta wallet/banco y costos incluidos                        |
-| D14 | diferida a E5A                 | Hosting, runtime backend, DB, email, dominio/API y responsable de operación/backups                                                                   |
+| D12 | condicionada a aprobación E5A  | Vendedor: persona física argentina sin LLC. Candidato: Lemon Squeezy MoR + payout Wise USD; falta aprobación expresa del producto y KYC/payout real |
+| D13 | cerrada para v1                | Tarjeta es el medio principal buscado. No ofrecer USDT/crypto en v1; 95% neto no es requisito compatible con microventas por tarjeta                  |
+| D14 | cerrada para E4                | Cloudflare: Pages + Function + D1 + Turnstile + cron; `sctd.vpugliese.online` y alertas a `it@vpugliese.online`                                      |
 | D15 | diferida a E5A                 | Recuperación, dispositivos (default: 3), reemplazo de activaciones, gracia offline (default: 30 días), refunds y updates incluidos                    |
-| D16 | diferida a E5A                 | Redes USDT y wallet/exchange receptor si se ofrece crypto; guardar únicamente nombres/redes, nunca claves/seed                                        |
+| D16 | diferida fuera de v1           | No evaluar USDT/crypto hasta después del release comercial; guardar únicamente nombres/redes, nunca claves/seed                                      |
 | D17 | cerrada                        | Looper nunca fue enviado a Chrome Web Store; la versión pública previa no lo incluye y no requiere transición de acceso                            |
 | D18 | cerrada                        | Buzón de soporte disponible: `it@vpugliese.online`; reemplazar el aviso temporal de Help por su enlace `mailto:` antes de publicar                 |
+| D19 | cerrada                        | Primero terminar v1 (E3/E4/E7 y regresiones); E5A/E5B se desarrollan sólo en privado/sandbox; E6/checkout público se activan al final               |
 
 
-### Preguntas que debe responder el usuario cuando llegue E5A
+### Decisiones que quedan para cerrar E5A
 
-Presentarlas juntas al iniciar esa etapa; sus respuestas no son necesarias para E1–E4:
+No bloquean el código provider-neutral de E5B, pero sí el onboarding, sandbox con proveedor y cualquier activación pública:
 
-1. ¿Vendés como persona/entidad argentina? ¿Ya tenés Stripe u otra cuenta comercial legítima habilitada en otro país?
-2. ¿Preferís maximizar conversión con tarjeta y ofrecer USDT opcional, o exigir al menos 95% neto aunque el checkout tenga más fricción?
-3. ¿Qué hosting, base de datos y envío de email ya usás o querés usar?
-4. ¿La prueba exige email o aceptamos que una prueba local pueda resetearse al reinstalar?
-5. Antes de exportar, ¿la prueba queda ligada a un único track? Si la persona cierra/navega, ¿puede retomarlo?
-6. ¿Aprobás 3 instalaciones activas, reemplazo self-service y 30 días de gracia offline?
-7. ¿Qué política de reembolso y de futuras actualizaciones incluye la compra única?
-8. Si hay USDT, ¿qué red(es) y wallet/exchange de recepción querés evaluar?
-9. ¿Looper llegó alguna vez a usuarios públicos del Store? Si sí, ¿quién conserva acceso?
+1. Autorizar crear una cuenta Lemon Squeezy **sólo en Test Mode** y pedir su confirmación explícita del caso de uso antes de Live Mode. Es una acción externa y sólo la realiza el titular.
+2. Confirmar si la cuenta Wise USD es personal o Business y si se puede completar KYC/W-8 con los datos reales. No usar datos de residencia, empresa o Stripe de un país que no corresponda.
+3. Elegir prueba local reiniciable tras reinstalar o prueba vinculada a email; y confirmar la propuesta de un único track por prueba, sin timer oculto.
+4. Confirmar 3 instalaciones activas, reemplazo self-service y 30 días de gracia offline.
+5. Definir reembolsos y qué futuras actualizaciones incluye la compra única. No publicar antes términos, privacidad y soporte.
 
 E1 no incluye onboarding. Usar EN/ES/RU/PT-BR/DE, con español rioplatense, y dejar las traducciones listas para revisión humana antes de publicación.
 
 ## Orden de commits y gates de publicación
 
-El orden de trabajo es E1 → E2 → E3 → E4 → E5A → E5B → E6 → E7. E8 queda posterior. Mantener commits separados:
+El orden de producto es E1 → E2 → E3 → E4 → E7 → E6, con E5A/E5B preparados en privado en paralelo a E3–E7. E8 queda posterior. Mantener commits separados:
 
 1. `help and extension localization foundation` — E1.
 2. `add Looper entry and sales explainer` — E2, todavía sin trial ni venta pública.
 3. `update landing and import Web Store reviews` — E3.
 4. `add uninstall feedback flow` — E4, incluyendo endpoint elegido.
-5. Documento/decisión E5A; después commits propios de backend/licencias E5B.
-6. `gate Looper after free trial export` — E6, cuando compra/restauración ya funcionan.
-7. Calidad, retries y traducciones comerciales finales — E7.
+5. Documento/decisión E5A; después commits propios del Worker/licencias E5B, exclusivamente sandbox.
+6. Calidad, retries y traducciones comerciales finales — E7.
+7. `gate Looper after free trial export` — E6, únicamente cuando el producto v1 y compra/restauración ya funcionan.
 
-Gate 1: E1–E3 pueden probarse localmente sin sistema de pago. Gate 2: E4 requiere endpoint real antes de publicar la URL de desinstalación. Gate 3: E2 puede informar sobre Looper y su precio; trial y compra se activan solo cuando E6 garantice el límite y E5B tenga checkout listo. Gate 4: antes de bloquear Looper, probar restore/refund/offline. Gate 5: antes de Store, actualizar landing, README, privacidad y ficha con el mismo límite/precio/copy.
+Gate 1: E1–E3 pueden probarse localmente sin sistema de pago. Gate 2: E4 requiere endpoint real antes de publicar la URL de desinstalación. Gate 3: E5B puede operar sólo con sandbox y secretos de desarrollo en Cloudflare; ningún checkout/URL de Live Mode se agrega a la extensión. Gate 4: antes de bloquear Looper, completar E3/E4/E7, probar restore/refund/offline y obtener la aprobación escrita del proveedor. Gate 5: antes de Store, actualizar landing, README, privacidad, términos y ficha con el mismo límite/precio/copy.
 
 ## Fuentes y límites de la investigación
 
@@ -381,12 +456,14 @@ Gate 1: E1–E3 pueden probarse localmente sin sistema de pago. Gate 2: E4 requi
 - [Storage local y eliminación al desinstalar](https://developer.chrome.com/docs/extensions/reference/api/storage).
 - [Localización de extensiones](https://developer.chrome.com/docs/extensions/reference/api/i18n).
 - [Mensajes entre sitio y extensión](https://developer.chrome.com/docs/extensions/develop/concepts/messaging).
-- Comparación económica y condiciones específicas: `payment-options-20260905.md`, con fuentes oficiales. Revalidar al contratar; no garantiza aprobación, cobertura mundial ni asesoramiento fiscal.
+- Investigación comercial vigente: `payment-provider-research-20260907.md`. `payment-options-20260905.md` conserva cálculos históricos; revalidar tarifas y condiciones al contratar. Ninguno garantiza aprobación, cobertura mundial ni asesoramiento fiscal.
 
-La investigación separada requerida por la skill permitió detectar comisiones fijas y restricciones de categoría/geografía antes de elegir proveedor. Solo se escribieron documentos de planificación/investigación; no se implementó ayuda, landing, feedback, checkout ni paywall en esta etapa.  
-  
-  
-  
+La investigación separada detectó comisiones fijas y restricciones de categoría/geografía. Este párrafo sustituye una nota de estado anterior: ahora E1/E2 y parte de E3 ya están implementados; E4 y el resto de E5–E8 conservan el estado de la tabla al inicio del documento.
+
+## Anexo histórico no normativo
+
+El material siguiente es una conversación/estrategia anterior que el usuario quiso conservar. No es un plan ejecutable, no describe el estado actual, no autoriza cambios y no reemplaza las decisiones/gates de este documento.
+
 Una respuesta que me habia gustado mucho y tengo como principal roadmap para que me recuerde de hacer otro tipo de tareas, ya hice 4 imgs promocionales ahora me faltaria solo terminar la app y hacer un video.  
 &gt; Download entire SoundCloud libraries—not one track at a time.
 

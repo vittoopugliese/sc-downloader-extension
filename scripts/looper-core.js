@@ -1,6 +1,7 @@
 const SCLooperCore = (() => {
   const MIN_RANGE_MS = 250;
   const DEFAULT_RANGE_MS = 10000;
+  const MIN_ZOOM_WINDOW_MS = 1000;
 
   function isFiniteNumber(value) {
     return typeof value === "number" && Number.isFinite(value);
@@ -129,6 +130,60 @@ const SCLooperCore = (() => {
     return clamp(timeMs / duration, 0, 1) * 100;
   }
 
+  function normalizeZoomWindow(window, durationMs) {
+    const duration = normalizeDuration(durationMs);
+    if (duration === null) return null;
+
+    const startMs = isFiniteNumber(window?.startMs) ? window.startMs : 0;
+    const endMs = isFiniteNumber(window?.endMs) ? window.endMs : duration;
+    const normalizedStart = clamp(Math.min(startMs, endMs), 0, duration);
+    const normalizedEnd = clamp(Math.max(startMs, endMs), 0, duration);
+    const minimumSpan = Math.min(MIN_ZOOM_WINDOW_MS, duration);
+
+    if (normalizedEnd - normalizedStart < minimumSpan) {
+      const centered = (normalizedStart + normalizedEnd) / 2;
+      const start = clamp(centered - minimumSpan / 2, 0, duration - minimumSpan);
+      return { startMs: start, endMs: start + minimumSpan };
+    }
+
+    return { startMs: normalizedStart, endMs: normalizedEnd };
+  }
+
+  function zoomWindowAt(window, durationMs, focusMs, direction) {
+    const duration = normalizeDuration(durationMs);
+    if (
+      duration === null ||
+      !isFiniteNumber(focusMs) ||
+      !isFiniteNumber(direction) ||
+      direction === 0
+    ) {
+      return null;
+    }
+
+    const current = normalizeZoomWindow(window, duration) || {
+      startMs: 0,
+      endMs: duration,
+    };
+    const currentSpan = current.endMs - current.startMs;
+    const nextSpan = clamp(
+      currentSpan * (direction < 0 ? 0.8 : 1.25),
+      Math.min(MIN_ZOOM_WINDOW_MS, duration),
+      duration
+    );
+
+    if (nextSpan >= duration) return null;
+
+    const focus = clamp(focusMs, current.startMs, current.endMs);
+    const focusRatio = (focus - current.startMs) / currentSpan;
+    const startMs = clamp(
+      focus - focusRatio * nextSpan,
+      0,
+      duration - nextSpan
+    );
+
+    return { startMs, endMs: startMs + nextSpan };
+  }
+
   function getSeekTarget(range, currentTimeMs) {
     const normalized = normalizeRange(range);
     if (!normalized || !isFiniteNumber(currentTimeMs)) return null;
@@ -147,6 +202,9 @@ const SCLooperCore = (() => {
     moveRange,
     positionToTime,
     timeToPercent,
+    MIN_ZOOM_WINDOW_MS,
+    normalizeZoomWindow,
+    zoomWindowAt,
     getSeekTarget,
   };
 })();

@@ -1,10 +1,20 @@
-# Opciones de cobro para Looper — 2026-09-05
+# Opciones de cobro para Looper — antecedente 2026-09-05
 
-Investigación para planificación, consultada el 5 de septiembre de 2026. No se creó ninguna cuenta, checkout ni integración. Hipótesis: vendedor residente en Argentina, extra de software de USD 2,99, compra única; objetivo deseado de conservar al menos el 95% de las ventas. Residencia fiscal, entidad, cuenta bancaria y países compradores siguen pendientes de confirmar.
+Estado actualizado: 2026-09-07. Este documento conserva comparativas históricas. Para una sesión nueva, leer primero `payment-provider-research-20260907.md` y el registro E5 de `product-launch-plan-20260905.md`; ambos reemplazan las decisiones abiertas de este archivo.
 
-## Resultado que afecta el plan
+## Decisión vigente que afecta el plan
 
-Con las tarifas públicas verificadas, no hay una opción confirmada que combine USD 2,99 por licencia, tarjetas con poca fricción, vendedor argentino y 95% neto. Las comisiones fijas por venta impiden ese porcentaje incluso antes de retiros e impuestos. USDT podría reducir el costo porcentual, pero no elimina gas, mínimos, restricciones geográficas ni fricción del comprador. La aceptación del producto también requiere atención: Paddle menciona expresamente los streaming downloaders entre sus categorías prohibidas.
+- El vendedor es una persona física argentina sin LLC; tiene una cuenta USD de Wise. Wise puede ser un destino potencial de payout, pero no habilita Stripe directo ni convierte al vendedor en merchant estadounidense.
+- Tarjeta es el medio principal de v1. Crypto/USDT queda fuera de v1 y “retener 95%” deja de ser requisito: no es compatible con microventas de USD 2,99 por tarjeta.
+- **Lemon Squeezy** es el único candidato actual: Merchant of Record, tarjetas, posible payout a Argentina/Wise y licencias/webhooks. No está seleccionado para Live Mode: antes debe aprobar por escrito el producto real y el titular debe superar KYC/W-8 y confirmar payout.
+- Stripe directo está descartado por disponibilidad; Paddle y Dodo quedan descartados por políticas explícitas sobre streaming/downloaders. Gumroad sólo sería plan B si se acepta banco argentino/ARS, no Wise.
+- E5A/E5B se preparan sólo en privado/Test Mode. No crear checkout público, no cobrar y no activar E6 hasta terminar v1 (E3, E4, E7 y regresiones).
+
+No se creó ninguna cuenta, checkout, integración productiva ni contacto con proveedores. La aprobación de un proveedor no se presume.
+
+## Comparación histórica de comisiones
+
+La tabla y las secciones restantes son evidencia de contexto, no un menú de proveedores para v1. En particular, las alternativas crypto se difieren y Paddle/Stripe directo no se deben implementar para este producto. El cálculo de Lemon vigente a validar durante onboarding es USD 2,3405 neto base y aproximadamente USD 2,3171 tras 1% de payout bancario no estadounidense, antes de impuestos, conversión y cargos de Wise.
 
 ## Comparación de comisiones conocidas
 
@@ -75,13 +85,11 @@ Propuesta de alcance si se elige esta vía: backend crea orden y referencia ineq
 
 Como ejemplo técnico EVM, recibos/logs se consultan por RPC y deben combinarse con una política de confirmación/finalidad. [JSON-RPC Ethereum](https://ethereum.org/developers/docs/apis/json-rpc/), [finalidad](https://ethereum.org/developers/docs/consensus-mechanisms/pos/). Cada red exige su política. La wallet de cobro y sus claves privadas nunca van en la extensión. Esta vía agrega desarrollo y operación propios; no incorpora automáticamente merchant of record ni resuelve obligaciones o restricciones por usar crypto. Es una alternativa de arquitectura a evaluar, no una implementación ni promesa de menor costo total.
 
-## Decisiones pendientes antes de implementar cobros
+## Decisiones pendientes antes de sandbox/Live Mode
 
-1. Confirmar residencia/entidad y cuentas de cobro existentes, sin compartir credenciales.
-2. Decidir si 95% es requisito estricto o aspiración y si USD 2,99 será precio final al cliente o base antes de impuestos.
-3. Confirmar si se aceptaría tarjeta como principal y crypto opcional, y en qué redes se desea recibir USDT.
-4. Verificar aceptación del producto con el proveedor que se elija y pedir tarifa concreta de microtransacción, payout y moneda. No enviar solicitudes sin autorización del usuario.
-5. Revisar países reales del dashboard para no confundir idioma de reviews con país comprador.
-6. Definir reembolsos, recuperación de compra, cantidad de dispositivos y qué actualizaciones cubre la compra única; son decisiones de licencia independientes del procesador.
+1. El titular autoriza abrir Lemon Squeezy sólo en Test Mode y solicita aprobación explícita del caso de uso completo, sin ocultar el downloader/Looper.
+2. Confirmar si Wise USD es cuenta personal o Business y completar KYC/W-8 únicamente con datos reales; verificar que Lemon acepte los datos de payout concretos.
+3. Definir trial local reiniciable o trial por email; confirmar una prueba ligada a un track, 3 dispositivos, reemplazo self-service y 30 días de gracia offline.
+4. Definir reembolsos y qué futuras actualizaciones cubre la compra única. Publicar privacidad, términos y soporte antes de Live Mode.
 
-Se puede planificar la interfaz, prueba y contrato interno de licencias sin elegir aún proveedor. El diseño debería registrar una orden, aceptar una confirmación autenticada del proveedor y conceder acceso por esa orden; una URL de éxito por sí sola no debe marcar un usuario como pago. Este último párrafo es una propuesta de arquitectura, no una integración implementada.
+El contrato de licencia ya puede evolucionar de forma provider-neutral en `services/license-worker/`, pero un retorno de checkout nunca concede acceso: sólo un webhook autenticado y procesado de forma idempotente puede hacerlo.

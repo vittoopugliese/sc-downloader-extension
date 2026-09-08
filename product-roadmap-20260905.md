@@ -1,8 +1,25 @@
 # Roadmap de producto: descargas gratis + Looper de pago
 
-Fecha: 2026-09-05. Base inspeccionada: `e37d50f` más el working tree local.
+Fecha inicial: 2026-09-05. Estado actualizado: 2026-09-07. Base inicial inspeccionada: `e37d50f` más el working tree de esa fecha.
 
-Este documento consolida la conversación de crecimiento, los dos planes de `.cursor/plans/` y el código actual. Es un plan de ejecución: no habilita pagos ni modifica la extensión. Los planes anteriores conservan valor histórico, pero sus casillas pendientes no describen el estado actual.
+Este documento conserva la estrategia y el backlog de producto. La fuente de verdad ejecutable y de estado es `product-launch-plan-20260905.md`; la investigación comercial vigente es `payment-provider-research-20260907.md`. No usar las casillas históricas de este documento para decidir qué implementar primero ni para activar pagos.
+
+## Actualización operativa — leer antes del resto
+
+La estrategia actual es: **terminar v1 primero y activar cobro/paywall al final**. E5A/E5B pueden construirse en privado y Test Mode, pero no habrá checkout público ni limitación de Looper hasta que se cierre el gate de v1.
+
+| Paquete histórico | Estado actual / siguiente acción |
+| --- | --- |
+| R0 / P01 — export y regresiones | Cerrado como base funcional. Mantener regresiones y validación Chrome real antes de release. |
+| R1 / P02 — Help e i18n | Cerrado como E1. Sólo falta reemplazar el aviso temporal por `mailto:it@vpugliese.online` antes de release. |
+| R1 / P03 — entrada Looper | Cerrado como E2: explica Looper con imagen, sin trial, compra ni checkout. |
+| R1 / P04 + R2 / P07 — feedback, landing | E3 está parcialmente cerrado: reseñas/landing hechas; falta localizar toda la landing. E4 está decidido, pero falta código y deploy Cloudflare del feedback de desinstalación. |
+| R2 / P05 — pago/licencia | E5A/E5B iniciados sólo como preparación privada: Lemon Squeezy es candidato condicionado a aprobación expresa; existe contrato D1/provider-neutral, pero no checkout ni Worker desplegado. |
+| R2 / P06 — gate de Looper | Es E6 y queda intencionalmente diferido hasta finalizar E3/E4/E7 y probar E5B. |
+| R3 / P08/P09 — reintentos/textos | Es E7 y forma parte del cierre de v1 antes de activar venta. |
+| R3 / P10–P12 y A01–A02 | Backlog posterior; no bloquea v1 ni la primera venta. |
+
+El orden actual es E3/E4/E7 como cierre de producto, con E5A/E5B en sandbox en paralelo; después E6; por último Store. El detalle de decisiones, estructura Cloudflare y el comando del ZIP viven en `product-launch-plan-20260905.md`.
 
 ## 1. Decisiones y límites del producto
 
@@ -38,7 +55,9 @@ Limitaciones relevantes del export actual: obtiene y decodifica el audio complet
 
 Documentación atrasada: el plan V1 marca todas las fases pendientes; el README todavía reserva las descargas de loops para después; la landing dice `All features are free`. El viejo roadmap también menciona ZIP en el popup, ya superado por el flujo actual. No reintroducir esa arquitectura.
 
-## 3. Paquetes de código, en orden de ejecución
+## 3. Paquetes de código históricos y backlog
+
+Las descripciones siguientes explican el alcance original de cada paquete. Su estado actual y prioridad están resumidos arriba; no reemplazan el orden operativo actualizado.
 
 Tamaños relativos: S = cambio acotado; M = varios componentes; L = integración con servicio externo o varias situaciones de recuperación. No son compromisos de calendario.
 
@@ -193,8 +212,8 @@ La relación `clicks Pro / (popups abiertos + descargas ejecutadas)` puede servi
 | --- | --- | --- |
 | M01 | Exportar CSV del dashboard: usuarios, vistas, instalaciones/desinstalaciones, países, idiomas, OS y versiones de los últimos 90 días | Antes de priorizar locales y comparar releases. No requieren instrumentar la extensión |
 | M02 | Responder reseñas sobre bugs resueltos con versión y soporte específicos | Después de confirmar que esa versión está publicada; no afirmar “todo resuelto” genéricamente |
-| M03 | Grabar video nuevo con el guion inferior | Cuando P01 y la UI comercial estén estables; usar música propia/autorizada |
-| M04 | Crear cinco capturas y promo tile | Mostrar UI real, texto legible a tamaño reducido; especificaciones verificadas al subir |
+| M03 | Grabar video nuevo con el guion inferior | Pendiente cuando la UI esté estable; usar música propia/autorizada |
+| M04 | Usar las cuatro piezas promocionales ya creadas y verificar requisitos del Store | No crear nuevas imágenes por defecto. Al subir, comprobar dimensiones/texto legible y decidir sólo entonces si hace falta una captura adicional de UI real |
 | M05 | Actualizar ficha y detalles de publicación | Resumen, descripción, idiomas, extra pago, privacidad, soporte; no cambiar el nombre solo para meter keywords |
 | M06 | Verificar sitio/dominio, identidad de publisher, HTTPS y enlaces | `CNAME` no demuestra por sí solo despliegue correcto; no contar el badge como garantizado |
 | M07 | Evaluar publicación en Edge Add-ons | Tras estabilizar release comercial; probar carpeta, offscreen y restauración antes de prometer compatibilidad |
@@ -226,13 +245,11 @@ Grabar también un corte de 15–20 segundos solo de Looper para su vista comerc
 - **D03:** comprobar si usuarios públicos ya recibieron el looper gratis. Si fue beta distribuida, comunicar transición y decidir acceso para testers; no asumir que solo existe localmente.
 - **D04:** condiciones operativas de caché/gracia offline, restauración y soporte, documentadas antes de activar el paywall.
 
-## 7. Próximo trabajo recomendado
+## 7. Próximo trabajo recomendado — reemplazado el 2026-09-07
 
-**Primer paquete ejecutable:** P01 → P02 → P03. Permite cerrar lo existente, mejorar ayuda y mostrar la propuesta comercial sin esperar pitch o analytics.
+Seguir `product-launch-plan-20260905.md`: completar la localización de E3, implementar/desplegar E4 y cerrar E7. E5A/E5B se construyen en privado y sandbox; E6, checkout público y Store quedan bloqueados hasta superar el gate “producto v1 terminado”.
 
-Después: P04; resolver D01 y completar P05–P06; cerrar P07 y M03–M06 para publicar la venta. P08–P09 siguen por impacto en uso y reputación. A01–A02 quedan explícitamente después; P10–P12 se priorizan con señales reales.
-
-Cada paquete debe tener un diff separado y una validación de comportamiento. No mezclar el working tree del export con refactors generales, ni ejecutar automáticamente todo el antiguo plan arquitectónico como requisito para monetizar.
+Cada entrega mantiene diff separado y validación proporcional. No mezclar el working tree con refactors generales ni activar cobros por una URL de retorno del checkout.
 
 ## Fuentes operativas consultadas
 
@@ -243,4 +260,4 @@ Cada paquete debe tener un diff separado y una validación de comportamiento. No
 - [Métricas del dashboard](https://developer.chrome.com/docs/webstore/metrics).
 - [Guía de imágenes y texto del listing](https://developer.chrome.com/docs/webstore/best-listing).
 
-Las condiciones específicas del proveedor de pagos y el detalle de disclosures se deben verificar al implementarlos; este documento no elige proveedor ni estima ingresos netos.
+Las condiciones específicas de pagos se reemplazaron por `payment-provider-research-20260907.md`; la decisión sigue condicionada a la aprobación explícita del proveedor y no autoriza ventas.

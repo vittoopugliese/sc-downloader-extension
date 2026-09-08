@@ -9,7 +9,9 @@
     "test:e2e:download": "node scripts/verify-download-browser.js",
     "test:live": "node scripts/verify-live-looper.js",
     "test:live:folder": "node scripts/verify-live-looper.js --folder",
-    "browser:live": "node scripts/open-live-browser.js"
+    "browser:live": "node scripts/open-live-browser.js",
+    "test:license": "node --test services/license-worker/test/contract.test.mjs",
+    "package:extension": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-extension.ps1"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0"

@@ -8,6 +8,7 @@ const SCLooper = (() => {
   const MEDIA_BRIDGE_EVENT = "scdl-looper:command";
   const MEDIA_BRIDGE_COMMAND_ATTRIBUTE = "data-scdl-looper-command";
   const MEDIA_BRIDGE_RESPONSE_ATTRIBUTE = "data-scdl-looper-response";
+  const ZOOM_SOURCE_HIDDEN_ATTRIBUTE = "data-scdl-loop-zoom-source-hidden";
   const WAVEFORM_SELECTORS = [
     '[role="slider"][aria-label="Waveform"]',
     ".fullHero__waveform .waveformWrapper__waveform",
@@ -41,6 +42,7 @@ const SCLooper = (() => {
   let isLoopDownloading = false;
   let downloadResetTimeout = null;
   let selectionDrag = null;
+  let zoomWindow = null;
 
   function setDebugStatus(status) {
     if (status === lastDebugStatus) return;
@@ -575,6 +577,20 @@ const SCLooper = (() => {
         bottom: 0;
         pointer-events: none;
       }
+      .scdl-loop-zoom-layer {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .scdl-loop-zoom-waveform {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      [${ZOOM_SOURCE_HIDDEN_ATTRIBUTE}] {
+        visibility: hidden !important;
+      }
       .scdl-loop-dim {
         background: rgba(0, 0, 0, 0.22);
       }
@@ -829,6 +845,9 @@ const SCLooper = (() => {
   function createOverlay() {
     const overlay = document.createElement("div");
     overlay.setAttribute(OVERLAY_ATTRIBUTE, "true");
+    const zoomLayer = document.createElement("div");
+    zoomLayer.className = "scdl-loop-zoom-layer";
+    zoomLayer.hidden = true;
     const before = document.createElement("div");
     before.className = "scdl-loop-dim scdl-loop-before";
     const selection = document.createElement("div");
@@ -837,6 +856,7 @@ const SCLooper = (() => {
     const after = document.createElement("div");
     after.className = "scdl-loop-dim scdl-loop-after";
     overlay.append(
+      zoomLayer,
       before,
       selection,
       after,
@@ -846,10 +866,94 @@ const SCLooper = (() => {
     return overlay;
   }
 
+  function getVisibleWaveformWindow() {
+    if (!range) return null;
+    return SCLooperCore.normalizeZoomWindow(zoomWindow, range.durationMs) || {
+      startMs: 0,
+      endMs: range.durationMs,
+    };
+  }
+
+  function timeToVisiblePercent(timeMs, visibleWindow) {
+    if (!visibleWindow || !Number.isFinite(timeMs)) return 0;
+    const span = visibleWindow.endMs - visibleWindow.startMs;
+    if (span <= 0) return 0;
+    return Math.min(
+      Math.max((timeMs - visibleWindow.startMs) / span, 0),
+      1
+    ) * 100;
+  }
+
+  function restoreZoomSource(currentView = view) {
+    currentView?.hiddenZoomSource?.removeAttribute(
+      ZOOM_SOURCE_HIDDEN_ATTRIBUTE
+    );
+    if (currentView) currentView.hiddenZoomSource = null;
+  }
+
+  function updateZoomWaveform() {
+    const zoomLayer = view?.overlay?.querySelector(".scdl-loop-zoom-layer");
+    if (!zoomLayer || !range) return;
+
+    if (!zoomWindow) {
+      zoomLayer.hidden = true;
+      restoreZoomSource();
+      return;
+    }
+
+    const source = view.waveform.querySelector("svg");
+    if (!source) {
+      zoomLayer.hidden = true;
+      restoreZoomSource();
+      return;
+    }
+
+    if (!view.zoomSvg || view.zoomSource !== source) {
+      restoreZoomSource();
+      view.zoomSource = source;
+      view.zoomSvg = source.cloneNode(true);
+      view.zoomSvg.removeAttribute(ZOOM_SOURCE_HIDDEN_ATTRIBUTE);
+      view.zoomSvg.classList.add("scdl-loop-zoom-waveform");
+      view.zoomSvg.setAttribute("aria-hidden", "true");
+      view.zoomSvg.setAttribute("focusable", "false");
+      zoomLayer.replaceChildren(view.zoomSvg);
+    }
+
+    const viewBox = String(source.getAttribute("viewBox") || "")
+      .trim()
+      .split(/[\s,]+/)
+      .map(Number);
+    const visibleWindow = getVisibleWaveformWindow();
+    if (
+      viewBox.length !== 4 ||
+      viewBox.some((value) => !Number.isFinite(value)) ||
+      !visibleWindow
+    ) {
+      zoomLayer.hidden = true;
+      restoreZoomSource();
+      return;
+    }
+
+    const [x, y, width, height] = viewBox;
+    const visibleWidth =
+      width * (visibleWindow.endMs - visibleWindow.startMs) / range.durationMs;
+    const visibleX =
+      x + width * visibleWindow.startMs / range.durationMs;
+    view.zoomSvg.setAttribute(
+      "viewBox",
+      `${visibleX} ${y} ${visibleWidth} ${height}`
+    );
+    source.setAttribute(ZOOM_SOURCE_HIDDEN_ATTRIBUTE, "true");
+    view.hiddenZoomSource = source;
+    zoomLayer.hidden = false;
+  }
+
   function updateOverlay() {
     if (!view?.overlay || !range) return;
-    const start = SCLooperCore.timeToPercent(range.startMs, range.durationMs);
-    const end = SCLooperCore.timeToPercent(range.endMs, range.durationMs);
+    const visibleWindow = getVisibleWaveformWindow();
+    updateZoomWaveform();
+    const start = timeToVisiblePercent(range.startMs, visibleWindow);
+    const end = timeToVisiblePercent(range.endMs, visibleWindow);
     const before = view.overlay.querySelector(".scdl-loop-before");
     const selection = view.overlay.querySelector(".scdl-loop-selection");
     const after = view.overlay.querySelector(".scdl-loop-after");
@@ -868,7 +972,12 @@ const SCLooper = (() => {
     for (const marker of view.overlay.querySelectorAll(".scdl-loop-marker")) {
       const isStart = marker.dataset.marker === "start";
       const timeMs = isStart ? range.startMs : range.endMs;
-      marker.style.left = `${isStart ? start : end}%`;
+      const markerPercent = isStart ? start : end;
+      marker.style.left = `${markerPercent}%`;
+      marker.style.visibility =
+        timeMs >= visibleWindow.startMs && timeMs <= visibleWindow.endMs
+          ? "visible"
+          : "hidden";
       marker.setAttribute(
         "aria-label",
         isStart ? t("looper_start") : t("looper_end")
@@ -889,10 +998,12 @@ const SCLooper = (() => {
   function removeView() {
     if (!view) return;
     selectionDrag = null;
+    restoreZoomSource(view);
     resizeObserver?.disconnect();
     resizeObserver = null;
     view.button?.removeEventListener("click", handleButtonClick);
     view.downloadButton?.removeEventListener("click", handleDownloadClick);
+    view.wrapper?.removeEventListener("wheel", handleWaveformWheel);
     view.button?.remove();
     view.downloadButton?.remove();
     view.overlay?.remove();
@@ -913,6 +1024,9 @@ const SCLooper = (() => {
       button,
       downloadButton,
       overlay: null,
+      zoomSvg: null,
+      zoomSource: null,
+      hiddenZoomSource: null,
       pageUrl: window.location.href,
     };
 
@@ -933,6 +1047,9 @@ const SCLooper = (() => {
     }
     view.overlay = createOverlay();
     view.wrapper.appendChild(view.overlay);
+    view.wrapper.addEventListener("wheel", handleWaveformWheel, {
+      passive: false,
+    });
     if (typeof ResizeObserver === "function") {
       resizeObserver?.disconnect();
       resizeObserver = new ResizeObserver(updateOverlay);
@@ -1051,13 +1168,66 @@ const SCLooper = (() => {
     event.stopPropagation();
   }
 
+  function handleWaveformWheel(event) {
+    if (
+      !range ||
+      !view ||
+      event.ctrlKey ||
+      !Number.isFinite(event.deltaY) ||
+      event.deltaY === 0
+    ) return;
+    if (event.target.closest?.(".scdl-loop-marker, .scdl-loop-selection-drag")) {
+      return;
+    }
+
+    const rect = view.waveform.getBoundingClientRect();
+    if (
+      !Number.isFinite(rect.width) ||
+      rect.width <= 0 ||
+      event.clientX < rect.left ||
+      event.clientX > rect.right ||
+      event.clientY < rect.top ||
+      event.clientY > rect.bottom
+    ) {
+      return;
+    }
+
+    const visibleWindow = getVisibleWaveformWindow();
+    const focusMs = SCLooperCore.positionToTime(
+      event.clientX,
+      rect.left,
+      rect.width,
+      visibleWindow.endMs - visibleWindow.startMs
+    ) + visibleWindow.startMs;
+    if (focusMs < range.startMs || focusMs > range.endMs) return;
+
+    const nextWindow = SCLooperCore.zoomWindowAt(
+      zoomWindow,
+      range.durationMs,
+      focusMs,
+      event.deltaY
+    );
+    if (
+      nextWindow === null &&
+      !zoomWindow &&
+      event.deltaY > 0
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    zoomWindow = nextWindow;
+    updateOverlay();
+  }
+
   function updateSelectionFromPointer(clientX) {
     if (!selectionDrag || !range || !view) return;
     const rect = view.waveform.getBoundingClientRect();
     if (!Number.isFinite(rect.width) || rect.width <= 0) return;
+    const visibleWindow = getVisibleWaveformWindow();
     const deltaMs =
       ((clientX - selectionDrag.startClientX) / rect.width) *
-      selectionDrag.initialRange.durationMs;
+      (visibleWindow.endMs - visibleWindow.startMs);
     range = SCLooperCore.moveRange(selectionDrag.initialRange, deltaMs);
     updateOverlay();
   }
@@ -1119,12 +1289,13 @@ const SCLooper = (() => {
   function updateMarkerFromPointer(marker, clientX) {
     if (!range || !view) return;
     const rect = view.waveform.getBoundingClientRect();
+    const visibleWindow = getVisibleWaveformWindow();
     const timeMs = SCLooperCore.positionToTime(
       clientX,
       rect.left,
       rect.width,
-      range.durationMs
-    );
+      visibleWindow.endMs - visibleWindow.startMs
+    ) + visibleWindow.startMs;
     range = SCLooperCore.moveMarker(range, marker, timeMs);
     updateOverlay();
   }
@@ -1213,6 +1384,9 @@ const SCLooper = (() => {
         return;
       }
       range = normalized;
+      zoomWindow = zoomWindow
+        ? SCLooperCore.normalizeZoomWindow(zoomWindow, range.durationMs)
+        : null;
       updateOverlay();
     }
 
@@ -1269,6 +1443,7 @@ const SCLooper = (() => {
     player?.destroy();
     player = nextPlayer;
     range = initialRange;
+    zoomWindow = null;
     initialUrl = window.location.href;
     initialTrackIdentity = player.getTrackIdentity();
     lastSeekAttemptAt = Number.NEGATIVE_INFINITY;
@@ -1306,6 +1481,7 @@ const SCLooper = (() => {
     player?.destroy();
     player = null;
     range = null;
+    zoomWindow = null;
     initialUrl = null;
     initialTrackIdentity = null;
     lastSeekAttemptAt = Number.NEGATIVE_INFINITY;

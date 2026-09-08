@@ -88,6 +88,7 @@ async function waitForFile(directory, timeoutMs = 30000) {
         body: `<html><head><style>
           .track { width: 640px; }
           .waveform { display: block; width: 600px; height: 120px; }
+          .waveform svg { display: block; width: 100%; height: 100%; }
           .actions { display: flex; }
           button { width: 30px; height: 30px; }
         </style></head><body>
@@ -95,7 +96,9 @@ async function waitForFile(directory, timeoutMs = 30000) {
           <div class="track">
             <h1>Loop regression</h1>
             <div class="waveform-wrap">
-              <div class="waveform" role="slider" aria-label="Waveform" aria-valuemax="2000"></div>
+              <div class="waveform" role="slider" aria-label="Waveform" aria-valuemax="2000">
+                <svg viewBox="0 0 600 120" preserveAspectRatio="none"><rect x="0" y="20" width="4" height="80" fill="white"></rect><rect x="100" y="35" width="4" height="65" fill="white"></rect><rect x="200" y="10" width="4" height="90" fill="white"></rect><rect x="300" y="45" width="4" height="55" fill="white"></rect><rect x="400" y="25" width="4" height="75" fill="white"></rect><rect x="500" y="15" width="4" height="85" fill="white"></rect></svg>
+              </div>
             </div>
             <div class="actions"><button aria-haspopup="true" aria-label="More actions">More</button></div>
           </div>
@@ -120,6 +123,59 @@ async function waitForFile(directory, timeoutMs = 30000) {
     await loopButton.click();
     const endMarker = page.locator('[data-scdl-loop-overlay] [data-marker="end"]');
     await endMarker.waitFor();
+    const waveform = page.locator('[role="slider"][aria-label="Waveform"]');
+    const waveformBox = await waveform.boundingBox();
+    await waveform.evaluate((element, point) => {
+      const event = new WheelEvent("wheel", {
+        bubbles: true,
+        cancelable: true,
+        clientX: point.x,
+        clientY: point.y,
+        deltaY: -100,
+      });
+      element.dispatchEvent(event);
+      if (!event.defaultPrevented) throw new Error("Waveform wheel was not consumed");
+    }, {
+      x: waveformBox.x + waveformBox.width / 2,
+      y: waveformBox.y + waveformBox.height / 2,
+    });
+    const zoomedViewBox = await page.locator('.scdl-loop-zoom-waveform').getAttribute('viewBox');
+    assert.ok(Number(zoomedViewBox.split(/\s+/)[2]) < 600, "Wheel up must zoom the waveform");
+    assert.equal(
+      await waveform.locator(":scope > svg").getAttribute("data-scdl-loop-zoom-source-hidden"),
+      "true",
+      "The original waveform must be hidden while the zoomed copy is visible"
+    );
+    assert.equal(
+      await waveform.locator(":scope > svg").evaluate((element) => getComputedStyle(element).visibility),
+      "hidden",
+      "The source waveform must not remain visible behind the zoomed waveform"
+    );
+    await waveform.evaluate((element, point) => {
+      element.dispatchEvent(new WheelEvent("wheel", {
+        bubbles: true,
+        cancelable: true,
+        clientX: point.x,
+        clientY: point.y,
+        deltaY: 100,
+      }));
+    }, {
+      x: waveformBox.x + waveformBox.width / 2,
+      y: waveformBox.y + waveformBox.height / 2,
+    });
+    await page.waitForFunction(() => {
+      return document.querySelector('.scdl-loop-zoom-layer')?.hidden === true;
+    });
+    assert.equal(
+      await waveform.locator(":scope > svg").getAttribute("data-scdl-loop-zoom-source-hidden"),
+      null,
+      "The original waveform must be restored after zooming all the way out"
+    );
+    assert.equal(
+      await waveform.locator(":scope > svg").evaluate((element) => getComputedStyle(element).visibility),
+      "visible",
+      "The source waveform must become visible again after zooming out"
+    );
     await endMarker.press("Shift+ArrowLeft");
     assert.equal(await endMarker.getAttribute("aria-valuenow"), "1000");
 
