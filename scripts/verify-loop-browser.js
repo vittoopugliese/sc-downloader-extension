@@ -117,6 +117,32 @@ async function waitForFile(directory, timeoutMs = 30000) {
               bar.setAttribute("fill", "white");
               fixtureWaveform.appendChild(bar);
             }
+            window.commentModeOpenCount = 0;
+            const waveformElement = document.querySelector(".waveform");
+            const actionsElement = document.querySelector(".actions");
+            const createMoreButton = () => {
+              const button = document.createElement("button");
+              button.setAttribute("aria-haspopup", "true");
+              button.setAttribute("aria-label", "More actions");
+              button.textContent = "More";
+              return button;
+            };
+            window.enterFixtureCommentMode = () => {
+              window.commentModeOpenCount += 1;
+              const closeButton = document.createElement("button");
+              closeButton.className = "comment-close";
+              closeButton.textContent = "×";
+              closeButton.addEventListener("click", () => {
+                actionsElement.replaceChildren(createMoreButton());
+              });
+              actionsElement.replaceChildren(closeButton);
+            };
+            waveformElement.addEventListener("click", (event) => {
+              const rect = waveformElement.getBoundingClientRect();
+              if (event.clientY > rect.top + rect.height / 2) {
+                window.enterFixtureCommentMode();
+              }
+            });
           </script>
         </body></html>`,
       })
@@ -143,6 +169,35 @@ async function waitForFile(directory, timeoutMs = 30000) {
     await endMarker.waitFor();
     const waveform = page.locator('[role="slider"][aria-label="Waveform"]');
     const waveformBox = await waveform.boundingBox();
+    const selection = page.locator(".scdl-loop-selection");
+    const selectionBox = await selection.boundingBox();
+    const selectionClickPoint = {
+      x: selectionBox.x + selectionBox.width / 2,
+      y: selectionBox.y + selectionBox.height * 0.8,
+    };
+    await page.mouse.click(selectionClickPoint.x, selectionClickPoint.y);
+    assert.equal(
+      await page.evaluate(() => window.commentModeOpenCount),
+      0,
+      "Clicks inside the A-B selection must not open SoundCloud comment mode"
+    );
+
+    const rangeBeforeCommentMode = {
+      start: await startMarker.getAttribute("aria-valuenow"),
+      end: await endMarker.getAttribute("aria-valuenow"),
+    };
+    await page.evaluate(() => window.enterFixtureCommentMode());
+    await page.locator(".comment-close").click();
+    await page.locator("[data-scdl-looper]").waitFor({ state: "visible" });
+    await page.locator("[data-scdl-loop-download]").waitFor({ state: "visible" });
+    assert.deepEqual(
+      {
+        start: await startMarker.getAttribute("aria-valuenow"),
+        end: await endMarker.getAttribute("aria-valuenow"),
+      },
+      rangeBeforeCommentMode,
+      "Closing comment mode must remount the looper controls without losing A-B"
+    );
     await waveform.evaluate((element, point) => {
       const event = new WheelEvent("wheel", {
         bubbles: true,
@@ -267,6 +322,22 @@ async function waitForFile(directory, timeoutMs = 30000) {
       Math.abs(outsideRangeSeekMs - 3600) < 25,
       "Zoom seeking must use the whole visible viewport, including outside A-B"
     );
+    const insideRangeSeekMs = await selection.evaluate((element, point) => {
+      element.dispatchEvent(new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        clientX: point.x,
+        clientY: point.y,
+      }));
+      return document.querySelector("audio").currentTime * 1000;
+    }, {
+      x: waveformBox.x + waveformBox.width * 0.25,
+      y: waveformBox.y + waveformBox.height * 0.75,
+    });
+    assert.ok(
+      Math.abs(insideRangeSeekMs - 6000) < 25,
+      "The A-B interaction layer must keep zoom-aware seeking without leaking the click"
+    );
     const endMarkerBox = await endMarker.boundingBox();
     await page.mouse.move(
       endMarkerBox.x + endMarkerBox.width / 2,
@@ -384,6 +455,34 @@ async function waitForFile(directory, timeoutMs = 30000) {
       await endMarker.press("Shift+ArrowLeft");
     }
     assert.equal(await endMarker.getAttribute("aria-valuenow"), "6000");
+
+    for (let step = 0; step < 7; step += 1) {
+      await endMarker.press("ArrowLeft");
+    }
+    assert.equal(await endMarker.getAttribute("aria-valuenow"), "5300");
+    const narrowStartBefore = Number(await startMarker.getAttribute("aria-valuenow"));
+    const narrowEndBefore = Number(await endMarker.getAttribute("aria-valuenow"));
+    const narrowSelectionBox = await selection.boundingBox();
+    await page.mouse.move(
+      narrowSelectionBox.x + narrowSelectionBox.width / 2,
+      narrowSelectionBox.y + 12
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      narrowSelectionBox.x + narrowSelectionBox.width / 2 + 60,
+      narrowSelectionBox.y + 12
+    );
+    await page.mouse.up();
+    const narrowStartAfter = Number(await startMarker.getAttribute("aria-valuenow"));
+    const narrowEndAfter = Number(await endMarker.getAttribute("aria-valuenow"));
+    assert.ok(
+      Math.abs(narrowStartAfter - narrowStartBefore - 2000) < 25 &&
+        Math.abs(narrowEndAfter - narrowEndBefore - 2000) < 25,
+      "A narrow selection must remain draggable as a whole from its top grip"
+    );
+    for (let step = 0; step < 7; step += 1) {
+      await endMarker.press("ArrowRight");
+    }
 
     const downloadButton = page.locator("[data-scdl-loop-download]");
     await downloadButton.click();

@@ -636,15 +636,17 @@ const SCLooper = (() => {
           rgba(255, 85, 0, 0.24) 100%
         );
         box-sizing: border-box;
+        pointer-events: auto;
       }
       .scdl-loop-selection-drag {
         position: absolute;
-        z-index: 1;
+        z-index: 3;
         top: 0;
-        left: 0;
-        right: 0;
+        left: 50%;
+        right: auto;
+        width: max(100%, 24px);
         height: 24px;
-        min-width: 0;
+        min-width: 24px;
         margin: 0;
         padding: 0;
         border: 0;
@@ -652,6 +654,7 @@ const SCLooper = (() => {
         color: #fff;
         background: transparent;
         cursor: grab;
+        transform: translateX(-50%);
         touch-action: none;
         pointer-events: auto;
       }
@@ -896,6 +899,8 @@ const SCLooper = (() => {
     before.className = "scdl-loop-dim scdl-loop-before";
     const selection = document.createElement("div");
     selection.className = "scdl-loop-selection";
+    selection.addEventListener("pointerdown", stopMarkerEvent);
+    selection.addEventListener("click", handleSelectionClick);
     const selectionDragHandle = createSelectionDragHandle();
     selection.appendChild(selectionDragHandle);
     const after = document.createElement("div");
@@ -1507,6 +1512,14 @@ const SCLooper = (() => {
     event.stopPropagation();
   }
 
+  function handleSelectionClick(event) {
+    if (zoomWindow) {
+      handleZoomInteractionClick(event);
+      return;
+    }
+    stopMarkerEvent(event);
+  }
+
   function handleZoomInteractionClick(event) {
     stopMarkerEvent(event);
     if (!zoomWindow || !range || !view || !player) return;
@@ -1962,7 +1975,7 @@ const SCLooper = (() => {
   }
 
   function scheduleEnsure(delay = 80) {
-    if (ensureTimeout !== null) clearTimeout(ensureTimeout);
+    if (ensureTimeout !== null) return;
     ensureTimeout = setTimeout(() => {
       ensureTimeout = null;
       runEnsureMounted();
