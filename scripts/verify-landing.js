@@ -96,11 +96,6 @@ if (fs.existsSync(reviewSourcePath)) {
 assert(!html.includes('All features are free'), 'Outdated all-features-free promise remains');
 for (const requiredCopy of [
   'Full-track downloads stay free',
-  'A–B repeat',
-  '$2.99',
-  'one time',
-  'Purchases open soon',
-  'Looper Pro is planned as a one-time add-on',
   'Download only content you own or have permission to save.'
 ]) {
   assert(html.includes(requiredCopy), `Missing required landing copy: ${requiredCopy}`);
@@ -115,7 +110,10 @@ assert(!/(href|action)=["'][^"']*(checkout|stripe|paddle|lemonsqueezy)/i.test(ht
 assert(html.includes("text.textContent = review.text"), 'Review text must be rendered with textContent');
 assert(html.includes("badge.textContent = 'ALREADY IMPLEMENTED'"), 'Implemented review requests need their badge');
 assert(html.includes('review-card:nth-child(n + 4) { display:none; }'), 'Only three reviews should show before expansion');
-assert(html.includes('assets/promos/four.png'), 'The approved Looper promo image is missing');
+assert(!html.includes('looper-player'), 'The retired standalone Looper player must be absent');
+assert(!/<button[^>]+id="loop-export"/.test(html), 'The retired WAV-export UI must be absent');
+assert(/data-loop-handle="start"[\s\S]*data-loop-handle="end"/.test(html), 'The hero Looper preview needs draggable A and B markers');
+assert(html.includes("handle.addEventListener('pointerdown'"), 'The hero Looper markers must support pointer dragging');
 assert(html.includes('mailto:it@vpugliese.online'), 'The configured support email is missing');
 assert(!/reviews\.txt/i.test(html), 'Production landing must not fetch the Desktop review source');
 

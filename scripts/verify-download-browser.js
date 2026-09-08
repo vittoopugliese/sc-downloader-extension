@@ -57,7 +57,7 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
     await page.goto("https://soundcloud.com/discover");
     const button = page.locator("#scdl-player-download");
     await button.waitFor();
-    assert.match(await button.locator("img").getAttribute("src"), /assets\/icon48\.png$/);
+    assert.match(await button.locator("img").getAttribute("src"), /assets\/icons\/download\.svg$/);
     await button.click();
     await page.waitForFunction(() => {
       const button = document.getElementById("scdl-player-download");

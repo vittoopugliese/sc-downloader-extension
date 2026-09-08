@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f5ef">
-  <meta name="description" content="Download SoundCloud tracks, playlists, likes and artist uploads for free. Keep cover art and metadata, choose a folder, and try the A–B Looper with WAV export.">
+  <meta name="description" content="Download SoundCloud tracks, playlists, likes and artist uploads for free. Keep cover art and metadata, choose a folder, and preview an A–B loop.">
   <meta property="og:type" content="website">
   <meta property="og:title" content="SoundCloud Track Downloader — Your favorites. Your files.">
-  <meta property="og:description" content="Free full-track and collection downloads, plus an A–B Looper with WAV export. A focused Chrome extension built for SoundCloud.">
+  <meta property="og:description" content="Free full-track and collection downloads, plus an interactive A–B Looper preview. A focused Chrome extension built for SoundCloud.">
   <meta name="twitter:card" content="summary">
   <title>SoundCloud Track Downloader — Free tracks, playlists & artist uploads</title>
   <link rel="icon" type="image/png" href="./assets/app-icon-logo-transparent-xl.png">
@@ -64,53 +64,53 @@
     .store-stat strong { display:block; margin-bottom:3px; font-size:15px; letter-spacing:-.4px; }
     .store-stat span { display:block; color:var(--muted); font-size:9px; line-height:1.35; }
     .store-source { display:block; max-width:430px; margin:6px 0 0; color:#7b7e73; font-size:8px; text-align:right; text-decoration:underline; text-underline-offset:2px; }
-    .demo-stage { position:relative; min-width:0; background:var(--soft); border:1px solid #e0e3d7; border-radius:15px; padding:24px 22px 19px; }
-    .demo-stage::before { content:""; position:absolute; inset:0; border-radius:inherit; opacity:.33; background-image:radial-gradient(#a9ae99 .7px,transparent .7px); background-size:12px 12px; pointer-events:none; }
+    .demo-stage { position:relative; min-width:0; background:#ebebe8; border:1px solid #d4d4d0; border-radius:15px; padding:24px 22px 19px; }
+    .demo-stage::before { content:""; position:absolute; inset:0; border-radius:inherit; opacity:.33; background-image:radial-gradient(#a5a5a0 .7px,transparent .7px); background-size:12px 12px; pointer-events:none; }
     .demo-stage > * { position:relative; }
     .demo-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:21px; }
-    .demo-top .eyebrow { font-size:9px; letter-spacing:1.3px; color:#62685a; }
-    .demo-badge { border:1px solid #bec6b2; border-radius:4px; padding:4px 7px; color:#4f5944; background:#eef0e7; font-family:ui-monospace,monospace; font-size:9px; }
-    .demo-tabs { display:flex; padding:4px; gap:3px; border:1px solid #d2d6c8; border-radius:7px; background:#dfe3d6; width:fit-content; margin:0 auto 22px; }
-    .demo-tabs button { border:0; background:transparent; padding:8px 13px; color:#555c4d; border-radius:4px; font-size:11px; white-space:nowrap; }
-    .demo-tabs button[aria-pressed="true"] { color:var(--ink); background:var(--paper); box-shadow:0 1px 3px #2933221a; font-weight:700; }
-    .browser { border:1px solid #41453e; border-radius:9px; background:#191c19; overflow:hidden; box-shadow:0 17px 32px -16px #27372066; }
-    .browser-bar { background:#30332e; display:flex; align-items:center; gap:12px; padding:11px 12px; }
+    .demo-top .eyebrow { font-size:9px; letter-spacing:1.3px; color:#5f5f5b; }
+    .demo-badge { border:1px solid #c8c8c2; border-radius:4px; padding:4px 7px; color:#6f351f; background:#fff4ef; font-family:ui-monospace,monospace; font-size:9px; }
+    .demo-tabs { display:flex; padding:4px; gap:3px; border:1px solid #d0d0cb; border-radius:7px; background:#deded9; width:fit-content; margin:0 auto 22px; }
+    .demo-tabs button { border:0; background:transparent; padding:8px 13px; color:#575754; border-radius:4px; font-size:11px; white-space:nowrap; }
+    .demo-tabs button[aria-pressed="true"] { color:#8e310f; background:#fff8f4; box-shadow:0 1px 3px #3b2a221a; font-weight:700; }
+    .browser { border:1px solid #454545; border-radius:9px; background:#1b1b1b; overflow:hidden; box-shadow:0 17px 32px -16px #29292966; }
+    .browser-bar { background:#353535; display:flex; align-items:center; gap:12px; padding:11px 12px; }
     .dots { display:flex; gap:4px; }
-    .dots i { display:block; width:5px; height:5px; background:#83877c; border-radius:50%; }
-    .address { display:flex; gap:7px; align-items:center; background:#232621; color:#aeb5a6; border-radius:4px; padding:5px 8px; font-size:9px; flex:1; min-width:0; }
+    .dots i { display:block; width:5px; height:5px; background:#919191; border-radius:50%; }
+    .address { display:flex; gap:7px; align-items:center; background:#262626; color:#b8b8b8; border-radius:4px; padding:5px 8px; font-size:9px; flex:1; min-width:0; }
     .address .icon { width:10px; height:10px; }
     #demo-url { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
     .extension-pin { color:#ff8753; width:15px; height:15px; }
-    .extension-preview { position:relative; text-align:center; padding:29px 20px 23px; overflow:hidden; background:#30342a; color:#f5f5f1; isolation:isolate; min-height:277px; }
-    .extension-preview::before { content:""; position:absolute; inset:-30px; background:radial-gradient(ellipse at 80% 10%,#ada675 0%,transparent 45%),radial-gradient(ellipse at 18% 75%,#8d9b6a 0%,transparent 43%),linear-gradient(150deg,#1b2c23,#655f41 50%,#1d2720); filter:blur(15px); z-index:-2; }
+    .extension-preview { position:relative; text-align:center; padding:29px 20px 23px; overflow:hidden; background:#353535; color:#f6f4f2; isolation:isolate; min-height:277px; }
+    .extension-preview::before { content:""; position:absolute; inset:-30px; background:radial-gradient(ellipse at 80% 10%,#bd5b35 0%,transparent 45%),radial-gradient(ellipse at 18% 75%,#6e6e6e 0%,transparent 43%),linear-gradient(150deg,#242424,#6a5147 50%,#242424); filter:blur(15px); z-index:-2; }
     .extension-preview::after { content:""; position:absolute; inset:0; background:#0006; z-index:-1; }
     .extension-preview h2 { font-size:24px; line-height:1.2; letter-spacing:-.65px; margin:0 0 12px; }
-    .artist { display:flex; align-items:center; justify-content:center; gap:9px; color:#d6d9d0; font-size:13px; font-weight:700; }
-    .avatar { display:block; width:25px; height:25px; border-radius:50%; background:repeating-radial-gradient(ellipse at 80% 90%,#c5c6a0 0 2px,#6e795e 3px 5px,#414c3a 6px 8px); }
-    .preview-meta { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:7px; margin:14px 0 13px; color:#d2d4ce; font-size:11px; }
-    .preview-meta select,.folder-pill { appearance:auto; background:#ffffff17; border:1px solid #ffffff3d; border-radius:14px; padding:4px 8px; color:#f2f2eb; font-size:10px; }
-    .preview-meta select option { background:#252b24; color:white; }
+    .artist { display:flex; align-items:center; justify-content:center; gap:9px; color:#dedddb; font-size:13px; font-weight:700; }
+    .avatar { display:block; width:25px; height:25px; border-radius:50%; background:repeating-radial-gradient(ellipse at 80% 90%,#ffae82 0 2px,#bd5b35 3px 5px,#5a5a5a 6px 8px); }
+    .preview-meta { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:7px; margin:14px 0 13px; color:#dbd9d7; font-size:11px; }
+    .preview-meta select,.folder-pill { appearance:auto; background:#ffffff17; border:1px solid #ffffff3d; border-radius:14px; padding:4px 8px; color:#f7f5f2; font-size:10px; }
+    .preview-meta select option { background:#2a2a2a; color:white; }
     .folder-pill { display:flex; align-items:center; gap:4px; }
     .folder-pill .icon { width:11px; height:11px; }
     .waveform-wrap { position:relative; margin:7px 0 12px; }
-    .waveform { width:100%; height:58px; display:block; color:#dfdfd3; }
-    .loop-selection { position:absolute; inset:2px auto 2px 34%; width:30%; border-inline:2px solid #ff8753; background:linear-gradient(90deg,#ff6b2a3d,#ff6b2a1a 50%,#ff6b2a3d); opacity:0; transition:opacity .2s; pointer-events:none; }
-    .loop-selection::before,.loop-selection::after { position:absolute; top:-7px; display:grid; place-items:center; width:18px; height:18px; border-radius:50%; background:#ff6b2a; color:white; font:700 9px/1 Arial,sans-serif; }
-    .loop-selection::before { content:"A"; left:-10px; }
-    .loop-selection::after { content:"B"; right:-10px; }
-    .extension-preview.is-looper .loop-selection { opacity:1; }
+    .waveform { width:100%; height:58px; display:block; color:#e4e1de; }
+    .loop-selection { position:absolute; inset:2px auto 2px 34%; width:30%; border-inline:2px solid #ff8753; background:linear-gradient(90deg,#ff6b2a3d,#ff6b2a1a 50%,#ff6b2a3d); opacity:0; visibility:hidden; transition:opacity .2s; pointer-events:none; }
+    .loop-handle { position:absolute; top:-7px; display:grid; place-items:center; width:20px; height:20px; padding:0; border:1px solid #ffd1bc; border-radius:50%; background:#f05a24; color:white; font:700 9px/1 Arial,sans-serif; box-shadow:0 2px 8px #0005; cursor:ew-resize; touch-action:none; }
+    .loop-handle[data-loop-handle="start"] { left:-11px; }
+    .loop-handle[data-loop-handle="end"] { right:-11px; }
+    .extension-preview.is-looper .loop-selection { opacity:1; visibility:visible; }
     .demo-actions { position:relative; display:grid; place-items:center; min-height:36px; }
-    .download-demo { display:grid; place-items:center; margin:0 auto; border:0; width:34px; height:34px; border-radius:50%; color:#252b24; background:#e4e7db; transition:transform .2s,background .2s; }
+    .download-demo { display:grid; place-items:center; margin:0 auto; border:0; width:34px; height:34px; border-radius:50%; color:#393939; background:#f1efec; transition:transform .2s,background .2s; }
     .download-demo:hover { transform:translateY(-2px); background:white; }
     .download-demo:focus-visible { outline-color:#ffb28f; }
     .looper-state { position:absolute; right:0; display:none; align-items:center; gap:5px; min-height:30px; padding:5px 8px; border:1px solid #ff875388; border-radius:15px; color:#ffb08d; background:#ff55001f; font-size:9px; font-weight:700; letter-spacing:.2px; }
     .looper-state .icon { width:13px; height:13px; }
     .extension-preview.is-looper .looper-state { display:flex; }
-    .preview-status { font-size:10px; margin:9px 0 0; color:#d4d7cd; min-height:14px; }
-    .preview-status.complete { color:#c0e0ad; }
-    .demo-caption { margin:20px 0 0; text-align:center; color:#565e4e; font-size:10px; line-height:1.55; }
+    .preview-status { font-size:10px; margin:9px 0 0; color:#dedbd8; min-height:14px; }
+    .preview-status.complete { color:#ffbc9e; }
+    .demo-caption { margin:20px 0 0; text-align:center; color:#5d5d59; font-size:10px; line-height:1.55; }
     .demo-caption .arrow { display:inline-block; transform:rotate(-25deg); margin-right:4px; font-size:16px; }
-    .demo-disclaimer { display:block; margin-top:4px; font-size:9px; color:#69705f; }
+    .demo-disclaimer { display:block; margin-top:4px; font-size:9px; color:#777773; }
     .benefit-strip { border-block:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:18px; padding:21px 0; }
     .benefit-strip span { display:flex; align-items:center; gap:8px; font-size:11px; color:#51564b; }
     .benefit-strip .icon { width:16px; height:16px; color:#717d60; }
@@ -127,23 +127,6 @@
     .feature p { font-size:12px; line-height:1.75; color:var(--muted); margin:0; max-width:450px; }
     .free-label { display:inline-flex; align-items:center; gap:5px; margin-top:12px; color:#58664c; font:700 9px/1 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.8px; text-transform:uppercase; }
     .free-label::before { content:""; width:5px; height:5px; border-radius:50%; background:#6d7b60; }
-    .looper { display:grid; grid-template-columns:1.08fr .92fr; gap:38px; align-items:center; margin:4px 0 50px; padding:35px 37px; border:1px solid #e2c6b9; border-radius:12px; background:linear-gradient(135deg,#f3e9e2,#edeee5 68%); }
-    .looper .eyebrow { color:#8c3a20; }
-    .looper h2 { margin:15px 0 12px; font-size:34px; line-height:1.1; letter-spacing:-1.5px; }
-    .looper-copy > p { margin:0; max-width:560px; color:var(--muted); font-size:13px; line-height:1.75; }
-    .looper-points { display:flex; flex-wrap:wrap; gap:8px; margin:20px 0 0; padding:0; list-style:none; }
-    .looper-points li { padding:7px 10px; border:1px solid #d8c9bf; border-radius:999px; background:#ffffff7a; color:#575950; font-size:10px; }
-    .demo-link { display:inline-flex; align-items:center; gap:7px; margin-top:17px; padding:0; border:0; border-bottom:1px solid #a75538; color:#823b25; background:transparent; font-size:10px; font-weight:700; }
-    .demo-link:hover { color:var(--orange); }
-    .demo-link .icon { width:14px; height:14px; transform:rotate(-90deg); }
-    .looper-offer { padding:23px; border:1px solid #d6d7cc; border-radius:9px; background:#f7f5efdb; }
-    .looper-promo-image { display:block; width:100%; margin:0 0 16px; border:1px solid #d8c9bf; border-radius:7px; }
-    .looper-offer small { display:block; margin-bottom:8px; color:var(--orange); font:700 9px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:1px; text-transform:uppercase; }
-    .looper-price { display:flex; align-items:end; gap:8px; margin-bottom:11px; }
-    .looper-price strong { font-size:34px; letter-spacing:-1.8px; }
-    .looper-price span { padding-bottom:5px; color:var(--muted); font-size:11px; }
-    .looper-offer p { margin:0 0 15px; color:var(--muted); font-size:11px; line-height:1.6; }
-    .coming-soon { width:100%; padding:11px 13px; border:1px solid #c9cabf; border-radius:6px; color:#77796f; background:#e8e8df; font-size:11px; font-weight:700; cursor:not-allowed; }
     .reviews { padding:49px 0 45px; border-top:1px solid var(--line); scroll-margin-top:24px; }
     .reviews .section-heading { margin-bottom:20px; }
     .reviews-summary { max-width:510px; line-height:1.6 !important; text-align:right; }
@@ -221,7 +204,7 @@
     .benefit-strip span { font-size:12px; font-weight:400; }
     .features { max-width:920px; margin-inline:auto; padding:64px 0; }
     .section-heading { display:block; margin-bottom:25px; text-align:center; }
-    .section-heading h2,.closing h2,.faq h2,.looper h2 { font-family:"Sora",Arial,sans-serif; font-weight:700; }
+    .section-heading h2,.closing h2,.faq h2 { font-family:"Sora",Arial,sans-serif; font-weight:700; }
     .section-heading h2 { font-size:30px; }
     .section-heading p { margin-top:9px; font-size:13px; }
     .feature-grid { grid-template-columns:repeat(3,1fr); gap:0; border-top:1px solid var(--line); }
@@ -231,7 +214,7 @@
     .feature h3 { font-family:"Sora",Arial,sans-serif; font-size:15px; font-weight:700; }
     .feature p { font-size:13px; line-height:1.65; }
     .free-label { font-family:"Roboto",Arial,sans-serif; font-weight:700; }
-    .looper,.reviews,.faq { display:none; }
+    .reviews,.faq { display:none; }
     .closing { max-width:920px; margin:0 auto 34px; padding:34px; border-radius:14px; background:#242620; border:0; color:white; }
     .closing h2 { font-size:27px; }
     .closing p { color:#d2d3cd; font-size:13px; }
@@ -247,38 +230,9 @@
     .social-proof,.store-proof,.store-source,.demo-stage { display:block; }
     .demo-stage { padding:22px 20px 17px; }
     .feature:last-child { display:block; }
-    .looper,.reviews,.faq { display:block; }
-    .looper { display:grid; margin-top:10px; }
+    .reviews,.faq { display:block; }
     @media (max-width:1000px) { .hero { gap:28px; } }
     @media (max-width:760px) { .hero { display:block; padding:48px 0; text-align:center; } .hero-copy { display:flex; } .hero-icon { width:104px; height:104px; border-radius:23px; margin-bottom:23px; } .eyebrow { justify-content:center; } .intro { margin-inline:auto; } .demo-stage { display:block; } .feature-grid { grid-template-columns:1fr; } .feature { border-right:0; border-bottom:1px solid var(--line); padding:23px 0; } .feature:last-child { display:block; } .closing { margin-inline:0; } nav > a:not(.nav-install) { display:none; } }
-    .looper { color:#fff; border:0; background:linear-gradient(135deg,#b8320d,#e95724 55%,#f28b4b); box-shadow:0 18px 45px #b8320d2e; }
-    .looper .eyebrow,.looper-copy > p,.looper-points li,.looper-offer p,.looper-price span { color:#ffe4d8; }
-    .looper h2 { color:#fff; }
-    .looper-brand { width:150px; height:42px; object-fit:contain; object-position:left center; filter:brightness(0) invert(1); margin-bottom:16px; }
-    .looper-points li { border-color:#ffffff66; background:#ffffff1c; }
-    .looper-player { margin-top:24px; padding:17px; border:1px solid #ffffff4d; border-radius:12px; background:#7c210d66; }
-    .looper-player-head,.looper-ranges,.looper-controls { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-    .looper-player-head { margin-bottom:14px; font-size:11px; }
-    .looper-player-head span,.looper-status { color:#ffd3c1; font-size:10px; }
-    .looper-wave { position:relative; height:55px; overflow:hidden; border-radius:7px; background:repeating-linear-gradient(90deg,#ffffff40 0 2px,transparent 2px 8px),#671b0d; cursor:pointer; }
-    .looper-wave::after { content:""; position:absolute; inset:23px 0 auto; height:2px; background:#ffffff55; }
-    .looper-selection-live { position:absolute; inset:5px auto 5px 20%; width:50%; border-inline:2px solid #ffd2b8; background:#ffb08c45; }
-    .looper-playhead { position:absolute; top:0; bottom:0; left:20%; width:2px; background:#fff; box-shadow:0 0 8px #fff; }
-    .looper-ranges { margin-top:12px; }
-    .looper-ranges label { display:flex; align-items:center; gap:7px; width:50%; color:#fff; font:700 10px "Roboto",sans-serif; }
-    .looper-ranges input { width:100%; accent-color:#ffd0b9; }
-    .looper-controls { justify-content:flex-start; flex-wrap:wrap; margin-top:13px; }
-    .looper-control { padding:8px 10px; border:1px solid #ffffff66; border-radius:999px; color:#fff; background:#ffffff1c; font:700 10px "Roboto",sans-serif; }
-    .looper-control:hover { background:#ffffff35; }
-    .looper-control.is-primary { margin-left:auto; border-color:#fff; color:#9d2b0e; background:#fff; }
-    .looper-status { margin:11px 0 0; }
-    .looper-offer { background:#fff8f3; border-color:#f3b69b; }
-    .looper-promo-image { width:82%; margin:0 auto 14px; border-color:#f3b69b; }
-    .looper-offer small { color:#c74217; }
-    .looper-price strong { color:#9d2b0e; }
-    .looper-offer p { color:#754b3e; }
-    .looper-offer .coming-soon { border-color:#e9a487; color:#9d2b0e; background:#ffe6da; }
-    @media (max-width:760px) { .looper-player-head { align-items:flex-start; flex-direction:column; } .looper-control.is-primary { margin-left:0; } .looper-promo-image { width:70%; } }
     @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*::before,*::after { transition:none !important; animation:none !important; } }
   </style>
 </head>
@@ -347,13 +301,16 @@
               <div class="artist"><span class="avatar" aria-hidden="true"></span><span id="preview-artist">Field Notes</span></div>
               <div class="preview-meta">
                 <span id="preview-count">24 tracks</span><span aria-hidden="true">·</span>
-                <select id="preview-format" aria-label="Preview audio format"><option value="auto">Auto</option><option value="mp3">MP3</option><option value="m4a">M4A</option><option value="wav">WAV</option></select>
+                <select id="preview-format" aria-label="Preview audio format"><option value="auto">Auto</option><option value="mp3">MP3</option><option value="m4a">M4A</option></select>
                 <select id="preview-amount" aria-label="Preview number of tracks"><option value="all">All</option><option value="10">10</option></select>
                 <span class="folder-pill"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>Folder</span>
               </div>
               <div class="waveform-wrap">
                 <svg class="waveform" id="waveform" viewBox="0 0 380 58" preserveAspectRatio="none" aria-hidden="true"><path d="M0 29H380" stroke="currentColor" opacity=".3"/></svg>
-                <span class="loop-selection" aria-hidden="true"></span>
+                <span class="loop-selection" id="loop-selection" aria-label="Drag the A and B markers to change the loop range">
+                  <button class="loop-handle" data-loop-handle="start" type="button" aria-label="Drag A marker">A</button>
+                  <button class="loop-handle" data-loop-handle="end" type="button" aria-label="Drag B marker">B</button>
+                </span>
               </div>
               <div class="demo-actions">
                 <button class="download-demo" id="preview-download" type="button" aria-label="Try the download animation"><svg class="icon" aria-hidden="true"><use id="download-icon" href="#i-download"/></svg></button>
@@ -370,7 +327,6 @@
         <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Full-track downloads stay free</span>
         <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Tracks, playlists, likes & profiles</span>
         <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Cover art, metadata & folders</span>
-        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>At launch: One free Looper WAV export</span>
       </div>
       <section class="features" id="features" aria-labelledby="features-title">
         <div class="section-heading"><h2 id="features-title">Everything around the file is handled.</h2><p>One focused workflow, from SoundCloud to your folder.</p></div>
@@ -380,34 +336,6 @@
           <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-background"/></svg><span class="feature-index">03 / BACKGROUND</span></div><h3>Close the popup. It keeps going.</h3><p>Pause, resume or cancel a batch. Progress stays visible on the extension badge and a desktop notification tells you when it finishes.</p><span class="free-label">Always free</span></article>
           <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg><span class="feature-index">04 / ORGANIZED</span></div><h3>Files ready for your library.</h3><p>Choose an available format and destination folder. MP3 and M4A keep artwork and metadata, while Unicode filenames remain intact.</p><span class="free-label">Always free</span></article>
         </div>
-      </section>
-      <section class="looper" aria-labelledby="looper-title">
-        <div class="looper-copy">
-          <img class="looper-brand" src="./assets/app-icon-logo-transparent-xl.png" alt="SoundCloud Track Downloader" width="150" height="42">
-          <div class="eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-loop"/></svg> Looper Pro</div>
-          <h2 id="looper-title">Loop the part you need.</h2>
-          <p>Set A and B on an individual track, repeat that section while you listen, then export only the selected range as a WAV file. The WAV reflects the available source—it does not restore quality that is not there.</p>
-          <ul class="looper-points" aria-label="Looper features">
-            <li>A–B repeat</li>
-            <li>Keyboard adjustments</li>
-            <li>Selected-range WAV export</li>
-          </ul>
-          <button class="demo-link" id="preview-looper" type="button">See Looper in the interactive demo <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
-          <div class="looper-player" aria-label="Try the Looper">
-            <div class="looper-player-head"><strong>Try it with a sample loop</strong><span id="loop-time">A 1.6s · B 5.6s</span></div>
-            <div class="looper-wave" id="looper-wave" role="img" aria-label="Interactive A–B waveform"><span class="looper-selection-live" id="looper-selection-live"></span><span class="looper-playhead" id="looper-playhead"></span></div>
-            <div class="looper-ranges"><label>A <input id="loop-start" type="range" min="0" max="100" value="20" step="1"></label><label>B <input id="loop-end" type="range" min="0" max="100" value="70" step="1"></label></div>
-            <div class="looper-controls"><button type="button" class="looper-control" id="loop-play">Play loop</button><button type="button" class="looper-control" id="loop-set-a">Set A</button><button type="button" class="looper-control" id="loop-set-b">Set B</button><button type="button" class="looper-control is-primary" id="loop-export">Export WAV</button></div>
-            <p class="looper-status" id="loop-status" role="status" aria-live="polite">Drag A and B, then play the sample.</p>
-          </div>
-        </div>
-        <aside class="looper-offer" aria-label="Planned Looper Pro offer">
-          <small>Early-access plan</small>
-          <div class="looper-price"><strong>$2.99</strong><span>one time</span></div>
-          <img class="looper-promo-image" src="./assets/promos/one.png" data-original-promo="./assets/promos/four.png" alt="Playlist download example">
-          <p>Looper Pro is planned as a one-time add-on. Full-track and collection downloads remain free whether you buy it or not.</p>
-          <button class="coming-soon" type="button" disabled>Purchases open soon</button>
-        </aside>
       </section>
       <section class="reviews" id="reviews" aria-labelledby="reviews-title">
         <div class="section-heading">
@@ -430,10 +358,6 @@
         <div class="faq-grid">
           <div class="faq-intro"><h2 id="faq-title">Straight answers.</h2><p class="faq-lead">No blurred lines between the free downloader and the optional creative tool.</p></div>
           <div class="faq-list">
-            <details><summary>What stays free?</summary><p>Every full-track download feature: individual tracks, playlists, albums, likes, artist uploads, selection, formats, folders, metadata, artwork and background batches. No account or Looper purchase is required for them.</p></details>
-            <details><summary>How does the free Looper tryout work?</summary><p>The planned tryout lets you set and hear one A–B loop on an individual track and successfully save that selected range as one WAV. After that export, Looper—not the downloader—requires an unlock.</p></details>
-            <details><summary>Is Looper Pro a subscription?</summary><p>No. The early-access plan is a single USD 2.99 purchase, not a recurring subscription. Checkout is not open yet; this page will not take payment until purchase and restoration are ready.</p></details>
-            <details><summary>Can I restore a Looper purchase?</summary><p>Yes. Purchase restoration is part of the release requirement and will be available before sales open. Reinstalling the free downloader never requires a purchase.</p></details>
             <details><summary>What can I download?</summary><p>Use the extension only for content you own or have permission to save. It is an independent tool and is not affiliated with, approved by or maintained by SoundCloud.</p></details>
             <details id="privacy"><summary>What about privacy?</summary><p>The current extension processes audio and downloads in your browser and its Chrome Web Store disclosure states that it does not collect or sell user data. This landing has no analytics or form submission. <a href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb" target="_blank" rel="noopener noreferrer">View the current Store disclosure</a>.</p></details>
           </div>
@@ -539,9 +463,13 @@
       const downloadIcon = document.getElementById('download-icon');
       const waveform = document.getElementById('waveform');
       const extensionPreview = document.getElementById('extension-preview');
+      const loopSelection = document.getElementById('loop-selection');
+      const loopHandles = [...document.querySelectorAll('[data-loop-handle]')];
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       let mode = 'playlist';
       let timer;
+      let loopStart = 34;
+      let loopEnd = 64;
       const bars = [];
       for (let i = 0; i < 95; i++) {
         const height = Math.round(7 + Math.abs(Math.sin(i * 1.73) * Math.cos(i * .23)) * 30 + Math.sin(i * .064) ** 2 * 16);
@@ -550,14 +478,44 @@
         waveform.appendChild(bar);
         bars.push(bar);
       }
+      function renderLoopSelection() {
+        loopSelection.style.left = `${loopStart}%`;
+        loopSelection.style.width = `${loopEnd - loopStart}%`;
+      }
+      function setLoopMarker(marker, clientX) {
+        const bounds = waveform.getBoundingClientRect();
+        const next = Math.max(0, Math.min(100, (clientX - bounds.left) / bounds.width * 100));
+        if (marker === 'start') loopStart = Math.min(next, loopEnd - 4);
+        else loopEnd = Math.max(next, loopStart + 4);
+        renderLoopSelection();
+        status.textContent = `Loop range: A ${Math.round(loopStart)}% · B ${Math.round(loopEnd)}%`;
+      }
+      loopHandles.forEach(handle => handle.addEventListener('pointerdown', event => {
+        if (mode !== 'looper') return;
+        event.preventDefault();
+        const marker = handle.dataset.loopHandle;
+        handle.setPointerCapture(event.pointerId);
+        setLoopMarker(marker, event.clientX);
+        const move = moveEvent => setLoopMarker(marker, moveEvent.clientX);
+        const release = releaseEvent => {
+          handle.releasePointerCapture?.(releaseEvent.pointerId);
+          handle.removeEventListener('pointermove', move);
+          handle.removeEventListener('pointerup', release);
+          handle.removeEventListener('pointercancel', release);
+        };
+        handle.addEventListener('pointermove', move);
+        handle.addEventListener('pointerup', release);
+        handle.addEventListener('pointercancel', release);
+      }));
+      renderLoopSelection();
       function reset() {
         window.clearInterval(timer);
         download.disabled = false;
         downloadIcon.setAttribute('href', '#i-download');
-        download.setAttribute('aria-label', mode === 'looper' ? 'Try the loop export animation' : 'Try the download animation');
+        download.setAttribute('aria-label', mode === 'looper' ? 'Try the loop preview animation' : 'Try the download animation');
         status.classList.remove('complete');
         status.textContent = mode === 'looper'
-          ? 'Set A and B. Export one loop free.'
+          ? 'Drag A or B to set the loop range.'
           : mode === 'track'
             ? 'Ready to download this track'
             : `Ready to download ${modes[mode].total} tracks`;
@@ -575,18 +533,9 @@
         amount.hidden = mode === 'track' || mode === 'looper';
         amount.value = 'all';
         format.disabled = mode === 'looper';
-        format.value = mode === 'looper' ? 'wav' : 'auto';
+        format.value = 'auto';
         reset();
       }));
-      document.getElementById('preview-looper').addEventListener('click', () => {
-        const looperTab = tabs.find(tab => tab.dataset.mode === 'looper');
-        looperTab.click();
-        document.querySelector('.demo-stage').scrollIntoView({
-          behavior: reducedMotion.matches ? 'auto' : 'smooth',
-          block: 'center'
-        });
-        looperTab.focus({ preventScroll: true });
-      });
       amount.addEventListener('change', reset);
       format.addEventListener('change', reset);
       download.addEventListener('click', () => {
@@ -595,17 +544,17 @@
         const total = mode === 'track' ? 1 : amount.value === 'all' ? modes[mode].total : Number(amount.value);
         const finish = () => {
           window.clearInterval(timer);
-          bars.forEach(bar => bar.setAttribute('fill', '#b7d6a1'));
+          bars.forEach(bar => bar.setAttribute('fill', '#ffb18a'));
           downloadIcon.setAttribute('href', '#i-check');
           download.disabled = false;
-          download.setAttribute('aria-label', mode === 'looper' ? 'Replay the loop export animation' : 'Replay the download animation');
+          download.setAttribute('aria-label', mode === 'looper' ? 'Replay the loop preview animation' : 'Replay the download animation');
           status.classList.add('complete');
           status.textContent = mode === 'looper'
-            ? 'Demo complete · WAV loop · No files downloaded'
+            ? 'Loop range ready · No files downloaded'
             : `Demo complete · ${total === 1 ? '1 track' : `${total} tracks`} · No files downloaded`;
         };
         if (reducedMotion.matches) { finish(); return; }
-        status.textContent = mode === 'looper' ? 'Demo: exporting the selected range to WAV…' : 'Demo: downloading in the background…';
+        status.textContent = mode === 'looper' ? 'Demo: previewing the selected loop range…' : 'Demo: downloading in the background…';
         let step = 0;
         timer = window.setInterval(() => {
           step++;
@@ -684,7 +633,7 @@
   </script>
   <script>
     (() => {
-      const start = document.getElementById('loop-start');
+      const start = null;
       const end = document.getElementById('loop-end');
       const selection = document.getElementById('looper-selection-live');
       const playhead = document.getElementById('looper-playhead');

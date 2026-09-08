@@ -22,13 +22,12 @@ assert(
 );
 assert(
   /id="looperPanel"[^>]*role="dialog"/.test(popup) &&
-    /assets\/promos\/four\.png/.test(popup) &&
     /id="looperPurchaseBtn"/.test(popup) &&
     /id="looperCheckoutNote"/.test(popup),
-  "The popup must provide a localized Looper explainer with the approved promo image and no checkout link."
+  "The popup must provide a localized Looper explainer without a checkout link."
 );
 assert(
-  /body\.looper-explainer-mode,[\s\S]*min-height:\s*580px/.test(popup) &&
+  /body\.looper-explainer-mode,[\s\S]*min-height:\s*468px/.test(popup) &&
     /id="helpBackBtn"[^>]*>[\s\S]*class="back-icon"[^>]*src="\.\/assets\/icons\/back-arrow\.svg"/.test(popup) &&
     /id="looperBackBtn"[^>]*>[\s\S]*class="back-icon"[^>]*src="\.\/assets\/icons\/back-arrow\.svg"/.test(popup),
   "Help and Looper must reuse the compact existing back-arrow icon, and Looper must expand the popup."

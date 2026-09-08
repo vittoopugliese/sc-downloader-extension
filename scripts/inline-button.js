@@ -547,8 +547,8 @@ function createPlayerDownloadButton() {
   button.setAttribute("aria-label", button.title);
 
   const icon = document.createElement("img");
-  icon.className = "scdl-player-icon";
-  icon.src = chrome.runtime.getURL("assets/icon48.png");
+  icon.className = "scdl-player-icon scdl-filtered";
+  icon.src = chrome.runtime.getURL("assets/icons/download.svg");
   icon.alt = "";
   icon.draggable = false;
   button.appendChild(icon);
