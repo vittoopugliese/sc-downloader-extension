@@ -3,6 +3,21 @@
   "main": "src/index.mjs",
   "compatibility_date": "2026-09-08",
   "workers_dev": false,
+  "routes": [{
+    "pattern": "sctd.vpugliese.online/api/uninstall-feedback*",
+    "zone_name": "vpugliese.online"
+  }],
+  "vars": {
+    "ALLOWED_HOSTNAME": "sctd.vpugliese.online",
+    "TURNSTILE_SITE_KEY": "REPLACE_WITH_TURNSTILE_SITE_KEY"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 }
+  },
+  "secrets": {
+    "required": ["TURNSTILE_SECRET", "RATE_LIMIT_SALT"]
+  },
   "triggers": { "crons": ["0 3 * * *"] },
   "d1_databases": [{
     "binding": "FEEDBACK_DB",

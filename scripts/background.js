@@ -13,6 +13,16 @@ importScripts(
 
 const t = globalThis.SCDLI18n?.t || ((key) => key);
 
+const UNINSTALL_FEEDBACK_URL = "https://sctd.vpugliese.online/";
+
+async function configureUninstallFeedback() {
+  const url = new URL(UNINSTALL_FEEDBACK_URL);
+  url.searchParams.set("view", "goodbye");
+  url.searchParams.set("locale", chrome.i18n.getUILanguage());
+  url.searchParams.set("version", chrome.runtime.getManifest().version);
+  await chrome.runtime.setUninstallURL(url.toString());
+}
+
 function getOAuthToken() {
   return new Promise((resolve, reject) => {
     chrome.cookies.get(
@@ -82,10 +92,12 @@ async function resolveLoopTrack(request, sender) {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
+  configureUninstallFeedback().catch(() => {});
   BulkJobManager.recoverRunningJob().catch(() => {});
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  configureUninstallFeedback().catch(() => {});
   BulkJobManager.recoverRunningJob().catch(() => {});
 });
 

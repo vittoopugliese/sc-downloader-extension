@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f5ef">
-  <meta name="description" content="Download SoundCloud tracks, playlists, likes and artist uploads for free. Keep cover art and metadata, choose a folder, and loop or export an A–B range as WAV.">
+  <meta name="description" content="Download SoundCloud tracks, playlists, likes and artist uploads for free. Keep cover art and metadata, choose a folder, and loop or export an A-B range as WAV.">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="SoundCloud Track Downloader — Your favorites. Your files.">
-  <meta property="og:description" content="Free full-track and collection downloads, plus a free A–B Looper with WAV export. A focused Chrome extension built for SoundCloud.">
+  <meta property="og:title" content="SoundCloud Track Downloader">
+  <meta property="og:description" content="Free full-track and collection downloads, plus a free A-B Looper with WAV export. A focused Chrome extension built for SoundCloud.">
   <meta name="twitter:card" content="summary">
   <title>SoundCloud Track Downloader — Free tracks, playlists & artist uploads</title>
-  <link rel="icon" type="image/png" href="./assets/app-icon-logo-with-background-xl">
-  <link rel="apple-touch-icon" href="./assets/app-icon-logo-transparent-xl.png">
+  <link rel="icon" type="image/png" href="./assets/app-icon-logo-with-background-xl.png">
+  <link rel="apple-touch-icon" href="./assets/app-icon-logo-with-background-xl.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -59,11 +59,11 @@
     blockquote { margin:0; font-size:12px; line-height:1.55; }
     blockquote p { margin:0 0 5px; }
     blockquote cite { color:var(--muted); font-size:10px; font-style:normal; }
-    .store-proof { display:flex; flex-wrap: wrap; gap:2px; overflow:hidden;margin-top:12px; border:1px solid var(--line); border-radius:8px; background:var(--line); }
-    .store-stat { min-width:0; padding:12px 13px; background:#fbfaf6; }
+    .store-proof { display:flex; flex-wrap:nowrap; gap:2px; overflow:hidden; margin-top:12px; border:1px solid var(--line); border-radius:8px; background:var(--line); }
+    .store-stat { flex:1 1 0; min-width:0; padding:12px 13px; background:#fbfaf6; }
     .store-stat strong { display:block; margin-bottom:3px; font-size:15px; letter-spacing:-.4px; }
     .store-stat span { display:block; color:var(--muted); font-size:9px; line-height:1.35; }
-    .store-source { display:block; max-width:430px; margin:6px 0 0; color:#7b7e73; font-size:8px; text-align:right; text-decoration:underline; text-underline-offset:2px; }
+    .store-source { display:block; max-width:430px; margin:6px 0 0; color:#7b7e73; font-size:8px; text-align:left; text-decoration:underline; text-underline-offset:2px; }
     .demo-stage { position:relative; min-width:0; background:#ebebe8; border:1px solid #d4d4d0; border-radius:15px; padding:24px 22px 19px; }
     .demo-stage::before { content:""; position:absolute; inset:0; border-radius:inherit; opacity:.33; background-image:radial-gradient(#a5a5a0 .7px,transparent .7px); background-size:12px 12px; pointer-events:none; }
     .demo-stage > * { position:relative; }
@@ -139,26 +139,26 @@
     .looper-guide-note { margin:21px 0 0; color:#6c5347; font-size:11px; line-height:1.6; }
     .reviews { padding:49px 0 45px; border-top:1px solid var(--line); scroll-margin-top:24px; }
     .reviews .section-heading { margin-bottom:20px; }
-    .reviews-summary { max-width:510px; line-height:1.6 !important; text-align:right; }
-    .review-viewport { padding:4px 1px 0; }
-    .review-list { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:0; padding:0; list-style:none; }
-    .review-card { display:flex; flex-direction:column; min-height:196px; padding:19px; border:1px solid var(--line); border-radius:9px; background:#fbfaf6; scroll-snap-align:start; }
+    .reviews-summary { max-width:640px; margin:10px auto 0; line-height:1.6 !important; text-align:center; }
+    .reviews .section-heading .reviews-summary { margin:10px auto 0; }
+    .review-viewport { overflow-x:auto; padding:4px 1px 8px; scroll-behavior:smooth; scroll-snap-type:x mandatory; overscroll-behavior-x:contain; scrollbar-color:#c8cabf transparent; scrollbar-width:thin; }
+    .review-list { display:flex; align-items:flex-start; gap:16px; width:max-content; margin:0; padding:0; list-style:none; }
+    .review-card { display:flex; flex:0 0 min(360px,calc(100vw - 80px)); flex-direction:column; min-height:220px; padding:19px; border:1px solid var(--line); border-radius:9px; background:#fbfaf6; scroll-snap-align:start; }
     .review-card::before { content:"“"; height:27px; color:var(--orange); font:38px/.8 Georgia,serif; }
     .review-text { margin:0 0 20px; color:#3c3f38; font-size:12px; line-height:1.65; white-space:pre-line; overflow-wrap:anywhere; }
     .review-meta { display:flex; justify-content:space-between; gap:12px; margin-top:auto; padding-top:13px; border-top:1px solid #e6e5dc; font-size:9px; line-height:1.45; }
     .review-author { font-weight:700; overflow-wrap:anywhere; }
     .review-date,.review-source { color:var(--muted); }
     .review-source { display:block; margin-top:2px; }
-    .review-controls { display:flex; justify-content:flex-end; align-items:center; gap:16px; margin-top:13px; }
+    .review-controls { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-top:13px; }
+    .review-nav { display:flex; align-items:center; gap:8px; }
     .icon-button,.text-button { display:inline-flex; align-items:center; justify-content:center; border:1px solid #c8cabf; border-radius:6px; background:transparent; color:var(--ink); }
     .icon-button { width:35px; height:35px; }
     .icon-button:hover,.text-button:hover { background:var(--soft); }
+    .icon-button:disabled { opacity:.35; cursor:default; }
     .icon-button .icon { width:16px; height:16px; }
     .icon-button.prev .icon { transform:rotate(180deg); }
     .text-button { min-height:35px; padding:8px 12px; font-size:10px; font-weight:700; }
-    .review-card:nth-child(n + 4) { display:none; }
-    .reviews.is-expanded .review-card:nth-child(n + 4) { display:flex; }
-    .reviews.is-expanded .review-card { min-height:0; }
     .review-implemented { display:inline-flex; width:fit-content; margin:6px 0 0; padding:3px 5px; border-radius:3px; color:#4f653f; background:#e1ecd8; font:700 8px/1 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.55px; }
     .review-cta { display:flex; justify-content:space-between; align-items:center; gap:24px; margin-top:24px; padding:20px 22px; border:1px solid #d6d8cc; border-radius:8px; background:var(--soft); }
     .review-cta p { margin:0; color:var(--muted); font-size:11px; line-height:1.6; }
@@ -194,15 +194,14 @@
     body { font-family:"Roboto",Arial,sans-serif; background:#faf9f6; }
     h1,h2,h3,.brand,.cta,.nav-install { font-family:"Sora",Arial,sans-serif; }
     header { height:82px; border:0; }
-    .brand { font-size:13px; font-weight:700; letter-spacing:-.5px; }
+    .brand { gap:7px; font-size:13px; font-weight:700; letter-spacing:-.5px; }
     .brand-mark { display:none; }
-    .brand-logo { display:block; width:116px; height:38px; object-fit:contain; object-position:left center; }
+    .brand-logo { display:block; width:42px; height:42px; border-radius:10px; object-fit:cover; }
     nav { gap:22px; font-family:"Roboto",Arial,sans-serif; font-weight:500; }
     nav > a:not(.nav-install) { display:none; }
     .nav-install { padding:11px 15px; border-color:#deded4; border-radius:999px; font-size:11px; font-weight:700; }
     .hero { display:block; max-width:780px; margin:0 auto; padding:76px 0 66px; text-align:center; }
     .hero-copy { display:flex; flex-direction:column; align-items:center; }
-    .hero-icon { width:128px; height:128px; margin:0 0 28px; border-radius:28px; box-shadow:0 18px 40px #d93e1029; }
     .eyebrow { font-family:"Roboto",Arial,sans-serif; font-size:11px; font-weight:700; letter-spacing:1.5px; }
     h1 { max-width:720px; margin:19px 0 20px; font-size:clamp(48px,7vw,76px); font-weight:800; line-height:1.04; letter-spacing:-4px; }
     .intro { max-width:570px; font-size:17px; line-height:1.65; }
@@ -219,14 +218,13 @@
     .section-heading p { margin-top:9px; font-size:13px; }
     .feature-grid { grid-template-columns:repeat(3,1fr); gap:0; border-top:1px solid var(--line); }
     .feature { min-height:0; padding:26px 24px; border-top:0; border-right:1px solid var(--line); }
-    .feature:last-child { display:none; }
     .feature:nth-child(3) { border-right:0; }
     .feature h3 { font-family:"Sora",Arial,sans-serif; font-size:15px; font-weight:700; }
     .feature p { font-size:13px; line-height:1.65; }
     .free-label { font-family:"Roboto",Arial,sans-serif; font-weight:700; }
     .reviews,.faq { display:none; }
     .looper-guide { display:block; }
-    .closing { max-width:920px; margin:0 auto 34px; padding:34px; border-radius:14px; background:#242620; border:0; color:white; }
+    .closing { width:100%; margin:0 0 34px; padding:34px; border-radius:14px; background:#242620; border:0; color:white; }
     .closing h2 { font-size:27px; }
     .closing p { color:#d2d3cd; font-size:13px; }
     .closing .cta { background:white; color:var(--ink); }
@@ -235,15 +233,16 @@
     nav > a:not(.nav-install) { display:inline-flex; }
     .hero { display:grid; grid-template-columns:.88fr 1.12fr; max-width:none; text-align:left; gap:54px; }
     .hero-copy { display:block; }
-    .hero-icon { display:block; }
     .eyebrow { justify-content:flex-start; }
     .intro { margin-left:0; }
-    .social-proof,.store-proof,.store-source,.demo-stage { display:block; }
+    .social-proof,.store-source,.demo-stage { display:block; }
+    .store-proof { display:flex; }
     .demo-stage { padding:22px 20px 17px; }
-    .feature:last-child { display:block; }
     .reviews,.faq { display:block; }
     @media (max-width:1000px) { .hero { gap:28px; } }
-    @media (max-width:760px) { .hero { display:block; padding:48px 0; text-align:center; } .hero-copy { display:flex; } .hero-icon { width:104px; height:104px; border-radius:23px; margin-bottom:23px; } .eyebrow { justify-content:center; } .intro { margin-inline:auto; } .demo-stage { display:block; } .feature-grid { grid-template-columns:1fr; } .feature { border-right:0; border-bottom:1px solid var(--line); padding:23px 0; } .feature:last-child { display:block; } .looper-guide { padding:26px 21px; text-align:left; } .looper-steps { grid-template-columns:1fr; } .looper-steps li,.looper-steps li:not(:first-child) { min-height:0; padding:17px 0 17px 42px; border-right:0; border-bottom:1px solid #e6c8b8; } .looper-steps li:last-child { border-bottom:0; } .looper-steps li::before { position:absolute; top:19px; left:0; } .closing { margin-inline:0; } nav > a:not(.nav-install) { display:none; } }
+    @media (max-width:760px) { .hero { display:block; padding:48px 0; text-align:center; } .hero-copy { display:flex; } .eyebrow { justify-content:center; } .intro { margin-inline:auto; } .demo-stage { display:block; } .feature-grid { grid-template-columns:1fr; } .feature { border-right:0; border-bottom:1px solid var(--line); padding:23px 0; } .looper-guide { padding:26px 21px; text-align:left; } .looper-steps { grid-template-columns:1fr; } .looper-steps li,.looper-steps li:not(:first-child) { min-height:0; padding:17px 0 17px 42px; border-right:0; border-bottom:1px solid #e6c8b8; } .looper-steps li:last-child { border-bottom:0; } .looper-steps li::before { position:absolute; top:19px; left:0; } .closing { margin-inline:0; } nav > a:not(.nav-install) { display:none; } }
+    @media (max-width:1000px) { .review-card { flex-basis:min(340px,calc(100vw - 64px)); } }
+    @media (max-width:760px) { .review-card { flex-basis:calc(100vw - 52px); } }
     @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*::before,*::after { transition:none !important; animation:none !important; } }
   </style>
 </head>
@@ -264,7 +263,7 @@
   <div class="shell">
     <header>
       <a class="brand" href="#" aria-label="SoundCloud Track Downloader home" data-l10n-aria="brand_home">
-        <img class="brand-logo" src="./assets/app-icon-logo-transparent-xl.png" alt="" width="116" height="38">
+        <img class="brand-logo" src="./assets/app-icon-logo-with-background-xl.png" alt="" width="42" height="42">
         <span>SoundCloud<small>Track Downloader</small></span>
       </a>
       <nav aria-label="Main navigation" data-l10n-aria="main_navigation">
@@ -277,12 +276,10 @@
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <img class="hero-icon" src="./assets/app-icon-logo-with-background-xl.png" width="128" height="128" alt="SoundCloud Track Downloader icon" data-l10n-alt="hero_icon_alt">
           <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span> <span data-l10n="hero_eyebrow">Free bulk downloader for Chrome</span></div>
           <h1 id="hero-title"><span data-l10n="hero_title_first">Whole collections.</span><br><em data-l10n="hero_title_second">One click.</em></h1>
           <p class="intro"><span data-l10n="hero_intro_first">Download individual tracks, playlists, likes and complete artist uploads without leaving SoundCloud.</span> <strong data-l10n="hero_intro_second">Choose what you need and let the batch finish in the background.</strong></p>
           <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb"><svg class="icon" aria-hidden="true"><use href="#i-chrome"/></svg> <span data-l10n="hero_cta">Add to Chrome — it’s free</span></a>
-          <p class="cta-note"><span data-l10n="cta_free">Full-track downloads stay free</span> <span>·</span> <span data-l10n="cta_no_signup">No signup</span> <span>·</span> <span data-l10n="cta_no_redirects">No redirects</span></p>
           <p class="mobile-note" data-l10n="mobile_note">Install on your desktop browser to start downloading.</p>
           <div class="store-proof" aria-label="Chrome Web Store snapshot">
             <div class="store-stat"><strong>20,000+</strong><span>public Store users</span></div>
@@ -342,10 +339,9 @@
       <section class="features" id="features" aria-labelledby="features-title">
         <div class="section-heading"><h2 id="features-title" data-l10n="features_title">Everything around the file is handled.</h2><p data-l10n="features_intro">One focused workflow, from SoundCloud to your folder.</p></div>
         <div class="feature-grid">
-          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg><span class="feature-index">01 / BULK</span></div><h3 data-l10n="feature_bulk_title">One track or the whole collection.</h3><p data-l10n="feature_bulk_copy">Save playlists, albums, likes and every public upload on an artist’s tracks page. Select specific tracks or start one complete batch.</p><span class="free-label" data-l10n="always_free">Always free</span></article>
-          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span class="feature-index">02 / IN PLACE</span></div><h3 data-l10n="feature_place_title">Download where you’re already listening.</h3><p data-l10n="feature_place_copy">Use the popup, the track action bar or the persistent player. No link copying, converter tab or redirect in the middle.</p><span class="free-label" data-l10n="always_free">Always free</span></article>
-          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-background"/></svg><span class="feature-index">03 / BACKGROUND</span></div><h3 data-l10n="feature_background_title">Close the popup. It keeps going.</h3><p data-l10n="feature_background_copy">Pause, resume or cancel a batch. Progress stays visible on the extension badge and a desktop notification tells you when it finishes.</p><span class="free-label" data-l10n="always_free">Always free</span></article>
-          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg><span class="feature-index">04 / ORGANIZED</span></div><h3>Files ready for your library.</h3><p>Choose an available format and destination folder. MP3 and M4A keep artwork and metadata, while Unicode filenames remain intact.</p><span class="free-label">Always free</span></article>
+          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg><span class="feature-index" data-l10n="feature_bulk_index">01 / BULK</span></div><h3 data-l10n="feature_bulk_title">One track or the whole collection.</h3><p data-l10n="feature_bulk_copy">Save playlists, albums, likes and every public upload on an artist’s tracks page. Select specific tracks or start one complete batch.</p><span class="free-label" data-l10n="always_free">Always free</span></article>
+          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span class="feature-index" data-l10n="feature_place_index">02 / IN PLACE</span></div><h3 data-l10n="feature_place_title">Download where you’re already listening.</h3><p data-l10n="feature_place_copy">Use the popup, the track action bar or the persistent player. No link copying, converter tab or redirect in the middle.</p><span class="free-label" data-l10n="always_free">Always free</span></article>
+          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-background"/></svg><span class="feature-index" data-l10n="feature_background_index">03 / BACKGROUND</span></div><h3 data-l10n="feature_background_title">Close the popup. It keeps going.</h3><p data-l10n="feature_background_copy">Pause, resume or cancel a batch. Progress stays visible on the extension badge and a desktop notification tells you when it finishes.</p><span class="free-label" data-l10n="always_free">Always free</span></article>
         </div>
       </section>
       <section class="looper-guide" id="looper" aria-labelledby="looper-title">
@@ -368,7 +364,10 @@
           <ol class="review-list" id="review-list"></ol>
         </div>
         <div class="review-controls">
-          <button class="text-button" id="review-toggle" type="button" aria-expanded="false">Show all 39 reviews</button>
+          <div class="review-nav" aria-label="Review carousel controls">
+            <button class="icon-button prev" id="review-prev" type="button" aria-label="Previous reviews"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+            <button class="icon-button" id="review-next" type="button" aria-label="Next reviews"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+          </div>
         </div>
         <div class="review-cta">
           <p><strong data-l10n="reviews_cta_title">Already using the extension?</strong><span data-l10n="reviews_cta_copy">Share an honest review—it helps other people decide whether it fits their workflow.</span></p>
@@ -406,28 +405,42 @@
       const goodbyeView = new URLSearchParams(location.search).get('view') === 'goodbye';
       if (goodbyeView) {
         document.title = 'SoundCloud Track Downloader — Feedback';
-        document.body.innerHTML = `<main class="goodbye" aria-labelledby="goodbye-title"><a class="goodbye-brand" href="/">SoundCloud Track Downloader</a><section class="goodbye-card"><p class="eyebrow">UNINSTALL FEEDBACK</p><h1 id="goodbye-title">Sorry to see you go.</h1><p>What could we do better? Your answer is optional and helps improve the extension.</p><form id="feedback-form"><fieldset><legend>What was the main reason?</legend><label><input required type="radio" name="reason" value="downloads_did_not_work"> Downloads did not work</label><label><input type="radio" name="reason" value="confusing_to_use"> It was confusing to use</label><label><input type="radio" name="reason" value="missing_feature"> A feature was missing</label><label><input type="radio" name="reason" value="pricing"> Pricing</label><label><input type="radio" name="reason" value="no_longer_needed"> I no longer need it</label><label><input type="radio" name="reason" value="other"> Other</label></fieldset><label>Optional comment<textarea name="comment" maxlength="2000" rows="4"></textarea></label><label>Email, only if you want a reply<input name="email" type="email" maxlength="254" autocomplete="email"></label><div id="turnstile"></div><p id="feedback-status" role="status" aria-live="polite"></p><button class="cta" type="submit">Send feedback</button><button class="goodbye-close" type="button">No thanks</button></form></section></main>`;
+        document.body.innerHTML = `<main class="goodbye" aria-labelledby="goodbye-title"><a class="goodbye-brand" href="/">SoundCloud Track Downloader</a><section class="goodbye-card"><p class="eyebrow">UNINSTALL FEEDBACK</p><h1 id="goodbye-title">Sorry to see you go.</h1><p>What could we do better? Your answer is optional and helps improve the extension.</p><form id="feedback-form"><fieldset><legend>What was the main reason?</legend><label><input required type="radio" name="reason" value="downloads_did_not_work"> Downloads did not work</label><label><input type="radio" name="reason" value="confusing_to_use"> It was confusing to use</label><label><input type="radio" name="reason" value="missing_feature"> A feature was missing</label><label><input type="radio" name="reason" value="pricing"> Pricing</label><label><input type="radio" name="reason" value="no_longer_needed"> I no longer need it</label><label><input type="radio" name="reason" value="other"> Other</label></fieldset><label>Optional comment<textarea name="comment" maxlength="2000" rows="4"></textarea></label><label>Email, only if you want a reply<input name="email" type="email" maxlength="254" autocomplete="email"></label><div id="turnstile"></div><p id="feedback-status" role="status" aria-live="polite"></p><button class="cta" id="feedback-submit" type="submit" disabled>Send feedback</button><button class="goodbye-close" type="button">No thanks</button></form><p id="feedback-success" class="feedback-success" role="status" hidden>Thank you. Your feedback was received.</p></section></main>`;
         const style = document.createElement('style');
-        style.textContent = `.goodbye{min-height:100vh;padding:28px;display:grid;place-items:center;background:#f7f6f0;color:#292b27;font:16px/1.5 Inter,system-ui,sans-serif}.goodbye-brand{position:fixed;top:22px;left:28px;color:inherit;font-weight:800;text-decoration:none}.goodbye-card{width:min(100%,580px);padding:36px;border:1px solid #d8d8cf;border-radius:12px;background:#fff;box-shadow:0 18px 50px #1b21151a}.goodbye h1{font-size:40px;margin:8px 0}.goodbye fieldset{display:grid;gap:9px;margin:25px 0 18px;border:0;padding:0}.goodbye legend{font-weight:700;margin-bottom:9px}.goodbye label{display:grid;gap:6px;margin:14px 0}.goodbye fieldset label{display:block;margin:0}.goodbye input,.goodbye textarea{font:inherit;padding:9px;border:1px solid #b8b9b1;border-radius:6px}.goodbye textarea{resize:vertical}.goodbye-close{margin-left:12px;border:0;background:transparent;color:#555;cursor:pointer}.goodbye .cta{border:0;cursor:pointer}.goodbye .eyebrow{font-size:11px;color:#788269;font-weight:800;letter-spacing:1px}.goodbye #feedback-status{min-height:24px;color:#a23d24}.goodbye #feedback-status.ok{color:#376337}@media(max-width:600px){.goodbye{padding:16px}.goodbye-brand{position:static;margin-bottom:14px}.goodbye-card{padding:25px}.goodbye h1{font-size:31px}}`;
+        style.textContent = `.goodbye{min-height:100vh;padding:28px;display:grid;place-items:center;background:#f7f6f0;color:#292b27;font:16px/1.5 Inter,system-ui,sans-serif}.goodbye-brand{position:fixed;top:22px;left:28px;color:inherit;font-weight:800;text-decoration:none}.goodbye-card{width:min(100%,580px);padding:36px;border:1px solid #d8d8cf;border-radius:12px;background:#fff;box-shadow:0 18px 50px #1b21151a}.goodbye h1{font-size:40px;margin:8px 0}.goodbye fieldset{display:grid;gap:9px;margin:25px 0 18px;border:0;padding:0}.goodbye legend{font-weight:700;margin-bottom:9px}.goodbye label{display:grid;gap:6px;margin:14px 0}.goodbye fieldset label{display:block;margin:0}.goodbye input,.goodbye textarea{font:inherit;padding:9px;border:1px solid #b8b9b1;border-radius:6px}.goodbye textarea{resize:vertical}.goodbye-close{margin-left:12px;border:0;background:transparent;color:#555;cursor:pointer}.goodbye .cta{border:0;cursor:pointer}.goodbye .cta:disabled{cursor:not-allowed;opacity:.55}.goodbye .eyebrow{font-size:11px;color:#788269;font-weight:800;letter-spacing:1px}.goodbye #feedback-status{min-height:24px;color:#a23d24}.goodbye .feedback-success{color:#376337;font-weight:700;margin-top:24px}@media(max-width:600px){.goodbye{padding:16px}.goodbye-brand{position:static;margin-bottom:14px}.goodbye-card{padding:25px}.goodbye h1{font-size:31px}}`;
         document.head.append(style);
         const form = document.getElementById('feedback-form');
         const status = document.getElementById('feedback-status');
+        const submit = document.getElementById('feedback-submit');
+        const success = document.getElementById('feedback-success');
+        const submissionId = crypto.randomUUID();
         let turnstileToken = '';
-        const setStatus = (message, ok = false) => { status.textContent = message; status.classList.toggle('ok', ok); };
+        let turnstileWidget;
+        const setStatus = message => { status.textContent = message; };
         document.querySelector('.goodbye-close').addEventListener('click', () => { document.body.innerHTML = '<main class="goodbye"><p>Thanks for trying SoundCloud Track Downloader.</p></main>'; });
         fetch('/api/uninstall-feedback/config', { cache: 'no-store' }).then(response => response.ok ? response.json() : null).then(config => {
-          if (!config?.turnstileSiteKey) { setStatus('Feedback is not configured yet. You can contact support at it@vpugliese.online.'); return; }
-          const script = document.createElement('script'); script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'; script.async = true;
-          script.onload = () => window.turnstile.render('#turnstile', { sitekey: config.turnstileSiteKey, callback: token => { turnstileToken = token; }, 'expired-callback': () => { turnstileToken = ''; } });
+          if (!config?.turnstileSiteKey) { setStatus('Feedback is temporarily unavailable. Please try again later.'); return; }
+          const container = document.getElementById('turnstile');
+          window.scdTurnstileSuccess = token => { turnstileToken = token; submit.disabled = false; setStatus(''); };
+          container.className = 'cf-turnstile';
+          container.dataset.sitekey = config.turnstileSiteKey;
+          container.dataset.action = 'uninstall_feedback';
+          container.dataset.callback = 'scdTurnstileSuccess';
+          container.dataset['expiredCallback'] = 'scdTurnstileExpired';
+          container.dataset['errorCallback'] = 'scdTurnstileError';
+          window.scdTurnstileExpired = () => { turnstileToken = ''; submit.disabled = true; };
+          window.scdTurnstileError = () => { turnstileToken = ''; submit.disabled = true; setStatus('Could not load feedback protection. Please try again later.'); };
+          const script = document.createElement('script'); script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'; script.async = true; script.defer = true;
           document.head.append(script);
         }).catch(() => setStatus('Could not load feedback protection. Please try again later.'));
         form.addEventListener('submit', async event => {
           event.preventDefault();
           if (!turnstileToken) { setStatus('Please complete the verification first.'); return; }
           const values = new FormData(form);
-          const payload = { reason: values.get('reason'), comment: values.get('comment'), email: values.get('email'), submissionId: crypto.randomUUID(), locale: navigator.language || '', extensionVersion: new URLSearchParams(location.search).get('version') || '', turnstileToken };
+          const payload = { reason: values.get('reason'), comment: values.get('comment'), email: values.get('email'), submissionId, locale: new URLSearchParams(location.search).get('locale') || navigator.language || '', extensionVersion: new URLSearchParams(location.search).get('version') || '', turnstileToken };
           setStatus('Sending…');
-          try { const response = await fetch('/api/uninstall-feedback', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) throw new Error(); form.hidden = true; setStatus('Thank you. Your feedback was received.', true); } catch { setStatus('We could not send your feedback. Please try again.'); }
+          submit.disabled = true;
+          try { const response = await fetch('/api/uninstall-feedback', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) throw new Error(); form.hidden = true; success.hidden = false; } catch { turnstileToken = ''; if (turnstileWidget !== undefined) window.turnstile.reset(turnstileWidget); setStatus('We could not send your feedback. Please try again.'); }
         });
         return;
       }
@@ -589,11 +602,10 @@
 
       const reviewList = document.getElementById('review-list');
       const reviewViewport = document.getElementById('review-viewport');
-      const reviewSection = document.getElementById('reviews');
-      const reviewToggle = document.getElementById('review-toggle');
+      const reviewPrevious = document.getElementById('review-prev');
+      const reviewNext = document.getElementById('review-next');
       const reviewCount = document.getElementById('review-count');
       reviewCount.textContent = String(webStoreReviews.length);
-      reviewToggle.textContent = t('reviews_show_all', webStoreReviews.length);
 
       webStoreReviews.forEach(review => {
         const item = document.createElement('li');
@@ -630,13 +642,25 @@
         reviewList.append(item);
       });
 
-      reviewToggle.addEventListener('click', () => {
-        const expanded = reviewSection.classList.toggle('is-expanded');
-        reviewToggle.setAttribute('aria-expanded', String(expanded));
-        reviewToggle.textContent = expanded
-          ? t('reviews_show_fewer')
-          : t('reviews_show_all', webStoreReviews.length);
-      });
+      const updateReviewControls = () => {
+        const maxScroll = reviewViewport.scrollWidth - reviewViewport.clientWidth - 2;
+        reviewPrevious.disabled = reviewViewport.scrollLeft <= 2;
+        reviewNext.disabled = reviewViewport.scrollLeft >= maxScroll;
+      };
+      const moveReviews = (direction) => {
+        reviewViewport.scrollBy({ left: direction * Math.max(280, reviewViewport.clientWidth * 0.86), behavior: 'smooth' });
+      };
+      reviewPrevious.addEventListener('click', () => moveReviews(-1));
+      reviewNext.addEventListener('click', () => moveReviews(1));
+      reviewViewport.addEventListener('scroll', updateReviewControls, { passive: true });
+      reviewViewport.addEventListener('wheel', (event) => {
+        const delta = event.shiftKey ? event.deltaY : Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+        if (!delta) return;
+        event.preventDefault();
+        reviewViewport.scrollLeft += delta;
+      }, { passive: false });
+      window.addEventListener('resize', updateReviewControls);
+      updateReviewControls();
 
       const revealHashDetails = () => {
         const target = document.getElementById(window.location.hash.slice(1));

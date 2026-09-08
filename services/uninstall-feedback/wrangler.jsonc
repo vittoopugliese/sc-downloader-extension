@@ -1,0 +1,28 @@
+{
+  "name": "sctd-uninstall-feedback",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-09-08",
+  "workers_dev": false,
+  "routes": [{
+    "pattern": "sctd.vpugliese.online/api/uninstall-feedback*",
+    "zone_name": "vpugliese.online"
+  }],
+  "vars": {
+    "ALLOWED_HOSTNAME": "sctd.vpugliese.online",
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAEtSfGG5Lfk3ZTUA"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 }
+  },
+  "secrets": {
+    "required": ["TURNSTILE_SECRET", "RATE_LIMIT_SALT"]
+  },
+  "triggers": { "crons": ["0 3 * * *"] },
+  "d1_databases": [{
+    "binding": "FEEDBACK_DB",
+    "database_name": "sctd-feedback",
+    "database_id": "2dd4db76-b59a-49c4-8db6-34fb2bc4a74c",
+    "migrations_dir": "migrations"
+  }]
+}

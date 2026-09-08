@@ -116,7 +116,8 @@ assert(!/(href|action)=["'][^"']*(checkout|stripe|paddle|lemonsqueezy)/i.test(ht
 assert(!/USD\s*2[.,]99|Looper Pro|Early access|Purchases open soon/i.test(html), 'The free Looper landing must not retain payment copy');
 assert(html.includes("text.textContent = review.text"), 'Review text must be rendered with textContent');
 assert(html.includes("badge.textContent = t('implemented_badge')"), 'Implemented review requests need their localized badge');
-assert(html.includes('review-card:nth-child(n + 4) { display:none; }'), 'Only three reviews should show before expansion');
+assert(html.includes('scroll-snap-type:x mandatory'), 'Reviews should use a horizontal scroll carousel');
+assert(html.includes('id="review-prev"') && html.includes('id="review-next"'), 'Reviews should have previous and next controls');
 assert(!html.includes('looper-player'), 'The retired standalone Looper player must be absent');
 assert(!/<button[^>]+id="loop-export"/.test(html), 'The retired WAV-export UI must be absent');
 assert(/data-loop-handle="start"[\s\S]*data-loop-handle="end"/.test(html), 'The hero Looper preview needs draggable A and B markers');

@@ -11,17 +11,46 @@ npm run test:feedback
 
 No envía datos reales ni necesita secretos para ejecutarse.
 
-## Despliegue manual requerido
+## Arquitectura publicada
 
-1. Crear D1 y copiar `wrangler.example.jsonc` a `wrangler.jsonc` con su ID real.
-2. Configurar `TURNSTILE_SECRET` como Worker Secret y crear el widget para `sctd.vpugliese.online`.
-3. Aplicar migraciones y desplegar el Worker en la ruta `sctd.vpugliese.online/api/uninstall-feedback`.
-4. Probar `GET /health`, un envío real y la exportación privada de D1. Sólo entonces registrar la URL de desinstalación en la extensión.
+La landing puede seguir en GitHub Pages. El Worker sólo toma las rutas bajo
+`sctd.vpugliese.online/api/uninstall-feedback*`; `/`, imágenes y scripts siguen
+siendo servidos por GitHub Pages. La llamada del formulario es same-origin, así
+que no necesita CORS ni una migración de la página.
 
-No activar `setUninstallURL` con una URL provisional: sin el deploy verificado,
-la extensión debe permanecer sin servicio de feedback externo.
+## Despliegue
 
-Al superar ese smoke test, la URL que debe registrar el service worker es:
+Desde `services/uninstall-feedback`:
+
+```powershell
+npx wrangler@latest d1 create sctd-feedback
+Copy-Item wrangler.example.jsonc wrangler.jsonc
+# Copiar el database_id devuelto a wrangler.jsonc.
+npx wrangler@latest d1 migrations apply sctd-feedback --remote
+npx wrangler@latest secret put TURNSTILE_SECRET
+npx wrangler@latest secret put RATE_LIMIT_SALT
+npx wrangler@latest deploy
+```
+
+Antes de `deploy`, reemplazar `REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID` y
+`REPLACE_WITH_TURNSTILE_SITE_KEY` en `wrangler.jsonc`. Crear el widget Turnstile
+en el dashboard con modo **Managed**, dominio permitido
+`sctd.vpugliese.online` y acción `uninstall_feedback`; la site key es pública,
+el secret siempre va con `wrangler secret put`.
+
+Probar después del deploy:
+
+```powershell
+Invoke-RestMethod https://sctd.vpugliese.online/api/uninstall-feedback/health
+Invoke-RestMethod https://sctd.vpugliese.online/api/uninstall-feedback/config
+npx wrangler@latest d1 export sctd-feedback --remote --output feedback-schema.sql --no-data
+```
+
+El primer endpoint debe devolver `status: ready`; el segundo, la site key. El
+formulario sólo acepta un envío real después de completar Turnstile.
+
+La extensión de este repositorio ya registra, en cada instalación, actualización
+e inicio del service worker, esta URL:
 
 ```text
 https://sctd.vpugliese.online/?view=goodbye&locale=<chrome-ui-language>&version=<extension-version>
@@ -30,3 +59,13 @@ https://sctd.vpugliese.online/?view=goodbye&locale=<chrome-ui-language>&version=
 La landing muestra esta vista sólo con `view=goodbye`; una visita normal conserva la landing. El formulario no pone email ni otros datos personales en la URL.
 
 No se guardan identificadores persistentes de instalación. `submission_id` existe únicamente para que un reintento del mismo formulario no duplique la respuesta.
+
+## `it@vpugliese.online`
+
+Ese correo no es necesario para que el formulario funcione: es sólo el canal de
+soporte de la landing. Para activarlo en Cloudflare, abrir **Email > Email
+Routing**, verificar una dirección de destino que controles, crear la ruta
+`it@vpugliese.online` hacia ese destino y confirmar el correo de verificación.
+No pongas una dirección de destino ni un secreto en el repositorio. Mientras no
+lo configures, el formulario seguirá operativo y el fallback no promete ese
+canal.

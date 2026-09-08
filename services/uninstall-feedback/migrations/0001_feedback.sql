@@ -6,12 +6,12 @@ CREATE TABLE IF NOT EXISTS uninstall_feedback (
   email TEXT,
   locale TEXT,
   extension_version TEXT,
-  ip_address TEXT NOT NULL,
+  ip_hash TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   delete_after INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS uninstall_feedback_rate_limit
-  ON uninstall_feedback (ip_address, created_at);
+  ON uninstall_feedback (ip_hash, created_at);
 CREATE INDEX IF NOT EXISTS uninstall_feedback_expiry
   ON uninstall_feedback (delete_after);
