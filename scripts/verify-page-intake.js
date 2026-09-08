@@ -88,6 +88,11 @@ function harness(pageUrl, hydration, api, runtimeReply) {
   await track.intake.extractCurrent();
   assert.equal(track.intake.getTrack().id, 1);
   assert.equal(track.published[0].type, "TRACK_DATA");
+  assert.equal(
+    track.intake.classify("https://soundcloud.com/artist/track-1/comments"),
+    "track",
+    "A SoundCloud track comments route must remain classified as a track"
+  );
 
   const playlist = harness(
     "https://soundcloud.com/artist/sets/set",

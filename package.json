@@ -11,6 +11,7 @@
     "test:live:folder": "node scripts/verify-live-looper.js --folder",
     "browser:live": "node scripts/open-live-browser.js",
     "test:license": "node --test services/license-worker/test/contract.test.mjs",
+    "test:feedback": "node --test services/uninstall-feedback/test/validation.test.mjs",
     "package:extension": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-extension.ps1"
   },
   "devDependencies": {

@@ -23,6 +23,11 @@ const SCPageIntake = (() => {
     if (!url.hostname.includes("soundcloud.com")) return "other";
     const segments = url.pathname.split("/").filter(Boolean);
     const second = segments[1]?.toLowerCase();
+    const isTrackCommentsRoute =
+      segments.length === 3 &&
+      segments[2].toLowerCase() === "comments" &&
+      !NON_TRACK_PATHS.has(segments[0].toLowerCase()) &&
+      !NON_TRACK_PATHS.has(segments[1].toLowerCase());
 
     if (segments.length === 2 && second === "likes") return "likes";
     if (segments.length === 3 && second === "sets") return "playlist";
@@ -36,7 +41,8 @@ const SCPageIntake = (() => {
     if (
       segments.length >= 2 &&
       segments.length <= 3 &&
-      !segments.some((segment) => NON_TRACK_PATHS.has(segment.toLowerCase()))
+      (isTrackCommentsRoute ||
+        !segments.some((segment) => NON_TRACK_PATHS.has(segment.toLowerCase())))
     ) {
       return "track";
     }
