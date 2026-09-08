@@ -10,7 +10,11 @@
   <meta property="og:description" content="Free full-track and collection downloads, plus an A–B Looper with WAV export. A focused Chrome extension built for SoundCloud.">
   <meta name="twitter:card" content="summary">
   <title>SoundCloud Track Downloader — Free tracks, playlists & artist uploads</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23eb4b18'/%3E%3Cpath d='M20 9v18m-7-7 7 7 7-7M11 31h18' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/png" sizes="128x128" href="./assets/icon128.png">
+  <link rel="apple-touch-icon" href="./assets/icon128.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
   <style>
     :root { color-scheme: light; --paper:#f7f5ef; --ink:#242620; --muted:#686a61; --orange:#d93e10; --orange-soft:#f7ded3; --line:#deded4; --soft:#eaece2; --green:#59664b; }
     * { box-sizing:border-box; }
@@ -192,6 +196,49 @@
     @media (max-width:1000px) { .shell { width:calc(100% - 48px); } .hero { gap:28px; padding:55px 0; } h1 { font-size:58px; letter-spacing:-3px; } .demo-stage { padding:19px 14px 16px; } .intro { font-size:15px; } .demo-tabs button { padding:8px 9px; } .preview-meta { gap:5px; } .extension-preview { padding-inline:12px; } .review-list { grid-template-columns:repeat(2,1fr); } }
     @media (max-width:760px) { header { height:80px; } nav > a:not(.nav-install) { display:none; } .nav-install { font-size:11px; padding:10px 12px; gap:8px; } .hero { grid-template-columns:1fr; padding-top:42px; gap:32px; } .hero-copy { text-align:center; } .eyebrow { justify-content:center; } h1 { font-size:66px; margin-top:22px; } .intro { margin-inline:auto; max-width:440px; } .social-proof { margin:26px auto 0; width:fit-content; text-align:left; } .store-proof,.store-source { margin-inline:auto; } .demo-stage { max-width:490px; width:100%; margin-inline:auto; padding:21px; } .extension-preview { padding:29px 20px 23px; } .benefit-strip { flex-wrap:wrap; justify-content:center; column-gap:28px; row-gap:15px; } .section-heading { display:block; text-align:center; } .section-heading p { margin-top:10px; } .feature-grid { gap:22px; } .looper { grid-template-columns:1fr; gap:24px; padding:28px; text-align:center; } .looper .eyebrow { justify-content:center; } .looper-copy > p { margin-inline:auto; } .looper-points { justify-content:center; } .looper-offer { max-width:380px; width:100%; margin-inline:auto; text-align:left; } .reviews-summary { margin-inline:auto !important; text-align:center; } .faq-grid { grid-template-columns:1fr; gap:23px; } .faq-intro { text-align:center; } .closing { padding:26px; } .closing h2 { font-size:22px; } footer { align-items:flex-start; } }
     @media (max-width:540px) { body { padding-bottom:72px; } .shell { width:calc(100% - 36px); } .brand { font-size:12px; gap:8px; } .brand small { font-size:9px; } .brand-mark { width:33px; height:33px; border-radius:9px; } .nav-install { padding:9px 10px; } .nav-install .icon { display:none; } h1 { font-size:52px; letter-spacing:-3.4px; } .intro { font-size:15px; } .eyebrow { font-size:10px; letter-spacing:1.35px; } .mobile-note { display:block; font-size:10px; color:var(--muted); margin:12px 0 0; } .hero { padding-bottom:32px; } .store-proof { grid-template-columns:repeat(3,minmax(0,1fr)); } .store-stat { padding:10px 8px; } .store-stat strong { font-size:13px; } .demo-stage { padding:17px 13px; } .demo-top { margin-bottom:16px; } .demo-tabs { width:100%; overflow-x:auto; justify-content:flex-start; margin-bottom:16px; } .demo-tabs button { padding:8px 12px; } .extension-preview h2 { font-size:23px; } .benefit-strip { justify-content:flex-start; display:grid; grid-template-columns:1fr 1fr; gap:16px 8px; } .benefit-strip span { font-size:10px; gap:6px; } .features { padding:35px 0; } .section-heading h2 { font-size:26px; } .feature-grid { grid-template-columns:1fr; gap:0; } .feature { display:grid; grid-template-columns:35px 1fr; column-gap:12px; min-height:0; padding:18px 0; } .feature-title { grid-row:span 3; display:block; margin:0; } .feature-index { display:block; margin-top:8px; } .feature h3 { font-size:16px; margin-bottom:6px; } .feature p { max-width:none; } .free-label { grid-column:2; } .looper { margin-bottom:38px; padding:25px 20px; } .looper h2 { font-size:29px; } .review-list { grid-template-columns:1fr; } .review-controls { align-items:flex-start; } .review-cta { flex-direction:column; text-align:center; } .review-cta .nav-install { width:100%; } .closing { flex-direction:column; text-align:center; gap:19px; margin-bottom:24px; } footer { flex-direction:column; gap:12px; text-align:center; align-items:center; } .mobile-install { position:fixed; left:10px; right:10px; bottom:10px; z-index:30; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 11px 10px 14px; border:1px solid #d8c6bc; border-radius:10px; background:#f7f5eff2; box-shadow:0 12px 35px #20231d3d; backdrop-filter:blur(12px); } .mobile-install span { font-size:10px; line-height:1.35; } .mobile-install strong { display:block; margin:0; font-size:11px; } .mobile-install .cta { flex-shrink:0; padding:11px 13px; box-shadow:none; font-size:11px; } }
+
+    /* Refined, deliberately simple landing layout. */
+    body { font-family:"Roboto",Arial,sans-serif; background:#faf9f6; }
+    h1,h2,h3,.brand,.cta,.nav-install { font-family:"Sora",Arial,sans-serif; }
+    header { height:82px; border:0; }
+    .brand { font-size:13px; font-weight:700; letter-spacing:-.5px; }
+    .brand-mark { overflow:hidden; width:38px; height:38px; padding:0; border-radius:10px; background:transparent; }
+    .brand-mark .icon { display:none; }
+    .brand-mark::after { content:""; width:100%; height:100%; background:url("./assets/icon128.png") center / cover no-repeat; }
+    nav { gap:22px; font-family:"Roboto",Arial,sans-serif; font-weight:500; }
+    nav > a:not(.nav-install) { display:none; }
+    .nav-install { padding:11px 15px; border-color:#deded4; border-radius:999px; font-size:11px; font-weight:700; }
+    .hero { display:block; max-width:780px; margin:0 auto; padding:76px 0 66px; text-align:center; }
+    .hero-copy { display:flex; flex-direction:column; align-items:center; }
+    .hero-icon { width:128px; height:128px; margin:0 0 28px; border-radius:28px; box-shadow:0 18px 40px #d93e1029; }
+    .eyebrow { font-family:"Roboto",Arial,sans-serif; font-size:11px; font-weight:700; letter-spacing:1.5px; }
+    h1 { max-width:720px; margin:19px 0 20px; font-size:clamp(48px,7vw,76px); font-weight:800; line-height:1.04; letter-spacing:-4px; }
+    .intro { max-width:570px; font-size:17px; line-height:1.65; }
+    .intro strong { font-weight:500; }
+    .cta { border-radius:999px; padding:16px 23px; font-weight:700; box-shadow:none; }
+    .cta:hover { transform:translateY(-1px); }
+    .social-proof,.store-proof,.store-source,.demo-stage { display:none; }
+    .benefit-strip { justify-content:center; gap:16px 34px; padding:22px 0; }
+    .benefit-strip span { font-size:12px; font-weight:400; }
+    .features { max-width:920px; margin-inline:auto; padding:64px 0; }
+    .section-heading { display:block; margin-bottom:25px; text-align:center; }
+    .section-heading h2,.closing h2,.faq h2,.looper h2 { font-family:"Sora",Arial,sans-serif; font-weight:700; }
+    .section-heading h2 { font-size:30px; }
+    .section-heading p { margin-top:9px; font-size:13px; }
+    .feature-grid { grid-template-columns:repeat(3,1fr); gap:0; border-top:1px solid var(--line); }
+    .feature { min-height:0; padding:26px 24px; border-top:0; border-right:1px solid var(--line); }
+    .feature:last-child { display:none; }
+    .feature:nth-child(3) { border-right:0; }
+    .feature h3 { font-family:"Sora",Arial,sans-serif; font-size:15px; font-weight:700; }
+    .feature p { font-size:13px; line-height:1.65; }
+    .free-label { font-family:"Roboto",Arial,sans-serif; font-weight:700; }
+    .looper,.reviews,.faq { display:none; }
+    .closing { max-width:920px; margin:0 auto 34px; padding:34px; border-radius:14px; background:#242620; border:0; color:white; }
+    .closing h2 { font-size:27px; }
+    .closing p { color:#d2d3cd; font-size:13px; }
+    .closing .cta { background:white; color:var(--ink); }
+    footer { border-top:1px solid var(--line); padding-top:23px; }
+    @media (max-width:760px) { .hero { padding:48px 0; } .hero-icon { width:104px; height:104px; border-radius:23px; margin-bottom:23px; } .feature-grid { grid-template-columns:1fr; } .feature { border-right:0; border-bottom:1px solid var(--line); padding:23px 0; } .feature:last-child { display:block; } .closing { margin-inline:0; } }
     @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*::before,*::after { transition:none !important; animation:none !important; } }
   </style>
 </head>
@@ -225,6 +272,7 @@
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
+          <img class="hero-icon" src="./assets/icon128.png" width="128" height="128" alt="SoundCloud Track Downloader icon">
           <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span> Free bulk downloader for Chrome</div>
           <h1 id="hero-title">Whole collections.<br><em>One click.</em></h1>
           <p class="intro">Download individual tracks, playlists, likes and complete artist uploads without leaving SoundCloud. <strong>Choose what you need and let the batch finish in the background.</strong></p>
