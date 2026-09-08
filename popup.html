@@ -76,7 +76,6 @@
         }
 
         .container {
-            background: rgba(0, 0, 0, 0.54);
             min-height: 200px;
             height: 100%;
             padding: 12px;
@@ -85,6 +84,16 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+        }
+
+        /* Match the fixed artwork even when popup sizing rounds up the viewport. */
+        .container::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background: rgba(0, 0, 0, 0.54);
+            pointer-events: none;
         }
 
         body.selection-mode .container {
@@ -916,7 +925,6 @@
                 <li><h3 data-i18n="looper_step_save_title">Save the selected range</h3><p data-i18n="looper_step_save">Choose Download loop to save the A–B range as a WAV file.</p></li>
             </ol>
             <p class="looper-tip" data-i18n="looper_tip">The loop is temporary: close it with the cross or Escape. Opening another track removes it.</p>
-            <button id="looperDoneBtn" type="button" class="popup-control-btn is-primary looper-done-btn" title="Back to download" data-i18n="looper_done" data-i18n-title="looper_done">Back to download</button>
         </section>
     </div>
     <script src="./scripts/i18n.js"></script>

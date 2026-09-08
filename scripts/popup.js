@@ -60,7 +60,6 @@ const helpBackBtn = document.getElementById("helpBackBtn");
 const looperEntryBtn = document.getElementById("looperEntryBtn");
 const looperPanel = document.getElementById("looperPanel");
 const looperBackBtn = document.getElementById("looperBackBtn");
-const looperDoneBtn = document.getElementById("looperDoneBtn");
 
 let isDownloading = false;
 let isSelectionMode = false;
@@ -168,7 +167,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   helpBackBtn.addEventListener("click", closeHelp);
   looperEntryBtn.addEventListener("click", openLooperExplainer);
   looperBackBtn.addEventListener("click", closeLooperExplainer);
-  looperDoneBtn.addEventListener("click", closeLooperExplainer);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && looperPanel.classList.contains("is-visible")) {
       event.preventDefault();

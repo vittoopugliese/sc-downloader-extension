@@ -20,8 +20,13 @@ separate download browser test covers both Downloads and a remembered folder:
 ```powershell
 npm run test:e2e
 npm run test:e2e:download
+npm run test:e2e:popup
 npm run test:feedback
 ```
+
+`test:e2e:popup` checks that the popup background covers the bottom and right
+edges when the viewport is slightly larger than the content, at display scales
+of 100%, 125%, 150%, and 200%.
 
 `test:feedback` covers the local validation, Turnstile gate, duplicate handling,
 rate limit and retention cleanup for the optional uninstall-feedback Worker. It

@@ -23,7 +23,6 @@ assert(
 assert(
   /id="looperPanel"[^>]*role="dialog"/.test(popup) &&
     /class="looper-tutorial"/.test(popup) &&
-    /id="looperDoneBtn"/.test(popup) &&
     !/looperPurchaseBtn|looperCheckoutNote|USD 2\.99|LOOPER PRO/.test(popup),
   "The popup must provide a free, localized Looper tutorial without payment UI."
 );
