@@ -9,11 +9,15 @@ const SCLooper = (() => {
   const MEDIA_BRIDGE_COMMAND_ATTRIBUTE = "data-scdl-looper-command";
   const MEDIA_BRIDGE_RESPONSE_ATTRIBUTE = "data-scdl-looper-response";
   const ZOOM_SOURCE_HIDDEN_ATTRIBUTE = "data-scdl-loop-zoom-source-hidden";
+  const ZOOM_NATIVE_DISABLED_ATTRIBUTE = "data-scdl-loop-zoom-native-disabled";
+  const ZOOM_NATIVE_PLAYHEAD_HIDDEN_ATTRIBUTE =
+    "data-scdl-loop-native-playhead-hidden";
   const WAVEFORM_SELECTORS = [
     '[role="slider"][aria-label="Waveform"]',
     ".fullHero__waveform .waveformWrapper__waveform",
   ];
   const SEEK_RETRY_MS = 250;
+  const TRACK_IDENTITY_CHECK_INTERVAL_MS = 500;
   const STICKY_MEDIA_BRIDGE_SCORE = 30;
   const MEDIA_EVENTS = [
     "playing",
@@ -32,6 +36,7 @@ const SCLooper = (() => {
   let initialUrl = null;
   let initialTrackIdentity = null;
   let lastSeekAttemptAt = Number.NEGATIVE_INFINITY;
+  let lastTrackIdentityCheckAt = Number.NEGATIVE_INFINITY;
   let discoveryObserver = null;
   let contextInterval = null;
   let ensureTimeout = null;
@@ -43,6 +48,10 @@ const SCLooper = (() => {
   let downloadResetTimeout = null;
   let selectionDrag = null;
   let zoomWindow = null;
+  let zoomRenderFrameId = null;
+  let pendingZoomWindow = null;
+  let hasPendingZoomWindow = false;
+  let pendingZoomRect = null;
 
   function setDebugStatus(status) {
     if (status === lastDebugStatus) return;
@@ -588,7 +597,32 @@ const SCLooper = (() => {
         width: 100%;
         height: 100%;
       }
+      .scdl-loop-zoom-interaction {
+        position: absolute;
+        z-index: 0;
+        inset: 0;
+        background: transparent;
+        cursor: pointer;
+        pointer-events: auto;
+        touch-action: none;
+      }
+      .scdl-loop-zoom-playhead {
+        position: absolute;
+        z-index: 1;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        transform: translateX(-50%);
+        background: var(--mui-palette-contrast-contrastText, #fff);
+        pointer-events: none;
+      }
       [${ZOOM_SOURCE_HIDDEN_ATTRIBUTE}] {
+        visibility: hidden !important;
+      }
+      [${ZOOM_NATIVE_DISABLED_ATTRIBUTE}] {
+        pointer-events: none !important;
+      }
+      [${ZOOM_NATIVE_PLAYHEAD_HIDDEN_ATTRIBUTE}] {
         visibility: hidden !important;
       }
       .scdl-loop-dim {
@@ -848,22 +882,48 @@ const SCLooper = (() => {
     const zoomLayer = document.createElement("div");
     zoomLayer.className = "scdl-loop-zoom-layer";
     zoomLayer.hidden = true;
+    const zoomInteraction = document.createElement("div");
+    zoomInteraction.className = "scdl-loop-zoom-interaction";
+    zoomInteraction.setAttribute("aria-hidden", "true");
+    zoomInteraction.hidden = true;
+    zoomInteraction.addEventListener("pointerdown", stopZoomInteractionEvent);
+    zoomInteraction.addEventListener("click", handleZoomInteractionClick);
+    const zoomPlayhead = document.createElement("div");
+    zoomPlayhead.className = "scdl-loop-zoom-playhead";
+    zoomPlayhead.setAttribute("role", "presentation");
+    zoomPlayhead.hidden = true;
     const before = document.createElement("div");
     before.className = "scdl-loop-dim scdl-loop-before";
     const selection = document.createElement("div");
     selection.className = "scdl-loop-selection";
-    selection.appendChild(createSelectionDragHandle());
+    const selectionDragHandle = createSelectionDragHandle();
+    selection.appendChild(selectionDragHandle);
     const after = document.createElement("div");
     after.className = "scdl-loop-dim scdl-loop-after";
+    const markers = [createMarker("start", "A"), createMarker("end", "B")];
     overlay.append(
       zoomLayer,
+      zoomInteraction,
       before,
       selection,
       after,
-      createMarker("start", "A"),
-      createMarker("end", "B")
+      zoomPlayhead,
+      ...markers
     );
-    return overlay;
+    return {
+      overlay,
+      zoomLayer,
+      zoomInteraction,
+      zoomPlayhead,
+      before,
+      selection,
+      selectionDragHandle,
+      after,
+      markers: markers.map((element) => ({
+        element,
+        time: element.querySelector(".scdl-loop-marker-time"),
+      })),
+    };
   }
 
   function getVisibleWaveformWindow() {
@@ -874,16 +934,6 @@ const SCLooper = (() => {
     };
   }
 
-  function timeToVisiblePercent(timeMs, visibleWindow) {
-    if (!visibleWindow || !Number.isFinite(timeMs)) return 0;
-    const span = visibleWindow.endMs - visibleWindow.startMs;
-    if (span <= 0) return 0;
-    return Math.min(
-      Math.max((timeMs - visibleWindow.startMs) / span, 0),
-      1
-    ) * 100;
-  }
-
   function restoreZoomSource(currentView = view) {
     currentView?.hiddenZoomSource?.removeAttribute(
       ZOOM_SOURCE_HIDDEN_ATTRIBUTE
@@ -891,85 +941,326 @@ const SCLooper = (() => {
     if (currentView) currentView.hiddenZoomSource = null;
   }
 
-  function updateZoomWaveform() {
-    const zoomLayer = view?.overlay?.querySelector(".scdl-loop-zoom-layer");
-    if (!zoomLayer || !range) return;
+  function restoreAttribute(element, name, value) {
+    if (!element) return;
+    if (value === null) element.removeAttribute(name);
+    else element.setAttribute(name, value);
+  }
+
+  function restoreNativeWaveform(currentView = view) {
+    if (!currentView) return;
+    currentView.nativePlayheadObserver?.disconnect();
+    currentView.nativePlayheadObserver = null;
+    for (const entry of currentView.hiddenNativePlayheads || []) {
+      restoreAttribute(
+        entry.element,
+        ZOOM_NATIVE_PLAYHEAD_HIDDEN_ATTRIBUTE,
+        entry.previousValue
+      );
+    }
+    currentView.hiddenNativePlayheads = [];
+    currentView.hiddenNativePlayheadElements?.clear();
+
+    const state = currentView.nativeWaveformState;
+    if (!state) return;
+    restoreAttribute(
+      currentView.waveform,
+      ZOOM_NATIVE_DISABLED_ATTRIBUTE,
+      state.disabledMarker
+    );
+    restoreAttribute(currentView.waveform, "tabindex", state.tabIndex);
+    restoreAttribute(
+      currentView.waveform,
+      "aria-disabled",
+      state.ariaDisabled
+    );
+    currentView.nativeWaveformState = null;
+  }
+
+  function nativePlayheadCandidates(root) {
+    if (!root || root.nodeType !== 1) return [];
+    const candidates = [];
+    if (root.getAttribute?.("role") === "presentation") candidates.push(root);
+    candidates.push(...(root.querySelectorAll?.('[role="presentation"]') || []));
+    return candidates;
+  }
+
+  function hideNativePlayheads(currentView, roots) {
+    if (!currentView?.waveform || !roots?.length) return;
+    const waveformRect = currentView.waveform.getBoundingClientRect();
+    const candidates = roots.flatMap(nativePlayheadCandidates);
+    for (const element of candidates) {
+      if (
+        currentView.hiddenNativePlayheadElements.has(element) ||
+        element.closest?.(`[${OVERLAY_ATTRIBUTE}]`)
+      ) {
+        continue;
+      }
+      const rect = element.getBoundingClientRect();
+      if (rect.width > 3 || rect.height < waveformRect.height * 0.75) continue;
+      currentView.hiddenNativePlayheads.push({
+        element,
+        previousValue: element.getAttribute(
+          ZOOM_NATIVE_PLAYHEAD_HIDDEN_ATTRIBUTE
+        ),
+      });
+      currentView.hiddenNativePlayheadElements.add(element);
+      element.setAttribute(ZOOM_NATIVE_PLAYHEAD_HIDDEN_ATTRIBUTE, "true");
+    }
+  }
+
+  function disableNativeWaveform(currentView = view) {
+    if (!currentView?.waveform) return;
+    if (!currentView.nativeWaveformState) {
+      currentView.nativeWaveformState = {
+        disabledMarker: currentView.waveform.getAttribute(
+          ZOOM_NATIVE_DISABLED_ATTRIBUTE
+        ),
+        tabIndex: currentView.waveform.getAttribute("tabindex"),
+        ariaDisabled: currentView.waveform.getAttribute("aria-disabled"),
+      };
+      currentView.waveform.setAttribute(ZOOM_NATIVE_DISABLED_ATTRIBUTE, "true");
+      currentView.waveform.setAttribute("tabindex", "-1");
+      currentView.waveform.setAttribute("aria-disabled", "true");
+    }
+
+    if (!currentView.nativePlayheadObserver) {
+      hideNativePlayheads(currentView, [currentView.waveform]);
+      if (typeof MutationObserver === "function") {
+        currentView.nativePlayheadObserver = new MutationObserver((records) => {
+          const addedRoots = records.flatMap((record) =>
+            Array.from(record.addedNodes)
+          );
+          hideNativePlayheads(currentView, addedRoots);
+        });
+        currentView.nativePlayheadObserver.observe(currentView.waveform, {
+          childList: true,
+          subtree: true,
+        });
+      }
+    }
+  }
+
+  function updateZoomPlayhead(currentTimeMs = player?.getCurrentTimeMs()) {
+    const playhead = view?.overlayElements?.zoomPlayhead;
+    if (
+      !playhead ||
+      !zoomWindow ||
+      !view?.zoomVisualActive ||
+      !Number.isFinite(currentTimeMs)
+    ) {
+      if (playhead) playhead.hidden = true;
+      return;
+    }
+
+    const visibleWindow = getVisibleWaveformWindow();
+    if (
+      !visibleWindow ||
+      currentTimeMs < visibleWindow.startMs ||
+      currentTimeMs > visibleWindow.endMs
+    ) {
+      playhead.hidden = true;
+      return;
+    }
+
+    const left = `${SCLooperCore.timeToPercent(
+      currentTimeMs,
+      visibleWindow
+    )}%`;
+    if (playhead.style.left !== left) playhead.style.left = left;
+    playhead.hidden = false;
+  }
+
+  function updateZoomInteraction(zoomVisualActive) {
+    const interaction = view?.overlayElements?.zoomInteraction;
+    if (!interaction) return;
+    view.zoomVisualActive = Boolean(zoomVisualActive);
+    interaction.hidden = !zoomVisualActive;
+    if (!zoomVisualActive) {
+      restoreNativeWaveform();
+      if (view.overlayElements.zoomPlayhead) {
+        view.overlayElements.zoomPlayhead.hidden = true;
+      }
+      return;
+    }
+    disableNativeWaveform();
+    updateZoomPlayhead();
+  }
+
+  function resolveZoomVisualSource() {
+    if (
+      view.zoomSource?.isConnected &&
+      view.waveform.contains(view.zoomSource)
+    ) {
+      return {
+        kind: view.zoomSourceKind,
+        element: view.zoomSource,
+        canvases: view.zoomSourceCanvases,
+      };
+    }
+
+    const svg = view.waveform.querySelector("svg");
+    if (svg) return { kind: "svg", element: svg, canvases: null };
+
+    const canvases = Array.from(view.waveform.querySelectorAll("canvas")).filter(
+      (canvas) =>
+        canvas.width > 0 &&
+        canvas.height > 0 &&
+        !canvas.classList.contains("waveformCommentsNode")
+    );
+    if (canvases.length === 0) return null;
+    return {
+      kind: "canvas",
+      element: canvases[0].closest(".waveform") || canvases[0].parentElement,
+      canvases,
+    };
+  }
+
+  function mountZoomVisual(source, zoomLayer) {
+    let nextVisual;
+    let nextViewBox = null;
+    if (source.kind === "svg") {
+      const viewBox = String(source.element.getAttribute("viewBox") || "")
+        .trim()
+        .split(/[\s,]+/)
+        .map(Number);
+      if (
+        viewBox.length !== 4 ||
+        viewBox.some((value) => !Number.isFinite(value))
+      ) {
+        return false;
+      }
+      nextViewBox = viewBox;
+      nextVisual = source.element.cloneNode(true);
+      nextVisual.removeAttribute(ZOOM_SOURCE_HIDDEN_ATTRIBUTE);
+      nextVisual.setAttribute("focusable", "false");
+    } else {
+      const firstCanvas = source.canvases?.[0];
+      if (!firstCanvas || firstCanvas.width <= 0 || firstCanvas.height <= 0) {
+        return false;
+      }
+      nextVisual = document.createElement("canvas");
+      nextVisual.width = firstCanvas.width;
+      nextVisual.height = firstCanvas.height;
+    }
+
+    nextVisual.classList.add("scdl-loop-zoom-waveform");
+    nextVisual.setAttribute("aria-hidden", "true");
+    zoomLayer.replaceChildren(nextVisual);
+
+    restoreZoomSource();
+    view.zoomVisual = nextVisual;
+    view.zoomSource = source.element;
+    view.zoomSourceKind = source.kind;
+    view.zoomSourceCanvases = source.canvases;
+    view.zoomSourceViewBox = nextViewBox;
+    return true;
+  }
+
+  function renderCanvasZoom(visibleWindow) {
+    const context = view.zoomVisual?.getContext?.("2d");
+    const canvases = view.zoomSourceCanvases;
+    if (!context || !canvases?.length) return false;
+    const start =
+      SCLooperCore.timeToPercent(visibleWindow.startMs, range.durationMs) / 100;
+    const end =
+      SCLooperCore.timeToPercent(visibleWindow.endMs, range.durationMs) / 100;
+    context.clearRect(0, 0, view.zoomVisual.width, view.zoomVisual.height);
+    for (const canvas of canvases) {
+      context.drawImage(
+        canvas,
+        canvas.width * start,
+        0,
+        canvas.width * (end - start),
+        canvas.height,
+        0,
+        0,
+        view.zoomVisual.width,
+        view.zoomVisual.height
+      );
+    }
+    return true;
+  }
+
+  function updateZoomWaveform(visibleWindow) {
+    const zoomLayer = view?.overlayElements?.zoomLayer;
+    if (!zoomLayer || !range) return false;
 
     if (!zoomWindow) {
       zoomLayer.hidden = true;
       restoreZoomSource();
-      return;
+      return false;
     }
 
-    const source = view.waveform.querySelector("svg");
+    const source = resolveZoomVisualSource();
     if (!source) {
       zoomLayer.hidden = true;
       restoreZoomSource();
-      return;
+      return false;
     }
 
-    if (!view.zoomSvg || view.zoomSource !== source) {
-      restoreZoomSource();
-      view.zoomSource = source;
-      view.zoomSvg = source.cloneNode(true);
-      view.zoomSvg.removeAttribute(ZOOM_SOURCE_HIDDEN_ATTRIBUTE);
-      view.zoomSvg.classList.add("scdl-loop-zoom-waveform");
-      view.zoomSvg.setAttribute("aria-hidden", "true");
-      view.zoomSvg.setAttribute("focusable", "false");
-      zoomLayer.replaceChildren(view.zoomSvg);
+    if (!view.zoomVisual || view.zoomSource !== source.element) {
+      if (!mountZoomVisual(source, zoomLayer)) {
+        zoomLayer.hidden = true;
+        restoreZoomSource();
+        return false;
+      }
     }
 
-    const viewBox = String(source.getAttribute("viewBox") || "")
-      .trim()
-      .split(/[\s,]+/)
-      .map(Number);
-    const visibleWindow = getVisibleWaveformWindow();
-    if (
-      viewBox.length !== 4 ||
-      viewBox.some((value) => !Number.isFinite(value)) ||
-      !visibleWindow
-    ) {
+    if (!visibleWindow) {
       zoomLayer.hidden = true;
       restoreZoomSource();
-      return;
+      return false;
     }
 
-    const [x, y, width, height] = viewBox;
-    const visibleWidth =
-      width * (visibleWindow.endMs - visibleWindow.startMs) / range.durationMs;
-    const visibleX =
-      x + width * visibleWindow.startMs / range.durationMs;
-    view.zoomSvg.setAttribute(
-      "viewBox",
-      `${visibleX} ${y} ${visibleWidth} ${height}`
-    );
-    source.setAttribute(ZOOM_SOURCE_HIDDEN_ATTRIBUTE, "true");
-    view.hiddenZoomSource = source;
+    if (source.kind === "svg") {
+      const [x, y, width, height] = view.zoomSourceViewBox;
+      const visibleStart =
+        SCLooperCore.timeToPercent(visibleWindow.startMs, range.durationMs) / 100;
+      const visibleEnd =
+        SCLooperCore.timeToPercent(visibleWindow.endMs, range.durationMs) / 100;
+      view.zoomVisual.setAttribute(
+        "viewBox",
+        `${x + width * visibleStart} ${y} ${width * (visibleEnd - visibleStart)} ${height}`
+      );
+    } else if (!renderCanvasZoom(visibleWindow)) {
+      zoomLayer.hidden = true;
+      restoreZoomSource();
+      return false;
+    }
+
+    source.element.setAttribute(ZOOM_SOURCE_HIDDEN_ATTRIBUTE, "true");
+    view.hiddenZoomSource = source.element;
     zoomLayer.hidden = false;
+    return true;
   }
 
   function updateOverlay() {
-    if (!view?.overlay || !range) return;
+    if (!view?.overlay || !view.overlayElements || !range) return;
     const visibleWindow = getVisibleWaveformWindow();
-    updateZoomWaveform();
-    const start = timeToVisiblePercent(range.startMs, visibleWindow);
-    const end = timeToVisiblePercent(range.endMs, visibleWindow);
-    const before = view.overlay.querySelector(".scdl-loop-before");
-    const selection = view.overlay.querySelector(".scdl-loop-selection");
-    const after = view.overlay.querySelector(".scdl-loop-after");
+    const zoomVisualActive = updateZoomWaveform(visibleWindow);
+    updateZoomInteraction(zoomVisualActive);
+    const start = SCLooperCore.timeToPercent(range.startMs, visibleWindow);
+    const end = SCLooperCore.timeToPercent(range.endMs, visibleWindow);
+    const {
+      before,
+      selection,
+      selectionDragHandle,
+      after,
+      markers,
+    } = view.overlayElements;
     before.style.left = "0";
     before.style.width = `${start}%`;
     selection.style.left = `${start}%`;
     selection.style.width = `${end - start}%`;
-    const dragHandle = selection.querySelector(".scdl-loop-selection-drag");
-    dragHandle?.setAttribute(
+    selectionDragHandle.setAttribute(
       "aria-valuetext",
       t("looper_range", [formatTime(range.startMs), formatTime(range.endMs)])
     );
     after.style.left = `${end}%`;
     after.style.right = "0";
 
-    for (const marker of view.overlay.querySelectorAll(".scdl-loop-marker")) {
+    for (const { element: marker, time } of markers) {
       const isStart = marker.dataset.marker === "start";
       const timeMs = isStart ? range.startMs : range.endMs;
       const markerPercent = isStart ? start : end;
@@ -986,8 +1277,38 @@ const SCLooper = (() => {
       marker.setAttribute("aria-valuemax", String(Math.round(range.durationMs)));
       marker.setAttribute("aria-valuenow", String(Math.round(timeMs)));
       marker.setAttribute("aria-valuetext", formatTime(timeMs));
-      marker.querySelector(".scdl-loop-marker-time").textContent = formatTime(timeMs);
+      time.textContent = formatTime(timeMs);
     }
+  }
+
+  function cancelPendingZoomRender() {
+    if (zoomRenderFrameId !== null) {
+      cancelAnimationFrame(zoomRenderFrameId);
+    }
+    zoomRenderFrameId = null;
+    pendingZoomWindow = null;
+    hasPendingZoomWindow = false;
+    pendingZoomRect = null;
+  }
+
+  function scheduleZoomRender(nextWindow) {
+    pendingZoomWindow = nextWindow;
+    hasPendingZoomWindow = true;
+    if (zoomRenderFrameId !== null) return;
+
+    zoomRenderFrameId = requestAnimationFrame(() => {
+      zoomRenderFrameId = null;
+      if (!hasPendingZoomWindow) return;
+
+      const nextZoomWindow = pendingZoomWindow;
+      pendingZoomWindow = null;
+      hasPendingZoomWindow = false;
+      pendingZoomRect = null;
+      if (!range || !view?.overlay) return;
+
+      zoomWindow = nextZoomWindow;
+      updateOverlay();
+    });
   }
 
   function restoreWrapperPosition(currentView) {
@@ -996,9 +1317,12 @@ const SCLooper = (() => {
   }
 
   function removeView() {
+    cancelPendingZoomRender();
     if (!view) return;
     selectionDrag = null;
     restoreZoomSource(view);
+    restoreNativeWaveform(view);
+    view.zoomVisualActive = false;
     resizeObserver?.disconnect();
     resizeObserver = null;
     view.button?.removeEventListener("click", handleButtonClick);
@@ -1024,9 +1348,18 @@ const SCLooper = (() => {
       button,
       downloadButton,
       overlay: null,
-      zoomSvg: null,
+      overlayElements: null,
+      zoomVisual: null,
+      zoomVisualActive: false,
       zoomSource: null,
+      zoomSourceKind: null,
+      zoomSourceCanvases: null,
+      zoomSourceViewBox: null,
       hiddenZoomSource: null,
+      hiddenNativePlayheads: [],
+      hiddenNativePlayheadElements: new Set(),
+      nativePlayheadObserver: null,
+      nativeWaveformState: null,
       pageUrl: window.location.href,
     };
 
@@ -1045,7 +1378,8 @@ const SCLooper = (() => {
       view.wrapper.style.position = "relative";
       view.changedWrapperPosition = true;
     }
-    view.overlay = createOverlay();
+    view.overlayElements = createOverlay();
+    view.overlay = view.overlayElements.overlay;
     view.wrapper.appendChild(view.overlay);
     view.wrapper.addEventListener("wheel", handleWaveformWheel, {
       passive: false,
@@ -1168,6 +1502,28 @@ const SCLooper = (() => {
     event.stopPropagation();
   }
 
+  function stopZoomInteractionEvent(event) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.stopPropagation();
+  }
+
+  function handleZoomInteractionClick(event) {
+    stopMarkerEvent(event);
+    if (!zoomWindow || !range || !view || !player) return;
+    const rect = view.waveform.getBoundingClientRect();
+    const visibleWindow = getVisibleWaveformWindow();
+    const timeMs = SCLooperCore.positionToTime(
+      event.clientX,
+      rect.left,
+      rect.width,
+      visibleWindow
+    );
+    if (timeMs === null) return;
+    lastSeekAttemptAt = Number.NEGATIVE_INFINITY;
+    player.seekToMs(timeMs);
+    updateZoomPlayhead(timeMs);
+  }
+
   function handleWaveformWheel(event) {
     if (
       !range ||
@@ -1180,7 +1536,7 @@ const SCLooper = (() => {
       return;
     }
 
-    const rect = view.waveform.getBoundingClientRect();
+    const rect = pendingZoomRect || view.waveform.getBoundingClientRect();
     if (
       !Number.isFinite(rect.width) ||
       rect.width <= 0 ||
@@ -1192,32 +1548,40 @@ const SCLooper = (() => {
       return;
     }
 
-    const visibleWindow = getVisibleWaveformWindow();
+    const currentZoomWindow = hasPendingZoomWindow
+      ? pendingZoomWindow
+      : zoomWindow;
+    const visibleWindow =
+      SCLooperCore.normalizeZoomWindow(
+        currentZoomWindow,
+        range.durationMs
+      ) || { startMs: 0, endMs: range.durationMs };
     const focusMs = SCLooperCore.positionToTime(
       event.clientX,
       rect.left,
       rect.width,
-      visibleWindow.endMs - visibleWindow.startMs
-    ) + visibleWindow.startMs;
+      visibleWindow
+    );
+    if (focusMs === null) return;
     if (focusMs < range.startMs || focusMs > range.endMs) return;
 
     const nextWindow = SCLooperCore.zoomWindowAt(
-      zoomWindow,
+      currentZoomWindow,
       range.durationMs,
       focusMs,
       event.deltaY
     );
     if (
       nextWindow === null &&
-      !zoomWindow &&
+      !currentZoomWindow &&
       event.deltaY > 0
     ) {
       return;
     }
 
     event.preventDefault();
-    zoomWindow = nextWindow;
-    updateOverlay();
+    pendingZoomRect = rect;
+    scheduleZoomRender(nextWindow);
   }
 
   function updateSelectionFromPointer(clientX) {
@@ -1225,9 +1589,20 @@ const SCLooper = (() => {
     const rect = view.waveform.getBoundingClientRect();
     if (!Number.isFinite(rect.width) || rect.width <= 0) return;
     const visibleWindow = getVisibleWaveformWindow();
-    const deltaMs =
-      ((clientX - selectionDrag.startClientX) / rect.width) *
-      (visibleWindow.endMs - visibleWindow.startMs);
+    const pointerTime = SCLooperCore.positionToTime(
+      clientX,
+      rect.left,
+      rect.width,
+      visibleWindow
+    );
+    const startPointerTime = SCLooperCore.positionToTime(
+      selectionDrag.startClientX,
+      rect.left,
+      rect.width,
+      visibleWindow
+    );
+    if (pointerTime === null || startPointerTime === null) return;
+    const deltaMs = pointerTime - startPointerTime;
     range = SCLooperCore.moveRange(selectionDrag.initialRange, deltaMs);
     updateOverlay();
   }
@@ -1294,8 +1669,9 @@ const SCLooper = (() => {
       clientX,
       rect.left,
       rect.width,
-      visibleWindow.endMs - visibleWindow.startMs
-    ) + visibleWindow.startMs;
+      visibleWindow
+    );
+    if (timeMs === null) return;
     range = SCLooperCore.moveMarker(range, marker, timeMs);
     updateOverlay();
   }
@@ -1402,17 +1778,26 @@ const SCLooper = (() => {
       return;
     }
 
-    const currentIdentity = player.getTrackIdentity();
-    if (identitiesConflict(initialTrackIdentity, currentIdentity)) {
-      reset("track-changed");
-      return;
+    const now = performance.now();
+    if (
+      now - lastTrackIdentityCheckAt >= TRACK_IDENTITY_CHECK_INTERVAL_MS
+    ) {
+      lastTrackIdentityCheckAt = now;
+      const currentIdentity = player.getTrackIdentity();
+      if (identitiesConflict(initialTrackIdentity, currentIdentity)) {
+        reset("track-changed");
+        return;
+      }
     }
 
     const currentTimeMs = player.getCurrentTimeMs();
-    if (SCLooperCore.getSeekTarget(range, currentTimeMs) !== null) {
+    const seekTarget = SCLooperCore.getSeekTarget(range, currentTimeMs);
+    if (seekTarget !== null) {
       seekToStart();
+      updateZoomPlayhead(seekTarget);
     } else {
       lastSeekAttemptAt = Number.NEGATIVE_INFINITY;
+      updateZoomPlayhead(currentTimeMs);
     }
 
     frameId = requestAnimationFrame(loopFrame);
@@ -1447,6 +1832,7 @@ const SCLooper = (() => {
     initialUrl = window.location.href;
     initialTrackIdentity = player.getTrackIdentity();
     lastSeekAttemptAt = Number.NEGATIVE_INFINITY;
+    lastTrackIdentityCheckAt = Number.NEGATIVE_INFINITY;
     player.subscribe(handlePlayerEvent);
     document.addEventListener("keydown", handleDocumentKeyDown, true);
     mountOverlay();
@@ -1475,6 +1861,7 @@ const SCLooper = (() => {
   }
 
   function reset(reason = "manual") {
+    cancelPendingZoomRender();
     if (frameId !== null) cancelAnimationFrame(frameId);
     frameId = null;
     document.removeEventListener("keydown", handleDocumentKeyDown, true);
@@ -1485,6 +1872,7 @@ const SCLooper = (() => {
     initialUrl = null;
     initialTrackIdentity = null;
     lastSeekAttemptAt = Number.NEGATIVE_INFINITY;
+    lastTrackIdentityCheckAt = Number.NEGATIVE_INFINITY;
     removeView();
 
     for (const node of document.querySelectorAll(

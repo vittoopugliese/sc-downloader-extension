@@ -109,10 +109,25 @@ const SCLooperCore = (() => {
     };
   }
 
-  function positionToTime(clientX, left, width, durationMs) {
-    const duration = normalizeDuration(durationMs);
+  function normalizeTimeViewport(viewport) {
+    if (isFiniteNumber(viewport)) {
+      const durationMs = normalizeDuration(viewport);
+      return durationMs === null ? null : { startMs: 0, endMs: durationMs };
+    }
+
+    const startMs = viewport?.startMs;
+    const endMs = viewport?.endMs;
+    return isFiniteNumber(startMs) &&
+      isFiniteNumber(endMs) &&
+      endMs > startMs
+      ? { startMs, endMs }
+      : null;
+  }
+
+  function positionToTime(clientX, left, width, viewport) {
+    const normalizedViewport = normalizeTimeViewport(viewport);
     if (
-      duration === null ||
+      normalizedViewport === null ||
       !isFiniteNumber(clientX) ||
       !isFiniteNumber(left) ||
       !isFiniteNumber(width) ||
@@ -121,13 +136,18 @@ const SCLooperCore = (() => {
       return null;
     }
 
-    return clamp((clientX - left) / width, 0, 1) * duration;
+    const spanMs = normalizedViewport.endMs - normalizedViewport.startMs;
+    return (
+      normalizedViewport.startMs +
+      clamp((clientX - left) / width, 0, 1) * spanMs
+    );
   }
 
-  function timeToPercent(timeMs, durationMs) {
-    const duration = normalizeDuration(durationMs);
-    if (duration === null || !isFiniteNumber(timeMs)) return 0;
-    return clamp(timeMs / duration, 0, 1) * 100;
+  function timeToPercent(timeMs, viewport) {
+    const normalizedViewport = normalizeTimeViewport(viewport);
+    if (normalizedViewport === null || !isFiniteNumber(timeMs)) return 0;
+    const spanMs = normalizedViewport.endMs - normalizedViewport.startMs;
+    return clamp((timeMs - normalizedViewport.startMs) / spanMs, 0, 1) * 100;
   }
 
   function normalizeZoomWindow(window, durationMs) {
@@ -174,7 +194,7 @@ const SCLooperCore = (() => {
     if (nextSpan >= duration) return null;
 
     const focus = clamp(focusMs, current.startMs, current.endMs);
-    const focusRatio = (focus - current.startMs) / currentSpan;
+    const focusRatio = timeToPercent(focus, current) / 100;
     const startMs = clamp(
       focus - focusRatio * nextSpan,
       0,

@@ -290,25 +290,128 @@ async function startTrackPlayback(page) {
     const endMarker = overlay.locator('[data-marker="end"]');
     const startMs = Number(await startMarker.getAttribute("aria-valuenow"));
     const initialEndMs = Number(await endMarker.getAttribute("aria-valuenow"));
+    const waveform = page.locator(
+      '[role="slider"][aria-label="Waveform"], .fullHero__waveform .waveformWrapper__waveform'
+    ).first();
+    const waveformBox = await waveform.boundingBox();
+    const durationMs = Number(await endMarker.getAttribute("aria-valuemax"));
+    const focusMs = (startMs + initialEndMs) / 2;
+    const focusPoint = {
+      x: waveformBox.x + waveformBox.width * focusMs / durationMs,
+      y: waveformBox.y + waveformBox.height / 2,
+    };
+    await waveform.evaluate((element, point) => {
+      element.dispatchEvent(new WheelEvent("wheel", {
+        bubbles: true,
+        cancelable: true,
+        clientX: point.x,
+        clientY: point.y,
+        deltaY: -100,
+      }));
+    }, focusPoint);
+    await page.waitForFunction(() => {
+      const overlay = document.querySelector("[data-scdl-loop-overlay]");
+      return (
+        overlay?.querySelector(".scdl-loop-zoom-layer")?.hidden === false &&
+        Boolean(
+          overlay?.parentElement?.querySelector(
+            "[data-scdl-loop-zoom-source-hidden]"
+          )
+        )
+      );
+    });
+    const nativePlayheadState = await waveform.evaluate((element) => {
+        const waveformRect = element.getBoundingClientRect();
+        const nativePlayheads = Array.from(
+          element.querySelectorAll('[role="presentation"]')
+        )
+          .filter((child) => {
+            if (child.closest("[data-scdl-loop-overlay]")) return false;
+            const rect = child.getBoundingClientRect();
+            return rect.width <= 3 && rect.height >= waveformRect.height * 0.75;
+          });
+        const overlay = document.querySelector("[data-scdl-loop-overlay]");
+        const zoomVisual = overlay?.querySelector(".scdl-loop-zoom-waveform");
+        return {
+          count: nativePlayheads.length,
+          allHidden: nativePlayheads.every(
+            (child) => getComputedStyle(child).visibility === "hidden"
+          ),
+          concreteZoomActive: Boolean(
+            overlay?.querySelector(".scdl-loop-zoom-layer")?.hidden === false &&
+            zoomVisual &&
+            getComputedStyle(zoomVisual).visibility !== "hidden" &&
+            overlay.parentElement?.querySelector(
+              "[data-scdl-loop-zoom-source-hidden]"
+            )
+          ),
+        };
+      });
+    assert.equal(
+      nativePlayheadState.count > 0
+        ? nativePlayheadState.allHidden
+        : nativePlayheadState.concreteZoomActive,
+      true,
+      nativePlayheadState.count > 0
+        ? "The native live playhead remained visible during zoom."
+        : "Canvas zoom did not expose a concrete replacement visual."
+    );
+    await waveform.evaluate((element, point) => {
+      element.dispatchEvent(new WheelEvent("wheel", {
+        bubbles: true,
+        cancelable: true,
+        clientX: point.x,
+        clientY: point.y,
+        deltaY: 100,
+      }));
+    }, focusPoint);
+    await page.waitForFunction(() => {
+      return document.querySelector(".scdl-loop-zoom-layer")?.hidden === true;
+    });
     if (initialEndMs - startMs > 1250) await endMarker.press("Shift+ArrowLeft");
     const endMs = Number(await endMarker.getAttribute("aria-valuenow"));
     assert.ok(endMs > startMs, "The live A-B selection is invalid.");
 
     const downloadButton = page.locator("[data-scdl-loop-download]");
+    await page.evaluate((timeoutMs) => {
+      window.__scdlLiveDownloadTerminalState = new Promise((resolve) => {
+        let settled = false;
+        const finish = (value) => {
+          if (settled) return;
+          settled = true;
+          observer.disconnect();
+          clearTimeout(timeoutId);
+          resolve(value);
+        };
+        const readTerminalState = () => {
+          const button = document.querySelector("[data-scdl-loop-download]");
+          const state = button?.dataset.scdlLoopDownloadState || "";
+          if (/success|error/.test(state)) {
+            finish({ state, title: button.title });
+          }
+        };
+        const observer = new MutationObserver(readTerminalState);
+        observer.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ["data-scdl-loop-download-state"],
+          childList: true,
+          subtree: true,
+        });
+        const timeoutId = setTimeout(
+          () => finish({ state: "timeout", title: "Live loop download timed out." }),
+          timeoutMs
+        );
+        readTerminalState();
+      });
+    }, DOWNLOAD_TIMEOUT_MS);
     await downloadButton.evaluate((button) => button.click());
-    await page.waitForFunction(
-      () =>
-        /success|error/.test(
-          document.querySelector("[data-scdl-loop-download]")?.dataset
-            .scdlLoopDownloadState || ""
-        ),
-      null,
-      { timeout: DOWNLOAD_TIMEOUT_MS }
+    const terminalDownloadState = await page.evaluate(() =>
+      window.__scdlLiveDownloadTerminalState
     );
     assert.equal(
-      await downloadButton.getAttribute("data-scdl-loop-download-state"),
+      terminalDownloadState.state,
       "success",
-      (await downloadButton.getAttribute("title")) || "Live loop download failed."
+      terminalDownloadState.title || "Live loop download failed."
     );
 
     let downloadedName;

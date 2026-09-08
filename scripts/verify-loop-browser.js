@@ -62,14 +62,14 @@ async function waitForFile(directory, timeoutMs = 30000) {
       downloadPath: downloads,
     });
 
-    const wav = createMonoWav();
+    const wav = createMonoWav(20);
     const audioUrl = `data:audio/wav;base64,${wav.toString("base64")}`;
     const trackUrl = "https://soundcloud.com/artist/loop-regression";
     const track = {
       id: 4242,
       title: "Loop regression",
       permalink_url: trackUrl,
-      duration: 2000,
+      duration: 20000,
       user: { username: "Artist" },
       media: {
         transcodings: [
@@ -87,8 +87,9 @@ async function waitForFile(directory, timeoutMs = 30000) {
         contentType: "text/html",
         body: `<html><head><style>
           .track { width: 640px; }
-          .waveform { display: block; width: 600px; height: 120px; }
+          .waveform { position: relative; display: block; width: 600px; height: 120px; }
           .waveform svg { display: block; width: 100%; height: 100%; }
+          .native-playhead { position: absolute; top: 0; left: 25%; width: 1px; height: 100%; background: white; }
           .actions { display: flex; }
           button { width: 30px; height: 30px; }
         </style></head><body>
@@ -96,13 +97,27 @@ async function waitForFile(directory, timeoutMs = 30000) {
           <div class="track">
             <h1>Loop regression</h1>
             <div class="waveform-wrap">
-              <div class="waveform" role="slider" aria-label="Waveform" aria-valuemax="2000">
-                <svg viewBox="0 0 600 120" preserveAspectRatio="none"><rect x="0" y="20" width="4" height="80" fill="white"></rect><rect x="100" y="35" width="4" height="65" fill="white"></rect><rect x="200" y="10" width="4" height="90" fill="white"></rect><rect x="300" y="45" width="4" height="55" fill="white"></rect><rect x="400" y="25" width="4" height="75" fill="white"></rect><rect x="500" y="15" width="4" height="85" fill="white"></rect></svg>
+              <div class="waveform" role="slider" aria-label="Waveform" aria-valuemax="20000">
+                <svg id="fixture-waveform" viewBox="0 0 600 120" preserveAspectRatio="none"></svg>
+                <div class="native-playhead" role="presentation"></div>
               </div>
             </div>
             <div class="actions"><button aria-haspopup="true" aria-label="More actions">More</button></div>
           </div>
           <audio src="${audioUrl}"></audio>
+          <script>
+            const fixtureWaveform = document.getElementById("fixture-waveform");
+            for (let index = 0; index < 2000; index += 1) {
+              const bar = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+              const amplitude = 18 + (index * 37 % 82);
+              bar.setAttribute("x", String(index * 0.3));
+              bar.setAttribute("y", String((120 - amplitude) / 2));
+              bar.setAttribute("width", "0.22");
+              bar.setAttribute("height", String(amplitude));
+              bar.setAttribute("fill", "white");
+              fixtureWaveform.appendChild(bar);
+            }
+          </script>
         </body></html>`,
       })
     );
@@ -118,9 +133,12 @@ async function waitForFile(directory, timeoutMs = 30000) {
     }, audioUrl);
 
     await page.goto(trackUrl);
+    await page.waitForFunction(() => Number.isFinite(document.querySelector("audio")?.duration));
+    await page.locator("audio").evaluate((audio) => { audio.currentTime = 5; });
     const loopButton = page.locator("[data-scdl-looper]");
     await loopButton.waitFor();
     await loopButton.click();
+    const startMarker = page.locator('[data-scdl-loop-overlay] [data-marker="start"]');
     const endMarker = page.locator('[data-scdl-loop-overlay] [data-marker="end"]');
     await endMarker.waitFor();
     const waveform = page.locator('[role="slider"][aria-label="Waveform"]');
@@ -151,6 +169,119 @@ async function waitForFile(directory, timeoutMs = 30000) {
       "hidden",
       "The source waveform must not remain visible behind the zoomed waveform"
     );
+    const zoomBurst = await waveform.evaluate(async (element, point) => {
+      const zoomSvg = document.querySelector(".scdl-loop-zoom-waveform");
+      let renders = 0;
+      let rectReads = 0;
+      const originalGetBoundingClientRect = element.getBoundingClientRect;
+      element.getBoundingClientRect = function () {
+        rectReads += 1;
+        return originalGetBoundingClientRect.call(this);
+      };
+      const observer = new MutationObserver((records) => {
+        renders += records.filter(
+          (record) => record.type === "attributes" && record.attributeName === "viewBox"
+        ).length;
+      });
+      observer.observe(zoomSvg, { attributes: true, attributeFilter: ["viewBox"] });
+      for (let index = 0; index < 20; index += 1) {
+        element.dispatchEvent(new WheelEvent("wheel", {
+          bubbles: true,
+          cancelable: true,
+          clientX: point.x,
+          clientY: point.y,
+          deltaY: index % 2 === 0 ? -10 : 10,
+        }));
+      }
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      observer.disconnect();
+      delete element.getBoundingClientRect;
+      return { renders, rectReads };
+    }, {
+      x: waveformBox.x + waveformBox.width / 2,
+      y: waveformBox.y + waveformBox.height / 2,
+    });
+    assert.ok(
+      zoomBurst.renders <= 2,
+      `A wheel burst must render at most once per frame; observed ${zoomBurst.renders} updates`
+    );
+    assert.ok(
+      zoomBurst.rectReads <= 1,
+      `A wheel burst must read waveform layout once; observed ${zoomBurst.rectReads} reads`
+    );
+    assert.equal(
+      await waveform.locator(".native-playhead").evaluate((element) => getComputedStyle(element).visibility),
+      "hidden",
+      "The native full-track playhead must be hidden while zoomed"
+    );
+    await waveform.evaluate((element) => {
+      const wrapper = document.createElement("div");
+      wrapper.style.cssText = "position:absolute;inset:0;pointer-events:none";
+      const replacement = document.createElement("div");
+      replacement.className = "native-playhead";
+      replacement.setAttribute("role", "presentation");
+      wrapper.appendChild(replacement);
+      element.querySelector(".native-playhead").replaceWith(wrapper);
+    });
+    await page.waitForFunction(() =>
+      document.querySelector(".native-playhead")?.hasAttribute(
+        "data-scdl-loop-native-playhead-hidden"
+      )
+    );
+    assert.equal(
+      await waveform.locator(".native-playhead").evaluate((element) => getComputedStyle(element).visibility),
+      "hidden",
+      "A nested native playhead mounted during zoom must also be hidden"
+    );
+    const zoomPlayhead = page.locator(".scdl-loop-zoom-playhead");
+    await page.waitForFunction(() => {
+      const playhead = document.querySelector(".scdl-loop-zoom-playhead");
+      return playhead && !playhead.hidden;
+    });
+    assert.ok(
+      Math.abs(await zoomPlayhead.evaluate((element) => parseFloat(element.style.left)) - 18.75) < 0.1,
+      "The zoom playhead must map current time through the visible viewport"
+    );
+    assert.ok(
+      Math.abs(await startMarker.evaluate((element) => parseFloat(element.style.left)) - 18.75) < 0.1,
+      "Marker A must use the same visible viewport as the waveform"
+    );
+    assert.ok(
+      Math.abs(await endMarker.evaluate((element) => parseFloat(element.style.left)) - 81.25) < 0.1,
+      "Marker B must use the same visible viewport as the waveform"
+    );
+    const zoomInteraction = page.locator(".scdl-loop-zoom-interaction");
+    const outsideRangeSeekMs = await zoomInteraction.evaluate((element, point) => {
+      element.dispatchEvent(new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        clientX: point.x,
+        clientY: point.y,
+      }));
+      return document.querySelector("audio").currentTime * 1000;
+    }, {
+      x: waveformBox.x + waveformBox.width * 0.1,
+      y: waveformBox.y + waveformBox.height * 0.75,
+    });
+    assert.ok(
+      Math.abs(outsideRangeSeekMs - 3600) < 25,
+      "Zoom seeking must use the whole visible viewport, including outside A-B"
+    );
+    const endMarkerBox = await endMarker.boundingBox();
+    await page.mouse.move(
+      endMarkerBox.x + endMarkerBox.width / 2,
+      endMarkerBox.y + endMarkerBox.height / 2
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      waveformBox.x + waveformBox.width * 0.75,
+      waveformBox.y + waveformBox.height / 2
+    );
+    await page.mouse.up();
+    assert.ok(
+      Math.abs(Number(await endMarker.getAttribute("aria-valuenow")) - 14000) < 25,
+      "Dragging marker B while zoomed must resolve through the visible viewport"
+    );
     await waveform.evaluate((element, point) => {
       element.dispatchEvent(new WheelEvent("wheel", {
         bubbles: true,
@@ -176,8 +307,83 @@ async function waitForFile(directory, timeoutMs = 30000) {
       "visible",
       "The source waveform must become visible again after zooming out"
     );
-    await endMarker.press("Shift+ArrowLeft");
-    assert.equal(await endMarker.getAttribute("aria-valuenow"), "1000");
+    assert.equal(
+      await waveform.locator(".native-playhead").evaluate((element) => getComputedStyle(element).visibility),
+      "visible",
+      "The native playhead must be restored after zooming out"
+    );
+    assert.equal(await zoomPlayhead.getAttribute("hidden"), "", "The zoom playhead must be hidden after zooming out");
+    assert.equal(await zoomInteraction.getAttribute("hidden"), "", "Zoom-aware seeking must be disabled after zooming out");
+
+    await waveform.locator(":scope > svg").evaluate((source) => {
+      const invalidSource = source.cloneNode(true);
+      invalidSource.setAttribute("viewBox", "invalid");
+      source.replaceWith(invalidSource);
+    });
+    await waveform.evaluate((element, point) => {
+      element.dispatchEvent(new WheelEvent("wheel", {
+        bubbles: true,
+        cancelable: true,
+        clientX: point.x,
+        clientY: point.y,
+        deltaY: -100,
+      }));
+    }, {
+      x: waveformBox.x + waveformBox.width / 2,
+      y: waveformBox.y + waveformBox.height / 2,
+    });
+    await page.evaluate(() => new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve))
+    ));
+    assert.equal(
+      await page.locator(".scdl-loop-zoom-layer").getAttribute("hidden"),
+      "",
+      "An invalid replacement SVG must not expose a stale zoom visual"
+    );
+    assert.equal(
+      await zoomPlayhead.getAttribute("hidden"),
+      "",
+      "The zoom playhead must stay hidden after zoom rendering fails"
+    );
+    await waveform.locator(":scope > svg").evaluate((source) => {
+      source.setAttribute("viewBox", "0 0 600 120");
+    });
+    await waveform.evaluate((element, point) => {
+      element.dispatchEvent(new WheelEvent("wheel", {
+        bubbles: true,
+        cancelable: true,
+        clientX: point.x,
+        clientY: point.y,
+        deltaY: -100,
+      }));
+    }, {
+      x: waveformBox.x + waveformBox.width / 2,
+      y: waveformBox.y + waveformBox.height / 2,
+    });
+    await page.waitForFunction(() =>
+      document.querySelector(".scdl-loop-zoom-layer")?.hidden === false
+    );
+    await waveform.evaluate((element, point) => {
+      for (let index = 0; index < 10; index += 1) {
+        element.dispatchEvent(new WheelEvent("wheel", {
+          bubbles: true,
+          cancelable: true,
+          clientX: point.x,
+          clientY: point.y,
+          deltaY: 100,
+        }));
+      }
+    }, {
+      x: waveformBox.x + waveformBox.width / 2,
+      y: waveformBox.y + waveformBox.height / 2,
+    });
+    await page.waitForFunction(() =>
+      document.querySelector(".scdl-loop-zoom-layer")?.hidden === true
+    );
+    for (let step = 0; step < 8; step += 1) {
+      await endMarker.press("Shift+ArrowLeft");
+    }
+    assert.equal(await endMarker.getAttribute("aria-valuenow"), "6000");
 
     const downloadButton = page.locator("[data-scdl-loop-download]");
     await downloadButton.click();

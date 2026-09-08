@@ -50,6 +50,7 @@ const source = fs
       initialUrl = window.location.href;
       initialTrackIdentity = null;
       lastSeekAttemptAt = Number.NEGATIVE_INFINITY;
+      lastTrackIdentityCheckAt = Number.NEGATIVE_INFINITY;
       frameId = null;
     };
     globalThis.__runLoopFrame = loopFrame;
@@ -74,6 +75,31 @@ const range = { startMs: 1000, endMs: 3000, durationMs: 10000 };
 
 const setPlaybackFixture = vm.runInContext("__setPlaybackFixture", context);
 const runLoopFrame = vm.runInContext("__runLoopFrame", context);
+
+let identityChecks = 0;
+setPlaybackFixture({
+  getCurrentTimeMs: () => 2000,
+  getTrackIdentity: () => {
+    identityChecks += 1;
+    return null;
+  },
+  seekToMs: noOp,
+}, range);
+for (let frame = 0; frame < 20; frame += 1) runLoopFrame();
+assert.equal(
+  identityChecks,
+  1,
+  "Track identity discovery must not query the DOM on every animation frame"
+);
+nowMs = 501;
+runLoopFrame();
+assert.equal(
+  identityChecks,
+  2,
+  "Track identity discovery must run again after the throttle interval"
+);
+
+nowMs = 0;
 setPlaybackFixture(ignoredSeekPlayer, range);
 runLoopFrame();
 nowMs = 500;

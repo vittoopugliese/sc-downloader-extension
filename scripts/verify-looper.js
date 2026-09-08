@@ -72,6 +72,22 @@ assert.equal(core.positionToTime(50, 0, 0, 10000), null);
 assert.equal(core.timeToPercent(2500, 10000), 25);
 assert.equal(core.timeToPercent(15000, 10000), 100);
 
+const viewport = { startMs: 2000, endMs: 6000 };
+assert.equal(core.positionToTime(25, 0, 100, viewport), 3000);
+assert.equal(core.positionToTime(-25, 0, 100, viewport), 2000);
+assert.equal(core.positionToTime(125, 0, 100, viewport), 6000);
+assert.equal(core.timeToPercent(3000, viewport), 25);
+assert.equal(core.timeToPercent(1000, viewport), 0);
+assert.equal(core.timeToPercent(7000, viewport), 100);
+assert.equal(
+  core.positionToTime(core.timeToPercent(4500, viewport), 0, 100, viewport),
+  4500
+);
+assert.equal(
+  core.positionToTime(50, 0, 100, { startMs: 4000, endMs: 4000 }),
+  null
+);
+
 const zoomed = core.zoomWindowAt(null, 10000, 5000, -100);
 assert.deepEqual(plain(zoomed), { startMs: 1000, endMs: 9000 });
 assert.deepEqual(plain(core.zoomWindowAt(zoomed, 10000, 5000, -100)), {
