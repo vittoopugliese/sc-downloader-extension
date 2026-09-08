@@ -10,8 +10,8 @@
   <meta property="og:description" content="Free full-track and collection downloads, plus an A–B Looper with WAV export. A focused Chrome extension built for SoundCloud.">
   <meta name="twitter:card" content="summary">
   <title>SoundCloud Track Downloader — Free tracks, playlists & artist uploads</title>
-  <link rel="icon" type="image/png" sizes="128x128" href="./assets/icon128.png">
-  <link rel="apple-touch-icon" href="./assets/icon128.png">
+  <link rel="icon" type="image/png" href="./assets/app-icon-logo-transparent-xl.png">
+  <link rel="apple-touch-icon" href="./assets/app-icon-logo-transparent-xl.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -202,9 +202,8 @@
     h1,h2,h3,.brand,.cta,.nav-install { font-family:"Sora",Arial,sans-serif; }
     header { height:82px; border:0; }
     .brand { font-size:13px; font-weight:700; letter-spacing:-.5px; }
-    .brand-mark { overflow:hidden; width:38px; height:38px; padding:0; border-radius:10px; background:transparent; }
-    .brand-mark .icon { display:none; }
-    .brand-mark::after { content:""; width:100%; height:100%; background:url("./assets/icon128.png") center / cover no-repeat; }
+    .brand-mark { display:none; }
+    .brand-logo { display:block; width:116px; height:38px; object-fit:contain; object-position:left center; }
     nav { gap:22px; font-family:"Roboto",Arial,sans-serif; font-weight:500; }
     nav > a:not(.nav-install) { display:none; }
     .nav-install { padding:11px 15px; border-color:#deded4; border-radius:999px; font-size:11px; font-weight:700; }
@@ -238,7 +237,48 @@
     .closing p { color:#d2d3cd; font-size:13px; }
     .closing .cta { background:white; color:var(--ink); }
     footer { border-top:1px solid var(--line); padding-top:23px; }
-    @media (max-width:760px) { .hero { padding:48px 0; } .hero-icon { width:104px; height:104px; border-radius:23px; margin-bottom:23px; } .feature-grid { grid-template-columns:1fr; } .feature { border-right:0; border-bottom:1px solid var(--line); padding:23px 0; } .feature:last-child { display:block; } .closing { margin-inline:0; } }
+    /* Keep the richer product story visible while preserving the cleaner styling. */
+    nav > a:not(.nav-install) { display:inline-flex; }
+    .hero { display:grid; grid-template-columns:.88fr 1.12fr; max-width:none; text-align:left; gap:54px; }
+    .hero-copy { display:block; }
+    .hero-icon { display:block; }
+    .eyebrow { justify-content:flex-start; }
+    .intro { margin-left:0; }
+    .social-proof,.store-proof,.store-source,.demo-stage { display:block; }
+    .demo-stage { padding:22px 20px 17px; }
+    .feature:last-child { display:block; }
+    .looper,.reviews,.faq { display:block; }
+    .looper { display:grid; margin-top:10px; }
+    @media (max-width:1000px) { .hero { gap:28px; } }
+    @media (max-width:760px) { .hero { display:block; padding:48px 0; text-align:center; } .hero-copy { display:flex; } .hero-icon { width:104px; height:104px; border-radius:23px; margin-bottom:23px; } .eyebrow { justify-content:center; } .intro { margin-inline:auto; } .demo-stage { display:block; } .feature-grid { grid-template-columns:1fr; } .feature { border-right:0; border-bottom:1px solid var(--line); padding:23px 0; } .feature:last-child { display:block; } .closing { margin-inline:0; } nav > a:not(.nav-install) { display:none; } }
+    .looper { color:#fff; border:0; background:linear-gradient(135deg,#b8320d,#e95724 55%,#f28b4b); box-shadow:0 18px 45px #b8320d2e; }
+    .looper .eyebrow,.looper-copy > p,.looper-points li,.looper-offer p,.looper-price span { color:#ffe4d8; }
+    .looper h2 { color:#fff; }
+    .looper-brand { width:150px; height:42px; object-fit:contain; object-position:left center; filter:brightness(0) invert(1); margin-bottom:16px; }
+    .looper-points li { border-color:#ffffff66; background:#ffffff1c; }
+    .looper-player { margin-top:24px; padding:17px; border:1px solid #ffffff4d; border-radius:12px; background:#7c210d66; }
+    .looper-player-head,.looper-ranges,.looper-controls { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .looper-player-head { margin-bottom:14px; font-size:11px; }
+    .looper-player-head span,.looper-status { color:#ffd3c1; font-size:10px; }
+    .looper-wave { position:relative; height:55px; overflow:hidden; border-radius:7px; background:repeating-linear-gradient(90deg,#ffffff40 0 2px,transparent 2px 8px),#671b0d; cursor:pointer; }
+    .looper-wave::after { content:""; position:absolute; inset:23px 0 auto; height:2px; background:#ffffff55; }
+    .looper-selection-live { position:absolute; inset:5px auto 5px 20%; width:50%; border-inline:2px solid #ffd2b8; background:#ffb08c45; }
+    .looper-playhead { position:absolute; top:0; bottom:0; left:20%; width:2px; background:#fff; box-shadow:0 0 8px #fff; }
+    .looper-ranges { margin-top:12px; }
+    .looper-ranges label { display:flex; align-items:center; gap:7px; width:50%; color:#fff; font:700 10px "Roboto",sans-serif; }
+    .looper-ranges input { width:100%; accent-color:#ffd0b9; }
+    .looper-controls { justify-content:flex-start; flex-wrap:wrap; margin-top:13px; }
+    .looper-control { padding:8px 10px; border:1px solid #ffffff66; border-radius:999px; color:#fff; background:#ffffff1c; font:700 10px "Roboto",sans-serif; }
+    .looper-control:hover { background:#ffffff35; }
+    .looper-control.is-primary { margin-left:auto; border-color:#fff; color:#9d2b0e; background:#fff; }
+    .looper-status { margin:11px 0 0; }
+    .looper-offer { background:#fff8f3; border-color:#f3b69b; }
+    .looper-promo-image { width:82%; margin:0 auto 14px; border-color:#f3b69b; }
+    .looper-offer small { color:#c74217; }
+    .looper-price strong { color:#9d2b0e; }
+    .looper-offer p { color:#754b3e; }
+    .looper-offer .coming-soon { border-color:#e9a487; color:#9d2b0e; background:#ffe6da; }
+    @media (max-width:760px) { .looper-player-head { align-items:flex-start; flex-direction:column; } .looper-control.is-primary { margin-left:0; } .looper-promo-image { width:70%; } }
     @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*::before,*::after { transition:none !important; animation:none !important; } }
   </style>
 </head>
@@ -259,7 +299,7 @@
   <div class="shell">
     <header>
       <a class="brand" href="#" aria-label="SoundCloud Track Downloader home">
-        <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></span>
+        <img class="brand-logo" src="./assets/app-icon-logo-transparent-xl.png" alt="" width="116" height="38">
         <span>SoundCloud<small>Track Downloader</small></span>
       </a>
       <nav aria-label="Main navigation">
@@ -272,7 +312,7 @@
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <img class="hero-icon" src="./assets/icon128.png" width="128" height="128" alt="SoundCloud Track Downloader icon">
+          <img class="hero-icon" src="./assets/app-icon-logo-with-background-xl.png" width="128" height="128" alt="SoundCloud Track Downloader icon">
           <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span> Free bulk downloader for Chrome</div>
           <h1 id="hero-title">Whole collections.<br><em>One click.</em></h1>
           <p class="intro">Download individual tracks, playlists, likes and complete artist uploads without leaving SoundCloud. <strong>Choose what you need and let the batch finish in the background.</strong></p>
@@ -347,6 +387,7 @@
       </section>
       <section class="looper" aria-labelledby="looper-title">
         <div class="looper-copy">
+          <img class="looper-brand" src="./assets/app-icon-logo-transparent-xl.png" alt="SoundCloud Track Downloader" width="150" height="42">
           <div class="eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-loop"/></svg> Looper Pro</div>
           <h2 id="looper-title">Loop the part you need.</h2>
           <p>Set A and B on an individual track, repeat that section while you listen, then export only the selected range as a WAV file. The WAV reflects the available source—it does not restore quality that is not there.</p>
@@ -356,11 +397,18 @@
             <li>Selected-range WAV export</li>
           </ul>
           <button class="demo-link" id="preview-looper" type="button">See Looper in the interactive demo <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+          <div class="looper-player" aria-label="Try the Looper">
+            <div class="looper-player-head"><strong>Try it with a sample loop</strong><span id="loop-time">A 1.6s · B 5.6s</span></div>
+            <div class="looper-wave" id="looper-wave" role="img" aria-label="Interactive A–B waveform"><span class="looper-selection-live" id="looper-selection-live"></span><span class="looper-playhead" id="looper-playhead"></span></div>
+            <div class="looper-ranges"><label>A <input id="loop-start" type="range" min="0" max="100" value="20" step="1"></label><label>B <input id="loop-end" type="range" min="0" max="100" value="70" step="1"></label></div>
+            <div class="looper-controls"><button type="button" class="looper-control" id="loop-play">Play loop</button><button type="button" class="looper-control" id="loop-set-a">Set A</button><button type="button" class="looper-control" id="loop-set-b">Set B</button><button type="button" class="looper-control is-primary" id="loop-export">Export WAV</button></div>
+            <p class="looper-status" id="loop-status" role="status" aria-live="polite">Drag A and B, then play the sample.</p>
+          </div>
         </div>
         <aside class="looper-offer" aria-label="Planned Looper Pro offer">
           <small>Early-access plan</small>
           <div class="looper-price"><strong>$2.99</strong><span>one time</span></div>
-          <img class="looper-promo-image" src="./assets/promos/four.png" alt="Looper A–B range and WAV export example">
+          <img class="looper-promo-image" src="./assets/promos/one.png" data-original-promo="./assets/promos/four.png" alt="Playlist download example">
           <p>Looper Pro is planned as a one-time add-on. Full-track and collection downloads remain free whether you buy it or not.</p>
           <button class="coming-soon" type="button" disabled>Purchases open soon</button>
         </aside>
@@ -608,6 +656,86 @@
       };
       window.addEventListener('hashchange', revealHashDetails);
       revealHashDetails();
+    })();
+  </script>
+  <script>
+    (() => {
+      const start = document.getElementById('loop-start');
+      const end = document.getElementById('loop-end');
+      const selection = document.getElementById('looper-selection-live');
+      const playhead = document.getElementById('looper-playhead');
+      const timeLabel = document.getElementById('loop-time');
+      const status = document.getElementById('loop-status');
+      const play = document.getElementById('loop-play');
+      if (!start || !end || !play) return;
+      const totalSeconds = 8;
+      let timer = 0;
+      let playing = false;
+      let audioContext;
+      const value = input => Number(input.value);
+      const range = () => {
+        let a = value(start) / 100 * totalSeconds;
+        let b = value(end) / 100 * totalSeconds;
+        if (b <= a + .2) b = Math.min(totalSeconds, a + .2);
+        return { a, b };
+      };
+      const update = () => {
+        const a = value(start), b = value(end);
+        selection.style.left = `${a}%`;
+        selection.style.width = `${Math.max(2, b - a)}%`;
+        const r = range();
+        timeLabel.textContent = `A ${r.a.toFixed(1)}s · B ${r.b.toFixed(1)}s`;
+      };
+      const stop = () => {
+        playing = false;
+        window.clearInterval(timer);
+        play.textContent = 'Play loop';
+        playhead.style.left = `${value(start)}%`;
+      };
+      const note = (when, frequency, duration = .18) => {
+        if (!audioContext) return;
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        oscillator.type = 'sine'; oscillator.frequency.value = frequency;
+        gain.gain.setValueAtTime(.0001, when); gain.gain.exponentialRampToValueAtTime(.12, when + .02); gain.gain.exponentialRampToValueAtTime(.0001, when + duration);
+        oscillator.connect(gain).connect(audioContext.destination); oscillator.start(when); oscillator.stop(when + duration + .03);
+      };
+      const playLoop = async () => {
+        if (playing) { stop(); return; }
+        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextCtor) { status.textContent = 'Your browser does not support audio preview.'; return; }
+        audioContext ||= new AudioContextCtor();
+        await audioContext.resume();
+        const r = range(); const length = r.b - r.a; const started = performance.now(); let lastNote = -1;
+        playing = true; play.textContent = 'Stop loop'; status.textContent = 'Playing the selected A–B range…';
+        timer = window.setInterval(() => {
+          const elapsed = ((performance.now() - started) / 1000) % length;
+          const progress = (r.a + elapsed) / totalSeconds * 100;
+          playhead.style.left = `${progress}%`;
+          const currentNote = Math.floor(elapsed * 4);
+          if (currentNote !== lastNote) { lastNote = currentNote; note(audioContext.currentTime, [220, 277.18, 329.63, 440][currentNote % 4]); }
+        }, 70);
+      };
+      const encodeWav = buffer => {
+        const samples = buffer.getChannelData(0); const bytes = new ArrayBuffer(44 + samples.length * 2); const view = new DataView(bytes);
+        const write = (offset, text) => [...text].forEach((char, i) => view.setUint8(offset + i, char.charCodeAt(0)));
+        write(0, 'RIFF'); view.setUint32(4, 36 + samples.length * 2, true); write(8, 'WAVE'); write(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, buffer.sampleRate, true); view.setUint32(28, buffer.sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); write(36, 'data'); view.setUint32(40, samples.length * 2, true);
+        samples.forEach((sample, i) => view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, sample)) * 0x7fff, true));
+        return new Blob([bytes], { type: 'audio/wav' });
+      };
+      const exportLoop = async () => {
+        const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (!Offline) { status.textContent = 'WAV export is not supported in this browser.'; return; }
+        const r = range(); const duration = r.b - r.a; const offline = new Offline(1, Math.ceil(44100 * duration), 44100); const oscillator = offline.createOscillator(); const gain = offline.createGain();
+        oscillator.type = 'sine'; oscillator.frequency.value = 330; gain.gain.value = .1; oscillator.connect(gain).connect(offline.destination); oscillator.start(); oscillator.stop(duration); status.textContent = 'Rendering your loop…';
+        const buffer = await offline.startRendering(); const link = document.createElement('a'); link.href = URL.createObjectURL(encodeWav(buffer)); link.download = 'soundcloud-loop.wav'; link.click(); URL.revokeObjectURL(link.href); status.textContent = 'WAV exported. Try another A–B range!';
+      };
+      [start, end].forEach(input => input.addEventListener('input', update));
+      play.addEventListener('click', playLoop);
+      document.getElementById('loop-set-a').addEventListener('click', () => { start.value = Math.min(value(end) - 5, 50); update(); status.textContent = 'A point set.'; });
+      document.getElementById('loop-set-b').addEventListener('click', () => { end.value = Math.max(value(start) + 5, 70); update(); status.textContent = 'B point set.'; });
+      document.getElementById('loop-export').addEventListener('click', exportLoop);
+      update();
     })();
   </script>
 </body>

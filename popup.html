@@ -431,6 +431,22 @@
         }
 
         #helpPanel.is-visible { display: block; }
+        .help-site-link {
+            display: block;
+            margin: 0 0 18px;
+            color: #f5fbff;
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 1.2;
+            text-decoration: underline;
+            text-decoration-color: currentColor;
+            text-decoration-thickness: 2px;
+            text-underline-offset: 4px;
+            overflow-wrap: anywhere;
+            transition: color 160ms ease;
+        }
+        .help-site-link:hover,
+        .help-site-link:focus-visible { color: var(--accent); }
         .help-header,
         .looper-header { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
         .help-header h2,
@@ -441,23 +457,6 @@
         .help-section h3 { margin: 0 0 4px; font-size: 13px; line-height: 1.25; font-weight: 700; }
         .help-section p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
         .help-links { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
-        .help-site-link {
-            display: block;
-            width: 100%;
-            margin-bottom: 2px;
-            color: #c9c9c9;
-            font-size: 11px;
-            line-height: 1.35;
-            text-decoration: underline;
-            text-decoration-color: rgba(255, 255, 255, 0.42);
-            text-underline-offset: 3px;
-            transition: color 160ms ease, text-decoration-color 160ms ease;
-        }
-        .help-site-link:hover,
-        .help-site-link:focus-visible {
-            color: #f5fbff;
-            text-decoration-color: currentColor;
-        }
         .help-link { color: #fff; font-size: 11px; text-align: center; }
         .help-section:last-child { padding-bottom: 0; }
 
@@ -873,6 +872,7 @@
             <p id="failedSummary"></p>
         </div>
         <section id="helpPanel" aria-labelledby="helpTitle" aria-modal="true" role="dialog">
+            <a class="help-site-link" href="https://sctd.vpugliese.online" target="_blank" rel="noopener noreferrer">sctd.vpugliese.online</a>
             <div class="help-header"><button id="helpBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button><h2 id="helpTitle" data-i18n="help_title">How it works</h2></div>
             <p class="help-copy" data-i18n="help_intro">Download tracks you own or have permission to download.</p>
             <div class="help-section"><h3 data-i18n="help_getting_started_title">Download from SoundCloud</h3><p data-i18n="help_getting_started">Open a track, playlist, Likes, or a user's Tracks page. Use the Download button here or the download button on the SoundCloud page.</p></div>
@@ -881,7 +881,7 @@
             <div class="help-section"><h3 data-i18n="help_format_title">Formats and quality</h3><p data-i18n="help_format">Auto selects the available stream. Original is available only when the artist has enabled an original download. Source quality varies by track.</p></div>
             <div class="help-section"><h3 data-i18n="help_progress_title">Progress and errors</h3><p data-i18n="help_progress">The status shows progress and saved files. If a track cannot be read or saved, retry after reloading SoundCloud or choosing the folder again.</p></div>
             <div class="help-section"><h3 data-i18n="help_looper_title">Looper</h3><p data-i18n="help_looper">On a compatible individual track, Looper lets you repeat an A–B section and export that selected range as WAV. It does not change full-track downloads.</p></div>
-            <div class="help-section"><h3 data-i18n="help_support_title">Support and reviews</h3><p data-i18n="help_support">Need help or want to share feedback? Use the links below.</p><div class="help-links"><a class="help-site-link" href="https://sctd.vpugliese.online" target="_blank" rel="noopener noreferrer" style="font-style: underline;">https://sctd.vpugliese.online</a><a class="popup-control-btn help-link" href="https://soundcloud.com/" target="_blank" data-i18n="open_soundcloud">Open SoundCloud</a><a class="popup-control-btn help-link" href="https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews" target="_blank" data-i18n="write_review">Write a Chrome Web Store review</a></div></div>
+            <div class="help-section"><h3 data-i18n="help_support_title">Support and reviews</h3><p data-i18n="help_support">Need help or want to share feedback? Use the links below.</p><div class="help-links"><a class="popup-control-btn help-link" href="https://soundcloud.com/" target="_blank" data-i18n="open_soundcloud">Open SoundCloud</a><a class="popup-control-btn help-link" href="https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews" target="_blank" data-i18n="write_review">Write a Chrome Web Store review</a></div></div>
         </section>
         <section id="looperPanel" aria-labelledby="looperTitle" aria-modal="true" role="dialog">
             <div class="looper-header"><button id="looperBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button><h2 id="looperTitle" data-i18n="looper_title">Loop the part you need.</h2></div>
