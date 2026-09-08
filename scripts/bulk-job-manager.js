@@ -30,6 +30,8 @@ const JOB_TRANSITIONS = Object.freeze({
     JOB_STATUS.RUNNING,
     ...TERMINAL_JOB_STATUSES,
   ]),
+  [JOB_STATUS.COMPLETED]: new Set([JOB_STATUS.RUNNING]),
+  [JOB_STATUS.FAILED]: new Set([JOB_STATUS.RUNNING]),
 });
 
 let jobControl = { jobId: null, state: null };
@@ -787,6 +789,39 @@ const BulkJobManager = {
     );
     if (!job) {
       return { success: false, error: "No paused job to resume." };
+    }
+    await startKeepalive();
+    runJobLoop(job.id);
+    broadcastJobUpdate(job);
+    return { success: true, job: getPublicJobSnapshot(job) };
+  },
+
+  async retryFailedJob() {
+    const job = await mutateJob(
+      null,
+      { statuses: [JOB_STATUS.COMPLETED, JOB_STATUS.FAILED], broadcast: false },
+      (value) => {
+        if (!value.failed?.length) return false;
+
+        value.trackStatus = value.trackStatus.map((status) =>
+          status === TRACK_STATUS.FAILED ? null : status
+        );
+        value.failed = [];
+        transitionJob(value, JOB_STATUS.RUNNING);
+        value.finishedAt = null;
+        value.error = null;
+        value.currentTrackTitle = null;
+        value.currentTrackStatus = null;
+        syncJobCountersFromTrackStatus(value);
+        jobControl = { jobId: value.id, state: JOB_STATUS.RUNNING };
+      }
+    );
+    if (!job || !job.trackStatus.includes(null)) {
+      return { success: false, error: "No failed tracks are available to retry." };
+    }
+
+    if (activeLoopPromise && activeLoopJobId === job.id) {
+      await activeLoopPromise;
     }
     await startKeepalive();
     runJobLoop(job.id);

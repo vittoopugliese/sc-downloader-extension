@@ -71,10 +71,23 @@
   }
 
   function findMedia(expectedDurationMs) {
-    for (const media of document.querySelectorAll("audio, video")) {
+    const connectedMedia = Array.from(document.querySelectorAll("audio, video"));
+    for (const media of connectedMedia) {
       remember(media);
     }
-    return Array.from(knownMedia)
+    for (const media of knownMedia) {
+      if (media.isConnected === false && media.paused) {
+        knownMedia.delete(media);
+      }
+    }
+    if (lastPlayingMedia?.isConnected === false && lastPlayingMedia.paused) {
+      lastPlayingMedia = null;
+    }
+
+    const candidates = connectedMedia.length > 0
+      ? connectedMedia
+      : Array.from(knownMedia);
+    return candidates
       .map((media) => ({ media, score: scoreMedia(media, expectedDurationMs) }))
       .filter((candidate) => candidate.score >= 0)
       .sort((left, right) => right.score - left.score)[0]?.media || null;

@@ -66,6 +66,7 @@ const source = fs
       initialTrackIdentity = identity;
     };
     globalThis.__handleLoopDownloadClick = handleDownloadClick;
+    globalThis.__resetLooper = reset;
     const looper = { ensureMounted: runEnsureMounted, reset, getState };`
   )
   .replace(
@@ -76,6 +77,7 @@ vm.runInContext(source, context, { filename: "looper.js" });
 
 const setFixture = vm.runInContext("globalThis.__setLoopDownloadFixture", context);
 const click = vm.runInContext("globalThis.__handleLoopDownloadClick", context);
+const reset = vm.runInContext("globalThis.__resetLooper", context);
 setFixture(
   { startMs: 1000, endMs: 4000, durationMs: 10000 },
   "url:https://soundcloud.com/artist/track"
@@ -121,6 +123,36 @@ const button = {
   assert.equal(button.dataset.scdlLoopDownloadState, "error");
   assert.equal(button.disabled, false);
   assert.equal(button.textContent, "", "Errors must not replace the arrow with text");
+
+  let resolvePendingDownload;
+  runtimeResponse = new Promise((resolve) => {
+    resolvePendingDownload = resolve;
+  });
+  const staleButton = { ...button, dataset: {}, isConnected: false };
+  const staleDownload = click({
+    currentTarget: staleButton,
+    preventDefault: noOp,
+    stopPropagation: noOp,
+  });
+  reset("navigation");
+  setFixture(
+    { startMs: 2000, endMs: 5000, durationMs: 10000 },
+    "url:https://soundcloud.com/artist/new-track"
+  );
+  runtimeResponse = { success: true };
+  const remountedButton = { ...button, dataset: {}, isConnected: true };
+  await click({
+    currentTarget: remountedButton,
+    preventDefault: noOp,
+    stopPropagation: noOp,
+  });
+  resolvePendingDownload({ success: true });
+  await staleDownload;
+  assert.equal(
+    remountedButton.dataset.scdlLoopDownloadState,
+    "success",
+    "A stale download completion must not overwrite the remounted Looper button"
+  );
 
   const looperSource = fs.readFileSync(
     path.resolve(__dirname, "looper.js"),

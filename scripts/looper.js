@@ -45,6 +45,7 @@ const SCLooper = (() => {
   let lastDebugStatus = null;
   let mediaBridgeRequestId = 0;
   let isLoopDownloading = false;
+  let loopDownloadOperationId = 0;
   let downloadResetTimeout = null;
   let selectionDrag = null;
   let zoomWindow = null;
@@ -1457,6 +1458,7 @@ const SCLooper = (() => {
       durationMs: range.durationMs,
     };
     const trackIdentity = initialTrackIdentity;
+    const operationId = loopDownloadOperationId += 1;
     isLoopDownloading = true;
     if (downloadResetTimeout) clearTimeout(downloadResetTimeout);
     setDownloadButtonState(button, "loading");
@@ -1479,12 +1481,14 @@ const SCLooper = (() => {
       if (!result?.success) {
         throw new Error(result?.error || t("looper_download_failed"));
       }
+      if (operationId !== loopDownloadOperationId) return;
       setDownloadButtonState(button, "success");
       downloadResetTimeout = setTimeout(() => {
         downloadResetTimeout = null;
         if (button.isConnected) setDownloadButtonState(button);
       }, 2500);
     } catch (error) {
+      if (operationId !== loopDownloadOperationId) return;
       console.error("SC Downloader loop download error:", error);
       setDownloadButtonState(
         button,
@@ -1492,6 +1496,7 @@ const SCLooper = (() => {
         error?.message || t("looper_download_failed")
       );
     } finally {
+      if (operationId !== loopDownloadOperationId) return;
       isLoopDownloading = false;
       if (
         button.isConnected &&
@@ -1872,6 +1877,10 @@ const SCLooper = (() => {
   }
 
   function reset(reason = "manual") {
+    loopDownloadOperationId += 1;
+    isLoopDownloading = false;
+    if (downloadResetTimeout) clearTimeout(downloadResetTimeout);
+    downloadResetTimeout = null;
     cancelPendingZoomRender();
     if (frameId !== null) cancelAnimationFrame(frameId);
     frameId = null;

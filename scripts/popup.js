@@ -35,6 +35,7 @@ const downloadBtn = document.getElementById("downloadBtn");
 const jobControls = document.getElementById("jobControls");
 const pauseJobBtn = document.getElementById("pauseJobBtn");
 const resumeJobBtn = document.getElementById("resumeJobBtn");
+const retryFailedJobBtn = document.getElementById("retryFailedJobBtn");
 const cancelJobBtn = document.getElementById("cancelJobBtn");
 const downloadStatus = document.getElementById("downloadStatus");
 const jobHint = document.getElementById("jobHint");
@@ -290,6 +291,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  retryFailedJobBtn.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ type: "RETRY_FAILED_BULK_JOB" }, (response) => {
+      if (response?.job) {
+        activeBulkJob = response.job;
+        renderBulkJobState(response.job);
+        startJobPolling();
+      }
+    });
+  });
+
   resetDownloadFolder.addEventListener("click", async () => {
     if (isDownloading) {
       return;
@@ -493,6 +504,7 @@ function renderBulkJobState(job) {
 
   pauseJobBtn.classList.toggle("is-hidden", job.status !== "running");
   resumeJobBtn.classList.toggle("is-hidden", job.status !== "paused");
+  retryFailedJobBtn.classList.add("is-hidden");
   cancelJobBtn.classList.toggle("is-hidden", !["running", "paused"].includes(job.status));
 
   if (job.status === "running" || job.status === "paused") {
@@ -515,7 +527,9 @@ function renderBulkJobSummary(job) {
   jobHint.classList.add("is-hidden");
   pauseJobBtn.classList.add("is-hidden");
   resumeJobBtn.classList.add("is-hidden");
+  retryFailedJobBtn.classList.toggle("is-hidden", !job.failed?.length);
   cancelJobBtn.classList.add("is-hidden");
+  jobControls.classList.toggle("is-visible", Boolean(job.failed?.length));
 
   if (job.status === "completed") {
     const destination = job.destinationName || `${t("downloads_folder")}/${job.folderName}`;

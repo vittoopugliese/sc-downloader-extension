@@ -49,6 +49,7 @@ class FakeAudio extends FakeMedia {}
 
 const documentListeners = new Map();
 const root = new FakeElement();
+let documentMedia = [];
 root.dispatchEvent = (event) => {
   event.target = root;
   documentListeners.get(event.type)?.(event);
@@ -61,7 +62,7 @@ const documentStub = {
     documentListeners.set(type, listener);
   },
   querySelectorAll() {
-    return [];
+    return documentMedia;
   },
 };
 const windowStub = {
@@ -114,5 +115,19 @@ assert.equal(state.state.currentTimeMs, 3000);
 
 assert.equal(command("seek", { timeMs: 12000 }).ok, true);
 assert.equal(media.currentTime, 12);
+
+media.play();
+const currentMedia = new FakeAudio("https://cf-media.sndcdn.com/current-track.mp3");
+currentMedia.isConnected = true;
+currentMedia.currentTime = 7;
+documentMedia = [currentMedia];
+assert.equal(
+  command("state").state.currentTimeMs,
+  7000,
+  "A connected current media element must win over a detached historical player"
+);
+assert.equal(command("seek", { timeMs: 15000 }).ok, true);
+assert.equal(currentMedia.currentTime, 15);
+assert.equal(media.currentTime, 12, "Seeking must not target the historical player");
 
 console.log("Looper MAIN-world bridge verification passed.");

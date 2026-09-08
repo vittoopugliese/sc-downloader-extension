@@ -213,6 +213,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "RESUME_BULK_JOB") {
     return respond(BulkJobManager.resumeJob(), sendResponse);
   }
+  if (request.type === "RETRY_FAILED_BULK_JOB") {
+    return respond(BulkJobManager.retryFailedJob(), sendResponse);
+  }
   if (request.type === "CANCEL_BULK_JOB") {
     return respond(BulkJobManager.cancelJob(), sendResponse);
   }

@@ -14,6 +14,7 @@ function createHarness(options = {}) {
   let active = 0;
   let maxActive = 0;
   let automatic = options.automatic !== false;
+  let failIds = new Set(options.failIds || []);
   const releases = [];
   const starts = [];
   const effects = { close: 0, notifications: 0, abort: 0 };
@@ -32,7 +33,7 @@ function createHarness(options = {}) {
           await new Promise((resolve) => setTimeout(resolve, 5));
         }
         if (await request.isCancelled?.()) return { cancelled: true };
-        if (options.failIds?.includes(request.trackData.id)) {
+        if (failIds.has(request.trackData.id)) {
           throw new Error(`failed ${request.trackData.id}`);
         }
         return { success: true, fileName: `${request.trackData.id}.mp3` };
@@ -106,6 +107,7 @@ function createHarness(options = {}) {
     get job() { return clone(storedJob); },
     releaseAll() { releases.splice(0).forEach((resolve) => resolve()); },
     setAutomatic(value) { automatic = value; },
+    setFailIds(ids) { failIds = new Set(ids); },
   };
 }
 
@@ -137,6 +139,14 @@ async function waitFor(predicate, label, timeout = 3000) {
   assert.equal(partial.maxActive, 2);
   assert.equal(partial.effects.notifications, 1);
   assert.equal(partial.effects.close, 1);
+  partial.setFailIds([]);
+  assert.equal((await partial.manager.retryFailedJob()).success, true);
+  await waitFor(
+    () => partial.job?.status === "completed" && partial.job.completed === 3,
+    "retried job"
+  );
+  assert.equal(partial.job.failed.length, 0);
+  assert.deepEqual(partial.starts, [1, 2, 3, 2], "Only failed tracks must be retried");
 
   const paused = createHarness({ automatic: false });
   await paused.manager.createJob(tracks(3), "Paused set");
