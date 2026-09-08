@@ -110,6 +110,17 @@ const documentStub = {
   getElementById: () => null,
   querySelector: () => null,
   querySelectorAll: () => [],
+  createElementNS: (_namespace, tagName) => ({
+    tagName,
+    attributes: {},
+    classList: { add: noOp },
+    setAttribute(name, value) {
+      this.attributes[name] = value;
+    },
+    appendChild(child) {
+      this.child = child;
+    },
+  }),
   addEventListener: noOp,
   removeEventListener: noOp,
 };
@@ -141,13 +152,38 @@ const lifecycleContext = vm.createContext({
   requestAnimationFrame: () => 1,
   cancelAnimationFrame: noOp,
 });
+const looperSource = fs.readFileSync(path.resolve(__dirname, "looper.js"), "utf8")
+  .replace(
+    "  const looper = { ensureMounted: runEnsureMounted, reset, getState };",
+    "  globalThis.__setLooperButtonState = setButtonState;\n  const looper = { ensureMounted: runEnsureMounted, reset, getState };"
+  );
 vm.runInContext(
-  fs.readFileSync(path.resolve(__dirname, "looper.js"), "utf8"),
+  looperSource,
   lifecycleContext
 );
 const looper = vm.runInContext("SCLooper", lifecycleContext);
 assert.doesNotThrow(() => looper.reset("first"));
 assert.doesNotThrow(() => looper.reset("second"));
 assert.deepEqual(plain(looper.getState()), { active: false });
+
+const rerenderedActiveButton = {
+  dataset: { scdlLoopState: "active" },
+  classList: { toggle: noOp },
+  querySelector: () => null,
+  replaceChildren(child) {
+    this.child = child;
+  },
+  setAttribute: noOp,
+};
+vm.runInContext("globalThis.__setLooperButtonState", lifecycleContext)(
+  rerenderedActiveButton,
+  true,
+  true
+);
+assert.equal(
+  rerenderedActiveButton.child?.child?.attributes.d,
+  "M6 6l12 12M18 6L6 18",
+  "An active loop button must restore its close icon after SoundCloud rerenders it"
+);
 
 console.log("Looper verification passed.");

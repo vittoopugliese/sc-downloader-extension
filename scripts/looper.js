@@ -65,6 +65,13 @@ const SCLooper = (() => {
     if (!value) return null;
     try {
       const url = new URL(value, window.location.origin);
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (
+        parts.length === 3 &&
+        parts[2].toLowerCase() === "comments"
+      ) {
+        url.pathname = `/${parts[0]}/${parts[1]}`;
+      }
       url.hash = "";
       url.search = "";
       return url.toString().replace(/\/$/, "");
@@ -123,10 +130,15 @@ const SCLooper = (() => {
       "stations",
       "charts",
     ]);
+    const isTrackCommentsRoute =
+      parts.length === 3 &&
+      parts[2].toLowerCase() === "comments" &&
+      ![parts[0], parts[1]].some((part) => reserved.has(part.toLowerCase()));
     return (
       parts.length >= 2 &&
       parts.length <= 3 &&
-      !parts.some((part) => reserved.has(part.toLowerCase()))
+      (isTrackCommentsRoute ||
+        !parts.some((part) => reserved.has(part.toLowerCase())))
     );
   }
 
@@ -791,7 +803,10 @@ const SCLooper = (() => {
     button.classList.toggle("scdl-loop-active", active);
     button.classList.toggle("scdl-loop-unavailable", !available);
     const visualState = active ? "active" : "idle";
-    if (button.dataset.scdlLoopState !== visualState) {
+    if (
+      button.dataset.scdlLoopState !== visualState ||
+      !button.querySelector(".scdl-loop-button-icon")
+    ) {
       button.replaceChildren(loopIcon(active));
       button.dataset.scdlLoopState = visualState;
     }
@@ -1419,6 +1434,36 @@ const SCLooper = (() => {
     setDownloadButtonState(view.downloadButton);
   }
 
+  // SoundCloud can rebuild the action row while the orange A-B selection is
+  // being interacted with. Reinsert the loop control synchronously at that
+  // seam so the active loop can always be closed.
+  function forceMountLoopButton() {
+    if (!range) return;
+    const discovered = discoverTarget();
+    const menuButton = view?.menuButton?.isConnected
+      ? view.menuButton
+      : discovered?.menuButton;
+    const parent = menuButton?.parentElement;
+    if (!parent) return;
+
+    if (!view) {
+      if (discovered) mountView(discovered);
+      return;
+    }
+
+    if (
+      !view.button?.isConnected ||
+      view.button.parentElement !== parent
+    ) {
+      view.button?.remove();
+      const button = createButton(menuButton);
+      parent.insertBefore(button, menuButton);
+      view.button = button;
+      view.menuButton = menuButton;
+    }
+    setButtonState(view.button, true, true);
+  }
+
   function identityUrl(identity) {
     return typeof identity === "string" && identity.startsWith("url:")
       ? normalizeUrl(identity.slice(4))
@@ -1508,6 +1553,7 @@ const SCLooper = (() => {
   }
 
   function stopMarkerEvent(event) {
+    forceMountLoopButton();
     event.preventDefault();
     event.stopPropagation();
   }
@@ -1518,6 +1564,7 @@ const SCLooper = (() => {
   }
 
   function handleSelectionClick(event) {
+    forceMountLoopButton();
     if (zoomWindow) {
       handleZoomInteractionClick(event);
       return;
@@ -1625,6 +1672,7 @@ const SCLooper = (() => {
 
   function handleSelectionPointerDown(event) {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    forceMountLoopButton();
     stopMarkerEvent(event);
     selectionDrag = {
       pointerId: event.pointerId,
@@ -1789,7 +1837,7 @@ const SCLooper = (() => {
     frameId = null;
     if (!range || !player) return;
 
-    if (window.location.href !== initialUrl) {
+    if (normalizeUrl(window.location.href) !== initialUrl) {
       reset("navigation");
       return;
     }
@@ -1845,7 +1893,7 @@ const SCLooper = (() => {
     player = nextPlayer;
     range = initialRange;
     zoomWindow = null;
-    initialUrl = window.location.href;
+    initialUrl = normalizeUrl(window.location.href);
     initialTrackIdentity = player.getTrackIdentity();
     lastSeekAttemptAt = Number.NEGATIVE_INFINITY;
     lastTrackIdentityCheckAt = Number.NEGATIVE_INFINITY;
@@ -1929,7 +1977,7 @@ const SCLooper = (() => {
   }
 
   function ensureMounted() {
-    if (range && window.location.href !== initialUrl) {
+    if (range && normalizeUrl(window.location.href) !== initialUrl) {
       reset("navigation");
       return false;
     }
@@ -1995,7 +2043,9 @@ const SCLooper = (() => {
     discoveryObserver = new MutationObserver(() => scheduleEnsure());
     discoveryObserver.observe(document.body, { childList: true, subtree: true });
     contextInterval = setInterval(() => {
-      if (range && window.location.href !== initialUrl) reset("navigation");
+      if (range && normalizeUrl(window.location.href) !== initialUrl) {
+        reset("navigation");
+      }
       scheduleEnsure(0);
     }, 750);
     window.addEventListener("popstate", scheduleEnsure);

@@ -129,10 +129,12 @@ async function waitForFile(directory, timeoutMs = 30000) {
             };
             window.enterFixtureCommentMode = () => {
               window.commentModeOpenCount += 1;
+              history.pushState({}, "", "/artist/loop-regression/comments");
               const closeButton = document.createElement("button");
               closeButton.className = "comment-close";
               closeButton.textContent = "×";
               closeButton.addEventListener("click", () => {
+                history.pushState({}, "", "/artist/loop-regression");
                 actionsElement.replaceChildren(createMoreButton());
               });
               actionsElement.replaceChildren(closeButton);
@@ -164,9 +166,30 @@ async function waitForFile(directory, timeoutMs = 30000) {
     const loopButton = page.locator("[data-scdl-looper]");
     await loopButton.waitFor();
     await loopButton.click();
+    const overlay = page.locator("[data-scdl-loop-overlay]");
     const startMarker = page.locator('[data-scdl-loop-overlay] [data-marker="start"]');
     const endMarker = page.locator('[data-scdl-loop-overlay] [data-marker="end"]');
     await endMarker.waitFor();
+    await loopButton.evaluate((button) => button.replaceChildren());
+    await page.waitForTimeout(1000);
+    assert.equal(
+      await loopButton.locator(".scdl-loop-button-icon").count(),
+      1,
+      await page.evaluate(() => JSON.stringify({
+        button: document.querySelector("[data-scdl-looper]")?.outerHTML,
+        debug: document.documentElement.getAttribute("data-scdl-looper-debug"),
+      }))
+    );
+    assert.equal(
+      await loopButton.getAttribute("aria-pressed"),
+      "true",
+      "An active loop button whose contents SoundCloud rerenders must restore its close icon"
+    );
+    assert.equal(
+      await loopButton.locator(".scdl-loop-button-icon path").getAttribute("d"),
+      "M6 6l12 12M18 6L6 18",
+      "The remounted active loop control must show the close cross"
+    );
     const waveform = page.locator('[role="slider"][aria-label="Waveform"]');
     const waveformBox = await waveform.boundingBox();
     const selection = page.locator(".scdl-loop-selection");
@@ -175,6 +198,15 @@ async function waitForFile(directory, timeoutMs = 30000) {
       x: selectionBox.x + selectionBox.width / 2,
       y: selectionBox.y + selectionBox.height * 0.8,
     };
+    await page.evaluate(() => document.querySelector("[data-scdl-looper]")?.remove());
+    await page.mouse.move(selectionClickPoint.x, selectionClickPoint.y);
+    await page.mouse.down();
+    assert.equal(
+      await page.locator("[data-scdl-looper]").count(),
+      1,
+      "Touching the orange selection must imperatively reinsert the loop button"
+    );
+    await page.mouse.up();
     const wheelRouting = await page.evaluate(({ waveformPoint, selectionPoint }) => {
       const waveformElement = document.querySelector('[role="slider"][aria-label="Waveform"]');
       const selectionElement = document.querySelector(".scdl-loop-selection-drag");
@@ -230,6 +262,20 @@ async function waitForFile(directory, timeoutMs = 30000) {
       rangeBeforeCommentMode,
       "Closing comment mode must remount the looper controls without losing A-B"
     );
+    assert.equal(
+      await loopButton.locator(".scdl-loop-button-icon path").getAttribute("d"),
+      "M6 6l12 12M18 6L6 18",
+      "Closing comment mode must restore the active loop close icon"
+    );
+    await loopButton.click();
+    await overlay.waitFor({ state: "detached" });
+    assert.equal(
+      await page.locator("[data-scdl-looper]").getAttribute("aria-pressed"),
+      "false",
+      "The restored close icon must deactivate the loop"
+    );
+    await page.locator("[data-scdl-looper]").click();
+    await page.locator('[data-scdl-loop-overlay] [data-marker="end"]').waitFor();
     await waveform.evaluate((element, point) => {
       const event = new WheelEvent("wheel", {
         bubbles: true,
