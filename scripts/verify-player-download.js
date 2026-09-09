@@ -19,6 +19,7 @@ const messageCalls = [];
 const context = vm.createContext({
   console,
   URL,
+  CustomEvent,
   AbortController,
   setTimeout,
   clearTimeout,
@@ -26,8 +27,13 @@ const context = vm.createContext({
   window: { location },
   location,
   document: {
-    documentElement: { innerHTML: 'window.client_id="client-test-12345678901234567890"' },
+    documentElement: {
+      innerHTML: 'window.client_id="client-test-12345678901234567890"',
+      setAttribute() {},
+    },
     querySelectorAll: () => [],
+    addEventListener() {},
+    dispatchEvent() {},
   },
   MutationObserver: class {
     observe() {}
@@ -35,6 +41,7 @@ const context = vm.createContext({
   chrome: {
     runtime: {
       onMessage: { addListener() {} },
+      getURL: (value) => `chrome-extension://test/${value}`,
       sendMessage: (message) => {
         messageCalls.push(message);
         return Promise.resolve({ success: true });
@@ -87,8 +94,20 @@ const playerButton = {
   classList: { add() {}, remove() {} },
   setAttribute() {},
 };
+const tempoHost = {
+  getAttribute: (name) =>
+    name === "data-scdl-tempo-rate"
+      ? "1.5"
+      : name === "data-scdl-tempo-preserve-pitch"
+        ? "true"
+        : null,
+};
 context.document.getElementById = (id) =>
-  id === "scdl-player-download" ? playerButton : null;
+  id === "scdl-player-download"
+    ? playerButton
+    : id === "scdl-tempo-control"
+      ? tempoHost
+      : null;
 
 const inlinePath = path.resolve(__dirname, "inline-button.js");
 const intentPath = path.resolve(__dirname, "download-intent.js");
@@ -122,7 +141,12 @@ vm.runInContext(inlineCode, context, { filename: inlinePath });
   const downloadMessage = messageCalls.find(
     (message) => message.type === "DOWNLOAD_SINGLE_TRACK"
   );
-  if (!downloadMessage?.trackData || downloadMessage.formatPreference !== "auto") {
+  if (
+    !downloadMessage?.trackData ||
+    downloadMessage.formatPreference !== "auto" ||
+    downloadMessage.playbackTransform?.rate !== 1.5 ||
+    downloadMessage.playbackTransform?.preservePitch !== true
+  ) {
     throw new Error("The player click did not start the single-track download flow.");
   }
 

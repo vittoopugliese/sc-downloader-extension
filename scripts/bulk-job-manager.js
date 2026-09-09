@@ -622,7 +622,8 @@ const BulkJobManager = {
   async downloadSingleTrack(
     trackData,
     formatPreference = "auto",
-    downloadDestination = null
+    downloadDestination = null,
+    playbackTransform = null
   ) {
     await withJobState(async () => {
       const activeJobBeforeDownload = await loadJob();
@@ -646,6 +647,7 @@ const BulkJobManager = {
         trackData,
         formatPreference: formatPreference || "auto",
         destination: resolvedDestination,
+        playbackTransform,
       });
     } finally {
       singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);

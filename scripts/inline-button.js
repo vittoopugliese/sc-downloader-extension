@@ -14,6 +14,14 @@ let playerTrackUrl = null;
 let successResetTimeout = null;
 let playerSuccessResetTimeout = null;
 
+function readPlayerPlaybackTransform() {
+  const host = document.getElementById("scdl-tempo-control");
+  const rate = Number(host?.getAttribute("data-scdl-tempo-rate"));
+  const preservePitch = host?.getAttribute("data-scdl-tempo-preserve-pitch") === "true";
+  if (!Number.isFinite(rate)) return null;
+  return { rate, preservePitch };
+}
+
 function injectInlineStyles() {
   if (document.getElementById(INLINE_STYLES_ID)) return;
 
@@ -605,6 +613,7 @@ async function handlePlayerDownloadClick() {
     const result = await withPlayerDownloadTimeout(
       inlineDownloadIntent.downloadTrack(trackData, {
         formatPreference: "auto",
+        playbackTransform: readPlayerPlaybackTransform(),
       }),
       translate("download_timeout")
     );

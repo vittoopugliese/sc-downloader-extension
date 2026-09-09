@@ -9,6 +9,7 @@ const decodedAudio = {
   sampleRate: 4,
   numberOfChannels: 1,
   length: 8,
+  duration: 2,
   getChannelData() {
     return new Float32Array([0, 0.25, 0.5, 0.75, 1, -1, -0.5, 0]);
   },
@@ -114,6 +115,27 @@ const download = vm.runInContext("SCDownload", context);
   assert.equal((await transformed.blob.arrayBuffer()).byteLength, 60);
   assert.match(transformedProgress.join("\n"), /Rendering loop at 0.5x/);
 
+  const fullTrackProgress = [];
+  const fullTrack = await download.buildTrackBlob(
+    "https://example.com/audio.mp3",
+    {
+      artist: "Artist",
+      title: "Track",
+      streamProtocol: "progressive",
+      streamMimeType: "audio/mpeg",
+    },
+    (value) => fullTrackProgress.push(value),
+    undefined,
+    null,
+    { rate: 0.5, preservePitch: false }
+  );
+  assert.equal(
+    fullTrack.fileName,
+    "Artist - Track (0.5x natural pitch).wav"
+  );
+  assert.equal((await fullTrack.blob.arrayBuffer()).byteLength, 76);
+  assert.match(fullTrackProgress.join("\n"), /Rendering loop at 0.5x/);
+
   await assert.rejects(
     download.buildTrackBlob(
       "https://example.com/audio.mp3",
@@ -124,7 +146,7 @@ const download = vm.runInContext("SCDownload", context);
     ),
     /selected loop range is invalid/
   );
-  assert.equal(fetchCount, 2, "Invalid ranges must fail before downloading audio");
+  assert.equal(fetchCount, 3, "Invalid ranges must fail before downloading audio");
 
   const looperSource = fs.readFileSync(
     path.resolve(__dirname, "looper.js"),

@@ -20,6 +20,7 @@ const SCDownloadIntent = (() => {
         trackData: track,
         formatPreference:
           options.formatPreference || track.formatPreference || "auto",
+        playbackTransform: options.playbackTransform || null,
         downloadDestination: options.downloadDestination ?? null,
       });
     }

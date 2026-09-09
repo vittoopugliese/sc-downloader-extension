@@ -384,6 +384,72 @@ const SCDownload = (() => {
     }
   }
 
+  function hasPlaybackTransform(playbackTransform) {
+    const rate = Number(playbackTransform?.rate);
+    return Number.isFinite(rate) && Math.abs(rate - 1) > 0.0001;
+  }
+
+  async function finalizeTransformedBlob(
+    trackData,
+    buffer,
+    playbackTransform,
+    onProgress,
+    signal
+  ) {
+    throwIfAborted(signal);
+    const AudioContextConstructor =
+      globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (typeof AudioContextConstructor !== "function") {
+      throw new Error("This browser cannot decode audio to apply playback speed.");
+    }
+
+    onProgress?.("Decoding audio...");
+    const audioContext = new AudioContextConstructor();
+    try {
+      const sourceBuffer =
+        buffer instanceof ArrayBuffer
+          ? buffer.slice(0)
+          : buffer.buffer.slice(
+              buffer.byteOffset,
+              buffer.byteOffset + buffer.byteLength
+            );
+      const decoded = await audioContext.decodeAudioData(sourceBuffer);
+      throwIfAborted(signal);
+      const renderer = globalThis.SCLoopAudioRenderer;
+      if (!renderer?.normalizeTransform || !renderer?.render) {
+        throw new Error("The audio renderer is unavailable.");
+      }
+      const transform = renderer.normalizeTransform(playbackTransform);
+      const rendered = await renderer.render(
+        decoded,
+        { startMs: 0, endMs: decoded.duration * 1000 },
+        transform,
+        { onProgress, signal }
+      );
+      throwIfAborted(signal);
+      onProgress?.("Encoding WAV...");
+      const wavBytes = encodeWavSegment(rendered, {
+        startMs: 0,
+        endMs: (rendered.length / rendered.sampleRate) * 1000,
+      }, signal);
+      const rateLabel = String(Number(Number(transform.rate).toFixed(3)));
+      const pitchLabel = transform.preservePitch ? "preserve pitch" : "natural pitch";
+      return {
+        blob: new Blob([wavBytes], { type: "audio/wav" }),
+        fileName: sanitizeFilename(
+          { ...trackData, title: `${trackData?.title || "Untitled"} (${rateLabel}x ${pitchLabel})` },
+          "wav"
+        ),
+      };
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      if (error?.message?.includes("could not be decoded")) throw error;
+      throw new Error(`The downloaded audio could not be processed: ${error.message}`);
+    } finally {
+      await audioContext.close?.().catch?.(() => {});
+    }
+  }
+
   async function buildTrackBlob(
     streamUrl,
     trackData,
@@ -403,6 +469,15 @@ const SCDownload = (() => {
     if (isDirectDownload) {
       onProgress?.("Downloading file...");
       const buffer = await fetchBufferOrThrow(streamUrl, "File download", signal);
+      if (hasPlaybackTransform(playbackTransform) && !normalizedTrimRange) {
+        return finalizeTransformedBlob(
+          trackData,
+          buffer,
+          playbackTransform,
+          onProgress,
+          signal
+        );
+      }
       if (normalizedTrimRange) {
         return finalizeLoopBlob(
           trackData,
@@ -445,6 +520,15 @@ const SCDownload = (() => {
 
       onProgress?.("Preparing file...");
       const combined = combineChunks(chunks);
+      if (hasPlaybackTransform(playbackTransform) && !normalizedTrimRange) {
+        return finalizeTransformedBlob(
+          trackData,
+          combined,
+          playbackTransform,
+          onProgress,
+          signal
+        );
+      }
       if (normalizedTrimRange) {
         return finalizeLoopBlob(
           trackData,

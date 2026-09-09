@@ -106,7 +106,7 @@
         [hidden] { display: none !important; }
 
         .trigger {
-          width: 48px;
+          width: 64px;
           height: 34px;
           margin: 0;
           margin-left: 6px;
@@ -124,14 +124,15 @@
         .trigger:hover { color: #abababff; }
         .trigger-icon {
           display: block;
-          width: 20px;
-          height: 20px;
+          flex: 0 0 24px;
+          width: 24px;
+          height: 24px;
           fill: currentColor;
         }
 
         .trigger-rate {
-          flex: 0 0 6ch;
-          width: 6ch;
+          flex: 0 0 4ch;
+          width: 4ch;
           font-variant-numeric: tabular-nums;
           margin-left: 2px;
           color: #ff6c23ff;
@@ -139,7 +140,6 @@
           font-weight: 600;
           line-height: 1;
           position:relative;
-          right: 9px;
           transform: translateY(5px);
         }
         .trigger:focus-visible,
@@ -524,8 +524,9 @@
     if (!ui) return;
     const state = controller.snapshot();
     const text = formatRate(state.effectiveRate);
-    ui.trigger.querySelector(".trigger-rate").textContent = text;
-    ui.trigger.setAttribute("aria-label", `Playback speed ${text}`);
+    const triggerText = `${(Math.floor(Number(state.effectiveRate) * 10 + 1e-9) / 10).toFixed(1)}x`;
+    ui.trigger.querySelector(".trigger-rate").textContent = triggerText;
+    ui.trigger.setAttribute("aria-label", `Playback speed ${triggerText}`);
     ui.slider.value = String(state.rate);
     ui.slider.setAttribute("aria-valuetext", formatRate(state.rate));
     ui.bypass.setAttribute("aria-pressed", String(state.bypassed));

@@ -194,7 +194,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     BulkJobManager.downloadSingleTrack(
       request.trackData,
       request.formatPreference || "auto",
-      request.downloadDestination ?? null
+      request.downloadDestination ?? null,
+      request.playbackTransform || null
     )
       .then(sendResponse)
       .catch((error) => sendResponse(errorResponse(error)));
