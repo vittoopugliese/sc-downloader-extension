@@ -221,6 +221,18 @@
   "help_support": {
     "message": "¿Necesitás ayuda o querés dejar feedback? Usá los enlaces de abajo."
   },
+  "message_on_soundcloud": {
+    "message": "Escribime por SC"
+  },
+  "made_with": {
+    "message": "Hecho con"
+  },
+  "by": {
+    "message": "por"
+  },
+  "sctd_web": {
+    "message": "SCTD Web"
+  },
   "open_soundcloud": {
     "message": "Abrir SoundCloud"
   },

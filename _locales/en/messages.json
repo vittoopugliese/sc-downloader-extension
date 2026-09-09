@@ -221,6 +221,18 @@
   "help_support": {
     "message": "Need help or want to share feedback? Use the links below."
   },
+  "message_on_soundcloud": {
+    "message": "Message me on SC"
+  },
+  "made_with": {
+    "message": "Made with"
+  },
+  "by": {
+    "message": "by"
+  },
+  "sctd_web": {
+    "message": "SCTD Web"
+  },
   "open_soundcloud": {
     "message": "Open SoundCloud"
   },

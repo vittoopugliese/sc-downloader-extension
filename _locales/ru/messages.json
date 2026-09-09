@@ -206,6 +206,18 @@
   "help_support": {
     "message": "Нужна помощь или хотите оставить отзыв? Используйте ссылки ниже."
   },
+  "message_on_soundcloud": {
+    "message": "Написать мне в SC"
+  },
+  "made_with": {
+    "message": "Сделано с"
+  },
+  "by": {
+    "message": "автор"
+  },
+  "sctd_web": {
+    "message": "SCTD Web"
+  },
   "open_soundcloud": {
     "message": "Открыть SoundCloud"
   },
