@@ -35,10 +35,86 @@
   Object.defineProperty(window, INSTALLED_FLAG, { value: true });
 
   const { DEFAULTS, clampRate, create, formatRate } = globalThis.SCTempoControl;
+  const RATE_ANIMATION_DURATION_MS = 220;
   let ui = null;
   let mountQueued = false;
   let playbackFailure = "";
   let storageFailure = "";
+  let rateAnimationFrame = null;
+  let rateAnimationTarget = null;
+  let displayedRate = null;
+  let animateNextRateChange = false;
+  const reducedMotionQuery =
+    typeof matchMedia === "function"
+      ? matchMedia("(prefers-reduced-motion: reduce)")
+      : null;
+
+  function prefersReducedMotion() {
+    return reducedMotionQuery?.matches === true;
+  }
+
+  // Perlin's smootherstep: soft at both ends without the extra machinery of
+  // a CSS animation or a second DOM tree.
+  function smootherstep(progress) {
+    return progress * progress * progress * (progress * (progress * 6 - 15) + 10);
+  }
+
+  function formatTriggerRate(rate) {
+    return `${(Math.floor(Number(rate) * 10 + 1e-9) / 10).toFixed(1)}x`;
+  }
+
+  function cancelRateAnimation() {
+    if (rateAnimationFrame !== null) cancelAnimationFrame(rateAnimationFrame);
+    rateAnimationFrame = null;
+    rateAnimationTarget = null;
+  }
+
+  function setDisplayedRate(rate) {
+    if (!ui) return;
+    ui.triggerRate.textContent = formatTriggerRate(rate);
+    ui.current.textContent = formatRate(rate);
+    displayedRate = rate;
+  }
+
+  function renderRate(target, animate) {
+    if (!ui) return;
+
+    // A non-rate render (for example Keep Tone) must not interrupt a rate
+    // transition that is already heading to this exact target.
+    if (!animate && rateAnimationFrame !== null && rateAnimationTarget === target) {
+      return;
+    }
+
+    if (!animate || prefersReducedMotion()) {
+      cancelRateAnimation();
+      if (displayedRate !== target) setDisplayedRate(target);
+      return;
+    }
+
+    if (rateAnimationFrame !== null && rateAnimationTarget === target) return;
+
+    cancelRateAnimation();
+    const origin = Number.isFinite(displayedRate) ? displayedRate : target;
+    if (origin === target) {
+      setDisplayedRate(target);
+      return;
+    }
+
+    rateAnimationTarget = target;
+    const startedAt = performance.now();
+    const step = (now) => {
+      const progress = Math.min((now - startedAt) / RATE_ANIMATION_DURATION_MS, 1);
+      setDisplayedRate(origin + (target - origin) * smootherstep(progress));
+      if (progress < 1 && !prefersReducedMotion()) {
+        rateAnimationFrame = requestAnimationFrame(step);
+        return;
+      }
+      rateAnimationFrame = null;
+      rateAnimationTarget = null;
+      setDisplayedRate(target);
+    };
+    rateAnimationFrame = requestAnimationFrame(step);
+  }
 
   function syncBrandLogo() {
     if (!ui) return;
@@ -487,6 +563,7 @@
       slider: root.querySelector(".slider"),
       pitchToggle: root.querySelector(".pitch-toggle"),
       current: root.querySelector(".current"),
+      triggerRate: root.querySelector(".trigger-rate"),
       bypass: root.querySelector(".bypass"),
       status: root.querySelector(".status"),
       brandLogo: root.querySelector(".brand-logo"),
@@ -502,31 +579,30 @@
     root.querySelectorAll(".preset").forEach((button) => {
       button.addEventListener("click", () => {
         playbackFailure = "";
+        animateNextRateChange = true;
         const state = controller.setRate(Number(button.dataset.rate));
         writeSetting(RATE_STORAGE, state.rate);
-        render();
       });
     });
     ui.slider.addEventListener("input", () => {
       playbackFailure = "";
       const state = controller.setRate(ui.slider.valueAsNumber);
       writeSetting(RATE_STORAGE, state.rate);
-      render();
     });
     ui.slider.addEventListener("dblclick", () => {
       playbackFailure = "";
+      animateNextRateChange = true;
       const state = controller.setRate(DEFAULTS.rate);
       writeSetting(RATE_STORAGE, state.rate);
-      render();
     });
     ui.pitchToggle.addEventListener("change", () => {
       playbackFailure = "";
       const state = controller.setPreservePitch(ui.pitchToggle.checked);
       writeSetting(PITCH_STORAGE, state.preservePitch);
-      render();
     });
     ui.bypass.addEventListener("click", () => {
       playbackFailure = "";
+      animateNextRateChange = true;
       controller.setBypassed(!controller.snapshot().bypassed);
     });
 
@@ -539,8 +615,9 @@
     if (!ui) return;
     const state = controller.snapshot();
     const text = formatRate(state.effectiveRate);
-    const triggerText = `${(Math.floor(Number(state.effectiveRate) * 10 + 1e-9) / 10).toFixed(1)}x`;
-    ui.trigger.querySelector(".trigger-rate").textContent = triggerText;
+    const triggerText = formatTriggerRate(state.effectiveRate);
+    const animateRate = animateNextRateChange;
+    animateNextRateChange = false;
     ui.trigger.setAttribute("aria-label", `Playback speed ${triggerText}`);
     ui.slider.value = String(state.rate);
     ui.slider.setAttribute("aria-valuetext", formatRate(state.rate));
@@ -552,7 +629,7 @@
     syncRange(ui.slider);
     ui.pitchToggle.checked = state.preservePitch;
     ui.pitchToggle.disabled = !state.preservePitchSupported;
-    ui.current.textContent = text;
+    renderRate(state.effectiveRate, animateRate);
     ui.host.setAttribute(RATE_ATTRIBUTE, String(state.effectiveRate));
     ui.host.setAttribute(PITCH_ATTRIBUTE, String(state.preservePitch));
     const message = playbackFailure || storageFailure;

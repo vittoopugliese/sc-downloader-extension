@@ -216,8 +216,33 @@ async function main() {
       }
     }
     await host.locator('.preset[data-rate="1"]').click();
+    if (await page.locator('audio').evaluate((audio) => audio.playbackRate) !== 1) {
+      throw new Error('A preset must apply to audio immediately while its label animates.');
+    }
+    await page.waitForTimeout(80);
+    const midAnimation = await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      return {
+        current: root.querySelector('.current').textContent,
+        trigger: root.querySelector('.trigger-rate').textContent,
+      };
+    });
+    if (
+      midAnimation.current === '1.000x' ||
+      midAnimation.trigger === '1.0x'
+    ) {
+      throw new Error('Speed indicators did not animate during a preset change.');
+    }
+    await page.waitForTimeout(180);
+    if (
+      await host.locator('.current').textContent() !== '1.000x' ||
+      await host.locator('.trigger-rate').textContent() !== '1.0x'
+    ) {
+      throw new Error('Preset animation did not settle on the selected speed.');
+    }
     await host.locator('.preset[data-rate="0.5"]').click();
     await host.locator('.bypass').click();
+    await page.waitForTimeout(240);
     if (await page.locator('audio').evaluate((audio) => audio.playbackRate) !== 1 ||
         await host.locator('.slider').inputValue() !== '0.5' ||
         !(await host.locator('.pitch-toggle').isChecked()) ||
@@ -237,7 +262,7 @@ async function main() {
       if (await page.locator('audio').evaluate((audio) => audio.playbackRate) !== rate ||
           await host.locator('.slider').inputValue() !== String(rate) ||
           await host.locator('.current').textContent() !== label ||
-          await host.locator('.trigger-rate').textContent() !== label) {
+          await host.locator('.trigger-rate').textContent() !== '1.3x') {
         throw new Error(`Half-step playback or three-decimal display failed at ${rate}.`);
       }
       const layout = await host.evaluate((element) =>
@@ -252,10 +277,19 @@ async function main() {
       stableLayout = JSON.stringify(layout);
     }
     await host.locator('.bypass').click();
+    await page.waitForTimeout(240);
     if (await host.locator('.current').textContent() !== '1.000x') {
       throw new Error('Bypass display must keep three decimal places.');
     }
     await host.locator('.bypass').click();
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await host.locator('.preset[data-rate="3"]').click();
+    if (
+      await host.locator('.current').textContent() !== '3.000x' ||
+      await host.locator('.trigger-rate').textContent() !== '3.0x'
+    ) {
+      throw new Error('Reduced motion must show the selected speed immediately.');
+    }
 
     fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
     await page.screenshot({ path: screenshotPath });

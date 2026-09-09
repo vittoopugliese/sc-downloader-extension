@@ -31,13 +31,13 @@ editar el rango sin duplicar lógica
 La recomendación es:
 
 1. extraer un módulo profundo `SCLoopSession` que sea la única fuente de verdad de
-   `{ active, startMs, endMs, durationMs, trackIdentity }`;
+ `{ active, startMs, endMs, durationMs, trackIdentity }`;
 2. conservar `SCLooperCore` para normalización y matemáticas del rango;
 3. hacer que waveform y panel sean dos adapters de la misma interface;
 4. ampliar el bridge MAIN existente para controlar el media activo, en vez de
-   copiar el interceptor y temporizador del repo externo;
+ copiar el interceptor y temporizador del repo externo;
 5. desacoplar la vida del loop de `location.href`: el loop debe pertenecer al track
-   que realmente está sonando.
+ que realmente está sonando.
 
 Esto permite decidir el layout después. Tabs y vista combinada pasan a ser dos
 presentaciones intercambiables sobre el mismo módulo.
@@ -166,18 +166,18 @@ crear la sesión.
 El repo confirma el comportamiento buscado sin depender de una waveform:
 
 - `inject.js` corre en MAIN a `document_start` y `content.js` en isolated world
-  ([`repos/soundcloud-looper-extension-main/manifest.json:20-32`](../repos/soundcloud-looper-extension-main/manifest.json));
+([`repos/soundcloud-looper-extension-main/manifest.json:20-32`](../repos/soundcloud-looper-extension-main/manifest.json));
 - intercepta `HTMLMediaElement.prototype.play` para capturar incluso el audio
-  detached ([`repos/soundcloud-looper-extension-main/inject.js:18-30`](../repos/soundcloud-looper-extension-main/inject.js));
+detached ([`repos/soundcloud-looper-extension-main/inject.js:18-30`](../repos/soundcloud-looper-extension-main/inject.js));
 - cada 100 ms lee `currentTime` y, al alcanzar `end - 0.05`, asigna
-  `currentTime = start`
-  ([`repos/soundcloud-looper-extension-main/inject.js:32-48`](../repos/soundcloud-looper-extension-main/inject.js));
+`currentTime = start`
+([`repos/soundcloud-looper-extension-main/inject.js:32-48`](../repos/soundcloud-looper-extension-main/inject.js));
 - la UI captura A o B usando la posición que recibe del bridge y permite edición
-  textual ([`repos/soundcloud-looper-extension-main/content.js:42-75`](../repos/soundcloud-looper-extension-main/content.js),
-  [`repos/soundcloud-looper-extension-main/content.js:244-283`](../repos/soundcloud-looper-extension-main/content.js));
+textual ([`repos/soundcloud-looper-extension-main/content.js:42-75`](../repos/soundcloud-looper-extension-main/content.js),
+[`repos/soundcloud-looper-extension-main/content.js:244-283`](../repos/soundcloud-looper-extension-main/content.js));
 - opcionalmente guarda un loop por pathname en `chrome.storage.sync`
-  ([`repos/soundcloud-looper-extension-main/content.js:16-24`](../repos/soundcloud-looper-extension-main/content.js),
-  [`repos/soundcloud-looper-extension-main/content.js:77-114`](../repos/soundcloud-looper-extension-main/content.js)).
+([`repos/soundcloud-looper-extension-main/content.js:16-24`](../repos/soundcloud-looper-extension-main/content.js),
+[`repos/soundcloud-looper-extension-main/content.js:77-114`](../repos/soundcloud-looper-extension-main/content.js)).
 
 La idea reutilizable es “capturar A/B en la posición viva del player y repetir
 sobre el media real”. No hace falta portar su panel flotante para obtenerla.
@@ -187,7 +187,7 @@ sobre el media real”. No hace falta portar su panel flotante para obtenerla.
 El repo externo:
 
 - elige simplemente el último `HTMLMediaElement` que hizo `play()`, sin comparar
-  duración, source, estado ni identidad;
+duración, source, estado ni identidad;
 - identifica el track por `location.pathname`, no por la canción del player;
 - no valida `start < end`, duración, valores finitos ni rango mínimo;
 - usa `postMessage("*")` con un namespace público y sin request IDs;
@@ -315,10 +315,10 @@ Reglas propuestas:
 - navegar por feed/perfil no destruye el loop si sigue sonando el mismo track;
 - cambiar el track reproducido limpia/desactiva el rango transitorio;
 - si la nueva página muestra la waveform del track activo, se monta el adapter y
-  refleja la sesión existente;
+refleja la sesión existente;
 - si muestra otra waveform, no debe adjudicarle el rango del player;
 - descarga y persistencia usan track ID/permalink del player, con pathname sólo
-  como fallback.
+como fallback.
 
 ### 5. Persistencia separada
 
@@ -344,9 +344,9 @@ Ventajas:
 Costes:
 
 - el estado de tempo debe seguir visible en forma resumida dentro de Looping para
-  que el usuario entienda cómo escucha y cómo exportará;
+que el usuario entienda cómo escucha y cómo exportará;
 - hay que implementar semántica real de tabs, foco con flechas y
-  `aria-controls`/`aria-selected`.
+`aria-controls`/`aria-selected`.
 
 Orden sugerido dentro del panel:
 
@@ -374,7 +374,7 @@ una ventaja arquitectónica: seguirá usando la misma sesión.
 - extraer `SCLoopSession` y la identidad del track activo;
 - adaptar el looper de waveform a ese módulo sin alterar su UX;
 - eliminar tests que inspeccionan/reemplazan texto interno de `looper.js` y probar
-  por la interface nueva;
+por la interface nueva;
 - mantener el comportamiento A–B y descarga existente.
 
 ### Fase 2 — loop sin waveform
@@ -382,7 +382,7 @@ una ventaja arquitectónica: seguirá usando la misma sesión.
 - permitir crear una sesión desde el media activo;
 - ampliar el bridge con set/clear loop;
 - verificar feed, búsqueda, playlist, perfil, navegación SPA, ads/previews y
-  reemplazo del audio;
+reemplazo del audio;
 - asegurar que cerrar el panel no detenga el motor.
 
 ### Fase 3 — tab Looping
@@ -423,47 +423,61 @@ El árbol ya tenía una modificación local no relacionada en
 ### Comportamiento
 
 1. ¿“Track actual” es siempre el audio del player persistente, aunque estés mirando
-   otra página o waveform? Esta investigación recomienda que sí.
+ otra página o waveform? Esta investigación recomienda que sí.  
+SI, el audio del player existente, aunque este en otra waveform. Si estoy con un loop en una waveform y se esta reproduciendo ahi, tratemos de que el looper del popup replique esos cambios en tiempo real, sino, de igual manera tratemos de que los dos loops puedan convivir. SIEMPRE priorizamos el de la waveform, que puedo deslizar y hacer zoom en la waveform. Segundo el del popup. Tene en cuenta que el looper de popup va a loopear solo con un slider y no sera tan preciso. podrias agregarle los botones de set start y set end como los que tiene el repo que revisaste, de igual manera tambien te adjunte una imagen de referencia. 
 2. ¿El loop debe continuar al cerrar el panel? La arquitectura propuesta asume que
-   sí.
-3. ¿Al navegar por SoundCloud debe continuar si el mismo track sigue sonando? La
-   recomendación es sí; sólo se limpia al cambiar el track reproducido.
+ sí.  
+SI - ademas, necesitamos agregar un bypass de loop y el actual del pitch. creo que estaria bueno que esten separados.
+3. ¿Al navegar por SoundCloud debe continuar si el mismo track sigue sonando? La  
+ recomendación es sí; sólo se limpia al cambiar el track reproducido.  
+ SI.
 4. ¿Al activar Loop debe hacer seek inmediato a A y respetar play/pause, o además
-   debe iniciar reproducción? La referencia hace seek pero no llama `play()`.
+ debe iniciar reproducción? La referencia hace seek pero no llama `play()`.  
+SI a todo. 
 5. ¿Scrub manual antes de A debe ser permitido hasta llegar a B, o debe volver a A
-   inmediatamente? El repo externo sólo fuerza B; el looper actual fuerza ambos
-   bordes.
+ inmediatamente? El repo externo sólo fuerza B; el looper actual fuerza ambos
+ bordes.  
+Como vos quieras, acepto la recomendacion
 
 ### Edición y UI
 
 6. ¿La primera versión necesita Set A/Set B en vivo, inputs editables, un slider
-   doble, o los tres? Recomendación inicial: Set A/Set B + inputs; el mini-slider
-   puede llegar después.
+ doble, o los tres? Recomendación inicial: Set A/Set B + inputs; el mini-slider
+ puede llegar después.  
+SI , acepto la recomendacion. el slider viene luego
 7. ¿La waveform y el panel deben editar exactamente el mismo rango en tiempo real?
-   La propuesta asume que sí.
+ La propuesta asume que sí.  
+SI, ya tenemos el audio conectado, creo que tomar el valor en los dos lados es posible para que se repliquen bidireccionalmente
 8. ¿Querés tabs arriba del bloque completo de logo/header, o logo común arriba y
-   tabs debajo? La recomendación visual es tabs arriba, header común debajo.
+ tabs debajo? La recomendación visual es tabs arriba, header común debajo.  
+Creo que al final NO quiero tabs. Revisa la imagen, la cual tiene el slider, pero creo que podrias primero hacer los botones. pero quiero que reordenes todo para NO tener tabs y para que se vea exactamente como la imagen. fijate que ahora tengo dos botones (corazon) par que el user setee dos velocidades favoritas. hagamos que con LONG PRESS en el boton, guardo la velocidad actual,  y con un click simplemente se pone. y fijate el header que ahora es primero los 4 botones (hacelos 2px menos de padding vertical y 3px menos de padding horizontal asi entran un poco mejor)
 9. ¿Preferís `Speed & Tone` / `Looping`, `Playback` / `Looping`, o conservar
-   literalmente `Tone & Velocity`?
-10. ¿La tab Looping debe incluir `Download loop`, o la descarga sigue disponible
-    sólo junto a la waveform?
+ literalmente `Tone & Velocity`?  
+no hagamos tabs mejor. que todo se maneje del mismo panel unico. total el looper son dos inputs botones que pongan el start y end, el slider marcando a y b y el boton bypass loop
+10. ¿La tab Looping debe incluir `Download loop`, o la descarga sigue disponible  
+  sólo junto a la waveform? que la descarga siempre sea desde el player. que el popup solo edite values
 
 ### Estado y persistencia
 
 11. ¿El rango es sólo temporal como hoy, o querés recordar automáticamente un loop
-    por track? Si se guarda, ¿global/local o sincronizado entre navegadores?
+  por track? Si se guarda, ¿global/local o sincronizado entre navegadores?  
+que NO se guarde, que sea rango temporal como hoy
 12. ¿Al volver al track debe reactivarse automáticamente o sólo restaurar A/B
-    apagado?
+  apagado?  
+no restauremos por ahora, menos complejidad por ahora
 13. ¿Debe existir siempre un solo loop por track? Los documentos anteriores dicen
-    que sí, pero conviene reconfirmarlo para fijar el esquema.
+  que sí, pero conviene reconfirmarlo para fijar el esquema.  
+SI solo uno por current track.
 
 ### Descarga y producto
 
 14. ¿La tab debe mostrar explícitamente que el WAV usará el rate/Keep Tone efectivo,
-    incluido bypass?
-15. ¿El loop y su export siguen siendo gratuitos, premium o parte de una prueba?
+  incluido bypass?  
+por ahora no, siempre descargamos audio modificado
+15. ¿El loop y su export siguen siendo gratuitos, premium o parte de una prueba? por ahora TODAS LAs features son gratis
 16. El gap previo de descarga completa con tempo/pitch sigue abierto: ¿se resuelve
-    en este mismo trabajo o se mantiene como entrega separada?
+  en este mismo trabajo o se mantiene como entrega separada?  
+CREO que ya esta terminado. revisalo igual
 
 ## Recomendación de alcance inmediato
 
