@@ -117,8 +117,8 @@
         .help-tabs {
             display: flex;
             gap: 4px;
-            padding: 4px;
-            margin: 18px 0 8px;
+            padding: 3px;
+            margin: 14px 0 8px;
             border: 1px solid #383838;
             border-radius: 12px;
             background: #191919;
@@ -126,7 +126,8 @@
         }
         .help-tabs button {
             flex: 1;
-            padding: 10px 8px;
+            min-height: 32px;
+            padding: 6px 6px;
             border: 0;
             border-radius: 8px;
             background: transparent;
@@ -760,7 +761,9 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 0 4px;
+            /* Keep the fixed settings button clear of the list actions. */
+            box-sizing: border-box;
+            padding: 0 44px 0 4px;
         }
 
         .control-slot {
@@ -960,7 +963,7 @@
                 <button id="downloadsTab" type="button" role="tab" aria-selected="true" aria-controls="downloadsHelp" data-help-tab="downloadsHelp" data-i18n="download" data-i18n-title="download" title="Download">Download</button>
                 <button id="speedTab" type="button" role="tab" aria-selected="false" aria-controls="speedHelp" tabindex="-1" data-help-tab="speedHelp" data-i18n="help_speed_title" data-i18n-title="help_speed_title" title="Speed">Speed</button>
                 <button id="looperTab" type="button" role="tab" aria-selected="false" aria-controls="looperPanel" tabindex="-1" data-help-tab="looperPanel" data-i18n="help_looper_title" title="Looper">Looper</button>
-                <button id="supportTab" type="button" role="tab" aria-selected="false" aria-controls="supportHelp" tabindex="-1" data-help-tab="supportHelp" data-i18n="help_support_title" data-i18n-title="help_support_title" title="Support and reviews">Support and reviews</button>
+                <button id="supportTab" type="button" role="tab" aria-selected="false" aria-controls="supportHelp" tabindex="-1" data-help-tab="supportHelp" data-i18n="contact" data-i18n-title="contact" title="Contact">Contact</button>
             </div>
             <div class="help-content">
             <section id="downloadsHelp" role="tabpanel" aria-labelledby="downloadsTab">
