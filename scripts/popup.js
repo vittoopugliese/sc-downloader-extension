@@ -58,9 +58,7 @@ const selectionRows = document.getElementById("selectionRows");
 const helpBtn = document.getElementById("helpBtn");
 const helpPanel = document.getElementById("helpPanel");
 const helpBackBtn = document.getElementById("helpBackBtn");
-const looperEntryBtn = document.getElementById("looperEntryBtn");
 const looperPanel = document.getElementById("looperPanel");
-const looperBackBtn = document.getElementById("looperBackBtn");
 
 let isDownloading = false;
 let isSelectionMode = false;
@@ -84,20 +82,20 @@ let currentFormatPreference = SCStreamSelector.DEFAULT_PREFERENCE;
 let currentDownloadDestination = null;
 let helpReturnFocus = null;
 let helpSelectionScrollTop = 0;
-let looperReturnFocus = null;
-let looperSelectionScrollTop = 0;
 const popupDownloadIntent = SCDownloadIntent.create(chrome.runtime);
 
 function openHelp() {
   helpReturnFocus = document.activeElement;
   helpSelectionScrollTop = selectionViewport.scrollTop;
   helpPanel.classList.add("is-visible");
+  document.body.classList.add("help-mode");
   helpBackBtn.focus();
 }
 
 function closeHelp() {
   if (!helpPanel.classList.contains("is-visible")) return;
   helpPanel.classList.remove("is-visible");
+  document.body.classList.remove("help-mode");
   if (isSelectionMode) {
     selectionViewport.scrollTop = helpSelectionScrollTop;
     renderVisibleSelectionRows();
@@ -110,7 +108,7 @@ function trapHelpFocus(event) {
   if (event.key !== "Tab" || !helpPanel.classList.contains("is-visible")) return;
   const focusable = [...helpPanel.querySelectorAll(
     'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
-  )];
+  )].filter((element) => element.getClientRects().length && element.tabIndex >= 0);
   const first = focusable[0];
   const last = focusable.at(-1);
   if (!first || !last) return;
@@ -124,23 +122,18 @@ function trapHelpFocus(event) {
 }
 
 function openLooperExplainer() {
-  looperReturnFocus = document.activeElement;
-  looperSelectionScrollTop = selectionViewport.scrollTop;
-  document.body.classList.add("looper-explainer-mode");
-  looperPanel.classList.add("is-visible");
-  looperBackBtn.focus();
+  openHelp();
+  selectHelpTab(document.getElementById("looperTab"));
 }
 
-function closeLooperExplainer() {
-  if (!looperPanel.classList.contains("is-visible")) return;
-  looperPanel.classList.remove("is-visible");
-  document.body.classList.remove("looper-explainer-mode");
-  if (isSelectionMode) {
-    selectionViewport.scrollTop = looperSelectionScrollTop;
-    renderVisibleSelectionRows();
-  }
-  looperReturnFocus?.focus?.();
-  looperReturnFocus = null;
+function selectHelpTab(selected) {
+  helpPanel.querySelectorAll('[role="tab"]').forEach((tab) => {
+    const active = tab === selected;
+    tab.setAttribute("aria-selected", String(active));
+    tab.tabIndex = active ? 0 : -1;
+    document.getElementById(tab.dataset.helpTab).hidden = !active;
+  });
+  helpPanel.querySelector(".help-content").scrollTop = 0;
 }
 
 async function openRequestedPopupView() {
@@ -177,19 +170,28 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   helpBtn.addEventListener("click", openHelp);
   helpBackBtn.addEventListener("click", closeHelp);
-  looperEntryBtn.addEventListener("click", openLooperExplainer);
-  looperBackBtn.addEventListener("click", closeLooperExplainer);
+  const helpTabs = [...helpPanel.querySelectorAll('[role="tab"]')];
+  helpTabs.forEach((tab, index) => {
+    tab.addEventListener("click", () => selectHelpTab(tab));
+    tab.addEventListener("keydown", (event) => {
+      let next;
+      if (event.key === "ArrowRight") next = (index + 1) % helpTabs.length;
+      if (event.key === "ArrowLeft") next = (index + helpTabs.length - 1) % helpTabs.length;
+      if (event.key === "Home") next = 0;
+      if (event.key === "End") next = helpTabs.length - 1;
+      if (next === undefined) return;
+      event.preventDefault();
+      selectHelpTab(helpTabs[next]);
+      helpTabs[next].focus();
+    });
+  });
   await openRequestedPopupView();
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && looperPanel.classList.contains("is-visible")) {
-      event.preventDefault();
-      closeLooperExplainer();
-    } else if (event.key === "Escape" && helpPanel.classList.contains("is-visible")) {
+    if (event.key === "Escape" && helpPanel.classList.contains("is-visible")) {
       event.preventDefault();
       closeHelp();
     }
     trapHelpFocus(event);
-    trapPanelFocus(event, looperPanel);
   });
 
   retryBtn.addEventListener("click", () => {

@@ -43,6 +43,25 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
         `The popup background must cover the viewport at ${x},${y}`,
       );
     }
+    await page.setViewportSize({ width: 426, height: 580 });
+    const source = fs.readFileSync(path.resolve(__dirname, "popup.js"), "utf8");
+    const selectTab = source.slice(source.indexOf("function selectHelpTab("), source.indexOf("async function openRequestedPopupView"));
+    await page.evaluate((selectTab) => {
+      window.helpPanel = document.getElementById("helpPanel");
+      document.body.classList.add("help-mode");
+      helpPanel.classList.add("is-visible");
+      window.eval(selectTab);
+    }, selectTab);
+    for (const id of ["downloadsTab", "looperTab", "supportTab"]) {
+      await page.evaluate((id) => selectHelpTab(document.getElementById(id)), id);
+      assert.equal(await page.locator('#helpPanel [role="tabpanel"]:visible').count(), 1);
+      assert.equal(await page.locator(`#${id}`).getAttribute("aria-selected"), "true");
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 426);
+      if (deviceScaleFactor === 1) {
+        fs.mkdirSync(path.resolve(__dirname, "..", "test-results"), { recursive: true });
+        await page.screenshot({ path: path.resolve(__dirname, "..", "test-results", `help-${id}.png`) });
+      }
+    }
     await page.close();
     console.log(`Popup browser verification passed at scale ${deviceScaleFactor}.`);
     }

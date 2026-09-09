@@ -100,10 +100,60 @@
             justify-content: flex-start;
         }
 
-        body.looper-explainer-mode,
-        body.looper-explainer-mode .container {
+        body.help-mode,
+        body.help-mode .container {
             min-height: 580px;
         }
+
+        body.help-mode { height: 580px; }
+        body #helpPanel.is-visible { display: flex; flex-direction: column; }
+        body #helpPanel {
+            z-index: 11;
+            overflow: hidden;
+            padding: 20px;
+            background: radial-gradient(ellipse at top right, #35251b, transparent 55%), #111;
+        }
+        .help-header { flex: 0 0 auto; }
+        .help-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 4px;
+            margin: 18px 0 8px;
+            border: 1px solid #383838;
+            border-radius: 12px;
+            background: #191919;
+            flex: 0 0 auto;
+        }
+        .help-tabs button {
+            flex: 1;
+            padding: 10px 8px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: #bbb;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .help-tabs button[aria-selected="true"] { background: #ff5500; color: #fff; }
+        .help-tabs button:hover { color: #fff; }
+        .help-tabs button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+        .help-content { overflow-y: auto; min-height: 0; padding: 0 4px 8px 0; }
+        .help-content [hidden] { display: none !important; }
+        #helpPanel .help-section, #helpPanel .looper-tutorial li {
+            background: #1b1b1b;
+            border: 1px solid #303030;
+            border-radius: 12px;
+            margin: 10px 0;
+            padding: 15px 14px 15px 42px;
+        }
+        #helpPanel .help-section h3, #helpPanel .looper-tutorial h3 { font-size: 14px; margin-bottom: 7px; }
+        #helpPanel .help-section p, #helpPanel .looper-tutorial p { font-size: 13px; line-height: 1.65; }
+        #helpPanel #looperPanel { position: static; display: block; padding: 0; background: none; overflow: visible; }
+        #helpPanel .help-site-link { margin: 20px 0; font-size: 16px; text-decoration: none; }
+        #helpPanel .help-copy, #helpPanel .looper-copy { font-size: 13px; line-height: 1.6; color: #ccc; }
+        .tab-heading { font-size: 18px; margin: 20px 0 0; }
 
         .track-info { text-align: center; }
 
@@ -887,9 +937,6 @@
                     <img class="dl-icon" src="./assets/icons/download.svg" alt="" width="22" height="22" draggable="false">
                     <span class="dl-spinner" aria-hidden="true"></span>
                 </button>
-                <span id="looperActionSlot">
-                    <button id="looperEntryBtn" type="button" class="popup-control-btn" aria-label="Looper guide" title="Looper guide" data-i18n-aria-label="looper_entry" data-i18n-title="looper_entry"><span data-i18n="looper_entry">Looper guide</span></button>
-                </span>
             </div>
             <div id="jobControls">
                 <button id="pauseJobBtn" type="button" class="job-btn" title="Pause download" data-i18n="pause" data-i18n-title="pause">Pause</button>
@@ -903,19 +950,24 @@
             <ul id="failedDetails" aria-live="polite"></ul>
         </div>
         <section id="helpPanel" aria-labelledby="helpTitle" aria-modal="true" role="dialog">
-            <a class="help-site-link" href="https://sctd.vpugliese.online" target="_blank" rel="noopener noreferrer">sctd.vpugliese.online</a>
             <div class="help-header"><button id="helpBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button><h2 id="helpTitle" data-i18n="help_title">How it works</h2></div>
+            <div class="help-tabs" role="tablist" aria-label="Help topics">
+                <button id="downloadsTab" type="button" role="tab" aria-selected="true" aria-controls="downloadsHelp" data-help-tab="downloadsHelp" data-i18n="download" data-i18n-title="download" title="Download">Download</button>
+                <button id="looperTab" type="button" role="tab" aria-selected="false" aria-controls="looperPanel" tabindex="-1" data-help-tab="looperPanel" data-i18n="help_looper_title" title="Looper">Looper</button>
+                <button id="supportTab" type="button" role="tab" aria-selected="false" aria-controls="supportHelp" tabindex="-1" data-help-tab="supportHelp" data-i18n="help_support_title" data-i18n-title="help_support_title" title="Support and reviews">Support and reviews</button>
+            </div>
+            <div class="help-content">
+            <section id="downloadsHelp" role="tabpanel" aria-labelledby="downloadsTab">
             <p class="help-copy" data-i18n="help_intro">Download tracks you own or have permission to download.</p>
             <div class="help-section"><h3 data-i18n="help_getting_started_title">Download from SoundCloud</h3><p data-i18n="help_getting_started">Open a track, playlist, Likes, or a user's Tracks page. Use the Download button here or the download button on the SoundCloud page.</p></div>
             <div class="help-section"><h3 data-i18n="help_collection_title">Choose a collection</h3><p data-i18n="help_collection">For playlists, Likes, and user tracks, choose a preset or Select to pick individual tracks. Downloads keep running if you close this popup.</p></div>
             <div class="help-section"><h3 data-i18n="help_folder_title">Choose a folder</h3><p data-i18n="help_folder">Use the folder button to select where files are saved. Choose Downloads to return to Chrome's normal Downloads folder.</p></div>
             <div class="help-section"><h3 data-i18n="help_format_title">Formats and quality</h3><p data-i18n="help_format">Auto selects the available stream. Original is available only when the artist has enabled an original download. Source quality varies by track.</p></div>
             <div class="help-section"><h3 data-i18n="help_progress_title">Progress and errors</h3><p data-i18n="help_progress">The status shows progress and saved files. If a track cannot be read or saved, retry after reloading SoundCloud or choosing the folder again.</p></div>
-            <div class="help-section"><h3 data-i18n="help_looper_title">Looper</h3><p data-i18n="help_looper">On a compatible individual track, Looper lets you repeat an A–B section and export that selected range as WAV. It does not change full-track downloads.</p></div>
-            <div class="help-section"><h3 data-i18n="help_support_title">Support and reviews</h3><p data-i18n="help_support">Need help or want to share feedback? Use the links below.</p><div class="help-links"><a class="popup-control-btn help-link" href="https://soundcloud.com/" target="_blank" data-i18n="open_soundcloud">Open SoundCloud</a><a class="popup-control-btn help-link" href="mailto:it@vpugliese.online" data-i18n="support_email">Email support</a><a class="popup-control-btn help-link" href="https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews" target="_blank" data-i18n="write_review">Write a Chrome Web Store review</a></div></div>
         </section>
-        <section id="looperPanel" aria-labelledby="looperTitle" aria-modal="true" role="dialog">
-            <div class="looper-header"><button id="looperBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button><h2 id="looperTitle" data-i18n="looper_title">How to use Looper</h2></div>
+        <section id="looperPanel" aria-labelledby="looperTab" role="tabpanel" hidden>
+            <div class="help-section"><h3 data-i18n="help_looper_title">Looper</h3><p data-i18n="help_looper">On a compatible individual track, Looper lets you repeat an A–B section and export that selected range as WAV. It does not change full-track downloads.</p></div>
+            <h3 class="tab-heading" data-i18n="looper_title">How to use Looper</h3>
             <p class="looper-copy" data-i18n="looper_intro">Looper is free on compatible individual SoundCloud tracks. It repeats the A–B range you choose and saves it as WAV.</p>
             <ol class="looper-tutorial">
                 <li><h3 data-i18n="looper_step_open_title">Open an individual track</h3><p data-i18n="looper_step_open">Open the SoundCloud track you want to work with, then wait for it to load or start playing it.</p></li>
@@ -925,6 +977,12 @@
                 <li><h3 data-i18n="looper_step_save_title">Save the selected range</h3><p data-i18n="looper_step_save">Choose Download loop to save the A–B range as a WAV file.</p></li>
             </ol>
             <p class="looper-tip" data-i18n="looper_tip">The loop is temporary: close it with the cross or Escape. Opening another track removes it.</p>
+        </section>
+        <section id="supportHelp" role="tabpanel" aria-labelledby="supportTab" hidden>
+            <div class="help-section"><h3 data-i18n="help_support_title">Support and reviews</h3><p data-i18n="help_support">Need help or want to share feedback? Use the links below.</p><div class="help-links"><a class="popup-control-btn help-link" href="https://soundcloud.com/" target="_blank" data-i18n="open_soundcloud">Open SoundCloud</a><a class="popup-control-btn help-link" href="mailto:it@vpugliese.online" data-i18n="support_email">Email support</a><a class="popup-control-btn help-link" href="https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews" target="_blank" data-i18n="write_review">Write a Chrome Web Store review</a></div></div>
+            <a class="help-site-link" href="https://sctd.vpugliese.online" target="_blank" rel="noopener noreferrer">sctd.vpugliese.online</a>
+        </section>
+        </div>
         </section>
     </div>
     <script src="./scripts/i18n.js"></script>
