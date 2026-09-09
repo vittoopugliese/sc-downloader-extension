@@ -158,6 +158,60 @@
   "help_looper": {
     "message": "On a compatible individual track, Looper lets you repeat an A–B section and export that selected range as WAV. It does not change full-track downloads."
   },
+  "help_speed_title": {
+    "message": "Speed"
+  },
+  "help_speed_intro": {
+    "message": "The speed selector controls SoundCloud playback from 0.1x to 4x and shows the active speed beside the player controls."
+  },
+  "help_speed_open_title": {
+    "message": "Open the selector"
+  },
+  "help_speed_open": {
+    "message": "Press the speedometer beside the player download button. Its orange value always shows the effective playback speed. Press the extension name inside the panel to open the Looper guide."
+  },
+  "help_speed_presets_title": {
+    "message": "Quick speeds"
+  },
+  "help_speed_presets": {
+    "message": "Choose 0.5x, 1x, 1.5x, 2x, 2.5x, or 3x for an immediate change. The highlighted preset matches the selected speed."
+  },
+  "help_speed_slider_title": {
+    "message": "Precise control"
+  },
+  "help_speed_slider": {
+    "message": "Drag the slider anywhere from 0.1x to 4x in 0.025x steps. Double-click the slider to return to the normal 1x speed."
+  },
+  "help_speed_pitch_title": {
+    "message": "Keep Tone"
+  },
+  "help_speed_pitch": {
+    "message": "Enable Keep Tone to change duration while keeping the original musical pitch. Leave it off to let pitch rise or fall with speed. The option is disabled when the browser cannot preserve pitch."
+  },
+  "help_speed_bypass_title": {
+    "message": "Temporary bypass"
+  },
+  "help_speed_bypass": {
+    "message": "Press the bypass icon beside the current value to play at 1x without losing your selected speed or Keep Tone setting. Press it again to restore them."
+  },
+  "help_speed_memory_title": {
+    "message": "Remembered and kept active"
+  },
+  "help_speed_memory": {
+    "message": "Your selected speed and Keep Tone choice are stored locally, restored on later visits, and applied to the current player and newly loaded SoundCloud audio."
+  },
+  "help_speed_looper_effect_title": {
+    "message": "Downloads and Looper"
+  },
+  "help_speed_looper_effect": {
+    "message": "Speed does not alter full-track downloads. A Looper WAV export uses the effective speed: with Keep Tone on it preserves pitch; with it off both duration and pitch change."
+  },
+  "help_speed_close_title": {
+    "message": "Close and troubleshoot"
+  },
+  "help_speed_close": {
+    "message": "Click outside the panel or press Escape to close it. If playback or saving a preference fails, the panel shows a message; reload SoundCloud and try again."
+  },
   "help_support_title": {
     "message": "Support and reviews"
   },

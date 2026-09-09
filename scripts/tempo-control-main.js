@@ -149,7 +149,7 @@
           position: fixed;
           z-index: 2147483647;
           width: min(420px, calc(100vw - 16px));
-          padding: 18px 17px 20px;
+          padding: 9px 8.5px 10px;
           border: 1px solid #444;
           border-radius: 7px;
           color: #eee;
@@ -203,7 +203,7 @@
           border: 0;
           color: #fff;
           background: transparent;
-          font: 600 16px/1.25 Interstate, Lucida Grande, Arial, sans-serif;
+          font: 700 17px/1.2 Interstate, Lucida Grande, Arial, sans-serif;
           text-align: left;
           text-decoration: none;
           cursor: pointer;
@@ -219,19 +219,19 @@
 
         .presets {
           display: grid;
-          grid-template-columns: repeat(3, 40px);
-          gap: 4px;
+          grid-template-columns: repeat(3, 44px);
+          gap: 5px;
           flex: 0 0 auto;
         }
 
         .preset {
-          height: 28px;
+          height: 30px;
           padding: 0;
           border: 1px solid #484848;
           border-radius: 5px;
           background: #292929;
           color: #ff6c23;
-          font: inherit;
+          font: 500 13px/1 Interstate, Lucida Grande, Arial, sans-serif;
           cursor: pointer;
           transition: background 160ms ease, border-color 160ms ease;
         }
@@ -342,12 +342,12 @@
           display: inline-flex;
           align-items: center;
           gap: 9px;
-          font-size: 14px;
+          font: 500 15px/1.2 Interstate, Lucida Grande, Arial, sans-serif;
         }
 
         .pitch-toggle {
-          width: 15px;
-          height: 15px;
+          width: 18px;
+          height: 18px;
           margin: 0;
           accent-color: #ff5500;
         }
@@ -416,11 +416,11 @@
         <div class="pitch-row">
           <label class="pitch-label">
             <input class="pitch-toggle" type="checkbox" />
-            Preserve Pitch
+            Keep Tone
           </label>
           <div class="speed-status">
-            <button class="bypass" type="button" aria-label="Bypass playback speed" aria-pressed="false" title="Bypass playback speed">${BYPASS_ICON}</button>
             <output class="current">1x</output>
+            <button class="bypass" type="button" aria-label="Bypass playback speed" aria-pressed="false" title="Bypass playback speed">${BYPASS_ICON}</button>
           </div>
         </div>
         <p class="status" role="status" aria-live="polite" hidden></p>

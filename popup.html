@@ -344,8 +344,8 @@
         }
 
         #downloadBtn {
-            width: 37px;
-            height: 37px;
+            width: 40px;
+            height: 40px;
             padding: 0;
             background-color: #ffffffc7;
             border: none;
@@ -354,12 +354,14 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background-color 254ms, transform 254ms;
+            transition: background-color 254ms ease, box-shadow 254ms ease, filter 254ms ease, transform 254ms ease;
         }
 
         #downloadBtn:hover {
             background-color: #ffffff;
-            transform: scale(1.054);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.18);
+            filter: brightness(1.06);
+            transform: scale(0.93);
         }
 
         #downloadBtn.is-disabled {
@@ -456,21 +458,24 @@
         }
 
         #helpBtn {
-            left: 0;
+            position: absolute;
+            top: 16px;
+            right: 12px;
+            z-index: 1;
             width: 32px;
             min-width: 32px;
             padding: 0;
         }
 
         .settings-icon {
-            width: 16px;
-            height: 16px;
+            width: 15px;
+            height: 15px;
             display: block;
             filter: invert(1);
         }
 
         #downloadBtn { left: 50%; transform: translateX(-50%); }
-        #downloadBtn:hover { transform: translateX(-50%) scale(1.054); }
+        #downloadBtn:hover { transform: translateX(-50%) scale(0.93); }
         #looperActionSlot { position: absolute; right: 0; top: 0; display: flex; justify-content: flex-end; min-width: 120px; height: 32px; }
         #looperEntryBtn {
             min-width: 0;
@@ -871,6 +876,7 @@
 
     <div id="artwork"></div>
     <div class="container">
+        <button id="helpBtn" type="button" class="popup-control-btn" aria-label="Help and settings" title="Help and settings" data-i18n-aria-label="settings_and_help" data-i18n-title="settings_and_help"><img class="settings-icon" src="./assets/icons/settings.svg" alt="" width="15" height="15" draggable="false"></button>
         <div class="track-info">
             <div class="track-details">
                 <h2 id="title"></h2>
@@ -932,7 +938,6 @@
 
         <div class="download-button-container">
             <div class="action-row">
-                <button id="helpBtn" type="button" class="popup-control-btn" aria-label="Help and settings" title="Help and settings" data-i18n-aria-label="settings_and_help" data-i18n-title="settings_and_help"><img class="settings-icon" src="./assets/icons/settings.svg" alt="" width="16" height="16" draggable="false"></button>
                 <button id="downloadBtn" type="button" aria-label="Download" title="Download" data-i18n-aria-label="download" data-i18n-title="download" class="is-hidden">
                     <img class="dl-icon" src="./assets/icons/download.svg" alt="" width="22" height="22" draggable="false">
                     <span class="dl-spinner" aria-hidden="true"></span>
@@ -953,6 +958,7 @@
             <div class="help-header"><button id="helpBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button><h2 id="helpTitle" data-i18n="help_title">How it works</h2></div>
             <div class="help-tabs" role="tablist" aria-label="Help topics">
                 <button id="downloadsTab" type="button" role="tab" aria-selected="true" aria-controls="downloadsHelp" data-help-tab="downloadsHelp" data-i18n="download" data-i18n-title="download" title="Download">Download</button>
+                <button id="speedTab" type="button" role="tab" aria-selected="false" aria-controls="speedHelp" tabindex="-1" data-help-tab="speedHelp" data-i18n="help_speed_title" data-i18n-title="help_speed_title" title="Speed">Speed</button>
                 <button id="looperTab" type="button" role="tab" aria-selected="false" aria-controls="looperPanel" tabindex="-1" data-help-tab="looperPanel" data-i18n="help_looper_title" title="Looper">Looper</button>
                 <button id="supportTab" type="button" role="tab" aria-selected="false" aria-controls="supportHelp" tabindex="-1" data-help-tab="supportHelp" data-i18n="help_support_title" data-i18n-title="help_support_title" title="Support and reviews">Support and reviews</button>
             </div>
@@ -964,6 +970,17 @@
             <div class="help-section"><h3 data-i18n="help_folder_title">Choose a folder</h3><p data-i18n="help_folder">Use the folder button to select where files are saved. Choose Downloads to return to Chrome's normal Downloads folder.</p></div>
             <div class="help-section"><h3 data-i18n="help_format_title">Formats and quality</h3><p data-i18n="help_format">Auto selects the available stream. Original is available only when the artist has enabled an original download. Source quality varies by track.</p></div>
             <div class="help-section"><h3 data-i18n="help_progress_title">Progress and errors</h3><p data-i18n="help_progress">The status shows progress and saved files. If a track cannot be read or saved, retry after reloading SoundCloud or choosing the folder again.</p></div>
+        </section>
+        <section id="speedHelp" role="tabpanel" aria-labelledby="speedTab" hidden>
+            <p class="help-copy" data-i18n="help_speed_intro">The speed selector controls SoundCloud playback from 0.1x to 4x and shows the active speed beside the player controls.</p>
+            <div class="help-section"><h3 data-i18n="help_speed_open_title">Open the selector</h3><p data-i18n="help_speed_open">Press the speedometer beside the player download button. Its orange value always shows the effective playback speed. Press the extension name inside the panel to open the Looper guide.</p></div>
+            <div class="help-section"><h3 data-i18n="help_speed_presets_title">Quick speeds</h3><p data-i18n="help_speed_presets">Choose 0.5x, 1x, 1.5x, 2x, 2.5x, or 3x for an immediate change. The highlighted preset matches the selected speed.</p></div>
+            <div class="help-section"><h3 data-i18n="help_speed_slider_title">Precise control</h3><p data-i18n="help_speed_slider">Drag the slider anywhere from 0.1x to 4x in 0.025x steps. Double-click the slider to return to the normal 1x speed.</p></div>
+            <div class="help-section"><h3 data-i18n="help_speed_pitch_title">Keep Tone</h3><p data-i18n="help_speed_pitch">Enable Keep Tone to change duration while keeping the original musical pitch. Leave it off to let pitch rise or fall with speed. The option is disabled when the browser cannot preserve pitch.</p></div>
+            <div class="help-section"><h3 data-i18n="help_speed_bypass_title">Temporary bypass</h3><p data-i18n="help_speed_bypass">Press the bypass icon beside the current value to play at 1x without losing your selected speed or Keep Tone setting. Press it again to restore them.</p></div>
+            <div class="help-section"><h3 data-i18n="help_speed_memory_title">Remembered and kept active</h3><p data-i18n="help_speed_memory">Your selected speed and Keep Tone choice are stored locally, restored on later visits, and applied to the current player and newly loaded SoundCloud audio.</p></div>
+            <div class="help-section"><h3 data-i18n="help_speed_looper_effect_title">Downloads and Looper</h3><p data-i18n="help_speed_looper_effect">Speed does not alter full-track downloads. A Looper WAV export uses the effective speed: with Keep Tone on it preserves pitch; with it off both duration and pitch change.</p></div>
+            <div class="help-section"><h3 data-i18n="help_speed_close_title">Close and troubleshoot</h3><p data-i18n="help_speed_close">Click outside the panel or press Escape to close it. If playback or saving a preference fails, the panel shows a message; reload SoundCloud and try again.</p></div>
         </section>
         <section id="looperPanel" aria-labelledby="looperTab" role="tabpanel" hidden>
             <div class="help-section"><h3 data-i18n="help_looper_title">Looper</h3><p data-i18n="help_looper">On a compatible individual track, Looper lets you repeat an A–B section and export that selected range as WAV. It does not change full-track downloads.</p></div>

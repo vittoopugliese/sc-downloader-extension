@@ -158,6 +158,60 @@
   "help_looper": {
     "message": "En un track individual compatible, Looper te permite repetir una sección A–B y exportar ese rango seleccionado como WAV. No cambia las descargas de tracks completos."
   },
+  "help_speed_title": {
+    "message": "Velocidad"
+  },
+  "help_speed_intro": {
+    "message": "El selector controla la reproducción de SoundCloud de 0.1x a 4x y muestra la velocidad activa junto a los controles del reproductor."
+  },
+  "help_speed_open_title": {
+    "message": "Abrí el selector"
+  },
+  "help_speed_open": {
+    "message": "Presioná el velocímetro junto al botón de descarga del reproductor. El valor naranja siempre muestra la velocidad efectiva. Presioná el nombre de la extensión dentro del panel para abrir la guía del Looper."
+  },
+  "help_speed_presets_title": {
+    "message": "Velocidades rápidas"
+  },
+  "help_speed_presets": {
+    "message": "Elegí 0.5x, 1x, 1.5x, 2x, 2.5x o 3x para cambiar de inmediato. El preset resaltado coincide con la velocidad seleccionada."
+  },
+  "help_speed_slider_title": {
+    "message": "Control preciso"
+  },
+  "help_speed_slider": {
+    "message": "Arrastrá el control entre 0.1x y 4x en pasos de 0.025x. Hacé doble clic sobre el slider para volver a la velocidad normal de 1x."
+  },
+  "help_speed_pitch_title": {
+    "message": "Mantener tono"
+  },
+  "help_speed_pitch": {
+    "message": "Activá Mantener tono para cambiar la duración conservando el tono musical original. Dejalo desactivado para que el tono suba o baje con la velocidad. La opción se deshabilita si el navegador no puede preservar el tono."
+  },
+  "help_speed_bypass_title": {
+    "message": "Bypass temporal"
+  },
+  "help_speed_bypass": {
+    "message": "Presioná el icono de bypass junto al valor actual para reproducir a 1x sin perder la velocidad elegida ni el ajuste de tono. Presionalo otra vez para restaurarlos."
+  },
+  "help_speed_memory_title": {
+    "message": "Recordado y siempre activo"
+  },
+  "help_speed_memory": {
+    "message": "La velocidad y la opción Mantener tono se guardan localmente, se recuperan en visitas posteriores y se aplican al reproductor actual y al audio nuevo que cargue SoundCloud."
+  },
+  "help_speed_looper_effect_title": {
+    "message": "Descargas y Looper"
+  },
+  "help_speed_looper_effect": {
+    "message": "La velocidad no modifica las descargas de tracks completos. Una exportación WAV del Looper usa la velocidad efectiva: con Mantener tono conserva el tono; sin esa opción cambian la duración y el tono."
+  },
+  "help_speed_close_title": {
+    "message": "Cerrar y solucionar problemas"
+  },
+  "help_speed_close": {
+    "message": "Hacé clic fuera del panel o presioná Escape para cerrarlo. Si falla la reproducción o el guardado de una preferencia, el panel muestra un mensaje; recargá SoundCloud e intentá otra vez."
+  },
   "help_support_title": {
     "message": "Soporte y reseñas"
   },

@@ -52,7 +52,7 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
       helpPanel.classList.add("is-visible");
       window.eval(selectTab);
     }, selectTab);
-    for (const id of ["downloadsTab", "looperTab", "supportTab"]) {
+    for (const id of ["downloadsTab", "speedTab", "looperTab", "supportTab"]) {
       await page.evaluate((id) => selectHelpTab(document.getElementById(id)), id);
       assert.equal(await page.locator('#helpPanel [role="tabpanel"]:visible').count(), 1);
       assert.equal(await page.locator(`#${id}`).getAttribute("aria-selected"), "true");

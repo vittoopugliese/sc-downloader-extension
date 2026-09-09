@@ -143,6 +143,60 @@
   "help_looper": {
     "message": "Em uma faixa individual compatível, o Looper permite repetir uma seção A–B e exportar esse intervalo como WAV. Isso não altera os downloads de faixas completas."
   },
+  "help_speed_title": {
+    "message": "Velocidade"
+  },
+  "help_speed_intro": {
+    "message": "O seletor controla a reprodução do SoundCloud de 0.1x a 4x e mostra a velocidade ativa ao lado dos controles do player."
+  },
+  "help_speed_open_title": {
+    "message": "Abra o seletor"
+  },
+  "help_speed_open": {
+    "message": "Pressione o velocímetro ao lado do botão de download do player. O valor laranja sempre mostra a velocidade efetiva. Pressione o nome da extensão dentro do painel para abrir o guia do Looper."
+  },
+  "help_speed_presets_title": {
+    "message": "Velocidades rápidas"
+  },
+  "help_speed_presets": {
+    "message": "Escolha 0.5x, 1x, 1.5x, 2x, 2.5x ou 3x para mudar imediatamente. A predefinição destacada corresponde à velocidade selecionada."
+  },
+  "help_speed_slider_title": {
+    "message": "Controle preciso"
+  },
+  "help_speed_slider": {
+    "message": "Arraste o controle entre 0.1x e 4x em incrementos de 0.025x. Clique duas vezes no controle para voltar à velocidade normal de 1x."
+  },
+  "help_speed_pitch_title": {
+    "message": "Manter tom"
+  },
+  "help_speed_pitch": {
+    "message": "Ative Manter tom para mudar a duração preservando o tom musical original. Deixe desativado para que o tom suba ou desça com a velocidade. A opção fica desativada se o navegador não puder preservar o tom."
+  },
+  "help_speed_bypass_title": {
+    "message": "Bypass temporário"
+  },
+  "help_speed_bypass": {
+    "message": "Pressione o ícone de bypass ao lado do valor atual para reproduzir em 1x sem perder a velocidade escolhida nem o ajuste de tom. Pressione novamente para restaurá-los."
+  },
+  "help_speed_memory_title": {
+    "message": "Lembrado e sempre ativo"
+  },
+  "help_speed_memory": {
+    "message": "A velocidade e a opção Manter tom são salvas localmente, restauradas em visitas futuras e aplicadas ao player atual e aos novos áudios carregados pelo SoundCloud."
+  },
+  "help_speed_looper_effect_title": {
+    "message": "Downloads e Looper"
+  },
+  "help_speed_looper_effect": {
+    "message": "A velocidade não altera downloads de faixas completas. Uma exportação WAV do Looper usa a velocidade efetiva: com Manter tom preserva o tom; sem a opção, a duração e o tom mudam."
+  },
+  "help_speed_close_title": {
+    "message": "Fechar e resolver problemas"
+  },
+  "help_speed_close": {
+    "message": "Clique fora do painel ou pressione Escape para fechá-lo. Se a reprodução ou o salvamento de uma preferência falhar, o painel exibirá uma mensagem; recarregue o SoundCloud e tente novamente."
+  },
   "help_support_title": {
     "message": "Suporte e avaliações"
   },

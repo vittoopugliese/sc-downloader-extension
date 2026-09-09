@@ -112,14 +112,44 @@ async function main() {
         getComputedStyle(brand.querySelector(".brand-logo")).height
       ),
       logoHidden: brand.querySelector(".brand-logo")?.hidden,
+      titleFontSize: parseFloat(
+        getComputedStyle(brand.querySelector(".brand-name")).fontSize
+      ),
     }));
     if (
       branding.name !== "SoundCloud Track Downloader" ||
       branding.logoWidth !== 48 ||
       branding.logoHeight !== 48 ||
-      branding.logoHidden
+      branding.logoHidden ||
+      branding.titleFontSize !== 17
     ) {
       throw new Error("Playback Speed panel branding is missing or incorrectly sized.");
+    }
+
+    const compactStyles = await host.locator(".panel").evaluate((panel) => {
+      const preset = panel.querySelector(".preset");
+      const toggle = panel.querySelector(".pitch-toggle");
+      const pitchLabel = panel.querySelector(".pitch-label");
+      const speedStatus = panel.querySelector(".speed-status");
+      const style = getComputedStyle(panel);
+      return {
+        padding: [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft],
+        presetSize: [preset.offsetWidth, preset.offsetHeight],
+        toggleSize: [toggle.offsetWidth, toggle.offsetHeight],
+        pitchText: pitchLabel.textContent.trim(),
+        pitchFontSize: parseFloat(getComputedStyle(pitchLabel).fontSize),
+        statusOrder: Array.from(speedStatus.children).map((child) => child.className),
+      };
+    });
+    if (
+      compactStyles.padding.join(" ") !== "9px 8.5px 10px 8.5px" ||
+      compactStyles.presetSize.join("x") !== "44x30" ||
+      compactStyles.toggleSize.join("x") !== "18x18" ||
+      compactStyles.pitchText !== "Keep Tone" ||
+      compactStyles.pitchFontSize !== 15 ||
+      compactStyles.statusOrder.join(" ") !== "current bypass"
+    ) {
+      throw new Error("Playback Speed panel compact styling is incomplete.");
     }
 
     await host.locator(".brand-name").click();

@@ -143,6 +143,60 @@
   "help_looper": {
     "message": "Bei einem kompatiblen einzelnen Track wiederholt Looper einen A–B-Abschnitt und exportiert diesen Bereich als WAV. Downloads vollständiger Tracks bleiben unverändert."
   },
+  "help_speed_title": {
+    "message": "Tempo"
+  },
+  "help_speed_intro": {
+    "message": "Die Tempoauswahl steuert die SoundCloud-Wiedergabe von 0.1x bis 4x und zeigt das aktive Tempo neben der Playersteuerung an."
+  },
+  "help_speed_open_title": {
+    "message": "Auswahl öffnen"
+  },
+  "help_speed_open": {
+    "message": "Drücke den Tachometer neben der Downloadtaste des Players. Der orange Wert zeigt immer das wirksame Wiedergabetempo. Über den Erweiterungsnamen im Panel öffnest du die Looper-Anleitung."
+  },
+  "help_speed_presets_title": {
+    "message": "Schnelle Tempi"
+  },
+  "help_speed_presets": {
+    "message": "Wähle 0.5x, 1x, 1.5x, 2x, 2.5x oder 3x für eine sofortige Änderung. Die hervorgehobene Vorgabe entspricht dem gewählten Tempo."
+  },
+  "help_speed_slider_title": {
+    "message": "Präzise Steuerung"
+  },
+  "help_speed_slider": {
+    "message": "Ziehe den Regler zwischen 0.1x und 4x in Schritten von 0.025x. Ein Doppelklick auf den Regler stellt das normale Tempo von 1x wieder her."
+  },
+  "help_speed_pitch_title": {
+    "message": "Tonhöhe beibehalten"
+  },
+  "help_speed_pitch": {
+    "message": "Aktiviere Tonhöhe beibehalten, um die Dauer zu ändern und die ursprüngliche musikalische Tonhöhe zu erhalten. Ist es aus, steigt oder fällt die Tonhöhe mit dem Tempo. Die Option ist deaktiviert, wenn der Browser die Tonhöhe nicht erhalten kann."
+  },
+  "help_speed_bypass_title": {
+    "message": "Temporärer Bypass"
+  },
+  "help_speed_bypass": {
+    "message": "Drücke das Bypass-Symbol neben dem aktuellen Wert für 1x, ohne das gewählte Tempo oder die Tonhöheneinstellung zu verlieren. Drücke es erneut, um beides wiederherzustellen."
+  },
+  "help_speed_memory_title": {
+    "message": "Gespeichert und aktiv gehalten"
+  },
+  "help_speed_memory": {
+    "message": "Tempo und Tonhöheneinstellung werden lokal gespeichert, bei späteren Besuchen wiederhergestellt und auf den aktuellen Player sowie neu geladenes SoundCloud-Audio angewendet."
+  },
+  "help_speed_looper_effect_title": {
+    "message": "Downloads und Looper"
+  },
+  "help_speed_looper_effect": {
+    "message": "Das Tempo verändert vollständige Track-Downloads nicht. Ein WAV-Export des Loopers verwendet das wirksame Tempo: Mit erhaltener Tonhöhe bleibt sie gleich; andernfalls ändern sich Dauer und Tonhöhe."
+  },
+  "help_speed_close_title": {
+    "message": "Schließen und Fehler beheben"
+  },
+  "help_speed_close": {
+    "message": "Klicke außerhalb des Panels oder drücke Escape, um es zu schließen. Schlägt Wiedergabe oder Speichern fehl, zeigt das Panel eine Meldung; lade SoundCloud neu und versuche es erneut."
+  },
   "help_support_title": {
     "message": "Support und Bewertungen"
   },
