@@ -415,7 +415,6 @@
         const success = document.getElementById('feedback-success');
         const submissionId = crypto.randomUUID();
         let turnstileToken = '';
-        let turnstileWidget;
         const setStatus = message => { status.textContent = message; };
         document.querySelector('.goodbye-close').addEventListener('click', () => { document.body.innerHTML = '<main class="goodbye"><p>Thanks for trying SoundCloud Track Downloader.</p></main>'; });
         fetch('/api/uninstall-feedback/config', { cache: 'no-store' }).then(response => response.ok ? response.json() : null).then(config => {
@@ -430,8 +429,10 @@
           container.dataset['errorCallback'] = 'scdTurnstileError';
           window.scdTurnstileExpired = () => { turnstileToken = ''; submit.disabled = true; };
           window.scdTurnstileError = () => { turnstileToken = ''; submit.disabled = true; setStatus('Could not load feedback protection. Please try again later.'); };
+          setStatus('Loading verification…');
           const script = document.createElement('script'); script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'; script.async = true; script.defer = true;
-          document.head.append(script);
+          script.onerror = () => setStatus('Could not load feedback protection. Please try again later.');
+          window.setTimeout(() => document.head.append(script), 1500);
         }).catch(() => setStatus('Could not load feedback protection. Please try again later.'));
         form.addEventListener('submit', async event => {
           event.preventDefault();
@@ -440,7 +441,7 @@
           const payload = { reason: values.get('reason'), comment: values.get('comment'), email: values.get('email'), submissionId, locale: new URLSearchParams(location.search).get('locale') || navigator.language || '', extensionVersion: new URLSearchParams(location.search).get('version') || '', turnstileToken };
           setStatus('Sending…');
           submit.disabled = true;
-          try { const response = await fetch('/api/uninstall-feedback', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) throw new Error(); form.hidden = true; success.hidden = false; } catch { turnstileToken = ''; if (turnstileWidget !== undefined) window.turnstile.reset(turnstileWidget); setStatus('We could not send your feedback. Please try again.'); }
+          try { const response = await fetch('/api/uninstall-feedback', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) throw new Error(); form.hidden = true; success.hidden = false; } catch { turnstileToken = ''; if (typeof window.turnstile?.reset === 'function') window.turnstile.reset(); setStatus('We could not send your feedback. Please try again.'); }
         });
         return;
       }
