@@ -245,16 +245,33 @@
           font-weight: 700;
         }
 
-        .limits,
         .pitch-row {
           display: flex;
           align-items: center;
           justify-content: space-between;
         }
 
+        .slider-wrap {
+          position: relative;
+          height: 28px;
+          margin: 0 0 10px;
+        }
+
         .limits {
-          margin-bottom: 4px;
-          color: #ccc;
+          position: absolute;
+          z-index: 1;
+          top: 50%;
+          right: 4px;
+          left: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          color: #eee;
+          font-size: 9px;
+          font-weight: 600;
+          line-height: 1;
+          pointer-events: none;
+          transform: translateY(-50%);
         }
 
         .slider {
@@ -263,7 +280,7 @@
           display: block;
           width: 100%;
           height: 28px;
-          margin: 0 0 14px;
+          margin: 0;
           border: 0;
           background: linear-gradient(
               to right,
@@ -384,16 +401,18 @@
           ${[1, 2, 3, 0.5, 1.5, 2.5].map((rate) => `<button class="preset" type="button" data-rate="${rate}" aria-pressed="false">${rate}x</button>`).join("")}
         </div>
         </div>
-        <div class="limits" aria-hidden="true"><span>0.1x</span><span>4x</span></div>
-        <input
-          class="slider"
-          type="range"
-          min="0.1"
-          max="4"
-          step="0.025"
-          value="1"
-          aria-label="Playback speed"
-        />
+        <div class="slider-wrap">
+          <div class="limits" aria-hidden="true"><span>0.1x</span><span>4x</span></div>
+          <input
+            class="slider"
+            type="range"
+            min="0.1"
+            max="4"
+            step="0.025"
+            value="1"
+            aria-label="Playback speed"
+          />
+        </div>
         <div class="pitch-row">
           <label class="pitch-label">
             <input class="pitch-toggle" type="checkbox" />

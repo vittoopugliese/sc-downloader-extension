@@ -78,6 +78,31 @@ async function main() {
       throw new Error("Playback Speed panel did not open.");
     }
 
+    const compactSlider = await host.locator(".slider-wrap").evaluate((wrapper) => {
+      const labels = wrapper.querySelector(".limits");
+      const slider = wrapper.querySelector(".slider");
+      const wrapperBounds = wrapper.getBoundingClientRect();
+      const labelsBounds = labels?.getBoundingClientRect();
+      const sliderBounds = slider?.getBoundingClientRect();
+      return {
+        labelsAreInsideSliderWrapper:
+          labels?.parentElement === wrapper &&
+          labelsBounds.top >= wrapperBounds.top &&
+          labelsBounds.bottom <= wrapperBounds.bottom,
+        wrapperMatchesSlider:
+          sliderBounds.top === wrapperBounds.top &&
+          sliderBounds.bottom === wrapperBounds.bottom,
+        labelsIgnorePointerInput: getComputedStyle(labels).pointerEvents === "none",
+      };
+    });
+    if (
+      !compactSlider.labelsAreInsideSliderWrapper ||
+      !compactSlider.wrapperMatchesSlider ||
+      !compactSlider.labelsIgnorePointerInput
+    ) {
+      throw new Error("Playback speed limits are not compactly overlaid inside the slider.");
+    }
+
     const branding = await host.locator(".brand").evaluate((brand) => ({
       name: brand.querySelector(".brand-name")?.textContent?.trim(),
       logoWidth: parseFloat(
