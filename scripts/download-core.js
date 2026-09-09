@@ -360,10 +360,7 @@ const SCDownload = (() => {
         endMs: (rendered.length / rendered.sampleRate) * 1000,
       };
       const wavBytes = encodeWavSegment(rendered, outputRange, signal);
-      const rateLabel = Number(transform.rate)
-        .toFixed(2)
-        .replace(/\.00$/, "")
-        .replace(/0$/, "");
+      const rateLabel = String(Number(Number(transform.rate).toFixed(3)));
       const transformLabel =
         transform.rate === 1
           ? ""

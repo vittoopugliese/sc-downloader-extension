@@ -7,9 +7,9 @@
   "use strict";
 
   const DEFAULTS = Object.freeze({
-    min: 0.5,
-    max: 2,
-    step: 0.05,
+    min: 0.1,
+    max: 4,
+    step: 0.025,
     rate: 1,
     preservePitch: false,
   });
@@ -22,11 +22,11 @@
   function clampRate(value, minimum = DEFAULTS.min, maximum = DEFAULTS.max) {
     const number = Number(value);
     if (!Number.isFinite(number)) return DEFAULTS.rate;
-    return Math.round(Math.max(minimum, Math.min(maximum, number)) * 100) / 100;
+    return Math.round(Math.max(minimum, Math.min(maximum, number)) * 1000) / 1000;
   }
 
   function formatRate(value) {
-    return `${Number(value).toFixed(2).replace(/\.00$/, "").replace(/0$/, "")}x`;
+    return `${Number(Number(value).toFixed(3))}x`;
   }
 
   function create(options = {}) {
@@ -62,6 +62,7 @@
     let preservePitch =
       Boolean(options.initialPreservePitch) && supportsPreservePitch();
     let installed = false;
+    let bypassed = false;
 
     function supportsPreservePitch() {
       return PITCH_PROPERTIES.some((name) => native[name]?.set);
@@ -73,6 +74,8 @@
         max: maximum,
         step: DEFAULTS.step,
         rate,
+        bypassed,
+        effectiveRate: bypassed ? 1 : rate,
         preservePitch,
         preservePitchSupported: supportsPreservePitch(),
       });
@@ -89,8 +92,8 @@
       for (const name of PITCH_PROPERTIES) {
         setNative(audio, name, preservePitch);
       }
-      setNative(audio, "defaultPlaybackRate", rate);
-      setNative(audio, "playbackRate", rate);
+      setNative(audio, "defaultPlaybackRate", bypassed ? 1 : rate);
+      setNative(audio, "playbackRate", bypassed ? 1 : rate);
     }
 
     function apply(audio) {
@@ -130,6 +133,12 @@
 
     function setRate(value) {
       rate = clampRate(value, minimum, maximum);
+      updateAll();
+      return snapshot();
+    }
+
+    function setBypassed(value) {
+      bypassed = Boolean(value);
       updateAll();
       return snapshot();
     }
@@ -179,6 +188,7 @@
       install: installGuards,
       setPreservePitch,
       setRate,
+      setBypassed,
       snapshot,
     });
   }

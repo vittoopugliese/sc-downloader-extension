@@ -85,9 +85,9 @@ function fakeFactory(record) {
       rate: 0.12,
       preservePitch: true,
     }))),
-    { rate: 0.5, preservePitch: true }
+    { rate: 0.12, preservePitch: true }
   );
-  assert.equal(rendererModule.normalizeTransform({ rate: 8 }).rate, 2);
+  assert.equal(rendererModule.normalizeTransform({ rate: 8 }).rate, 4);
   assert.equal(rendererModule.normalizeTransform({ rate: "nope" }).rate, 1);
 
   const sourceBuffer = audioBuffer([

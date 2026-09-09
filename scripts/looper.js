@@ -1492,7 +1492,7 @@ const SCLooper = (() => {
 
     const parsedRate = Number(rateValue);
     const rate = Number.isFinite(parsedRate)
-      ? Math.round(Math.max(0.5, Math.min(2, parsedRate)) * 100) / 100
+      ? Math.round(Math.max(0.1, Math.min(4, parsedRate)) * 1000) / 1000
       : 1;
     return {
       rate,

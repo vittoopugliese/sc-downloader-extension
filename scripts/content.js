@@ -4,6 +4,35 @@ let observerRegistered = false;
 let urlCheckInterval = null;
 let urlChangeTimeout = null;
 let lastBulkProgressAt = 0;
+const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
+const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
+const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
+const POPUP_START_VIEW_KEY = "scdl.popup.startView";
+
+function exposeTempoControlAssets() {
+  document.documentElement.setAttribute(
+    EXTENSION_LOGO_ATTRIBUTE,
+    chrome.runtime.getURL("assets/icon48.png")
+  );
+  document.dispatchEvent(new CustomEvent(EXTENSION_ASSETS_EVENT));
+}
+
+document.addEventListener(OPEN_LOOPER_GUIDE_EVENT, () => {
+  chrome.storage.local
+    .set({ [POPUP_START_VIEW_KEY]: "looper" })
+    .then(() => chrome.runtime.sendMessage({ type: "OPEN_EXTENSION_POPUP" }))
+    .then((result) => {
+      if (!result?.success) {
+        throw new Error(result?.error || "The extension popup could not open.");
+      }
+    })
+    .catch(async (error) => {
+      await chrome.storage.local.remove(POPUP_START_VIEW_KEY).catch(() => {});
+      console.warn("[SC Downloader] Could not open the Looper guide.", error);
+    });
+});
+
+exposeTempoControlAssets();
 
 const intake = SCPageIntake.create({
   window,

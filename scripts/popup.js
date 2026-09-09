@@ -12,6 +12,7 @@ const SELECT_WARN_THRESHOLD = 1000;
 const ROW_HEIGHT = 40;
 const MAX_SELECTION_HEIGHT = 8 * ROW_HEIGHT;
 const OVERSCAN = 6;
+const POPUP_START_VIEW_KEY = "scdl.popup.startView";
 
 const loadingOverlay = document.getElementById("loadingOverlay");
 const loadingText = document.getElementById("loadingText");
@@ -142,6 +143,17 @@ function closeLooperExplainer() {
   looperReturnFocus = null;
 }
 
+async function openRequestedPopupView() {
+  try {
+    const stored = await chrome.storage.local.get(POPUP_START_VIEW_KEY);
+    if (stored[POPUP_START_VIEW_KEY] !== "looper") return;
+    await chrome.storage.local.remove(POPUP_START_VIEW_KEY);
+    openLooperExplainer();
+  } catch (error) {
+    console.warn("[SC Downloader] Could not restore the requested popup view.", error);
+  }
+}
+
 function trapPanelFocus(event, panel) {
   if (event.key !== "Tab" || !panel.classList.contains("is-visible")) return;
   const focusable = [...panel.querySelectorAll(
@@ -167,6 +179,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   helpBackBtn.addEventListener("click", closeHelp);
   looperEntryBtn.addEventListener("click", openLooperExplainer);
   looperBackBtn.addEventListener("click", closeLooperExplainer);
+  await openRequestedPopupView();
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && looperPanel.classList.contains("is-visible")) {
       event.preventDefault();

@@ -45,6 +45,16 @@ async function main() {
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-core.js"),
     });
+    await page.evaluate(() => {
+      document.documentElement.setAttribute(
+        "data-scdl-extension-logo-url",
+        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+      );
+      window.looperGuideRequests = 0;
+      document.addEventListener("scdl:open-looper-guide", () => {
+        window.looperGuideRequests += 1;
+      });
+    });
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-main.js"),
     });
@@ -68,13 +78,40 @@ async function main() {
       throw new Error("Playback Speed panel did not open.");
     }
 
+    const branding = await host.locator(".brand").evaluate((brand) => ({
+      name: brand.querySelector(".brand-name")?.textContent?.trim(),
+      logoWidth: parseFloat(
+        getComputedStyle(brand.querySelector(".brand-logo")).width
+      ),
+      logoHeight: parseFloat(
+        getComputedStyle(brand.querySelector(".brand-logo")).height
+      ),
+      logoHidden: brand.querySelector(".brand-logo")?.hidden,
+    }));
+    if (
+      branding.name !== "SoundCloud Track Downloader" ||
+      branding.logoWidth !== 48 ||
+      branding.logoHeight !== 48 ||
+      branding.logoHidden
+    ) {
+      throw new Error("Playback Speed panel branding is missing or incorrectly sized.");
+    }
+
+    await host.locator(".brand-name").click();
+    const looperGuideRequested = await page.evaluate(
+      () => window.looperGuideRequests
+    );
+    if (looperGuideRequested !== 1) {
+      throw new Error("Playback Speed panel did not request the Looper guide.");
+    }
+
     await host.locator(".slider").evaluate((slider) => {
-      slider.value = "0.85";
+      slider.value = "0.875";
       slider.dispatchEvent(new Event("input", { bubbles: true }));
     });
     const speed = await page.locator("audio").evaluate((audio) => audio.playbackRate);
-    if (speed !== 0.85) {
-      throw new Error(`Expected audio at 0.85x, received ${speed}x.`);
+    if (speed !== 0.875) {
+      throw new Error(`Expected audio at 0.875x, received ${speed}x.`);
     }
 
     await host.locator(".pitch-toggle").check();
@@ -89,7 +126,7 @@ async function main() {
       audio.playbackRate = 1.25;
       return audio.playbackRate;
     });
-    if (guardedSpeed !== 0.85) {
+    if (guardedSpeed !== 0.875) {
       throw new Error("SoundCloud-style host write escaped the playback-rate guard.");
     }
 
@@ -107,6 +144,35 @@ async function main() {
     });
     if (!bridgeStillOwnsMedia) {
       throw new Error("Tempo control broke the existing looper media bridge.");
+    }
+
+    for (const rate of [1, 2, 0.5, 1.5]) {
+      const preset = host.locator(`.preset[data-rate="${rate}"]`);
+      await preset.click();
+      if (await page.locator("audio").evaluate((audio) => audio.playbackRate) !== rate ||
+          await preset.getAttribute("aria-pressed") !== "true") {
+        throw new Error(`Preset ${rate}x did not apply.`);
+      }
+    }
+    for (const rate of [0.1, 0.125, 0.15, 0.175, 0.2, 4]) {
+      await host.locator(".slider").fill(String(rate));
+      if (await page.locator("audio").evaluate((audio) => audio.playbackRate) !== rate) {
+        throw new Error(`Slider rate ${rate}x did not apply.`);
+      }
+    }
+    await host.locator('.preset[data-rate="1"]').click();
+    await host.locator('.preset[data-rate="0.5"]').click();
+    await host.locator('.bypass').click();
+    if (await page.locator('audio').evaluate((audio) => audio.playbackRate) !== 1 ||
+        await host.locator('.slider').inputValue() !== '0.5' ||
+        !(await host.locator('.pitch-toggle').isChecked()) ||
+        await host.getAttribute('data-scdl-tempo-rate') !== '1') {
+      throw new Error('Bypass must apply 1x while retaining speed and pitch settings.');
+    }
+    await host.locator('.bypass').click();
+    if (await page.locator('audio').evaluate((audio) => audio.playbackRate) !== 0.5 ||
+        await host.locator('.bypass').getAttribute('aria-pressed') !== 'false') {
+      throw new Error('Disabling bypass must restore the selected speed.');
     }
 
     fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });

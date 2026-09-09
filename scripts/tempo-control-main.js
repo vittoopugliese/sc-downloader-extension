@@ -14,6 +14,11 @@
   const PITCH_STORAGE = "scdl.tempo.preservePitch";
   const RATE_ATTRIBUTE = "data-scdl-tempo-rate";
   const PITCH_ATTRIBUTE = "data-scdl-tempo-preserve-pitch";
+  const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
+  const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
+  const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
+  // Inline copy of assets/icons/bypass.svg for the MAIN-world shadow UI.
+  const BYPASS_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17.2C22 19.85 19.85 22 17.2 22C15.78 22 14.51 21.38 13.63 20.4C12.87 19.55 12.4 18.43 12.4 17.2C12.4 14.55 14.55 12.4 17.2 12.4C18.57 12.4 19.81 12.98 20.69 13.91C20.68 13.91 20.68 13.91 20.69 13.92C21.5 14.78 22 15.93 22 17.2Z"/><path d="M18.48 18.54L15.95 16M18.45 16.03L15.92 18.57"/><path d="M22 8.69C22 10.66 21.49 12.4 20.69 13.91C19.81 12.98 18.57 12.4 17.2 12.4C14.55 12.4 12.4 14.55 12.4 17.2C12.4 18.43 12.87 19.55 13.63 20.4C13.26 20.57 12.92 20.71 12.62 20.81C12.28 20.93 11.72 20.93 11.38 20.81C8.48 19.82 2 15.69 2 8.69C2 5.6 4.49 3.09998 7.56 3.09998C9.37 3.09998 10.99 3.98002 12 5.33002C13.01 3.98002 14.63 3.09998 16.44 3.09998C19.51 3.09998 22 5.6 22 8.69Z"/></svg>`;
   // Kept inline because this script runs in the page's MAIN world, where
   // chrome.runtime.getURL() is intentionally unavailable. The paths match
   // assets/icons/speed-meter.svg, with fill changed to currentColor.
@@ -27,6 +32,18 @@
   let mountQueued = false;
   let playbackFailure = "";
   let storageFailure = "";
+
+  function syncBrandLogo() {
+    if (!ui) return;
+    const logoUrl = document.documentElement.getAttribute(
+      EXTENSION_LOGO_ATTRIBUTE
+    );
+    if (!logoUrl) return;
+    ui.brandLogo.src = logoUrl;
+    ui.brandLogo.hidden = false;
+  }
+
+  document.addEventListener(EXTENSION_ASSETS_EVENT, syncBrandLogo);
 
   function readStoredRate() {
     try {
@@ -107,14 +124,15 @@
         .trigger:hover { color: #abababff; }
         .trigger-icon {
           display: block;
-          width: 18px;
-          height: 18px;
+          width: 20px;
+          height: 20px;
           fill: currentColor;
         }
 
         .trigger-rate {
           margin-left: 2px;
           color: #ff6c23ff;
+          font-size: 11px;
           font-weight: 600;
           line-height: 1;
           position:relative;
@@ -130,14 +148,96 @@
         .panel {
           position: fixed;
           z-index: 2147483647;
-          width: min(314px, calc(100vw - 16px));
+          width: min(420px, calc(100vw - 16px));
           padding: 18px 17px 20px;
           border: 1px solid #444;
           border-radius: 7px;
           color: #eee;
           background: #202020;
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+          transform-origin: bottom right;
         }
+
+        .panel:not([hidden]) {
+          animation: tempo-panel-enter 180ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        @keyframes tempo-panel-enter {
+          from {
+            opacity: 0;
+            transform: translateY(10px) scale(0.97);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        .panel-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 18px;
+        }
+
+        .brand {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex: 1;
+          min-width: 0;
+        }
+
+        .brand-logo {
+          width: 48px;
+          height: 48px;
+          flex: 0 0 48px;
+          border-radius: 10px;
+          object-fit: contain;
+        }
+
+        .brand-name {
+          margin: 0;
+          padding: 0;
+          border: 0;
+          color: #fff;
+          background: transparent;
+          font: 600 16px/1.25 Interstate, Lucida Grande, Arial, sans-serif;
+          text-align: left;
+          text-decoration: none;
+          cursor: pointer;
+          transition: color 160ms ease;
+        }
+
+        .brand-name:hover { color: #d0d0d0; }
+        .brand-name:focus-visible,
+        .preset:focus-visible {
+          outline: 2px solid #ff5500;
+          outline-offset: 3px;
+        }
+
+        .presets {
+          display: grid;
+          grid-template-columns: repeat(3, 40px);
+          gap: 4px;
+          flex: 0 0 auto;
+        }
+
+        .preset {
+          height: 28px;
+          padding: 0;
+          border: 1px solid #484848;
+          border-radius: 5px;
+          background: #292929;
+          color: #ff6c23;
+          font: inherit;
+          cursor: pointer;
+          transition: background 160ms ease, border-color 160ms ease;
+        }
+
+        .preset:hover { background: #383838; border-color: #777; }
+        .preset[aria-pressed="true"] { border-color: #ff5500; background: #42291d; }
 
         .title {
           margin: 0 0 22px;
@@ -199,8 +299,29 @@
           background: #ff5500;
         }
 
-        .pitch-row { cursor: pointer; }
+        .bypass {
+          display: grid;
+          place-items: center;
+          width: 28px;
+          height: 28px;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          color: #ef5350;
+          cursor: pointer;
+          transition: color 160ms ease;
+        }
+        .bypass[aria-pressed="true"] { color: #ccc; }
+        .bypass:hover { filter: brightness(1.15); }
+        .bypass:focus-visible { outline: 2px solid #ff5500; outline-offset: 2px; }
+        .speed-status { display: flex; align-items: center; gap: 6px; }
+        .bypass svg { width: 20px; height: 20px; animation: heart-float 3s ease-in-out infinite; }
+        @keyframes heart-float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-3px); }
+        }
         .pitch-label {
+          cursor: pointer;
           display: inline-flex;
           align-items: center;
           gap: 9px;
@@ -231,7 +352,10 @@
         }
 
         @media (prefers-reduced-motion: reduce) {
-          * { transition: none !important; }
+          * {
+            animation: none !important;
+            transition: none !important;
+          }
         }
       </style>
       <button
@@ -247,23 +371,39 @@
         aria-label="Playback Speed"
         hidden
       >
-        <div class="limits" aria-hidden="true"><span>0.5x</span><span>2x</span></div>
+        <div class="panel-header">
+        <div class="brand">
+          <img class="brand-logo" width="48" height="48" alt="" hidden />
+          <button
+            class="brand-name"
+            type="button"
+            aria-label="Open the Looper guide"
+          >SoundCloud Track <br />Downloader</button>
+        </div>
+        <div class="presets" role="group" aria-label="Quick playback speeds">
+          ${[1, 2, 3, 0.5, 1.5, 2.5].map((rate) => `<button class="preset" type="button" data-rate="${rate}" aria-pressed="false">${rate}x</button>`).join("")}
+        </div>
+        </div>
+        <div class="limits" aria-hidden="true"><span>0.1x</span><span>4x</span></div>
         <input
           class="slider"
           type="range"
-          min="0.5"
-          max="2"
-          step="0.05"
+          min="0.1"
+          max="4"
+          step="0.025"
           value="1"
           aria-label="Playback speed"
         />
-        <label class="pitch-row">
-          <span class="pitch-label">
+        <div class="pitch-row">
+          <label class="pitch-label">
             <input class="pitch-toggle" type="checkbox" />
             Preserve Pitch
-          </span>
-          <output class="current">1x</output>
-        </label>
+          </label>
+          <div class="speed-status">
+            <button class="bypass" type="button" aria-label="Bypass playback speed" aria-pressed="false" title="Bypass playback speed">${BYPASS_ICON}</button>
+            <output class="current">1x</output>
+          </div>
+        </div>
         <p class="status" role="status" aria-live="polite" hidden></p>
       </section>
     `;
@@ -272,7 +412,7 @@
   function positionPanel() {
     if (!ui || ui.panel.hidden) return;
     const anchor = ui.trigger.getBoundingClientRect();
-    const width = Math.min(314, innerWidth - 16);
+    const width = Math.min(420, innerWidth - 16);
     const left = Math.max(8, Math.min(innerWidth - width - 8, anchor.right - width));
     ui.panel.style.left = `${left}px`;
     ui.panel.style.bottom = `${Math.max(8, innerHeight - anchor.top + 8)}px`;
@@ -306,11 +446,25 @@
       slider: root.querySelector(".slider"),
       pitchToggle: root.querySelector(".pitch-toggle"),
       current: root.querySelector(".current"),
+      bypass: root.querySelector(".bypass"),
       status: root.querySelector(".status"),
+      brandLogo: root.querySelector(".brand-logo"),
+      brandName: root.querySelector(".brand-name"),
     };
 
     ui.trigger.addEventListener("click", () => {
       setPanelOpen(ui.panel.hidden);
+    });
+    ui.brandName.addEventListener("click", () => {
+      document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
+    });
+    root.querySelectorAll(".preset").forEach((button) => {
+      button.addEventListener("click", () => {
+        playbackFailure = "";
+        const state = controller.setRate(Number(button.dataset.rate));
+        writeSetting(RATE_STORAGE, state.rate);
+        render();
+      });
     });
     ui.slider.addEventListener("input", () => {
       playbackFailure = "";
@@ -330,24 +484,34 @@
       writeSetting(PITCH_STORAGE, state.preservePitch);
       render();
     });
+    ui.bypass.addEventListener("click", () => {
+      playbackFailure = "";
+      controller.setBypassed(!controller.snapshot().bypassed);
+    });
 
     render();
+    syncBrandLogo();
     return host;
   }
 
   function render() {
     if (!ui) return;
     const state = controller.snapshot();
-    const text = formatRate(state.rate);
+    const text = formatRate(state.effectiveRate);
     ui.trigger.querySelector(".trigger-rate").textContent = text;
     ui.trigger.setAttribute("aria-label", `Playback speed ${text}`);
     ui.slider.value = String(state.rate);
-    ui.slider.setAttribute("aria-valuetext", text);
+    ui.slider.setAttribute("aria-valuetext", formatRate(state.rate));
+    ui.bypass.setAttribute("aria-pressed", String(state.bypassed));
+    ui.bypass.title = state.bypassed ? "Bypass on — click to restore playback speed" : "Bypass playback speed";
+    ui.root.querySelectorAll(".preset").forEach((button) => {
+      button.setAttribute("aria-pressed", String(Number(button.dataset.rate) === state.rate));
+    });
     syncRange(ui.slider);
     ui.pitchToggle.checked = state.preservePitch;
     ui.pitchToggle.disabled = !state.preservePitchSupported;
     ui.current.textContent = text;
-    ui.host.setAttribute(RATE_ATTRIBUTE, String(state.rate));
+    ui.host.setAttribute(RATE_ATTRIBUTE, String(state.effectiveRate));
     ui.host.setAttribute(PITCH_ATTRIBUTE, String(state.preservePitch));
     const message = playbackFailure || storageFailure;
     ui.status.textContent = message;

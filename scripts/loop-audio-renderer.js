@@ -6,8 +6,8 @@
 (() => {
   "use strict";
 
-  const MIN_RATE = 0.5;
-  const MAX_RATE = 2;
+  const MIN_RATE = 0.1;
+  const MAX_RATE = 4;
   const DEFAULT_RATE = 1;
   const QUANTUM = 128;
   const MAX_RENDERED_PCM_BYTES = 512 * 1024 * 1024;
@@ -17,7 +17,7 @@
   function normalizeTransform(value) {
     const number = Number(value?.rate);
     const rate = Number.isFinite(number)
-      ? Math.round(Math.max(MIN_RATE, Math.min(MAX_RATE, number)) * 100) / 100
+      ? Math.round(Math.max(MIN_RATE, Math.min(MAX_RATE, number)) * 1000) / 1000
       : DEFAULT_RATE;
     return Object.freeze({
       rate,
