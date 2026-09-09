@@ -1,5 +1,23 @@
 # Roadmap de producto: descargas gratis + Looper de pago
 
+## Overlay de feature `9dc9f1b` - 2026-09-09
+
+Pitch/velocidad ya no estan solamente en P10-P12: `9dc9f1b1d07ec773207cff72dd362e60e035cbc5` implemento velocidad live `0.5x`-`2x`, preserve pitch binario y export A-B transformado. “Pitch” no significa transposicion independiente. El resto de este roadmap conserva lenguaje historico que dice que estas capacidades no existen o no afectan el WAV.
+
+El alcance quedo ademas incompleto respecto de la expectativa actual: la descarga normal del boton del player no recibe `playbackTransform` y no respeta pitch/rate. El usuario lo marco como gap; no tratarlo como exclusion acordada.
+
+Este adelanto no cierra el gate de release. Quedan P0 de licencia/package y reproducibilidad, mas pruebas reales de audio, memoria, cancelacion, i18n y accesibilidad. Ver [`COLD-AUDIT-HANDOFF-9dc9f1b.md`](COLD-AUDIT-HANDOFF-9dc9f1b.md).
+
+Antes de E6/paywall hay que decidir expresamente:
+
+- si velocidad/preserve live permanecen gratis;
+- si el export transformado forma parte del Looper pago;
+- si la transformacion del boton del player se limita a esa superficie o tambien alcanza popup, inline y colecciones;
+- que una prueba solo se consume despues de guardar el WAV con exito, incluyendo el render WASM;
+- como comunicar que preserve pitch no es un editor de tono.
+
+No activar pagos ni cambiar acceso como consecuencia automatica de esta implementacion.
+
 Fecha inicial: 2026-09-05. Estado actualizado: 2026-09-07. Base inicial inspeccionada: `e37d50f` más el working tree de esa fecha.
 
 Este documento conserva la estrategia y el backlog de producto. La fuente de verdad ejecutable y de estado es `product-launch-plan-20260905.md`; la investigación comercial vigente es `payment-provider-research-20260907.md`. No usar las casillas históricas de este documento para decidir qué implementar primero ni para activar pagos.
@@ -261,4 +279,3 @@ Cada entrega mantiene diff separado y validación proporcional. No mezclar el wo
 - [Guía de imágenes y texto del listing](https://developer.chrome.com/docs/webstore/best-listing).
 
 Las condiciones específicas de pagos se reemplazaron por `payment-provider-research-20260907.md`; la decisión sigue condicionada a la aprobación explícita del proveedor y no autoriza ventas.
-

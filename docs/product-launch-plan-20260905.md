@@ -1,5 +1,23 @@
 # Plan de lanzamiento: ayuda, prueba de Looper, compra única y web
 
+## Addendum obligatorio: tempo/preserve y export transformado (2026-09-09)
+
+El commit `9dc9f1b1d07ec773207cff72dd362e60e035cbc5` adelanto una feature que este plan ubicaba en E8: control live de velocidad/preserve y descarga WAV del loop con esa transformacion. Por eso, las frases posteriores que dejan pitch/velocidad “para despues” son contexto historico, no estado del codigo.
+
+El alcance todavia tiene un gap confirmado por el usuario: la descarga normal del boton del player no respeta el pitch/rate seleccionado porque `playbackTransform` solo entra por `DOWNLOAD_LOOP`. Antes de implementar el fix hay que fijar si esa regla se limita al boton del player o tambien se extiende a popup, inline y colecciones.
+
+Este plan de lanzamiento no debe considerar la feature cerrada todavia. El relevamiento [`COLD-AUDIT-HANDOFF-9dc9f1b.md`](COLD-AUDIT-HANDOFF-9dc9f1b.md) registra dos P0: falta el notice `THIRD_PARTY_LICENSES.md` tanto en Git como en la allow-list del ZIP, y el test de provenance depende de un repo local ignorado. Tambien faltan matriz real de audio/fuentes, limites de RAM/duracion, cancelacion, i18n y accesibilidad.
+
+Reglas comerciales provisionales hasta decision explicita:
+
+- no activar checkout/paywall por el solo hecho de que exista esta feature;
+- no consumir el trial si renderizar o guardar el WAV falla;
+- mantener tracks completos gratuitos; si se transforman, definir formato, UX y costo antes del gate;
+- no vender “pitch editing”: lo implementado es preservar o no el pitch al cambiar tempo;
+- decidir antes de E6 si el control live es gratis y si el WAV transformado pertenece al valor premium de Looper.
+
+El gate “producto v1 terminado” incorpora ahora el cierre de esos P0/P1. El procedimiento de arranque en frio debe leer el handoff del commit junto a este archivo.
+
 Fecha inicial: 2026-09-05. Última consolidación: 2026-09-07.
 
 Estado: fuente de verdad para retomar el trabajo en una sesión sin contexto. E1 y E2 están cerradas en código; E3 está parcialmente cerrada; E4 no se implementó ni desplegó. E5A/E5B se pueden preparar de forma privada, pero no habrá cobro, checkout público ni paywall hasta que esté terminado el producto v1. Esta sesión no autoriza publicación, creación de cuentas ni contacto con proveedores.
@@ -736,4 +754,3 @@ Una respuesta que me habia gustado mucho y tengo como principal roadmap para que
     landing corta, al grano con las features, y aclarando que es GRATIS.
 
   entonces por ahora solo quiero una landing, nada mas, respeta el working tree y cuando termines comitea s
-

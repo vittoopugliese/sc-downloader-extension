@@ -1,5 +1,18 @@
 # Mapa de features: Segment Looper + Playback Speed
 
+## Actualizacion posterior al commit `9dc9f1b` (2026-09-09)
+
+Este mapa fue escrito **antes** de implementar la feature y debe conservarse como analisis de fuentes, no como estado actual. El commit `9dc9f1b1d07ec773207cff72dd362e60e035cbc5` adelanto parte de las fases que abajo figuran como futuras:
+
+- ya existe velocidad live `0.5x`-`2x`, step `0.05`, persistencia global y preserve pitch nativo;
+- ya existe export WAV del A-B actual con rate natural o Signalsmith preserve;
+- la descarga normal del boton del player todavia ignora ese estado; el usuario lo reporta como gap y espera que respete pitch;
+- no existen pitch independiente, perfiles por track, timeline, biblioteca, hotkeys, rango configurable ni panel draggable;
+- Signalsmith se usa solo offline; no se implemento el grafo AudioWorklet live propuesto en la fase avanzada;
+- el estado exacto del commit tiene bloqueantes de licencia, packaging y reproducibilidad de tests.
+
+Para la auditoria en frio, usar como documento rector [`COLD-AUDIT-HANDOFF-9dc9f1b.md`](COLD-AUDIT-HANDOFF-9dc9f1b.md). La matriz y el roadmap que siguen son la fotografia pre-implementacion y no deben usarse para afirmar que la extension actual carece de velocidad/preserve.
+
 Fecha del análisis: 2026-09-08
 
 Fuentes primarias:
@@ -216,4 +229,3 @@ por ahora SOLO en la waveform de current track.
 - Verificar licencias antes de copiar código: el repo Tempo declara MIT y Signalsmith/Mediabunny tienen avisos propios; el repo Segment Looper no contiene licencia.
 - Mantener privacidad local: loops, rates, timelines y backups no necesitan servidor.
 - Probar SPA, HLS AAC, reproductor persistente, pestañas múltiples, pause/resume, cambio rápido de track, popup cerrado y reinicio del service worker.
-

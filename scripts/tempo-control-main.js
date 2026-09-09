@@ -14,6 +14,10 @@
   const PITCH_STORAGE = "scdl.tempo.preservePitch";
   const RATE_ATTRIBUTE = "data-scdl-tempo-rate";
   const PITCH_ATTRIBUTE = "data-scdl-tempo-preserve-pitch";
+  // Kept inline because this script runs in the page's MAIN world, where
+  // chrome.runtime.getURL() is intentionally unavailable. The paths match
+  // assets/icons/speed-meter.svg, with fill changed to currentColor.
+  const SPEED_METER_ICON = `<svg class="trigger-icon" viewBox="0 0 612 612" aria-hidden="true" focusable="false"><g><path d="M175.205 239.62c.127-1.965-.533-3.902-1.833-5.381l-58.84-66.941c-1.3-1.479-3.135-2.381-5.102-2.508-1.975-.126-3.902.533-5.381 1.833-27.037 23.766-49.479 51.794-66.706 83.305-.944 1.729-1.165 3.762-.611 5.651.554 1.89 1.836 3.483 3.565 4.427l78.205 42.748a7.46 7.46 0 0 0 3.557.912c2.627 0 5.174-1.398 6.523-3.866 11.386-20.828 26.229-39.359 44.114-55.08 1.482-1.308 2.384-3.143 2.509-5.11Z"/><path d="M201.462 214.829a7.46 7.46 0 0 0 10.041 3.081c20.962-11.117 43.512-18.371 67.025-21.561 4.064-.551 6.913-4.293 6.362-8.358l-11.979-88.316c-.551-4.064-4.304-6.909-8.358-6.362-35.708 4.843-69.949 15.857-101.772 32.736-3.623 1.922-5.002 6.416-3.082 10.041l41.763 78.739Z"/><path d="m105.785 334.345-86.017-23.338a7.47 7.47 0 0 0-9.113 5.224C3.586 342.295 0 369.309 0 396.523c0 4.657.111 9.329.342 14.284.185 3.981 3.468 7.083 7.414 7.083.116 0 .234-.002.35-.008l89.031-4.113a7.46 7.46 0 0 0 7.075-7.762c-.155-3.341-.23-6.444-.23-9.484 0-18.02 2.365-35.873 7.029-53.066a7.46 7.46 0 0 0-5.226-9.112Z"/><path d="M438.731 120.745c-32.411-15.625-67.04-25.308-102.925-28.786a7.46 7.46 0 0 0-8.11 6.677l-8.593 88.712c-.396 4.082 2.594 7.713 6.677 8.108 23.652 2.291 46.463 8.669 67.8 18.954a7.46 7.46 0 0 0 10.14-3.37l38.7-80.287c1.558-3.788.007-8.228-3.689-10.008Z"/><path d="M569.642 245.337a7.46 7.46 0 0 0-.828-5.624c-18.432-30.835-41.933-57.983-69.848-80.686a7.46 7.46 0 0 0-10.447 1.075l-56.237 69.144a7.46 7.46 0 0 0 1.077 10.449c18.47 15.019 34.015 32.975 46.205 53.369a7.46 7.46 0 0 0 10.186 2.564l76.501-45.728a7.46 7.46 0 0 0 3.391-4.562Z"/><path d="M598.044 304.939c-1.228-3.915-5.397-6.096-9.308-4.867l-85.048 26.648c-3.915 1.226-6.093 5.393-4.867 9.306 6.104 19.486 9.199 39.839 9.199 60.494 0 3.041-.076 6.144-.23 9.484a7.46 7.46 0 0 0 7.075 7.762l89.031 4.113.35.008c3.944 0 7.228-3.103 7.414-7.083.229-4.955.342-9.627.342-14.284 0-31.217-4.694-61.912-13.956-91.584Z"/><path d="M305.737 380.755c-1.281 0-2.555.042-3.824.11l-120.65-71.185a7.46 7.46 0 0 0-10.632 10.186l65.815 123.355a69.56 69.56 0 0 0-.371 7.195c0 18.608 7.246 36.101 20.403 49.258 13.158 13.158 30.652 20.404 49.26 20.404s36.101-7.248 49.258-20.404c13.157-13.157 20.403-30.65 20.403-49.258s-7.246-36.101-20.403-49.258c-13.157-13.157-30.652-20.403-49.259-20.403Z"/></g></svg>`;
 
   if (window[INSTALLED_FLAG] || !globalThis.SCTempoControl) return;
   Object.defineProperty(window, INSTALLED_FLAG, { value: true });
@@ -85,20 +89,38 @@
         [hidden] { display: none !important; }
 
         .trigger {
-          min-width: 54px;
+          width: 48px;
           height: 34px;
           margin: 0;
-          padding: 0 10px;
-          border: 1px solid #333;
-          border-radius: 4px;
-          color: #ff5500;
-          background: #181818;
+          margin-left: 6px;
+          padding: 0;
+          border: 0;
+          color: #fff;
+          background: transparent;
           font: inherit;
-          font-weight: 600;
           cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
         }
 
-        .trigger:hover { border-color: #555; }
+        .trigger:hover { color: #abababff; }
+        .trigger-icon {
+          display: block;
+          width: 18px;
+          height: 18px;
+          fill: currentColor;
+        }
+
+        .trigger-rate {
+          margin-left: 2px;
+          color: #ff6c23ff;
+          font-weight: 600;
+          line-height: 1;
+          position:relative;
+          right: 9px;
+          transform: translateY(5px);
+        }
         .trigger:focus-visible,
         input:focus-visible {
           outline: 2px solid #ff5500;
@@ -218,7 +240,7 @@
         aria-label="Playback speed 1x"
         aria-haspopup="dialog"
         aria-expanded="false"
-      >1x</button>
+      >${SPEED_METER_ICON}<span class="trigger-rate">1x</span></button>
       <section
         class="panel"
         role="dialog"
@@ -317,7 +339,7 @@
     if (!ui) return;
     const state = controller.snapshot();
     const text = formatRate(state.rate);
-    ui.trigger.textContent = text;
+    ui.trigger.querySelector(".trigger-rate").textContent = text;
     ui.trigger.setAttribute("aria-label", `Playback speed ${text}`);
     ui.slider.value = String(state.rate);
     ui.slider.setAttribute("aria-valuetext", text);

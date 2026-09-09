@@ -3,6 +3,22 @@
 Fecha: 2026-09-05
 Base: `e63fbba`
 
+## Overlay de arquitectura para `9dc9f1b` (2026-09-09)
+
+El commit `9dc9f1b1d07ec773207cff72dd362e60e035cbc5` es posterior a esta base y agrega tempo/preserve live mas render transformado de loops. No es una fase de este refactor y no debe contarse como reduccion de codigo: agrega aproximadamente 969 lineas de runtime por diff entre core, adapter y renderer, ademas del vendor generado, y elimina muy poco porque incorpora comportamiento nuevo.
+
+Impacto sobre este plan:
+
+- `SCLoopAudioRenderer.render(...)` es un deep module con buen deletion test: oculta recorte, duracion, motores natural/WASM, progreso y cancelacion.
+- `SCTempoControl` tambien concentra politica compleja de descriptors y audio detras de una interface pequena.
+- `tempo-control-main.js` conserva UI, CSS, storage y lifecycle en un adapter de 419 lineas de diff; auditar cohesion antes de dividirlo, sin crear wrappers shallow.
+- `playbackTransform` atraviesa looper, background, job manager, execution, offscreen y download core. El contrato y las reglas de normalizacion estan duplicados; decidir si corresponde un value object canonico o si la duplicacion queda documentada como validacion de fronteras.
+- la descarga normal del player no atraviesa este seam y hoy ignora pitch/rate; cualquier fix debe integrarse al Download Intent canonico sin duplicar otro pipeline;
+- live y offline tienen owners distintos de audio por diseno. Mantener ese seam salvo que una fase separada justifique un motor live WASM.
+- el cambio tiene P0 de licencia/package y tests no autocontenidos; no usarlo como nueva base estable hasta cerrar esos gates.
+
+El inventario completo, riesgos y checklist estan en [`COLD-AUDIT-HANDOFF-9dc9f1b.md`](COLD-AUDIT-HANDOFF-9dc9f1b.md). Los conteos de la seccion siguiente siguen siendo historicos de la base `e63fbba`.
+
 ## Objetivo
 
 Reducir repetición y complejidad en los archivos principales sin eliminar ni alterar features actuales. La medida de éxito no será cuántos archivos se crean, sino cuánto comportamiento queda detrás de una interface pequeña, cuánto bajan los callers y cuánta lógica vieja se elimina.
@@ -299,4 +315,3 @@ Meta global conservadora: eliminar 500–800 líneas productivas netas, aumentar
 ## Próximo paso recomendado
 
 Comenzar por la fase 0 y luego ejecutar la fase 1. El Download Track canónico reduce el riesgo de mover mappings inconsistentes durante Page Intake. Después, la fase 2 produce la contracción visible más grande: `content.js` deja de ser el lugar donde se implementa cada tipo de página completo.
-
