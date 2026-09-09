@@ -228,3 +228,7 @@ const SCLooperCore = (() => {
     getSeekTarget,
   };
 })();
+
+// MAIN-world consumers (the player panel and session model) are loaded as
+// separate content-script entries, so expose the shared pure helpers explicitly.
+globalThis.SCLooperCore = SCLooperCore;

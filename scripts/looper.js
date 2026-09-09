@@ -20,6 +20,8 @@ const SCLooper = (() => {
   const WAVEFORM_SELECTORS = [
     '[role="slider"][aria-label="Waveform"]',
     ".fullHero__waveform .waveformWrapper__waveform",
+    ".waveformWrapper__waveform",
+    '[data-testid="waveform"]',
   ];
   const SEEK_RETRY_MS = 250;
   const TRACK_IDENTITY_CHECK_INTERVAL_MS = 500;
@@ -96,7 +98,11 @@ const SCLooper = (() => {
   }
 
   function isMoreActionsButton(button) {
-    if (button?.getAttribute("aria-haspopup") !== "true") return false;
+    const buttonClass = String(button?.className || "");
+    const hasMoreClass = /(?:^|\s)sc-button-more(?:\s|$)/.test(buttonClass);
+    if (button?.getAttribute("aria-haspopup") !== "true" && !hasMoreClass) {
+      return false;
+    }
     const label = normalizeLabel(
       button.getAttribute("aria-label") || button.getAttribute("title")
     );
@@ -183,18 +189,18 @@ const SCLooper = (() => {
   }
 
   function findMoreActionsWithin(container) {
-    return Array.from(
-      container?.querySelectorAll?.('button[aria-haspopup="true"]') || []
-    ).find(isMoreActionsButton) || null;
+    const buttons = [
+      ...(container?.querySelectorAll?.('button[aria-haspopup="true"]') || []),
+      ...(container?.querySelectorAll?.("button.sc-button-more") || []),
+    ];
+    return Array.from(new Set(buttons)).find(isMoreActionsButton) || null;
   }
 
   function findTrackRoot(waveform) {
     let candidate = waveform.parentElement;
     while (candidate && candidate !== document.body) {
       const menuButton = findMoreActionsWithin(candidate);
-      const visibleWaveforms = Array.from(
-        candidate.querySelectorAll('[role="slider"][aria-label="Waveform"]')
-      ).filter(isVisible);
+      const visibleWaveforms = queryWaveforms(candidate).filter(isVisible);
       if (
         menuButton &&
         candidate.querySelector("h1") &&
@@ -2067,7 +2073,7 @@ const SCLooper = (() => {
     );
     const visibleWaveforms = validWaveforms.filter(isVisible);
     const menus = Array.from(
-      document.querySelectorAll('button[aria-haspopup="true"]')
+      document.querySelectorAll('button[aria-haspopup="true"], button.sc-button-more')
     );
     const matchedMenus = menus.filter(isMoreActionsButton);
     return [
@@ -2083,9 +2089,11 @@ const SCLooper = (() => {
   }
 
   function ensureMounted() {
-    // Validate before the mounted fast path as well as before a fresh mount.
-    // A player badge can update while the page still shows waveform A.
-    if (!waveformMatchesCurrentPlayer()) {
+    // Track pages own their waveform even when the global player badge is
+    // still empty or points at another track. The player identity is used by
+    // the bridge when activating playback, but must not prevent mounting the
+    // control beside the selected track's waveform.
+    if (!isTrackPage() && !waveformMatchesCurrentPlayer()) {
       if (view) removeView();
       setDebugStatus("waiting;waveform-track-is-not-playing");
       return false;

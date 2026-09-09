@@ -26,6 +26,8 @@
   const LOOP_EXPORT_EVENT = "scdl:download-loop";
   const LOOP_EXPORT_RESULT_EVENT = "scdl:download-loop-result";
   const LOOP_EXPORT_ATTRIBUTE = "data-scdl-loop-export-request";
+  const PLAYER_WAVEFORM_ATTRIBUTE = "data-scdl-player-waveform";
+  const PLAYER_WAVEFORM_EVENT = "scdl:player-waveform-ready";
   const LONG_PRESS_MS = 650;
   const PLAYER_TIMELINE_SELECTOR = [
     ".playbackTimeline",
@@ -58,6 +60,14 @@
   let loopRequestId = 0;
   let loopState = { active: false, enabled: false, startMs: null, endMs: null, durationMs: null };
   let loopPollInterval = null;
+  let waveformSamples = [];
+  let waveformTrackUrl = null;
+  let waveformSourceUrl = null;
+  let waveformZoom = null;
+  let waveformLoadId = 0;
+  let waveformDrag = null;
+  let setterHoldTimer = null;
+  let setterLongPressed = false;
   const customRates = CUSTOM_RATE_STORAGE.map((key) => {
     try {
       const stored = localStorage.getItem(key);
@@ -319,26 +329,107 @@
       : 0;
   }
 
+  function visibleWaveformWindow() {
+    const durationMs = loopState.durationMs;
+    if (!Number.isFinite(durationMs) || durationMs <= 0) return null;
+    return globalThis.SCLooperCore?.normalizeZoomWindow?.(waveformZoom, durationMs) || { startMs: 0, endMs: durationMs };
+  }
+
+  function waveformTime(clientX) {
+    const rect = ui.waveformStage.getBoundingClientRect();
+    const window = visibleWaveformWindow();
+    return window && globalThis.SCLooperCore?.positionToTime
+      ? globalThis.SCLooperCore.positionToTime(clientX, rect.left, rect.width, window)
+      : null;
+  }
+
+  function drawWaveform() {
+    if (!ui?.waveformCanvas) return;
+    const canvas = ui.waveformCanvas;
+    const rect = canvas.getBoundingClientRect();
+    const scale = Math.max(1, window.devicePixelRatio || 1);
+    const width = Math.max(1, Math.round(rect.width * scale));
+    const height = Math.max(1, Math.round(rect.height * scale));
+    if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+    const context = canvas.getContext("2d");
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = "#0e1216";
+    context.fillRect(0, 0, width, height);
+    const windowRange = visibleWaveformWindow();
+    if (!windowRange) return;
+    const durationMs = loopState.durationMs;
+    const samples = waveformSamples.length ? waveformSamples : Array.from({ length: 180 }, (_, index) => 22 + Math.abs(Math.sin(index * 1.73) * 58 + Math.sin(index * .29) * 18));
+    const first = Math.floor(windowRange.startMs / durationMs * samples.length);
+    const last = Math.max(first + 1, Math.ceil(windowRange.endMs / durationMs * samples.length));
+    const visible = samples.slice(first, last);
+    const maximum = Math.max(1, ...visible.map((sample) => Math.abs(Number(sample) || 0)));
+    const complete = Number.isFinite(loopState.startMs) && Number.isFinite(loopState.endMs);
+    const start = complete ? loopPercentInWindow(loopState.startMs, windowRange) : -1;
+    const end = complete ? loopPercentInWindow(loopState.endMs, windowRange) : -1;
+    const barWidth = width / visible.length;
+    for (let index = 0; index < visible.length; index += 1) {
+      const percent = index / Math.max(1, visible.length - 1) * 100;
+      const barHeight = Math.max(2 * scale, Math.abs(Number(visible[index]) || 0) / maximum * (height * .72));
+      context.fillStyle = complete && percent >= start && percent <= end ? "#ff6a1a" : "#858d96";
+      context.globalAlpha = complete && (percent < start || percent > end) ? .55 : .92;
+      context.fillRect(index * barWidth, (height - barHeight) / 2, Math.max(1, barWidth - scale), barHeight);
+    }
+    context.globalAlpha = 1;
+    if (complete) { context.fillStyle = "rgba(255,85,0,.18)"; context.fillRect(width * start / 100, 0, width * (end - start) / 100, height); }
+    if (Number.isFinite(loopState.currentTimeMs)) {
+      const playhead = loopPercentInWindow(loopState.currentTimeMs, windowRange);
+      if (playhead >= 0 && playhead <= 100) { context.fillStyle = "rgba(255,255,255,.72)"; context.fillRect(width * playhead / 100, 0, Math.max(1, scale), height); }
+    }
+  }
+
+  function loopPercentInWindow(value, windowRange = visibleWaveformWindow()) {
+    if (!windowRange || !Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(100, (value - windowRange.startMs) / (windowRange.endMs - windowRange.startMs) * 100));
+  }
+
+  async function loadPlayerWaveform() {
+    let descriptor = null;
+    try { descriptor = JSON.parse(document.documentElement.getAttribute(PLAYER_WAVEFORM_ATTRIBUTE) || "null"); } catch {}
+    if (!descriptor || (descriptor.trackUrl === waveformTrackUrl && descriptor.waveformUrl === waveformSourceUrl && !Array.isArray(descriptor.samples))) return;
+    waveformTrackUrl = descriptor.trackUrl;
+    waveformSourceUrl = descriptor.waveformUrl || null;
+    waveformZoom = null;
+    waveformSamples = [];
+    const loadId = waveformLoadId += 1;
+    if (Array.isArray(descriptor.samples)) { waveformSamples = descriptor.samples; drawWaveform(); return; }
+    if (!descriptor.waveformUrl) { drawWaveform(); return; }
+    try {
+      const response = await fetch(descriptor.waveformUrl);
+      const data = await response.json();
+      if (loadId !== waveformLoadId) return;
+      waveformSamples = Array.isArray(data.samples) ? data.samples : [];
+    } catch { waveformSamples = []; }
+    drawWaveform();
+  }
+
   function renderLoop() {
-    if (!ui?.loopSlider) return;
+    if (!ui?.waveformStage) return;
     const duration = Number.isFinite(loopState.durationMs) ? loopState.durationMs : 0;
     const start = Number.isFinite(loopState.startMs) ? loopState.startMs : 0;
     const end = Number.isFinite(loopState.endMs) ? loopState.endMs : duration;
-    for (const input of [ui.loopStart, ui.loopEnd]) {
-      input.max = String(Math.max(1, duration));
-      input.disabled = !loopState.available || duration <= 0;
+    const windowRange = visibleWaveformWindow();
+    const startPercent = loopPercentInWindow(start, windowRange);
+    const endPercent = loopPercentInWindow(end, windowRange);
+    ui.waveformSelection.style.left = `${startPercent}%`;
+    ui.waveformSelection.style.width = `${Math.max(0, endPercent - startPercent)}%`;
+    ui.waveformSelection.hidden = !loopState.active;
+    for (const [marker, value, letter] of [[ui.waveformStart, loopState.startMs, "A"], [ui.waveformEnd, loopState.endMs, "B"]]) {
+      marker.hidden = !Number.isFinite(value) || !windowRange || value < windowRange.startMs || value > windowRange.endMs;
+      marker.style.left = `${loopPercentInWindow(value, windowRange)}%`;
+      marker.textContent = letter;
+      marker.setAttribute("aria-valuenow", String(Math.round(value || 0)));
+      marker.setAttribute("aria-valuetext", formatLoopTime(value));
     }
-    ui.loopStart.value = String(start);
-    ui.loopEnd.value = String(end);
-    ui.loopStart.setAttribute("aria-valuetext", formatLoopTime(start));
-    ui.loopEnd.setAttribute("aria-valuetext", formatLoopTime(end));
-    ui.loopSlider.style.setProperty("--loop-start", `${loopPercent(start)}%`);
-    ui.loopSlider.style.setProperty("--loop-end", `${loopPercent(end)}%`);
     ui.setA.textContent = Number.isFinite(loopState.startMs)
-      ? `Set A  ${formatLoopTime(loopState.startMs)}`
+      ? formatLoopTime(loopState.startMs)
       : "Set A";
     ui.setB.textContent = Number.isFinite(loopState.endMs)
-      ? `Set B  ${formatLoopTime(loopState.endMs)}`
+      ? formatLoopTime(loopState.endMs)
       : "Set B";
     ui.setA.disabled = !loopState.available;
     ui.setB.disabled = !loopState.available;
@@ -347,6 +438,10 @@
       input.disabled = !loopState.available || duration <= 0;
       if (ui.root.activeElement !== input) input.value = Number.isFinite(value) ? formatLoopTime(value) : "";
     }
+    ui.waveformStartLabel.textContent = formatLoopTime(windowRange?.startMs || 0);
+    ui.waveformMiddleLabel.textContent = formatLoopTime(windowRange ? (windowRange.startMs + windowRange.endMs) / 2 : 0);
+    ui.waveformEndLabel.textContent = formatLoopTime(windowRange?.endMs || duration);
+    drawWaveform();
   }
 
   function setLoopPoint(marker) {
@@ -402,6 +497,77 @@
   function clearLoop() {
     setLoopFailure(requestLoop("clear-loop"));
     readLoopState();
+  }
+
+  function setWaveformRange(nextRange, marker = null) {
+    if (!nextRange) return;
+    setLoopFailure(requestLoop("set-loop", { ...nextRange, marker, enabled: true, startPlayback: !loopState.active }));
+    readLoopState();
+  }
+
+  function beginWaveformDrag(event, kind) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (!Number.isFinite(loopState.durationMs)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.currentTarget;
+    target.setPointerCapture(event.pointerId);
+    waveformDrag = { kind, pointerId: event.pointerId, startX: event.clientX, range: { startMs: loopState.startMs, endMs: loopState.endMs, durationMs: loopState.durationMs } };
+  }
+
+  function moveWaveformDrag(event) {
+    if (!waveformDrag || waveformDrag.pointerId !== event.pointerId || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    event.preventDefault();
+    const core = globalThis.SCLooperCore;
+    const timeMs = waveformTime(event.clientX);
+    if (!core || timeMs === null) return;
+    let nextRange;
+    if (waveformDrag.kind === "selection") {
+      const startTime = waveformTime(waveformDrag.startX);
+      nextRange = core.moveRange(waveformDrag.range, timeMs - startTime);
+    } else {
+      nextRange = core.moveMarker(waveformDrag.range, waveformDrag.kind, timeMs);
+    }
+    setWaveformRange(nextRange, waveformDrag.kind === "selection" ? null : waveformDrag.kind);
+  }
+
+  function endWaveformDrag(event) {
+    if (!waveformDrag || waveformDrag.pointerId !== event.pointerId) return;
+    moveWaveformDrag(event);
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    waveformDrag = null;
+  }
+
+  function moveWaveformMarkerByKey(event, marker) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const amount = event.shiftKey ? 1000 : 100;
+    const value = loopState[`${marker}Ms`] + (event.key === "ArrowLeft" ? -amount : amount);
+    setWaveformRange(globalThis.SCLooperCore?.moveMarker?.(loopState, marker, value), marker);
+  }
+
+  function handleWaveformWheel(event) {
+    if (!Number.isFinite(loopState.durationMs) || !event.deltaY) return;
+    const focusMs = waveformTime(event.clientX);
+    if (focusMs === null) return;
+    event.preventDefault();
+    waveformZoom = globalThis.SCLooperCore?.zoomWindowAt?.(waveformZoom, loopState.durationMs, focusMs, event.deltaY) || null;
+    renderLoop();
+  }
+
+  function installSetterHold(button, marker) {
+    const cancel = () => { if (setterHoldTimer !== null) clearTimeout(setterHoldTimer); setterHoldTimer = null; };
+    button.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      setterLongPressed = false;
+      cancel();
+      setterHoldTimer = setTimeout(() => { setterHoldTimer = null; setterLongPressed = true; clearLoop(); }, LONG_PRESS_MS);
+    });
+    for (const name of ["pointerup", "pointercancel", "pointerleave"]) button.addEventListener(name, cancel);
+    button.addEventListener("click", (event) => {
+      if (setterLongPressed) { event.preventDefault(); setterLongPressed = false; return; }
+      setLoopPoint(marker);
+    });
   }
 
   async function downloadLoopFromPlayer() {
@@ -767,6 +933,42 @@
         .download-loop { height: 26px; border: 1px solid #b84400; border-radius: 5px; color: #fff; background: #ff5500; cursor: pointer; font: 600 10px/1 Interstate, Arial, sans-serif; }
         .status { margin-top: 5px; }
 
+        /* Expanded player editor, based on the supplied panel reference. */
+        .panel { width: min(640px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 16px; border: 2px solid #3b424a; border-radius: 18px; background: linear-gradient(145deg, #11161b, #090d11); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b535b transparent; }
+        .panel-header { display: grid; grid-template-columns: 252px 1fr; gap: 18px; margin-bottom: 12px; }
+        .presets { display: grid; grid-template-columns: repeat(3, 56px) 69px; gap: 7px; flex-basis: auto; }
+        .preset { width: 56px; height: 38px; border-radius: 9px; font-size: 14px; }
+        .custom-preset, .custom-preset[data-saved="true"] { width: 69px; padding: 0 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+        .brand { justify-content: flex-start; }
+        .brand-logo { width: 72px; height: 72px; flex-basis: 72px; border-radius: 14px; }
+        .brand-name { font-size: 22px; line-height: 1.04; text-align: left; }
+        .rating-link { color: #92989f; font-size: 11px; font-weight: 500; text-decoration-color: #5f666d; opacity: .82; }
+        .rating-link:hover { color: #bdc1c5; opacity: 1; }
+        .middle-row { grid-template-columns: 252px 1fr; gap: 0; margin: 0 0 12px; border-top: 1px solid #2e343a; border-bottom: 1px solid #2e343a; padding: 9px 0; }
+        .setters { grid-template-columns: 1fr 1fr; gap: 8px; padding-right: 13px; border-right: 1px solid #3b4248; }
+        .setter { height: 36px; padding: 0 10px; border-radius: 9px; font-size: 13px; font-variant-numeric: tabular-nums; }
+        .pitch-row { display: grid; grid-template-columns: 1fr auto; height: 36px; align-items: center; gap: 0; padding-left: 15px; }
+        .pitch-label { justify-content: center; font-size: 14px; }
+        .speed-status { min-width: 142px; height: 36px; justify-content: flex-end; margin-left: 14px; padding-left: 14px; border-left: 1px solid #3b4248; }
+        .current { width: 7ch; flex-basis: 7ch; font-size: 18px; }
+        .slider-wrap { height: 38px; margin-bottom: 12px; border: 1px solid #30373e; border-radius: 11px; background: rgba(255,255,255,.025); padding: 4px 34px; }
+        .slider { height: 28px; border-radius: 999px; background-size: 100% 9px; }
+        .slider::-webkit-slider-runnable-track { height: 9px; border-radius: 999px; }
+        .slider::-webkit-slider-thumb { width: 21px; height: 21px; margin-top: -6px; box-shadow: 0 0 0 3px #fff; }
+        .limits { padding: 0 10px; }
+        .range-label { border-radius: 5px; background: #32383e; }
+        .waveform-shell { position: relative; overflow: hidden; height: 174px; border: 2px solid #343b42; border-radius: 14px; background: linear-gradient(#10151a, #090d11); touch-action: none; }
+        .waveform-stage { position: absolute; inset: 28px 10px 25px; cursor: crosshair; }
+        .waveform-canvas { display: block; width: 100%; height: 100%; border-radius: 8px; }
+        .waveform-selection { position: absolute; inset: 0 auto 0; border: 1px solid #ff650f; background: rgba(255,85,0,.12); cursor: grab; }
+        .waveform-marker { position: absolute; z-index: 4; top: -22px; width: 30px; height: 25px; margin-left: -15px; padding: 0; border: 0; border-radius: 7px 7px 4px 4px; color: #090909; background: #ff650f; font: 800 15px/1 Arial; cursor: ew-resize; box-shadow: 0 3px 12px rgba(255,85,0,.35); }
+        .waveform-marker::after { content: ""; position: absolute; top: 25px; left: 50%; width: 2px; height: 121px; background: #ff650f; transform: translateX(-50%); }
+        .waveform-title { position: absolute; z-index: 3; top: 5px; left: 50%; color: #ff741f; font-weight: 700; transform: translateX(-50%); pointer-events: none; }
+        .waveform-times { position: absolute; inset: auto 12px 4px; display: flex; justify-content: space-between; color: #7e8790; font-size: 11px; font-variant-numeric: tabular-nums; }
+        .waveform-actions { position: absolute; z-index: 5; top: 4px; right: 7px; display: flex; gap: 5px; }
+        .clear-loop, .download-loop { height: 22px; border-radius: 6px; opacity: .72; }
+        .loop-edit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
         @media (forced-colors: active) {
           .trigger, .panel { border-color: CanvasText; }
         }
@@ -832,16 +1034,20 @@
             aria-label="Playback speed"
           />
         </div>
-        <div class="loop-slider" role="group" aria-label="Loop range">
-          <span class="range-label" aria-hidden="true">Loop</span>
-          <input class="loop-range loop-start" type="range" min="0" max="1" step="1" value="0" aria-label="Loop start A" />
-          <input class="loop-range loop-end" type="range" min="0" max="1" step="1" value="1" aria-label="Loop end B" />
+        <div class="waveform-shell" role="group" aria-label="Loop waveform">
+          <span class="waveform-title">Loop Region</span>
+          <div class="waveform-actions"><button class="clear-loop" type="button" aria-label="Clear loop">Clear</button><button class="download-loop" type="button" aria-label="Download loop">WAV</button></div>
+          <div class="waveform-stage">
+            <canvas class="waveform-canvas" aria-hidden="true"></canvas>
+            <div class="waveform-selection" hidden></div>
+            <button class="waveform-marker waveform-start" type="button" role="slider" aria-label="Loop start A">A</button>
+            <button class="waveform-marker waveform-end" type="button" role="slider" aria-label="Loop end B">B</button>
+          </div>
+          <div class="waveform-times"><span class="waveform-start-label">00:00.000</span><span class="waveform-middle-label">00:00.000</span><span class="waveform-end-label">00:00.000</span></div>
         </div>
         <div class="loop-edit">
           <input class="loop-time loop-start-time" inputmode="decimal" placeholder="A 00:00.000" aria-label="Loop start time" />
           <input class="loop-time loop-end-time" inputmode="decimal" placeholder="B 00:00.000" aria-label="Loop end time" />
-          <button class="clear-loop" type="button" aria-label="Clear loop">Clear</button>
-          <button class="download-loop" type="button" aria-label="Download loop">WAV</button>
         </div>
         <p class="status" role="status" aria-live="polite" hidden></p>
       </section>
@@ -851,7 +1057,7 @@
   function positionPanel() {
     if (!ui || ui.panel.hidden) return;
     const anchor = ui.trigger.getBoundingClientRect();
-    const width = Math.min(420, innerWidth - 16);
+    const width = Math.min(640, innerWidth - 16);
     const left = Math.max(8, Math.min(innerWidth - width - 8, anchor.right - width));
     ui.panel.style.left = `${left}px`;
     ui.panel.style.bottom = `${Math.max(8, innerHeight - anchor.top + 8)}px`;
@@ -900,9 +1106,15 @@
       brandName: root.querySelector(".brand-name"),
       setA: root.querySelector(".set-a"),
       setB: root.querySelector(".set-b"),
-      loopSlider: root.querySelector(".loop-slider"),
-      loopStart: root.querySelector(".loop-start"),
-      loopEnd: root.querySelector(".loop-end"),
+      waveformShell: root.querySelector(".waveform-shell"),
+      waveformStage: root.querySelector(".waveform-stage"),
+      waveformCanvas: root.querySelector(".waveform-canvas"),
+      waveformSelection: root.querySelector(".waveform-selection"),
+      waveformStart: root.querySelector(".waveform-start"),
+      waveformEnd: root.querySelector(".waveform-end"),
+      waveformStartLabel: root.querySelector(".waveform-start-label"),
+      waveformMiddleLabel: root.querySelector(".waveform-middle-label"),
+      waveformEndLabel: root.querySelector(".waveform-end-label"),
       loopStartTime: root.querySelector(".loop-start-time"),
       loopEndTime: root.querySelector(".loop-end-time"),
       clearLoop: root.querySelector(".clear-loop"),
@@ -911,6 +1123,7 @@
 
     ui.trigger.addEventListener("click", () => {
       setPanelOpen(ui.panel.hidden);
+      if (!ui.panel.hidden) loadPlayerWaveform();
     });
     ui.brandName.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
@@ -993,10 +1206,22 @@
       requestLoop("set-global-bypass", { bypassed });
       readLoopState();
     });
-    ui.setA.addEventListener("click", () => setLoopPoint("start"));
-    ui.setB.addEventListener("click", () => setLoopPoint("end"));
-    ui.loopStart.addEventListener("input", () => setLoopFromSliders("start"));
-    ui.loopEnd.addEventListener("input", () => setLoopFromSliders("end"));
+    installSetterHold(ui.setA, "start");
+    installSetterHold(ui.setB, "end");
+    for (const [marker, name] of [[ui.waveformStart, "start"], [ui.waveformEnd, "end"]]) {
+      marker.addEventListener("pointerdown", (event) => beginWaveformDrag(event, name));
+      marker.addEventListener("pointermove", moveWaveformDrag);
+      marker.addEventListener("pointerup", endWaveformDrag);
+      marker.addEventListener("pointercancel", endWaveformDrag);
+      marker.addEventListener("keydown", (event) => moveWaveformMarkerByKey(event, name));
+    }
+    ui.waveformSelection.addEventListener("pointerdown", (event) => beginWaveformDrag(event, "selection"));
+    ui.waveformSelection.addEventListener("pointermove", moveWaveformDrag);
+    ui.waveformSelection.addEventListener("pointerup", endWaveformDrag);
+    ui.waveformSelection.addEventListener("pointercancel", endWaveformDrag);
+    ui.waveformStage.addEventListener("wheel", handleWaveformWheel, { passive: false });
+    ui.waveformStage.addEventListener("dblclick", () => { waveformZoom = null; renderLoop(); });
+    ui.waveformCanvas.addEventListener("click", (event) => { const timeMs = waveformTime(event.clientX); if (timeMs !== null) requestLoop("seek", { timeMs }); });
     for (const [input, marker] of [[ui.loopStartTime, "start"], [ui.loopEndTime, "end"]]) {
       input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); commitLoopTime(marker); input.blur(); } if (event.key === "Escape") { input.value = Number.isFinite(loopState[`${marker}Ms`]) ? formatLoopTime(loopState[`${marker}Ms`]) : ""; input.blur(); } });
       input.addEventListener("blur", () => { if (input.value.trim()) commitLoopTime(marker); });
@@ -1142,6 +1367,7 @@
     }
   });
   document.addEventListener(LOOP_SESSION_EVENT, readLoopState);
+  document.addEventListener(PLAYER_WAVEFORM_EVENT, loadPlayerWaveform);
   loopPollInterval = setInterval(readLoopState, 250);
 
   mount();

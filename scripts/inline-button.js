@@ -4,6 +4,8 @@ const INLINE_STYLES_ID = "scdl-inline-styles";
 const SUCCESS_RESET_MS = 2000;
 const BULK_WARN_THRESHOLD = 200;
 const PLAYER_DOWNLOAD_TIMEOUT_MS = 120000;
+const PLAYER_WAVEFORM_ATTRIBUTE = "data-scdl-player-waveform";
+const PLAYER_WAVEFORM_EVENT = "scdl:player-waveform-ready";
 const translate = globalThis.SCDLI18n?.t || ((key) => key);
 const inlineDownloadIntent = SCDownloadIntent.create(chrome.runtime);
 
@@ -13,6 +15,32 @@ let isPlayerDownloading = false;
 let playerTrackUrl = null;
 let successResetTimeout = null;
 let playerSuccessResetTimeout = null;
+let playerVisualRequestId = 0;
+
+function publishPlayerVisual(trackUrl) {
+  const requestId = playerVisualRequestId += 1;
+  const root = document.documentElement;
+  if (!root?.setAttribute) return;
+  if (!trackUrl) {
+    root.removeAttribute?.(PLAYER_WAVEFORM_ATTRIBUTE);
+    if (typeof document.dispatchEvent === "function" && typeof CustomEvent === "function") document.dispatchEvent(new CustomEvent(PLAYER_WAVEFORM_EVENT));
+    return;
+  }
+  Promise.resolve(window.SCDL?.resolvePlayerTrackData?.(trackUrl))
+    .then((trackData) => {
+      if (requestId !== playerVisualRequestId || playerTrackUrl !== trackUrl) return;
+      root.setAttribute(PLAYER_WAVEFORM_ATTRIBUTE, JSON.stringify({
+        trackUrl,
+        waveformUrl: trackData?.waveformUrl || null,
+      }));
+      if (typeof document.dispatchEvent === "function" && typeof CustomEvent === "function") document.dispatchEvent(new CustomEvent(PLAYER_WAVEFORM_EVENT));
+    })
+    .catch(() => {
+      if (requestId !== playerVisualRequestId) return;
+      root.setAttribute(PLAYER_WAVEFORM_ATTRIBUTE, JSON.stringify({ trackUrl, waveformUrl: null }));
+      if (typeof document.dispatchEvent === "function" && typeof CustomEvent === "function") document.dispatchEvent(new CustomEvent(PLAYER_WAVEFORM_EVENT));
+    });
+}
 
 function readPlayerPlaybackTransform() {
   const host = document.getElementById("scdl-tempo-control");
@@ -561,6 +589,7 @@ function ensurePlayerDownloadButton() {
   if (!container || !trackUrl) {
     button?.remove();
     playerTrackUrl = null;
+    publishPlayerVisual(null);
     return;
   }
 
@@ -568,6 +597,7 @@ function ensurePlayerDownloadButton() {
 
   if (playerTrackUrl !== trackUrl) {
     playerTrackUrl = trackUrl;
+    publishPlayerVisual(trackUrl);
     if (!isPlayerDownloading) {
       setPlayerButtonState("idle");
     }

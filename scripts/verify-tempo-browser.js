@@ -50,6 +50,10 @@ async function main() {
         "data-scdl-extension-logo-url",
         "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
       );
+      document.documentElement.setAttribute("data-scdl-player-waveform", JSON.stringify({
+        trackUrl: "http://127.0.0.1/artist/track",
+        samples: Array.from({ length: 240 }, (_, index) => 20 + Math.abs(Math.sin(index * .47) * 80)),
+      }));
       window.looperGuideRequests = 0;
       document.addEventListener("scdl:open-looper-guide", () => {
         window.looperGuideRequests += 1;
@@ -100,15 +104,17 @@ async function main() {
           labels?.parentElement === wrapper &&
           labelsBounds.top >= wrapperBounds.top &&
           labelsBounds.bottom <= wrapperBounds.bottom,
-        wrapperMatchesSlider:
-          sliderBounds.top === wrapperBounds.top &&
-          sliderBounds.bottom === wrapperBounds.bottom,
+        sliderIsInset:
+          sliderBounds.top > wrapperBounds.top &&
+          sliderBounds.bottom < wrapperBounds.bottom,
+        roundedContainer: parseFloat(getComputedStyle(wrapper).borderRadius) > 0,
         labelsIgnorePointerInput: getComputedStyle(labels).pointerEvents === "none",
       };
     });
     if (
       !compactSlider.labelsAreInsideSliderWrapper ||
-      !compactSlider.wrapperMatchesSlider ||
+      !compactSlider.sliderIsInset ||
+      !compactSlider.roundedContainer ||
       !compactSlider.labelsIgnorePointerInput
     ) {
       throw new Error("Playback speed limits are not compactly overlaid inside the slider.");
@@ -129,10 +135,10 @@ async function main() {
     }));
     if (
       branding.name !== "SoundCloud Track Downloader" ||
-      branding.logoWidth !== 58 ||
-      branding.logoHeight !== 58 ||
+      branding.logoWidth !== 72 ||
+      branding.logoHeight !== 72 ||
       branding.logoHidden ||
-      branding.titleFontSize !== 17
+      branding.titleFontSize !== 22
     ) {
       throw new Error("Playback Speed panel branding is missing or incorrectly sized.");
     }
@@ -153,14 +159,14 @@ async function main() {
       };
     });
     if (
-      compactStyles.padding.join(" ") !== "10px 10px 10px 10px" ||
-      compactStyles.presetSize.join("x") !== "36x28" ||
+      compactStyles.padding.join(" ") !== "16px 16px 16px 16px" ||
+      compactStyles.presetSize.join("x") !== "56x38" ||
       compactStyles.toggleSize.join("x") !== "17x17" ||
       compactStyles.pitchText !== "Keep Tone" ||
-      compactStyles.pitchFontSize !== 13 ||
+      compactStyles.pitchFontSize !== 14 ||
       compactStyles.statusOrder.join(" ") !== "current bypass"
     ) {
-      throw new Error("Playback Speed panel compact styling is incomplete.");
+      throw new Error(`Playback Speed panel compact styling is incomplete: ${JSON.stringify(compactStyles)}`);
     }
 
     await host.locator(".brand-name").click();
@@ -183,9 +189,9 @@ async function main() {
     if (
       panelFeatures.customCount !== 2 ||
       !panelFeatures.reviewHref.endsWith("/reviews") ||
-      panelFeatures.labels.join("|") !== "Tone & Velocity|Loop" ||
+      panelFeatures.labels.join("|") !== "Tone & Velocity" ||
       panelFeatures.order.slice(0, 4).join("|") !==
-        "panel-header|middle-row|slider-wrap|loop-slider"
+        "panel-header|middle-row|slider-wrap|waveform-shell"
     ) {
       throw new Error("The combined panel layout or links are incomplete.");
     }
@@ -215,10 +221,53 @@ async function main() {
       capturedLoop.startMs !== 12345 ||
       capturedLoop.endMs !== 20678 ||
       !capturedLoop.enabled ||
-      !(await host.locator(".set-a").textContent()).includes("00:12.345")
+      (await host.locator(".set-a").textContent()).trim() !== "00:12.345"
     ) {
       throw new Error(`Set A/Set B did not capture and display the live player range: ${JSON.stringify({ capturedLoop, label: await host.locator(".set-a").textContent() })}`);
     }
+
+    const waveformUi = await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      const canvas = root.querySelector(".waveform-canvas");
+      const custom = root.querySelector('.custom-preset[data-custom-index="0"]');
+      return {
+        canvas: [canvas.width, canvas.height],
+        markers: root.querySelectorAll(".waveform-marker:not([hidden])").length,
+        customFits: custom.scrollWidth <= custom.clientWidth,
+        setALabel: root.querySelector(".set-a").textContent.trim(),
+      };
+    });
+    if (waveformUi.canvas[0] <= 1 || waveformUi.canvas[1] <= 1 || waveformUi.markers !== 2 || !waveformUi.customFits || waveformUi.setALabel.includes("Set A")) {
+      throw new Error(`Interactive waveform layout is incomplete: ${JSON.stringify(waveformUi)}`);
+    }
+
+    const endMarker = host.locator(".waveform-end");
+    const markerBox = await endMarker.boundingBox();
+    await page.mouse.move(markerBox.x + markerBox.width / 2, markerBox.y + markerBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(markerBox.x - 32, markerBox.y + markerBox.height / 2, { steps: 4 });
+    await page.mouse.up();
+    const draggedEnd = await page.evaluate(() => JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session")).endMs);
+    if (!(draggedEnd < 20678)) throw new Error(`Dragging marker B did not update the shared loop session: ${draggedEnd}`);
+
+    const waveformStage = host.locator(".waveform-stage");
+    await waveformStage.hover();
+    const fullEndLabel = await host.locator(".waveform-end-label").textContent();
+    await page.mouse.wheel(0, -180);
+    const zoomedEndLabel = await host.locator(".waveform-end-label").textContent();
+    if (zoomedEndLabel === fullEndLabel) throw new Error("The player waveform did not zoom around the pointer.");
+
+    await host.locator(".set-a").dispatchEvent("pointerdown", { pointerType: "mouse", button: 0 });
+    await page.waitForTimeout(700);
+    await host.locator(".set-a").dispatchEvent("pointerup", { pointerType: "mouse", button: 0 });
+    await host.locator(".set-a").click();
+    if (await page.evaluate(() => JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session")).active)) {
+      throw new Error("Holding Set A did not clear the loop selection.");
+    }
+    await page.locator("audio").evaluate((audio) => { audio.currentTime = 12.345; });
+    await host.locator(".set-a").click();
+    await page.locator("audio").evaluate((audio) => { audio.currentTime = 20.678; });
+    await host.locator(".set-b").click();
 
     await host.locator(".slider").evaluate((slider) => {
       slider.value = "0.875";
