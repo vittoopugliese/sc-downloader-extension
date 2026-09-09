@@ -13,6 +13,10 @@ Run the fast, DOM-free verification suite:
 npm test
 ```
 
+This suite includes the loop renderer contract, an integrity check for the
+pinned Signalsmith factory, and a real WASM render that verifies a slowed test
+tone keeps its original pitch.
+
 Run the deterministic looper browser test. It loads the unpacked extension in
 Chromium, selects A-B, exports WAV, and verifies the downloaded samples. The
 separate download browser test covers both Downloads and a remembered folder:
@@ -21,6 +25,7 @@ separate download browser test covers both Downloads and a remembered folder:
 npm run test:e2e
 npm run test:e2e:download
 npm run test:e2e:popup
+npm run test:e2e:tempo
 npm run test:feedback
 ```
 

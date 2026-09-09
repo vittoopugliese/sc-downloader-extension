@@ -36,15 +36,19 @@ $packageItems = @(
     "scripts/looper-core.js",
     "scripts/looper-main-bridge.js",
     "scripts/looper.js",
+    "scripts/loop-audio-renderer.js",
     "scripts/metadata.js",
     "scripts/offscreen.js",
     "scripts/page-intake.js",
     "scripts/popup.js",
     "scripts/soundcloud-http.js",
     "scripts/stream-selector.js",
+    "scripts/tempo-control-core.js",
+    "scripts/tempo-control-main.js",
     "scripts/track-download-execution.js",
     "scripts/vendor/id3-writer.js"
-)
+    "scripts/vendor/signalsmith/wasm-factory.mjs"
+  )
 
 New-Item -ItemType Directory -Force -Path $distributionRoot | Out-Null
 if (Test-Path -LiteralPath $stagingRoot) {

@@ -314,6 +314,7 @@ const SCDownload = (() => {
     trackData,
     buffer,
     trimRange,
+    playbackTransform,
     onProgress,
     signal
   ) {
@@ -326,6 +327,7 @@ const SCDownload = (() => {
 
     onProgress?.("Decoding audio...");
     const audioContext = new AudioContextConstructor();
+    let decoded;
     try {
       const sourceBuffer =
         buffer instanceof ArrayBuffer
@@ -334,25 +336,48 @@ const SCDownload = (() => {
               buffer.byteOffset,
               buffer.byteOffset + buffer.byteLength
             );
-      const decoded = await audioContext.decodeAudioData(sourceBuffer);
+      decoded = await audioContext.decodeAudioData(sourceBuffer);
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      throw new Error("The downloaded audio could not be decoded to export this loop.");
+    }
+
+    try {
       throwIfAborted(signal);
-      onProgress?.("Cutting selected loop...");
-      const wavBytes = encodeWavSegment(decoded, trimRange, signal);
+      const renderer = globalThis.SCLoopAudioRenderer;
+      if (!renderer?.normalizeTransform || !renderer?.render) {
+        throw new Error("The loop audio renderer is unavailable.");
+      }
+      const transform = renderer.normalizeTransform(playbackTransform);
+      const rendered = await renderer.render(decoded, trimRange, transform, {
+        onProgress,
+        signal,
+      });
+      throwIfAborted(signal);
+      onProgress?.("Encoding WAV...");
+      const outputRange = {
+        startMs: 0,
+        endMs: (rendered.length / rendered.sampleRate) * 1000,
+      };
+      const wavBytes = encodeWavSegment(rendered, outputRange, signal);
+      const rateLabel = Number(transform.rate)
+        .toFixed(2)
+        .replace(/\.00$/, "")
+        .replace(/0$/, "");
+      const transformLabel =
+        transform.rate === 1
+          ? ""
+          : ` ${rateLabel}x ${
+              transform.preservePitch ? "preserve pitch" : "natural pitch"
+            }`;
       const loopTrack = {
         ...trackData,
-        title: `${trackData?.title || "Untitled"} (loop)`,
+        title: `${trackData?.title || "Untitled"} (loop${transformLabel})`,
       };
       return {
         blob: new Blob([wavBytes], { type: "audio/wav" }),
         fileName: sanitizeFilename(loopTrack, "wav"),
       };
-    } catch (error) {
-      if (error?.name === "AbortError") throw error;
-      throw new Error(
-        error?.message === "The selected loop starts after the available audio ends."
-          ? error.message
-          : "The downloaded audio could not be decoded to export this loop."
-      );
     } finally {
       try {
         await audioContext.close?.();
@@ -367,7 +392,8 @@ const SCDownload = (() => {
     trackData,
     onProgress,
     signal,
-    trimRange = null
+    trimRange = null,
+    playbackTransform = null
   ) {
     const normalizedTrimRange = normalizeTrimRange(trimRange);
     const isHlsStream =
@@ -385,6 +411,7 @@ const SCDownload = (() => {
           trackData,
           buffer,
           normalizedTrimRange,
+          playbackTransform,
           onProgress,
           signal
         );
@@ -426,6 +453,7 @@ const SCDownload = (() => {
           trackData,
           combined,
           normalizedTrimRange,
+          playbackTransform,
           onProgress,
           signal
         );
@@ -440,6 +468,7 @@ const SCDownload = (() => {
         trackData,
         buffer,
         normalizedTrimRange,
+        playbackTransform,
         onProgress,
         signal
       );

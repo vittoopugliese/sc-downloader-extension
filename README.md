@@ -18,6 +18,8 @@ This release is a **big one**. What started as a single-track downloader is now 
 **Highlights:**
 - **Inline download button** ~ download tracks directly from SoundCloud's action bar (Like/Repost/Share) without opening the popup
 - **Player download button** ~ download the track currently playing from SoundCloud's persistent bottom player without opening the popup
+- **Playback speed control** ~ choose `0.5x` to `2x` beside the player download button, in `0.05x` steps, with optional **Preserve Pitch**
+- **Tempo-aware loop export** ~ the downloaded A-B WAV uses the current player speed and either natural pitch or Signalsmith-preserved pitch
 - **Playlists, sets & albums** ~ download collections as numbered files in a folder
 - **International filenames** ~ preserves Cyrillic, accented, CJK, and emoji titles while keeping paths safe on Windows, macOS, and Linux
 - **Remembered download folder** ~ use the native folder picker once, then change the destination beside the quality and amount selectors whenever needed
@@ -115,16 +117,26 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 
 Use the compact **Folder** button beside the format selector to open the system folder picker. The chosen directory is remembered and used as the final destination; create any new folder directly in that picker. If no folder is selected, the browser's default Downloads directory is used.
 
+### Change playback speed
+
+1. Play any SoundCloud track
+2. Press the speed value beside the player download button
+3. Move the slider from `0.5x` to `2x` in `0.05x` steps
+4. Enable **Preserve Pitch** to keep the original pitch while changing speed
+
+Double-click the slider to return to `1x`. The selected speed and pitch mode are remembered locally.
+
 ### Loop part of a track
 
 1. Open an individual track page and load or play the track
 2. Press the loop button immediately before **More actions**
 3. Drag A and B on the waveform; use the arrow keys for 100 ms adjustments or Shift + arrow for 1 second
 4. Scroll **up** over the waveform to zoom toward the cursor, or scroll **down** to zoom back out. This makes it easy to place a precise A-B range even on a long track.
-5. Press **Download loop** to save the selected A-B range as a WAV file
-6. Press the cross or `Escape` to remove the temporary loop
+5. Choose the player speed and **Preserve Pitch** mode you want
+6. Press **Download loop** to render the selected A-B range as a WAV file with those settings
+7. Press the cross or `Escape` to remove the temporary loop
 
-Looper is included for free. It uses SoundCloud's current player and lives only in memory: navigating or changing tracks removes it. The WAV reflects the available source; speed, pitch and saved loops are future ideas, not part of the current tool.
+Looper is included for free. It uses SoundCloud's current player and lives only in memory: navigating or changing tracks removes it. The WAV reflects the available source. At speeds other than `1x`, export changes both duration and pitch when **Preserve Pitch** is off; when it is on, the bundled Signalsmith engine keeps the original musical pitch while changing duration.
 
 ### Download a playlist, likes, or user uploads
 1. Go to a **playlist/set**, **likes**, or `soundcloud.com/{user}/tracks` page
@@ -166,6 +178,7 @@ Dark blurred artwork background, SoundCloud-orange accents, spinner states, and 
 - Large collections: pagination handled automatically; stream URLs refreshed per track if they expire
 - The A-B looper keeps its timing rules in a DOM-free module so a future precise audio/download adapter can reuse the same range
 - SoundCloud's detached `Audio` player is captured by a minimal MAIN-world bridge; the looper UI only exchanges player state and seek commands with it
+- Loop WAV processing runs in the extension's offscreen document. Signalsmith/WASM is loaded only for preserved-pitch exports, so it never takes ownership of SoundCloud's live audio graph
 
 ---
 

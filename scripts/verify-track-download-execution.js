@@ -99,10 +99,13 @@ function createHarness(overrides = {}) {
   assert.deepEqual(downloadsCollection.calls.at(-1), ["revoke", "blob:test"]);
 
   const trimRange = { startMs: 1250, endMs: 4750, durationMs: 10000 };
+  const playbackTransform = { rate: 0.85, preservePitch: true };
   let receivedTrimRange = null;
+  let receivedPlaybackTransform = null;
   const loop = createHarness({
     async buildTrack(request) {
       receivedTrimRange = request.trimRange;
+      receivedPlaybackTransform = request.playbackTransform;
       return {
         success: true,
         blobUrl: "blob:loop",
@@ -113,8 +116,10 @@ function createHarness(overrides = {}) {
   const loopResult = await loop.execution.execute({
     trackData: { id: 23 },
     trimRange,
+    playbackTransform,
   });
   assert.deepEqual(receivedTrimRange, trimRange);
+  assert.deepEqual(receivedPlaybackTransform, playbackTransform);
   assert.equal(loopResult.fileName, "Artist - Track (loop).wav");
 
   const cancelled = createHarness();

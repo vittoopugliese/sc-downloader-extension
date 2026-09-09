@@ -45,7 +45,11 @@ const context = vm.createContext({
   },
 });
 
-for (const fileName of ["format-utils.js", "download-core.js"]) {
+for (const fileName of [
+  "format-utils.js",
+  "loop-audio-renderer.js",
+  "download-core.js",
+]) {
   vm.runInContext(
     fs.readFileSync(path.resolve(__dirname, fileName), "utf8"),
     context,
@@ -76,7 +80,7 @@ const download = vm.runInContext("SCDownload", context);
   assert.deepEqual(progress, [
     "Downloading file...",
     "Decoding audio...",
-    "Cutting selected loop...",
+    "Encoding WAV...",
   ]);
 
   const wav = new Uint8Array(await result.blob.arrayBuffer());
@@ -89,6 +93,27 @@ const download = vm.runInContext("SCDownload", context);
   assert.equal(samples.getInt16(48, true), 32767);
   assert.equal(samples.getInt16(50, true), -32768);
 
+  const transformedProgress = [];
+  const transformed = await download.buildTrackBlob(
+    "https://example.com/audio.mp3",
+    {
+      artist: "Artist",
+      title: "Track",
+      streamProtocol: "progressive",
+      streamMimeType: "audio/mpeg",
+    },
+    (value) => transformedProgress.push(value),
+    undefined,
+    { startMs: 500, endMs: 1500 },
+    { rate: 0.5, preservePitch: false }
+  );
+  assert.equal(
+    transformed.fileName,
+    "Artist - Track (loop 0.5x natural pitch).wav"
+  );
+  assert.equal((await transformed.blob.arrayBuffer()).byteLength, 60);
+  assert.match(transformedProgress.join("\n"), /Rendering loop at 0.5x/);
+
   await assert.rejects(
     download.buildTrackBlob(
       "https://example.com/audio.mp3",
@@ -99,7 +124,7 @@ const download = vm.runInContext("SCDownload", context);
     ),
     /selected loop range is invalid/
   );
-  assert.equal(fetchCount, 1, "Invalid ranges must fail before downloading audio");
+  assert.equal(fetchCount, 2, "Invalid ranges must fail before downloading audio");
 
   const looperSource = fs.readFileSync(
     path.resolve(__dirname, "looper.js"),

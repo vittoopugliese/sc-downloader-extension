@@ -72,12 +72,14 @@ function dispatch(request, sender) {
 
 (async () => {
   const trimRange = { startMs: 1000, endMs: 4000, durationMs: 10000 };
+  const playbackTransform = { rate: 0.85, preservePitch: true };
   const response = await dispatch(
     {
       type: "DOWNLOAD_LOOP",
       trackData: null,
       trackUrl: "https://soundcloud.com/artist/track",
       trimRange,
+      playbackTransform,
     },
     { tab: { id: 42 } }
   );
@@ -90,6 +92,7 @@ function dispatch(request, sender) {
   assert.equal(downloads.length, 1);
   assert.equal(downloads[0][0], resolvedTrack);
   assert.deepEqual(downloads[0][2], trimRange);
+  assert.deepEqual(downloads[0][3], playbackTransform);
 
   console.log("Loop background routing verification passed.");
 })().catch((error) => {

@@ -12,6 +12,11 @@ const SCLooper = (() => {
   const ZOOM_NATIVE_DISABLED_ATTRIBUTE = "data-scdl-loop-zoom-native-disabled";
   const ZOOM_NATIVE_PLAYHEAD_HIDDEN_ATTRIBUTE =
     "data-scdl-loop-native-playhead-hidden";
+  const TEMPO_HOST_SELECTOR = "#scdl-tempo-control";
+  const TEMPO_RATE_ATTRIBUTE = "data-scdl-tempo-rate";
+  const TEMPO_PITCH_ATTRIBUTE = "data-scdl-tempo-preserve-pitch";
+  const TEMPO_RATE_STORAGE = "scdl.tempo.rate";
+  const TEMPO_PITCH_STORAGE = "scdl.tempo.preservePitch";
   const WAVEFORM_SELECTORS = [
     '[role="slider"][aria-label="Waveform"]',
     ".fullHero__waveform .waveformWrapper__waveform",
@@ -1470,6 +1475,31 @@ const SCLooper = (() => {
       : null;
   }
 
+  function readPlaybackTransform() {
+    const host = document.querySelector(TEMPO_HOST_SELECTOR);
+    let rateValue = host?.getAttribute(TEMPO_RATE_ATTRIBUTE);
+    let pitchValue = host?.getAttribute(TEMPO_PITCH_ATTRIBUTE);
+    try {
+      if (rateValue === null || rateValue === undefined) {
+        rateValue = localStorage.getItem(TEMPO_RATE_STORAGE);
+      }
+      if (pitchValue === null || pitchValue === undefined) {
+        pitchValue = localStorage.getItem(TEMPO_PITCH_STORAGE);
+      }
+    } catch {
+      // The DOM snapshot remains authoritative when page storage is blocked.
+    }
+
+    const parsedRate = Number(rateValue);
+    const rate = Number.isFinite(parsedRate)
+      ? Math.round(Math.max(0.5, Math.min(2, parsedRate)) * 100) / 100
+      : 1;
+    return {
+      rate,
+      preservePitch: pitchValue === "true",
+    };
+  }
+
   async function resolveLoopTrackData(identity) {
     const expectedUrl = identityUrl(identity);
     const currentTrack = window.SCDL?.getTrackData?.() || null;
@@ -1522,6 +1552,7 @@ const SCLooper = (() => {
         trackUrl: identityUrl(trackIdentity),
         formatPreference: trackData?.formatPreference || "auto",
         trimRange,
+        playbackTransform: readPlaybackTransform(),
       });
       if (!result?.success) {
         throw new Error(result?.error || t("looper_download_failed"));

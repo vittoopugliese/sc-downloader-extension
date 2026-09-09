@@ -208,6 +208,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           trackData,
           request.formatPreference || trackData.formatPreference || "auto",
           request.trimRange,
+          request.playbackTransform || null,
           request.downloadDestination ?? null
         )
       )

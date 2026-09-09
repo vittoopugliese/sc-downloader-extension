@@ -56,6 +56,10 @@ async function waitForFile(directory, timeoutMs = 30000) {
     const worker =
       context.serviceWorkers()[0] || (await context.waitForEvent("serviceworker"));
     const page = await context.newPage();
+    await page.addInitScript(() => {
+      localStorage.setItem("scdl.tempo.rate", "0.5");
+      localStorage.setItem("scdl.tempo.preservePitch", "true");
+    });
     const cdp = await context.newCDPSession(page);
     await cdp.send("Browser.setDownloadBehavior", {
       behavior: "allow",
@@ -599,10 +603,29 @@ async function waitForFile(directory, timeoutMs = 30000) {
     const dataSize = output.readUInt32LE(40);
     assert.equal(
       dataSize / blockAlign / sampleRate,
-      1,
-      "A-B selection must contain exactly one second"
+      2,
+      "A one-second A-B selection at 0.5x must render two seconds"
     );
-    console.log("PASS: looper A-B click -> WAV build -> Downloads file");
+    const samples = [];
+    const firstFrame = Math.floor(sampleRate * 0.5);
+    const lastFrame = Math.floor(sampleRate * 1.5);
+    for (let frame = firstFrame; frame < lastFrame; frame += 1) {
+      samples.push(output.readInt16LE(44 + frame * blockAlign));
+    }
+    const crossings = [];
+    for (let index = 1; index < samples.length; index += 1) {
+      if (samples[index - 1] <= 0 && samples[index] > 0) crossings.push(index);
+    }
+    const measuredPitch =
+      ((crossings.length - 1) * sampleRate) /
+      (crossings[crossings.length - 1] - crossings[0]);
+    assert.ok(
+      Math.abs(measuredPitch - 220) < 10,
+      `Preserved loop pitch drifted to ${measuredPitch.toFixed(2)} Hz`
+    );
+    console.log(
+      "PASS: looper A-B + 0.5x preserve pitch -> Signalsmith WAV -> Downloads file"
+    );
   } finally {
     await context.close();
     assert.equal(path.dirname(path.resolve(profile)), path.resolve(os.tmpdir()));

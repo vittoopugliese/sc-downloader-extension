@@ -343,13 +343,20 @@ const destinationHandler = SCDownloadDestination.create({
 const trackDownloadExecution = SCTrackDownloadExecution.create({
   resolveSource: (trackData, formatPreference) =>
     SCDownloadSource.resolve(trackData, formatPreference),
-  buildTrack: ({ buildId, trackData, streamUrl, trimRange }) =>
+  buildTrack: ({
+    buildId,
+    trackData,
+    streamUrl,
+    trimRange,
+    playbackTransform,
+  }) =>
     sendOffscreenMessage({
       type: "OFFSCREEN_BUILD",
       buildId,
       trackData,
       streamUrl,
       trimRange: trimRange || null,
+      playbackTransform: playbackTransform || null,
     }),
   saveOutput: (output) => destinationHandler.save(output),
   revokeBlob: (blobUrl) =>
@@ -656,6 +663,7 @@ const BulkJobManager = {
     trackData,
     formatPreference = "auto",
     trimRange,
+    playbackTransform = null,
     downloadDestination = null
   ) {
     await withJobState(async () => {
@@ -681,6 +689,7 @@ const BulkJobManager = {
         formatPreference: formatPreference || "auto",
         destination: resolvedDestination,
         trimRange,
+        playbackTransform,
       });
     } finally {
       singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);

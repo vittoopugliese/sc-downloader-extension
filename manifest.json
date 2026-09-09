@@ -15,6 +15,9 @@
   "background": {
     "service_worker": "scripts/background.js"
   },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -27,6 +30,15 @@
     "128": "assets/icon128.png"
   },
   "content_scripts": [
+    {
+      "matches": ["https://soundcloud.com/*"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "js": [
+        "scripts/tempo-control-core.js",
+        "scripts/tempo-control-main.js"
+      ]
+    },
     {
       "matches": ["https://soundcloud.com/*"],
       "all_frames": true,

@@ -49,6 +49,7 @@ const SCTrackDownloadExecution = (() => {
           trackData: resolved.trackData,
           streamUrl: resolved.streamUrl,
           trimRange: command.trimRange || null,
+          playbackTransform: command.playbackTransform || null,
         });
         activeBuildIds.delete(buildId);
         progressByBuildId.delete(buildId);
