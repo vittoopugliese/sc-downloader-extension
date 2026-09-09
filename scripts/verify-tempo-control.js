@@ -111,7 +111,7 @@ for (const expected of [
   'min="0.1"',
   'max="4"',
   'step="${DEFAULTS.step}"',
-  "Preserve Pitch",
+  "Keep Tone",
   "#scdl-player-download",
   ".playbackTimeline__progressWrapper",
 ]) {

@@ -34,6 +34,7 @@ $packageItems = @(
     "scripts/i18n.js",
     "scripts/inline-button.js",
     "scripts/looper-core.js",
+    "scripts/loop-session.js",
     "scripts/looper-main-bridge.js",
     "scripts/looper.js",
     "scripts/loop-audio-renderer.js",

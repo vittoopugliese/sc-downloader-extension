@@ -12,11 +12,18 @@
   const DOWNLOAD_BUTTON_SELECTOR = "#scdl-player-download";
   const RATE_STORAGE = "scdl.tempo.rate";
   const PITCH_STORAGE = "scdl.tempo.preservePitch";
+  const CUSTOM_RATE_STORAGE = ["scdl.tempo.customRate.1", "scdl.tempo.customRate.2"];
   const RATE_ATTRIBUTE = "data-scdl-tempo-rate";
   const PITCH_ATTRIBUTE = "data-scdl-tempo-preserve-pitch";
   const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
   const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
   const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
+  const REVIEW_URL = "https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews";
+  const LOOP_COMMAND_EVENT = "scdl-looper:command";
+  const LOOP_COMMAND_ATTRIBUTE = "data-scdl-looper-command";
+  const LOOP_RESPONSE_ATTRIBUTE = "data-scdl-looper-response";
+  const LOOP_SESSION_EVENT = "scdl-loop-session:changed";
+  const LONG_PRESS_MS = 650;
   const PLAYER_TIMELINE_SELECTOR = [
     ".playbackTimeline",
     ".playbackTimeline__progressWrapper",
@@ -44,6 +51,17 @@
   let rateAnimationTarget = null;
   let displayedRate = null;
   let animateNextRateChange = false;
+  let loopRequestId = 0;
+  let loopState = { active: false, enabled: false, startMs: null, endMs: null, durationMs: null };
+  let loopPollInterval = null;
+  const customRates = CUSTOM_RATE_STORAGE.map((key) => {
+    try {
+      const stored = localStorage.getItem(key);
+      return stored === null ? null : clampRate(stored);
+    } catch {
+      return null;
+    }
+  });
   const reducedMotionQuery =
     typeof matchMedia === "function"
       ? matchMedia("(prefers-reduced-motion: reduce)")
@@ -167,6 +185,163 @@
       render();
       return false;
     }
+  }
+
+  function loopDocuments() {
+    const results = [];
+    const seen = new Set();
+    function visit(targetWindow) {
+      if (!targetWindow || seen.has(targetWindow)) return;
+      seen.add(targetWindow);
+      try {
+        if (targetWindow.document?.documentElement) results.push(targetWindow.document);
+        for (let index = 0; index < targetWindow.frames.length; index += 1) {
+          visit(targetWindow.frames[index]);
+        }
+      } catch {
+        // Cross-origin frames cannot contain the SoundCloud media we control.
+      }
+    }
+    visit(window);
+    return results;
+  }
+
+  function requestLoopFrom(targetDocument, type, payload = {}) {
+    const root = targetDocument?.documentElement;
+    if (!root?.dispatchEvent) return null;
+    const id = `tempo-${Date.now()}-${loopRequestId += 1}`;
+    try {
+      root.removeAttribute(LOOP_RESPONSE_ATTRIBUTE);
+      root.setAttribute(
+        LOOP_COMMAND_ATTRIBUTE,
+        JSON.stringify({ id, type, ...payload })
+      );
+      root.dispatchEvent(new CustomEvent(LOOP_COMMAND_EVENT, { bubbles: true }));
+      const serialized = root.getAttribute(LOOP_RESPONSE_ATTRIBUTE);
+      const response = serialized ? JSON.parse(serialized) : null;
+      return response?.id === id ? response : null;
+    } catch {
+      return null;
+    } finally {
+      root.removeAttribute(LOOP_COMMAND_ATTRIBUTE);
+      root.removeAttribute(LOOP_RESPONSE_ATTRIBUTE);
+    }
+  }
+
+  function loopResponseScore(response) {
+    if (!response?.state?.available) return response?.state?.loop?.active ? 500 : -1;
+    return (response.state.loop?.active ? 1000 : 0) +
+      (response.state.paused === false ? 100 : 0) +
+      (Number.isFinite(response.state.currentTimeMs) ? 10 : 0);
+  }
+
+  function requestLoop(type, payload = {}) {
+    const documents = loopDocuments();
+    if (type === "state") {
+      return documents
+        .map((targetDocument) => requestLoopFrom(targetDocument, type, payload))
+        .filter(Boolean)
+        .sort((left, right) => loopResponseScore(right) - loopResponseScore(left))[0] || null;
+    }
+    if (type === "clear-loop" || type === "set-global-bypass") {
+      const responses = documents
+        .map((targetDocument) => requestLoopFrom(targetDocument, type, payload))
+        .filter(Boolean);
+      return responses.find((response) => response.loop?.active) || responses[0] || null;
+    }
+    const target = documents
+      .map((targetDocument) => ({
+        targetDocument,
+        response: requestLoopFrom(targetDocument, "state"),
+      }))
+      .sort((left, right) => loopResponseScore(right.response) - loopResponseScore(left.response))[0];
+    return requestLoopFrom(target?.targetDocument || document, type, payload);
+  }
+
+  function readLoopState() {
+    const response = requestLoop("state");
+    const state = response?.state;
+    if (!state) return;
+    loopState = state.loop || { active: false, enabled: false };
+    loopState.available = state.available === true;
+    loopState.currentTimeMs = state.currentTimeMs;
+    loopState.durationMs = Number.isFinite(loopState.durationMs)
+      ? loopState.durationMs
+      : state.durationMs;
+    renderLoop();
+  }
+
+  function formatLoopTime(value) {
+    if (!Number.isFinite(value)) return "";
+    const totalMs = Math.max(0, Math.round(value));
+    const hours = Math.floor(totalMs / 3600000);
+    const minutes = Math.floor((totalMs % 3600000) / 60000);
+    const seconds = Math.floor((totalMs % 60000) / 1000);
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    }
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(totalMs % 1000).padStart(3, "0")}`;
+  }
+
+  function loopPercent(value) {
+    return Number.isFinite(value) && Number.isFinite(loopState.durationMs) && loopState.durationMs > 0
+      ? Math.max(0, Math.min(100, value / loopState.durationMs * 100))
+      : 0;
+  }
+
+  function renderLoop() {
+    if (!ui?.loopSlider) return;
+    const duration = Number.isFinite(loopState.durationMs) ? loopState.durationMs : 0;
+    const start = Number.isFinite(loopState.startMs) ? loopState.startMs : 0;
+    const end = Number.isFinite(loopState.endMs) ? loopState.endMs : duration;
+    for (const input of [ui.loopStart, ui.loopEnd]) {
+      input.max = String(Math.max(1, duration));
+      input.disabled = !loopState.available || duration <= 0;
+    }
+    ui.loopStart.value = String(start);
+    ui.loopEnd.value = String(end);
+    ui.loopStart.setAttribute("aria-valuetext", formatLoopTime(start));
+    ui.loopEnd.setAttribute("aria-valuetext", formatLoopTime(end));
+    ui.loopSlider.style.setProperty("--loop-start", `${loopPercent(start)}%`);
+    ui.loopSlider.style.setProperty("--loop-end", `${loopPercent(end)}%`);
+    ui.setA.textContent = Number.isFinite(loopState.startMs)
+      ? `Set A  ${formatLoopTime(loopState.startMs)}`
+      : "Set A";
+    ui.setB.textContent = Number.isFinite(loopState.endMs)
+      ? `Set B  ${formatLoopTime(loopState.endMs)}`
+      : "Set B";
+    ui.setA.disabled = !loopState.available;
+    ui.setB.disabled = !loopState.available;
+  }
+
+  function setLoopPoint(marker) {
+    const liveState = requestLoop("state")?.state;
+    const current = liveState?.currentTimeMs;
+    if (liveState) {
+      loopState = { ...(liveState.loop || loopState), available: liveState.available === true, currentTimeMs: current, durationMs: liveState.loop?.durationMs || liveState.durationMs };
+    }
+    if (!Number.isFinite(current)) return;
+    const payload = {
+      marker,
+      startMs: marker === "start" ? current : loopState.startMs,
+      endMs: marker === "end" ? current : loopState.endMs,
+      enabled: true,
+      startPlayback: true,
+    };
+    requestLoop("set-loop", payload);
+    readLoopState();
+  }
+
+  function setLoopFromSliders(marker) {
+    const activatesLoop = !loopState.active;
+    requestLoop("set-loop", {
+      marker,
+      startMs: ui.loopStart.valueAsNumber,
+      endMs: ui.loopEnd.valueAsNumber,
+      enabled: true,
+      startPlayback: activatesLoop,
+    });
+    readLoopState();
   }
 
   function syncRange(input) {
@@ -454,6 +629,46 @@
           font-size: 11px;
         }
 
+        /* The player panel intentionally mirrors the compact one-screen layout. */
+        .panel { width: min(420px, calc(100vw - 16px)); padding: 10px; border: 3px solid #080808; border-radius: 11px; }
+        .panel-header { align-items: center; gap: 8px; margin-bottom: 8px; }
+        .presets { order: -1; grid-template-columns: repeat(4, 36px); gap: 5px; flex-basis: 159px; }
+        .preset { width: 36px; height: 28px; padding: 0; }
+        .custom-preset { color: #ff3651; font-size: 16px; font-weight: 800; }
+        .custom-preset[data-saved="true"] { color: #ff6c23; font-size: 10px; }
+        .brand { gap: 7px; }
+        .brand-logo { width: 58px; height: 58px; flex-basis: 58px; border-radius: 12px; transition: filter 180ms ease, opacity 180ms ease; }
+        .brand-logo.is-bypassed { filter: grayscale(1); opacity: .58; }
+        .brand-copy { min-width: 0; }
+        .brand-name { font-size: 17px; white-space: nowrap; }
+        .rating-link { display: block; margin-top: 3px; color: #fff; font-size: 9px; font-style: italic; font-weight: 600; text-decoration: underline; white-space: nowrap; }
+        .rating-link:hover { color: #ffb18a; }
+        .middle-row { display: grid; grid-template-columns: 159px 1fr; align-items: center; gap: 10px; margin-bottom: 6px; }
+        .setters { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        .setter { min-width: 0; height: 30px; padding: 0 5px; border: 1px solid #484848; border-radius: 6px; background: #292929; color: #fff; font: italic 600 10px/1 Interstate, Lucida Grande, Arial, sans-serif; cursor: pointer; white-space: nowrap; }
+        .setter:hover:not(:disabled) { background: #383838; border-color: #777; }
+        .setter:disabled { cursor: not-allowed; opacity: .48; }
+        .pitch-row { gap: 6px; }
+        .pitch-label { gap: 7px; font-size: 13px; white-space: nowrap; }
+        .pitch-toggle { width: 17px; height: 17px; }
+        .speed-status { margin-left: auto; gap: 4px; }
+        .current { font-size: 15px; }
+        .bypass { width: 26px; height: 26px; }
+        .bypass svg { width: 21px; height: 21px; }
+        .slider-wrap { height: 26px; margin: 0 0 5px; }
+        .slider { height: 26px; background-size: 100% 10px; }
+        .slider::-webkit-slider-runnable-track { height: 10px; }
+        .slider::-moz-range-track, .slider::-moz-range-progress { height: 10px; }
+        .range-label { position: absolute; z-index: 2; inset: 50% auto auto 50%; padding: 0 5px; color: #ddd; background: #3b3b3b; font-size: 9px; font-style: italic; font-weight: 700; line-height: 12px; pointer-events: none; transform: translate(-50%, -50%); }
+        .loop-slider { position: relative; height: 28px; margin-top: 1px; background: linear-gradient(to right, #3b3b3b 0 var(--loop-start, 0%), #ff5500 var(--loop-start, 0%) var(--loop-end, 100%), #3b3b3b var(--loop-end, 100%) 100%) center / 100% 10px no-repeat; }
+        .loop-range { appearance: none; -webkit-appearance: none; position: absolute; inset: 0; width: 100%; height: 28px; margin: 0; border: 0; background: transparent; pointer-events: none; }
+        .loop-range::-webkit-slider-runnable-track { height: 10px; background: transparent; }
+        .loop-range::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 19px; height: 19px; margin-top: -5px; border: 2px solid #fff; border-radius: 50%; background: #ff5500; pointer-events: auto; cursor: ew-resize; }
+        .loop-range::-moz-range-track { height: 10px; background: transparent; }
+        .loop-range::-moz-range-thumb { width: 15px; height: 15px; border: 2px solid #fff; border-radius: 50%; background: #ff5500; pointer-events: auto; cursor: ew-resize; }
+        .loop-range:disabled::-webkit-slider-thumb { opacity: .45; cursor: not-allowed; }
+        .status { margin-top: 5px; }
+
         @media (forced-colors: active) {
           .trigger, .panel { border-color: CanvasText; }
         }
@@ -475,24 +690,40 @@
       <section
         class="panel"
         role="dialog"
-        aria-label="Playback Speed"
+        aria-label="Playback speed and loop"
         hidden
       >
         <div class="panel-header">
-        <div class="brand">
-          <img class="brand-logo" width="48" height="48" alt="" hidden />
-          <button
-            class="brand-name"
-            type="button"
-            aria-label="Open the Looper guide"
-          >SoundCloud Track <br />Downloader</button>
-        </div>
         <div class="presets" role="group" aria-label="Quick playback speeds">
-          ${[1, 2, 3, 0.5, 1.5, 2.5].map((rate) => `<button class="preset" type="button" data-rate="${rate}" aria-pressed="false">${rate}x</button>`).join("")}
+          ${[1, 2, 3].map((rate) => `<button class="preset" type="button" data-rate="${rate}" aria-pressed="false">${rate}x</button>`).join("")}
+          ${customRates.slice(0, 1).map((rate, index) => `<button class="preset custom-preset" type="button" data-custom-index="${index}" data-saved="${rate !== null}" aria-pressed="false" title="${rate === null ? "Hold to save the current speed" : `Saved speed ${formatRate(rate)}. Hold to replace`}">${rate === null ? "X" : formatRate(rate)}</button>`).join("")}
+          ${[0.5, 1.5, 2.5].map((rate) => `<button class="preset" type="button" data-rate="${rate}" aria-pressed="false">${rate}x</button>`).join("")}
+          ${customRates.slice(1, 2).map((rate, offset) => { const index = offset + 1; return `<button class="preset custom-preset" type="button" data-custom-index="${index}" data-saved="${rate !== null}" aria-pressed="false" title="${rate === null ? "Hold to save the current speed" : `Saved speed ${formatRate(rate)}. Hold to replace`}">${rate === null ? "X" : formatRate(rate)}</button>`; }).join("")}
         </div>
+        <div class="brand">
+          <img class="brand-logo" width="58" height="58" alt="" hidden />
+          <div class="brand-copy">
+            <button class="brand-name" type="button" aria-label="Open the Looper guide">SoundCloud Track <br />Downloader</button>
+            <a class="rating-link" href="${REVIEW_URL}" target="_blank" rel="noopener noreferrer">Please consider rating the app!</a>
+          </div>
+        </div>
+        </div>
+        <div class="middle-row">
+          <div class="setters">
+            <button class="setter set-a" type="button">Set A</button>
+            <button class="setter set-b" type="button">Set B</button>
+          </div>
+          <div class="pitch-row">
+            <label class="pitch-label"><input class="pitch-toggle" type="checkbox" />Keep Tone</label>
+            <div class="speed-status">
+              <output class="current">1x</output>
+              <button class="bypass" type="button" aria-label="Bypass loop and playback effects" aria-pressed="false" title="Bypass loop and playback effects">${BYPASS_ICON}</button>
+            </div>
+          </div>
         </div>
         <div class="slider-wrap">
           <div class="limits" aria-hidden="true"><span>0.1x</span><span>4x</span></div>
+          <span class="range-label" aria-hidden="true">Tone &amp; Velocity</span>
           <input
             class="slider"
             type="range"
@@ -503,15 +734,10 @@
             aria-label="Playback speed"
           />
         </div>
-        <div class="pitch-row">
-          <label class="pitch-label">
-            <input class="pitch-toggle" type="checkbox" />
-            Keep Tone
-          </label>
-          <div class="speed-status">
-            <output class="current">1x</output>
-            <button class="bypass" type="button" aria-label="Bypass playback speed" aria-pressed="false" title="Bypass playback speed">${BYPASS_ICON}</button>
-          </div>
+        <div class="loop-slider" role="group" aria-label="Loop range">
+          <span class="range-label" aria-hidden="true">Loop</span>
+          <input class="loop-range loop-start" type="range" min="0" max="1" step="1" value="0" aria-label="Loop start A" />
+          <input class="loop-range loop-end" type="range" min="0" max="1" step="1" value="1" aria-label="Loop end B" />
         </div>
         <p class="status" role="status" aria-live="polite" hidden></p>
       </section>
@@ -568,6 +794,11 @@
       status: root.querySelector(".status"),
       brandLogo: root.querySelector(".brand-logo"),
       brandName: root.querySelector(".brand-name"),
+      setA: root.querySelector(".set-a"),
+      setB: root.querySelector(".set-b"),
+      loopSlider: root.querySelector(".loop-slider"),
+      loopStart: root.querySelector(".loop-start"),
+      loopEnd: root.querySelector(".loop-end"),
     };
 
     ui.trigger.addEventListener("click", () => {
@@ -577,10 +808,46 @@
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
     });
     root.querySelectorAll(".preset").forEach((button) => {
+      if (button.classList.contains("custom-preset")) return;
       button.addEventListener("click", () => {
         playbackFailure = "";
         animateNextRateChange = true;
         const state = controller.setRate(Number(button.dataset.rate));
+        writeSetting(RATE_STORAGE, state.rate);
+      });
+    });
+    root.querySelectorAll(".custom-preset").forEach((button) => {
+      const index = Number(button.dataset.customIndex);
+      let timer = null;
+      let longPressed = false;
+      const cancel = () => {
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+      };
+      button.addEventListener("pointerdown", () => {
+        longPressed = false;
+        cancel();
+        timer = setTimeout(() => {
+          timer = null;
+          longPressed = true;
+          customRates[index] = controller.snapshot().rate;
+          writeSetting(CUSTOM_RATE_STORAGE[index], customRates[index]);
+          render();
+        }, LONG_PRESS_MS);
+      });
+      for (const eventName of ["pointerup", "pointercancel", "pointerleave"]) {
+        button.addEventListener(eventName, cancel);
+      }
+      button.addEventListener("click", (event) => {
+        if (longPressed) {
+          event.preventDefault();
+          longPressed = false;
+          return;
+        }
+        if (!Number.isFinite(customRates[index])) return;
+        playbackFailure = "";
+        animateNextRateChange = true;
+        const state = controller.setRate(customRates[index]);
         writeSetting(RATE_STORAGE, state.rate);
       });
     });
@@ -603,11 +870,19 @@
     ui.bypass.addEventListener("click", () => {
       playbackFailure = "";
       animateNextRateChange = true;
-      controller.setBypassed(!controller.snapshot().bypassed);
+      const bypassed = !controller.snapshot().bypassed;
+      controller.setBypassed(bypassed);
+      requestLoop("set-global-bypass", { bypassed });
+      readLoopState();
     });
+    ui.setA.addEventListener("click", () => setLoopPoint("start"));
+    ui.setB.addEventListener("click", () => setLoopPoint("end"));
+    ui.loopStart.addEventListener("input", () => setLoopFromSliders("start"));
+    ui.loopEnd.addEventListener("input", () => setLoopFromSliders("end"));
 
     render();
     syncBrandLogo();
+    readLoopState();
     return host;
   }
 
@@ -622,9 +897,26 @@
     ui.slider.value = String(state.rate);
     ui.slider.setAttribute("aria-valuetext", formatRate(state.rate));
     ui.bypass.setAttribute("aria-pressed", String(state.bypassed));
-    ui.bypass.title = state.bypassed ? "Bypass on — click to restore playback speed" : "Bypass playback speed";
+    ui.bypass.title = state.bypassed
+      ? "Bypass on — restore loop, speed and tone"
+      : "Bypass loop, speed and tone";
+    ui.bypass.setAttribute("aria-label", ui.bypass.title);
+    ui.brandLogo.classList.toggle("is-bypassed", state.bypassed);
     ui.root.querySelectorAll(".preset").forEach((button) => {
-      button.setAttribute("aria-pressed", String(Number(button.dataset.rate) === state.rate));
+      const customIndex = Number(button.dataset.customIndex);
+      const buttonRate = Number.isInteger(customIndex)
+        ? customRates[customIndex]
+        : Number(button.dataset.rate);
+      button.setAttribute("aria-pressed", String(buttonRate === state.rate));
+    });
+    ui.root.querySelectorAll(".custom-preset").forEach((button) => {
+      const index = Number(button.dataset.customIndex);
+      const value = customRates[index];
+      button.dataset.saved = String(Number.isFinite(value));
+      button.textContent = Number.isFinite(value) ? formatRate(value) : "X";
+      button.title = Number.isFinite(value)
+        ? `Saved speed ${formatRate(value)}. Hold to replace`
+        : "Hold to save the current speed";
     });
     syncRange(ui.slider);
     ui.pitchToggle.checked = state.preservePitch;
@@ -635,6 +927,7 @@
     const message = playbackFailure || storageFailure;
     ui.status.textContent = message;
     ui.status.hidden = !message;
+    renderLoop();
   }
 
   function mount() {
@@ -722,6 +1015,8 @@
       controller.setPreservePitch(readStoredPitch());
     }
   });
+  document.addEventListener(LOOP_SESSION_EVENT, readLoopState);
+  loopPollInterval = setInterval(readLoopState, 250);
 
   mount();
   render();

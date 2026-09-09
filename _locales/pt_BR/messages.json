@@ -141,7 +141,7 @@
     "message": "Looper"
   },
   "help_looper": {
-    "message": "Em uma faixa individual compatível, o Looper permite repetir uma seção A–B e exportar esse intervalo como WAV. Isso não altera os downloads de faixas completas."
+    "message": "O Looper acompanha a faixa no player persistente do SoundCloud mesmo ao navegar ou fechar o painel. Defina A/B no painel ou edite o mesmo intervalo em uma waveform compatível; a exportação WAV continua junto à waveform."
   },
   "help_speed_title": {
     "message": "Velocidade"
@@ -159,7 +159,7 @@
     "message": "Velocidades rápidas"
   },
   "help_speed_presets": {
-    "message": "Escolha 0.5x, 1x, 1.5x, 2x, 2.5x ou 3x para mudar imediatamente. A predefinição destacada corresponde à velocidade selecionada."
+    "message": "Escolha uma das seis velocidades rápidas. Os dois botões X são presets personalizados: mantenha um pressionado para salvar a velocidade atual do slider e clique depois para restaurá-la."
   },
   "help_speed_slider_title": {
     "message": "Controle preciso"
@@ -177,7 +177,7 @@
     "message": "Bypass temporário"
   },
   "help_speed_bypass": {
-    "message": "Pressione o ícone de bypass ao lado do valor atual para reproduzir em 1x sem perder a velocidade escolhida nem o ajuste de tom. Pressione novamente para restaurá-los."
+    "message": "O único bypass desativa temporariamente o loop e reproduz em 1x sem perder o intervalo, a velocidade ou Keep Tone. O logo fica cinza; pressione novamente para restaurar tudo."
   },
   "help_speed_memory_title": {
     "message": "Lembrado e sempre ativo"
@@ -189,7 +189,7 @@
     "message": "Downloads e Looper"
   },
   "help_speed_looper_effect": {
-    "message": "A velocidade não altera downloads de faixas completas. Uma exportação WAV do Looper usa a velocidade efetiva: com Manter tom preserva o tom; sem a opção, a duração e o tom mudam."
+    "message": "Downloads completos iniciados junto ao player do SoundCloud e exportações WAV do Looper usam a velocidade efetiva. Keep Tone preserva o tom; sem a opção, duração e tom mudam. O bypass exporta em 1x."
   },
   "help_speed_close_title": {
     "message": "Fechar e resolver problemas"
@@ -477,13 +477,13 @@
     "message": "Ative o loop"
   },
   "looper_step_enable": {
-    "message": "Pressione o botão de loop imediatamente antes de Mais ações."
+    "message": "Abra o painel do velocímetro e use Set A/Set B na posição atual, arraste as alças do slider Loop ou pressione o botão de loop antes de Mais ações."
   },
   "looper_step_range_title": {
     "message": "Defina A e B"
   },
   "looper_step_range": {
-    "message": "Arraste os marcadores pela forma de onda. As setas movem um marcador 100 ms; Shift + Seta move 1 segundo."
+    "message": "O painel e a waveform editam o mesmo intervalo A–B em tempo real. As setas movem 100 ms; Shift + Seta move 1 segundo."
   },
   "looper_step_zoom_title": {
     "message": "Amplie para marcar com precisão"
@@ -498,7 +498,7 @@
     "message": "Escolha Baixar loop para salvar o intervalo A–B como um arquivo WAV."
   },
   "looper_tip": {
-    "message": "O loop é temporário: feche-o com o X ou Escape. Abrir outra faixa o remove."
+    "message": "O loop é temporário e acompanha a faixa atual ao navegar. Trocar a faixa em reprodução o remove; o bypass compartilhado pausa loop e efeitos sem esquecer os ajustes."
   },
   "looper_done": {
     "message": "Voltar ao download"

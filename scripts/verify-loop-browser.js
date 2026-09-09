@@ -278,8 +278,16 @@ async function waitForFile(directory, timeoutMs = 30000) {
       "false",
       "The restored close icon must deactivate the loop"
     );
+    await page.locator("audio").evaluate((audio) => {
+      audio.pause();
+      audio.currentTime = 5;
+    });
     await page.locator("[data-scdl-looper]").click();
     await page.locator('[data-scdl-loop-overlay] [data-marker="end"]').waitFor();
+    await page.locator("audio").evaluate((audio) => {
+      audio.pause();
+      audio.currentTime = 5;
+    });
     await waveform.evaluate((element, point) => {
       const event = new WheelEvent("wheel", {
         bubbles: true,

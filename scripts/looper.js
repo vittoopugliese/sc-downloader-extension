@@ -36,12 +36,14 @@ const SCLooper = (() => {
 
   let view = null;
   let range = null;
+  let loopEnabled = false;
   let player = null;
   let frameId = null;
   let initialUrl = null;
   let initialTrackIdentity = null;
   let lastSeekAttemptAt = Number.NEGATIVE_INFINITY;
   let lastTrackIdentityCheckAt = Number.NEGATIVE_INFINITY;
+  let lastSessionSyncAt = Number.NEGATIVE_INFINITY;
   let discoveryObserver = null;
   let contextInterval = null;
   let ensureTimeout = null;
@@ -526,6 +528,37 @@ const SCLooper = (() => {
       },
       isAvailable() {
         return Boolean(resolve()) || Boolean(resolveBridge());
+      },
+      getLoopState() {
+        return resolveBridge()?.loop || null;
+      },
+      setLoop(nextRange, enabled = true, startPlayback = false, marker = null) {
+        resolveBridge();
+        if (!bridgeDocument || !nextRange) return false;
+        const response = requestMediaBridge(bridgeDocument, "set-loop", {
+          expectedDurationMs,
+          startMs: nextRange.startMs,
+          endMs: nextRange.endMs,
+          enabled,
+          startPlayback,
+          marker,
+        });
+        return response?.ok === true ? response.loop : null;
+      },
+      setLoopEnabled(enabled) {
+        resolveBridge();
+        if (!bridgeDocument) return false;
+        return requestMediaBridge(bridgeDocument, "set-loop-enabled", {
+          expectedDurationMs,
+          enabled,
+        })?.ok === true;
+      },
+      clearLoop() {
+        resolveBridge();
+        if (!bridgeDocument) return false;
+        return requestMediaBridge(bridgeDocument, "clear-loop", {
+          expectedDurationMs,
+        })?.ok === true;
       },
     };
   }
@@ -1699,6 +1732,7 @@ const SCLooper = (() => {
     const deltaMs = pointerTime - startPointerTime;
     range = SCLooperCore.moveRange(selectionDrag.initialRange, deltaMs);
     updateOverlay();
+    publishRangeToSession(false);
   }
 
   function handleSelectionPointerDown(event) {
@@ -1753,6 +1787,7 @@ const SCLooper = (() => {
       event.key === "ArrowLeft" ? -amount : amount
     );
     updateOverlay();
+    publishRangeToSession(false);
     seekIfOutsideRange();
   }
 
@@ -1769,6 +1804,7 @@ const SCLooper = (() => {
     if (timeMs === null) return;
     range = SCLooperCore.moveMarker(range, marker, timeMs);
     updateOverlay();
+    publishRangeToSession(false, marker);
   }
 
   function handleMarkerPointerDown(event) {
@@ -1807,7 +1843,39 @@ const SCLooper = (() => {
       currentTime + (event.key === "ArrowLeft" ? -amount : amount)
     );
     updateOverlay();
+    publishRangeToSession(false, marker);
     seekIfOutsideRange();
+  }
+
+  function publishRangeToSession(startPlayback = false, marker = null) {
+    if (!range || !player?.setLoop) return false;
+    const session = player.setLoop(range, true, startPlayback, marker);
+    if (!session) return false;
+    loopEnabled = session.enabled === true;
+    return true;
+  }
+
+  function syncRangeFromSession() {
+    const session = player?.getLoopState?.();
+    if (!session) return true;
+    if (!session.active) {
+      reset("session-cleared", false);
+      return false;
+    }
+    const normalized = SCLooperCore.normalizeRange(session);
+    if (!normalized) return true;
+    loopEnabled = session.enabled === true;
+    if (
+      !range ||
+      range.startMs !== normalized.startMs ||
+      range.endMs !== normalized.endMs ||
+      range.durationMs !== normalized.durationMs
+    ) {
+      range = normalized;
+      if (view && !view.overlay) mountOverlay();
+      updateOverlay();
+    }
+    return true;
   }
 
   function seekToStart() {
@@ -1819,6 +1887,7 @@ const SCLooper = (() => {
   }
 
   function seekIfOutsideRange() {
+    if (!loopEnabled) return;
     const currentTimeMs = player?.getCurrentTimeMs();
     if (SCLooperCore.getSeekTarget(range, currentTimeMs) !== null) {
       seekToStart();
@@ -1859,6 +1928,7 @@ const SCLooper = (() => {
         ? SCLooperCore.normalizeZoomWindow(zoomWindow, range.durationMs)
         : null;
       updateOverlay();
+      player.setLoop?.(range, loopEnabled, false);
     }
 
     if (event.type !== "emptied") seekIfOutsideRange();
@@ -1867,13 +1937,13 @@ const SCLooper = (() => {
   function loopFrame() {
     frameId = null;
     if (!range || !player) return;
-
-    if (normalizeUrl(window.location.href) !== initialUrl) {
-      reset("navigation");
-      return;
-    }
+    if (typeof player.getLoopState !== "function") loopEnabled = true;
 
     const now = performance.now();
+    if (now - lastSessionSyncAt >= 250) {
+      lastSessionSyncAt = now;
+      if (!syncRangeFromSession()) return;
+    }
     if (
       now - lastTrackIdentityCheckAt >= TRACK_IDENTITY_CHECK_INTERVAL_MS
     ) {
@@ -1886,6 +1956,11 @@ const SCLooper = (() => {
     }
 
     const currentTimeMs = player.getCurrentTimeMs();
+    if (!loopEnabled) {
+      updateZoomPlayhead(currentTimeMs);
+      frameId = requestAnimationFrame(loopFrame);
+      return;
+    }
     const seekTarget = SCLooperCore.getSeekTarget(range, currentTimeMs);
     if (seekTarget !== null) {
       seekToStart();
@@ -1898,7 +1973,7 @@ const SCLooper = (() => {
     frameId = requestAnimationFrame(loopFrame);
   }
 
-  function activate() {
+  function activate(sessionRange = null, publish = true) {
     const target = discoverTarget();
     if (!target) return false;
     if (!view || view.waveform !== target.waveform) mountView(target);
@@ -1910,10 +1985,12 @@ const SCLooper = (() => {
       return false;
     }
 
-    const initialRange = SCLooperCore.createInitialRange(
-      nextPlayer.getDurationMs(),
-      nextPlayer.getCurrentTimeMs()
-    );
+    const initialRange = sessionRange
+      ? SCLooperCore.normalizeRange(sessionRange)
+      : SCLooperCore.createInitialRange(
+          nextPlayer.getDurationMs(),
+          nextPlayer.getCurrentTimeMs()
+        );
     if (!initialRange) {
       nextPlayer.destroy();
       updateButtonAvailability();
@@ -1923,16 +2000,19 @@ const SCLooper = (() => {
     player?.destroy();
     player = nextPlayer;
     range = initialRange;
+    loopEnabled = sessionRange ? sessionRange.enabled === true : true;
     zoomWindow = null;
     initialUrl = normalizeUrl(window.location.href);
     initialTrackIdentity = player.getTrackIdentity();
     lastSeekAttemptAt = Number.NEGATIVE_INFINITY;
     lastTrackIdentityCheckAt = Number.NEGATIVE_INFINITY;
+    lastSessionSyncAt = Number.NEGATIVE_INFINITY;
     player.subscribe(handlePlayerEvent);
     document.addEventListener("keydown", handleDocumentKeyDown, true);
     mountOverlay();
     setButtonState(view.button, true, true);
     setDownloadButtonState(view.downloadButton);
+    if (publish) publishRangeToSession(true);
     frameId = requestAnimationFrame(loopFrame);
     return true;
   }
@@ -1955,7 +2035,7 @@ const SCLooper = (() => {
     scheduleEnsure(0);
   }
 
-  function reset(reason = "manual") {
+  function reset(reason = "manual", clearSession = true) {
     loopDownloadOperationId += 1;
     isLoopDownloading = false;
     if (downloadResetTimeout) clearTimeout(downloadResetTimeout);
@@ -1964,14 +2044,17 @@ const SCLooper = (() => {
     if (frameId !== null) cancelAnimationFrame(frameId);
     frameId = null;
     document.removeEventListener("keydown", handleDocumentKeyDown, true);
+    if (clearSession) player?.clearLoop?.();
     player?.destroy();
     player = null;
     range = null;
+    loopEnabled = false;
     zoomWindow = null;
     initialUrl = null;
     initialTrackIdentity = null;
     lastSeekAttemptAt = Number.NEGATIVE_INFINITY;
     lastTrackIdentityCheckAt = Number.NEGATIVE_INFINITY;
+    lastSessionSyncAt = Number.NEGATIVE_INFINITY;
     removeView();
 
     for (const node of document.querySelectorAll(
@@ -2008,11 +2091,6 @@ const SCLooper = (() => {
   }
 
   function ensureMounted() {
-    if (range && normalizeUrl(window.location.href) !== initialUrl) {
-      reset("navigation");
-      return false;
-    }
-
     if (
       view?.pageUrl === window.location.href &&
       view.button?.isConnected &&
@@ -2022,13 +2100,26 @@ const SCLooper = (() => {
     ) {
       view.durationMs = readWaveformDuration(view.waveform);
       updateButtonAvailability();
+      if (!range) {
+        const probe = createNativeMediaAdapter(view.durationMs);
+        const session = probe.getLoopState?.();
+        probe.destroy();
+        if (session?.active) return activate(session, false);
+      }
       return true;
     }
 
     const target = discoverTarget();
     if (!target) {
       setDebugStatus(mountingDiagnostics());
-      if (!isTrackPage() && (view || range)) reset("unsupported-page");
+      if (view) removeView();
+      return false;
+    }
+    const playerPermalink = currentPlayerPermalink();
+    const pagePermalink = currentPagePermalink();
+    if (playerPermalink && pagePermalink && playerPermalink !== pagePermalink) {
+      if (view) removeView();
+      setDebugStatus("waiting;waveform-track-is-not-playing");
       return false;
     }
     if (
@@ -2046,6 +2137,12 @@ const SCLooper = (() => {
       mountView(target);
     } else {
       updateButtonAvailability();
+    }
+    if (!range) {
+      const probe = createNativeMediaAdapter(target.durationMs);
+      const session = probe.getLoopState?.();
+      probe.destroy();
+      if (session?.active) return activate(session, false);
     }
     return true;
   }
@@ -2074,9 +2171,6 @@ const SCLooper = (() => {
     discoveryObserver = new MutationObserver(() => scheduleEnsure());
     discoveryObserver.observe(document.body, { childList: true, subtree: true });
     contextInterval = setInterval(() => {
-      if (range && normalizeUrl(window.location.href) !== initialUrl) {
-        reset("navigation");
-      }
       scheduleEnsure(0);
     }, 750);
     window.addEventListener("popstate", scheduleEnsure);

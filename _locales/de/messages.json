@@ -141,7 +141,7 @@
     "message": "Looper"
   },
   "help_looper": {
-    "message": "Bei einem kompatiblen einzelnen Track wiederholt Looper einen A–B-Abschnitt und exportiert diesen Bereich als WAV. Downloads vollständiger Tracks bleiben unverändert."
+    "message": "Looper folgt dem Track im dauerhaften SoundCloud-Player, auch beim Navigieren oder Schließen des Panels. Setze A/B im Panel oder bearbeite denselben Bereich auf einer kompatiblen Wellenform; der WAV-Export bleibt neben der Wellenform."
   },
   "help_speed_title": {
     "message": "Tempo"
@@ -159,7 +159,7 @@
     "message": "Schnelle Tempi"
   },
   "help_speed_presets": {
-    "message": "Wähle 0.5x, 1x, 1.5x, 2x, 2.5x oder 3x für eine sofortige Änderung. Die hervorgehobene Vorgabe entspricht dem gewählten Tempo."
+    "message": "Wähle eine der sechs schnellen Geschwindigkeiten. Die beiden X-Tasten sind eigene Presets: Halte eine gedrückt, um die aktuelle Slider-Geschwindigkeit zu speichern, und klicke später darauf, um sie wiederherzustellen."
   },
   "help_speed_slider_title": {
     "message": "Präzise Steuerung"
@@ -177,7 +177,7 @@
     "message": "Temporärer Bypass"
   },
   "help_speed_bypass": {
-    "message": "Drücke das Bypass-Symbol neben dem aktuellen Wert für 1x, ohne das gewählte Tempo oder die Tonhöheneinstellung zu verlieren. Drücke es erneut, um beides wiederherzustellen."
+    "message": "Der einzige Bypass deaktiviert vorübergehend Loop und Wiedergabeeffekte, ohne Bereich, Geschwindigkeit oder Keep Tone zu vergessen. Das Logo wird grau; erneut drücken stellt alles wieder her."
   },
   "help_speed_memory_title": {
     "message": "Gespeichert und aktiv gehalten"
@@ -189,7 +189,7 @@
     "message": "Downloads und Looper"
   },
   "help_speed_looper_effect": {
-    "message": "Das Tempo verändert vollständige Track-Downloads nicht. Ein WAV-Export des Loopers verwendet das wirksame Tempo: Mit erhaltener Tonhöhe bleibt sie gleich; andernfalls ändern sich Dauer und Tonhöhe."
+    "message": "Vollständige Downloads neben dem SoundCloud-Player und Looper-WAV-Exporte verwenden das wirksame Tempo. Keep Tone erhält die Tonhöhe; ohne die Option ändern sich Dauer und Tonhöhe. Bypass exportiert mit 1x."
   },
   "help_speed_close_title": {
     "message": "Schließen und Fehler beheben"
@@ -477,13 +477,13 @@
     "message": "Loop einschalten"
   },
   "looper_step_enable": {
-    "message": "Drücke den Loop-Button direkt vor Weitere Aktionen."
+    "message": "Öffne das Tacho-Panel und nutze Set A/Set B an der aktuellen Position, ziehe die Griffe des Loop-Sliders oder nutze den Loop-Button vor Weitere Aktionen."
   },
   "looper_step_range_title": {
     "message": "A und B festlegen"
   },
   "looper_step_range": {
-    "message": "Ziehe die Marker über die Wellenform. Pfeiltasten verschieben einen Marker um 100 ms; Umschalt + Pfeil um 1 Sekunde."
+    "message": "Panel und Wellenform bearbeiten denselben A–B-Bereich in Echtzeit. Die Pfeiltasten verschieben einen Marker um 100 ms, Umschalt + Pfeil um 1 Sekunde."
   },
   "looper_step_zoom_title": {
     "message": "Für präzise Punkte hineinzoomen"
@@ -498,7 +498,7 @@
     "message": "Wähle Loop herunterladen, um den A–B-Bereich als WAV-Datei zu speichern."
   },
   "looper_tip": {
-    "message": "Der Loop ist temporär: Schließe ihn mit dem Kreuz oder Escape. Ein anderer Track entfernt ihn."
+    "message": "Der Loop ist temporär und folgt dem aktuellen Player-Track beim Navigieren. Ein Wechsel des abgespielten Tracks entfernt ihn; der gemeinsame Bypass pausiert Loop und Effekte, ohne Einstellungen zu vergessen."
   },
   "looper_done": {
     "message": "Zurück zum Download"

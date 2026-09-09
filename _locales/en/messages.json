@@ -156,7 +156,7 @@
     "message": "Looper"
   },
   "help_looper": {
-    "message": "On a compatible individual track, Looper lets you repeat an A–B section and export that selected range as WAV. It does not change full-track downloads."
+    "message": "Looper follows the track in SoundCloud's persistent player, even when you navigate or close the control panel. Set A/B from the panel or edit the same range on a compatible waveform; WAV export remains beside the waveform."
   },
   "help_speed_title": {
     "message": "Speed"
@@ -174,7 +174,7 @@
     "message": "Quick speeds"
   },
   "help_speed_presets": {
-    "message": "Choose 0.5x, 1x, 1.5x, 2x, 2.5x, or 3x for an immediate change. The highlighted preset matches the selected speed."
+    "message": "Choose one of the six quick speeds. The two X buttons are custom presets: hold one to save the slider's current speed, then click it to restore that exact value. Custom presets stay saved between SoundCloud sessions."
   },
   "help_speed_slider_title": {
     "message": "Precise control"
@@ -192,7 +192,7 @@
     "message": "Temporary bypass"
   },
   "help_speed_bypass": {
-    "message": "Press the bypass icon beside the current value to play at 1x without losing your selected speed or Keep Tone setting. Press it again to restore them."
+    "message": "The single bypass icon temporarily disables the loop and plays at 1x without losing the selected range, speed, or Keep Tone setting. The logo turns gray while bypass is active; press it again to restore everything."
   },
   "help_speed_memory_title": {
     "message": "Remembered and kept active"
@@ -204,7 +204,7 @@
     "message": "Downloads and Looper"
   },
   "help_speed_looper_effect": {
-    "message": "Speed does not alter full-track downloads. A Looper WAV export uses the effective speed: with Keep Tone on it preserves pitch; with it off both duration and pitch change."
+    "message": "Full-track downloads started beside the SoundCloud player and Looper WAV exports use the effective speed. Keep Tone preserves pitch; with it off, duration and pitch change. Bypass exports at the normal 1x rate."
   },
   "help_speed_close_title": {
     "message": "Close and troubleshoot"
@@ -612,13 +612,13 @@
     "message": "Turn on the loop"
   },
   "looper_step_enable": {
-    "message": "Press the loop button immediately before More actions."
+    "message": "Open the speedometer panel and use Set A and Set B at the live playhead, drag either handle on the Loop slider, or press the loop button before More actions on a compatible waveform."
   },
   "looper_step_range_title": {
     "message": "Set A and B"
   },
   "looper_step_range": {
-    "message": "Drag the markers over the waveform. Arrow keys move a marker 100 ms; Shift + Arrow moves it 1 second."
+    "message": "The panel and waveform edit the same A–B range in real time. The panel shows milliseconds for short tracks and hours when needed; waveform arrow keys move a marker 100 ms, or 1 second with Shift."
   },
   "looper_step_zoom_title": {
     "message": "Zoom in for precise points"
@@ -633,7 +633,7 @@
     "message": "Choose Download loop to save the A–B range as a WAV file."
   },
   "looper_tip": {
-    "message": "The loop is temporary: close it with the cross or Escape. Opening another track removes it."
+    "message": "The loop is temporary and follows the current player track across SoundCloud navigation. Changing the playing track removes it. The shared bypass pauses both loop and playback effects without forgetting their settings."
   },
   "looper_done": {
     "message": "Back to download"

@@ -3,22 +3,141 @@
   const COMMAND_EVENT = "scdl-looper:command";
   const COMMAND_ATTRIBUTE = "data-scdl-looper-command";
   const RESPONSE_ATTRIBUTE = "data-scdl-looper-response";
+  const SESSION_ATTRIBUTE = "data-scdl-loop-session";
+  const SESSION_EVENT = "scdl-loop-session:changed";
 
-  if (window[INSTALLED_FLAG]) return;
+  if (window[INSTALLED_FLAG] || !globalThis.SCLoopSession) return;
   Object.defineProperty(window, INSTALLED_FLAG, { value: true });
 
   const knownMedia = new Set();
   const observedMedia = new WeakSet();
   let lastPlayingMedia = null;
+  let loopMedia = null;
+  let loopMediaSource = null;
+  let loopFrameId = null;
+  let globallyBypassed = false;
+  let restoreLoopWhenUnbypassed = false;
+  const loopSession = globalThis.SCLoopSession.create();
+  let loopState = loopSession.snapshot();
+  loopSession.subscribe((next) => { loopState = next; });
+
+  function publicLoopState() {
+    return { ...loopState };
+  }
+
+  function publishLoopState() {
+    const root = document.documentElement;
+    if (!root) return;
+    root.setAttribute(SESSION_ATTRIBUTE, JSON.stringify(publicLoopState()));
+    const event = typeof CustomEvent === "function"
+      ? new CustomEvent(SESSION_EVENT, { bubbles: true })
+      : { type: SESSION_EVENT };
+    root.dispatchEvent(event);
+  }
+
+  function stopLoopFrame() {
+    if (loopFrameId !== null && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(loopFrameId);
+    }
+    loopFrameId = null;
+  }
+
+  function clearLoopState() {
+    stopLoopFrame();
+    loopMedia = null;
+    loopMediaSource = null;
+    restoreLoopWhenUnbypassed = false;
+    loopSession.command({ type: "clear" });
+    publishLoopState();
+  }
+
+  function loopFrame() {
+    loopFrameId = null;
+    if (!loopState.enabled || !loopMedia) return;
+    if (
+      mediaSource(loopMedia) !== loopMediaSource ||
+      (lastPlayingMedia && lastPlayingMedia !== loopMedia && !lastPlayingMedia.paused)
+    ) {
+      clearLoopState();
+      return;
+    }
+    enforceLoop(loopMedia);
+    if (typeof requestAnimationFrame === "function") {
+      loopFrameId = requestAnimationFrame(loopFrame);
+    }
+  }
+
+  function enforceLoop(media) {
+    if (!loopState.enabled || media !== loopMedia) return;
+    const currentTimeMs = Number.isFinite(media.currentTime)
+      ? media.currentTime * 1000
+      : null;
+    if (
+      Number.isFinite(currentTimeMs) &&
+      (currentTimeMs < loopState.startMs || currentTimeMs >= loopState.endMs)
+    ) {
+      media.currentTime = loopState.startMs / 1000;
+    }
+  }
+
+  function startLoopFrame() {
+    stopLoopFrame();
+    if (loopState.enabled && typeof requestAnimationFrame === "function") {
+      loopFrameId = requestAnimationFrame(loopFrame);
+    }
+  }
+
+  function updateLoop(media, command) {
+    const durationMs = mediaDurationMs(media);
+    if (!Number.isFinite(durationMs)) return false;
+
+    loopMedia = media;
+    lastPlayingMedia = media;
+    loopMediaSource = mediaSource(media);
+    loopSession.command({
+      type: "set-range",
+      startMs: command.startMs,
+      endMs: command.endMs,
+      durationMs,
+      trackIdentity: loopMediaSource,
+      enabled: command.enabled !== false && !globallyBypassed,
+      marker: command.marker,
+    });
+    if (globallyBypassed && command.enabled !== false && loopState.active) {
+      restoreLoopWhenUnbypassed = true;
+    }
+    publishLoopState();
+    if (loopState.enabled && command.startPlayback !== false) {
+      media.currentTime = loopState.startMs / 1000;
+      Promise.resolve(media.play?.()).catch(() => {});
+    }
+    startLoopFrame();
+    return true;
+  }
 
   function remember(media) {
     if (!(media instanceof HTMLMediaElement)) return media;
+    if (
+      loopMedia &&
+      (media !== loopMedia || mediaSource(loopMedia) !== loopMediaSource) &&
+      !media.paused
+    ) {
+      clearLoopState();
+    }
     knownMedia.add(media);
     if (!observedMedia.has(media)) {
       observedMedia.add(media);
       media.addEventListener("playing", () => {
+        if (
+          loopMedia &&
+          (media !== loopMedia || mediaSource(media) !== loopMediaSource)
+        ) {
+          clearLoopState();
+        }
         lastPlayingMedia = media;
       });
+      media.addEventListener("timeupdate", () => enforceLoop(media));
+      media.addEventListener("seeking", () => enforceLoop(media));
     }
     if (!media.paused) lastPlayingMedia = media;
     return media;
@@ -124,9 +243,63 @@
                   ? media.currentTime * 1000
                   : null,
                 paused: media.paused !== false,
+                source: mediaSource(media),
+                loop: publicLoopState(),
               }
-            : { available: false },
+            : { available: false, loop: publicLoopState() },
         });
+        return;
+      }
+
+      if (command.type === "set-loop" && media) {
+        respond(root, {
+          id: command.id,
+          ok: updateLoop(media, command),
+          loop: publicLoopState(),
+        });
+        return;
+      }
+
+      if (command.type === "set-loop-enabled" && loopMedia) {
+        loopSession.command({
+          type: "set-enabled",
+          enabled: command.enabled && !globallyBypassed,
+        });
+        publishLoopState();
+        if (loopState.enabled) {
+          loopMedia.currentTime = loopState.startMs / 1000;
+          Promise.resolve(loopMedia.play?.()).catch(() => {});
+        }
+        startLoopFrame();
+        respond(root, { id: command.id, ok: true, loop: publicLoopState() });
+        return;
+      }
+
+      if (command.type === "set-global-bypass") {
+        globallyBypassed = Boolean(command.bypassed);
+        if (globallyBypassed) {
+          restoreLoopWhenUnbypassed = loopState.enabled || restoreLoopWhenUnbypassed;
+          loopSession.command({ type: "set-enabled", enabled: false });
+        } else {
+          loopSession.command({
+            type: "set-enabled",
+            enabled: restoreLoopWhenUnbypassed,
+          });
+          restoreLoopWhenUnbypassed = false;
+        }
+        publishLoopState();
+        if (loopState.enabled && loopMedia) {
+          loopMedia.currentTime = loopState.startMs / 1000;
+          Promise.resolve(loopMedia.play?.()).catch(() => {});
+        }
+        startLoopFrame();
+        respond(root, { id: command.id, ok: true, loop: publicLoopState() });
+        return;
+      }
+
+      if (command.type === "clear-loop") {
+        clearLoopState();
+        respond(root, { id: command.id, ok: true, loop: publicLoopState() });
         return;
       }
 
@@ -144,4 +317,6 @@
     },
     true
   );
+
+  publishLoopState();
 })();

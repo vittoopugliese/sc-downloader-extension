@@ -50,6 +50,8 @@ class FakeAudio extends FakeMedia {}
 const documentListeners = new Map();
 const root = new FakeElement();
 let documentMedia = [];
+let nextAnimationId = 0;
+const animationCallbacks = new Map();
 root.dispatchEvent = (event) => {
   event.target = root;
   documentListeners.get(event.type)?.(event);
@@ -80,8 +82,20 @@ const context = vm.createContext({
   Number,
   JSON,
   Object,
+  requestAnimationFrame(callback) {
+    nextAnimationId += 1;
+    animationCallbacks.set(nextAnimationId, callback);
+    return nextAnimationId;
+  },
+  cancelAnimationFrame(id) {
+    animationCallbacks.delete(id);
+  },
 });
 
+vm.runInContext(
+  fs.readFileSync(path.resolve(__dirname, "loop-session.js"), "utf8"),
+  context
+);
 vm.runInContext(
   fs.readFileSync(path.resolve(__dirname, "looper-main-bridge.js"), "utf8"),
   context
@@ -129,5 +143,45 @@ assert.equal(
 assert.equal(command("seek", { timeMs: 15000 }).ok, true);
 assert.equal(currentMedia.currentTime, 15);
 assert.equal(media.currentTime, 12, "Seeking must not target the historical player");
+
+const configured = command("set-loop", {
+  startMs: 1000,
+  endMs: 3000,
+  enabled: true,
+  startPlayback: false,
+});
+assert.equal(configured.ok, true);
+assert.equal(configured.loop.active, true);
+assert.equal(configured.loop.enabled, true);
+currentMedia.currentTime = 3;
+const loopCallback = [...animationCallbacks.values()].at(-1);
+loopCallback();
+assert.equal(currentMedia.currentTime, 1, "MAIN must enforce B by seeking to A");
+
+assert.equal(command("set-loop-enabled", { enabled: false }).ok, true);
+assert.equal(command("state").state.loop.enabled, false);
+assert.equal(command("set-loop-enabled", { enabled: true }).loop.enabled, true);
+assert.equal(command("set-global-bypass", { bypassed: true }).loop.enabled, false);
+assert.equal(
+  command("set-loop", {
+    startMs: 1500,
+    endMs: 3500,
+    enabled: true,
+    startPlayback: false,
+  }).loop.enabled,
+  false,
+  "Waveform edits must not escape the shared bypass"
+);
+assert.equal(command("set-global-bypass", { bypassed: false }).loop.enabled, true);
+
+const replacementMedia = new FakeAudio("https://cf-media.sndcdn.com/replacement.mp3");
+replacementMedia.isConnected = true;
+documentMedia = [replacementMedia];
+replacementMedia.play();
+assert.equal(
+  command("state").state.loop.active,
+  false,
+  "Starting another player track must clear the transient loop"
+);
 
 console.log("Looper MAIN-world bridge verification passed.");

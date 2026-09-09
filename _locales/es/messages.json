@@ -156,7 +156,7 @@
     "message": "Looper"
   },
   "help_looper": {
-    "message": "En un track individual compatible, Looper te permite repetir una sección A–B y exportar ese rango seleccionado como WAV. No cambia las descargas de tracks completos."
+    "message": "Looper sigue el track del player persistente de SoundCloud aunque navegues o cierres el panel. Podés definir A/B desde el panel o editar el mismo rango en una waveform compatible; la exportación WAV sigue junto a la waveform."
   },
   "help_speed_title": {
     "message": "Velocidad"
@@ -174,7 +174,7 @@
     "message": "Velocidades rápidas"
   },
   "help_speed_presets": {
-    "message": "Elegí 0.5x, 1x, 1.5x, 2x, 2.5x o 3x para cambiar de inmediato. El preset resaltado coincide con la velocidad seleccionada."
+    "message": "Elegí una de las seis velocidades rápidas. Los dos botones X son presets personalizados: mantené presionado uno para guardar la velocidad actual del slider y luego hacé clic para recuperarla. Se conservan entre sesiones de SoundCloud."
   },
   "help_speed_slider_title": {
     "message": "Control preciso"
@@ -192,7 +192,7 @@
     "message": "Bypass temporal"
   },
   "help_speed_bypass": {
-    "message": "Presioná el icono de bypass junto al valor actual para reproducir a 1x sin perder la velocidad elegida ni el ajuste de tono. Presionalo otra vez para restaurarlos."
+    "message": "El único bypass desactiva temporalmente el loop y reproduce a 1x sin perder el rango, la velocidad ni Keep Tone. El logo se pone gris mientras está activo; presionalo otra vez para restaurar todo."
   },
   "help_speed_memory_title": {
     "message": "Recordado y siempre activo"
@@ -204,7 +204,7 @@
     "message": "Descargas y Looper"
   },
   "help_speed_looper_effect": {
-    "message": "La velocidad no modifica las descargas de tracks completos. Una exportación WAV del Looper usa la velocidad efectiva: con Mantener tono conserva el tono; sin esa opción cambian la duración y el tono."
+    "message": "Las descargas completas iniciadas junto al player de SoundCloud y las exportaciones WAV del Looper usan la velocidad efectiva. Keep Tone conserva el tono; sin esa opción cambian duración y tono. Con bypass se exporta a 1x."
   },
   "help_speed_close_title": {
     "message": "Cerrar y solucionar problemas"
@@ -612,13 +612,13 @@
     "message": "Activá el loop"
   },
   "looper_step_enable": {
-    "message": "Presioná el botón de loop justo antes de Más acciones."
+    "message": "Abrí el panel del velocímetro y usá Set A y Set B en la posición actual, mové los extremos del slider Loop o presioná el botón de loop antes de Más acciones en una waveform compatible."
   },
   "looper_step_range_title": {
     "message": "Marcá A y B"
   },
   "looper_step_range": {
-    "message": "Arrastrá los marcadores sobre la forma de onda. Las flechas mueven un marcador 100 ms; Mayús + flechas lo mueve 1 segundo."
+    "message": "El panel y la waveform editan el mismo rango A–B en tiempo real. El panel muestra milisegundos o, cuando hace falta, horas; en la waveform las flechas mueven 100 ms y Mayús + flechas 1 segundo."
   },
   "looper_step_zoom_title": {
     "message": "Hacé zoom para marcar con precisión"
@@ -633,7 +633,7 @@
     "message": "Elegí Descargar loop para guardar el rango A–B como un archivo WAV."
   },
   "looper_tip": {
-    "message": "El loop es temporal: cerralo con la cruz o Escape. Abrir otro track lo elimina."
+    "message": "El loop es temporal y sigue al track actual durante la navegación. Cambiar el track que suena lo elimina. El bypass compartido pausa el loop y los efectos sin olvidar sus ajustes."
   },
   "looper_done": {
     "message": "Volver a descargar"

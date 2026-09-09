@@ -54,9 +54,16 @@ async function main() {
       document.addEventListener("scdl:open-looper-guide", () => {
         window.looperGuideRequests += 1;
       });
+      Object.defineProperty(document.querySelector("audio"), "duration", {
+        configurable: true,
+        value: 120,
+      });
     });
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-main.js"),
+    });
+    await page.addScriptTag({
+      path: path.join(__dirname, "loop-session.js"),
     });
     await page.addScriptTag({
       path: path.join(__dirname, "looper-main-bridge.js"),
@@ -77,6 +84,7 @@ async function main() {
     if (!(await panel.isVisible())) {
       throw new Error("Playback Speed panel did not open.");
     }
+    await page.waitForTimeout(300);
 
     const compactSlider = await host.locator(".slider-wrap").evaluate((wrapper) => {
       const labels = wrapper.querySelector(".limits");
@@ -118,8 +126,8 @@ async function main() {
     }));
     if (
       branding.name !== "SoundCloud Track Downloader" ||
-      branding.logoWidth !== 48 ||
-      branding.logoHeight !== 48 ||
+      branding.logoWidth !== 58 ||
+      branding.logoHeight !== 58 ||
       branding.logoHidden ||
       branding.titleFontSize !== 17
     ) {
@@ -142,11 +150,11 @@ async function main() {
       };
     });
     if (
-      compactStyles.padding.join(" ") !== "9px 8.5px 10px 8.5px" ||
-      compactStyles.presetSize.join("x") !== "44x30" ||
-      compactStyles.toggleSize.join("x") !== "18x18" ||
+      compactStyles.padding.join(" ") !== "10px 10px 10px 10px" ||
+      compactStyles.presetSize.join("x") !== "36x28" ||
+      compactStyles.toggleSize.join("x") !== "17x17" ||
       compactStyles.pitchText !== "Keep Tone" ||
-      compactStyles.pitchFontSize !== 15 ||
+      compactStyles.pitchFontSize !== 13 ||
       compactStyles.statusOrder.join(" ") !== "current bypass"
     ) {
       throw new Error("Playback Speed panel compact styling is incomplete.");
@@ -158,6 +166,55 @@ async function main() {
     );
     if (looperGuideRequested !== 1) {
       throw new Error("Playback Speed panel did not request the Looper guide.");
+    }
+
+    const panelFeatures = await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      return {
+        customCount: root.querySelectorAll(".custom-preset").length,
+        reviewHref: root.querySelector(".rating-link")?.href,
+        labels: [...root.querySelectorAll(".range-label")].map((node) => node.textContent),
+        order: [...root.querySelector(".panel").children].map((node) => node.className),
+      };
+    });
+    if (
+      panelFeatures.customCount !== 2 ||
+      !panelFeatures.reviewHref.endsWith("/reviews") ||
+      panelFeatures.labels.join("|") !== "Tone & Velocity|Loop" ||
+      panelFeatures.order.slice(0, 4).join("|") !==
+        "panel-header|middle-row|slider-wrap|loop-slider"
+    ) {
+      throw new Error("The combined panel layout or links are incomplete.");
+    }
+
+    await host.locator(".slider").fill("0.7125");
+    const custom = host.locator('.custom-preset[data-custom-index="0"]');
+    await custom.dispatchEvent("pointerdown");
+    await page.waitForTimeout(700);
+    await custom.dispatchEvent("pointerup");
+    await host.locator('.preset[data-rate="2"]').click();
+    await custom.click();
+    if (
+      await page.locator("audio").evaluate((audio) => audio.playbackRate) !== 0.7125 ||
+      await page.evaluate(() => localStorage.getItem("scdl.tempo.customRate.1")) !== "0.7125"
+    ) {
+      throw new Error("A custom speed was not saved by long press and restored by click.");
+    }
+
+    await page.locator("audio").evaluate((audio) => { audio.currentTime = 12.345; });
+    await host.locator(".set-a").click();
+    await page.locator("audio").evaluate((audio) => { audio.currentTime = 20.678; });
+    await host.locator(".set-b").click();
+    const capturedLoop = await page.evaluate(() =>
+      JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session"))
+    );
+    if (
+      capturedLoop.startMs !== 12345 ||
+      capturedLoop.endMs !== 20678 ||
+      !capturedLoop.enabled ||
+      !(await host.locator(".set-a").textContent()).includes("00:12.345")
+    ) {
+      throw new Error(`Set A/Set B did not capture and display the live player range: ${JSON.stringify({ capturedLoop, label: await host.locator(".set-a").textContent() })}`);
     }
 
     await host.locator(".slider").evaluate((slider) => {
@@ -243,16 +300,23 @@ async function main() {
     await host.locator('.preset[data-rate="0.5"]').click();
     await host.locator('.bypass').click();
     await page.waitForTimeout(240);
+    const bypassVisualAndLoop = await host.evaluate((element) => ({
+      logoFilter: getComputedStyle(element.shadowRoot.querySelector('.brand-logo')).filter,
+      loop: JSON.parse(document.documentElement.getAttribute('data-scdl-loop-session')),
+    }));
     if (await page.locator('audio').evaluate((audio) => audio.playbackRate) !== 1 ||
         await host.locator('.slider').inputValue() !== '0.5' ||
         !(await host.locator('.pitch-toggle').isChecked()) ||
-        await host.getAttribute('data-scdl-tempo-rate') !== '1') {
-      throw new Error('Bypass must apply 1x while retaining speed and pitch settings.');
+        await host.getAttribute('data-scdl-tempo-rate') !== '1' ||
+        bypassVisualAndLoop.loop.enabled ||
+        bypassVisualAndLoop.logoFilter === 'none') {
+      throw new Error('Bypass must disable loop/effects, retain settings, and gray the logo.');
     }
     await host.locator('.bypass').click();
     if (await page.locator('audio').evaluate((audio) => audio.playbackRate) !== 0.5 ||
-        await host.locator('.bypass').getAttribute('aria-pressed') !== 'false') {
-      throw new Error('Disabling bypass must restore the selected speed.');
+        await host.locator('.bypass').getAttribute('aria-pressed') !== 'false' ||
+        !(await page.evaluate(() => JSON.parse(document.documentElement.getAttribute('data-scdl-loop-session')).enabled))) {
+      throw new Error('Disabling bypass must restore the selected speed and loop.');
     }
 
     await host.locator('.slider').fill('1.3');
