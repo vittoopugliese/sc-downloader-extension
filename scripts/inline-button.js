@@ -116,25 +116,14 @@ function injectInlineStyles() {
     #${INLINE_BUTTON_ID}.scdl-profile-download {
       display: inline-flex;
       align-items: center;
+      color: #fff !important;
+      background: #f50 !important;
+      border-color: #f50 !important;
     }
 
     #${INLINE_BUTTON_ID}.scdl-profile-download .scdl-inline-icon {
       width: 16px;
       height: 16px;
-    }
-
-    #${INLINE_BUTTON_ID}.scdl-profile-floating {
-      position: fixed;
-      right: 24px;
-      bottom: 92px;
-      z-index: 10000;
-      min-height: 36px;
-      padding: 0 14px;
-      color: #fff;
-      background: #f50;
-      border-color: #f50;
-      border-radius: 4px;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
     }
 
     #${INLINE_BUTTON_ID}.is-loading {
@@ -685,19 +674,15 @@ function ensureInlineDownloadButton(trackData) {
     : null;
 
   const buttonGroup = findActionButtonGroup();
-  const profileTracksPage = isProfileTracksInlinePage();
-  if (!buttonGroup && !profileTracksPage) {
+  if (!buttonGroup) {
     return;
   }
 
   let button = document.getElementById(INLINE_BUTTON_ID);
   if (!button) {
     button = createInlineDownloadButton();
-    const moreButton = buttonGroup?.querySelector(".sc-button-more");
-    if (!buttonGroup) {
-      button.classList.add("scdl-profile-floating");
-      document.body.appendChild(button);
-    } else if (moreButton) {
+    const moreButton = buttonGroup.querySelector(".sc-button-more");
+    if (moreButton) {
       buttonGroup.insertBefore(button, moreButton);
     } else {
       buttonGroup.appendChild(button);
@@ -739,7 +724,7 @@ function startToolbarObserver() {
       return;
     }
 
-    if (!findActionButtonGroup() && !isProfileTracksInlinePage()) {
+    if (!findActionButtonGroup()) {
       return;
     }
 

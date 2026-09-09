@@ -130,6 +130,9 @@
         }
 
         .trigger-rate {
+          flex: 0 0 6ch;
+          width: 6ch;
+          font-variant-numeric: tabular-nums;
           margin-left: 2px;
           color: #ff6c23ff;
           font-size: 11px;
@@ -254,7 +257,7 @@
         .slider-wrap {
           position: relative;
           height: 28px;
-          margin: 0 0 10px;
+          margin: 0 0 8px;
         }
 
         .limits {
@@ -353,8 +356,12 @@
         }
 
         .current {
+          width: 6ch;
+          flex: 0 0 6ch;
+          text-align: right;
+          font-variant-numeric: tabular-nums;
           color: #ff5500;
-          font-size: 14px;
+          font-size: 16px;
           font-weight: 700;
         }
 
@@ -408,7 +415,7 @@
             type="range"
             min="0.1"
             max="4"
-            step="0.025"
+            step="${DEFAULTS.step}"
             value="1"
             aria-label="Playback speed"
           />

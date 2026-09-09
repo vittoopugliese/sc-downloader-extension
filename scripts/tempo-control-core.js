@@ -9,7 +9,7 @@
   const DEFAULTS = Object.freeze({
     min: 0.1,
     max: 4,
-    step: 0.025,
+    step: 0.0125,
     rate: 1,
     preservePitch: false,
   });
@@ -22,11 +22,13 @@
   function clampRate(value, minimum = DEFAULTS.min, maximum = DEFAULTS.max) {
     const number = Number(value);
     if (!Number.isFinite(number)) return DEFAULTS.rate;
-    return Math.round(Math.max(minimum, Math.min(maximum, number)) * 1000) / 1000;
+    return Math.round(Math.max(minimum, Math.min(maximum, number)) * 10000) / 10000;
   }
 
   function formatRate(value) {
-    return `${Number(Number(value).toFixed(3))}x`;
+    // Truncate only the display; playback retains the full half-step precision.
+    const thousandths = Math.floor(Number(value) * 1000 + 1e-9);
+    return `${(thousandths / 1000).toFixed(3)}x`;
   }
 
   function create(options = {}) {

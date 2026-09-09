@@ -230,6 +230,33 @@ async function main() {
       throw new Error('Disabling bypass must restore the selected speed.');
     }
 
+    await host.locator('.slider').fill('1.3');
+    let stableLayout;
+    for (const [rate, label] of [[1.3, '1.300x'], [1.3125, '1.312x'], [1.325, '1.325x']]) {
+      if (rate !== 1.3) await host.locator('.slider').press('ArrowRight');
+      if (await page.locator('audio').evaluate((audio) => audio.playbackRate) !== rate ||
+          await host.locator('.slider').inputValue() !== String(rate) ||
+          await host.locator('.current').textContent() !== label ||
+          await host.locator('.trigger-rate').textContent() !== label) {
+        throw new Error(`Half-step playback or three-decimal display failed at ${rate}.`);
+      }
+      const layout = await host.evaluate((element) =>
+        ['.current', '.bypass', '.trigger-rate'].map((selector) => {
+          const rect = element.shadowRoot.querySelector(selector).getBoundingClientRect();
+          return [rect.x, rect.width];
+        })
+      );
+      if (stableLayout && JSON.stringify(layout) !== stableLayout) {
+        throw new Error('Speed indicators shifted while stepping playback rate.');
+      }
+      stableLayout = JSON.stringify(layout);
+    }
+    await host.locator('.bypass').click();
+    if (await host.locator('.current').textContent() !== '1.000x') {
+      throw new Error('Bypass display must keep three decimal places.');
+    }
+    await host.locator('.bypass').click();
+
     fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
     await page.screenshot({ path: screenshotPath });
     console.log(`Tempo browser verification passed: ${screenshotPath}`);

@@ -102,7 +102,7 @@ controller.setPreservePitch(false);
 if (audio.playbackRate !== 4 || audio.preservesPitch !== false) {
   throw new Error("Rate clamping or Preserve Pitch updates are broken.");
 }
-if (context.SCTempoControl.formatRate(1) !== "1x") {
+if (context.SCTempoControl.formatRate(1) !== "1.000x") {
   throw new Error("Compact player rate formatting is broken.");
 }
 
@@ -110,7 +110,7 @@ const adapterCode = fs.readFileSync(adapterPath, "utf8");
 for (const expected of [
   'min="0.1"',
   'max="4"',
-  'step="0.025"',
+  'step="${DEFAULTS.step}"',
   "Preserve Pitch",
   "#scdl-player-download",
 ]) {
