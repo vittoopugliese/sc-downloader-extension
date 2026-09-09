@@ -17,20 +17,19 @@ assert(
 assert(
   /\.action-row\s*\{[^}]*position:\s*relative/s.test(popup) &&
     /#downloadBtn\s*\{[^}]*left:\s*50%;[^}]*translateX\(-50%\)/s.test(popup) &&
-    /id="looperActionSlot"[\s\S]*id="looperEntryBtn"/.test(popup),
-  "Download must remain absolutely centered with a visible Looper entry."
+    /id="looperTab"[^>]*data-help-tab="looperPanel"/.test(popup),
+  "Download must remain centered and the Help view must expose the Looper guide."
 );
 assert(
-  /id="looperPanel"[^>]*role="dialog"/.test(popup) &&
+  /id="looperPanel"[^>]*role="tabpanel"/.test(popup) &&
     /class="looper-tutorial"/.test(popup) &&
     !/looperPurchaseBtn|looperCheckoutNote|USD 2\.99|LOOPER PRO/.test(popup),
   "The popup must provide a free, localized Looper tutorial without payment UI."
 );
 assert(
-  /body\.looper-explainer-mode,[\s\S]*min-height:\s*580px/.test(popup) &&
-    /id="helpBackBtn"[^>]*>[\s\S]*class="back-icon"[^>]*src="\.\/assets\/icons\/back-arrow\.svg"/.test(popup) &&
-    /id="looperBackBtn"[^>]*>[\s\S]*class="back-icon"[^>]*src="\.\/assets\/icons\/back-arrow\.svg"/.test(popup),
-  "Help and Looper must reuse the compact existing back-arrow icon, and Looper must expand the popup."
+  /#looperPanel\.is-visible\s*\{\s*display:\s*block/.test(popup) &&
+    /id="helpBackBtn"[^>]*>[\s\S]*class="back-icon"[^>]*src="\.\/assets\/icons\/back-arrow\.svg"/.test(popup),
+  "Help and its Looper tab must reuse the compact existing back-arrow icon."
 );
 assert(
   /data-i18n="looper_step_zoom_title"[\s\S]*data-i18n="looper_step_zoom"/.test(popup),
@@ -48,21 +47,10 @@ assert(
   "Help must preserve selection scroll, trap keyboard focus, and close with Escape."
 );
 assert(
-  /function openLooperExplainer\(\)[\s\S]*looperPanel\.classList\.add\("is-visible"\)/.test(
-    popupScript
-  ) &&
-    /function openLooperExplainer\(\)[\s\S]*document\.body\.classList\.add\("looper-explainer-mode"\)/.test(
-      popupScript
-    ) &&
-    /function closeLooperExplainer\(\)[\s\S]*document\.body\.classList\.remove\("looper-explainer-mode"\)/.test(
-      popupScript
-    ) &&
-    /function closeLooperExplainer\(\)[\s\S]*selectionViewport\.scrollTop = looperSelectionScrollTop/.test(
-      popupScript
-    ) &&
-    /looperDoneBtn\.addEventListener\("click", closeLooperExplainer\)/.test(popupScript) &&
+  /function openLooperExplainer\(\)[\s\S]*openHelp\(\)/.test(popupScript) &&
+    /function openLooperExplainer\(\)[\s\S]*selectHelpTab\(document\.getElementById\("looperTab"\)\)/.test(popupScript) &&
     !/ACTIVATE_LOOPER|DOWNLOAD_LOOP|looperPurchaseBtn|looperCheckoutNote/.test(popupScript),
-  "The Looper tutorial must preserve selection state and must not activate Looper or a checkout."
+  "The Looper tutorial must open inside Help and must not activate Looper or a checkout."
 );
 
 function assert(condition, message) {

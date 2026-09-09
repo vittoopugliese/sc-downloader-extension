@@ -31,7 +31,7 @@ async function main() {
         #scdl-player-download { width: 32px; height: 32px; }
       </style>
       <div class="playControls__elements">
-        <div class="playControls__soundBadge"></div>
+        <div class="playControls__soundBadge"><a class="playbackSoundBadge__titleLink" href="/artist/track">Track</a></div>
         <button id="scdl-player-download">D</button>
         <audio></audio>
       </div>`);
@@ -61,6 +61,9 @@ async function main() {
     });
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-main.js"),
+    });
+    await page.addScriptTag({
+      path: path.join(__dirname, "looper-core.js"),
     });
     await page.addScriptTag({
       path: path.join(__dirname, "loop-session.js"),
@@ -308,14 +311,14 @@ async function main() {
         await host.locator('.slider').inputValue() !== '0.5' ||
         !(await host.locator('.pitch-toggle').isChecked()) ||
         await host.getAttribute('data-scdl-tempo-rate') !== '1' ||
-        bypassVisualAndLoop.loop.enabled ||
+        bypassVisualAndLoop.loop.effectiveEnabled ||
         bypassVisualAndLoop.logoFilter === 'none') {
       throw new Error('Bypass must disable loop/effects, retain settings, and gray the logo.');
     }
     await host.locator('.bypass').click();
     if (await page.locator('audio').evaluate((audio) => audio.playbackRate) !== 0.5 ||
         await host.locator('.bypass').getAttribute('aria-pressed') !== 'false' ||
-        !(await page.evaluate(() => JSON.parse(document.documentElement.getAttribute('data-scdl-loop-session')).enabled))) {
+        !(await page.evaluate(() => JSON.parse(document.documentElement.getAttribute('data-scdl-loop-session')).effectiveEnabled))) {
       throw new Error('Disabling bypass must restore the selected speed and loop.');
     }
 

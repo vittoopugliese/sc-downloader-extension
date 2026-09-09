@@ -350,6 +350,12 @@ const SCLooper = (() => {
     );
   }
 
+  function waveformMatchesCurrentPlayer() {
+    const playerPermalink = currentPlayerPermalink();
+    const pagePermalink = currentPagePermalink();
+    return !playerPermalink || !pagePermalink || playerPermalink === pagePermalink;
+  }
+
   function requestMediaBridge(targetDocument, type, payload = {}) {
     const root = targetDocument?.documentElement;
     if (!root?.dispatchEvent) return null;
@@ -507,13 +513,8 @@ const SCLooper = (() => {
         return resolveBridge()?.paused !== false;
       },
       getTrackIdentity() {
-        const permalink = currentPlayerPermalink();
-        if (permalink) return `url:${permalink}`;
-        const pagePermalink = currentPagePermalink();
-        if (isTrackPage() && pagePermalink) return `url:${pagePermalink}`;
-        const source = mediaSource(resolve());
-        if (source) return `media:${source}`;
-        return pagePermalink ? `url:${pagePermalink}` : null;
+        const session = resolveBridge()?.loop;
+        return session?.trackIdentity || null;
       },
       subscribe(listener) {
         listeners.add(listener);
@@ -535,8 +536,10 @@ const SCLooper = (() => {
       setLoop(nextRange, enabled = true, startPlayback = false, marker = null) {
         resolveBridge();
         if (!bridgeDocument || !nextRange) return false;
+        const expectedGeneration = resolveBridge()?.loop?.generation;
         const response = requestMediaBridge(bridgeDocument, "set-loop", {
           expectedDurationMs,
+          expectedGeneration,
           startMs: nextRange.startMs,
           endMs: nextRange.endMs,
           enabled,
@@ -550,6 +553,7 @@ const SCLooper = (() => {
         if (!bridgeDocument) return false;
         return requestMediaBridge(bridgeDocument, "set-loop-enabled", {
           expectedDurationMs,
+          expectedGeneration: resolveBridge()?.loop?.generation,
           enabled,
         })?.ok === true;
       },
@@ -558,6 +562,7 @@ const SCLooper = (() => {
         if (!bridgeDocument) return false;
         return requestMediaBridge(bridgeDocument, "clear-loop", {
           expectedDurationMs,
+          expectedGeneration: resolveBridge()?.loop?.generation,
         })?.ok === true;
       },
     };
@@ -1879,19 +1884,13 @@ const SCLooper = (() => {
   }
 
   function seekToStart() {
-    if (!player || !range) return;
-    const now = performance.now();
-    if (now - lastSeekAttemptAt < SEEK_RETRY_MS) return;
-    lastSeekAttemptAt = now;
-    player.seekToMs(range.startMs);
+    // The MAIN-world bridge is the sole writer of currentTime. The waveform
+    // only sends range commands and paints the confirmed snapshot.
   }
 
   function seekIfOutsideRange() {
-    if (!loopEnabled) return;
-    const currentTimeMs = player?.getCurrentTimeMs();
-    if (SCLooperCore.getSeekTarget(range, currentTimeMs) !== null) {
-      seekToStart();
-    }
+    // See seekToStart(). Keeping this call site as a no-op avoids gesture code
+    // becoming a second playback engine.
   }
 
   function identitiesConflict(initial, current) {
@@ -1928,7 +1927,8 @@ const SCLooper = (() => {
         ? SCLooperCore.normalizeZoomWindow(zoomWindow, range.durationMs)
         : null;
       updateOverlay();
-      player.setLoop?.(range, loopEnabled, false);
+      // loadedmetadata describes the adapter, never a command to transfer this
+      // view's range to that adapter.
     }
 
     if (event.type !== "emptied") seekIfOutsideRange();
@@ -1955,20 +1955,8 @@ const SCLooper = (() => {
       }
     }
 
-    const currentTimeMs = player.getCurrentTimeMs();
-    if (!loopEnabled) {
-      updateZoomPlayhead(currentTimeMs);
-      frameId = requestAnimationFrame(loopFrame);
-      return;
-    }
-    const seekTarget = SCLooperCore.getSeekTarget(range, currentTimeMs);
-    if (seekTarget !== null) {
-      seekToStart();
-      updateZoomPlayhead(seekTarget);
-    } else {
-      lastSeekAttemptAt = Number.NEGATIVE_INFINITY;
-      updateZoomPlayhead(currentTimeMs);
-    }
+    // rAF is rendering-only. Enforcement lives in looper-main-bridge.js.
+    updateZoomPlayhead(player.getCurrentTimeMs());
 
     frameId = requestAnimationFrame(loopFrame);
   }
@@ -2030,9 +2018,13 @@ const SCLooper = (() => {
 
   function handleDocumentKeyDown(event) {
     if (event.key !== "Escape" || !range) return;
-    event.preventDefault();
-    reset("escape");
-    scheduleEnsure(0);
+    // MAIN and ISOLATED listeners do not have a reliable registration order.
+    // Give the open tempo dialog one turn to mark the gesture as consumed.
+    setTimeout(() => {
+      if (document.documentElement?.getAttribute("data-scdl-tempo-panel-escape") === "true") return;
+      reset("escape");
+      scheduleEnsure(0);
+    }, 0);
   }
 
   function reset(reason = "manual", clearSession = true) {
@@ -2091,6 +2083,13 @@ const SCLooper = (() => {
   }
 
   function ensureMounted() {
+    // Validate before the mounted fast path as well as before a fresh mount.
+    // A player badge can update while the page still shows waveform A.
+    if (!waveformMatchesCurrentPlayer()) {
+      if (view) removeView();
+      setDebugStatus("waiting;waveform-track-is-not-playing");
+      return false;
+    }
     if (
       view?.pageUrl === window.location.href &&
       view.button?.isConnected &&
@@ -2113,13 +2112,6 @@ const SCLooper = (() => {
     if (!target) {
       setDebugStatus(mountingDiagnostics());
       if (view) removeView();
-      return false;
-    }
-    const playerPermalink = currentPlayerPermalink();
-    const pagePermalink = currentPagePermalink();
-    if (playerPermalink && pagePermalink && playerPermalink !== pagePermalink) {
-      if (view) removeView();
-      setDebugStatus("waiting;waveform-track-is-not-playing");
       return false;
     }
     if (

@@ -496,3 +496,17 @@ cerrarse así:
 Ese alcance aprovecha la lógica más fuerte del repositorio actual y adopta del repo
 externo sólo la idea de producto que falta: marcar A/B directamente desde la
 posición del audio que está sonando.
+
+## Auditoría posterior del commit implementado — 2026-09-09
+
+La auditoría completa del commit `6822c92093ab26fe09b46d9d5579c91d2aeb0a09`
+está en [LOOPING-PLAYER-PANEL-AUDIT-6822c9.md](LOOPING-PLAYER-PANEL-AUDIT-6822c9.md).
+Incluye revisión funcional y de modularización, resultados de pruebas, defectos
+reproducidos y 18 tareas técnicas con contexto y criterios de aceptación para el
+agente que implemente las correcciones. No se aplicaron fixes de producción.
+
+El informe toma las respuestas y decisiones posteriores como autoridad: panel
+único, slider doble y bypass global. Las recomendaciones anteriores de tabs y
+bypasses separados no deben interpretarse como el alcance vigente. La feature
+requiere corregir las regresiones de sesión/identidad/lifecycle documentadas antes
+de dar la implementación por cerrada.

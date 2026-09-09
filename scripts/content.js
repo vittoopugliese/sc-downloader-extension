@@ -7,17 +7,26 @@ let lastBulkProgressAt = 0;
 const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
 const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
 const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
+const LOOP_EXPORT_EVENT = "scdl:download-loop";
+const LOOP_EXPORT_RESULT_EVENT = "scdl:download-loop-result";
+const LOOP_EXPORT_ATTRIBUTE = "data-scdl-loop-export-request";
 const POPUP_START_VIEW_KEY = "scdl.popup.startView";
 
 function exposeTempoControlAssets() {
-  document.documentElement.setAttribute(
+  document.documentElement?.setAttribute?.(
     EXTENSION_LOGO_ATTRIBUTE,
     chrome.runtime.getURL("assets/icon48.png")
   );
-  document.dispatchEvent(new CustomEvent(EXTENSION_ASSETS_EVENT));
+  if (typeof document.dispatchEvent === "function" && typeof CustomEvent === "function") {
+    document.dispatchEvent(new CustomEvent(EXTENSION_ASSETS_EVENT));
+  }
 }
 
-document.addEventListener(OPEN_LOOPER_GUIDE_EVENT, () => {
+function onDocumentEvent(type, listener) {
+  if (typeof document?.addEventListener === "function") document.addEventListener(type, listener);
+}
+
+onDocumentEvent(OPEN_LOOPER_GUIDE_EVENT, () => {
   chrome.storage.local
     .set({ [POPUP_START_VIEW_KEY]: "looper" })
     .then(() => chrome.runtime.sendMessage({ type: "OPEN_EXTENSION_POPUP" }))
@@ -30,6 +39,27 @@ document.addEventListener(OPEN_LOOPER_GUIDE_EVENT, () => {
       await chrome.storage.local.remove(POPUP_START_VIEW_KEY).catch(() => {});
       console.warn("[SC Downloader] Could not open the Looper guide.", error);
     });
+});
+
+onDocumentEvent(LOOP_EXPORT_EVENT, () => {
+  let request;
+  try {
+    request = JSON.parse(document.documentElement.getAttribute(LOOP_EXPORT_ATTRIBUTE) || "null");
+  } catch {
+    request = null;
+  }
+  if (!request?.id || !request.trimRange || !Number.isFinite(request.trimRange.startMs) || !Number.isFinite(request.trimRange.endMs)) return;
+  const trackUrl = String(request.trackIdentity || "").replace(/^permalink:/, "") || null;
+  chrome.runtime.sendMessage({
+    type: "DOWNLOAD_LOOP",
+    trackUrl,
+    trimRange: request.trimRange,
+    playbackTransform: request.playbackTransform || null,
+  }).then((result) => {
+    document.dispatchEvent(new CustomEvent(LOOP_EXPORT_RESULT_EVENT, { detail: { id: request.id, ...result } }));
+  }).catch((error) => {
+    document.dispatchEvent(new CustomEvent(LOOP_EXPORT_RESULT_EVENT, { detail: { id: request.id, success: false, error: error?.message || "Could not start loop download." } }));
+  });
 });
 
 exposeTempoControlAssets();

@@ -61,6 +61,6 @@ for (const key of usedKeys) {
 assert.equal(messages.en.app_name.message, "SoundCloud Track Downloader");
 assert(read("manifest.json").includes('"default_locale": "en"'));
 assert(read("popup.html").includes('id="helpPanel"'));
-assert(read("popup.html").includes('id="looperActionSlot"'));
+assert(read("popup.html").includes('id="looperTab"'));
 
 console.log(`i18n verification passed (${usedKeys.size} used keys, ${englishKeys.length} localized keys).`);

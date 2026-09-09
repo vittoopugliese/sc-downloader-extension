@@ -105,11 +105,7 @@ runLoopFrame();
 nowMs = 500;
 runLoopFrame();
 
-assert.equal(
-  seekAttempts,
-  2,
-  "The looper must retry when SoundCloud acknowledges but ignores a seek"
-);
+assert.equal(seekAttempts, 0, "The waveform must never enforce playback directly");
 
 let currentTimeMs = range.endMs;
 let completedLoops = 0;
@@ -129,6 +125,6 @@ for (let cycle = 0; cycle < 10; cycle += 1) {
   runLoopFrame();
   runLoopFrame();
 }
-assert.equal(completedLoops, 10, "Ten consecutive loop cycles must return to A");
+assert.equal(completedLoops, 0, "The MAIN bridge, not the waveform, owns loop seeks");
 
 console.log("Looper playback verification passed.");

@@ -23,6 +23,9 @@
   const LOOP_COMMAND_ATTRIBUTE = "data-scdl-looper-command";
   const LOOP_RESPONSE_ATTRIBUTE = "data-scdl-looper-response";
   const LOOP_SESSION_EVENT = "scdl-loop-session:changed";
+  const LOOP_EXPORT_EVENT = "scdl:download-loop";
+  const LOOP_EXPORT_RESULT_EVENT = "scdl:download-loop-result";
+  const LOOP_EXPORT_ATTRIBUTE = "data-scdl-loop-export-request";
   const LONG_PRESS_MS = 650;
   const PLAYER_TIMELINE_SELECTOR = [
     ".playbackTimeline",
@@ -47,6 +50,7 @@
   let mountQueued = false;
   let playbackFailure = "";
   let storageFailure = "";
+  let loopFailure = "";
   let rateAnimationFrame = null;
   let rateAnimationTarget = null;
   let displayedRate = null;
@@ -255,7 +259,11 @@
         response: requestLoopFrom(targetDocument, "state"),
       }))
       .sort((left, right) => loopResponseScore(right.response) - loopResponseScore(left.response))[0];
-    return requestLoopFrom(target?.targetDocument || document, type, payload);
+    const generation = target?.response?.state?.loop?.generation;
+    return requestLoopFrom(target?.targetDocument || document, type, {
+      ...payload,
+      ...(Number.isInteger(generation) ? { expectedGeneration: generation } : {}),
+    });
   }
 
   function readLoopState() {
@@ -281,6 +289,28 @@
       return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
     }
     return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(totalMs % 1000).padStart(3, "0")}`;
+  }
+
+  function parseLoopTime(value) {
+    const source = String(value || "").trim();
+    if (!source) return null;
+    const match = /^(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?$/.exec(source);
+    if (!match) return NaN;
+    const hours = Number(match[1] || 0);
+    const minutes = Number(match[2]);
+    const seconds = Number(match[3]);
+    if (minutes >= 60 || seconds >= 60) return NaN;
+    return ((hours * 3600 + minutes * 60 + seconds) * 1000) + Number((match[4] || "").padEnd(3, "0"));
+  }
+
+  function setLoopFailure(response) {
+    const error = response?.error;
+    loopFailure = error === "waiting-metadata" || error === "waiting-track"
+      ? "Loop is waiting for the current track metadata."
+      : error === "stale-generation"
+        ? "The track changed. Please set the loop again."
+        : error ? "Could not update the loop. Please retry." : "";
+    render();
   }
 
   function loopPercent(value) {
@@ -312,6 +342,11 @@
       : "Set B";
     ui.setA.disabled = !loopState.available;
     ui.setB.disabled = !loopState.available;
+    ui.clearLoop.disabled = !loopState.active && !Number.isFinite(loopState.startMs);
+    for (const [input, value] of [[ui.loopStartTime, loopState.startMs], [ui.loopEndTime, loopState.endMs]]) {
+      input.disabled = !loopState.available || duration <= 0;
+      if (ui.root.activeElement !== input) input.value = Number.isFinite(value) ? formatLoopTime(value) : "";
+    }
   }
 
   function setLoopPoint(marker) {
@@ -328,20 +363,79 @@
       enabled: true,
       startPlayback: true,
     };
-    requestLoop("set-loop", payload);
+    setLoopFailure(requestLoop("set-loop", payload));
     readLoopState();
   }
 
   function setLoopFromSliders(marker) {
     const activatesLoop = !loopState.active;
-    requestLoop("set-loop", {
+    setLoopFailure(requestLoop("set-loop", {
       marker,
       startMs: ui.loopStart.valueAsNumber,
       endMs: ui.loopEnd.valueAsNumber,
       enabled: true,
       startPlayback: activatesLoop,
-    });
+    }));
     readLoopState();
+  }
+
+  function commitLoopTime(marker) {
+    const input = marker === "start" ? ui.loopStartTime : ui.loopEndTime;
+    const value = parseLoopTime(input.value);
+    const duration = loopState.durationMs;
+    if (!Number.isFinite(value) || !Number.isFinite(duration) || value < 0 || value > duration) {
+      loopFailure = "Enter a time between 00:00.000 and the track duration.";
+      render();
+      return;
+    }
+    const startMs = marker === "start" ? value : loopState.startMs;
+    const endMs = marker === "end" ? value : loopState.endMs;
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs - startMs < 250) {
+      loopFailure = "Loop end must be at least 250 ms after its start.";
+      render();
+      return;
+    }
+    setLoopFailure(requestLoop("set-loop", { marker, startMs, endMs, enabled: true, startPlayback: !loopState.active }));
+    readLoopState();
+  }
+
+  function clearLoop() {
+    setLoopFailure(requestLoop("clear-loop"));
+    readLoopState();
+  }
+
+  async function downloadLoopFromPlayer() {
+    if (!loopState.active || !Number.isFinite(loopState.startMs) || !Number.isFinite(loopState.endMs)) {
+      loopFailure = "Set both loop markers before downloading.";
+      render();
+      return;
+    }
+    const id = `loop-export-${Date.now()}`;
+    ui.downloadLoop.disabled = true;
+    loopFailure = "Preparing loop download…";
+    render();
+    const result = await new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve({ success: false, error: "Download request timed out." }), 120000);
+      const listener = (event) => {
+        if (event.detail?.id !== id) return;
+        clearTimeout(timeout);
+        document.removeEventListener(LOOP_EXPORT_RESULT_EVENT, listener);
+        resolve(event.detail);
+      };
+      document.addEventListener(LOOP_EXPORT_RESULT_EVENT, listener);
+      document.documentElement.setAttribute(LOOP_EXPORT_ATTRIBUTE, JSON.stringify({
+        id,
+        trackIdentity: loopState.trackIdentity,
+        generation: loopState.generation,
+        trimRange: { startMs: loopState.startMs, endMs: loopState.endMs, durationMs: loopState.durationMs },
+        playbackTransform: { rate: controller.snapshot().effectiveRate, preservePitch: controller.snapshot().preservePitch },
+      }));
+      document.dispatchEvent(new CustomEvent(LOOP_EXPORT_EVENT));
+    });
+    document.documentElement.removeAttribute(LOOP_EXPORT_ATTRIBUTE);
+    ui.downloadLoop.disabled = false;
+    loopFailure = result?.success ? "Loop download started." : (result?.error || "Could not start loop download.");
+    render();
   }
 
   function syncRange(input) {
@@ -667,6 +761,10 @@
         .loop-range::-moz-range-track { height: 10px; background: transparent; }
         .loop-range::-moz-range-thumb { width: 15px; height: 15px; border: 2px solid #fff; border-radius: 50%; background: #ff5500; pointer-events: auto; cursor: ew-resize; }
         .loop-range:disabled::-webkit-slider-thumb { opacity: .45; cursor: not-allowed; }
+        .loop-edit { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 5px; margin-top: 4px; }
+        .loop-time { min-width: 0; height: 26px; padding: 0 6px; border: 1px solid #484848; border-radius: 5px; color: #fff; background: #292929; font: 11px/1 monospace; }
+        .clear-loop { height: 26px; border: 1px solid #484848; border-radius: 5px; color: #fff; background: #292929; cursor: pointer; font: 600 10px/1 Interstate, Arial, sans-serif; }
+        .download-loop { height: 26px; border: 1px solid #b84400; border-radius: 5px; color: #fff; background: #ff5500; cursor: pointer; font: 600 10px/1 Interstate, Arial, sans-serif; }
         .status { margin-top: 5px; }
 
         @media (forced-colors: active) {
@@ -739,6 +837,12 @@
           <input class="loop-range loop-start" type="range" min="0" max="1" step="1" value="0" aria-label="Loop start A" />
           <input class="loop-range loop-end" type="range" min="0" max="1" step="1" value="1" aria-label="Loop end B" />
         </div>
+        <div class="loop-edit">
+          <input class="loop-time loop-start-time" inputmode="decimal" placeholder="A 00:00.000" aria-label="Loop start time" />
+          <input class="loop-time loop-end-time" inputmode="decimal" placeholder="B 00:00.000" aria-label="Loop end time" />
+          <button class="clear-loop" type="button" aria-label="Clear loop">Clear</button>
+          <button class="download-loop" type="button" aria-label="Download loop">WAV</button>
+        </div>
         <p class="status" role="status" aria-live="polite" hidden></p>
       </section>
     `;
@@ -799,6 +903,10 @@
       loopSlider: root.querySelector(".loop-slider"),
       loopStart: root.querySelector(".loop-start"),
       loopEnd: root.querySelector(".loop-end"),
+      loopStartTime: root.querySelector(".loop-start-time"),
+      loopEndTime: root.querySelector(".loop-end-time"),
+      clearLoop: root.querySelector(".clear-loop"),
+      downloadLoop: root.querySelector(".download-loop"),
     };
 
     ui.trigger.addEventListener("click", () => {
@@ -824,7 +932,8 @@
         if (timer !== null) clearTimeout(timer);
         timer = null;
       };
-      button.addEventListener("pointerdown", () => {
+      button.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
         longPressed = false;
         cancel();
         timer = setTimeout(() => {
@@ -838,6 +947,15 @@
       for (const eventName of ["pointerup", "pointercancel", "pointerleave"]) {
         button.addEventListener(eventName, cancel);
       }
+      button.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        if (event.repeat || timer !== null) return;
+        event.preventDefault();
+        longPressed = false;
+        timer = setTimeout(() => { timer = null; longPressed = true; customRates[index] = controller.snapshot().rate; writeSetting(CUSTOM_RATE_STORAGE[index], customRates[index]); render(); }, LONG_PRESS_MS);
+      });
+      button.addEventListener("keyup", (event) => { if (event.key === "Enter" || event.key === " ") cancel(); });
+      button.addEventListener("blur", cancel);
       button.addEventListener("click", (event) => {
         if (longPressed) {
           event.preventDefault();
@@ -879,6 +997,12 @@
     ui.setB.addEventListener("click", () => setLoopPoint("end"));
     ui.loopStart.addEventListener("input", () => setLoopFromSliders("start"));
     ui.loopEnd.addEventListener("input", () => setLoopFromSliders("end"));
+    for (const [input, marker] of [[ui.loopStartTime, "start"], [ui.loopEndTime, "end"]]) {
+      input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); commitLoopTime(marker); input.blur(); } if (event.key === "Escape") { input.value = Number.isFinite(loopState[`${marker}Ms`]) ? formatLoopTime(loopState[`${marker}Ms`]) : ""; input.blur(); } });
+      input.addEventListener("blur", () => { if (input.value.trim()) commitLoopTime(marker); });
+    }
+    ui.clearLoop.addEventListener("click", clearLoop);
+    ui.downloadLoop.addEventListener("click", downloadLoopFromPlayer);
 
     render();
     syncBrandLogo();
@@ -924,7 +1048,7 @@
     renderRate(state.effectiveRate, animateRate);
     ui.host.setAttribute(RATE_ATTRIBUTE, String(state.effectiveRate));
     ui.host.setAttribute(PITCH_ATTRIBUTE, String(state.preservePitch));
-    const message = playbackFailure || storageFailure;
+    const message = playbackFailure || storageFailure || loopFailure;
     ui.status.textContent = message;
     ui.status.hidden = !message;
     renderLoop();
@@ -1002,6 +1126,8 @@
     "keydown",
     (event) => {
       if (event.key === "Escape" && ui && !ui.panel.hidden) {
+        document.documentElement?.setAttribute("data-scdl-tempo-panel-escape", "true");
+        setTimeout(() => document.documentElement?.removeAttribute("data-scdl-tempo-panel-escape"), 0);
         setPanelOpen(false);
         ui.trigger.focus();
       }

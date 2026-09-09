@@ -5,318 +5,103 @@
   const RESPONSE_ATTRIBUTE = "data-scdl-looper-response";
   const SESSION_ATTRIBUTE = "data-scdl-loop-session";
   const SESSION_EVENT = "scdl-loop-session:changed";
-
+  const CHANNEL_NAME = "scdl-loop-session-v2";
   if (window[INSTALLED_FLAG] || !globalThis.SCLoopSession) return;
   Object.defineProperty(window, INSTALLED_FLAG, { value: true });
-
   const knownMedia = new Set();
   const observedMedia = new WeakSet();
-  let lastPlayingMedia = null;
-  let loopMedia = null;
-  let loopMediaSource = null;
-  let loopFrameId = null;
-  let globallyBypassed = false;
-  let restoreLoopWhenUnbypassed = false;
+  const instanceId = `${Date.now()}:${Math.random()}`;
+  const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel(CHANNEL_NAME) : null;
   const loopSession = globalThis.SCLoopSession.create();
-  let loopState = loopSession.snapshot();
+  let loopState = loopSession.snapshot(); let loopMedia = null; let lastPlayingMedia = null; let loopFrameId = null; let trackIdentity = null; let generation = 0; let remoteOwner = null;
   loopSession.subscribe((next) => { loopState = next; });
-
-  function publicLoopState() {
-    return { ...loopState };
+  function mediaDurationMs(media) { return Number.isFinite(media?.duration) ? Math.round(media.duration * 1000) : null; }
+  function mediaSource(media) { return media?.currentSrc || media?.src || null; }
+  function playerTrackIdentity() {
+    const link = document.querySelector(".playbackSoundBadge__titleLink[href]") || document.querySelector("a.playbackSoundBadge__titleLink[href]");
+    if (!link?.href) return null;
+    try { const url = new URL(link.href, window.location.href); url.hash = ""; url.search = ""; return `permalink:${url.toString().replace(/\/$/, "")}`; } catch { return null; }
   }
-
-  function publishLoopState() {
+  function reconcileTrack() {
+    const nextIdentity = playerTrackIdentity();
+    if (!nextIdentity || nextIdentity === trackIdentity) return;
+    trackIdentity = nextIdentity; generation += 1; loopMedia = null;
+    loopSession.command({ type: "set-track", trackIdentity, generation }); stopLoopFrame();
+  }
+  function publicLoopState() { return { ...loopState, trackIdentity, generation }; }
+  function publishLoopState(broadcast = true) {
     const root = document.documentElement;
-    if (!root) return;
-    root.setAttribute(SESSION_ATTRIBUTE, JSON.stringify(publicLoopState()));
-    const event = typeof CustomEvent === "function"
-      ? new CustomEvent(SESSION_EVENT, { bubbles: true })
-      : { type: SESSION_EVENT };
-    root.dispatchEvent(event);
+    if (root) { root.setAttribute(SESSION_ATTRIBUTE, JSON.stringify(publicLoopState())); root.dispatchEvent(typeof CustomEvent === "function" ? new CustomEvent(SESSION_EVENT, { bubbles: true }) : { type: SESSION_EVENT }); }
+    if (broadcast && channel) channel.postMessage({ type: "state", sender: instanceId, owner: loopState.active ? instanceId : null, state: publicLoopState() });
   }
-
-  function stopLoopFrame() {
-    if (loopFrameId !== null && typeof cancelAnimationFrame === "function") {
-      cancelAnimationFrame(loopFrameId);
-    }
-    loopFrameId = null;
+  function stopLoopFrame() { if (loopFrameId !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(loopFrameId); loopFrameId = null; }
+  function clearLoopState() { stopLoopFrame(); loopMedia = null; loopSession.command({ type: "clear" }); publishLoopState(); }
+  function enforceLoop() {
+    if (!loopState.effectiveEnabled || !loopMedia || remoteOwner) return;
+    const now = Number.isFinite(loopMedia.currentTime) ? loopMedia.currentTime * 1000 : null;
+    if (Number.isFinite(now) && (now < loopState.startMs || now >= loopState.endMs)) { try { loopMedia.currentTime = loopState.startMs / 1000; } catch { loopSession.command({ type: "set-error", error: "seek-failed" }); } }
   }
-
-  function clearLoopState() {
-    stopLoopFrame();
-    loopMedia = null;
-    loopMediaSource = null;
-    restoreLoopWhenUnbypassed = false;
-    loopSession.command({ type: "clear" });
-    publishLoopState();
-  }
-
-  function loopFrame() {
-    loopFrameId = null;
-    if (!loopState.enabled || !loopMedia) return;
-    if (
-      mediaSource(loopMedia) !== loopMediaSource ||
-      (lastPlayingMedia && lastPlayingMedia !== loopMedia && !lastPlayingMedia.paused)
-    ) {
-      clearLoopState();
-      return;
-    }
-    enforceLoop(loopMedia);
-    if (typeof requestAnimationFrame === "function") {
-      loopFrameId = requestAnimationFrame(loopFrame);
-    }
-  }
-
-  function enforceLoop(media) {
-    if (!loopState.enabled || media !== loopMedia) return;
-    const currentTimeMs = Number.isFinite(media.currentTime)
-      ? media.currentTime * 1000
-      : null;
-    if (
-      Number.isFinite(currentTimeMs) &&
-      (currentTimeMs < loopState.startMs || currentTimeMs >= loopState.endMs)
-    ) {
-      media.currentTime = loopState.startMs / 1000;
-    }
-  }
-
-  function startLoopFrame() {
-    stopLoopFrame();
-    if (loopState.enabled && typeof requestAnimationFrame === "function") {
-      loopFrameId = requestAnimationFrame(loopFrame);
-    }
-  }
-
-  function updateLoop(media, command) {
-    const durationMs = mediaDurationMs(media);
-    if (!Number.isFinite(durationMs)) return false;
-
-    loopMedia = media;
-    lastPlayingMedia = media;
-    loopMediaSource = mediaSource(media);
-    loopSession.command({
-      type: "set-range",
-      startMs: command.startMs,
-      endMs: command.endMs,
-      durationMs,
-      trackIdentity: loopMediaSource,
-      enabled: command.enabled !== false && !globallyBypassed,
-      marker: command.marker,
-    });
-    if (globallyBypassed && command.enabled !== false && loopState.active) {
-      restoreLoopWhenUnbypassed = true;
-    }
-    publishLoopState();
-    if (loopState.enabled && command.startPlayback !== false) {
-      media.currentTime = loopState.startMs / 1000;
-      Promise.resolve(media.play?.()).catch(() => {});
-    }
-    startLoopFrame();
-    return true;
-  }
-
+  function loopFrame() { loopFrameId = null; reconcileTrack(); enforceLoop(); if (loopState.effectiveEnabled && loopMedia && typeof requestAnimationFrame === "function") loopFrameId = requestAnimationFrame(loopFrame); }
+  function startLoopFrame() { stopLoopFrame(); if (loopState.effectiveEnabled && loopMedia && !remoteOwner && typeof requestAnimationFrame === "function") loopFrameId = requestAnimationFrame(loopFrame); }
   function remember(media) {
     if (!(media instanceof HTMLMediaElement)) return media;
-    if (
-      loopMedia &&
-      (media !== loopMedia || mediaSource(loopMedia) !== loopMediaSource) &&
-      !media.paused
-    ) {
-      clearLoopState();
-    }
     knownMedia.add(media);
     if (!observedMedia.has(media)) {
       observedMedia.add(media);
-      media.addEventListener("playing", () => {
-        if (
-          loopMedia &&
-          (media !== loopMedia || mediaSource(media) !== loopMediaSource)
-        ) {
-          clearLoopState();
-        }
-        lastPlayingMedia = media;
-      });
-      media.addEventListener("timeupdate", () => enforceLoop(media));
-      media.addEventListener("seeking", () => enforceLoop(media));
+      media.addEventListener("playing", () => { reconcileTrack(); if (loopState.active && trackIdentity === loopState.trackIdentity) loopMedia = media; lastPlayingMedia = media; startLoopFrame(); });
+      media.addEventListener("timeupdate", enforceLoop); media.addEventListener("seeking", enforceLoop);
+      media.addEventListener("loadedmetadata", () => { reconcileTrack(); if (media === loopMedia && loopState.active) publishLoopState(); });
+      media.addEventListener("emptied", () => { if (media === loopMedia) publishLoopState(); });
     }
     if (!media.paused) lastPlayingMedia = media;
     return media;
   }
-
   const NativeAudio = window.Audio;
-  if (typeof NativeAudio === "function") {
-    function CapturedAudio(...args) {
-      return remember(new NativeAudio(...args));
-    }
-    Object.setPrototypeOf(CapturedAudio, NativeAudio);
-    CapturedAudio.prototype = NativeAudio.prototype;
-    window.Audio = CapturedAudio;
-  }
-
+  if (typeof NativeAudio === "function") { function CapturedAudio(...args) { return remember(new NativeAudio(...args)); } Object.setPrototypeOf(CapturedAudio, NativeAudio); CapturedAudio.prototype = NativeAudio.prototype; window.Audio = CapturedAudio; }
   const mediaPrototype = window.HTMLMediaElement?.prototype;
-  if (mediaPrototype) {
-    for (const methodName of ["play", "load"]) {
-      const nativeMethod = mediaPrototype[methodName];
-      if (typeof nativeMethod !== "function") continue;
-      mediaPrototype[methodName] = function (...args) {
-        remember(this);
-        return nativeMethod.apply(this, args);
-      };
-    }
-  }
-
-  function mediaDurationMs(media) {
-    return Number.isFinite(media?.duration) ? media.duration * 1000 : null;
-  }
-
-  function mediaSource(media) {
-    return media?.currentSrc || media?.src || null;
-  }
-
-  function scoreMedia(media, expectedDurationMs) {
-    let score = media === lastPlayingMedia ? 50 : 0;
-    const durationMs = mediaDurationMs(media);
-    if (durationMs !== null && Number.isFinite(expectedDurationMs)) {
-      const difference = Math.abs(durationMs - expectedDurationMs);
-      if (difference <= 1000) score += 100;
-      else if (difference <= 3000) score += 30;
-      else score -= 100;
-    }
-    if (!media.paused) score += 40;
-    if (mediaSource(media)) score += 15;
-    if (media.readyState >= 1) score += 10;
-    if (media.currentTime > 0) score += 5;
-    return score;
-  }
-
+  if (mediaPrototype) for (const methodName of ["play", "load"]) { const nativeMethod = mediaPrototype[methodName]; if (typeof nativeMethod === "function") mediaPrototype[methodName] = function (...args) { remember(this); return nativeMethod.apply(this, args); }; }
   function findMedia(expectedDurationMs) {
-    const connectedMedia = Array.from(document.querySelectorAll("audio, video"));
-    for (const media of connectedMedia) {
-      remember(media);
-    }
-    for (const media of knownMedia) {
-      if (media.isConnected === false && media.paused) {
-        knownMedia.delete(media);
-      }
-    }
-    if (lastPlayingMedia?.isConnected === false && lastPlayingMedia.paused) {
-      lastPlayingMedia = null;
-    }
-
-    const candidates = connectedMedia.length > 0
-      ? connectedMedia
-      : Array.from(knownMedia);
-    return candidates
-      .map((media) => ({ media, score: scoreMedia(media, expectedDurationMs) }))
-      .filter((candidate) => candidate.score >= 0)
-      .sort((left, right) => right.score - left.score)[0]?.media || null;
+    reconcileTrack();
+    if (loopMedia && knownMedia.has(loopMedia)) return loopMedia;
+    const connected = Array.from(document.querySelectorAll("audio, video")).map(remember);
+    // Detached history is a fallback until it becomes the selected loop owner.
+    // An on-page player must still win normal discovery.
+    const candidates = (connected.length ? connected : [...knownMedia]).filter((media) => mediaDurationMs(media) !== null);
+    return candidates.sort((left, right) => { const score = (media) => (media === lastPlayingMedia ? 100 : 0) + (!media.paused ? 50 : 0) + (Number.isFinite(expectedDurationMs) && mediaDurationMs(media) === expectedDurationMs ? 10 : 0); return score(right) - score(left); })[0] || null;
   }
-
-  function respond(root, response) {
-    root.setAttribute(RESPONSE_ATTRIBUTE, JSON.stringify(response));
+  function stale(command) { return Number.isInteger(command.expectedGeneration) && command.expectedGeneration !== generation; }
+  function playback(media, response) {
+    if (!loopState.effectiveEnabled || !media) return;
+    try { media.currentTime = loopState.startMs / 1000; } catch { response.error = "seek-failed"; loopSession.command({ type: "set-error", error: response.error }); return; }
+    Promise.resolve(media.play?.()).catch(() => { loopSession.command({ type: "set-error", error: "playback-failed" }); publishLoopState(); });
   }
-
-  document.addEventListener(
-    COMMAND_EVENT,
-    (event) => {
-      const root = event.target;
-      if (!(root instanceof Element)) return;
-
-      let command;
-      try {
-        command = JSON.parse(root.getAttribute(COMMAND_ATTRIBUTE) || "null");
-      } catch {
-        return;
-      }
-      if (!command || typeof command.id !== "string") return;
-
-      const media = findMedia(Number(command.expectedDurationMs));
-      if (command.type === "state") {
-        respond(root, {
-          id: command.id,
-          ok: true,
-          state: media
-            ? {
-                available: true,
-                durationMs: mediaDurationMs(media),
-                currentTimeMs: Number.isFinite(media.currentTime)
-                  ? media.currentTime * 1000
-                  : null,
-                paused: media.paused !== false,
-                source: mediaSource(media),
-                loop: publicLoopState(),
-              }
-            : { available: false, loop: publicLoopState() },
-        });
-        return;
-      }
-
-      if (command.type === "set-loop" && media) {
-        respond(root, {
-          id: command.id,
-          ok: updateLoop(media, command),
-          loop: publicLoopState(),
-        });
-        return;
-      }
-
-      if (command.type === "set-loop-enabled" && loopMedia) {
-        loopSession.command({
-          type: "set-enabled",
-          enabled: command.enabled && !globallyBypassed,
-        });
-        publishLoopState();
-        if (loopState.enabled) {
-          loopMedia.currentTime = loopState.startMs / 1000;
-          Promise.resolve(loopMedia.play?.()).catch(() => {});
-        }
-        startLoopFrame();
-        respond(root, { id: command.id, ok: true, loop: publicLoopState() });
-        return;
-      }
-
-      if (command.type === "set-global-bypass") {
-        globallyBypassed = Boolean(command.bypassed);
-        if (globallyBypassed) {
-          restoreLoopWhenUnbypassed = loopState.enabled || restoreLoopWhenUnbypassed;
-          loopSession.command({ type: "set-enabled", enabled: false });
-        } else {
-          loopSession.command({
-            type: "set-enabled",
-            enabled: restoreLoopWhenUnbypassed,
-          });
-          restoreLoopWhenUnbypassed = false;
-        }
-        publishLoopState();
-        if (loopState.enabled && loopMedia) {
-          loopMedia.currentTime = loopState.startMs / 1000;
-          Promise.resolve(loopMedia.play?.()).catch(() => {});
-        }
-        startLoopFrame();
-        respond(root, { id: command.id, ok: true, loop: publicLoopState() });
-        return;
-      }
-
-      if (command.type === "clear-loop") {
-        clearLoopState();
-        respond(root, { id: command.id, ok: true, loop: publicLoopState() });
-        return;
-      }
-
-      if (
-        command.type === "seek" &&
-        media &&
-        Number.isFinite(command.timeMs)
-      ) {
-        media.currentTime = Math.max(0, command.timeMs) / 1000;
-        respond(root, { id: command.id, ok: true });
-        return;
-      }
-
-      respond(root, { id: command.id, ok: false });
-    },
-    true
-  );
-
-  publishLoopState();
+  function updateLoop(media, command) {
+    const durationMs = mediaDurationMs(media);
+    if (!Number.isFinite(durationMs)) return { ok: false, error: "waiting-metadata" };
+    if (!trackIdentity) return { ok: false, error: "waiting-track" };
+    loopMedia = media;
+    loopSession.command({ type: "set-range", startMs: command.startMs, endMs: command.endMs, durationMs, trackIdentity, generation, enabled: command.enabled });
+    const result = { ok: loopState.active, loop: publicLoopState() };
+    if (result.ok && command.startPlayback !== false) playback(media, result);
+    publishLoopState(); startLoopFrame(); return { ...result, loop: publicLoopState() };
+  }
+  function respond(root, response) { root.setAttribute(RESPONSE_ATTRIBUTE, JSON.stringify(response)); }
+  document.addEventListener(COMMAND_EVENT, (event) => {
+    const root = event.target; if (!(root instanceof Element)) return;
+    let command; try { command = JSON.parse(root.getAttribute(COMMAND_ATTRIBUTE) || "null"); } catch { return; }
+    if (!command || typeof command.id !== "string") return;
+    reconcileTrack();
+    if (stale(command)) { respond(root, { id: command.id, ok: false, error: "stale-generation", state: { loop: publicLoopState() } }); return; }
+    const media = findMedia(Number(command.expectedDurationMs));
+    if (command.type === "state") { respond(root, { id: command.id, ok: true, state: media ? { available: true, durationMs: mediaDurationMs(media), currentTimeMs: Number.isFinite(media.currentTime) ? media.currentTime * 1000 : null, paused: media.paused !== false, source: mediaSource(media), loop: publicLoopState() } : { available: false, loop: publicLoopState(), error: "unavailable" } }); return; }
+    if (command.type === "set-global-bypass") { loopSession.command({ type: "set-bypass", bypassed: Boolean(command.bypassed) }); publishLoopState(); startLoopFrame(); respond(root, { id: command.id, ok: true, loop: publicLoopState() }); return; }
+    if (command.type === "clear-loop") { clearLoopState(); respond(root, { id: command.id, ok: true, loop: publicLoopState() }); return; }
+    if (!media) { respond(root, { id: command.id, ok: false, error: "unavailable", loop: publicLoopState() }); return; }
+    if (command.type === "set-loop") { respond(root, { id: command.id, ...updateLoop(media, command) }); return; }
+    if (command.type === "set-loop-enabled") { if (!loopState.active) { respond(root, { id: command.id, ok: false, error: "invalid-range", loop: publicLoopState() }); return; } loopSession.command({ type: "set-enabled", enabled: command.enabled }); const response = { id: command.id, ok: true, loop: publicLoopState() }; if (loopState.effectiveEnabled) playback(loopMedia, response); publishLoopState(); startLoopFrame(); respond(root, { ...response, loop: publicLoopState() }); return; }
+    if (command.type === "seek" && Number.isFinite(command.timeMs)) { try { media.currentTime = Math.max(0, command.timeMs) / 1000; respond(root, { id: command.id, ok: true }); } catch { respond(root, { id: command.id, ok: false, error: "seek-failed" }); } return; }
+    respond(root, { id: command.id, ok: false, error: "unknown-command" });
+  }, true);
+  if (channel) { channel.onmessage = ({ data }) => { if (!data || data.sender === instanceId || data.type !== "state") return; if (data.state?.bypassed !== loopState.bypassed) loopSession.command({ type: "set-bypass", bypassed: data.state.bypassed }); remoteOwner = data.owner && data.owner !== instanceId ? data.owner : null; if (remoteOwner) stopLoopFrame(); publishLoopState(false); }; channel.postMessage({ type: "state", sender: instanceId, owner: null, state: publicLoopState() }); }
+  reconcileTrack(); publishLoopState();
 })();

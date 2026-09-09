@@ -19,7 +19,9 @@ $packageItems = @(
     "manifest.json",
     "popup.html",
     "offscreen.html",
-    "assets",
+    "assets/icon48.png",
+    "assets/icon128.png",
+    "assets/icons",
     "_locales",
     "scripts/background.js",
     "scripts/bulk-job-manager.js",
@@ -47,8 +49,9 @@ $packageItems = @(
     "scripts/tempo-control-core.js",
     "scripts/tempo-control-main.js",
     "scripts/track-download-execution.js",
-    "scripts/vendor/id3-writer.js"
-    "scripts/vendor/signalsmith/wasm-factory.mjs"
+    "scripts/vendor/id3-writer.js",
+    "scripts/vendor/signalsmith/wasm-factory.mjs",
+    "THIRD_PARTY_LICENSES.md"
   )
 
 New-Item -ItemType Directory -Force -Path $distributionRoot | Out-Null
