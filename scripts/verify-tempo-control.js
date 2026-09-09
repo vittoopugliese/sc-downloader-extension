@@ -113,6 +113,7 @@ for (const expected of [
   'step="${DEFAULTS.step}"',
   "Preserve Pitch",
   "#scdl-player-download",
+  ".playbackTimeline__progressWrapper",
 ]) {
   if (!adapterCode.includes(expected)) {
     throw new Error(`Tempo player adapter is missing ${expected}.`);
