@@ -5,6 +5,8 @@ const vm = require("node:vm");
 const projectRoot = path.resolve(__dirname, "..");
 const corePath = path.join(__dirname, "tempo-control-core.js");
 const adapterPath = path.join(__dirname, "tempo-control-main.js");
+const contentPath = path.join(__dirname, "content.js");
+const panelLogo = "assets/icon128.png";
 const manifest = JSON.parse(
   fs.readFileSync(path.join(projectRoot, "manifest.json"), "utf8")
 );
@@ -30,10 +32,21 @@ for (const item of [
   "scripts/tempo-control-core.js",
   "scripts/tempo-control-main.js",
   "THIRD_PARTY_LICENSES.md",
+  panelLogo,
 ]) {
   if (!packageScript.includes(`\"${item}\"`)) {
     throw new Error(`Extension package is missing ${item}.`);
   }
+}
+
+const contentCode = fs.readFileSync(contentPath, "utf8");
+if (
+  !contentCode.includes(panelLogo) ||
+  !manifest.web_accessible_resources?.some((entry) =>
+    entry.resources?.includes(panelLogo)
+  )
+) {
+  throw new Error("The tempo panel logo is not exposed to SoundCloud.");
 }
 
 class MockMediaElement {
@@ -112,6 +125,7 @@ for (const expected of [
   'max="3"',
   'step="${DEFAULTS.step}"',
   "Keep Tone",
+  "scdl.tempo.waveformCollapsed",
   "#scdl-player-download",
   ".playbackTimeline__progressWrapper",
 ]) {

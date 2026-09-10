@@ -9,6 +9,9 @@ const screenshotPath = path.join(
   "test-results",
   "tempo-control.png"
 );
+const logoDataUrl = `data:image/png;base64,${fs.readFileSync(
+  path.join(projectRoot, "assets", "icon128.png")
+).toString("base64")}`;
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -56,10 +59,10 @@ async function main() {
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-core.js"),
     });
-    await page.evaluate(() => {
+    await page.evaluate((logoUrl) => {
       document.documentElement.setAttribute(
         "data-scdl-extension-logo-url",
-        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+        logoUrl
       );
       document.documentElement.setAttribute("data-scdl-player-waveform", JSON.stringify({
         trackUrl: "http://127.0.0.1/artist/track",
@@ -73,7 +76,7 @@ async function main() {
         configurable: true,
         value: 120,
       });
-    });
+    }, logoDataUrl);
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-main.js"),
     });
@@ -89,6 +92,10 @@ async function main() {
 
     const host = page.locator("#scdl-tempo-control");
     await host.waitFor();
+    await page.waitForFunction(() =>
+      document.querySelector("#scdl-tempo-control")?.shadowRoot
+        ?.querySelector(".brand-logo")?.naturalWidth === 128
+    );
     const placedBesideDownload = await page.evaluate(() => {
       const download = document.querySelector("#scdl-player-download");
       return download?.nextElementSibling?.id === "scdl-tempo-control";
@@ -161,10 +168,10 @@ async function main() {
     }));
     if (
       branding.name !== "SoundCloud Track Downloader" ||
-      branding.logoWidth !== 72 ||
-      branding.logoHeight !== 72 ||
+      branding.logoWidth !== 54 ||
+      branding.logoHeight !== 54 ||
       branding.logoHidden ||
-      branding.titleFontSize !== 22
+      branding.titleFontSize !== 20
     ) {
       throw new Error("Playback Speed panel branding is missing or incorrectly sized.");
     }
@@ -174,22 +181,32 @@ async function main() {
       const toggle = panel.querySelector(".pitch-toggle");
       const pitchLabel = panel.querySelector(".pitch-label");
       const speedStatus = panel.querySelector(".speed-status");
+      const waveformShell = panel.querySelector(".waveform-shell");
+      const tempoRow = panel.querySelector(".tempo-row");
       const style = getComputedStyle(panel);
       return {
+        panelSize: [panel.offsetWidth, panel.offsetHeight],
         padding: [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft],
         presetSize: [preset.offsetWidth, preset.offsetHeight],
         toggleSize: [toggle.offsetWidth, toggle.offsetHeight],
         pitchText: pitchLabel.textContent.trim(),
-        pitchFontSize: parseFloat(getComputedStyle(pitchLabel).fontSize),
+        pitchTooltip: toggle.title,
+        pitchContainerWidth: pitchLabel.offsetWidth,
+        waveformHeight: waveformShell.offsetHeight,
+        tempoOrder: Array.from(tempoRow.children).map((child) => child.className),
         statusOrder: Array.from(speedStatus.children).map((child) => child.className),
       };
     });
     if (
-      compactStyles.padding.join(" ") !== "8px 8px 8px 8px" ||
-      compactStyles.presetSize.join("x") !== "56x34" ||
-      compactStyles.toggleSize.join("x") !== "20x20" ||
-      compactStyles.pitchText !== "PreservePitch" ||
-      compactStyles.pitchFontSize !== 15 ||
+      compactStyles.panelSize[0] !== 480 ||
+      compactStyles.padding.join(" ") !== "7px 7px 7px 7px" ||
+      compactStyles.presetSize.join("x") !== "42x27" ||
+      compactStyles.toggleSize.join("x") !== "16x16" ||
+      compactStyles.pitchText !== "" ||
+      compactStyles.pitchTooltip !== "Keep tone" ||
+      compactStyles.pitchContainerWidth !== 22 ||
+      compactStyles.waveformHeight !== 130 ||
+      compactStyles.tempoOrder.join(" ") !== "slider-wrap pitch-label" ||
       compactStyles.statusOrder.join(" ") !== "current bypass"
     ) {
       throw new Error(`Playback Speed panel compact styling is incomplete: ${JSON.stringify(compactStyles)}`);
@@ -283,6 +300,68 @@ async function main() {
     const zoomedEndLabel = await host.locator(".waveform-end-label").textContent();
     if (zoomedEndLabel === fullEndLabel) throw new Error("The player waveform did not zoom around the pointer.");
 
+    await host.locator(".waveform-toggle").click();
+    await page.evaluate(() => {
+      window.waveformFetches = 0;
+      window.originalFetch = window.fetch;
+      window.fetch = async (resource, options) => {
+        if (String(resource).includes("lazy-waveform")) {
+          window.waveformFetches += 1;
+          return { json: async () => ({ samples: [15, 40, 75, 30, 60] }) };
+        }
+        return window.originalFetch(resource, options);
+      };
+      document.documentElement.setAttribute("data-scdl-player-waveform", JSON.stringify({
+        trackUrl: "http://127.0.0.1/artist/next-track",
+        waveformUrl: "https://example.test/lazy-waveform.json",
+      }));
+      document.dispatchEvent(new CustomEvent("scdl:player-waveform-ready"));
+    });
+    await page.waitForTimeout(220);
+    const collapsedLooper = await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      const shell = root.querySelector(".waveform-shell");
+      const canvas = root.querySelector(".waveform-canvas");
+      return {
+        collapsed: shell.classList.contains("is-collapsed"),
+        height: shell.offsetHeight,
+        stageDisplay: getComputedStyle(root.querySelector(".waveform-stage")).display,
+        settersVisible: [...root.querySelectorAll(".waveform-setters .setter")].every(
+          (button) => button.offsetWidth > 0 && button.offsetHeight > 0
+        ),
+        canvas: [canvas.width, canvas.height],
+        stored: localStorage.getItem("scdl.tempo.waveformCollapsed"),
+        fetches: window.waveformFetches,
+      };
+    });
+    if (
+      !collapsedLooper.collapsed ||
+      collapsedLooper.height !== 32 ||
+      collapsedLooper.stageDisplay !== "none" ||
+      !collapsedLooper.settersVisible ||
+      collapsedLooper.canvas.join("x") !== "1x1" ||
+      collapsedLooper.stored !== "true" ||
+      collapsedLooper.fetches !== 0
+    ) {
+      throw new Error(`Collapsed looper still renders or loads its waveform: ${JSON.stringify(collapsedLooper)}`);
+    }
+
+    await host.locator(".waveform-toggle").click();
+    await page.waitForFunction(() => window.waveformFetches === 1);
+    await page.waitForTimeout(220);
+    const expandedLooper = await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      const canvas = root.querySelector(".waveform-canvas");
+      return {
+        collapsed: root.querySelector(".waveform-shell").classList.contains("is-collapsed"),
+        canvas: [canvas.width, canvas.height],
+        stored: localStorage.getItem("scdl.tempo.waveformCollapsed"),
+      };
+    });
+    if (expandedLooper.collapsed || expandedLooper.canvas.some((size) => size <= 1) || expandedLooper.stored !== "false") {
+      throw new Error(`Expanded looper did not lazily render its waveform: ${JSON.stringify(expandedLooper)}`);
+    }
+
     await host.locator(".set-a").dispatchEvent("pointerdown", { pointerType: "mouse", button: 0 });
     await page.waitForTimeout(700);
     await host.locator(".set-a").dispatchEvent("pointerup", { pointerType: "mouse", button: 0 });
@@ -304,7 +383,10 @@ async function main() {
       throw new Error(`Expected audio at 0.875x, received ${speed}x.`);
     }
 
-    await host.locator(".pitch-toggle").check();
+    await host.locator(".pitch-toggle").evaluate((toggle) => {
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     const pitch = await page
       .locator("audio")
       .evaluate((audio) => audio.preservesPitch);

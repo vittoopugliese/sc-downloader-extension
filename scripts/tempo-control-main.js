@@ -14,6 +14,7 @@
   const PITCH_STORAGE = "scdl.tempo.preservePitch";
   const CUSTOM_RATE_STORAGE = ["scdl.tempo.customRate.1", "scdl.tempo.customRate.2"];
   const DETACH_STORAGE = "scdl.tempo.panelDetached";
+  const WAVEFORM_COLLAPSED_STORAGE = "scdl.tempo.waveformCollapsed";
   const RATE_ATTRIBUTE = "data-scdl-tempo-rate";
   const PITCH_ATTRIBUTE = "data-scdl-tempo-preserve-pitch";
   const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
@@ -73,6 +74,9 @@
   let setterLongPressed = false;
   let panelDetached = (() => {
     try { return localStorage.getItem(DETACH_STORAGE) === "true"; } catch { return false; }
+  })();
+  let waveformCollapsed = (() => {
+    try { return localStorage.getItem(WAVEFORM_COLLAPSED_STORAGE) === "true"; } catch { return false; }
   })();
   const customRates = CUSTOM_RATE_STORAGE.map((key) => {
     try {
@@ -350,7 +354,7 @@
   }
 
   function drawWaveform() {
-    if (!ui?.waveformCanvas) return;
+    if (!ui?.waveformCanvas || waveformCollapsed) return;
     const canvas = ui.waveformCanvas;
     const rect = canvas.getBoundingClientRect();
     const scale = Math.max(1, window.devicePixelRatio || 1);
@@ -394,6 +398,7 @@
   }
 
   async function loadPlayerWaveform() {
+    if (waveformCollapsed) return;
     let descriptor = null;
     try { descriptor = JSON.parse(document.documentElement.getAttribute(PLAYER_WAVEFORM_ATTRIBUTE) || "null"); } catch {}
     if (!descriptor || (descriptor.trackUrl === waveformTrackUrl && descriptor.waveformUrl === waveformSourceUrl && !Array.isArray(descriptor.samples))) return;
@@ -415,6 +420,13 @@
 
   function renderLoop() {
     if (!ui?.waveformStage) return;
+    ui.waveformShell.classList.toggle("is-collapsed", waveformCollapsed);
+    ui.waveformToggle.setAttribute("aria-expanded", String(!waveformCollapsed));
+    ui.waveformToggle.setAttribute(
+      "aria-label",
+      waveformCollapsed ? "Expand looper" : "Minimize looper"
+    );
+    ui.waveformToggle.title = ui.waveformToggle.getAttribute("aria-label");
     const duration = Number.isFinite(loopState.durationMs) ? loopState.durationMs : 0;
     const start = Number.isFinite(loopState.startMs) ? loopState.startMs : 0;
     const end = Number.isFinite(loopState.endMs) ? loopState.endMs : duration;
@@ -448,6 +460,28 @@
     ui.waveformMiddleLabel.textContent = formatLoopTime(windowRange ? (windowRange.startMs + windowRange.endMs) / 2 : 0);
     ui.waveformEndLabel.textContent = formatLoopTime(windowRange?.endMs || duration);
     drawWaveform();
+  }
+
+  function setWaveformCollapsed(collapsed) {
+    waveformCollapsed = Boolean(collapsed);
+    try { localStorage.setItem(WAVEFORM_COLLAPSED_STORAGE, String(waveformCollapsed)); } catch {}
+
+    if (waveformCollapsed) {
+      waveformLoadId += 1;
+      waveformSamples = [];
+      waveformTrackUrl = null;
+      waveformSourceUrl = null;
+      waveformZoom = null;
+      ui.waveformCanvas.width = 1;
+      ui.waveformCanvas.height = 1;
+    }
+
+    renderLoop();
+    if (!waveformCollapsed && !ui.panel.hidden) {
+      loadPlayerWaveform();
+      setTimeout(drawWaveform, 180);
+    }
+    if (!ui.panel.hidden) positionPanel();
   }
 
   function setLoopPoint(marker) {
@@ -945,52 +979,63 @@
         .clear-loop svg, .download-loop svg { width: 12px; height: 12px; flex: 0 0 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .status { margin-top: 5px; }
 
-        /* Expanded player editor, based on the supplied panel reference. */
-        .panel { width: min(640px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 8px; border: 1px solid #262626; border-radius: 18px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
-        .panel-header { position: relative; display: grid; grid-template-columns: 195px minmax(0, 1fr) auto; gap: 18px; margin-bottom: 16px; padding-bottom: 18px; border-bottom: 1px solid #2e2e2e; }
-        .presets { display: grid; grid-template-columns: repeat(2, 56px) 69px; gap: 7px; flex-basis: auto; }
-        .preset { width: 56px; height: 34px; border-radius: 9px; font-size: 13px; }
-        .custom-preset, .custom-preset[data-saved="true"] { width: 69px; padding: 0 4px; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+        /* Expanded player editor, compact enough to stay clear of the player. */
+        .panel { width: min(480px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
+        .panel-header { position: relative; display: grid; grid-template-columns: 146px minmax(0, 1fr) auto; gap: 10px; margin-bottom: 9px; padding-bottom: 10px; border-bottom: 1px solid #2e2e2e; }
+        .presets { display: grid; grid-template-columns: repeat(2, 42px) 52px; gap: 5px; flex-basis: auto; }
+        .preset { width: 42px; height: 27px; border-radius: 7px; font-size: 12px; }
+        .custom-preset, .custom-preset[data-saved="true"] { width: 52px; padding: 0 3px; font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
         .brand { justify-content: flex-start; min-width: 0; }
-        .brand-logo { width: 72px; height: 72px; flex-basis: 72px; border-radius: 14px; }
-        .brand-name { font-size: 22px; line-height: 1.04; text-align: left; }
+        .brand-logo { width: 54px; height: 54px; flex-basis: 54px; border-radius: 11px; }
+        .brand-name { font-size: 20px; line-height: 1.04; text-align: left; }
         .brand-title-line { position: relative; display: inline-block; min-width: 0; }
-        .free-badge { position: absolute; bottom: 1px; left: 128px; display: inline-flex; align-items: center; height: 17px; margin-left: 7px; padding: 0 5px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font: 800 10px/1 Arial, sans-serif; letter-spacing: .04em; }
-        .rating-link { color: #989898; font-size: 11px; font-weight: 500; text-decoration-color: #666; opacity: .82; }
+        .free-badge { position: absolute; bottom: 1px; left: 116px; display: inline-flex; align-items: center; height: 15px; margin-left: 6px; padding: 0 4px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font: 800 9px/1 Arial, sans-serif; letter-spacing: .04em; }
+        .rating-link { color: #989898; font-size: 10px; font-weight: 500; text-decoration-color: #666; opacity: .82; }
         .rating-link:hover { color: #bdc1c5; opacity: 1; }
-        .setter { height: 36px; padding: 0 10px; border-radius: 9px; font-size: 13px; font-variant-numeric: tabular-nums; }
-        .tempo-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: 5px; margin-bottom: 12px; }
-        .pitch-label { position: relative; bottom: 3px; display: grid; grid-template-columns: auto 20px; grid-template-rows: 1fr auto; align-items: end; column-gap: 4px; margin: 0 4px; max-width: 62px; padding: 0; color: #fff; font-size: 15px; font-style: italic; line-height: 16px; text-align: left; white-space: nowrap; }
-        .pitch-label span { grid-row: 1 / span 2; }
-        .pitch-toggle { position: relative; right: 24px; top: 4px; grid-column: 2; grid-row: 2; width: 20px; height: 20px; align-self: end; scale: .7; }
-        .speed-status { position: absolute; right: 1px; bottom: 17px; min-width: 0; height: 30px; justify-content: flex-end; gap: 3px; }
-        .current { width: 7ch; flex-basis: 7ch; font-size: 18px; }
+        .setter { height: 28px; padding: 0 8px; border-radius: 7px; font-size: 11px; font-variant-numeric: tabular-nums; }
+        .tempo-row { display: grid; grid-template-columns: minmax(0, 1fr) 22px; align-items: center; gap: 5px; margin-bottom: 8px; }
+        .pitch-label { display: grid; place-items: center; width: 22px; height: 32px; margin: 0; padding: 0; cursor: help; }
+        .pitch-toggle { width: 16px; height: 16px; margin: 0; }
+        .speed-status { position: absolute; right: 1px; bottom: 9px; min-width: 0; height: 26px; justify-content: flex-end; gap: 2px; }
+        .current { width: 7ch; flex-basis: 7ch; font-size: 17px; }
         .current.is-bypassed { color: #d6d6d6; }
-        .slider-wrap { height: 38px; margin: 0; border: 1px solid #30373e; border-radius: 11px; background: rgba(255,255,255,.025); padding: 7px 34px 3px; }
-        .slider { height: 28px; border-radius: 42%; background-size: 100% 9px; }
+        .slider-wrap { height: 32px; margin: 0; border: 1px solid #30373e; border-radius: 9px; background: rgba(255,255,255,.025); padding: 5px 28px 2px; }
+        .slider { height: 24px; border-radius: 42%; background-size: 100% 8px; }
         .slider::-webkit-slider-runnable-track { height: 9px; border-radius: 999px; }
-        .slider::-webkit-slider-thumb { width: 21px; height: 21px; margin-top: -6px; box-shadow: 0 0 0 3px #fff; }
-        .limits { padding: 0 10px; }
+        .slider::-webkit-slider-thumb { width: 17px; height: 17px; margin-top: -4px; box-shadow: 0 0 0 2px #fff; }
+        .limits { padding: 0 7px; }
         .range-label { top: 1px; padding: 0; border-radius: 0; background: transparent; transform: translateX(-50%); }
-        .waveform-shell { position: relative; overflow: hidden; height: 174px; border: 1px solid #343434; border-radius: 14px; background: linear-gradient(#101010, #080808); touch-action: none; }
-        .waveform-stage { position: absolute; inset: 28px 10px 31px; cursor: crosshair; }
+        .waveform-shell { position: relative; overflow: hidden; height: 130px; border: 1px solid #343434; border-radius: 11px; background: linear-gradient(#101010, #080808); touch-action: none; transition: height 160ms ease; }
+        .waveform-shell.is-collapsed { height: 32px; touch-action: auto; }
+        .waveform-stage { position: absolute; inset: 25px 8px 27px; cursor: crosshair; }
         .waveform-canvas { display: block; width: 100%; height: 100%; border-radius: 8px; }
         .waveform-selection { position: absolute; inset: 0 auto 0; border: 0; border-inline: 1px solid #ff741f; background: linear-gradient(90deg, rgba(255, 145, 85, .28), rgba(255, 106, 26, .055) 50%, rgba(255, 145, 85, .28)); cursor: grab; }
         .waveform-marker { position: absolute; z-index: 7; top: -17px; width: 18px; height: 18px; margin-left: -9px; padding: 0; border: 0; border-radius: 5px 5px 3px 3px; color: #fff; background: #ff741f; font: 800 11px/1 Arial; text-transform: lowercase; cursor: ew-resize; box-shadow: 0 2px 7px rgba(255, 116, 31, .28); }
-        .waveform-marker::after { content: ""; position: absolute; top: 18px; left: 50%; width: 1px; height: 125px; background: #ff741f; transform: translateX(-50%); }
-        .waveform-title { position: absolute; z-index: 3; top: 5px; left: 50%; color: #fff; font-weight: 700; transform: translateX(-50%); pointer-events: none; }
-        .waveform-times { position: absolute; inset: auto 12px 4px; display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; color: #7e8790; font-size: 11px; font-variant-numeric: tabular-nums; }
+        .waveform-marker::after { content: ""; position: absolute; top: 18px; left: 50%; width: 1px; height: 90px; background: #ff741f; transform: translateX(-50%); }
+        .waveform-title { position: absolute; z-index: 3; top: 4px; left: 50%; color: #fff; font-size: 11px; font-weight: 700; transform: translateX(-50%); pointer-events: none; }
+        .waveform-times { position: absolute; inset: auto 9px 3px; display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; color: #7e8790; font-size: 10px; font-variant-numeric: tabular-nums; }
         .waveform-start-label { justify-self: start; }
         .waveform-middle-label { justify-self: center; }
         .waveform-end-label { justify-self: end; }
-        .waveform-actions { position: absolute; z-index: 5; top: 4px; right: 7px; display: flex; gap: 5px; }
+        .waveform-actions { position: absolute; z-index: 5; top: 4px; right: 6px; display: flex; gap: 4px; }
         .waveform-setters { display: contents; }
-        .waveform-times .setter { z-index: 5; width: 84px; height: 28px; padding: 0 8px; border-radius: 8px; font-size: 12px; transform: translateY(-3px); }
+        .waveform-times .setter { z-index: 5; width: 68px; height: 23px; padding: 0 6px; border-radius: 6px; font-size: 10px; transform: translateY(-2px); }
+        .waveform-toggle { position: absolute; z-index: 8; top: 4px; left: 6px; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 1px solid #484848; border-radius: 6px; color: #c8c8c8; background: #202020; cursor: pointer; }
+        .waveform-toggle:hover { color: #ff6a1a; border-color: #ff6a1a; }
+        .waveform-toggle:focus-visible { outline: 2px solid #ff5500; outline-offset: 1px; }
+        .waveform-toggle svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 160ms ease; }
+        .waveform-shell.is-collapsed .waveform-toggle svg { transform: rotate(180deg); }
+        .waveform-shell.is-collapsed .waveform-stage { display: none; }
+        .waveform-shell.is-collapsed .waveform-title { left: 34px; line-height: 22px; transform: none; }
+        .waveform-shell.is-collapsed .waveform-times { inset: 4px 105px 4px 105px; grid-template-columns: 1fr 1fr; gap: 4px; }
+        .waveform-shell.is-collapsed .waveform-times > span { display: none; }
+        .waveform-shell.is-collapsed .waveform-setters { display: block; }
+        .waveform-shell.is-collapsed .waveform-times .setter { width: 100%; height: 22px; transform: none; }
         .panel-tools { display: flex; gap: 5px; margin-left: auto; align-self: flex-start; }
-        .panel-tool { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 1px solid #4b4b4b; border-radius: 50%; color: #d0d0d0; background: #171717; cursor: pointer; }
+        .panel-tool { display: flex; align-items: center; justify-content: center; width: 27px; height: 27px; padding: 0; border: 1px solid #4b4b4b; border-radius: 50%; color: #d0d0d0; background: #171717; cursor: pointer; }
         .panel-tool:hover, .panel-tool[aria-pressed="true"] { color: #ff6a1a; border-color: #ff6a1a; }
         .panel-tool svg { display: block; width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-        .clear-loop, .download-loop { height: 22px; border-radius: 6px; opacity: .82; }
+        .clear-loop, .download-loop { height: 22px; padding: 0 6px; border-radius: 6px; opacity: .82; }
         .loop-edit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
         @media (forced-colors: active) {
@@ -1058,9 +1103,10 @@
             aria-label="Playback speed"
             />
           </div>
-          <label class="pitch-label"><span>Preserve<br />Pitch</span><input class="pitch-toggle" type="checkbox" /></label>
+          <label class="pitch-label" title="Keep tone"><input class="pitch-toggle" type="checkbox" aria-label="Keep tone" title="Keep tone" /></label>
         </div>
         <div class="waveform-shell" role="group" aria-label="Loop waveform">
+          <button class="waveform-toggle" type="button" aria-label="Minimize looper" aria-expanded="true" title="Minimize looper"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
           <span class="waveform-title">Loop Region</span>
           <div class="waveform-actions"><button class="clear-loop" type="button" aria-label="Clear loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button></div>
           <div class="waveform-stage">
@@ -1083,7 +1129,7 @@
   function positionPanel() {
     if (!ui || ui.panel.hidden) return;
     const anchor = ui.trigger.getBoundingClientRect();
-    const width = Math.min(640, innerWidth - 16);
+    const width = Math.min(480, innerWidth - 16);
     const left = Math.max(8, Math.min(innerWidth - width - 8, anchor.right - width));
     ui.panel.style.left = `${left}px`;
     ui.panel.style.bottom = `${Math.max(8, innerHeight - anchor.top + 8)}px`;
@@ -1147,6 +1193,7 @@
       setA: root.querySelector(".set-a"),
       setB: root.querySelector(".set-b"),
       waveformShell: root.querySelector(".waveform-shell"),
+      waveformToggle: root.querySelector(".waveform-toggle"),
       waveformStage: root.querySelector(".waveform-stage"),
       waveformCanvas: root.querySelector(".waveform-canvas"),
       waveformSelection: root.querySelector(".waveform-selection"),
@@ -1163,7 +1210,7 @@
 
     ui.trigger.addEventListener("click", () => {
       setPanelOpen(ui.panel.hidden);
-      if (!ui.panel.hidden) loadPlayerWaveform();
+      if (!ui.panel.hidden && !waveformCollapsed) loadPlayerWaveform();
     });
     ui.brandName.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
@@ -1175,6 +1222,9 @@
       panelDetached = !panelDetached;
       try { localStorage.setItem(DETACH_STORAGE, String(panelDetached)); } catch {}
       render();
+    });
+    ui.waveformToggle.addEventListener("click", () => {
+      setWaveformCollapsed(!waveformCollapsed);
     });
     root.querySelectorAll(".preset").forEach((button) => {
       if (button.classList.contains("custom-preset")) return;

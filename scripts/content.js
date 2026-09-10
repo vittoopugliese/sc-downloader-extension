@@ -15,7 +15,7 @@ const POPUP_START_VIEW_KEY = "scdl.popup.startView";
 function exposeTempoControlAssets() {
   document.documentElement?.setAttribute?.(
     EXTENSION_LOGO_ATTRIBUTE,
-    chrome.runtime.getURL("assets/icon48.png")
+    chrome.runtime.getURL("assets/icon128.png")
   );
   if (typeof document.dispatchEvent === "function" && typeof CustomEvent === "function") {
     document.dispatchEvent(new CustomEvent(EXTENSION_ASSETS_EVENT));
