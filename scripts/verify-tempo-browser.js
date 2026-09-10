@@ -29,9 +29,20 @@ async function main() {
         }
         .playControls__soundBadge { flex: 1; }
         #scdl-player-download { width: 32px; height: 32px; }
+        .volume__sliderWrapper {
+          position: fixed; right: 16px; bottom: 64px; z-index: 1;
+          width: 30px; height: 150px; border: 1px solid #777; background: #292929;
+        }
+        .volume__sliderProgress { position: absolute; right: 13px; bottom: 10px; width: 4px; background: #f50; }
+        .volume__sliderHandle { position: absolute; right: 7px; width: 16px; height: 16px; border-radius: 50%; background: #f50; }
       </style>
       <div class="playControls__elements">
         <div class="playControls__soundBadge"><a class="playbackSoundBadge__titleLink" href="/artist/track">Track</a></div>
+        <div class="volume__sliderWrapper" role="slider" aria-valuemin="0" aria-valuemax="1" aria-label="Volume" aria-valuenow="0.5">
+          <div class="volume__sliderBackground"></div>
+          <div class="volume__sliderProgress" style="height: 60px;"></div>
+          <div class="volume__sliderHandle" style="top: 70px;"></div>
+        </div>
         <button id="scdl-player-download">D</button>
         <audio></audio>
       </div>`);
@@ -90,6 +101,21 @@ async function main() {
     const panel = host.locator(".panel");
     if (!(await panel.isVisible())) {
       throw new Error("Playback Speed panel did not open.");
+    }
+    const volumeLayering = await page.evaluate(() => {
+      const volume = document.querySelector(".volume__sliderWrapper");
+      const rect = volume?.getBoundingClientRect();
+      const topElement = rect && document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      const panelRect = document.querySelector("#scdl-tempo-control")?.shadowRoot?.querySelector(".panel")?.getBoundingClientRect();
+      return {
+        isAbove: topElement?.closest(".volume__sliderWrapper") === volume,
+        panel: panelRect && [panelRect.left, panelRect.top, panelRect.right, panelRect.bottom],
+        volume: rect && [rect.left, rect.top, rect.right, rect.bottom],
+        volumeZIndex: volume && getComputedStyle(volume).zIndex,
+      };
+    });
+    if (!volumeLayering.isAbove) {
+      throw new Error("The native volume slider is hidden behind the tempo panel.");
     }
     await page.waitForTimeout(300);
 
@@ -159,11 +185,11 @@ async function main() {
       };
     });
     if (
-      compactStyles.padding.join(" ") !== "16px 16px 16px 16px" ||
-      compactStyles.presetSize.join("x") !== "56x38" ||
-      compactStyles.toggleSize.join("x") !== "17x17" ||
+      compactStyles.padding.join(" ") !== "8px 8px 8px 8px" ||
+      compactStyles.presetSize.join("x") !== "56x34" ||
+      compactStyles.toggleSize.join("x") !== "20x20" ||
       compactStyles.pitchText !== "PreservePitch" ||
-      compactStyles.pitchFontSize !== 13 ||
+      compactStyles.pitchFontSize !== 15 ||
       compactStyles.statusOrder.join(" ") !== "current bypass"
     ) {
       throw new Error(`Playback Speed panel compact styling is incomplete: ${JSON.stringify(compactStyles)}`);

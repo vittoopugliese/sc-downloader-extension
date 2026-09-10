@@ -29,6 +29,8 @@
   const LOOP_EXPORT_ATTRIBUTE = "data-scdl-loop-export-request";
   const PLAYER_WAVEFORM_ATTRIBUTE = "data-scdl-player-waveform";
   const PLAYER_WAVEFORM_EVENT = "scdl:player-waveform-ready";
+  const VOLUME_LAYER_ATTRIBUTE = "data-scdl-tempo-panel-open";
+  const VOLUME_LAYER_STYLE_ID = "scdl-tempo-volume-layer";
   const LONG_PRESS_MS = 650;
   const PLAYER_TIMELINE_SELECTOR = [
     ".playbackTimeline",
@@ -374,12 +376,12 @@
     for (let index = 0; index < visible.length; index += 1) {
       const percent = index / Math.max(1, visible.length - 1) * 100;
       const barHeight = Math.max(2 * scale, Math.abs(Number(visible[index]) || 0) / maximum * (height * .72));
-      context.fillStyle = complete && percent >= start && percent <= end ? "#ff6a1a" : "#858d96";
+      context.fillStyle = complete && percent >= start && percent <= end ? "#ff741f" : "#858d96";
       context.globalAlpha = complete && (percent < start || percent > end) ? .55 : .92;
       context.fillRect(index * barWidth, (height - barHeight) / 2, Math.max(1, barWidth - scale), barHeight);
     }
     context.globalAlpha = 1;
-    if (complete) { context.fillStyle = "rgba(255,85,0,.18)"; context.fillRect(width * start / 100, 0, width * (end - start) / 100, height); }
+    if (complete) { context.fillStyle = "rgba(255, 106, 26, .18)"; context.fillRect(width * start / 100, 0, width * (end - start) / 100, height); }
     if (Number.isFinite(loopState.currentTimeMs)) {
       const playhead = loopPercentInWindow(loopState.currentTimeMs, windowRange);
       if (playhead >= 0 && playhead <= 100) { context.fillStyle = "rgba(255,255,255,.72)"; context.fillRect(width * playhead / 100, 0, Math.max(1, scale), height); }
@@ -422,7 +424,7 @@
     ui.waveformSelection.style.left = `${startPercent}%`;
     ui.waveformSelection.style.width = `${Math.max(0, endPercent - startPercent)}%`;
     ui.waveformSelection.hidden = !loopState.active;
-    for (const [marker, value, letter] of [[ui.waveformStart, loopState.startMs, "A"], [ui.waveformEnd, loopState.endMs, "B"]]) {
+    for (const [marker, value, letter] of [[ui.waveformStart, loopState.startMs, "a"], [ui.waveformEnd, loopState.endMs, "b"]]) {
       marker.hidden = !Number.isFinite(value) || !windowRange || value < windowRange.startMs || value > windowRange.endMs;
       marker.style.left = `${loopPercentInWindow(value, windowRange)}%`;
       marker.textContent = letter;
@@ -664,6 +666,7 @@
           position:relative;
           transform: translateY(5px);
         }
+        .trigger-rate.is-bypassed { color: #d6d6d6; }
         .trigger:focus-visible,
         input:focus-visible {
           outline: 2px solid #ff5500;
@@ -672,7 +675,7 @@
 
         .panel {
           position: fixed;
-          z-index: 2147483647;
+          z-index: 2147483646;
           width: min(420px, calc(100vw - 16px));
           padding: 9px 8.5px 10px;
           border: 1px solid #444;
@@ -943,49 +946,50 @@
         .status { margin-top: 5px; }
 
         /* Expanded player editor, based on the supplied panel reference. */
-        .panel { width: min(640px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 16px; border: 2px solid #3b424a; border-radius: 18px; background: linear-gradient(145deg, #11161b, #090d11); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b535b transparent; }
-        .panel-header { position: relative; display: grid; grid-template-columns: 184px minmax(0, 1fr) auto; gap: 18px; margin-bottom: 16px; padding-bottom: 18px; border-bottom: 1px solid #2e343a; }
+        .panel { width: min(640px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 8px; border: 1px solid #262626; border-radius: 18px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
+        .panel-header { position: relative; display: grid; grid-template-columns: 195px minmax(0, 1fr) auto; gap: 18px; margin-bottom: 16px; padding-bottom: 18px; border-bottom: 1px solid #2e2e2e; }
         .presets { display: grid; grid-template-columns: repeat(2, 56px) 69px; gap: 7px; flex-basis: auto; }
-        .preset { width: 56px; height: 38px; border-radius: 9px; font-size: 14px; }
-        .custom-preset, .custom-preset[data-saved="true"] { width: 69px; padding: 0 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+        .preset { width: 56px; height: 34px; border-radius: 9px; font-size: 13px; }
+        .custom-preset, .custom-preset[data-saved="true"] { width: 69px; padding: 0 4px; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
         .brand { justify-content: flex-start; min-width: 0; }
         .brand-logo { width: 72px; height: 72px; flex-basis: 72px; border-radius: 14px; }
         .brand-name { font-size: 22px; line-height: 1.04; text-align: left; }
-        .brand-title-line { display: flex; align-items: flex-end; gap: 6px; min-width: 0; }
-        .free-badge { display: inline-flex; align-items: center; height: 17px; margin-bottom: 1px; padding: 0 5px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font: 800 10px/1 Arial, sans-serif; letter-spacing: .04em; }
-        .rating-link { color: #92989f; font-size: 11px; font-weight: 500; text-decoration-color: #5f666d; opacity: .82; }
+        .brand-title-line { position: relative; display: inline-block; min-width: 0; }
+        .free-badge { position: absolute; bottom: 1px; left: 128px; display: inline-flex; align-items: center; height: 17px; margin-left: 7px; padding: 0 5px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font: 800 10px/1 Arial, sans-serif; letter-spacing: .04em; }
+        .rating-link { color: #989898; font-size: 11px; font-weight: 500; text-decoration-color: #666; opacity: .82; }
         .rating-link:hover { color: #bdc1c5; opacity: 1; }
         .setter { height: 36px; padding: 0 10px; border-radius: 9px; font-size: 13px; font-variant-numeric: tabular-nums; }
-        .tempo-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: 8px; margin-bottom: 12px; }
-        .pitch-label { display: grid; grid-template-columns: auto 17px; grid-template-rows: 1fr auto; align-items: end; column-gap: 5px; padding: 1px 1px 5px 0; color: #fff; font-size: 13px; font-style: italic; line-height: 1.04; text-align: left; white-space: nowrap; }
+        .tempo-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: 5px; margin-bottom: 12px; }
+        .pitch-label { position: relative; bottom: 3px; display: grid; grid-template-columns: auto 20px; grid-template-rows: 1fr auto; align-items: end; column-gap: 4px; margin: 0 4px; max-width: 62px; padding: 0; color: #fff; font-size: 15px; font-style: italic; line-height: 16px; text-align: left; white-space: nowrap; }
         .pitch-label span { grid-row: 1 / span 2; }
-        .pitch-toggle { grid-column: 2; grid-row: 2; }
+        .pitch-toggle { position: relative; right: 24px; top: 4px; grid-column: 2; grid-row: 2; width: 20px; height: 20px; align-self: end; scale: .7; }
         .speed-status { position: absolute; right: 1px; bottom: 17px; min-width: 0; height: 30px; justify-content: flex-end; gap: 3px; }
         .current { width: 7ch; flex-basis: 7ch; font-size: 18px; }
+        .current.is-bypassed { color: #d6d6d6; }
         .slider-wrap { height: 38px; margin: 0; border: 1px solid #30373e; border-radius: 11px; background: rgba(255,255,255,.025); padding: 7px 34px 3px; }
-        .slider { height: 28px; border-radius: 999px; background-size: 100% 9px; }
+        .slider { height: 28px; border-radius: 42%; background-size: 100% 9px; }
         .slider::-webkit-slider-runnable-track { height: 9px; border-radius: 999px; }
         .slider::-webkit-slider-thumb { width: 21px; height: 21px; margin-top: -6px; box-shadow: 0 0 0 3px #fff; }
         .limits { padding: 0 10px; }
         .range-label { top: 1px; padding: 0; border-radius: 0; background: transparent; transform: translateX(-50%); }
-        .waveform-shell { position: relative; overflow: hidden; height: 174px; border: 2px solid #343b42; border-radius: 14px; background: linear-gradient(#10151a, #090d11); touch-action: none; }
+        .waveform-shell { position: relative; overflow: hidden; height: 174px; border: 1px solid #343434; border-radius: 14px; background: linear-gradient(#101010, #080808); touch-action: none; }
         .waveform-stage { position: absolute; inset: 28px 10px 31px; cursor: crosshair; }
         .waveform-canvas { display: block; width: 100%; height: 100%; border-radius: 8px; }
-        .waveform-selection { position: absolute; inset: 0 auto 0; border: 1px solid #ff650f; background: rgba(255,85,0,.12); cursor: grab; }
-        .waveform-marker { position: absolute; z-index: 7; top: -22px; width: 30px; height: 25px; margin-left: -15px; padding: 0; border: 0; border-radius: 7px 7px 4px 4px; color: #090909; background: #ff650f; font: 800 15px/1 Arial; cursor: ew-resize; box-shadow: 0 3px 12px rgba(255,85,0,.35); }
-        .waveform-marker::after { content: ""; position: absolute; top: 25px; left: 50%; width: 2px; height: 121px; background: #ff650f; transform: translateX(-50%); }
-        .waveform-title { position: absolute; z-index: 3; top: 5px; left: 50%; color: #ff741f; font-weight: 700; transform: translateX(-50%); pointer-events: none; }
+        .waveform-selection { position: absolute; inset: 0 auto 0; border: 0; border-inline: 1px solid #ff741f; background: linear-gradient(90deg, rgba(255, 145, 85, .28), rgba(255, 106, 26, .055) 50%, rgba(255, 145, 85, .28)); cursor: grab; }
+        .waveform-marker { position: absolute; z-index: 7; top: -17px; width: 18px; height: 18px; margin-left: -9px; padding: 0; border: 0; border-radius: 5px 5px 3px 3px; color: #fff; background: #ff741f; font: 800 11px/1 Arial; text-transform: lowercase; cursor: ew-resize; box-shadow: 0 2px 7px rgba(255, 116, 31, .28); }
+        .waveform-marker::after { content: ""; position: absolute; top: 18px; left: 50%; width: 1px; height: 125px; background: #ff741f; transform: translateX(-50%); }
+        .waveform-title { position: absolute; z-index: 3; top: 5px; left: 50%; color: #fff; font-weight: 700; transform: translateX(-50%); pointer-events: none; }
         .waveform-times { position: absolute; inset: auto 12px 4px; display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; color: #7e8790; font-size: 11px; font-variant-numeric: tabular-nums; }
         .waveform-start-label { justify-self: start; }
         .waveform-middle-label { justify-self: center; }
         .waveform-end-label { justify-self: end; }
         .waveform-actions { position: absolute; z-index: 5; top: 4px; right: 7px; display: flex; gap: 5px; }
         .waveform-setters { display: contents; }
-        .waveform-times .setter { z-index: 5; width: 84px; height: 32px; padding: 0 8px; border-radius: 8px; transform: translateY(-5px); }
+        .waveform-times .setter { z-index: 5; width: 84px; height: 28px; padding: 0 8px; border-radius: 8px; font-size: 12px; transform: translateY(-3px); }
         .panel-tools { display: flex; gap: 5px; margin-left: auto; align-self: flex-start; }
-        .panel-tool { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid #4b535b; border-radius: 50%; color: #c7cdd2; background: #171d22; cursor: pointer; }
+        .panel-tool { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 1px solid #4b4b4b; border-radius: 50%; color: #d0d0d0; background: #171717; cursor: pointer; }
         .panel-tool:hover, .panel-tool[aria-pressed="true"] { color: #ff6a1a; border-color: #ff6a1a; }
-        .panel-tool svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .panel-tool svg { display: block; width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
         .clear-loop, .download-loop { height: 22px; border-radius: 6px; opacity: .82; }
         .loop-edit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
@@ -1085,10 +1089,22 @@
     ui.panel.style.bottom = `${Math.max(8, innerHeight - anchor.top + 8)}px`;
   }
 
+  function setVolumeLayerOpen(open) {
+    let style = document.getElementById(VOLUME_LAYER_STYLE_ID);
+    if (!style) {
+      style = document.createElement("style");
+      style.id = VOLUME_LAYER_STYLE_ID;
+      style.textContent = `html[${VOLUME_LAYER_ATTRIBUTE}="true"] .volume__sliderWrapper { z-index: 2147483647 !important; }`;
+      (document.head || document.documentElement).append(style);
+    }
+    document.documentElement.setAttribute(VOLUME_LAYER_ATTRIBUTE, String(open));
+  }
+
   function setPanelOpen(open) {
     if (!ui) return;
     ui.panel.hidden = !open;
     ui.trigger.setAttribute("aria-expanded", String(open));
+    setVolumeLayerOpen(open);
     if (open) positionPanel();
   }
 
@@ -1278,6 +1294,8 @@
     ui.slider.value = String(state.rate);
     ui.slider.setAttribute("aria-valuetext", formatRate(state.rate));
     ui.bypass.setAttribute("aria-pressed", String(state.bypassed));
+    ui.current.classList.toggle("is-bypassed", state.bypassed);
+    ui.triggerRate.classList.toggle("is-bypassed", state.bypassed);
     ui.bypass.title = state.bypassed
       ? "Bypass on — restore loop, speed and tone"
       : "Bypass loop, speed and tone";
