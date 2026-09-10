@@ -147,7 +147,7 @@
     "message": "Tempo"
   },
   "help_speed_intro": {
-    "message": "Die Tempoauswahl steuert die SoundCloud-Wiedergabe von 0.1x bis 4x und zeigt das aktive Tempo neben der Playersteuerung an."
+    "message": "Die Tempoauswahl steuert die SoundCloud-Wiedergabe von 0.1x bis 3x und zeigt das aktive Tempo neben der Playersteuerung an."
   },
   "help_speed_open_title": {
     "message": "Auswahl öffnen"
@@ -159,13 +159,13 @@
     "message": "Schnelle Tempi"
   },
   "help_speed_presets": {
-    "message": "Wähle eine der sechs schnellen Geschwindigkeiten. Die beiden X-Tasten sind eigene Presets: Halte eine gedrückt, um die aktuelle Slider-Geschwindigkeit zu speichern, und klicke später darauf, um sie wiederherzustellen."
+    "message": "Wähle eine der vier schnellen Geschwindigkeiten. Die beiden X-Tasten sind eigene Presets: Halte eine gedrückt, um die aktuelle Slider-Geschwindigkeit zu speichern, und klicke später darauf, um sie wiederherzustellen."
   },
   "help_speed_slider_title": {
     "message": "Präzise Steuerung"
   },
   "help_speed_slider": {
-    "message": "Ziehe den Regler zwischen 0.1x und 4x in Schritten von 0.025x. Ein Doppelklick auf den Regler stellt das normale Tempo von 1x wieder her."
+    "message": "Ziehe den Regler zwischen 0.1x und 3x in Schritten von 0.025x. Ein Doppelklick auf den Regler stellt das normale Tempo von 1x wieder her."
   },
   "help_speed_pitch_title": {
     "message": "Tonhöhe beibehalten"

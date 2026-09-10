@@ -8,7 +8,7 @@
 
   const DEFAULTS = Object.freeze({
     min: 0.1,
-    max: 4,
+    max: 3,
     step: 0.0125,
     rate: 1,
     preservePitch: false,

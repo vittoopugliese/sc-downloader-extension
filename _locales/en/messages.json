@@ -162,7 +162,7 @@
     "message": "Speed"
   },
   "help_speed_intro": {
-    "message": "The speed selector controls SoundCloud playback from 0.1x to 4x and shows the active speed beside the player controls."
+    "message": "The speed selector controls SoundCloud playback from 0.1x to 3x and shows the active speed beside the player controls."
   },
   "help_speed_open_title": {
     "message": "Open the selector"
@@ -174,13 +174,13 @@
     "message": "Quick speeds"
   },
   "help_speed_presets": {
-    "message": "Choose one of the six quick speeds. The two X buttons are custom presets: hold one to save the slider's current speed, then click it to restore that exact value. Custom presets stay saved between SoundCloud sessions."
+    "message": "Choose one of the four quick speeds. The two X buttons are custom presets: hold one to save the slider's current speed, then click it to restore that exact value. Custom presets stay saved between SoundCloud sessions."
   },
   "help_speed_slider_title": {
     "message": "Precise control"
   },
   "help_speed_slider": {
-    "message": "Drag the slider anywhere from 0.1x to 4x in 0.025x steps. Double-click the slider to return to the normal 1x speed."
+    "message": "Drag the slider anywhere from 0.1x to 3x in 0.025x steps. Double-click the slider to return to the normal 1x speed."
   },
   "help_speed_pitch_title": {
     "message": "Keep Tone"

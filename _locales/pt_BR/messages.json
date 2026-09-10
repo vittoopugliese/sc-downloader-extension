@@ -147,7 +147,7 @@
     "message": "Velocidade"
   },
   "help_speed_intro": {
-    "message": "O seletor controla a reprodução do SoundCloud de 0.1x a 4x e mostra a velocidade ativa ao lado dos controles do player."
+    "message": "O seletor controla a reprodução do SoundCloud de 0.1x a 3x e mostra a velocidade ativa ao lado dos controles do player."
   },
   "help_speed_open_title": {
     "message": "Abra o seletor"
@@ -159,13 +159,13 @@
     "message": "Velocidades rápidas"
   },
   "help_speed_presets": {
-    "message": "Escolha uma das seis velocidades rápidas. Os dois botões X são presets personalizados: mantenha um pressionado para salvar a velocidade atual do slider e clique depois para restaurá-la."
+    "message": "Escolha uma das quatro velocidades rápidas. Os dois botões X são presets personalizados: mantenha um pressionado para salvar a velocidade atual do slider e clique depois para restaurá-la."
   },
   "help_speed_slider_title": {
     "message": "Controle preciso"
   },
   "help_speed_slider": {
-    "message": "Arraste o controle entre 0.1x e 4x em incrementos de 0.025x. Clique duas vezes no controle para voltar à velocidade normal de 1x."
+    "message": "Arraste o controle entre 0.1x e 3x em incrementos de 0.025x. Clique duas vezes no controle para voltar à velocidade normal de 1x."
   },
   "help_speed_pitch_title": {
     "message": "Manter tom"

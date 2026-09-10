@@ -162,8 +162,8 @@ async function main() {
       compactStyles.padding.join(" ") !== "16px 16px 16px 16px" ||
       compactStyles.presetSize.join("x") !== "56x38" ||
       compactStyles.toggleSize.join("x") !== "17x17" ||
-      compactStyles.pitchText !== "Keep Tone" ||
-      compactStyles.pitchFontSize !== 14 ||
+      compactStyles.pitchText !== "PreservePitch" ||
+      compactStyles.pitchFontSize !== 13 ||
       compactStyles.statusOrder.join(" ") !== "current bypass"
     ) {
       throw new Error(`Playback Speed panel compact styling is incomplete: ${JSON.stringify(compactStyles)}`);
@@ -190,8 +190,8 @@ async function main() {
       panelFeatures.customCount !== 2 ||
       !panelFeatures.reviewHref.endsWith("/reviews") ||
       panelFeatures.labels.join("|") !== "Tone & Velocity" ||
-      panelFeatures.order.slice(0, 4).join("|") !==
-        "panel-header|middle-row|slider-wrap|waveform-shell"
+      panelFeatures.order.slice(0, 3).join("|") !==
+        "panel-header|tempo-row|waveform-shell"
     ) {
       throw new Error("The combined panel layout or links are incomplete.");
     }
@@ -318,7 +318,7 @@ async function main() {
         throw new Error(`Preset ${rate}x did not apply.`);
       }
     }
-    for (const rate of [0.1, 0.125, 0.15, 0.175, 0.2, 4]) {
+    for (const rate of [0.1, 0.125, 0.15, 0.175, 0.2, 3]) {
       await host.locator(".slider").fill(String(rate));
       if (await page.locator("audio").evaluate((audio) => audio.playbackRate) !== rate) {
         throw new Error(`Slider rate ${rate}x did not apply.`);
@@ -399,7 +399,7 @@ async function main() {
     }
     await host.locator('.bypass').click();
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await host.locator('.preset[data-rate="3"]').click();
+    await host.locator('.slider').fill('3');
     if (
       await host.locator('.current').textContent() !== '3.000x' ||
       await host.locator('.trigger-rate').textContent() !== '3.0x'
