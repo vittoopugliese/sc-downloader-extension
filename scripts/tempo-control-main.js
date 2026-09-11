@@ -773,7 +773,7 @@
           display: flex;
           align-items: center;
           gap: 12px;
-          margin-bottom: 18px;
+          padding-bottom: 10px;
         }
 
         .brand {
@@ -968,7 +968,7 @@
 
         /* The player panel intentionally mirrors the compact one-screen layout. */
         .panel { width: min(420px, calc(100vw - 16px)); padding: 10px; border: 3px solid #080808; border-radius: 11px; }
-        .panel-header { align-items: center; gap: 8px; margin-bottom: 8px; }
+        .panel-header { align-items: center; gap: 8px; padding-bottom: 10px; }
         .presets { order: -1; grid-template-columns: repeat(4, 36px); gap: 5px; flex-basis: 159px; }
         .preset { width: 36px; height: 28px; padding: 0; }
         .custom-preset { color: #ff3651; font-size: 16px; font-weight: 800; }
@@ -1014,7 +1014,7 @@
 
         /* Expanded player editor, compact enough to stay clear of the player. */
         .panel { width: min(480px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
-        .panel-header { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 92px 146px; gap: 10px; margin-bottom: 9px; padding-bottom: 10px; border-bottom: 1px solid #2e2e2e; }
+        .panel-header { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 92px 146px; gap: 12px; padding-bottom: 10px; }
         .presets { display: grid; grid-template-columns: repeat(2, 42px) 52px; gap: 5px; flex-basis: auto; }
         .preset { width: 42px; height: 27px; border-radius: 7px; font-size: 12px; }
         .custom-preset, .custom-preset[data-saved="true"] { width: 52px; padding: 0 3px; font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -1032,13 +1032,13 @@
         .speed-status { position: static; grid-column: 2; grid-row: 1; align-self: end; justify-self: center; min-width: 0; height: 26px; justify-content: center; gap: 2px; }
         .current { width: 7ch; flex-basis: 7ch; font-size: 17px; }
         .current.is-bypassed { color: #d6d6d6; }
-        .slider-wrap { height: 32px; margin: 0; border: 1px solid #30373e; border-radius: 9px; background: rgba(255,255,255,.025); padding: 5px 32px 2px; }
+        .slider-wrap { height: 32px; margin: 0; border: 1px solid #30373e; border-radius: 9px; background: rgba(255,255,255,.025); padding: 2px 32px 2px; }
         .slider { height: 24px; border-radius: 42%; background-size: 100% 8px; }
         .slider::-webkit-slider-runnable-track { height: 9px; border-radius: 999px; }
         .slider::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: -2.5px; box-shadow: 0 0 0 2px #fff; }
         .slider::-moz-range-thumb { width: 14px; height: 14px; }
         .limits { padding: 0 7px; }
-        .range-label { top: 1px; padding: 0; border-radius: 0; background: transparent; transform: translateX(-50%); }
+        .range-label { top: 8px; padding: 0; border-radius: 0; background: transparent; transform: translateX(-50%); }
         .waveform-shell { position: relative; overflow: hidden; height: 130px; border: 1px solid #343434; border-radius: 11px; background: linear-gradient(#101010, #080808); touch-action: none; transition: height 160ms ease; }
         .waveform-shell.is-collapsed { height: 32px; touch-action: auto; }
         .waveform-stage { position: absolute; inset: 25px 8px 27px; cursor: crosshair; }
