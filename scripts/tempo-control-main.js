@@ -713,6 +713,38 @@
         }
 
         .trigger:hover { color: #abababff; }
+        .trigger-shell {
+          position: relative;
+          display: inline-flex;
+          width: 64px;
+          height: 34px;
+          flex: 0 0 64px;
+        }
+
+        .clear-rate {
+          position: absolute;
+          top: -2px;
+          right: 5px;
+          z-index: 1;
+          width: 14px;
+          height: 14px;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          color: #ff6c23;
+          background: transparent;
+          font: 700 13px/14px Arial, sans-serif;
+          cursor: pointer;
+          opacity: .9;
+        }
+
+        .clear-rate:hover { color: #fff; opacity: 1; }
+        .clear-rate:focus-visible {
+          outline: 2px solid #ff5500;
+          outline-offset: 1px;
+          border-radius: 2px;
+        }
+
         .trigger-icon {
           display: block;
           flex: 0 0 24px;
@@ -727,7 +759,7 @@
           font-variant-numeric: tabular-nums;
           margin-left: 2px;
           color: #ff6c23ff;
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 600;
           line-height: 1;
           position:relative;
@@ -1088,13 +1120,16 @@
           }
         }
       </style>
-      <button
-        class="trigger"
-        type="button"
-        aria-label="Playback speed 1x"
-        aria-haspopup="dialog"
-        aria-expanded="false"
-      >${SPEED_METER_ICON}<span class="trigger-rate">1x</span></button>
+      <span class="trigger-shell">
+        <button
+          class="trigger"
+          type="button"
+          aria-label="Playback speed 1x"
+          aria-haspopup="dialog"
+          aria-expanded="false"
+        >${SPEED_METER_ICON}<span class="trigger-rate">1x</span></button>
+        <button class="clear-rate" type="button" aria-label="Clear selected playback speed" title="Clear selected playback speed">×</button>
+      </span>
       <section
         class="panel"
         role="dialog"
@@ -1221,6 +1256,7 @@
       host,
       root,
       trigger: root.querySelector(".trigger"),
+      clearRate: root.querySelector(".clear-rate"),
       panel: root.querySelector(".panel"),
       slider: root.querySelector(".slider"),
       pitchToggle: root.querySelector(".pitch-toggle"),
@@ -1254,6 +1290,13 @@
     ui.trigger.addEventListener("click", () => {
       setPanelOpen(ui.panel.hidden);
       if (!ui.panel.hidden && !waveformCollapsed) loadPlayerWaveform();
+    });
+    ui.clearRate.addEventListener("click", (event) => {
+      event.stopPropagation();
+      playbackFailure = "";
+      animateNextRateChange = true;
+      const state = controller.setRate(DEFAULTS.rate);
+      writeSetting(RATE_STORAGE, state.rate);
     });
     ui.brandName.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));

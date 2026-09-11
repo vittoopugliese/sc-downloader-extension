@@ -10,6 +10,7 @@ const excluded = new Set([
   "verify-live-looper.js",
   "verify-live-player-download.js",
   "verify-tempo-browser.js",
+  "verify-uninstall-feedback-browser.js",
 ]);
 const verifications = fs
   .readdirSync(scriptsDirectory)
