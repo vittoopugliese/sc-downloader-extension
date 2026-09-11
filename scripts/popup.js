@@ -31,7 +31,6 @@ const metaSep = document.getElementById("metaSep");
 const streamFormat = document.getElementById("streamFormat");
 const downloadFormat = document.getElementById("downloadFormat");
 const downloadLimit = document.getElementById("downloadLimit");
-const waveformCanvas = document.getElementById("waveformCanvas");
 const downloadBtn = document.getElementById("downloadBtn");
 const jobControls = document.getElementById("jobControls");
 const pauseJobBtn = document.getElementById("pauseJobBtn");
@@ -495,7 +494,6 @@ function renderBulkJobState(job) {
   streamFormat.style.display = "none";
   hideDownloadLimitSelector();
   metaSep.style.display = "none";
-  waveformCanvas.style.display = "none";
   hideDownloadDestination();
 
   if (job.artworkUrl) {
@@ -786,10 +784,6 @@ async function renderTrack(trackData) {
   jobHint.classList.add("is-hidden");
   showDownloadDestination();
 
-  if (trackData.waveformUrl) {
-    await drawWaveform(trackData.waveformUrl);
-  }
-
   attachDownloadListener();
 }
 
@@ -903,16 +897,6 @@ async function renderPlaylist(playlistData) {
   jobControls.classList.remove("is-visible");
   jobHint.classList.add("is-hidden");
   showDownloadDestination();
-
-  const firstTrackWaveform =
-    playlistData.kind === "user_tracks"
-      ? null
-      : playlistData.tracks?.[0]?.waveformUrl;
-  if (firstTrackWaveform) {
-    await drawWaveform(firstTrackWaveform);
-  } else {
-    waveformCanvas.style.display = "none";
-  }
 
   attachDownloadListener();
 
@@ -1051,7 +1035,6 @@ function enterSelectionMode(items, selectAllByDefault = false) {
   moveDownloadControlsToSelectionHeader();
   downloadLimit.classList.add("is-hidden");
   metaSep.style.display = "none";
-  waveformCanvas.style.display = "none";
   selectionViewport.scrollTop = 0;
   updateSelectionCount();
   renderVisibleSelectionRows();
@@ -1309,7 +1292,6 @@ function showTrackLoadError(reason) {
   downloadBtn.classList.add("is-hidden");
   hideDownloadLimitSelector();
   metaSep.style.display = "none";
-  waveformCanvas.style.display = "none";
   artwork.style.backgroundImage = "none";
   artwork.style.backgroundColor = "#000000";
   jobControls.classList.remove("is-visible");
@@ -1379,42 +1361,6 @@ function requestBulkSelectionList(total) {
 
 function requestBulkTracksByIds(ids) {
   return requestFromActiveTab({ type: "GET_BULK_TRACKS_BY_IDS", ids });
-}
-
-async function drawWaveform(waveformUrl) {
-  const ctx = waveformCanvas.getContext("2d");
-
-  try {
-    const waveformResponse = await fetch(waveformUrl);
-    const waveformData = await waveformResponse.json();
-
-    ctx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
-    ctx.fillStyle = "rgba(240, 240, 240, 0.5)";
-
-    const samples = waveformData.samples || [];
-    if (!samples.length) {
-      waveformCanvas.style.display = "none";
-      return;
-    }
-
-    const maxSample = Math.max(...samples.map(Math.abs)) || 1;
-    const canvasHeight = waveformCanvas.height;
-    const canvasWidth = waveformCanvas.width;
-    const barWidth = canvasWidth / samples.length;
-
-    samples.forEach((sample, index) => {
-      const normalizedSample = sample / maxSample;
-      const barHeight = Math.abs(normalizedSample) * (canvasHeight / 2);
-      const x = index * barWidth;
-      const y = canvasHeight / 2 - barHeight / 2;
-      ctx.fillRect(x, y, barWidth - 1, barHeight);
-    });
-
-    waveformCanvas.style.display = "flex";
-  } catch (error) {
-    console.error("Error drawing Waveform:", error);
-    waveformCanvas.style.display = "none";
-  }
 }
 
 window.addEventListener("unload", () => {

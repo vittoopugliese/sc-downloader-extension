@@ -59,6 +59,11 @@ function assert(condition, message) {
   }
 }
 
+assert(
+  !/id="waveformCanvas"/.test(popup) && !/\bdrawWaveform\b/.test(popupScript),
+  "The extension popup must not duplicate the waveform shown in the tempo panel."
+);
+
 const viewportRule = popup.match(
   /#selectionViewport\s*\{([^}]*)\}/s
 );

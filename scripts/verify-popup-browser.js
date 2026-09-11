@@ -16,7 +16,6 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
     await page.setContent(html);
     await page.evaluate(() => {
       document.querySelector("#loadingOverlay").classList.add("is-hidden");
-      document.querySelector("#waveformCanvas").style.display = "none";
       document.querySelector("#title").textContent = "t t o r i o - Tracks";
     });
     const dimensions = await page.evaluate(() => ({

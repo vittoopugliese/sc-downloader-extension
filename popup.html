@@ -50,10 +50,6 @@
             user-select: none;
         }
 
-        body.selection-mode #waveformCanvas {
-            display: none !important;
-        }
-
         body.selection-mode .track-details > h2,
         body.selection-mode #artistUrl,
         body.selection-mode #duration,
@@ -746,13 +742,6 @@
         .failed-detail strong { overflow: hidden; color: #fff; text-overflow: ellipsis; white-space: nowrap; }
         .failed-detail span { color: #ffb899; }
 
-        #waveformCanvas {
-            background: transparent;
-            width: 100%;
-            height: 80px;
-            display: block;
-        }
-
         #selectionPanel {
             display: none;
             flex-direction: column;
@@ -920,8 +909,6 @@
                 </p>
             </div>
         </div>
-
-        <canvas id="waveformCanvas" width="380" height="80" style="display: none;"></canvas>
 
         <div id="selectionPanel" class="is-hidden" aria-label="Track selection" data-i18n-aria-label="track_selection">
             <div class="selection-header">
