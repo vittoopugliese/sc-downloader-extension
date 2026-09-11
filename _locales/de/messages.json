@@ -153,7 +153,7 @@
     "message": "Auswahl öffnen"
   },
   "help_speed_open": {
-    "message": "Drücke den Tachometer neben der Downloadtaste des Players. Der orange Wert zeigt immer das wirksame Wiedergabetempo. Über den Erweiterungsnamen im Panel öffnest du die Looper-Anleitung."
+    "message": "Drücke den Tachometer in der Playersteuerung. Über das weiße Downloadsymbol im Panel lädst du den aktuell wiedergegebenen Track vollständig mit dem wirksamen Tempo und der Keep-Tone-Einstellung herunter. Die orange WAV-Taste exportiert nur den ausgewählten A-B-Bereich."
   },
   "help_speed_presets_title": {
     "message": "Schnelle Tempi"
@@ -189,7 +189,7 @@
     "message": "Downloads und Looper"
   },
   "help_speed_looper_effect": {
-    "message": "Vollständige Downloads neben dem SoundCloud-Player und Looper-WAV-Exporte verwenden das wirksame Tempo. Keep Tone erhält die Tonhöhe; ohne die Option ändern sich Dauer und Tonhöhe. Bypass exportiert mit 1x."
+    "message": "Vollständige Downloads über die weiße Paneltaste und A-B-WAV-Exporte verwenden das wirksame Tempo. Keep Tone erhält die Tonhöhe; ohne die Option ändern sich Dauer und Tonhöhe. Bypass exportiert mit 1x."
   },
   "help_speed_close_title": {
     "message": "Schließen und Fehler beheben"

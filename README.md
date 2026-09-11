@@ -17,8 +17,8 @@ This release is a **big one**. What started as a single-track downloader is now 
 
 **Highlights:**
 - **Inline download button** ~ download tracks directly from SoundCloud's action bar (Like/Repost/Share) without opening the popup
-- **Player download button** ~ download the track currently playing from SoundCloud's persistent bottom player without opening the popup
-- **Playback speed control** ~ choose `0.5x` to `2x` beside the player download button, in `0.05x` steps, with optional **Preserve Pitch**
+- **Tempo-panel download button** ~ download the track currently playing from SoundCloud's persistent player at the active speed and pitch setting
+- **Playback speed control** ~ choose `0.1x` to `3x` from the persistent player, in `0.025x` steps, with optional **Keep Tone**
 - **Tempo-aware loop export** ~ the downloaded A-B WAV uses the current player speed and either natural pitch or Signalsmith-preserved pitch
 - **Playlists, sets & albums** ~ download collections as numbered files in a folder
 - **International filenames** ~ preserves Cyrillic, accented, CJK, and emoji titles while keeping paths safe on Windows, macOS, and Linux
@@ -45,7 +45,7 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 - Waveform visualization
 - One-click download ~ works on public tracks without signing in
 - **Inline download button** on the track page action bar (next to Like/Repost/Share) ~ same download flow, no popup needed
-- **Player download button** in the persistent bottom player ~ downloads the track that is currently playing, even when the open page is a feed, playlist, or another track
+- **Master download button** inside the persistent player's tempo panel ~ downloads the complete track currently playing at the active speed and pitch setting, even when no loop is selected
 - **Experimental A-B looper** on individual track pages ~ drag the A/B markers over the waveform and repeat the selected section without starting paused audio
 - **Inline download button** on playlist/set and likes pages ~ starts a background bulk job for the full collection
 - **User profile downloads** ~ open `soundcloud.com/{user}/tracks`, choose from every public upload, and download the selection as one background job
@@ -83,9 +83,9 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 
 ![Playlist track selector](./assets/images/playlist-selector.png)
 
-#### Download from the persistent player
+#### Download from the persistent player's tempo panel
 
-![Player download button](./assets/images/player-download-demo.png)
+![Tempo-panel download button](./assets/images/player-download-demo.png)
 
 #### Create an A-B loop and download the selected range
 
@@ -111,7 +111,7 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 
 ### Download a single track
 1. Go to any SoundCloud **track** page
-2. Click the **player download icon** in the persistent bottom player, the **inline download button** in the action bar (next to Like/Repost/Share), **or** click the extension icon and use the popup download button
+2. Open the speedometer in the persistent player and click its white **master download icon**, use the **inline download button** in the action bar (next to Like/Repost/Share), **or** click the extension icon and use the popup download button
 3. Wait for the track info to load (popup only)
 4. Hit download ~ the file saves to your browser's default download folder
 
@@ -120,9 +120,9 @@ Use the compact **Folder** button beside the format selector to open the system 
 ### Change playback speed
 
 1. Play any SoundCloud track
-2. Press the speed value beside the player download button
-3. Move the slider from `0.5x` to `2x` in `0.05x` steps
-4. Enable **Preserve Pitch** to keep the original pitch while changing speed
+2. Press the speedometer in the player controls
+3. Move the slider from `0.1x` to `3x` in `0.025x` steps
+4. Enable **Keep Tone** to keep the original pitch while changing speed
 
 Double-click the slider to return to `1x`. The selected speed and pitch mode are remembered locally.
 

@@ -36,7 +36,7 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
         .sc-button-medium { height: 26px; }
         .sc-button-icon { min-width: 26px; }
         .sc-button-responsive > div { display: inline-block; margin-right: 5px; }
-        .playControls__elements { display: flex; align-items: center; height: 46px; }
+        .playControls__elements { position: fixed; inset: auto 0 0; display: flex; align-items: center; width: 100%; height: 46px; }
       </style></head><body><script>window.client_id="client-test-12345678901234567890";</script>
       <div class="playControls__elements"><div class="playControls__soundBadge">
       <a class="playbackSoundBadge__titleLink" href="${track.permalink_url}">Track</a>
@@ -55,15 +55,20 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
         : originalFetch(url, options);
     }, `data:audio/mpeg;base64,${audio.toString("base64")}`);
     await page.goto("https://soundcloud.com/discover");
-    const button = page.locator("#scdl-player-download");
+    const tempo = page.locator("#scdl-tempo-control");
+    await tempo.waitFor();
+    assert.equal(await page.locator("#scdl-player-download").count(), 0, "The standalone player download button must be removed");
+    await tempo.locator(".trigger").click();
+    const button = tempo.locator(".download-track-button");
     await button.waitFor();
-    assert.match(await button.locator("img").getAttribute("src"), /assets\/icons\/download\.svg$/);
+    assert.equal(await button.getAttribute("title"), "Download current playing");
+    assert.equal(await button.locator("svg").count(), 1);
     await button.click();
     await page.waitForFunction(() => {
-      const button = document.getElementById("scdl-player-download");
-      return button.classList.contains("is-success") || button.classList.contains("is-error");
+      const root = document.getElementById("scdl-tempo-control")?.shadowRoot;
+      return /Track download started\.|Could not start track download\./.test(root?.querySelector(".status")?.textContent || "");
     }, null, { timeout: 25000 });
-    assert.match(await button.getAttribute("class"), /is-success/, await button.getAttribute("title"));
+    assert.equal(await tempo.locator(".status").textContent(), "Track download started.");
     const files = await fs.readdir(downloads);
     assert.equal(files.length, 1, "Player must create an actual file in Downloads");
     assert.ok((await fs.stat(path.join(downloads, files[0]))).size >= audio.length);
@@ -90,10 +95,8 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
     });
     // Do not leave a second offscreen listener competing with the real worker.
     await extensionPage.goto(`chrome-extension://${extensionId}/index.html`);
-    await page.waitForFunction(() => !document.getElementById("scdl-player-download").classList.contains("is-success"));
     await button.click();
-    await page.waitForFunction(() => /is-success|is-error/.test(document.getElementById("scdl-player-download").className), null, { timeout: 25000 });
-    assert.match(await button.getAttribute("class"), /is-success/, await button.getAttribute("title"));
+    await page.waitForFunction(() => document.getElementById("scdl-tempo-control")?.shadowRoot?.querySelector(".status")?.textContent === "Track download started.", null, { timeout: 25000 });
     const saved = await extensionPage.evaluate(async () => {
       const handle = await navigator.storage.getDirectory();
       const sizes = [];
@@ -109,25 +112,16 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
         downloadDestination: { id: "expired-directory", name: "Expired folder" },
       });
     });
-    await page.waitForFunction(() => !document.getElementById("scdl-player-download").classList.contains("is-success"));
     await button.click();
-    await page.waitForFunction(() => /is-success|is-error/.test(document.getElementById("scdl-player-download").className), null, { timeout: 25000 });
-    assert.match(await button.getAttribute("class"), /is-success/, await button.getAttribute("title"));
+    await page.waitForFunction(() => document.getElementById("scdl-tempo-control")?.shadowRoot?.querySelector(".status")?.textContent === "Track download started.", null, { timeout: 25000 });
     const fallbackFiles = await fs.readdir(downloads);
     assert.equal(fallbackFiles.length, 2, "An unavailable folder must fall back to browser Downloads");
     console.log("PASS: unavailable remembered folder → browser Downloads fallback");
 
-    const centers = await button.evaluate(element => {
-      const button = element.getBoundingClientRect();
-      const icon = element.querySelector("img").getBoundingClientRect();
-      return { x: icon.x + icon.width / 2 - button.x - button.width / 2,
-        y: icon.y + icon.height / 2 - button.y - button.height / 2 };
-    });
-    assert.ok(Math.abs(centers.x) < 0.5 && Math.abs(centers.y) < 0.5, `Icon is off center: ${JSON.stringify(centers)}`);
-    assert.equal(await button.evaluate(element => getComputedStyle(element).height), "46px");
-    assert.equal(await button.evaluate(element => getComputedStyle(element).marginLeft), "24px");
-    assert.equal(await button.locator("img").evaluate(element => getComputedStyle(element).borderRadius), "100%");
-    console.log("PASS: player icon centered under host button styles");
+    assert.equal(await button.evaluate(element => getComputedStyle(element).width), "27px");
+    assert.equal(await button.evaluate(element => getComputedStyle(element).height), "24px");
+    assert.equal(await button.locator("svg").evaluate(element => getComputedStyle(element).width), "13px");
+    console.log("PASS: master download icon matches the compact tempo-panel tools");
   } finally {
     await context.close();
     assert.equal(path.dirname(path.resolve(profile)), path.resolve(os.tmpdir()));

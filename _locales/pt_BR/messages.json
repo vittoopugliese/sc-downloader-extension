@@ -153,7 +153,7 @@
     "message": "Abra o seletor"
   },
   "help_speed_open": {
-    "message": "Pressione o velocímetro ao lado do botão de download do player. O valor laranja sempre mostra a velocidade efetiva. Pressione o nome da extensão dentro do painel para abrir o guia do Looper."
+    "message": "Pressione o velocímetro nos controles do player. Use o ícone branco de download no painel para baixar a faixa atual inteira com a velocidade efetiva e a opção Keep Tone. O botão WAV laranja exporta apenas o intervalo A-B selecionado."
   },
   "help_speed_presets_title": {
     "message": "Velocidades rápidas"
@@ -189,7 +189,7 @@
     "message": "Downloads e Looper"
   },
   "help_speed_looper_effect": {
-    "message": "Downloads completos iniciados junto ao player do SoundCloud e exportações WAV do Looper usam a velocidade efetiva. Keep Tone preserva o tom; sem a opção, duração e tom mudam. O bypass exporta em 1x."
+    "message": "Downloads completos pelo botão branco do painel e exportações WAV A-B usam a velocidade efetiva. Keep Tone preserva o tom; sem a opção, duração e tom mudam. O bypass exporta em 1x."
   },
   "help_speed_close_title": {
     "message": "Fechar e resolver problemas"

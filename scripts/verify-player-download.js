@@ -31,6 +31,7 @@ const context = vm.createContext({
       innerHTML: 'window.client_id="client-test-12345678901234567890"',
       setAttribute() {},
     },
+    querySelector: () => null,
     querySelectorAll: () => [],
     addEventListener() {},
     dispatchEvent() {},
@@ -90,10 +91,6 @@ for (const name of ["soundcloud-http.js", "download-track.js", "page-intake.js"]
 }
 vm.runInContext(contentCode, context, { filename: contentPath });
 
-const playerButton = {
-  classList: { add() {}, remove() {} },
-  setAttribute() {},
-};
 const tempoHost = {
   getAttribute: (name) =>
     name === "data-scdl-tempo-rate"
@@ -103,11 +100,7 @@ const tempoHost = {
         : null,
 };
 context.document.getElementById = (id) =>
-  id === "scdl-player-download"
-    ? playerButton
-    : id === "scdl-tempo-control"
-      ? tempoHost
-      : null;
+  id === "scdl-tempo-control" ? tempoHost : null;
 
 const inlinePath = path.resolve(__dirname, "inline-button.js");
 const intentPath = path.resolve(__dirname, "download-intent.js");
@@ -116,7 +109,7 @@ vm.runInContext(fs.readFileSync(intentPath, "utf8"), context, {
 });
 const inlineCode = fs
   .readFileSync(inlinePath, "utf8")
-  .replace(/\nstartToolbarObserver\(\);\s*ensurePlayerDownloadButton\(\);\s*$/, "\n");
+  .replace(/\nstartToolbarObserver\(\);\s*ensurePlayerTrack\(\);\s*$/, "\n");
 vm.runInContext(inlineCode, context, { filename: inlinePath });
 
 (async () => {
@@ -134,7 +127,7 @@ vm.runInContext(inlineCode, context, { filename: inlinePath });
   }
 
   await vm.runInContext(
-    `playerTrackUrl = "https://soundcloud.com/artist/current-track"; handlePlayerDownloadClick()`,
+    `playerTrackUrl = "https://soundcloud.com/artist/current-track"; downloadCurrentPlayerTrack()`,
     context
   );
 
@@ -147,7 +140,7 @@ vm.runInContext(inlineCode, context, { filename: inlinePath });
     downloadMessage.playbackTransform?.rate !== 1.5 ||
     downloadMessage.playbackTransform?.preservePitch !== true
   ) {
-    throw new Error("The player click did not start the single-track download flow.");
+    throw new Error("The tempo panel master download did not start the single-track flow.");
   }
 
   console.log("Player download verification passed.");

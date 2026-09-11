@@ -126,7 +126,8 @@ for (const expected of [
   'step="${DEFAULTS.step}"',
   "Keep Tone",
   "scdl.tempo.waveformCollapsed",
-  "#scdl-player-download",
+  "Download current playing",
+  "scdl:download-current-track",
   ".playbackTimeline__progressWrapper",
 ]) {
   if (!adapterCode.includes(expected)) {

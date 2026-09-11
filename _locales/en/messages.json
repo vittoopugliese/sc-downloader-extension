@@ -168,7 +168,7 @@
     "message": "Open the selector"
   },
   "help_speed_open": {
-    "message": "Press the speedometer beside the player download button. Its orange value always shows the effective playback speed. Press the extension name inside the panel to open the Looper guide."
+    "message": "Press the speedometer in the player controls. Use the white download icon inside the panel to download the entire current track at the effective speed and Keep Tone setting. The orange WAV button exports only the selected A-B range."
   },
   "help_speed_presets_title": {
     "message": "Quick speeds"
@@ -204,7 +204,7 @@
     "message": "Downloads and Looper"
   },
   "help_speed_looper_effect": {
-    "message": "Full-track downloads started beside the SoundCloud player and Looper WAV exports use the effective speed. Keep Tone preserves pitch; with it off, duration and pitch change. Bypass exports at the normal 1x rate."
+    "message": "Full-track downloads from the white panel button and A-B WAV exports use the effective speed. Keep Tone preserves pitch; with it off, duration and pitch change. Bypass exports at the normal 1x rate."
   },
   "help_speed_close_title": {
     "message": "Close and troubleshoot"

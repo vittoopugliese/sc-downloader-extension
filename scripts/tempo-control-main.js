@@ -9,7 +9,6 @@
   const INSTALLED_FLAG = "__scdlTempoControlInstalled";
   const HOST_ID = "scdl-tempo-control";
   const PLAYER_SELECTOR = ".playControls__elements";
-  const DOWNLOAD_BUTTON_SELECTOR = "#scdl-player-download";
   const RATE_STORAGE = "scdl.tempo.rate";
   const PITCH_STORAGE = "scdl.tempo.preservePitch";
   const CUSTOM_RATE_STORAGE = ["scdl.tempo.customRate.1", "scdl.tempo.customRate.2"];
@@ -28,6 +27,9 @@
   const LOOP_EXPORT_EVENT = "scdl:download-loop";
   const LOOP_EXPORT_RESULT_EVENT = "scdl:download-loop-result";
   const LOOP_EXPORT_ATTRIBUTE = "data-scdl-loop-export-request";
+  const TRACK_EXPORT_EVENT = "scdl:download-current-track";
+  const TRACK_EXPORT_RESULT_EVENT = "scdl:download-current-track-result";
+  const TRACK_EXPORT_ATTRIBUTE = "data-scdl-track-export-request";
   const PLAYER_WAVEFORM_ATTRIBUTE = "data-scdl-player-waveform";
   const PLAYER_WAVEFORM_EVENT = "scdl:player-waveform-ready";
   const VOLUME_LAYER_ATTRIBUTE = "data-scdl-tempo-panel-open";
@@ -64,6 +66,7 @@
   let displayedRate = null;
   let animateNextRateChange = false;
   let loopRequestId = 0;
+  let trackDownloadPending = false;
   let loopState = { active: false, enabled: false, startMs: null, endMs: null, durationMs: null };
   let loopPollInterval = null;
   let waveformSamples = [];
@@ -646,6 +649,34 @@
     render();
   }
 
+  async function downloadCurrentTrack() {
+    if (trackDownloadPending) return;
+    const id = `track-export-${Date.now()}`;
+    trackDownloadPending = true;
+    loopFailure = "Preparing track download…";
+    render();
+    const result = await new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve({ success: false, error: "Download request timed out." }), 120000);
+      const listener = (event) => {
+        if (event.detail?.id !== id) return;
+        clearTimeout(timeout);
+        document.removeEventListener(TRACK_EXPORT_RESULT_EVENT, listener);
+        resolve(event.detail);
+      };
+      document.addEventListener(TRACK_EXPORT_RESULT_EVENT, listener);
+      const state = controller.snapshot();
+      document.documentElement.setAttribute(TRACK_EXPORT_ATTRIBUTE, JSON.stringify({
+        id,
+        playbackTransform: { rate: state.effectiveRate, preservePitch: state.preservePitch },
+      }));
+      document.dispatchEvent(new CustomEvent(TRACK_EXPORT_EVENT));
+    });
+    document.documentElement.removeAttribute(TRACK_EXPORT_ATTRIBUTE);
+    trackDownloadPending = false;
+    loopFailure = result?.success ? "Track download started." : (result?.error || "Could not start track download.");
+    render();
+  }
+
   function syncRange(input) {
     const minimum = Number(input.min) || 0;
     const span = Number(input.max) - minimum;
@@ -1039,6 +1070,7 @@
         .panel-tool { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 27px; height: 24px; margin: 0; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; color: #fff; background: rgba(255,255,255,.08); cursor: pointer; outline: none; transition: background-color 200ms, border-color 200ms; }
         .panel-tool:hover { color: #fff; border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.14); }
         .panel-tool:focus-visible { border-color: rgba(255,85,0,.65); }
+        .panel-tool:disabled { opacity: .48; cursor: wait; }
         .panel-tool[aria-pressed="true"] { color: #ff6a1a; border-color: #ff6a1a; }
         .panel-tool svg { display: block; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
         .settings-button svg { width: 13px; height: 13px; fill: currentColor; stroke: none; }
@@ -1084,6 +1116,9 @@
           </div>
         </div>
         <div class="panel-tools" role="group" aria-label="Panel options">
+          <button class="panel-tool download-track-button" type="button" aria-label="Download current playing" title="Download current playing">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+          </button>
           <button class="panel-tool settings-button" type="button" aria-label="Open settings" title="Open settings">
             ${SETTINGS_ICON}
           </button>
@@ -1195,6 +1230,7 @@
       status: root.querySelector(".status"),
       brandLogo: root.querySelector(".brand-logo"),
       brandName: root.querySelector(".brand-name"),
+      downloadTrackButton: root.querySelector(".download-track-button"),
       settingsButton: root.querySelector(".settings-button"),
       detachButton: root.querySelector(".detach-button"),
       setA: root.querySelector(".set-a"),
@@ -1222,6 +1258,7 @@
     ui.brandName.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
     });
+    ui.downloadTrackButton.addEventListener("click", downloadCurrentTrack);
     ui.settingsButton.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
     });
@@ -1365,6 +1402,7 @@
         : "Keep panel open when clicking outside"
     );
     ui.detachButton.title = ui.detachButton.getAttribute("aria-label");
+    ui.downloadTrackButton.disabled = trackDownloadPending;
     ui.brandLogo.classList.toggle("is-bypassed", state.bypassed);
     ui.root.querySelectorAll(".preset").forEach((button) => {
       const customIndex = Number(button.dataset.customIndex);
@@ -1403,14 +1441,6 @@
     }
 
     const host = ui?.host || createUi();
-    const downloadButton = player.querySelector(DOWNLOAD_BUTTON_SELECTOR);
-    if (downloadButton) {
-      if (downloadButton.nextElementSibling !== host) {
-        downloadButton.insertAdjacentElement("afterend", host);
-      }
-      return;
-    }
-
     if (host.parentElement !== player) {
       const soundBadge = player.querySelector(".playControls__soundBadge");
       if (soundBadge) soundBadge.insertAdjacentElement("afterend", host);

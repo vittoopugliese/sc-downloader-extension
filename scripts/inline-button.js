@@ -1,11 +1,13 @@
 const INLINE_BUTTON_ID = "scdl-inline-download";
-const PLAYER_BUTTON_ID = "scdl-player-download";
 const INLINE_STYLES_ID = "scdl-inline-styles";
 const SUCCESS_RESET_MS = 2000;
 const BULK_WARN_THRESHOLD = 200;
 const PLAYER_DOWNLOAD_TIMEOUT_MS = 120000;
 const PLAYER_WAVEFORM_ATTRIBUTE = "data-scdl-player-waveform";
 const PLAYER_WAVEFORM_EVENT = "scdl:player-waveform-ready";
+const TRACK_EXPORT_EVENT = "scdl:download-current-track";
+const TRACK_EXPORT_RESULT_EVENT = "scdl:download-current-track-result";
+const TRACK_EXPORT_ATTRIBUTE = "data-scdl-track-export-request";
 const translate = globalThis.SCDLI18n?.t || ((key) => key);
 const inlineDownloadIntent = SCDownloadIntent.create(chrome.runtime);
 
@@ -14,7 +16,6 @@ let isInlineDownloading = false;
 let isPlayerDownloading = false;
 let playerTrackUrl = null;
 let successResetTimeout = null;
-let playerSuccessResetTimeout = null;
 let playerVisualRequestId = 0;
 
 function publishPlayerVisual(trackUrl) {
@@ -71,14 +72,12 @@ function injectInlineStyles() {
       padding: 0;
     }
 
-    #${INLINE_BUTTON_ID}::before,
-    #${PLAYER_BUTTON_ID}::before {
+    #${INLINE_BUTTON_ID}::before {
       content: none;
       display: none;
     }
 
-    #${INLINE_BUTTON_ID} .scdl-inline-icon,
-    #${PLAYER_BUTTON_ID} .scdl-player-icon {
+    #${INLINE_BUTTON_ID} .scdl-inline-icon {
       flex: none;
       margin: 0;
       padding: 0;
@@ -93,60 +92,6 @@ function injectInlineStyles() {
       display: block;
       border-radius: 4px;
       object-fit: contain;
-    }
-
-    #${PLAYER_BUTTON_ID}.scdl-player-download {
-      position: relative;
-      flex: 0 0 auto;
-      width: 32px;
-      height: 100%;
-      min-width: 32px;
-      margin: 0 0 0 24px;
-      padding: 0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      vertical-align: middle;
-      box-sizing: border-box;
-    }
-
-    #${PLAYER_BUTTON_ID} .scdl-player-icon {
-      width: 22px;
-      height: 22px;
-      display: block;
-      object-fit: contain;
-      border-radius: 100%;
-    }
-
-    #${PLAYER_BUTTON_ID}.is-loading {
-      opacity: 0.65;
-      cursor: wait;
-      pointer-events: none;
-    }
-
-    #${PLAYER_BUTTON_ID}.is-loading .scdl-player-icon {
-      visibility: hidden;
-    }
-
-    #${PLAYER_BUTTON_ID}.is-loading::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      margin: auto;
-      padding: 0;
-      box-sizing: border-box;
-      width: 14px;
-      height: 14px;
-      border: 2px solid rgba(255, 85, 0, 0.28);
-      border-top-color: #ff5500;
-      border-radius: 50%;
-      animation: scdl-inline-spin 0.8s linear infinite;
-    }
-
-    #${PLAYER_BUTTON_ID}.is-disabled {
-      opacity: 0.42;
-      cursor: default;
-      pointer-events: none;
     }
 
     #${INLINE_BUTTON_ID}.scdl-profile-download {
@@ -484,58 +429,6 @@ function normalizePlayerTrackUrl(url) {
   }
 }
 
-function setPlayerButtonState(state, message = null) {
-  const button = document.getElementById(PLAYER_BUTTON_ID);
-  if (!button) {
-    return;
-  }
-
-  button.classList.remove("is-loading", "is-success", "is-error", "is-disabled");
-
-  if (state === "loading") {
-    button.classList.add("is-loading");
-    button.title = translate("inline_current_downloading");
-    button.setAttribute("aria-label", button.title);
-    return;
-  }
-
-  if (state === "success") {
-    button.classList.add("is-success");
-    button.title = translate("inline_current_downloaded");
-    button.setAttribute("aria-label", button.title);
-    return;
-  }
-
-  if (state === "error") {
-    button.classList.add("is-error");
-    button.title = message || translate("inline_download_failed");
-    button.setAttribute("aria-label", button.title);
-    return;
-  }
-
-  if (state === "disabled") {
-    button.classList.add("is-disabled");
-    button.title = message || translate("inline_no_track");
-    button.setAttribute("aria-label", button.title);
-    return;
-  }
-
-  button.title = translate("inline_current_track");
-  button.setAttribute("aria-label", button.title);
-}
-
-function resetPlayerButtonStateAfterSuccess() {
-  if (playerSuccessResetTimeout) {
-    clearTimeout(playerSuccessResetTimeout);
-  }
-
-  playerSuccessResetTimeout = setTimeout(() => {
-    playerSuccessResetTimeout = null;
-    isPlayerDownloading = false;
-    setPlayerButtonState("idle");
-  }, SUCCESS_RESET_MS);
-}
-
 function withPlayerDownloadTimeout(promise, message) {
   let timeoutId;
   const timeout = new Promise((_, reject) => {
@@ -562,114 +455,72 @@ function findPlayerControlsContainer() {
   return document.querySelector(".playControls__elements");
 }
 
-function createPlayerDownloadButton() {
-  const button = document.createElement("button");
-  button.id = PLAYER_BUTTON_ID;
-  button.type = "button";
-  button.className =
-    "sc-button sc-button-secondary sc-button-small sc-button-icon sc-button-responsive scdl-player-download";
-  button.title = translate("inline_current_track");
-  button.setAttribute("aria-label", button.title);
-
-  const icon = document.createElement("img");
-  icon.className = "scdl-player-icon scdl-filtered";
-  icon.src = chrome.runtime.getURL("assets/icons/download.svg");
-  icon.alt = "";
-  icon.draggable = false;
-  button.appendChild(icon);
-  button.addEventListener("click", handlePlayerDownloadClick);
-  return button;
-}
-
-function ensurePlayerDownloadButton() {
+function ensurePlayerTrack() {
   const container = findPlayerControlsContainer();
   const trackUrl = getPlayerTrackUrl();
-  let button = document.getElementById(PLAYER_BUTTON_ID);
 
   if (!container || !trackUrl) {
-    button?.remove();
     playerTrackUrl = null;
     publishPlayerVisual(null);
     return;
   }
 
-  injectInlineStyles();
-
   if (playerTrackUrl !== trackUrl) {
     playerTrackUrl = trackUrl;
     publishPlayerVisual(trackUrl);
-    if (!isPlayerDownloading) {
-      setPlayerButtonState("idle");
-    }
-  }
-
-  if (!button) {
-    button = createPlayerDownloadButton();
-  }
-
-  if (button.parentElement !== container) {
-    const soundBadge = container.querySelector(".playControls__soundBadge");
-    if (soundBadge) {
-      soundBadge.insertAdjacentElement("afterend", button);
-    } else {
-      container.appendChild(button);
-    }
-  }
-
-  if (!isPlayerDownloading) {
-    setPlayerButtonState("idle");
   }
 }
 
-async function handlePlayerDownloadClick() {
-  if (isPlayerDownloading || !playerTrackUrl) {
+async function downloadCurrentPlayerTrack(playbackTransform = readPlayerPlaybackTransform()) {
+  const requestedTrackUrl = getPlayerTrackUrl() || playerTrackUrl;
+  if (!requestedTrackUrl) throw new Error(translate("inline_no_track"));
+  const trackData = await withPlayerDownloadTimeout(
+    window.SCDL?.resolvePlayerTrackData?.(requestedTrackUrl),
+    translate("resolve_current_track_timeout")
+  );
+
+  if (!SCDownloadTrack.canDownload(trackData)) {
+    throw new Error(translate("current_track_no_source"));
+  }
+
+  const result = await withPlayerDownloadTimeout(
+    inlineDownloadIntent.downloadTrack(trackData, {
+      formatPreference: "auto",
+      playbackTransform,
+    }),
+    translate("download_timeout")
+  );
+
+  if (!result?.success) {
+    throw new Error(result?.error || translate("download_failed"));
+  }
+  return result;
+}
+
+document.addEventListener?.(TRACK_EXPORT_EVENT, async () => {
+  let request;
+  try {
+    request = JSON.parse(document.documentElement.getAttribute(TRACK_EXPORT_ATTRIBUTE) || "null");
+  } catch {
+    request = null;
+  }
+  if (!request?.id) return;
+  if (isPlayerDownloading) {
+    document.dispatchEvent(new CustomEvent(TRACK_EXPORT_RESULT_EVENT, { detail: { id: request.id, success: false, error: "A track download is already in progress." } }));
     return;
   }
 
-  const requestedTrackUrl = playerTrackUrl;
   isPlayerDownloading = true;
-  setPlayerButtonState("loading");
-
   try {
-    const trackData = await withPlayerDownloadTimeout(
-      window.SCDL?.resolvePlayerTrackData?.(requestedTrackUrl),
-      translate("resolve_current_track_timeout")
-    );
-
-    if (!SCDownloadTrack.canDownload(trackData)) {
-      throw new Error(translate("current_track_no_source"));
-    }
-
-    const result = await withPlayerDownloadTimeout(
-      inlineDownloadIntent.downloadTrack(trackData, {
-        formatPreference: "auto",
-        playbackTransform: readPlayerPlaybackTransform(),
-      }),
-      translate("download_timeout")
-    );
-
-    if (!result?.success) {
-      throw new Error(result?.error || translate("download_failed"));
-    }
-
-    if (playerTrackUrl !== requestedTrackUrl) {
-      isPlayerDownloading = false;
-      setPlayerButtonState("idle");
-      return;
-    }
-
-    setPlayerButtonState("success");
-    resetPlayerButtonStateAfterSuccess();
+    const result = await downloadCurrentPlayerTrack(request.playbackTransform || null);
+    document.dispatchEvent(new CustomEvent(TRACK_EXPORT_RESULT_EVENT, { detail: { id: request.id, ...result } }));
   } catch (error) {
     console.error("SC Track Downloader player download error:", error);
+    document.dispatchEvent(new CustomEvent(TRACK_EXPORT_RESULT_EVENT, { detail: { id: request.id, success: false, error: error?.message || translate("download_failed") } }));
+  } finally {
     isPlayerDownloading = false;
-    if (playerTrackUrl === requestedTrackUrl) {
-      setPlayerButtonState("error", error.message);
-    } else {
-      setPlayerButtonState("idle");
-    }
   }
-}
+});
 
 function createInlineDownloadButton() {
   injectInlineStyles();
@@ -753,7 +604,7 @@ function startToolbarObserver() {
   }
 
   toolbarObserver = new MutationObserver(() => {
-    ensurePlayerDownloadButton();
+    ensurePlayerTrack();
 
     if (!isInlineButtonPage()) {
       return;
@@ -777,4 +628,4 @@ function startToolbarObserver() {
 }
 
 startToolbarObserver();
-ensurePlayerDownloadButton();
+ensurePlayerTrack();

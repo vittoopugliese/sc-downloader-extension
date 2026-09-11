@@ -31,7 +31,6 @@ async function main() {
           align-items: center; padding: 0 24px; background: #303030;
         }
         .playControls__soundBadge { flex: 1; }
-        #scdl-player-download { width: 32px; height: 32px; }
         .volume__sliderWrapper {
           position: fixed; right: 16px; bottom: 64px; z-index: 1;
           width: 30px; height: 150px; border: 1px solid #777; background: #292929;
@@ -46,7 +45,6 @@ async function main() {
           <div class="volume__sliderProgress" style="height: 60px;"></div>
           <div class="volume__sliderHandle" style="top: 70px;"></div>
         </div>
-        <button id="scdl-player-download">D</button>
         <audio></audio>
       </div>`);
   });
@@ -69,8 +67,24 @@ async function main() {
         samples: Array.from({ length: 240 }, (_, index) => 20 + Math.abs(Math.sin(index * .47) * 80)),
       }));
       window.looperGuideRequests = 0;
+      window.trackDownloadRequests = [];
+      window.loopDownloadRequests = [];
       document.addEventListener("scdl:open-looper-guide", () => {
         window.looperGuideRequests += 1;
+      });
+      document.addEventListener("scdl:download-current-track", () => {
+        const request = JSON.parse(document.documentElement.getAttribute("data-scdl-track-export-request"));
+        window.trackDownloadRequests.push(request);
+        document.dispatchEvent(new CustomEvent("scdl:download-current-track-result", {
+          detail: { id: request.id, success: true },
+        }));
+      });
+      document.addEventListener("scdl:download-loop", () => {
+        const request = JSON.parse(document.documentElement.getAttribute("data-scdl-loop-export-request"));
+        window.loopDownloadRequests.push(request);
+        document.dispatchEvent(new CustomEvent("scdl:download-loop-result", {
+          detail: { id: request.id, success: true },
+        }));
       });
       Object.defineProperty(document.querySelector("audio"), "duration", {
         configurable: true,
@@ -96,12 +110,13 @@ async function main() {
       document.querySelector("#scdl-tempo-control")?.shadowRoot
         ?.querySelector(".brand-logo")?.naturalWidth === 128
     );
-    const placedBesideDownload = await page.evaluate(() => {
-      const download = document.querySelector("#scdl-player-download");
-      return download?.nextElementSibling?.id === "scdl-tempo-control";
+    const replacedPlayerDownload = await page.evaluate(() => {
+      const soundBadge = document.querySelector(".playControls__soundBadge");
+      return !document.querySelector("#scdl-player-download") &&
+        soundBadge?.nextElementSibling?.id === "scdl-tempo-control";
     });
-    if (!placedBesideDownload) {
-      throw new Error("Tempo control was not mounted beside the player download button.");
+    if (!replacedPlayerDownload) {
+      throw new Error("Tempo control did not replace the standalone player download button.");
     }
 
     await host.locator(".trigger").click();
@@ -191,6 +206,8 @@ async function main() {
       const toggle = panel.querySelector(".pitch-toggle");
       const pitchLabel = panel.querySelector(".pitch-label");
       const speedStatus = panel.querySelector(".speed-status");
+      const downloadTrackButton = panel.querySelector(".download-track-button");
+      const downloadTrackIcon = downloadTrackButton.querySelector("svg");
       const settingsButton = panel.querySelector(".settings-button");
       const settingsIcon = settingsButton.querySelector("svg");
       const detachButton = panel.querySelector(".detach-button");
@@ -209,6 +226,10 @@ async function main() {
         pitchText: pitchLabel.textContent.trim(),
         pitchTooltip: toggle.title,
         pitchContainerWidth: pitchLabel.offsetWidth,
+        downloadTrackButtonSize: [downloadTrackButton.offsetWidth, downloadTrackButton.offsetHeight],
+        downloadTrackIconSize: [downloadTrackIcon.clientWidth, downloadTrackIcon.clientHeight],
+        downloadTrackTooltip: downloadTrackButton.title,
+        toolOrder: [...tools.children].map((element) => element.className),
         settingsButtonSize: [settingsButton.offsetWidth, settingsButton.offsetHeight],
         settingsButtonRadius: getComputedStyle(settingsButton).borderRadius,
         settingsIconSize: [settingsIcon.clientWidth, settingsIcon.clientHeight],
@@ -231,6 +252,10 @@ async function main() {
       compactStyles.pitchText !== "" ||
       compactStyles.pitchTooltip !== "Keep tone" ||
       compactStyles.pitchContainerWidth !== 22 ||
+      compactStyles.downloadTrackButtonSize.join("x") !== "27x24" ||
+      compactStyles.downloadTrackIconSize.join("x") !== "13x13" ||
+      compactStyles.downloadTrackTooltip !== "Download current playing" ||
+      compactStyles.toolOrder.join("|") !== "panel-tool download-track-button|panel-tool settings-button|panel-tool detach-button" ||
       compactStyles.settingsButtonSize.join("x") !== "27x24" ||
       compactStyles.settingsButtonRadius !== "4px" ||
       compactStyles.settingsIconSize.join("x") !== "13x13" ||
@@ -272,6 +297,14 @@ async function main() {
       throw new Error("The combined panel layout or links are incomplete.");
     }
 
+    await host.locator(".download-loop").click();
+    if (
+      await page.evaluate(() => window.loopDownloadRequests.length) !== 0 ||
+      await host.locator(".status").textContent() !== "Set both loop markers before downloading."
+    ) {
+      throw new Error("The loop WAV button must remain blocked until both A/B markers are set.");
+    }
+
     await host.locator(".slider").fill("0.7125");
     const custom = host.locator('.custom-preset[data-custom-index="0"]');
     await custom.dispatchEvent("pointerdown");
@@ -284,6 +317,25 @@ async function main() {
       await page.evaluate(() => localStorage.getItem("scdl.tempo.customRate.1")) !== "0.7125"
     ) {
       throw new Error("A custom speed was not saved by long press and restored by click.");
+    }
+
+    await host.locator(".slider").fill("1.25");
+    await host.locator(".pitch-toggle").evaluate((toggle) => {
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await host.locator(".download-track-button").click();
+    const masterDownload = await page.evaluate(() => window.trackDownloadRequests.at(-1));
+    const activeLoopBeforeMasterDownload = await page.evaluate(() =>
+      JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session"))?.active
+    );
+    if (
+      activeLoopBeforeMasterDownload ||
+      masterDownload?.playbackTransform?.rate !== 1.25 ||
+      masterDownload?.playbackTransform?.preservePitch !== true ||
+      Object.hasOwn(masterDownload || {}, "trimRange")
+    ) {
+      throw new Error(`Master download must export the full current track at the active speed and pitch: ${JSON.stringify(masterDownload)}`);
     }
 
     await page.locator("audio").evaluate((audio) => { audio.currentTime = 12.345; });
@@ -300,6 +352,26 @@ async function main() {
       (await host.locator(".set-a").textContent()).trim() !== "00:12.345"
     ) {
       throw new Error(`Set A/Set B did not capture and display the live player range: ${JSON.stringify({ capturedLoop, label: await host.locator(".set-a").textContent() })}`);
+    }
+    await host.locator(".download-loop").click();
+    const loopDownload = await page.evaluate(() => window.loopDownloadRequests.at(-1));
+    if (
+      loopDownload?.trimRange?.startMs !== 12345 ||
+      loopDownload?.trimRange?.endMs !== 20678 ||
+      loopDownload?.playbackTransform?.rate !== 1.25 ||
+      loopDownload?.playbackTransform?.preservePitch !== true
+    ) {
+      throw new Error(`Loop WAV download must keep exporting only A/B at the active speed and pitch: ${JSON.stringify(loopDownload)}`);
+    }
+    await host.locator(".download-track-button").click();
+    const masterDownloadWithLoop = await page.evaluate(() => window.trackDownloadRequests.at(-1));
+    if (
+      await page.evaluate(() => window.trackDownloadRequests.length) !== 2 ||
+      Object.hasOwn(masterDownloadWithLoop || {}, "trimRange") ||
+      masterDownloadWithLoop?.playbackTransform?.rate !== 1.25 ||
+      masterDownloadWithLoop?.playbackTransform?.preservePitch !== true
+    ) {
+      throw new Error(`Master download must ignore an existing loop selection: ${JSON.stringify(masterDownloadWithLoop)}`);
     }
 
     const waveformUi = await host.evaluate((element) => {

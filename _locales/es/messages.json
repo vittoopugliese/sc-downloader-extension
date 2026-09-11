@@ -168,7 +168,7 @@
     "message": "Abrí el selector"
   },
   "help_speed_open": {
-    "message": "Presioná el velocímetro junto al botón de descarga del reproductor. El valor naranja siempre muestra la velocidad efectiva. Presioná el nombre de la extensión dentro del panel para abrir la guía del Looper."
+    "message": "Presioná el velocímetro en los controles del reproductor. Usá el ícono blanco de descarga dentro del panel para bajar completo el track actual con la velocidad efectiva y la opción Keep Tone. El botón WAV naranja exporta únicamente el rango A-B seleccionado."
   },
   "help_speed_presets_title": {
     "message": "Velocidades rápidas"
@@ -204,7 +204,7 @@
     "message": "Descargas y Looper"
   },
   "help_speed_looper_effect": {
-    "message": "Las descargas completas iniciadas junto al player de SoundCloud y las exportaciones WAV del Looper usan la velocidad efectiva. Keep Tone conserva el tono; sin esa opción cambian duración y tono. Con bypass se exporta a 1x."
+    "message": "Las descargas completas del botón blanco del panel y las exportaciones WAV A-B usan la velocidad efectiva. Keep Tone conserva el tono; sin esa opción cambian duración y tono. Con bypass se exporta a 1x."
   },
   "help_speed_close_title": {
     "message": "Cerrar y solucionar problemas"
@@ -492,7 +492,7 @@
     "message": "Artista desconocido"
   },
   "collection_download_hint": {
-    "message": "Guarda archivos individuales en la carpeta elegida. Podés cerrar este popup mientras descarga."
+    "message": "Guarda archivos individuales en la carpeta elegida.\nPodés cerrar este popup mientras descarga."
   },
   "load_selector_failed": {
     "message": "No se pudo cargar el selector. Elegí una cantidad o probá Seleccionar otra vez."

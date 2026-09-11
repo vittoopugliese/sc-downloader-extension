@@ -651,11 +651,12 @@
         #downloadStatus {
             margin: 0;
             min-height: 16px;
-            font-size: 13px;
+            font-size: 12px;
             color: #c4c4c4;
             text-align: center;
             max-width: 380px;
-            line-height: 1.4;
+            line-height: 1.1;
+            white-space: pre-line;
         }
 
         #jobControls {
@@ -982,13 +983,13 @@
         </section>
         <section id="speedHelp" role="tabpanel" aria-labelledby="speedTab" hidden>
             <p class="help-copy" data-i18n="help_speed_intro">The speed selector controls SoundCloud playback from 0.1x to 4x and shows the active speed beside the player controls.</p>
-            <div class="help-section"><h3 data-i18n="help_speed_open_title">Open the selector</h3><p data-i18n="help_speed_open">Press the speedometer beside the player download button. Its orange value always shows the effective playback speed. Press the extension name inside the panel to open the Looper guide.</p></div>
+            <div class="help-section"><h3 data-i18n="help_speed_open_title">Open the selector</h3><p data-i18n="help_speed_open">Press the speedometer in the player controls. Use the white download icon inside the panel to download the entire current track at the effective speed and Keep Tone setting. The orange WAV button exports only the selected A-B range.</p></div>
             <div class="help-section"><h3 data-i18n="help_speed_presets_title">Quick speeds</h3><p data-i18n="help_speed_presets">Choose one of the six quick speeds. The two X buttons are custom presets: hold one to save the slider's current speed, then click it whenever you want to restore that exact value. Custom presets stay saved between SoundCloud sessions.</p></div>
             <div class="help-section"><h3 data-i18n="help_speed_slider_title">Precise control</h3><p data-i18n="help_speed_slider">Drag the slider anywhere from 0.1x to 4x in 0.025x steps. Double-click the slider to return to the normal 1x speed.</p></div>
             <div class="help-section"><h3 data-i18n="help_speed_pitch_title">Keep Tone</h3><p data-i18n="help_speed_pitch">Enable Keep Tone to change duration while keeping the original musical pitch. Leave it off to let pitch rise or fall with speed. The option is disabled when the browser cannot preserve pitch.</p></div>
             <div class="help-section"><h3 data-i18n="help_speed_bypass_title">Temporary bypass</h3><p data-i18n="help_speed_bypass">The single bypass icon temporarily disables the loop and plays at 1x without losing the selected range, speed, or Keep Tone setting. The logo turns gray while bypass is active; press the icon again to restore everything.</p></div>
             <div class="help-section"><h3 data-i18n="help_speed_memory_title">Remembered and kept active</h3><p data-i18n="help_speed_memory">Your selected speed and Keep Tone choice are stored locally, restored on later visits, and applied to the current player and newly loaded SoundCloud audio.</p></div>
-            <div class="help-section"><h3 data-i18n="help_speed_looper_effect_title">Downloads and Looper</h3><p data-i18n="help_speed_looper_effect">Full-track downloads started beside the SoundCloud player and Looper WAV exports use the effective speed. Keep Tone preserves pitch; with it off, duration and pitch change. Bypass exports at the normal 1x rate.</p></div>
+            <div class="help-section"><h3 data-i18n="help_speed_looper_effect_title">Downloads and Looper</h3><p data-i18n="help_speed_looper_effect">Full-track downloads from the white panel button and A-B WAV exports use the effective speed. Keep Tone preserves pitch; with it off, duration and pitch change. Bypass exports at the normal 1x rate.</p></div>
             <div class="help-section"><h3 data-i18n="help_speed_close_title">Close and troubleshoot</h3><p data-i18n="help_speed_close">Click outside the panel or press Escape to close it. If playback or saving a preference fails, the panel shows a message; reload SoundCloud and try again.</p></div>
         </section>
         <section id="looperPanel" aria-labelledby="looperTab" role="tabpanel" hidden>
