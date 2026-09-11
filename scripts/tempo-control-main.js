@@ -42,6 +42,8 @@
   ].join(",");
   // Inline copy of assets/icons/bypass.svg for the MAIN-world shadow UI.
   const BYPASS_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17.2C22 19.85 19.85 22 17.2 22C15.78 22 14.51 21.38 13.63 20.4C12.87 19.55 12.4 18.43 12.4 17.2C12.4 14.55 14.55 12.4 17.2 12.4C18.57 12.4 19.81 12.98 20.69 13.91C20.68 13.91 20.68 13.91 20.69 13.92C21.5 14.78 22 15.93 22 17.2Z"/><path d="M18.48 18.54L15.95 16M18.45 16.03L15.92 18.57"/><path d="M22 8.69C22 10.66 21.49 12.4 20.69 13.91C19.81 12.98 18.57 12.4 17.2 12.4C14.55 12.4 12.4 14.55 12.4 17.2C12.4 18.43 12.87 19.55 13.63 20.4C13.26 20.57 12.92 20.71 12.62 20.81C12.28 20.93 11.72 20.93 11.38 20.81C8.48 19.82 2 15.69 2 8.69C2 5.6 4.49 3.09998 7.56 3.09998C9.37 3.09998 10.99 3.98002 12 5.33002C13.01 3.98002 14.63 3.09998 16.44 3.09998C19.51 3.09998 22 5.6 22 8.69Z"/></svg>`;
+  // Inline copy of assets/icons/settings.svg so the tempo panel matches popup.html.
+  const SETTINGS_ICON = `<svg viewBox="0 0 512 512" aria-hidden="true"><path d="M502.325 307.303 463.319 276.498a25.82 25.82 0 0 1-9.668-20.348v-.252a25.88 25.88 0 0 1 9.667-20.396l39.007-30.806a25.89 25.89 0 0 0 7.737-29.701l-17.134-41.366a25.89 25.89 0 0 0-26.472-15.532l-49.366 5.8a25.9 25.9 0 0 1-21.258-7.586l-.354-.356a25.88 25.88 0 0 1-7.552-21.225l5.799-49.363a25.89 25.89 0 0 0-15.531-26.472L337.004 1.939a25.89 25.89 0 0 0-29.701 7.736L276.498 48.68a25.82 25.82 0 0 1-20.349 9.668h-.252a25.88 25.88 0 0 1-20.395-9.667L204.697 9.675a25.89 25.89 0 0 0-29.702-7.736L133.63 19.072a25.89 25.89 0 0 0-15.532 26.473l5.799 49.366a25.9 25.9 0 0 1-7.585 21.257l-.356.356a25.88 25.88 0 0 1-21.226 7.552l-49.363-5.799a25.89 25.89 0 0 0-26.472 15.531L1.939 174.996a25.89 25.89 0 0 0 7.736 29.701l39.006 30.805a25.82 25.82 0 0 1 9.668 20.348v.251a25.88 25.88 0 0 1-9.667 20.395L9.675 307.303a25.89 25.89 0 0 0-7.736 29.701l17.134 41.365a25.89 25.89 0 0 0 26.472 15.532l49.366-5.799a25.9 25.9 0 0 1 21.258 7.586l.356.356a25.88 25.88 0 0 1 7.552 21.226l-5.799 49.364a25.89 25.89 0 0 0 15.532 26.472l41.366 17.134a25.89 25.89 0 0 0 29.701-7.736l30.804-39.005a25.82 25.82 0 0 1 20.348-9.669h.251a25.88 25.88 0 0 1 20.396 9.667l30.806 39.007a25.89 25.89 0 0 0 29.701 7.736l41.366-17.134a25.89 25.89 0 0 0 15.532-26.472l-5.8-49.366a25.9 25.9 0 0 1 7.586-21.257l.356-.356a25.88 25.88 0 0 1 21.225-7.552l49.364 5.799a25.89 25.89 0 0 0 26.472-15.531l17.134-41.365a25.89 25.89 0 0 0-7.737-29.701ZM281.292 329.698a77.75 77.75 0 1 1-59.52-143.695 77.75 77.75 0 0 1 59.52 143.695Z"/></svg>`;
   // Kept inline because this script runs in the page's MAIN world, where
   // chrome.runtime.getURL() is intentionally unavailable. The paths match
   // assets/icons/speed-meter.svg, with fill changed to currentColor.
@@ -981,28 +983,29 @@
 
         /* Expanded player editor, compact enough to stay clear of the player. */
         .panel { width: min(480px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
-        .panel-header { position: relative; display: grid; grid-template-columns: 146px minmax(0, 1fr) auto; gap: 10px; margin-bottom: 9px; padding-bottom: 10px; border-bottom: 1px solid #2e2e2e; }
+        .panel-header { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 92px 146px; gap: 10px; margin-bottom: 9px; padding-bottom: 10px; border-bottom: 1px solid #2e2e2e; }
         .presets { display: grid; grid-template-columns: repeat(2, 42px) 52px; gap: 5px; flex-basis: auto; }
         .preset { width: 42px; height: 27px; border-radius: 7px; font-size: 12px; }
         .custom-preset, .custom-preset[data-saved="true"] { width: 52px; padding: 0 3px; font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
-        .brand { justify-content: flex-start; min-width: 0; }
+        .brand { grid-column: 1; grid-row: 1; justify-content: flex-start; min-width: 0; }
         .brand-logo { width: 54px; height: 54px; flex-basis: 54px; border-radius: 11px; }
-        .brand-name { font-size: 20px; line-height: 1.04; text-align: left; }
+        .brand-name { font-size: 16px; line-height: 1.04; text-align: left; }
         .brand-title-line { position: relative; display: inline-block; min-width: 0; }
-        .free-badge { position: absolute; bottom: 1px; left: 116px; display: inline-flex; align-items: center; height: 15px; margin-left: 6px; padding: 0 4px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font: 800 9px/1 Arial, sans-serif; letter-spacing: .04em; }
+        .free-badge { position: absolute; bottom: 3px; left: 95px; display: inline-flex; align-items: center; height: 13px; margin-left: 6px; padding: 0 4px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font: 800 8px/1 Arial, sans-serif; letter-spacing: .04em; }
         .rating-link { color: #989898; font-size: 10px; font-weight: 500; text-decoration-color: #666; opacity: .82; }
         .rating-link:hover { color: #bdc1c5; opacity: 1; }
         .setter { height: 28px; padding: 0 8px; border-radius: 7px; font-size: 11px; font-variant-numeric: tabular-nums; }
         .tempo-row { display: grid; grid-template-columns: minmax(0, 1fr) 22px; align-items: center; gap: 5px; margin-bottom: 8px; }
         .pitch-label { display: grid; place-items: center; width: 22px; height: 32px; margin: 0; padding: 0; cursor: help; }
         .pitch-toggle { width: 16px; height: 16px; margin: 0; }
-        .speed-status { position: absolute; right: 1px; bottom: 9px; min-width: 0; height: 26px; justify-content: flex-end; gap: 2px; }
+        .speed-status { position: static; grid-column: 2; grid-row: 1; align-self: end; justify-self: center; min-width: 0; height: 26px; justify-content: center; gap: 2px; }
         .current { width: 7ch; flex-basis: 7ch; font-size: 17px; }
         .current.is-bypassed { color: #d6d6d6; }
-        .slider-wrap { height: 32px; margin: 0; border: 1px solid #30373e; border-radius: 9px; background: rgba(255,255,255,.025); padding: 5px 28px 2px; }
+        .slider-wrap { height: 32px; margin: 0; border: 1px solid #30373e; border-radius: 9px; background: rgba(255,255,255,.025); padding: 5px 32px 2px; }
         .slider { height: 24px; border-radius: 42%; background-size: 100% 8px; }
         .slider::-webkit-slider-runnable-track { height: 9px; border-radius: 999px; }
-        .slider::-webkit-slider-thumb { width: 17px; height: 17px; margin-top: -4px; box-shadow: 0 0 0 2px #fff; }
+        .slider::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: -2.5px; box-shadow: 0 0 0 2px #fff; }
+        .slider::-moz-range-thumb { width: 14px; height: 14px; }
         .limits { padding: 0 7px; }
         .range-label { top: 1px; padding: 0; border-radius: 0; background: transparent; transform: translateX(-50%); }
         .waveform-shell { position: relative; overflow: hidden; height: 130px; border: 1px solid #343434; border-radius: 11px; background: linear-gradient(#101010, #080808); touch-action: none; transition: height 160ms ease; }
@@ -1027,14 +1030,18 @@
         .waveform-shell.is-collapsed .waveform-toggle svg { transform: rotate(180deg); }
         .waveform-shell.is-collapsed .waveform-stage { display: none; }
         .waveform-shell.is-collapsed .waveform-title { left: 34px; line-height: 22px; transform: none; }
-        .waveform-shell.is-collapsed .waveform-times { inset: 4px 105px 4px 105px; grid-template-columns: 1fr 1fr; gap: 4px; }
+        .waveform-shell.is-collapsed .waveform-times { inset: 4px 0; grid-template-columns: repeat(2, 88px); justify-content: center; gap: 30px; }
         .waveform-shell.is-collapsed .waveform-times > span { display: none; }
         .waveform-shell.is-collapsed .waveform-setters { display: block; }
-        .waveform-shell.is-collapsed .waveform-times .setter { width: 100%; height: 22px; transform: none; }
-        .panel-tools { display: flex; gap: 5px; margin-left: auto; align-self: flex-start; }
-        .panel-tool { display: flex; align-items: center; justify-content: center; width: 27px; height: 27px; padding: 0; border: 1px solid #4b4b4b; border-radius: 50%; color: #d0d0d0; background: #171717; cursor: pointer; }
-        .panel-tool:hover, .panel-tool[aria-pressed="true"] { color: #ff6a1a; border-color: #ff6a1a; }
-        .panel-tool svg { display: block; width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .waveform-shell.is-collapsed .waveform-times .setter { width: 88px; height: 22px; transform: none; }
+        .presets { grid-column: 3; grid-row: 1; }
+        .panel-tools { display: flex; grid-column: 2; grid-row: 1; justify-self: center; align-self: start; gap: 5px; margin-left: 0; }
+        .panel-tool { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 27px; height: 24px; margin: 0; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; color: #fff; background: rgba(255,255,255,.08); cursor: pointer; outline: none; transition: background-color 200ms, border-color 200ms; }
+        .panel-tool:hover { color: #fff; border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.14); }
+        .panel-tool:focus-visible { border-color: rgba(255,85,0,.65); }
+        .panel-tool[aria-pressed="true"] { color: #ff6a1a; border-color: #ff6a1a; }
+        .panel-tool svg { display: block; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .settings-button svg { width: 13px; height: 13px; fill: currentColor; stroke: none; }
         .clear-loop, .download-loop { height: 22px; padding: 0 6px; border-radius: 6px; opacity: .82; }
         .loop-edit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
@@ -1078,7 +1085,7 @@
         </div>
         <div class="panel-tools" role="group" aria-label="Panel options">
           <button class="panel-tool settings-button" type="button" aria-label="Open settings" title="Open settings">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.8 1.8 0 0 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3.1 1.3v.2a1.8 1.8 0 0 1-3.6 0v-.2a1.8 1.8 0 0 0-3.1-1.3l-.1.1a1.8 1.8 0 0 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-1.3-3.1h-.2a1.8 1.8 0 0 1 0-3.6h.2a1.8 1.8 0 0 0 1.3-3.1l-.1-.1a1.8 1.8 0 0 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3.1-1.3V1.2a1.8 1.8 0 0 1 3.6 0v.2a1.8 1.8 0 0 0 3.1 1.3l.1-.1a1.8 1.8 0 0 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 1.3 3.1h.2a1.8 1.8 0 0 1 0 3.6h-.2a1.8 1.8 0 0 0-1.3 3.1Z"/></svg>
+            ${SETTINGS_ICON}
           </button>
           <button class="panel-tool detach-button" type="button" aria-label="Keep panel open when clicking outside" aria-pressed="false" title="Keep panel open when clicking outside">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M12 8v8"/><path d="M5 5h14v14H5z"/></svg>

@@ -153,25 +153,35 @@ async function main() {
       throw new Error("Playback speed limits are not compactly overlaid inside the slider.");
     }
 
-    const branding = await host.locator(".brand").evaluate((brand) => ({
-      name: brand.querySelector(".brand-name")?.textContent?.trim(),
-      logoWidth: parseFloat(
-        getComputedStyle(brand.querySelector(".brand-logo")).width
-      ),
-      logoHeight: parseFloat(
-        getComputedStyle(brand.querySelector(".brand-logo")).height
-      ),
-      logoHidden: brand.querySelector(".brand-logo")?.hidden,
-      titleFontSize: parseFloat(
-        getComputedStyle(brand.querySelector(".brand-name")).fontSize
-      ),
-    }));
+    const branding = await host.locator(".brand").evaluate((brand) => {
+      const badgeStyle = getComputedStyle(brand.querySelector(".free-badge"));
+      return {
+        name: brand.querySelector(".brand-name")?.textContent?.trim(),
+        logoWidth: parseFloat(
+          getComputedStyle(brand.querySelector(".brand-logo")).width
+        ),
+        logoHeight: parseFloat(
+          getComputedStyle(brand.querySelector(".brand-logo")).height
+        ),
+        logoHidden: brand.querySelector(".brand-logo")?.hidden,
+        titleFontSize: parseFloat(
+          getComputedStyle(brand.querySelector(".brand-name")).fontSize
+        ),
+        badge: {
+          left: badgeStyle.left,
+          bottom: badgeStyle.bottom,
+          height: badgeStyle.height,
+          fontSize: badgeStyle.fontSize,
+        },
+      };
+    });
     if (
       branding.name !== "SoundCloud Track Downloader" ||
       branding.logoWidth !== 54 ||
       branding.logoHeight !== 54 ||
       branding.logoHidden ||
-      branding.titleFontSize !== 20
+      branding.titleFontSize !== 16 ||
+      Object.values(branding.badge).join(" ") !== "95px 3px 13px 8px"
     ) {
       throw new Error("Playback Speed panel branding is missing or incorrectly sized.");
     }
@@ -181,6 +191,13 @@ async function main() {
       const toggle = panel.querySelector(".pitch-toggle");
       const pitchLabel = panel.querySelector(".pitch-label");
       const speedStatus = panel.querySelector(".speed-status");
+      const settingsButton = panel.querySelector(".settings-button");
+      const settingsIcon = settingsButton.querySelector("svg");
+      const detachButton = panel.querySelector(".detach-button");
+      const detachIcon = detachButton.querySelector("svg");
+      const brand = panel.querySelector(".brand");
+      const tools = panel.querySelector(".panel-tools");
+      const presets = panel.querySelector(".presets");
       const waveformShell = panel.querySelector(".waveform-shell");
       const tempoRow = panel.querySelector(".tempo-row");
       const style = getComputedStyle(panel);
@@ -192,6 +209,15 @@ async function main() {
         pitchText: pitchLabel.textContent.trim(),
         pitchTooltip: toggle.title,
         pitchContainerWidth: pitchLabel.offsetWidth,
+        settingsButtonSize: [settingsButton.offsetWidth, settingsButton.offsetHeight],
+        settingsButtonRadius: getComputedStyle(settingsButton).borderRadius,
+        settingsIconSize: [settingsIcon.clientWidth, settingsIcon.clientHeight],
+        detachButtonSize: [detachButton.offsetWidth, detachButton.offsetHeight],
+        detachButtonRadius: getComputedStyle(detachButton).borderRadius,
+        detachIconSize: [detachIcon.clientWidth, detachIcon.clientHeight],
+        headerOrder: [brand, tools, presets]
+          .sort((left, right) => left.getBoundingClientRect().left - right.getBoundingClientRect().left)
+          .map((element) => element.className),
         waveformHeight: waveformShell.offsetHeight,
         tempoOrder: Array.from(tempoRow.children).map((child) => child.className),
         statusOrder: Array.from(speedStatus.children).map((child) => child.className),
@@ -205,6 +231,13 @@ async function main() {
       compactStyles.pitchText !== "" ||
       compactStyles.pitchTooltip !== "Keep tone" ||
       compactStyles.pitchContainerWidth !== 22 ||
+      compactStyles.settingsButtonSize.join("x") !== "27x24" ||
+      compactStyles.settingsButtonRadius !== "4px" ||
+      compactStyles.settingsIconSize.join("x") !== "13x13" ||
+      compactStyles.detachButtonSize.join("x") !== "27x24" ||
+      compactStyles.detachButtonRadius !== "4px" ||
+      compactStyles.detachIconSize.join("x") !== "13x13" ||
+      compactStyles.headerOrder.join(" ") !== "brand panel-tools presets" ||
       compactStyles.waveformHeight !== 130 ||
       compactStyles.tempoOrder.join(" ") !== "slider-wrap pitch-label" ||
       compactStyles.statusOrder.join(" ") !== "current bypass"
@@ -322,13 +355,16 @@ async function main() {
       const root = element.shadowRoot;
       const shell = root.querySelector(".waveform-shell");
       const canvas = root.querySelector(".waveform-canvas");
+      const setters = [...root.querySelectorAll(".waveform-setters .setter")];
       return {
         collapsed: shell.classList.contains("is-collapsed"),
         height: shell.offsetHeight,
         stageDisplay: getComputedStyle(root.querySelector(".waveform-stage")).display,
-        settersVisible: [...root.querySelectorAll(".waveform-setters .setter")].every(
+        settersVisible: setters.every(
           (button) => button.offsetWidth > 0 && button.offsetHeight > 0
         ),
+        setterWidths: setters.map((button) => button.offsetWidth),
+        setterGap: setters[1].getBoundingClientRect().left - setters[0].getBoundingClientRect().right,
         canvas: [canvas.width, canvas.height],
         stored: localStorage.getItem("scdl.tempo.waveformCollapsed"),
         fetches: window.waveformFetches,
@@ -339,6 +375,8 @@ async function main() {
       collapsedLooper.height !== 32 ||
       collapsedLooper.stageDisplay !== "none" ||
       !collapsedLooper.settersVisible ||
+      collapsedLooper.setterWidths.join("x") !== "88x88" ||
+      collapsedLooper.setterGap !== 30 ||
       collapsedLooper.canvas.join("x") !== "1x1" ||
       collapsedLooper.stored !== "true" ||
       collapsedLooper.fetches !== 0
