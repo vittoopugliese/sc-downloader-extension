@@ -1,6 +1,8 @@
 # Indice de documentacion y estado
 
-Actualizado: 2026-09-09
+Actualizado: 2026-09-12
+
+Para el trabajo actual de producto, empezar por [`PLAYER-TOOLS-PRODUCT-AND-TECHNICAL-PLAN-20260912.md`](PLAYER-TOOLS-PRODUCT-AND-TECHNICAL-PLAN-20260912.md). Registra decisiones confirmadas sobre oferta, prueba global de veinte loops, Free/Pro, descargas, tooling local y alcance diferido. La próxima sesión debe preguntar qué etapa quiere iniciar el usuario antes de implementar. Las instrucciones de auditoría de abajo pertenecen al contexto histórico de `9dc9f1b`.
 
 Este indice evita confundir planes historicos con el estado del codigo.
 
@@ -23,4 +25,4 @@ Orden sugerido para retomar sin contexto:
 4. Inspeccionar el diff y el codigo actual; los documentos nunca reemplazan esa comprobacion.
 5. Ejecutar cada verificador relevante aun si el runner general se detiene antes.
 
-No asumir que una feature documentada esta lista para release. En particular, el estado registrado el 2026-09-09 tiene bloqueantes de licencia/package y reproducibilidad, y la descarga normal del player todavia ignora pitch/rate.
+No asumir que una feature documentada esta lista para release. El estado y bloqueantes registrados el 2026-09-09 son históricos: contrastarlos con el código antes de tratarlos como vigentes. La inspección del 2026-09-12 confirma que el botón de descarga completa del panel sí envía efectos; el nuevo plan conserva esa funcionalidad para Pro.
