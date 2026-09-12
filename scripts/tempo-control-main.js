@@ -11,7 +11,10 @@
   const PLAYER_SELECTOR = ".playControls__elements";
   const RATE_STORAGE = "scdl.tempo.rate";
   const PITCH_STORAGE = "scdl.tempo.preservePitch";
-  const CUSTOM_RATE_STORAGE = ["scdl.tempo.customRate.1", "scdl.tempo.customRate.2"];
+  const DEFAULT_SAVED_RATES = [0.5, 1, 1.5, 2];
+  const CUSTOM_RATE_STORAGE = DEFAULT_SAVED_RATES.map(
+    (_, index) => `scdl.tempo.savedRate.${index + 1}`
+  );
   const DETACH_STORAGE = "scdl.tempo.panelDetached";
   const WAVEFORM_COLLAPSED_STORAGE = "scdl.tempo.waveformCollapsed";
   const RATE_ATTRIBUTE = "data-scdl-tempo-rate";
@@ -36,6 +39,10 @@
   const VOLUME_LAYER_ATTRIBUTE = "data-scdl-tempo-panel-open";
   const VOLUME_LAYER_STYLE_ID = "scdl-tempo-volume-layer";
   const LONG_PRESS_MS = 650;
+  const HOVER_OPEN_DELAY_MS = 254;
+  // The panel sits eight pixels above its trigger. This brief grace period
+  // keeps a hover-opened panel available while the cursor crosses that gap.
+  const HOVER_CLOSE_DELAY_MS = 80;
   const PLAYER_TIMELINE_SELECTOR = [
     ".playbackTimeline",
     ".playbackTimeline__progressWrapper",
@@ -73,18 +80,21 @@
   let waveformDrag = null;
   let setterHoldTimer = null;
   let setterLongPressed = false;
+  let panelOpenMode = null;
+  let hoverOpenTimer = null;
+  let hoverCloseTimer = null;
   let panelDetached = (() => {
     try { return localStorage.getItem(DETACH_STORAGE) === "true"; } catch { return false; }
   })();
   let waveformCollapsed = (() => {
     try { return localStorage.getItem(WAVEFORM_COLLAPSED_STORAGE) === "true"; } catch { return false; }
   })();
-  const customRates = CUSTOM_RATE_STORAGE.map((key) => {
+  const customRates = CUSTOM_RATE_STORAGE.map((key, index) => {
     try {
       const stored = localStorage.getItem(key);
-      return stored === null ? null : clampRate(stored);
+      return stored === null ? DEFAULT_SAVED_RATES[index] : clampRate(stored);
     } catch {
-      return null;
+      return DEFAULT_SAVED_RATES[index];
     }
   });
   const reducedMotionQuery =
@@ -1045,9 +1055,9 @@
         /* Expanded player editor, compact enough to stay clear of the player. */
         .panel { width: min(480px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
         .panel-header { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 92px 146px; gap: 12px; padding-bottom: 10px; }
-        .presets { display: grid; grid-template-columns: repeat(2, 42px) 52px; gap: 5px; flex-basis: auto; }
+        .presets { display: grid; grid-template-columns: repeat(2, 42px); gap: 5px; flex-basis: auto; }
         .preset { width: 42px; height: 27px; border-radius: 7px; font-size: 12px; }
-        .custom-preset, .custom-preset[data-saved="true"] { width: 52px; padding: 0 3px; font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
+        .custom-preset, .custom-preset[data-saved="true"] { width: 42px; padding: 0 2px; font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
         .brand { grid-column: 1; grid-row: 1; justify-content: flex-start; min-width: 0; }
         .brand-logo { width: 54px; height: 54px; flex-basis: 54px; border-radius: 11px; }
         .brand-name { font-size: 16px; line-height: 1.04; text-align: left; }
@@ -1076,7 +1086,8 @@
         .waveform-selection { position: absolute; inset: 0 auto 0; border: 0; border-inline: 1px solid #ff741f; background: linear-gradient(90deg, rgba(255, 145, 85, .28), rgba(255, 106, 26, .055) 50%, rgba(255, 145, 85, .28)); cursor: grab; }
         .waveform-marker { position: absolute; z-index: 7; top: -17px; width: 18px; height: 18px; margin-left: -9px; padding: 0; border: 0; border-radius: 5px 5px 3px 3px; color: #fff; background: #ff741f; font: 800 11px/1 Arial; text-transform: lowercase; cursor: ew-resize; box-shadow: 0 2px 7px rgba(255, 116, 31, .28); }
         .waveform-marker::after { content: ""; position: absolute; top: 18px; left: 50%; width: 1px; height: 90px; background: #ff741f; transform: translateX(-50%); }
-        .waveform-title { position: absolute; z-index: 3; top: 4px; left: 50%; color: #fff; font-size: 11px; font-weight: 700; transform: translateX(-50%); pointer-events: none; }
+        .waveform-title { position: absolute; z-index: 3; top: 4px; left: 50%; display: inline-flex; align-items: center; gap: 5px; color: #fff; font-size: 11px; font-weight: 700; transform: translateX(-50%); pointer-events: none; }
+        .waveform-title svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .waveform-times { position: absolute; inset: auto 9px 3px; display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; color: #7e8790; font-size: 10px; font-variant-numeric: tabular-nums; }
         .waveform-start-label { justify-self: start; }
         .waveform-middle-label { justify-self: center; }
@@ -1091,10 +1102,10 @@
         .waveform-shell.is-collapsed .waveform-toggle svg { transform: rotate(180deg); }
         .waveform-shell.is-collapsed .waveform-stage { display: none; }
         .waveform-shell.is-collapsed .waveform-title { left: 34px; line-height: 22px; transform: none; }
-        .waveform-shell.is-collapsed .waveform-times { inset: 4px 0; grid-template-columns: repeat(2, 88px); justify-content: center; gap: 30px; }
+        .waveform-shell.is-collapsed .waveform-times { inset: 4px 0; grid-template-columns: repeat(2, max-content); justify-content: center; gap: 10px; }
         .waveform-shell.is-collapsed .waveform-times > span { display: none; }
         .waveform-shell.is-collapsed .waveform-setters { display: block; }
-        .waveform-shell.is-collapsed .waveform-times .setter { width: 88px; height: 22px; transform: none; }
+        .waveform-shell.is-collapsed .waveform-times .setter { width: auto; height: 22px; padding: 0 7px; transform: none; }
         .presets { grid-column: 3; grid-row: 1; }
         .panel-tools { display: flex; grid-column: 2; grid-row: 1; justify-self: center; align-self: start; gap: 5px; margin-left: 0; }
         .panel-tool { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 27px; height: 24px; margin: 0; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; color: #fff; background: rgba(255,255,255,.08); cursor: pointer; outline: none; transition: background-color 200ms, border-color 200ms; }
@@ -1136,10 +1147,7 @@
       >
         <div class="panel-header">
         <div class="presets" role="group" aria-label="Quick playback speeds">
-          ${[1, 2].map((rate) => `<button class="preset" type="button" data-rate="${rate}" aria-pressed="false">${rate}x</button>`).join("")}
-          ${customRates.slice(0, 1).map((rate, index) => `<button class="preset custom-preset" type="button" data-custom-index="${index}" data-saved="${rate !== null}" aria-pressed="false" title="${rate === null ? "Hold to save the current speed" : `Saved speed ${formatRate(rate)}. Hold to replace`}">${rate === null ? "X" : formatRate(rate)}</button>`).join("")}
-          ${[0.5, 1.5].map((rate) => `<button class="preset" type="button" data-rate="${rate}" aria-pressed="false">${rate}x</button>`).join("")}
-          ${customRates.slice(1, 2).map((rate, offset) => { const index = offset + 1; return `<button class="preset custom-preset" type="button" data-custom-index="${index}" data-saved="${rate !== null}" aria-pressed="false" title="${rate === null ? "Hold to save the current speed" : `Saved speed ${formatRate(rate)}. Hold to replace`}">${rate === null ? "X" : formatRate(rate)}</button>`; }).join("")}
+          ${customRates.map((rate, index) => `<button class="preset custom-preset" type="button" data-custom-index="${index}" data-saved="true" aria-pressed="false" title="Saved speed ${formatRate(rate)}. Hold to replace">${formatRate(rate)}</button>`).join("")}
         </div>
         <div class="brand">
           <img class="brand-logo" width="58" height="58" alt="" draggable="false" hidden />
@@ -1182,7 +1190,7 @@
         </div>
         <div class="waveform-shell" role="group" aria-label="Loop waveform">
           <button class="waveform-toggle" type="button" aria-label="Minimize looper" aria-expanded="true" title="Minimize looper"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
-          <span class="waveform-title">Loop Region</span>
+          <span class="waveform-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>Loop Region</span>
           <div class="waveform-actions"><button class="clear-loop" type="button" aria-label="Clear loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button></div>
           <div class="waveform-stage">
             <canvas class="waveform-canvas" aria-hidden="true"></canvas>
@@ -1227,6 +1235,50 @@
     ui.trigger.setAttribute("aria-expanded", String(open));
     setVolumeLayerOpen(open);
     if (open) positionPanel();
+  }
+
+  function clearHoverTimers() {
+    if (hoverOpenTimer !== null) clearTimeout(hoverOpenTimer);
+    if (hoverCloseTimer !== null) clearTimeout(hoverCloseTimer);
+    hoverOpenTimer = null;
+    hoverCloseTimer = null;
+  }
+
+  function openPanel(mode) {
+    if (!ui) return;
+    clearHoverTimers();
+    panelOpenMode = mode;
+    setPanelOpen(true);
+    if (!waveformCollapsed) loadPlayerWaveform();
+  }
+
+  function closePanel() {
+    clearHoverTimers();
+    panelOpenMode = null;
+    setPanelOpen(false);
+  }
+
+  function pointerIsOverTempoControl() {
+    return ui && (ui.trigger.matches(":hover") || ui.panel.matches(":hover"));
+  }
+
+  function scheduleHoverOpen() {
+    if (!ui || !ui.panel.hidden || hoverOpenTimer !== null) return;
+    hoverOpenTimer = setTimeout(() => {
+      hoverOpenTimer = null;
+      if (ui?.panel.hidden && ui.trigger.matches(":hover")) openPanel("hover");
+    }, HOVER_OPEN_DELAY_MS);
+  }
+
+  function scheduleHoverClose() {
+    if (!ui || panelDetached || panelOpenMode !== "hover") return;
+    if (hoverCloseTimer !== null) clearTimeout(hoverCloseTimer);
+    hoverCloseTimer = setTimeout(() => {
+      hoverCloseTimer = null;
+      if (!panelDetached && panelOpenMode === "hover" && !pointerIsOverTempoControl()) {
+        closePanel();
+      }
+    }, HOVER_CLOSE_DELAY_MS);
   }
 
   function isPlayerTimelineInteraction(event) {
@@ -1286,9 +1338,32 @@
       downloadLoop: root.querySelector(".download-loop"),
     };
 
+    ui.trigger.addEventListener("pointerenter", (event) => {
+      if (event.pointerType !== "mouse") return;
+      if (hoverCloseTimer !== null) {
+        clearTimeout(hoverCloseTimer);
+        hoverCloseTimer = null;
+      }
+      scheduleHoverOpen();
+    });
+    ui.trigger.addEventListener("pointerleave", () => {
+      if (hoverOpenTimer !== null) {
+        clearTimeout(hoverOpenTimer);
+        hoverOpenTimer = null;
+      }
+      scheduleHoverClose();
+    });
+    ui.panel.addEventListener("pointerenter", () => {
+      if (hoverCloseTimer !== null) {
+        clearTimeout(hoverCloseTimer);
+        hoverCloseTimer = null;
+      }
+    });
+    ui.panel.addEventListener("pointerleave", scheduleHoverClose);
     ui.trigger.addEventListener("click", () => {
-      setPanelOpen(ui.panel.hidden);
-      if (!ui.panel.hidden && !waveformCollapsed) loadPlayerWaveform();
+      if (ui.panel.hidden) openPanel("click");
+      else if (panelDetached || panelOpenMode === "click") closePanel();
+      else openPanel("click");
     });
     ui.clearRate.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -1307,6 +1382,9 @@
     ui.detachButton.addEventListener("click", () => {
       panelDetached = !panelDetached;
       try { localStorage.setItem(DETACH_STORAGE, String(panelDetached)); } catch {}
+      // Leaving detach returns to the persistent click mode, so the next
+      // outside click is the explicit close action even if it began as hover.
+      if (!panelDetached && !ui.panel.hidden) panelOpenMode = "click";
       render();
     });
     ui.waveformToggle.addEventListener("click", () => {
@@ -1478,7 +1556,7 @@
     const player = document.querySelector(PLAYER_SELECTOR);
     if (!player) {
       ui?.host.remove();
-      setPanelOpen(false);
+      closePanel();
       return;
     }
 
@@ -1530,7 +1608,7 @@
         !event.composedPath().includes(ui.host) &&
         !isPlayerTimelineInteraction(event)
       ) {
-        setPanelOpen(false);
+        closePanel();
       }
     },
     true
@@ -1541,7 +1619,7 @@
       if (event.key === "Escape" && ui && !ui.panel.hidden) {
         document.documentElement?.setAttribute("data-scdl-tempo-panel-escape", "true");
         setTimeout(() => document.documentElement?.removeAttribute("data-scdl-tempo-panel-escape"), 0);
-        setPanelOpen(false);
+        closePanel();
         ui.trigger.focus();
       }
     },

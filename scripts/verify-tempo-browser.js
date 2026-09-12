@@ -119,11 +119,84 @@ async function main() {
       throw new Error("Tempo control did not replace the standalone player download button.");
     }
 
-    await host.locator(".trigger").click();
     const panel = host.locator(".panel");
+    const panelIsOpen = () => host.evaluate((element) =>
+      !element.shadowRoot.querySelector(".panel").hidden
+    );
+
+    // Hover opens after the intended dwell time, stays open while the pointer
+    // is inside the panel, and closes when the pointer leaves it.
+    await host.locator(".trigger").hover();
+    await page.waitForTimeout(220);
+    if (await panelIsOpen()) {
+      throw new Error("Playback Speed panel opened before 254ms of hover.");
+    }
+    await page.waitForTimeout(55);
+    if (!(await panelIsOpen())) {
+      throw new Error("Playback Speed panel did not open after 254ms of hover.");
+    }
+    await panel.hover();
+    await page.waitForTimeout(80);
+    if (!(await panelIsOpen())) {
+      throw new Error("Hover-opened Playback Speed panel closed while the pointer was inside it.");
+    }
+    await page.mouse.move(10, 10);
+    await page.waitForFunction(
+      () => document.querySelector("#scdl-tempo-control")?.shadowRoot?.querySelector(".panel")?.hidden === true
+    );
+
+    // A click changes the mode to persistent until an outside click closes it.
+    await host.locator(".trigger").click();
     if (!(await panel.isVisible())) {
       throw new Error("Playback Speed panel did not open.");
     }
+    await page.mouse.move(10, 10);
+    if (!(await panelIsOpen())) {
+      throw new Error("Click-opened Playback Speed panel did not stay open after pointer leave.");
+    }
+    await page.mouse.click(10, 10);
+    if (await panelIsOpen()) {
+      throw new Error("Click-opened Playback Speed panel did not close after an outside click.");
+    }
+
+    // Detach keeps a hover-opened panel open until it is turned off again.
+    await host.locator(".trigger").hover();
+    await page.waitForTimeout(275);
+    await host.locator(".detach-button").click();
+    await page.mouse.click(10, 10);
+    if (!(await panelIsOpen())) {
+      throw new Error("Detached hover-opened Playback Speed panel closed after an outside click.");
+    }
+    await host.locator(".detach-button").click();
+    await page.mouse.move(10, 10);
+    await page.waitForTimeout(100);
+    if (!(await panelIsOpen())) {
+      throw new Error("Hover-opened panel closed before an outside click after detach was disabled.");
+    }
+    await page.mouse.click(10, 10);
+    if (await panelIsOpen()) {
+      throw new Error("Hover-opened panel stayed open after detach was disabled and clicked outside.");
+    }
+
+    // Detach also overrides a click-opened panel.
+    await host.locator(".trigger").click();
+    await host.locator(".detach-button").click();
+    await page.mouse.click(10, 10);
+    if (!(await panelIsOpen())) {
+      throw new Error("Detached Playback Speed panel closed after an outside click.");
+    }
+    await host.locator(".detach-button").click();
+    await page.mouse.move(10, 10);
+    await page.waitForTimeout(100);
+    if (!(await panelIsOpen())) {
+      throw new Error("Click-opened panel closed before an outside click after detach was disabled.");
+    }
+    await page.mouse.click(10, 10);
+    if (await panelIsOpen()) {
+      throw new Error("Playback Speed panel stayed open after detach was disabled and clicked outside.");
+    }
+
+    await host.locator(".trigger").click();
     const volumeLayering = await page.evaluate(() => {
       const volume = document.querySelector(".volume__sliderWrapper");
       const rect = volume?.getBoundingClientRect();
@@ -216,6 +289,7 @@ async function main() {
       const tools = panel.querySelector(".panel-tools");
       const presets = panel.querySelector(".presets");
       const waveformShell = panel.querySelector(".waveform-shell");
+      const waveformTitleIcon = panel.querySelector(".waveform-title svg");
       const tempoRow = panel.querySelector(".tempo-row");
       const style = getComputedStyle(panel);
       return {
@@ -240,6 +314,7 @@ async function main() {
           .sort((left, right) => left.getBoundingClientRect().left - right.getBoundingClientRect().left)
           .map((element) => element.className),
         waveformHeight: waveformShell.offsetHeight,
+        waveformTitleIconSize: [waveformTitleIcon?.clientWidth, waveformTitleIcon?.clientHeight],
         tempoOrder: Array.from(tempoRow.children).map((child) => child.className),
         statusOrder: Array.from(speedStatus.children).map((child) => child.className),
       };
@@ -264,6 +339,7 @@ async function main() {
       compactStyles.detachIconSize.join("x") !== "13x13" ||
       compactStyles.headerOrder.join(" ") !== "brand panel-tools presets" ||
       compactStyles.waveformHeight !== 130 ||
+      compactStyles.waveformTitleIconSize.join("x") !== "16x16" ||
       compactStyles.tempoOrder.join(" ") !== "slider-wrap pitch-label" ||
       compactStyles.statusOrder.join(" ") !== "current bypass"
     ) {
@@ -282,13 +358,17 @@ async function main() {
       const root = element.shadowRoot;
       return {
         customCount: root.querySelectorAll(".custom-preset").length,
+        fixedPresetCount: root.querySelectorAll(".preset:not(.custom-preset)").length,
+        savedRateLabels: [...root.querySelectorAll(".custom-preset")].map((button) => button.textContent),
         reviewHref: root.querySelector(".rating-link")?.href,
         labels: [...root.querySelectorAll(".range-label")].map((node) => node.textContent),
         order: [...root.querySelector(".panel").children].map((node) => node.className),
       };
     });
     if (
-      panelFeatures.customCount !== 2 ||
+      panelFeatures.customCount !== 4 ||
+      panelFeatures.fixedPresetCount !== 0 ||
+      panelFeatures.savedRateLabels.join("|") !== "0.500x|1.000x|1.500x|2.000x" ||
       !panelFeatures.reviewHref.endsWith("/reviews") ||
       panelFeatures.labels.join("|") !== "Tone & Velocity" ||
       panelFeatures.order.slice(0, 3).join("|") !==
@@ -310,11 +390,11 @@ async function main() {
     await custom.dispatchEvent("pointerdown");
     await page.waitForTimeout(700);
     await custom.dispatchEvent("pointerup");
-    await host.locator('.preset[data-rate="2"]').click();
+    await host.locator('.custom-preset[data-custom-index="3"]').click();
     await custom.click();
     if (
       await page.locator("audio").evaluate((audio) => audio.playbackRate) !== 0.7125 ||
-      await page.evaluate(() => localStorage.getItem("scdl.tempo.customRate.1")) !== "0.7125"
+      await page.evaluate(() => localStorage.getItem("scdl.tempo.savedRate.1")) !== "0.7125"
     ) {
       throw new Error("A custom speed was not saved by long press and restored by click.");
     }
@@ -447,8 +527,8 @@ async function main() {
       collapsedLooper.height !== 32 ||
       collapsedLooper.stageDisplay !== "none" ||
       !collapsedLooper.settersVisible ||
-      collapsedLooper.setterWidths.join("x") !== "88x88" ||
-      collapsedLooper.setterGap !== 30 ||
+      !collapsedLooper.setterWidths.every((width) => width < 88) ||
+      collapsedLooper.setterGap !== 10 ||
       collapsedLooper.canvas.join("x") !== "1x1" ||
       collapsedLooper.stored !== "true" ||
       collapsedLooper.fetches !== 0
@@ -528,12 +608,12 @@ async function main() {
       throw new Error("Tempo control broke the existing looper media bridge.");
     }
 
-    for (const rate of [1, 2, 0.5, 1.5]) {
-      const preset = host.locator(`.preset[data-rate="${rate}"]`);
+    for (const [index, rate] of [[0, 0.7125], [1, 1], [2, 1.5], [3, 2]]) {
+      const preset = host.locator(`.custom-preset[data-custom-index="${index}"]`);
       await preset.click();
       if (await page.locator("audio").evaluate((audio) => audio.playbackRate) !== rate ||
           await preset.getAttribute("aria-pressed") !== "true") {
-        throw new Error(`Preset ${rate}x did not apply.`);
+        throw new Error(`Saved speed ${rate}x did not apply.`);
       }
     }
     for (const rate of [0.1, 0.125, 0.15, 0.175, 0.2, 3]) {
@@ -542,7 +622,7 @@ async function main() {
         throw new Error(`Slider rate ${rate}x did not apply.`);
       }
     }
-    await host.locator('.preset[data-rate="1"]').click();
+    await host.locator('.custom-preset[data-custom-index="1"]').click();
     if (await page.locator('audio').evaluate((audio) => audio.playbackRate) !== 1) {
       throw new Error('A preset must apply to audio immediately while its label animates.');
     }
@@ -567,7 +647,7 @@ async function main() {
     ) {
       throw new Error('Preset animation did not settle on the selected speed.');
     }
-    await host.locator('.preset[data-rate="0.5"]').click();
+    await host.locator('.slider').fill('0.5');
     await host.locator('.bypass').click();
     await page.waitForTimeout(240);
     const bypassVisualAndLoop = await host.evaluate((element) => ({
