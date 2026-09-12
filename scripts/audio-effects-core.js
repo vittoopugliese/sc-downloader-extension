@@ -5,6 +5,29 @@
 (() => {
   "use strict";
 
+  if (globalThis.SCTempoEffects) return;
+  // Observe sources from document_start: a media element can only have one.
+  // When the page owns that source, add wet returns without altering its dry path.
+  const mediaSources = new WeakMap();
+  const contextPrototype = (globalThis.AudioContext || globalThis.webkitAudioContext)?.prototype;
+  if (contextPrototype?.createMediaElementSource) {
+    const nativeCreateSource = contextPrototype.createMediaElementSource;
+    contextPrototype.createMediaElementSource = function (target) {
+      const source = nativeCreateSource.call(this, target);
+      mediaSources.set(target, source);
+      return source;
+    };
+  }
+  if (typeof globalThis.MediaElementAudioSourceNode === "function") {
+    globalThis.MediaElementAudioSourceNode = new Proxy(globalThis.MediaElementAudioSourceNode, {
+      construct(target, args, newTarget) {
+        const source = Reflect.construct(target, args, newTarget);
+        mediaSources.set(source.mediaElement, source);
+        return source;
+      },
+    });
+  }
+
   const DEFAULTS = Object.freeze({ reverb: 0, delay: 0 });
   const MAX_SEND = Object.freeze({ reverb: 0.25, delay: 0.3 });
   const REVERB_SECONDS = 0.8;
@@ -51,6 +74,7 @@
     const onAvailabilityChange = options.onAvailabilityChange || (() => {});
     let audio = null;
     let context = null;
+    let ownsContext = false;
     let graph = null;
     const graphs = new WeakMap();
     let bypassed = false;
@@ -74,6 +98,7 @@
       const active = !bypassed && available;
       setParam(graph.reverbReturn.gain, active ? values.reverb / 100 * MAX_SEND.reverb : 0);
       setParam(graph.delayReturn.gain, active ? values.delay / 100 * MAX_SEND.delay : 0);
+      if (!graph.ownsSource) return;
       const useLimiter = active && (values.reverb > 0 || values.delay > 0);
       if (useLimiter && !graph.processedOutput) {
         graph.source.disconnect(context.destination);
@@ -122,11 +147,17 @@
       if (cached) {
         audio = target;
         graph = cached;
+        context = cached.context;
+        ensureEffectConnected("reverb");
+        ensureEffectConnected("delay");
         updateReturns();
         return true;
       }
       try {
-        const source = context.createMediaElementSource(target);
+        const existingSource = mediaSources.get(target);
+        if (existingSource) context = existingSource.context;
+        const source = existingSource || context.createMediaElementSource(target);
+        const ownsSource = !existingSource;
         const reverb = context.createConvolver();
         reverb.buffer = createImpulse(context);
         const reverbReturn = context.createGain();
@@ -145,7 +176,7 @@
         reverbReturn.gain.value = 0;
         delayReturn.gain.value = 0;
 
-        source.connect(context.destination);
+        if (ownsSource) source.connect(context.destination);
         reverb.connect(reverbReturn);
         reverbReturn.connect(master);
         delay.connect(feedback);
@@ -157,6 +188,7 @@
 
         const targetGraph = {
           source, reverb, reverbReturn, delay, feedback, delayReturn, master, limiter,
+          context, ownsSource,
           resetTimers: {},
           connected: { reverb: false, delay: false },
           processedOutput: false,
@@ -203,15 +235,17 @@
         return false;
       }
       try {
-        context = new AudioContextConstructor();
-        if (!connectAudio(target)) throw new Error("Could not connect the SoundCloud audio player.");
+        const existingSource = mediaSources.get(target);
+        ownsContext = !existingSource;
+        context = existingSource?.context || new AudioContextConstructor();
+        if (!connectAudio(target)) throw new Error(reason);
         if (context.state === "suspended") context.resume().catch(() => {});
         onAvailabilityChange(true);
         return true;
       } catch (error) {
         available = false;
         reason = error?.message || "Could not initialize live audio effects.";
-        try { context?.close(); } catch {}
+        if (ownsContext) { try { context?.close()?.catch(() => {}); } catch {} }
         context = null;
         graph = null;
         audio = null;

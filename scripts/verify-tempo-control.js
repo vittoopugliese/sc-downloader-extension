@@ -93,6 +93,26 @@ for (const name of ["playbackRate", "defaultPlaybackRate", "preservesPitch"]) {
 }
 
 class MockAudioElement extends MockMediaElement {}
+class MockAudioConstructor extends MockAudioElement {
+  constructor(source) {
+    super();
+    this.crossOrigin = null;
+    this.sourceAssignedWithCors = false;
+    let assignedSource = "";
+    Object.defineProperty(this, "src", {
+      configurable: true,
+      get: () => assignedSource,
+      set: (value) => {
+        this.sourceAssignedWithCors = this.crossOrigin === "anonymous";
+        assignedSource = value;
+      },
+    });
+    if (source !== undefined) {
+      this.src = source;
+    }
+  }
+}
+const audioGlobal = { Audio: MockAudioConstructor };
 const context = vm.createContext({ console, WeakRef });
 vm.runInContext(fs.readFileSync(corePath, "utf8"), context, {
   filename: corePath,
@@ -101,10 +121,20 @@ vm.runInContext(fs.readFileSync(corePath, "utf8"), context, {
 const controller = context.SCTempoControl.create({
   mediaPrototype: MockMediaElement.prototype,
   isAudio: (media) => media instanceof MockAudioElement,
+  audioGlobal,
   initialRate: 0.85,
   initialPreservePitch: true,
 });
 controller.install();
+
+const constructedAudio = new audioGlobal.Audio("https://media.soundcloud.test/stream.mp3");
+if (
+  constructedAudio.crossOrigin !== "anonymous" ||
+  !constructedAudio.sourceAssignedWithCors ||
+  controller.getActiveAudio() !== constructedAudio
+) {
+  throw new Error("SoundCloud Audio URLs must opt into CORS before the source is assigned.");
+}
 
 const audio = new MockAudioElement();
 controller.discover(audio);

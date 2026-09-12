@@ -10,10 +10,12 @@
     "test:e2e:popup": "node scripts/verify-popup-browser.js",
     "test:e2e:feedback": "node scripts/verify-uninstall-feedback-browser.js",
     "test:e2e:tempo": "node scripts/verify-tempo-browser.js",
+    "test:e2e:effects": "node scripts/verify-effects-browser.js && node scripts/verify-effects-browser.js --shared && node scripts/verify-effects-browser.js --shared --constructor",
     "test:live": "node scripts/verify-live-looper.js",
     "test:live:folder": "node scripts/verify-live-looper.js --folder",
     "browser:live": "node scripts/open-live-browser.js",
     "test:feedback": "node --test services/uninstall-feedback/test/validation.test.mjs",
+    "test:player-tools": "node scripts/verify-player-tools-policy.js",
     "package:extension": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-extension.ps1"
   },
   "devDependencies": {

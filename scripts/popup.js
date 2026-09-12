@@ -58,6 +58,8 @@ const helpBtn = document.getElementById("helpBtn");
 const helpPanel = document.getElementById("helpPanel");
 const helpBackBtn = document.getElementById("helpBackBtn");
 const looperPanel = document.getElementById("looperPanel");
+const playerToolsOffer = document.getElementById("playerToolsOffer");
+const playerToolsBtn = document.getElementById("playerToolsBtn");
 
 let isDownloading = false;
 let isSelectionMode = false;
@@ -1362,6 +1364,29 @@ function requestBulkSelectionList(total) {
 function requestBulkTracksByIds(ids) {
   return requestFromActiveTab({ type: "GET_BULK_TRACKS_BY_IDS", ids });
 }
+
+async function syncPlayerToolsOffer() {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "GET_PLAYER_TOOLS_SNAPSHOT" });
+    playerToolsOffer.hidden = response?.snapshot?.plan === "pro";
+  } catch {
+    playerToolsOffer.hidden = false;
+  }
+}
+
+playerToolsBtn.addEventListener("click", async () => {
+  playerToolsBtn.disabled = true;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "OPEN_PLAYER_TOOLS_PANEL" });
+    if (!response?.success) throw new Error(response?.error || "Could not open SoundCloud Player Tools.");
+    window.close();
+  } catch (error) {
+    playerToolsBtn.disabled = false;
+    downloadStatus.textContent = error?.message || "Could not open SoundCloud Player Tools.";
+  }
+});
+
+syncPlayerToolsOffer();
 
 window.addEventListener("unload", () => {
   stopPolling();

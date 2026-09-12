@@ -23,6 +23,7 @@
   const EXTENSION_PLAYER_ICON_ATTRIBUTE = "data-scdl-extension-player-icon-url";
   const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
   const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
+  const OPEN_PLAYER_TOOLS_PANEL_EVENT = "scdl:open-player-tools-panel";
   const REVIEW_URL = "https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews";
   const LOOP_COMMAND_EVENT = "scdl-looper:command";
   const LOOP_COMMAND_ATTRIBUTE = "data-scdl-looper-command";
@@ -36,6 +37,12 @@
   const TRACK_EXPORT_ATTRIBUTE = "data-scdl-track-export-request";
   const PLAYER_WAVEFORM_ATTRIBUTE = "data-scdl-player-waveform";
   const PLAYER_WAVEFORM_EVENT = "scdl:player-waveform-ready";
+  const ACCESS_ATTRIBUTE = "data-scdl-player-tools-access";
+  const ACCESS_EVENT = "scdl:player-tools-access-changed";
+  const ACCESS_REQUEST_ATTRIBUTE = "data-scdl-player-tools-request";
+  const ACCESS_RESPONSE_ATTRIBUTE = "data-scdl-player-tools-response";
+  const ACCESS_REQUEST_EVENT = "scdl:player-tools-request";
+  const ACCESS_RESPONSE_EVENT = "scdl:player-tools-response";
   const VOLUME_LAYER_ATTRIBUTE = "data-scdl-tempo-panel-open";
   const VOLUME_LAYER_STYLE_ID = "scdl-tempo-volume-layer";
   const LONG_PRESS_MS = 650;
@@ -72,6 +79,9 @@
   let loopRequestId = 0;
   let trackDownloadPending = false;
   let loopState = { active: false, enabled: false, startMs: null, endMs: null, durationMs: null };
+  let accessSnapshot = { state: "loading", plan: "free", capabilities: {} };
+  let playerToolsSessionId = null;
+  let accessRequestId = 0;
   let loopPollInterval = null;
   let waveformSamples = [];
   let waveformTrackUrl = null;
@@ -203,6 +213,121 @@
     } catch {
       return DEFAULTS.preservePitch;
     }
+  }
+
+  function readAccessSnapshot() {
+    try {
+      const value = JSON.parse(document.documentElement.getAttribute(ACCESS_ATTRIBUTE) || "null");
+      if (value && typeof value === "object" && value.capabilities) accessSnapshot = value;
+    } catch {}
+    playerToolsSessionId = accessSnapshot?.grant?.sessionId || null;
+  }
+
+  function hasCapability(name) {
+    return accessSnapshot?.plan === "pro" || accessSnapshot?.capabilities?.[name] === true;
+  }
+
+  function setProRequired(message = "Player Tools Pro is required for this control.") {
+    playbackFailure = message;
+    render();
+  }
+
+  function requestAccess(type, operation, payload = {}) {
+    const root = document.documentElement;
+    const id = `player-tools-${Date.now()}-${accessRequestId += 1}`;
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        document.removeEventListener(ACCESS_RESPONSE_EVENT, listener);
+        resolve({ success: false, code: "access-error" });
+      }, 4_000);
+      const listener = () => {
+        let response;
+        try { response = JSON.parse(root.getAttribute(ACCESS_RESPONSE_ATTRIBUTE) || "null"); } catch { response = null; }
+        if (response?.id !== id) return;
+        clearTimeout(timeout);
+        document.removeEventListener(ACCESS_RESPONSE_EVENT, listener);
+        if (response.snapshot) {
+          accessSnapshot = response.snapshot;
+          playerToolsSessionId = response.snapshot.grant?.sessionId || null;
+        }
+        resolve(response);
+      };
+      document.addEventListener(ACCESS_RESPONSE_EVENT, listener);
+      root.setAttribute(ACCESS_REQUEST_ATTRIBUTE, JSON.stringify({
+        id, type, operation, sessionId: playerToolsSessionId, payload,
+      }));
+      document.dispatchEvent(new CustomEvent(ACCESS_REQUEST_EVENT));
+    });
+  }
+
+  async function authorizeControl(operation) {
+    const result = await requestAccess("authorize", operation);
+    if (!result?.allowed) {
+      setProRequired(result?.code === "trial-exhausted"
+        ? "Your Player Tools preview is complete. Unlock lifetime access to continue."
+        : "Create an A–B loop to use this Player Tools control.");
+      return false;
+    }
+    return true;
+  }
+
+  async function authorizeLoop(payload) {
+    const completeRange = Number.isFinite(payload?.startMs) && Number.isFinite(payload?.endMs)
+      && payload.endMs - payload.startMs >= 250;
+    if (!completeRange) return true;
+    const operation = loopState.active ? "edit-loop" : "begin-loop";
+    const result = await requestAccess("authorize", operation, {
+      trackIdentity: loopState.trackIdentity || null,
+      generation: loopState.generation,
+    });
+    if (!result?.allowed) {
+      setProRequired(result?.code === "trial-exhausted"
+        ? "Your Player Tools preview is complete. Unlock lifetime access to make another loop."
+        : "Player Tools Pro is required to edit this loop.");
+      return false;
+    }
+    return true;
+  }
+
+  async function finishLoopSession() {
+    if (!playerToolsSessionId || accessSnapshot?.plan === "pro") return;
+    await requestAccess("end", "end-session").catch(() => {});
+    playerToolsSessionId = null;
+  }
+
+  document.addEventListener(ACCESS_EVENT, () => {
+    readAccessSnapshot();
+    if (!hasCapability("tempo")) {
+      controller.setRate(DEFAULTS.rate);
+      controller.setPreservePitch(false);
+    }
+    render();
+  });
+  readAccessSnapshot();
+
+  async function applyPlayerRate(rate, { animate = false } = {}) {
+    if (!(await authorizeControl("set-rate"))) return;
+    playbackFailure = "";
+    animateNextRateChange = animate;
+    const state = controller.setRate(rate);
+    writeSetting(RATE_STORAGE, state.rate);
+  }
+
+  async function applyPlayerPitch(enabled) {
+    if (!(await authorizeControl("set-preserve-pitch"))) {
+      if (ui) ui.pitchToggle.checked = controller.snapshot().preservePitch;
+      return;
+    }
+    playbackFailure = "";
+    const state = controller.setPreservePitch(enabled);
+    writeSetting(PITCH_STORAGE, state.preservePitch);
+  }
+
+  async function savePlayerPreset(index) {
+    if (!(await authorizeControl("save-preset"))) return;
+    customRates[index] = controller.snapshot().rate;
+    writeSetting(CUSTOM_RATE_STORAGE[index], customRates[index]);
+    render();
   }
 
   const controller = create({
@@ -525,7 +650,7 @@
     if (!ui.panel.hidden) positionPanel();
   }
 
-  function setLoopPoint(marker) {
+  async function setLoopPoint(marker) {
     const liveState = requestLoop("state")?.state;
     const current = liveState?.currentTimeMs;
     if (liveState) {
@@ -539,23 +664,26 @@
       enabled: true,
       startPlayback: true,
     };
+    if (!(await authorizeLoop(payload))) return;
     setLoopFailure(requestLoop("set-loop", payload));
     readLoopState();
   }
 
-  function setLoopFromSliders(marker) {
+  async function setLoopFromSliders(marker) {
     const activatesLoop = !loopState.active;
-    setLoopFailure(requestLoop("set-loop", {
+    const payload = {
       marker,
       startMs: ui.loopStart.valueAsNumber,
       endMs: ui.loopEnd.valueAsNumber,
       enabled: true,
       startPlayback: activatesLoop,
-    }));
+    };
+    if (!(await authorizeLoop(payload))) return;
+    setLoopFailure(requestLoop("set-loop", payload));
     readLoopState();
   }
 
-  function commitLoopTime(marker) {
+  async function commitLoopTime(marker) {
     const input = marker === "start" ? ui.loopStartTime : ui.loopEndTime;
     const value = parseLoopTime(input.value);
     const duration = loopState.durationMs;
@@ -571,18 +699,23 @@
       render();
       return;
     }
-    setLoopFailure(requestLoop("set-loop", { marker, startMs, endMs, enabled: true, startPlayback: !loopState.active }));
+    const payload = { marker, startMs, endMs, enabled: true, startPlayback: !loopState.active };
+    if (!(await authorizeLoop(payload))) return;
+    setLoopFailure(requestLoop("set-loop", payload));
     readLoopState();
   }
 
-  function clearLoop() {
+  async function clearLoop() {
     setLoopFailure(requestLoop("clear-loop"));
+    await finishLoopSession();
     readLoopState();
   }
 
-  function setWaveformRange(nextRange, marker = null) {
+  async function setWaveformRange(nextRange, marker = null) {
     if (!nextRange) return;
-    setLoopFailure(requestLoop("set-loop", { ...nextRange, marker, enabled: true, startPlayback: !loopState.active }));
+    const payload = { ...nextRange, marker, enabled: true, startPlayback: !loopState.active };
+    if (!(await authorizeLoop(payload))) return;
+    setLoopFailure(requestLoop("set-loop", payload));
     readLoopState();
   }
 
@@ -1136,6 +1269,11 @@
         .waveform-shell.is-collapsed .waveform-times > span { display: none; }
         .waveform-shell.is-collapsed .waveform-setters { display: block; }
         .waveform-shell.is-collapsed .waveform-times .setter { width: auto; height: 22px; padding: 0 7px; transform: none; }
+        .player-tools-upgrade { display: none; position: absolute; z-index: 12; inset: 3px; border: 1px solid #ff6a1a; border-radius: 7px; color: #fff; background: #3d2115; font: 700 10px/1 Interstate, Arial, sans-serif; cursor: pointer; }
+        .waveform-shell.is-locked { height: 34px; touch-action: auto; }
+        .waveform-shell.is-locked .waveform-stage, .waveform-shell.is-locked .waveform-times, .waveform-shell.is-locked .waveform-actions, .waveform-shell.is-locked .waveform-toggle { display: none; }
+        .waveform-shell.is-locked .waveform-title { left: 9px; line-height: 26px; transform: none; }
+        .waveform-shell.is-locked .player-tools-upgrade { display: block; left: auto; right: 4px; width: 172px; }
 
         .effects-shell { margin-top: 7px; overflow: hidden; border: 1px solid #30373e; border-radius: 9px; background: rgba(255,255,255,.025); }
         .effects-toggle { display: flex; align-items: center; width: 100%; height: 30px; gap: 8px; padding: 0 9px; border: 0; color: #e8e8e8; background: transparent; text-align: left; cursor: pointer; }
@@ -1252,6 +1390,7 @@
             <button class="waveform-marker waveform-end" type="button" role="slider" aria-label="Loop end B">B</button>
           </div>
           <div class="waveform-times"><span class="waveform-start-label">00:00.000</span><div class="waveform-setters"><button class="setter set-a" type="button">Set A</button></div><span class="waveform-middle-label">00:00.000</span><div class="waveform-setters"><button class="setter set-b" type="button">Set B</button></div><span class="waveform-end-label">00:00.000</span></div>
+          <button class="player-tools-upgrade" type="button">Try Player Tools — $3.69 lifetime</button>
         </div>
         <div class="loop-edit">
           <input class="loop-time loop-start-time" inputmode="decimal" placeholder="A 00:00.000" aria-label="Loop start time" />
@@ -1317,6 +1456,11 @@
     setPanelOpen(true);
     if (!waveformCollapsed) loadPlayerWaveform();
   }
+
+  document.addEventListener(OPEN_PLAYER_TOOLS_PANEL_EVENT, () => {
+    mount();
+    if (ui) openPanel("click");
+  });
 
   function closePanel() {
     clearHoverTimers();
@@ -1402,6 +1546,7 @@
       loopEndTime: root.querySelector(".loop-end-time"),
       clearLoop: root.querySelector(".clear-loop"),
       downloadLoop: root.querySelector(".download-loop"),
+      playerToolsUpgrade: root.querySelector(".player-tools-upgrade"),
       effectsShell: root.querySelector(".effects-shell"),
       effectsToggle: root.querySelector(".effects-toggle"),
       effectSliders: Object.fromEntries(
@@ -1442,10 +1587,7 @@
     });
     ui.clearRate.addEventListener("click", (event) => {
       event.stopPropagation();
-      playbackFailure = "";
-      animateNextRateChange = true;
-      const state = controller.setRate(DEFAULTS.rate);
-      writeSetting(RATE_STORAGE, state.rate);
+      applyPlayerRate(DEFAULTS.rate, { animate: true });
     });
     ui.brandName.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
@@ -1485,10 +1627,7 @@
     root.querySelectorAll(".preset").forEach((button) => {
       if (button.classList.contains("custom-preset")) return;
       button.addEventListener("click", () => {
-        playbackFailure = "";
-        animateNextRateChange = true;
-        const state = controller.setRate(Number(button.dataset.rate));
-        writeSetting(RATE_STORAGE, state.rate);
+        applyPlayerRate(Number(button.dataset.rate), { animate: true });
       });
     });
     root.querySelectorAll(".custom-preset").forEach((button) => {
@@ -1506,9 +1645,7 @@
         timer = setTimeout(() => {
           timer = null;
           longPressed = true;
-          customRates[index] = controller.snapshot().rate;
-          writeSetting(CUSTOM_RATE_STORAGE[index], customRates[index]);
-          render();
+          savePlayerPreset(index);
         }, LONG_PRESS_MS);
       });
       for (const eventName of ["pointerup", "pointercancel", "pointerleave"]) {
@@ -1519,7 +1656,7 @@
         if (event.repeat || timer !== null) return;
         event.preventDefault();
         longPressed = false;
-        timer = setTimeout(() => { timer = null; longPressed = true; customRates[index] = controller.snapshot().rate; writeSetting(CUSTOM_RATE_STORAGE[index], customRates[index]); render(); }, LONG_PRESS_MS);
+        timer = setTimeout(() => { timer = null; longPressed = true; savePlayerPreset(index); }, LONG_PRESS_MS);
       });
       button.addEventListener("keyup", (event) => { if (event.key === "Enter" || event.key === " ") cancel(); });
       button.addEventListener("blur", cancel);
@@ -1530,27 +1667,17 @@
           return;
         }
         if (!Number.isFinite(customRates[index])) return;
-        playbackFailure = "";
-        animateNextRateChange = true;
-        const state = controller.setRate(customRates[index]);
-        writeSetting(RATE_STORAGE, state.rate);
+        applyPlayerRate(customRates[index], { animate: true });
       });
     });
     ui.slider.addEventListener("input", () => {
-      playbackFailure = "";
-      const state = controller.setRate(ui.slider.valueAsNumber);
-      writeSetting(RATE_STORAGE, state.rate);
+      applyPlayerRate(ui.slider.valueAsNumber);
     });
     ui.slider.addEventListener("dblclick", () => {
-      playbackFailure = "";
-      animateNextRateChange = true;
-      const state = controller.setRate(DEFAULTS.rate);
-      writeSetting(RATE_STORAGE, state.rate);
+      applyPlayerRate(DEFAULTS.rate, { animate: true });
     });
     ui.pitchToggle.addEventListener("change", () => {
-      playbackFailure = "";
-      const state = controller.setPreservePitch(ui.pitchToggle.checked);
-      writeSetting(PITCH_STORAGE, state.preservePitch);
+      applyPlayerPitch(ui.pitchToggle.checked);
     });
     ui.bypass.addEventListener("click", () => {
       playbackFailure = "";
@@ -1582,6 +1709,9 @@
     }
     ui.clearLoop.addEventListener("click", clearLoop);
     ui.downloadLoop.addEventListener("click", downloadLoopFromPlayer);
+    ui.playerToolsUpgrade.addEventListener("click", () => {
+      document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
+    });
 
     render();
     syncBrandLogo();
@@ -1592,6 +1722,9 @@
   function render() {
     if (!ui) return;
     const state = controller.snapshot();
+    const canUseTempo = hasCapability("tempo");
+    const canEditLoop = hasCapability("editLoop");
+    const freeLocked = accessSnapshot?.state === "free_locked";
     const text = formatRate(state.effectiveRate);
     const triggerText = formatTriggerRate(state.effectiveRate);
     const animateRate = animateNextRateChange;
@@ -1615,6 +1748,13 @@
     );
     ui.detachButton.title = ui.detachButton.getAttribute("aria-label");
     ui.downloadTrackButton.disabled = trackDownloadPending;
+    ui.clearRate.disabled = !canUseTempo;
+    ui.slider.disabled = !canUseTempo;
+    ui.pitchToggle.disabled = !canUseTempo || !state.preservePitchSupported;
+    ui.bypass.disabled = false;
+    ui.root.querySelectorAll(".preset").forEach((button) => { button.disabled = !canUseTempo; });
+    ui.waveformShell.classList.toggle("is-locked", freeLocked);
+    ui.waveformToggle.disabled = freeLocked;
     ui.brandLogo.classList.toggle("is-bypassed", state.bypassed);
     ui.root.querySelectorAll(".preset").forEach((button) => {
       const customIndex = Number(button.dataset.customIndex);
@@ -1634,7 +1774,6 @@
     });
     syncRange(ui.slider);
     ui.pitchToggle.checked = state.preservePitch;
-    ui.pitchToggle.disabled = !state.preservePitchSupported;
     if (effectsBypassed !== state.bypassed) {
       effectsBypassed = state.bypassed;
       effectsController?.setBypassed(effectsBypassed);

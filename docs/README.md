@@ -8,6 +8,7 @@ Este indice evita confundir planes historicos con el estado del codigo.
 
 | Documento | Rol actual |
 | --- | --- |
+| [`LIKES-EXPLORER-IMPLEMENTATION-PLAN-20260912.md`](LIKES-EXPLORER-IMPLEMENTATION-PLAN-20260912.md) | Plan de Likes Explorer Pro: selector rápido, galería, índice por usuario, fechas de likes, reproducción y localización nativa; incluye evidencia Playwright y gates pendientes |
 | [`COLD-AUDIT-HANDOFF-9dc9f1b.md`](COLD-AUDIT-HANDOFF-9dc9f1b.md) | Fuente de contexto para auditar en frio toda la feature tempo/preserve/export de `9dc9f1b`; no es aprobacion |
 | [`product-launch-plan-20260905.md`](product-launch-plan-20260905.md) | Fuente operativa del lanzamiento comercial, con addendum de `9dc9f1b` |
 | [`product-roadmap-20260905.md`](product-roadmap-20260905.md) | Estrategia/backlog; varias secciones son historicas y el overlay marca la feature adelantada |

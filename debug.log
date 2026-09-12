@@ -14,3 +14,5 @@
 [0909/180138.829:WARNING:media\filters\ffmpeg_demuxer.cc:1248] PipelineStatus::DEMUXER_ERROR_COULD_NOT_OPEN
 [0909/194640.335:WARNING:media\filters\ffmpeg_demuxer.cc:1248] PipelineStatus::DEMUXER_ERROR_COULD_NOT_OPEN
 [0909/194640.532:WARNING:media\filters\ffmpeg_demuxer.cc:1248] PipelineStatus::DEMUXER_ERROR_COULD_NOT_OPEN
+[0912/175509.614:WARNING:net\spdy\spdy_session.cc:3188] Received HEADERS for invalid stream 1
+[0912/175509.688:WARNING:net\spdy\spdy_session.cc:3143] Received WINDOW_UPDATE for invalid stream 3

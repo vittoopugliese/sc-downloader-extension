@@ -1,6 +1,8 @@
 importScripts(
   "i18n.js",
   "format-utils.js",
+  "player-tools-policy.js",
+  "player-tools-access.js",
   "directory-storage.js",
   "soundcloud-http.js",
   "stream-selector.js",
@@ -56,6 +58,12 @@ function respond(promise, sendResponse, project = (value) => value) {
   return true;
 }
 
+function hasEffectivePlaybackTransform(transform) {
+  if (!transform || typeof transform !== "object") return false;
+  const rate = Number(transform.rate);
+  return Number.isFinite(rate) && Math.abs(rate - 1) > 0.0001;
+}
+
 async function requestTopFrameLoopTrack(tabId, trackUrl) {
   if (!Number.isInteger(tabId)) {
     throw new Error(t("soundcloud_tab_not_found"));
@@ -91,6 +99,25 @@ async function resolveLoopTrack(request, sender) {
   return requestTopFrameLoopTrack(sender.tab?.id, request.trackUrl);
 }
 
+async function openPlayerToolsPanel() {
+  const tabs = await chrome.tabs.query({ url: "https://soundcloud.com/*" });
+  const existing = tabs.find((tab) => tab.active) || tabs[0];
+  const tab = existing || await chrome.tabs.create({ url: "https://soundcloud.com/" });
+  if (!Number.isInteger(tab.id)) throw new Error("Could not open a SoundCloud tab.");
+  if (Number.isInteger(tab.windowId)) await chrome.windows.update(tab.windowId, { focused: true });
+  await chrome.tabs.update(tab.id, { active: true });
+  await new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(tab.id, { type: "OPEN_PLAYER_TOOLS_PANEL" }, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error("Open a SoundCloud track, then try Player Tools again."));
+        return;
+      }
+      resolve(response);
+    });
+  });
+  return { tabId: tab.id };
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   configureUninstallFeedback().catch(() => {});
   BulkJobManager.recoverRunningJob().catch(() => {});
@@ -108,6 +135,26 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === "GET_PLAYER_TOOLS_SNAPSHOT") {
+    return respond(SCPlayerToolsAccess.getSnapshot(sender), sendResponse, (snapshot) => ({ snapshot }));
+  }
+
+  if (request.type === "AUTHORIZE_PLAYER_TOOLS") {
+    return respond(
+      SCPlayerToolsAccess.authorize(sender, request),
+      sendResponse,
+      (result) => result
+    );
+  }
+
+  if (request.type === "END_PLAYER_TOOLS_SESSION") {
+    return respond(
+      SCPlayerToolsAccess.endSession(sender, request),
+      sendResponse,
+      (result) => result
+    );
+  }
+
   if (request.type === "OFFSCREEN_KEEPALIVE") {
     sendResponse({ success: true });
     return false;
@@ -191,19 +238,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === "DOWNLOAD_SINGLE_TRACK") {
-    BulkJobManager.downloadSingleTrack(
-      request.trackData,
-      request.formatPreference || "auto",
-      request.downloadDestination ?? null,
-      request.playbackTransform || null
-    )
+    const authorization = hasEffectivePlaybackTransform(request.playbackTransform)
+      ? SCPlayerToolsAccess.authorize(sender, { operation: "export-track-effects" })
+      : Promise.resolve({ allowed: true });
+    authorization
+      .then((access) => {
+        if (!access.allowed) {
+          const error = new Error("Player Tools Pro is required to download a track with playback effects.");
+          error.code = access.code || "pro-required";
+          throw error;
+        }
+        return BulkJobManager.downloadSingleTrack(
+          request.trackData,
+          request.formatPreference || "auto",
+          request.downloadDestination ?? null,
+          request.playbackTransform || null
+        );
+      })
       .then(sendResponse)
       .catch((error) => sendResponse(errorResponse(error)));
     return true;
   }
 
+  if (request.type === "OPEN_PLAYER_TOOLS_PANEL") {
+    return respond(openPlayerToolsPanel(), sendResponse);
+  }
+
   if (request.type === "DOWNLOAD_LOOP") {
-    resolveLoopTrack(request, sender)
+    SCPlayerToolsAccess.authorize(sender, { operation: "export-loop" })
+      .then((access) => {
+        if (access.allowed) return access;
+        const error = new Error("Player Tools Pro is required to export A–B loops.");
+        error.code = access.code || "pro-required";
+        throw error;
+      })
+      .then(() => resolveLoopTrack(request, sender))
       .then((trackData) =>
         BulkJobManager.downloadLoop(
           trackData,

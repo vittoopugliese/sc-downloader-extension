@@ -34,6 +34,7 @@
   function create(options = {}) {
     const mediaPrototype =
       options.mediaPrototype || globalThis.HTMLMediaElement?.prototype;
+    const audioGlobal = options.audioGlobal || globalThis;
     if (!mediaPrototype) {
       throw new Error("HTMLMediaElement is unavailable");
     }
@@ -64,6 +65,7 @@
     let preservePitch =
       Boolean(options.initialPreservePitch) && supportsPreservePitch();
     let installed = false;
+    let audioConstructorInstalled = false;
     let bypassed = false;
 
     function supportsPreservePitch() {
@@ -169,6 +171,34 @@
     function installGuards() {
       if (installed) return snapshot();
       installed = true;
+
+      // Web Audio deliberately outputs silence for cross-origin media that was
+      // fetched without CORS. SoundCloud commonly creates a detached
+      // `new Audio(url)`, so opt into anonymous CORS before assigning its URL.
+      // Doing this at construction time is essential; changing crossOrigin
+      // after the stream has loaded is too late for MediaElementAudioSourceNode.
+      const NativeAudio = audioGlobal?.Audio;
+      if (!audioConstructorInstalled && typeof NativeAudio === "function") {
+        const constructAudio = (source) => {
+          const audio = Reflect.construct(NativeAudio, []);
+          try { audio.crossOrigin = "anonymous"; } catch {}
+          if (source !== undefined && source !== null) audio.src = String(source);
+          discover(audio);
+          return audio;
+        };
+        const GuardedAudio = new Proxy(NativeAudio, {
+          construct(_target, args) {
+            return constructAudio(args[0]);
+          },
+          apply(_target, _thisArg, args) {
+            return constructAudio(args[0]);
+          },
+        });
+        try {
+          audioGlobal.Audio = GuardedAudio;
+          audioConstructorInstalled = audioGlobal.Audio === GuardedAudio;
+        } catch {}
+      }
 
       for (const name of properties) {
         const descriptor = native[name];

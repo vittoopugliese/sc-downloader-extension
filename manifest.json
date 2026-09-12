@@ -52,6 +52,7 @@
       "matches": ["https://soundcloud.com/*"],
       "js": [
         "scripts/i18n.js",
+        "scripts/player-tools-client.js",
         "scripts/format-utils.js",
         "scripts/soundcloud-http.js",
         "scripts/stream-selector.js",

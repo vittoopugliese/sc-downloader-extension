@@ -12,6 +12,7 @@ const LOOP_EXPORT_EVENT = "scdl:download-loop";
 const LOOP_EXPORT_RESULT_EVENT = "scdl:download-loop-result";
 const LOOP_EXPORT_ATTRIBUTE = "data-scdl-loop-export-request";
 const POPUP_START_VIEW_KEY = "scdl.popup.startView";
+const OPEN_PLAYER_TOOLS_PANEL_EVENT = "scdl:open-player-tools-panel";
 
 function exposeTempoControlAssets() {
   document.documentElement?.setAttribute?.(
@@ -44,6 +45,13 @@ onDocumentEvent(OPEN_LOOPER_GUIDE_EVENT, () => {
       await chrome.storage.local.remove(POPUP_START_VIEW_KEY).catch(() => {});
       console.warn("[SC Downloader] Could not open the Looper guide.", error);
     });
+});
+
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+  if (request.type !== "OPEN_PLAYER_TOOLS_PANEL") return false;
+  document.dispatchEvent(new CustomEvent(OPEN_PLAYER_TOOLS_PANEL_EVENT));
+  sendResponse({ success: true });
+  return false;
 });
 
 onDocumentEvent(LOOP_EXPORT_EVENT, () => {

@@ -882,6 +882,27 @@
             background: rgba(0, 0, 0, 0.54);
         }
 
+        .player-tools-offer {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            margin-top: 10px;
+            padding: 9px;
+            border: 1px solid rgba(255, 106, 26, .52);
+            border-radius: 10px;
+            background: linear-gradient(110deg, rgba(255, 85, 0, .17), rgba(26, 26, 26, .92));
+        }
+        .player-tools-offer[hidden] { display: none; }
+        .player-tools-offer img { width: 31px; height: 31px; border-radius: 7px; }
+        .player-tools-offer-copy { min-width: 0; flex: 1; }
+        .player-tools-offer-title { margin: 0; color: #fff; font-size: 12px; font-weight: 700; }
+        .player-tools-offer-detail { margin: 2px 0 0; color: #c9c9c9; font-size: 10px; line-height: 1.35; }
+        .player-tools-offer-price { color: #ff985d; white-space: nowrap; font-size: 10px; font-weight: 700; }
+        .player-tools-offer-price del { color: #aaa; font-weight: 500; }
+        #playerToolsBtn { flex: 0 0 auto; padding: 7px 8px; border: 1px solid #ff6a1a; border-radius: 7px; color: #fff; background: #d84a00; font: 700 10px/1 Roboto, sans-serif; cursor: pointer; }
+        #playerToolsBtn:hover { background: #ff5a00; }
+        #playerToolsBtn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
         #artwork {
             inset: -5px;
             z-index: -2;
@@ -1356,6 +1377,15 @@
             <p id="failedSummary"></p>
             <ul id="failedDetails" aria-live="polite"></ul>
         </div>
+        <section id="playerToolsOffer" class="player-tools-offer" aria-label="Player Tools">
+            <img src="./assets/icons/player-toolkit.png" alt="" width="31" height="31" draggable="false">
+            <div class="player-tools-offer-copy">
+                <p class="player-tools-offer-title">Player Tools</p>
+                <p class="player-tools-offer-detail">Tempo &amp; looping tools</p>
+                <p class="player-tools-offer-price"><del>$6.79</del> $3.69 lifetime · 46% OFF</p>
+            </div>
+            <button id="playerToolsBtn" type="button">Try Player Tools</button>
+        </section>
         <section id="helpPanel" aria-labelledby="helpTitle" aria-modal="true" role="dialog">
             <div class="help-header"><button id="helpBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button><h2 id="helpTitle" data-i18n="help_title">How it works</h2></div>
             <div class="help-tabs" role="tablist" aria-label="Help topics">
