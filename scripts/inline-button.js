@@ -57,6 +57,10 @@ function injectInlineStyles() {
   const style = document.createElement("style");
   style.id = INLINE_STYLES_ID;
   style.textContent = `
+    #${INLINE_BUTTON_ID} {
+      font-family: "SCDL UI", sans-serif;
+    }
+
     #${INLINE_BUTTON_ID}.sc-button {
       position: relative;
       display: inline-flex;

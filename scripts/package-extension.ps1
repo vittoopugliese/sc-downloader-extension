@@ -23,6 +23,7 @@ $packageItems = @(
     "assets/icon128.png",
     "assets/icons/player-toolkit.png",
     "assets/icons",
+    "assets/fonts",
     "_locales",
     "scripts/background.js",
     "scripts/audio-effects-core.js",

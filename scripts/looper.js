@@ -579,6 +579,22 @@ const SCLooper = (() => {
     const style = document.createElement("style");
     style.id = STYLES_ID;
     style.textContent = `
+      @font-face {
+        font-family: "SCDL UI";
+        src: url("${chrome.runtime.getURL("assets/fonts/Quicksand-Medium.ttf")}") format("truetype");
+        font-style: normal;
+        font-weight: 500;
+        font-display: swap;
+        unicode-range: U+0000-002F, U+003A-10FFFF;
+      }
+      @font-face {
+        font-family: "SCDL UI";
+        src: url("${chrome.runtime.getURL("assets/fonts/SmoochSans-Medium.ttf")}") format("truetype");
+        font-style: normal;
+        font-weight: 500;
+        font-display: swap;
+        unicode-range: U+0030-0039;
+      }
       [${BUTTON_ATTRIBUTE}] {
         position: relative;
       }
@@ -780,7 +796,7 @@ const SCLooper = (() => {
         border-radius: 50%;
         color: #fff;
         background: #ff5500ff;
-        font: 600 10px/18px Arial, sans-serif;
+        font: 600 10px/18px "SCDL UI", sans-serif;
         text-align: center;
         box-sizing: border-box;
       }
@@ -794,7 +810,7 @@ const SCLooper = (() => {
         border-radius: 3px;
         color: #fff;
         background: rgba(0, 0, 0, 0.82);
-        font: 11px/14px Arial, sans-serif;
+        font: 11px/14px "SCDL UI", sans-serif;
         white-space: nowrap;
         opacity: 0;
         transition: opacity 100ms ease;

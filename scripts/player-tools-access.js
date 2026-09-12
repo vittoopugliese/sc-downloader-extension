@@ -54,7 +54,7 @@
       }
 
       let grant = POLICY.snapshot(state, owner).grant;
-      if (operation === "begin-loop" && state.entitlement.status !== "active") {
+      if (decision.consume && operation === "begin-loop" && state.entitlement.status !== "active") {
         if (grant) {
           return { allowed: true, grant, snapshot: POLICY.snapshot(state, owner) };
         }

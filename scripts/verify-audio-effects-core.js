@@ -28,6 +28,7 @@ class FakeAudioContext {
   node(kind) { const node = new AudioNode(kind); this.nodes.push(node); return node; }
   createMediaElementSource(audio) { audio.sourceCount += 1; return this.node("media-source"); }
   createConvolver() { return this.node("convolver"); }
+  createBiquadFilter() { const node = this.node("biquad"); node.frequency = new AudioParam(); return node; }
   createGain() { const node = this.node("gain"); node.gain = new AudioParam(); return node; }
   createDelay() { const node = this.node("delay"); node.delayTime = new AudioParam(); return node; }
   createDynamicsCompressor() {
@@ -85,7 +86,7 @@ const delayNode = graphNodes.find((node) => node.kind === "delay");
 const feedbackNode = graphNodes.filter((node) => node.kind === "gain")[1];
 const masterNode = graphNodes.filter((node) => node.kind === "gain")[3];
 const limiterNode = graphNodes.find((node) => node.kind === "compressor");
-if (delayNode.delayTime.value !== 0.25 || feedbackNode.gain.value !== 0.25) {
+if (delayNode.delayTime.value !== 0.25 || feedbackNode.gain.value !== 0.205) {
   throw new Error("Delay time or feedback defaults changed unexpectedly.");
 }
 const sourceNode = graphNodes.find((node) => node.kind === "media-source");
@@ -108,6 +109,17 @@ effects.set("delay", 150);
 state = effects.snapshot();
 if (state.delay !== 100) throw new Error("Effect slider values must clamp to 100%.");
 if (!sourceNode.connections.includes(delayNode)) throw new Error("The delay branch did not connect when enabled.");
+effects.setCharacter("delayTime", 500);
+effects.setCharacter("delayFeedback", 60);
+effects.setCharacter("reverbSize", 90);
+effects.setCharacter("reverbRoom", "plate");
+if (delayNode.delayTime.value !== 0.5 || Math.abs(feedbackNode.gain.value - 0.492) > 1e-9 || effects.snapshot().reverbRoom !== "plate") {
+  throw new Error("Advanced FX settings did not update the live audio graph.");
+}
+effects.applyPreset("dub");
+if (effects.snapshot().preset !== "dub" || effects.snapshot().delayFeedback !== 60 || effects.snapshot().delay !== 48) {
+  throw new Error("FX presets did not apply their complete sound profile.");
+}
 effects.set("reverb", -1);
 if (effects.snapshot().reverb !== 0) throw new Error("0% must switch an effect off.");
 if (sourceNode.connections.some((node) => node.kind === "convolver")) {
@@ -124,7 +136,7 @@ if (!sourceNode.connections.includes(destination)) {
   throw new Error("Bypass must restore the unprocessed direct output path.");
 }
 effects.setBypassed(false);
-if (delayReturn.gain.value !== 0.3) throw new Error("Unbypass did not restore the delay amount.");
+if (delayReturn.gain.value !== 0.264) throw new Error("Unbypass did not restore the delay amount.");
 if (!sourceNode.connections.includes(masterNode)) {
   throw new Error("Enabling effects must restore the limited output path.");
 }

@@ -7,6 +7,7 @@ let lastBulkProgressAt = 0;
 const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
 const EXTENSION_PLAYER_ICON_ATTRIBUTE = "data-scdl-extension-player-icon-url";
 const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
+const EXTENSION_FONT_STYLE_ID = "scdl-extension-fonts";
 const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
 const LOOP_EXPORT_EVENT = "scdl:download-loop";
 const LOOP_EXPORT_RESULT_EVENT = "scdl:download-loop-result";
@@ -15,6 +16,29 @@ const POPUP_START_VIEW_KEY = "scdl.popup.startView";
 const OPEN_PLAYER_TOOLS_PANEL_EVENT = "scdl:open-player-tools-panel";
 
 function exposeTempoControlAssets() {
+  if (!document.getElementById(EXTENSION_FONT_STYLE_ID)) {
+    const fontStyle = document.createElement("style");
+    fontStyle.id = EXTENSION_FONT_STYLE_ID;
+    fontStyle.textContent = `
+      @font-face {
+        font-family: "SCDL UI";
+        src: url("${chrome.runtime.getURL("assets/fonts/Quicksand-Medium.ttf")}") format("truetype");
+        font-style: normal;
+        font-weight: 500;
+        font-display: swap;
+        unicode-range: U+0000-002F, U+003A-10FFFF;
+      }
+      @font-face {
+        font-family: "SCDL UI";
+        src: url("${chrome.runtime.getURL("assets/fonts/SmoochSans-Medium.ttf")}") format("truetype");
+        font-style: normal;
+        font-weight: 500;
+        font-display: swap;
+        unicode-range: U+0030-0039;
+      }
+    `;
+    (document.head || document.documentElement)?.appendChild(fontStyle);
+  }
   document.documentElement?.setAttribute?.(
     EXTENSION_LOGO_ATTRIBUTE,
     chrome.runtime.getURL("assets/icon128.png")

@@ -5,8 +5,10 @@
 
   const TRIAL_LIMIT = 20;
   const PRO_OPERATIONS = new Set(["export-loop", "export-track-effects"]);
-  const SESSION_OPERATIONS = new Set([
+  const FREE_PLAYBACK_OPERATIONS = new Set([
+    "begin-loop",
     "edit-loop",
+    "set-effect",
     "set-rate",
     "set-preserve-pitch",
     "save-preset",
@@ -44,11 +46,13 @@
     const sessionActive = Boolean(grant);
     const capabilities = {
       openPanel: true,
-      beginLoop: pro || trialAvailable,
-      editLoop: pro || sessionActive,
-      tempo: pro || sessionActive,
-      preservePitch: pro || sessionActive,
-      savePreset: pro || sessionActive,
+      beginLoop: true,
+      editLoop: true,
+      // Playback controls are independent from A-B loop selection. A loop is
+      // only a prerequisite for exporting the selected range as WAV.
+      tempo: true,
+      preservePitch: true,
+      savePreset: true,
       exportLoop: pro,
       exportTrackEffects: pro,
     };
@@ -76,21 +80,14 @@
   }
 
   function canAuthorize(raw, ownerKey, operation, sessionId) {
-    // Live FX act on the current player independently of loop trial sessions.
-    if (operation === "set-effect") return { allowed: true, consume: false, reason: null };
+    // Live playback controls act on the current player independently of loop
+    // trial sessions.
+    if (FREE_PLAYBACK_OPERATIONS.has(operation)) {
+      return { allowed: true, consume: false, reason: null };
+    }
     const current = snapshot(raw, ownerKey);
     if (current.plan === "pro") return { allowed: true, consume: false, reason: null };
     if (PRO_OPERATIONS.has(operation)) return { allowed: false, consume: false, reason: "pro-required" };
-    if (operation === "begin-loop") {
-      return current.capabilities.beginLoop
-        ? { allowed: true, consume: true, reason: null }
-        : { allowed: false, consume: false, reason: "trial-exhausted" };
-    }
-    if (SESSION_OPERATIONS.has(operation)) {
-      return current.grant && current.grant.sessionId === sessionId
-        ? { allowed: true, consume: false, reason: null }
-        : { allowed: false, consume: false, reason: "pro-required" };
-    }
     return { allowed: false, consume: false, reason: "unknown-operation" };
   }
 

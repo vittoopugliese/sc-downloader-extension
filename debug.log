@@ -16,3 +16,5 @@
 [0909/194640.532:WARNING:media\filters\ffmpeg_demuxer.cc:1248] PipelineStatus::DEMUXER_ERROR_COULD_NOT_OPEN
 [0912/175509.614:WARNING:net\spdy\spdy_session.cc:3188] Received HEADERS for invalid stream 1
 [0912/175509.688:WARNING:net\spdy\spdy_session.cc:3143] Received WINDOW_UPDATE for invalid stream 3
+[0912/202829.729:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)
+[0912/202917.459:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)

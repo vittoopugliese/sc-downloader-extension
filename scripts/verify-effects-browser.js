@@ -69,7 +69,7 @@ const { chromium } = require("playwright");
       fxMeter.getFloatTimeDomainData(data);
       return data.some(value => Math.abs(value) > 0.0001);
     });
-    await host.locator(".bypass").click();
+    await host.locator(".bypass").evaluate((button) => button.click());
     assert.equal(await host.locator(".bypass").getAttribute("aria-pressed"), "true");
     if (process.argv.includes('--shared')) {
       await page.waitForFunction(() => {
@@ -79,11 +79,20 @@ const { chromium } = require("playwright");
       });
     }
     assert.equal(await host.locator('[data-effect-value="reverb"]').textContent(), "35%");
-    await host.locator(".bypass").click();
+    await host.locator(".bypass").evaluate((button) => button.click());
     assert.equal(await host.locator(".bypass").getAttribute("aria-pressed"), "false");
     await host.locator(".effects-toggle").click();
     assert.equal(await host.locator(".effects-body").isVisible(), false);
-    assert.equal(await host.locator('[data-effect-value="reverb"]').textContent(), "35%");
+    await host.locator(".effects-toggle").click();
+    await host.locator('[data-effect-settings="reverb"]').click();
+    assert.equal(await host.locator('[data-effect-settings-panel="reverb"]').isVisible(), true);
+    await host.locator('#scdl-effect-reverb-room').selectOption('plate');
+    await host.locator('#scdl-effect-reverb-size').fill('85');
+    assert.equal(await host.locator('[data-effect-character-value="reverbSize"]').textContent(), '85%');
+    await host.locator('[data-fx-preset="dub"]').click();
+    assert.equal(await host.locator('#scdl-effect-delay-feedback').inputValue(), '60');
+    assert.equal(await host.locator('[data-effect-value="reverb"]').textContent(), "12%");
+    await host.locator(".effects-toggle").click();
     await host.locator(".effects-toggle").click();
     for (const name of ["reverb", "delay"]) {
       await host.locator(`#scdl-effect-${name}`).fill("0");

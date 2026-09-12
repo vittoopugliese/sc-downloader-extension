@@ -101,6 +101,7 @@
     try { return localStorage.getItem(WAVEFORM_COLLAPSED_STORAGE) === "true"; } catch { return false; }
   })();
   let effectsCollapsed = true;
+  let expandedEffectSettings = null;
   let effectsFailure = "";
   let effectsBypassed = false;
   const customRates = CUSTOM_RATE_STORAGE.map((key, index) => {
@@ -223,15 +224,6 @@
     playerToolsSessionId = accessSnapshot?.grant?.sessionId || null;
   }
 
-  function hasCapability(name) {
-    return accessSnapshot?.plan === "pro" || accessSnapshot?.capabilities?.[name] === true;
-  }
-
-  function setProRequired(message = "Player Tools Pro is required for this control.") {
-    playbackFailure = message;
-    render();
-  }
-
   function requestAccess(type, operation, payload = {}) {
     const root = document.documentElement;
     const id = `player-tools-${Date.now()}-${accessRequestId += 1}`;
@@ -260,35 +252,6 @@
     });
   }
 
-  async function authorizeControl(operation) {
-    const result = await requestAccess("authorize", operation);
-    if (!result?.allowed) {
-      setProRequired(result?.code === "trial-exhausted"
-        ? "Your Player Tools preview is complete. Unlock lifetime access to continue."
-        : "Create an A–B loop to use this Player Tools control.");
-      return false;
-    }
-    return true;
-  }
-
-  async function authorizeLoop(payload) {
-    const completeRange = Number.isFinite(payload?.startMs) && Number.isFinite(payload?.endMs)
-      && payload.endMs - payload.startMs >= 250;
-    if (!completeRange) return true;
-    const operation = loopState.active ? "edit-loop" : "begin-loop";
-    const result = await requestAccess("authorize", operation, {
-      trackIdentity: loopState.trackIdentity || null,
-      generation: loopState.generation,
-    });
-    if (!result?.allowed) {
-      setProRequired(result?.code === "trial-exhausted"
-        ? "Your Player Tools preview is complete. Unlock lifetime access to make another loop."
-        : "Player Tools Pro is required to edit this loop.");
-      return false;
-    }
-    return true;
-  }
-
   async function finishLoopSession() {
     if (!playerToolsSessionId || accessSnapshot?.plan === "pro") return;
     await requestAccess("end", "end-session").catch(() => {});
@@ -297,16 +260,11 @@
 
   document.addEventListener(ACCESS_EVENT, () => {
     readAccessSnapshot();
-    if (!hasCapability("tempo")) {
-      controller.setRate(DEFAULTS.rate);
-      controller.setPreservePitch(false);
-    }
     render();
   });
   readAccessSnapshot();
 
   async function applyPlayerRate(rate, { animate = false } = {}) {
-    if (!(await authorizeControl("set-rate"))) return;
     playbackFailure = "";
     animateNextRateChange = animate;
     const state = controller.setRate(rate);
@@ -314,17 +272,12 @@
   }
 
   async function applyPlayerPitch(enabled) {
-    if (!(await authorizeControl("set-preserve-pitch"))) {
-      if (ui) ui.pitchToggle.checked = controller.snapshot().preservePitch;
-      return;
-    }
     playbackFailure = "";
     const state = controller.setPreservePitch(enabled);
     writeSetting(PITCH_STORAGE, state.preservePitch);
   }
 
   async function savePlayerPreset(index) {
-    if (!(await authorizeControl("save-preset"))) return;
     customRates[index] = controller.snapshot().rate;
     writeSetting(CUSTOM_RATE_STORAGE[index], customRates[index]);
     render();
@@ -664,7 +617,6 @@
       enabled: true,
       startPlayback: true,
     };
-    if (!(await authorizeLoop(payload))) return;
     setLoopFailure(requestLoop("set-loop", payload));
     readLoopState();
   }
@@ -678,7 +630,6 @@
       enabled: true,
       startPlayback: activatesLoop,
     };
-    if (!(await authorizeLoop(payload))) return;
     setLoopFailure(requestLoop("set-loop", payload));
     readLoopState();
   }
@@ -700,7 +651,6 @@
       return;
     }
     const payload = { marker, startMs, endMs, enabled: true, startPlayback: !loopState.active };
-    if (!(await authorizeLoop(payload))) return;
     setLoopFailure(requestLoop("set-loop", payload));
     readLoopState();
   }
@@ -714,7 +664,6 @@
   async function setWaveformRange(nextRange, marker = null) {
     if (!nextRange) return;
     const payload = { ...nextRange, marker, enabled: true, startPlayback: !loopState.active };
-    if (!(await authorizeLoop(payload))) return;
     setLoopFailure(requestLoop("set-loop", payload));
     readLoopState();
   }
@@ -859,7 +808,7 @@
       <style>
         :host {
           color: #fff;
-          font: 12px/1.4 Interstate, Lucida Grande, Arial, sans-serif;
+          font: 12px/1.4 "SCDL UI", sans-serif;
         }
 
         *, *::before, *::after { box-sizing: border-box; }
@@ -901,7 +850,7 @@
           border: 0;
           color: #fff;
           background: transparent;
-          font: 700 13px/14px Arial, sans-serif;
+          font: 700 13px/14px "SCDL UI", sans-serif;
           cursor: pointer;
           opacity: .9;
         }
@@ -1004,7 +953,7 @@
           border: 0;
           color: #fff;
           background: transparent;
-          font: 700 17px/1.2 Interstate, Lucida Grande, Arial, sans-serif;
+          font: 700 17px/1.2 "SCDL UI", sans-serif;
           text-align: left;
           text-decoration: none;
           cursor: pointer;
@@ -1032,7 +981,7 @@
           border-radius: 5px;
           background: #292929;
           color: #ff6c23;
-          font: 500 13px/1 Interstate, Lucida Grande, Arial, sans-serif;
+          font: 500 13px/1 "SCDL UI", sans-serif;
           cursor: pointer;
           transition: background 160ms ease, border-color 160ms ease;
         }
@@ -1143,7 +1092,7 @@
           display: inline-flex;
           align-items: center;
           gap: 9px;
-          font: 500 15px/1.2 Interstate, Lucida Grande, Arial, sans-serif;
+          font: 500 15px/1.2 "SCDL UI", sans-serif;
         }
 
         .pitch-toggle {
@@ -1185,7 +1134,7 @@
         .rating-link:hover { color: #ffb18a; }
         .middle-row { display: grid; grid-template-columns: 159px 1fr; align-items: center; gap: 10px; margin-bottom: 6px; }
         .setters { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-        .setter { min-width: 0; height: 30px; padding: 0 5px; border: 1px solid #484848; border-radius: 6px; background: #292929; color: #fff; font: italic 600 10px/1 Interstate, Lucida Grande, Arial, sans-serif; cursor: pointer; white-space: nowrap; }
+        .setter { min-width: 0; height: 30px; padding: 0 5px; border: 1px solid #484848; border-radius: 6px; background: #292929; color: #fff; font: italic 600 10px/1 "SCDL UI", sans-serif; cursor: pointer; white-space: nowrap; }
         .setter:hover:not(:disabled) { background: #383838; border-color: #777; }
         .setter:disabled { cursor: not-allowed; opacity: .48; }
         .pitch-row { gap: 6px; }
@@ -1208,8 +1157,8 @@
         .loop-range::-moz-range-thumb { width: 15px; height: 15px; border: 2px solid #fff; border-radius: 50%; background: #ff5500; pointer-events: auto; cursor: ew-resize; }
         .loop-range:disabled::-webkit-slider-thumb { opacity: .45; cursor: not-allowed; }
         .loop-edit { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 5px; margin-top: 4px; }
-        .loop-time { min-width: 0; height: 26px; padding: 0 6px; border: 1px solid #484848; border-radius: 5px; color: #fff; background: #292929; font: 11px/1 monospace; }
-        .clear-loop, .download-loop { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 26px; border-radius: 5px; cursor: pointer; font: 600 10px/1 Interstate, Arial, sans-serif; }
+        .loop-time { min-width: 0; height: 26px; padding: 0 6px; border: 1px solid #484848; border-radius: 5px; color: #fff; background: #292929; font: 11px/1 "SCDL UI", sans-serif; }
+        .clear-loop, .download-loop { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 26px; border-radius: 5px; cursor: pointer; font: 600 10px/1 "SCDL UI", sans-serif; }
         .clear-loop { border: 1px solid #484848; color: #fff; background: #292929; }
         .download-loop { border: 1px solid #b84400; color: #fff; background: #ff5500; }
         .clear-loop svg, .download-loop svg { width: 12px; height: 12px; flex: 0 0 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -1225,7 +1174,7 @@
         .brand-logo { width: 54px; height: 54px; flex-basis: 54px; border-radius: 11px; }
         .brand-name { font-size: 16px; line-height: 1.04; text-align: left; }
         .brand-title-line { position: relative; display: inline-block; min-width: 0; }
-        .free-badge { position: absolute; bottom: 3px; left: 95px; display: inline-flex; align-items: center; height: 13px; margin-left: 6px; padding: 0 4px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font: 800 8px/1 Arial, sans-serif; letter-spacing: .04em; }
+        .free-badge { position: absolute; bottom: 3px; left: 95px; display: inline-flex; align-items: center; height: 13px; margin-left: 6px; padding: 0 4px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font: 800 8px/1 "SCDL UI", sans-serif; letter-spacing: .04em; }
         .rating-link { color: #989898; font-size: 10px; font-weight: 500; text-decoration-color: #666; opacity: .82; }
         .rating-link:hover { color: #bdc1c5; opacity: 1; }
         .setter { height: 28px; padding: 0 8px; border-radius: 7px; font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -1247,7 +1196,7 @@
         .waveform-stage { position: absolute; inset: 25px 8px 27px; cursor: crosshair; }
         .waveform-canvas { display: block; width: 100%; height: 100%; border-radius: 8px; }
         .waveform-selection { position: absolute; inset: 0 auto 0; border: 0; border-inline: 1px solid #ff741f; background: linear-gradient(90deg, rgba(255, 145, 85, .28), rgba(255, 106, 26, .055) 50%, rgba(255, 145, 85, .28)); cursor: grab; }
-        .waveform-marker { position: absolute; z-index: 7; top: -17px; width: 18px; height: 18px; margin-left: -9px; padding: 0; border: 0; border-radius: 5px 5px 3px 3px; color: #fff; background: #ff741f; font: 800 11px/1 Arial; text-transform: lowercase; cursor: ew-resize; box-shadow: 0 2px 7px rgba(255, 116, 31, .28); }
+        .waveform-marker { position: absolute; z-index: 7; top: -17px; width: 18px; height: 18px; margin-left: -9px; padding: 0; border: 0; border-radius: 5px 5px 3px 3px; color: #fff; background: #ff741f; font: 800 11px/1 "SCDL UI", sans-serif; text-transform: lowercase; cursor: ew-resize; box-shadow: 0 2px 7px rgba(255, 116, 31, .28); }
         .waveform-marker::after { content: ""; position: absolute; top: 18px; left: 50%; width: 1px; height: 90px; background: #ff741f; transform: translateX(-50%); }
         .waveform-title { position: absolute; z-index: 3; top: 4px; left: 50%; display: inline-flex; align-items: center; gap: 5px; color: #fff; font-size: 11px; font-weight: 700; transform: translateX(-50%); pointer-events: none; }
         .waveform-title svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -1269,7 +1218,7 @@
         .waveform-shell.is-collapsed .waveform-times > span { display: none; }
         .waveform-shell.is-collapsed .waveform-setters { display: block; }
         .waveform-shell.is-collapsed .waveform-times .setter { width: auto; height: 22px; padding: 0 7px; transform: none; }
-        .player-tools-upgrade { display: none; position: absolute; z-index: 12; inset: 3px; border: 1px solid #ff6a1a; border-radius: 7px; color: #fff; background: #3d2115; font: 700 10px/1 Interstate, Arial, sans-serif; cursor: pointer; }
+        .player-tools-upgrade { display: none; position: absolute; z-index: 12; inset: 3px; border: 1px solid #ff6a1a; border-radius: 7px; color: #fff; background: #3d2115; font: 700 10px/1 "SCDL UI", sans-serif; cursor: pointer; }
         .waveform-shell.is-locked { height: 34px; touch-action: auto; }
         .waveform-shell.is-locked .waveform-stage, .waveform-shell.is-locked .waveform-times, .waveform-shell.is-locked .waveform-actions, .waveform-shell.is-locked .waveform-toggle { display: none; }
         .waveform-shell.is-locked .waveform-title { left: 9px; line-height: 26px; transform: none; }
@@ -1279,13 +1228,16 @@
         .effects-toggle { display: flex; align-items: center; width: 100%; height: 30px; gap: 8px; padding: 0 9px; border: 0; color: #e8e8e8; background: transparent; text-align: left; cursor: pointer; }
         .effects-toggle:hover { color: #fff; background: rgba(255,255,255,.035); }
         .effects-icon { display: block; width: 17px; height: 17px; color: #c9cdd1; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-        .effects-title { flex: 1; font: 700 11px/1 Interstate, Arial, sans-serif; }
+        .effects-title { flex: 1; font: 700 11px/1 "SCDL UI", sans-serif; }
         .effects-chevron { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; transition: transform 140ms ease; }
         .effects-shell.is-collapsed .effects-chevron { transform: rotate(180deg); }
         .effects-body { padding: 0 9px 4px; }
         .effects-shell.is-collapsed .effects-body { display: none; }
-        .effect-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) 34px; align-items: center; gap: 9px; min-height: 31px; border-top: 1px solid rgba(255,255,255,.055); }
-        .effect-label { color: #d5d8db; font: 500 11px/1 Interstate, Arial, sans-serif; }
+        .effects-presets { display: flex; gap: 4px; padding: 1px 0 5px; }
+        .effects-preset { flex: 1; height: 22px; padding: 0 3px; border: 1px solid #3b4249; border-radius: 5px; color: #bfc4c8; background: #202428; font: 600 9px/1 "SCDL UI", sans-serif; cursor: pointer; }
+        .effects-preset:hover, .effects-preset[aria-pressed="true"] { border-color: #ff6a1a; color: #fff; background: #462619; }
+        .effect-row { display: grid; grid-template-columns: 62px minmax(0, 1fr) 34px 22px; align-items: center; gap: 7px; min-height: 31px; border-top: 1px solid rgba(255,255,255,.055); }
+        .effect-label { color: #d5d8db; font: 500 11px/1 "SCDL UI", sans-serif; }
         .effect-slider { appearance: none; -webkit-appearance: none; width: 100%; height: 20px; margin: 0; border: 0; background: linear-gradient(to right, #ff5500 var(--range-fill, 0%), #30373e var(--range-fill, 0%)) center / 100% 6px no-repeat; cursor: pointer; }
         .effect-slider:disabled { cursor: not-allowed; opacity: .45; }
         .effect-slider::-webkit-slider-runnable-track { height: 6px; background: transparent; }
@@ -1294,9 +1246,17 @@
         .effect-slider::-moz-range-track { height: 6px; background: #30373e; }
         .effect-slider::-moz-range-progress { height: 6px; background: #ff5500; }
         .effect-slider::-moz-range-thumb { width: 11px; height: 11px; border: 1px solid #f3f3f3; border-radius: 50%; background: #ff7b38; }
-        .effect-value { color: #bfc4c8; font: 500 10px/1 Interstate, Arial, sans-serif; text-align: right; font-variant-numeric: tabular-nums; }
-        .effects-note { margin: 0 0 3px 81px; color: #858c92; font: 9px/1.2 Interstate, Arial, sans-serif; }
-        .effects-export-note { margin: 4px 0 0; color: #9da3a8; font: 9px/1.2 Interstate, Arial, sans-serif; }
+        .effect-value { color: #bfc4c8; font: 500 10px/1 "SCDL UI", sans-serif; text-align: right; font-variant-numeric: tabular-nums; }
+        .effect-settings-toggle { width: 20px; height: 20px; padding: 0; border: 0; color: #858c92; background: transparent; font: 16px/1 "SCDL UI", sans-serif; cursor: pointer; }
+        .effect-settings-toggle:hover, .effect-settings-toggle[aria-expanded="true"] { color: #ff7b38; }
+        .effect-settings { display: none; grid-template-columns: 62px minmax(0, 1fr) 34px; gap: 4px 7px; padding: 4px 0 6px 69px; border-top: 1px solid rgba(255,255,255,.045); }
+        .effect-settings.is-open { display: grid; }
+        .effect-setting-label { align-self: center; color: #9da3a8; font: 500 9px/1 "SCDL UI", sans-serif; }
+        .effect-setting-slider { width: 100%; accent-color: #ff5500; }
+        .effect-setting-value { align-self: center; color: #bfc4c8; font: 500 9px/1 "SCDL UI", sans-serif; text-align: right; }
+        .effect-room { height: 21px; border: 1px solid #3b4249; border-radius: 4px; color: #e8e8e8; background: #202428; font: 500 9px "SCDL UI", sans-serif; }
+        .effects-note { margin: 0 0 3px 69px; color: #858c92; font: 9px/1.2 "SCDL UI", sans-serif; }
+        .effects-export-note { margin: 4px 0 0; color: #9da3a8; font: 9px/1.2 "SCDL UI", sans-serif; }
         .presets { grid-column: 3; grid-row: 1; }
         .panel-tools { display: flex; grid-column: 2; grid-row: 1; justify-self: center; align-self: start; gap: 5px; margin-left: 0; }
         .panel-tool { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 27px; height: 24px; margin: 0; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; color: #fff; background: rgba(255,255,255,.08); cursor: pointer; outline: none; transition: background-color 200ms, border-color 200ms; }
@@ -1403,9 +1363,12 @@
             <svg class="effects-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
           </button>
           <div class="effects-body">
-            <div class="effect-row"><label class="effect-label" for="scdl-effect-reverb">Reverb</label><input class="effect-slider" id="scdl-effect-reverb" type="range" min="0" max="100" step="1" value="0" aria-label="Reverb amount" title="Reverb amount; 0% turns it off" /><output class="effect-value" data-effect-value="reverb">0%</output></div>
-            <div class="effect-row"><label class="effect-label" for="scdl-effect-delay">Delay</label><input class="effect-slider" id="scdl-effect-delay" type="range" min="0" max="100" step="1" value="0" aria-label="Delay amount" title="Delay amount; 0% turns it off" /><output class="effect-value" data-effect-value="delay">0%</output></div>
-            <p class="effects-note">Amount added · 0% off</p>
+            <div class="effects-presets" role="group" aria-label="FX presets"><button class="effects-preset" data-fx-preset="subtle" type="button">Subtle</button><button class="effects-preset" data-fx-preset="studio" type="button">Studio</button><button class="effects-preset" data-fx-preset="wide" type="button">Wide</button><button class="effects-preset" data-fx-preset="dub" type="button">Dub</button></div>
+            <div class="effect-row"><label class="effect-label" for="scdl-effect-reverb">Reverb</label><input class="effect-slider" id="scdl-effect-reverb" type="range" min="0" max="100" step="1" value="0" aria-label="Reverb mix" title="Reverb mix; 0% turns it off" /><output class="effect-value" data-effect-value="reverb">0%</output><button class="effect-settings-toggle" type="button" data-effect-settings="reverb" aria-label="Reverb settings" aria-expanded="false">⚙</button></div>
+            <div class="effect-settings" data-effect-settings-panel="reverb"><label class="effect-setting-label" for="scdl-effect-reverb-room">Room</label><select class="effect-room" id="scdl-effect-reverb-room" data-effect-character="reverbRoom"><option value="room">Room</option><option value="hall">Hall</option><option value="plate">Plate</option></select><span></span><label class="effect-setting-label" for="scdl-effect-reverb-size">Size</label><input class="effect-setting-slider" id="scdl-effect-reverb-size" type="range" min="0" max="100" value="55" data-effect-character="reverbSize" /><output class="effect-setting-value" data-effect-character-value="reverbSize">55%</output><label class="effect-setting-label" for="scdl-effect-reverb-tone">Tone</label><input class="effect-setting-slider" id="scdl-effect-reverb-tone" type="range" min="0" max="100" value="70" data-effect-character="reverbTone" /><output class="effect-setting-value" data-effect-character-value="reverbTone">70%</output></div>
+            <div class="effect-row"><label class="effect-label" for="scdl-effect-delay">Delay</label><input class="effect-slider" id="scdl-effect-delay" type="range" min="0" max="100" step="1" value="0" aria-label="Delay mix" title="Delay mix; 0% turns it off" /><output class="effect-value" data-effect-value="delay">0%</output><button class="effect-settings-toggle" type="button" data-effect-settings="delay" aria-label="Delay settings" aria-expanded="false">⚙</button></div>
+            <div class="effect-settings" data-effect-settings-panel="delay"><label class="effect-setting-label" for="scdl-effect-delay-time">Time</label><input class="effect-setting-slider" id="scdl-effect-delay-time" type="range" min="60" max="800" value="250" data-effect-character="delayTime" /><output class="effect-setting-value" data-effect-character-value="delayTime">250ms</output><label class="effect-setting-label" for="scdl-effect-delay-feedback">Feedback</label><input class="effect-setting-slider" id="scdl-effect-delay-feedback" type="range" min="0" max="100" value="25" data-effect-character="delayFeedback" /><output class="effect-setting-value" data-effect-character-value="delayFeedback">25%</output><label class="effect-setting-label" for="scdl-effect-delay-tone">Tone</label><input class="effect-setting-slider" id="scdl-effect-delay-tone" type="range" min="0" max="100" value="70" data-effect-character="delayTone" /><output class="effect-setting-value" data-effect-character-value="delayTone">70%</output></div>
+            <p class="effects-note">Mix · open ⚙ for character</p>
           </div>
         </section>
         <p class="effects-export-note" hidden>WAV exports without FX.</p>
@@ -1555,6 +1518,12 @@
       effectValues: Object.fromEntries(
         ["reverb", "delay"].map((name) => [name, root.querySelector(`[data-effect-value="${name}"]`)])
       ),
+      effectCharacters: Object.fromEntries(
+        [...root.querySelectorAll("[data-effect-character]")].map((control) => [control.dataset.effectCharacter, control])
+      ),
+      effectCharacterValues: Object.fromEntries(
+        [...root.querySelectorAll("[data-effect-character-value]")].map((output) => [output.dataset.effectCharacterValue, output])
+      ),
       effectsExportNote: root.querySelector(".effects-export-note"),
     };
 
@@ -1621,6 +1590,32 @@
             ? "Play a track to activate FX."
             : "";
         }
+        render();
+      });
+    }
+    root.querySelectorAll(".effect-settings-toggle").forEach((button) => {
+      button.addEventListener("click", () => {
+        const name = button.dataset.effectSettings;
+        expandedEffectSettings = expandedEffectSettings === name ? null : name;
+        renderEffects();
+        if (!ui.panel.hidden) positionPanel();
+      });
+    });
+    root.querySelectorAll(".effects-preset").forEach((button) => {
+      button.addEventListener("click", () => {
+        effectsController?.applyPreset(button.dataset.fxPreset);
+        effectsFailure = "";
+        render();
+      });
+    });
+    for (const [name, control] of Object.entries(ui.effectCharacters)) {
+      control.addEventListener("input", () => {
+        effectsController?.setCharacter(name, control.value);
+        effectsFailure = "";
+        render();
+      });
+      control.addEventListener("change", () => {
+        effectsController?.setCharacter(name, control.value);
         render();
       });
     }
@@ -1722,9 +1717,6 @@
   function render() {
     if (!ui) return;
     const state = controller.snapshot();
-    const canUseTempo = hasCapability("tempo");
-    const canEditLoop = hasCapability("editLoop");
-    const freeLocked = accessSnapshot?.state === "free_locked";
     const text = formatRate(state.effectiveRate);
     const triggerText = formatTriggerRate(state.effectiveRate);
     const animateRate = animateNextRateChange;
@@ -1748,13 +1740,13 @@
     );
     ui.detachButton.title = ui.detachButton.getAttribute("aria-label");
     ui.downloadTrackButton.disabled = trackDownloadPending;
-    ui.clearRate.disabled = !canUseTempo;
-    ui.slider.disabled = !canUseTempo;
-    ui.pitchToggle.disabled = !canUseTempo || !state.preservePitchSupported;
+    ui.clearRate.disabled = false;
+    ui.slider.disabled = false;
+    ui.pitchToggle.disabled = !state.preservePitchSupported;
     ui.bypass.disabled = false;
-    ui.root.querySelectorAll(".preset").forEach((button) => { button.disabled = !canUseTempo; });
-    ui.waveformShell.classList.toggle("is-locked", freeLocked);
-    ui.waveformToggle.disabled = freeLocked;
+    ui.root.querySelectorAll(".preset").forEach((button) => { button.disabled = false; });
+    ui.waveformShell.classList.remove("is-locked");
+    ui.waveformToggle.disabled = false;
     ui.brandLogo.classList.toggle("is-bypassed", state.bypassed);
     ui.root.querySelectorAll(".preset").forEach((button) => {
       const customIndex = Number(button.dataset.customIndex);
@@ -1799,6 +1791,23 @@
       ui.effectValues[name].textContent = `${state[name]}%`;
       syncRange(slider);
     }
+    for (const [name, control] of Object.entries(ui.effectCharacters)) {
+      control.value = String(state[name]);
+      control.disabled = !state.available;
+      const output = ui.effectCharacterValues[name];
+      if (output) output.textContent = name === "delayTime" ? `${state[name]}ms` : `${state[name]}%`;
+    }
+    ui.root.querySelectorAll(".effects-preset").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.fxPreset === state.preset));
+      button.disabled = !state.available;
+    });
+    ui.root.querySelectorAll(".effect-settings-toggle").forEach((button) => {
+      const expanded = button.dataset.effectSettings === expandedEffectSettings;
+      button.setAttribute("aria-expanded", String(expanded));
+    });
+    ui.root.querySelectorAll(".effect-settings").forEach((panel) => {
+      panel.classList.toggle("is-open", panel.dataset.effectSettingsPanel === expandedEffectSettings);
+    });
     ui.effectsShell.classList.toggle("is-collapsed", effectsCollapsed);
     ui.effectsToggle.setAttribute("aria-expanded", String(!effectsCollapsed));
     ui.effectsExportNote.hidden = state.reverb === 0 && state.delay === 0;

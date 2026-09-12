@@ -398,6 +398,18 @@ async function main() {
       throw new Error("The combined panel layout or links are incomplete.");
     }
 
+    const freePlaybackControls = await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      return {
+        slider: root.querySelector(".slider").disabled,
+        pitch: root.querySelector(".pitch-toggle").disabled,
+        presets: [...root.querySelectorAll(".preset")].some((button) => button.disabled),
+      };
+    });
+    if (freePlaybackControls.slider || freePlaybackControls.pitch || freePlaybackControls.presets) {
+      throw new Error(`Pitch and speed controls must work without a selected loop: ${JSON.stringify(freePlaybackControls)}`);
+    }
+
     await host.locator(".download-loop").click();
     if (
       await page.evaluate(() => window.loopDownloadRequests.length) !== 0 ||
