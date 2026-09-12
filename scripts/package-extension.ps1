@@ -25,6 +25,7 @@ $packageItems = @(
     "assets/icons",
     "_locales",
     "scripts/background.js",
+    "scripts/audio-effects-core.js",
     "scripts/bulk-job-manager.js",
     "scripts/content.js",
     "scripts/directory-storage.js",

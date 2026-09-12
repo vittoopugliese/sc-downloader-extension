@@ -133,6 +133,21 @@
       onChange(snapshot());
     }
 
+    function getActiveAudio() {
+      const candidates = [];
+      for (const reference of references) {
+        const audio = reference.deref();
+        if (!audio) references.delete(reference);
+        else candidates.push(audio);
+      }
+      const score = (audio) =>
+        (audio.paused === false ? 100 : 0) +
+        ((audio.currentSrc || audio.src) ? 20 : 0) +
+        (audio.readyState >= 1 ? 10 : 0) +
+        (Number.isFinite(audio.duration) ? 5 : 0);
+      return candidates.sort((left, right) => score(right) - score(left))[0] || null;
+    }
+
     function setRate(value) {
       rate = clampRate(value, minimum, maximum);
       updateAll();
@@ -187,6 +202,7 @@
     return Object.freeze({
       apply,
       discover,
+      getActiveAudio,
       install: installGuards,
       setPreservePitch,
       setRate,

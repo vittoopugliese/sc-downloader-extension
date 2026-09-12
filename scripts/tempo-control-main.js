@@ -58,6 +58,7 @@
   Object.defineProperty(window, INSTALLED_FLAG, { value: true });
 
   const { DEFAULTS, clampRate, create, formatRate } = globalThis.SCTempoControl;
+  const effectsApi = globalThis.SCTempoEffects;
   const RATE_ANIMATION_DURATION_MS = 220;
   let ui = null;
   let mountQueued = false;
@@ -89,6 +90,9 @@
   let waveformCollapsed = (() => {
     try { return localStorage.getItem(WAVEFORM_COLLAPSED_STORAGE) === "true"; } catch { return false; }
   })();
+  let effectsCollapsed = true;
+  let effectsFailure = "";
+  let effectsBypassed = false;
   const customRates = CUSTOM_RATE_STORAGE.map((key, index) => {
     try {
       const stored = localStorage.getItem(key);
@@ -209,6 +213,29 @@
       playbackFailure =
         "Could not change playback speed. Reload SoundCloud and retry.";
       console.warn("[SC Downloader Tempo]", error);
+      render();
+    },
+  });
+
+  const effectsController = effectsApi?.create({
+    getActiveAudio() {
+      const discovered = controller.getActiveAudio?.();
+      if (discovered) return discovered;
+      const players = [...document.querySelectorAll("audio")].filter(
+        (audio) => audio.isConnected
+      );
+      const score = (audio) =>
+        (audio.paused === false ? 100 : 0) +
+        ((audio.currentSrc || audio.src) ? 20 : 0) +
+        (audio.readyState >= 1 ? 10 : 0) +
+        (Number.isFinite(audio.duration) ? 5 : 0);
+      return players.sort((left, right) => score(right) - score(left))[0] || null;
+    },
+    onAvailabilityChange(available, error) {
+      effectsFailure = available
+        ? ""
+        : (error?.message || "Audio effects are unavailable for this player.");
+      if (error) console.warn("[SC Downloader Effects]", error);
       render();
     },
   });
@@ -1109,6 +1136,29 @@
         .waveform-shell.is-collapsed .waveform-times > span { display: none; }
         .waveform-shell.is-collapsed .waveform-setters { display: block; }
         .waveform-shell.is-collapsed .waveform-times .setter { width: auto; height: 22px; padding: 0 7px; transform: none; }
+
+        .effects-shell { margin-top: 7px; overflow: hidden; border: 1px solid #30373e; border-radius: 9px; background: rgba(255,255,255,.025); }
+        .effects-toggle { display: flex; align-items: center; width: 100%; height: 30px; gap: 8px; padding: 0 9px; border: 0; color: #e8e8e8; background: transparent; text-align: left; cursor: pointer; }
+        .effects-toggle:hover { color: #fff; background: rgba(255,255,255,.035); }
+        .effects-icon { display: block; width: 17px; height: 17px; color: #c9cdd1; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .effects-title { flex: 1; font: 700 11px/1 Interstate, Arial, sans-serif; }
+        .effects-chevron { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; transition: transform 140ms ease; }
+        .effects-shell.is-collapsed .effects-chevron { transform: rotate(180deg); }
+        .effects-body { padding: 0 9px 4px; }
+        .effects-shell.is-collapsed .effects-body { display: none; }
+        .effect-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) 34px; align-items: center; gap: 9px; min-height: 31px; border-top: 1px solid rgba(255,255,255,.055); }
+        .effect-label { color: #d5d8db; font: 500 11px/1 Interstate, Arial, sans-serif; }
+        .effect-slider { appearance: none; -webkit-appearance: none; width: 100%; height: 20px; margin: 0; border: 0; background: linear-gradient(to right, #ff5500 var(--range-fill, 0%), #30373e var(--range-fill, 0%)) center / 100% 6px no-repeat; cursor: pointer; }
+        .effect-slider:disabled { cursor: not-allowed; opacity: .45; }
+        .effect-slider::-webkit-slider-runnable-track { height: 6px; background: transparent; }
+        .effect-slider::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 13px; height: 13px; margin-top: -3.5px; border: 2px solid #f3f3f3; border-radius: 50%; background: #aeb5bc; }
+        .effect-slider[data-active="true"]::-webkit-slider-thumb { background: #ff7b38; }
+        .effect-slider::-moz-range-track { height: 6px; background: #30373e; }
+        .effect-slider::-moz-range-progress { height: 6px; background: #ff5500; }
+        .effect-slider::-moz-range-thumb { width: 11px; height: 11px; border: 1px solid #f3f3f3; border-radius: 50%; background: #ff7b38; }
+        .effect-value { color: #bfc4c8; font: 500 10px/1 Interstate, Arial, sans-serif; text-align: right; font-variant-numeric: tabular-nums; }
+        .effects-note { margin: 0 0 3px 81px; color: #858c92; font: 9px/1.2 Interstate, Arial, sans-serif; }
+        .effects-export-note { margin: 4px 0 0; color: #9da3a8; font: 9px/1.2 Interstate, Arial, sans-serif; }
         .presets { grid-column: 3; grid-row: 1; }
         .panel-tools { display: flex; grid-column: 2; grid-row: 1; justify-self: center; align-self: start; gap: 5px; margin-left: 0; }
         .panel-tool { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 27px; height: 24px; margin: 0; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; color: #fff; background: rgba(255,255,255,.08); cursor: pointer; outline: none; transition: background-color 200ms, border-color 200ms; }
@@ -1207,6 +1257,19 @@
           <input class="loop-time loop-start-time" inputmode="decimal" placeholder="A 00:00.000" aria-label="Loop start time" />
           <input class="loop-time loop-end-time" inputmode="decimal" placeholder="B 00:00.000" aria-label="Loop end time" />
         </div>
+        <section class="effects-shell is-collapsed" aria-label="Audio effects">
+          <button class="effects-toggle" type="button" aria-expanded="false">
+            <svg class="effects-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h2l2-7 4 14 3-11 2 7h2l1-3h2"/></svg>
+            <span class="effects-title">FX</span>
+            <svg class="effects-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+          </button>
+          <div class="effects-body">
+            <div class="effect-row"><label class="effect-label" for="scdl-effect-reverb">Reverb</label><input class="effect-slider" id="scdl-effect-reverb" type="range" min="0" max="100" step="1" value="0" aria-label="Reverb amount" title="Reverb amount; 0% turns it off" /><output class="effect-value" data-effect-value="reverb">0%</output></div>
+            <div class="effect-row"><label class="effect-label" for="scdl-effect-delay">Delay</label><input class="effect-slider" id="scdl-effect-delay" type="range" min="0" max="100" step="1" value="0" aria-label="Delay amount" title="Delay amount; 0% turns it off" /><output class="effect-value" data-effect-value="delay">0%</output></div>
+            <p class="effects-note">Amount added · 0% off</p>
+          </div>
+        </section>
+        <p class="effects-export-note" hidden>WAV exports without FX.</p>
         <p class="status" role="status" aria-live="polite" hidden></p>
       </section>
     `;
@@ -1339,6 +1402,15 @@
       loopEndTime: root.querySelector(".loop-end-time"),
       clearLoop: root.querySelector(".clear-loop"),
       downloadLoop: root.querySelector(".download-loop"),
+      effectsShell: root.querySelector(".effects-shell"),
+      effectsToggle: root.querySelector(".effects-toggle"),
+      effectSliders: Object.fromEntries(
+        ["reverb", "delay"].map((name) => [name, root.querySelector(`#scdl-effect-${name}`)])
+      ),
+      effectValues: Object.fromEntries(
+        ["reverb", "delay"].map((name) => [name, root.querySelector(`[data-effect-value="${name}"]`)])
+      ),
+      effectsExportNote: root.querySelector(".effects-export-note"),
     };
 
     ui.trigger.addEventListener("pointerenter", (event) => {
@@ -1393,6 +1465,23 @@
     ui.waveformToggle.addEventListener("click", () => {
       setWaveformCollapsed(!waveformCollapsed);
     });
+    ui.effectsToggle.addEventListener("click", () => {
+      effectsCollapsed = !effectsCollapsed;
+      ui.effectsShell.classList.toggle("is-collapsed", effectsCollapsed);
+      ui.effectsToggle.setAttribute("aria-expanded", String(!effectsCollapsed));
+      if (!ui.panel.hidden) positionPanel();
+    });
+    for (const [name, slider] of Object.entries(ui.effectSliders)) {
+      slider.addEventListener("input", () => {
+        const state = effectsController?.set(name, slider.valueAsNumber);
+        if (state?.available) {
+          effectsFailure = state[name] > 0 && !state.initialized
+            ? "Play a track to activate FX."
+            : "";
+        }
+        render();
+      });
+    }
     root.querySelectorAll(".preset").forEach((button) => {
       if (button.classList.contains("custom-preset")) return;
       button.addEventListener("click", () => {
@@ -1546,13 +1635,34 @@
     syncRange(ui.slider);
     ui.pitchToggle.checked = state.preservePitch;
     ui.pitchToggle.disabled = !state.preservePitchSupported;
+    if (effectsBypassed !== state.bypassed) {
+      effectsBypassed = state.bypassed;
+      effectsController?.setBypassed(effectsBypassed);
+    }
     renderRate(state.effectiveRate, animateRate);
     ui.host.setAttribute(RATE_ATTRIBUTE, String(state.effectiveRate));
     ui.host.setAttribute(PITCH_ATTRIBUTE, String(state.preservePitch));
-    const message = playbackFailure || storageFailure || loopFailure;
+    const message = playbackFailure || storageFailure || loopFailure || effectsFailure;
     ui.status.textContent = message;
     ui.status.hidden = !message;
     renderLoop();
+    renderEffects();
+  }
+
+  function renderEffects() {
+    if (!ui || !effectsController) return;
+    const state = effectsController.snapshot();
+    for (const name of ["reverb", "delay"]) {
+      const slider = ui.effectSliders[name];
+      slider.value = String(state[name]);
+      slider.disabled = !state.available;
+      slider.dataset.active = String(state[name] > 0);
+      ui.effectValues[name].textContent = `${state[name]}%`;
+      syncRange(slider);
+    }
+    ui.effectsShell.classList.toggle("is-collapsed", effectsCollapsed);
+    ui.effectsToggle.setAttribute("aria-expanded", String(!effectsCollapsed));
+    ui.effectsExportNote.hidden = state.reverb === 0 && state.delay === 0;
   }
 
   function mount() {
@@ -1581,11 +1691,18 @@
   }
 
   controller.install();
-  document.querySelectorAll("audio").forEach(controller.discover);
+  document.querySelectorAll("audio").forEach((audio) => {
+    controller.discover(audio);
+    effectsController?.discover(audio);
+  });
   for (const event of ["play", "loadedmetadata"]) {
     document.addEventListener(
       event,
-      (mediaEvent) => controller.apply(mediaEvent.target),
+      (mediaEvent) => {
+        controller.apply(mediaEvent.target);
+        effectsController?.discover(mediaEvent.target);
+        effectsController?.applyToActive();
+      },
       true
     );
   }
@@ -1594,8 +1711,15 @@
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (!(node instanceof Element)) continue;
-        if (node instanceof HTMLAudioElement) controller.discover(node);
-        else node.querySelectorAll("audio").forEach(controller.discover);
+        if (node instanceof HTMLAudioElement) {
+          controller.discover(node);
+          effectsController?.discover(node);
+        } else {
+          node.querySelectorAll("audio").forEach((audio) => {
+            controller.discover(audio);
+            effectsController?.discover(audio);
+          });
+        }
       }
     }
     scheduleMount();

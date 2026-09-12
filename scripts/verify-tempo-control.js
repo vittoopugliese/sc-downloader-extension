@@ -20,6 +20,12 @@ const mainWorldEntry = manifest.content_scripts.find(
 if (!mainWorldEntry || mainWorldEntry.run_at !== "document_start") {
   throw new Error("Tempo control is not loaded at document_start in MAIN world.");
 }
+if (
+  mainWorldEntry.js.indexOf("scripts/audio-effects-core.js") < 0 ||
+  mainWorldEntry.js.indexOf("scripts/audio-effects-core.js") > mainWorldEntry.js.indexOf("scripts/tempo-control-main.js")
+) {
+  throw new Error("The audio effects engine must load before the tempo panel adapter.");
+}
 if (mainWorldEntry.all_frames) {
   throw new Error("Tempo control should only run in SoundCloud's top frame.");
 }
@@ -30,6 +36,7 @@ const packageScript = fs.readFileSync(
 );
 for (const item of [
   "scripts/tempo-control-core.js",
+  "scripts/audio-effects-core.js",
   "scripts/tempo-control-main.js",
   "THIRD_PARTY_LICENSES.md",
   panelLogo,
@@ -57,6 +64,11 @@ class MockMediaElement {
       preservesPitch: true,
     };
     this.listeners = new Map();
+    this.paused = true;
+    this.currentSrc = "";
+    this.src = "";
+    this.readyState = 0;
+    this.duration = NaN;
   }
 
   addEventListener(name, listener) {
@@ -117,6 +129,16 @@ if (audio.playbackRate !== 3 || audio.preservesPitch !== false) {
 }
 if (context.SCTempoControl.formatRate(1) !== "1.000x") {
   throw new Error("Compact player rate formatting is broken.");
+}
+
+const detachedPlayingAudio = new MockAudioElement();
+detachedPlayingAudio.paused = false;
+detachedPlayingAudio.currentSrc = "https://media.soundcloud.test/stream.mp3";
+detachedPlayingAudio.readyState = 4;
+detachedPlayingAudio.duration = 180;
+controller.discover(detachedPlayingAudio);
+if (controller.getActiveAudio() !== detachedPlayingAudio) {
+  throw new Error("Tempo control did not expose a detached playing Audio instance to Player Tools.");
 }
 
 const adapterCode = fs.readFileSync(adapterPath, "utf8");

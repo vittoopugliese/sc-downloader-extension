@@ -45,8 +45,8 @@ async function main() {
           <div class="volume__sliderProgress" style="height: 60px;"></div>
           <div class="volume__sliderHandle" style="top: 70px;"></div>
         </div>
-        <audio></audio>
-      </div>`);
+      </div>
+      <audio id="soundcloud-audio"></audio>`);
   });
   const port = await listen(server);
   const browser = await chromium.launch({ headless: true });
@@ -56,6 +56,9 @@ async function main() {
     await page.goto(`http://127.0.0.1:${port}`);
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-core.js"),
+    });
+    await page.addScriptTag({
+      path: path.join(__dirname, "audio-effects-core.js"),
     });
     await page.evaluate((logoUrl) => {
       document.documentElement.setAttribute(
@@ -89,6 +92,11 @@ async function main() {
       Object.defineProperty(document.querySelector("audio"), "duration", {
         configurable: true,
         value: 120,
+      });
+      Object.defineProperties(document.querySelector("audio"), {
+        currentSrc: { configurable: true, value: `${location.origin}/stream.mp3` },
+        readyState: { configurable: true, value: 4 },
+        paused: { configurable: true, value: false },
       });
     }, logoDataUrl);
     await page.addScriptTag({
@@ -547,6 +555,56 @@ async function main() {
       collapsedLooper.fetches !== 0
     ) {
       throw new Error(`Collapsed looper still renders or loads its waveform: ${JSON.stringify(collapsedLooper)}`);
+    }
+
+    const collapsedFx = await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      const shell = root.querySelector(".effects-shell");
+      return {
+        visible: shell.offsetHeight > 0,
+        collapsed: shell.classList.contains("is-collapsed"),
+        values: [...root.querySelectorAll(".effect-value")].map((value) => value.textContent),
+        loopImmediatelyBefore: root.querySelector(".loop-edit").nextElementSibling === shell,
+      };
+    });
+    if (
+      !collapsedFx.visible || !collapsedFx.collapsed ||
+      collapsedFx.values.join("|") !== "0%|0%" || !collapsedFx.loopImmediatelyBefore
+    ) {
+      throw new Error(`FX section was not compactly placed below the looper: ${JSON.stringify(collapsedFx)}`);
+    }
+    await host.locator(".effects-toggle").click();
+    await host.locator("#scdl-effect-reverb").evaluate((slider) => {
+      slider.value = "35";
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await host.locator("#scdl-effect-delay").evaluate((slider) => {
+      slider.value = "28";
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const activeFx = await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      return {
+        expanded: root.querySelector(".effects-toggle").getAttribute("aria-expanded"),
+        values: [...root.querySelectorAll(".effect-value")].map((value) => value.textContent),
+        exportNote: root.querySelector(".effects-export-note").hidden,
+        status: root.querySelector(".status").textContent,
+      };
+    });
+    if (
+      activeFx.expanded !== "true" || activeFx.values.join("|") !== "35%|28%" ||
+      activeFx.exportNote || activeFx.status === "Play a track to activate FX."
+    ) {
+      throw new Error(`FX sliders or WAV notice failed: ${JSON.stringify(activeFx)}`);
+    }
+    for (const selector of ["#scdl-effect-reverb", "#scdl-effect-delay"]) {
+      await host.locator(selector).evaluate((slider) => {
+        slider.value = "0";
+        slider.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+    if (!(await host.locator(".effects-export-note").isHidden())) {
+      throw new Error("WAV FX notice remained visible after returning all effects to 0%.");
     }
 
     await host.locator(".waveform-toggle").click();
