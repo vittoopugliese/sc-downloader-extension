@@ -291,6 +291,9 @@ async function main() {
       const waveformShell = panel.querySelector(".waveform-shell");
       const waveformTitleIcon = panel.querySelector(".waveform-title svg");
       const tempoRow = panel.querySelector(".tempo-row");
+      const triggerIcon = panel.getRootNode().querySelector(".trigger-icon");
+      const triggerRate = panel.getRootNode().querySelector(".trigger-rate");
+      const clearRate = panel.getRootNode().querySelector(".clear-rate");
       const style = getComputedStyle(panel);
       return {
         panelSize: [panel.offsetWidth, panel.offsetHeight],
@@ -315,12 +318,17 @@ async function main() {
           .map((element) => element.className),
         waveformHeight: waveformShell.offsetHeight,
         waveformTitleIconSize: [waveformTitleIcon?.clientWidth, waveformTitleIcon?.clientHeight],
+        triggerIconSize: [parseFloat(getComputedStyle(triggerIcon).width), parseFloat(getComputedStyle(triggerIcon).height)],
+        triggerIconPosition: getComputedStyle(triggerIcon).position,
+        triggerRateFontSize: getComputedStyle(triggerRate).fontSize,
+        triggerRatePosition: getComputedStyle(triggerRate).position,
+        clearRateColor: getComputedStyle(clearRate).color,
         tempoOrder: Array.from(tempoRow.children).map((child) => child.className),
         statusOrder: Array.from(speedStatus.children).map((child) => child.className),
       };
     });
     if (
-      compactStyles.panelSize[0] !== 480 ||
+      compactStyles.panelSize[0] !== 420 ||
       compactStyles.padding.join(" ") !== "7px 7px 7px 7px" ||
       compactStyles.presetSize.join("x") !== "42x27" ||
       compactStyles.toggleSize.join("x") !== "16x16" ||
@@ -340,6 +348,11 @@ async function main() {
       compactStyles.headerOrder.join(" ") !== "brand panel-tools presets" ||
       compactStyles.waveformHeight !== 130 ||
       compactStyles.waveformTitleIconSize.join("x") !== "16x16" ||
+      compactStyles.triggerIconSize.join("x") !== "20x20" ||
+      compactStyles.triggerIconPosition !== "absolute" ||
+      compactStyles.triggerRateFontSize !== "9px" ||
+      compactStyles.triggerRatePosition !== "absolute" ||
+      compactStyles.clearRateColor !== "rgb(255, 255, 255)" ||
       compactStyles.tempoOrder.join(" ") !== "slider-wrap pitch-label" ||
       compactStyles.statusOrder.join(" ") !== "current bypass"
     ) {

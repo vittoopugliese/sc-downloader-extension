@@ -716,9 +716,8 @@
           background: transparent;
           font: inherit;
           cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
+          position: relative;
+          display: block;
         }
 
         .trigger:hover { color: #abababff; }
@@ -732,15 +731,15 @@
 
         .clear-rate {
           position: absolute;
-          top: -2px;
-          right: 5px;
+          top: 0;
+          right: 0;
           z-index: 1;
           width: 14px;
           height: 14px;
           margin: 0;
           padding: 0;
           border: 0;
-          color: #ff6c23;
+          color: #fff;
           background: transparent;
           font: 700 13px/14px Arial, sans-serif;
           cursor: pointer;
@@ -755,24 +754,28 @@
         }
 
         .trigger-rate {
-          flex: 0 0 4ch;
-          width: 4ch;
+          position: absolute;
+          bottom: 2px;
+          left: 50%;
+          width: max-content;
           font-variant-numeric: tabular-nums;
-          margin-left: 2px;
+          margin: 0;
           color: #ff6c23ff;
-          font-size: 10px;
+          font-size: 9px;
           font-weight: 600;
           line-height: 1;
-          position:relative;
-          transform: translateY(5px);
+          transform: translateX(-50%);
         }
         .trigger-rate.is-bypassed { color: #d6d6d6; }
         .trigger-icon {
           display: block;
-          flex: 0 0 24px;
-          width: 24px;
-          height: 24px;
+          position: absolute;
+          top: 2px;
+          left: 50%;
+          width: 20px;
+          height: 20px;
           object-fit: contain;
+          transform: translateX(-50%);
         }
         .trigger:focus-visible,
         input:focus-visible {
@@ -1053,8 +1056,8 @@
         .status { margin-top: 5px; }
 
         /* Expanded player editor, compact enough to stay clear of the player. */
-        .panel { width: min(480px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
-        .panel-header { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 92px 146px; gap: 12px; padding-bottom: 10px; }
+        .panel { width: min(420px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
+        .panel-header { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 92px 92px; gap: 12px; padding-bottom: 10px; }
         .presets { display: grid; grid-template-columns: repeat(2, 42px); gap: 5px; flex-basis: auto; }
         .preset { width: 42px; height: 27px; border-radius: 7px; font-size: 12px; }
         .custom-preset, .custom-preset[data-saved="true"] { width: 42px; padding: 0 2px; font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -1212,7 +1215,7 @@
   function positionPanel() {
     if (!ui || ui.panel.hidden) return;
     const anchor = ui.trigger.getBoundingClientRect();
-    const width = Math.min(480, innerWidth - 16);
+    const width = Math.min(420, innerWidth - 16);
     const left = Math.max(8, Math.min(innerWidth - width - 8, anchor.right - width));
     ui.panel.style.left = `${left}px`;
     ui.panel.style.bottom = `${Math.max(8, innerHeight - anchor.top + 8)}px`;
