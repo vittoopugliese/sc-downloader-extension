@@ -410,13 +410,22 @@ async function main() {
       throw new Error(`Pitch and speed controls must work without a selected loop: ${JSON.stringify(freePlaybackControls)}`);
     }
 
-    await host.locator(".download-loop").click();
-    if (
-      await page.evaluate(() => window.loopDownloadRequests.length) !== 0 ||
-      await host.locator(".status").textContent() !== "Set both loop markers before downloading."
-    ) {
-      throw new Error("The loop WAV button must remain blocked until both A/B markers are set.");
+    const emptyLoopActions = await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      return {
+        hidden: root.querySelector(".waveform-actions").hidden,
+        clearDisabled: root.querySelector(".clear-loop").disabled,
+        downloadDisabled: root.querySelector(".download-loop").disabled,
+      };
+    });
+    if (emptyLoopActions.hidden || !emptyLoopActions.clearDisabled || !emptyLoopActions.downloadDisabled) {
+      throw new Error(`Expanded loop actions must be visible and disabled without a loop: ${JSON.stringify(emptyLoopActions)}`);
     }
+    await host.locator(".waveform-toggle").click();
+    if (!(await host.locator(".waveform-actions").isHidden())) {
+      throw new Error("Collapsed loop actions must not render without an active loop.");
+    }
+    await host.locator(".waveform-toggle").click();
 
     await host.locator(".slider").fill("0.7125");
     const custom = host.locator('.custom-preset[data-custom-index="0"]');
@@ -466,7 +475,9 @@ async function main() {
     ) {
       throw new Error(`Set A/Set B did not capture and display the live player range: ${JSON.stringify({ capturedLoop, label: await host.locator(".set-a").textContent() })}`);
     }
+    await host.locator(".waveform-toggle").click();
     await host.locator(".download-loop").click();
+    await host.locator(".waveform-toggle").click();
     const loopDownload = await page.evaluate(() => window.loopDownloadRequests.at(-1));
     if (
       loopDownload?.trimRange?.startMs !== 12345 ||
@@ -540,16 +551,14 @@ async function main() {
       const root = element.shadowRoot;
       const shell = root.querySelector(".waveform-shell");
       const canvas = root.querySelector(".waveform-canvas");
-      const setters = [...root.querySelectorAll(".waveform-setters .setter")];
       return {
         collapsed: shell.classList.contains("is-collapsed"),
         height: shell.offsetHeight,
         stageDisplay: getComputedStyle(root.querySelector(".waveform-stage")).display,
-        settersVisible: setters.every(
+        header: root.querySelector(".waveform-toggle").textContent.trim(),
+        settersVisible: [...root.querySelectorAll(".waveform-setters .setter")].some(
           (button) => button.offsetWidth > 0 && button.offsetHeight > 0
         ),
-        setterWidths: setters.map((button) => button.offsetWidth),
-        setterGap: setters[1].getBoundingClientRect().left - setters[0].getBoundingClientRect().right,
         canvas: [canvas.width, canvas.height],
         stored: localStorage.getItem("scdl.tempo.waveformCollapsed"),
         fetches: window.waveformFetches,
@@ -559,9 +568,8 @@ async function main() {
       !collapsedLooper.collapsed ||
       collapsedLooper.height !== 32 ||
       collapsedLooper.stageDisplay !== "none" ||
-      !collapsedLooper.settersVisible ||
-      !collapsedLooper.setterWidths.every((width) => width < 88) ||
-      collapsedLooper.setterGap !== 10 ||
+      collapsedLooper.settersVisible ||
+      !collapsedLooper.header.includes("Loop Region") ||
       collapsedLooper.canvas.join("x") !== "1x1" ||
       collapsedLooper.stored !== "true" ||
       collapsedLooper.fetches !== 0
@@ -599,13 +607,13 @@ async function main() {
       return {
         expanded: root.querySelector(".effects-toggle").getAttribute("aria-expanded"),
         values: [...root.querySelectorAll(".effect-value")].map((value) => value.textContent),
-        exportNote: root.querySelector(".effects-export-note").hidden,
+        exportNoteAbsent: root.querySelector(".effects-export-note") === null,
         status: root.querySelector(".status").textContent,
       };
     });
     if (
       activeFx.expanded !== "true" || activeFx.values.join("|") !== "35%|28%" ||
-      activeFx.exportNote || activeFx.status === "Play a track to activate FX."
+      !activeFx.exportNoteAbsent || activeFx.status === "Play a track to activate FX."
     ) {
       throw new Error(`FX sliders or WAV notice failed: ${JSON.stringify(activeFx)}`);
     }
@@ -615,10 +623,6 @@ async function main() {
         slider.dispatchEvent(new Event("input", { bubbles: true }));
       });
     }
-    if (!(await host.locator(".effects-export-note").isHidden())) {
-      throw new Error("WAV FX notice remained visible after returning all effects to 0%.");
-    }
-
     await host.locator(".waveform-toggle").click();
     await page.waitForFunction(() => window.waveformFetches === 1);
     await page.waitForTimeout(220);

@@ -29,21 +29,21 @@
   }
 
   const DEFAULTS = Object.freeze({
-    reverb: 0, delay: 0, reverbRoom: "hall", reverbSize: 55, reverbTone: 70,
+    reverb: 0, delay: 0, reverbRoom: "hall", reverbSize: 55, reverbDecay: 2.4, reverbPreDelay: 20, reverbTone: 70,
     delayTime: 250, delayFeedback: 25, delayTone: 70, preset: "custom",
   });
   const MAX_SEND = Object.freeze({ reverb: 0.7, delay: 0.55 });
   const REVERB_ROOMS = Object.freeze({ room: { seconds: 0.7, decay: 4.5 }, hall: { seconds: 2.4, decay: 2.7 }, plate: { seconds: 1.6, decay: 1.5 } });
   const PRESETS = Object.freeze({
-    subtle: { reverb: 18, delay: 0, reverbRoom: "room", reverbSize: 30, reverbTone: 70, delayTime: 180, delayFeedback: 15, delayTone: 70 },
-    studio: { reverb: 35, delay: 12, reverbRoom: "plate", reverbSize: 45, reverbTone: 72, delayTime: 220, delayFeedback: 22, delayTone: 68 },
-    wide: { reverb: 52, delay: 16, reverbRoom: "hall", reverbSize: 75, reverbTone: 78, delayTime: 310, delayFeedback: 28, delayTone: 72 },
-    dub: { reverb: 12, delay: 48, reverbRoom: "room", reverbSize: 40, reverbTone: 55, delayTime: 380, delayFeedback: 60, delayTone: 42 },
+    subtle: { reverb: 18, delay: 0, reverbRoom: "room", reverbSize: 30, reverbDecay: 0.8, reverbPreDelay: 8, reverbTone: 70, delayTime: 180, delayFeedback: 15, delayTone: 70 },
+    studio: { reverb: 35, delay: 12, reverbRoom: "plate", reverbSize: 45, reverbDecay: 1.6, reverbPreDelay: 18, reverbTone: 72, delayTime: 220, delayFeedback: 22, delayTone: 68 },
+    wide: { reverb: 52, delay: 16, reverbRoom: "hall", reverbSize: 75, reverbDecay: 4.8, reverbPreDelay: 45, reverbTone: 78, delayTime: 310, delayFeedback: 28, delayTone: 72 },
+    dub: { reverb: 12, delay: 48, reverbRoom: "room", reverbSize: 40, reverbDecay: 1.2, reverbPreDelay: 12, reverbTone: 55, delayTime: 380, delayFeedback: 60, delayTone: 42 },
   });
   const RAMP_SECONDS = 0.02;
   const TRACK_RESET_MS = 900;
   const REVERB_IMPULSE_ENERGY = 0.15;
-  const EFFECT_NODES = Object.freeze({ reverb: "reverb", delay: "delay" });
+  const EFFECT_NODES = Object.freeze({ reverb: "reverbPreDelay", delay: "delay" });
 
   function clampPercent(value) {
     const number = Number(value);
@@ -51,9 +51,9 @@
     return Math.round(Math.max(0, Math.min(100, number)));
   }
 
-  function createImpulse(context, room, size) {
+  function createImpulse(context, room, size, decaySeconds) {
     const profile = REVERB_ROOMS[room] || REVERB_ROOMS.hall;
-    const seconds = profile.seconds * (0.35 + Number(size) / 100 * 0.95);
+    const seconds = Number(decaySeconds);
     const length = Math.max(1, Math.floor(context.sampleRate * seconds));
     const buffer = context.createBuffer(2, length, context.sampleRate);
     let seed = 0x51c0ffee;
@@ -63,7 +63,7 @@
       for (let index = 0; index < length; index += 1) {
         seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
         const noise = (seed / 0xffffffff) * 2 - 1;
-        const decay = Math.pow(1 - index / length, profile.decay);
+        const decay = Math.pow(1 - index / length, profile.decay * (1.3 - Number(size) / 100 * 0.6));
         samples[index] = noise * decay * (channel === 0 ? 1 : 0.87);
         energy += samples[index] * samples[index];
       }
@@ -104,7 +104,8 @@
     function updateCharacter(targetGraph = graph) {
       if (!targetGraph || !targetGraph.context) return;
       const contextForGraph = targetGraph.context;
-      targetGraph.reverb.buffer = createImpulse(contextForGraph, values.reverbRoom, values.reverbSize);
+      targetGraph.reverb.buffer = createImpulse(contextForGraph, values.reverbRoom, values.reverbSize, values.reverbDecay);
+      setParam(targetGraph.reverbPreDelay.delayTime, values.reverbPreDelay / 1000);
       setParam(targetGraph.reverbTone.frequency, 600 + values.reverbTone / 100 * 15400);
       setParam(targetGraph.delayTone.frequency, 500 + values.delayTone / 100 * 15500);
       setParam(targetGraph.delay.delayTime, values.delayTime / 1000);
@@ -182,6 +183,7 @@
         if (existingSource) context = existingSource.context;
         const source = existingSource || context.createMediaElementSource(target);
         const ownsSource = !existingSource;
+        const reverbPreDelay = context.createDelay(0.25);
         const reverb = context.createConvolver();
         const reverbTone = context.createBiquadFilter();
         reverbTone.type = "lowpass";
@@ -204,6 +206,7 @@
         delayReturn.gain.value = 0;
 
         if (ownsSource) source.connect(context.destination);
+        reverbPreDelay.connect(reverb);
         reverb.connect(reverbTone);
         reverbTone.connect(reverbReturn);
         reverbReturn.connect(master);
@@ -216,7 +219,7 @@
         limiter.connect(context.destination);
 
         const targetGraph = {
-          source, reverb, reverbTone, reverbReturn, delay, delayTone, feedback, delayReturn, master, limiter,
+          source, reverbPreDelay, reverb, reverbTone, reverbReturn, delay, delayTone, feedback, delayReturn, master, limiter,
           context, ownsSource,
           resetTimers: {},
           connected: { reverb: false, delay: false },
@@ -317,7 +320,8 @@
     function setCharacter(name, value) {
       if (!(name in DEFAULTS) || name === "reverb" || name === "delay") throw new RangeError(`Unknown effect setting: ${name}`);
       if (name === "reverbRoom") values[name] = REVERB_ROOMS[value] ? value : DEFAULTS.reverbRoom;
-      else values[name] = clamp(value, name === "delayTime" ? 60 : 0, name === "delayTime" ? 800 : 100, DEFAULTS[name]);
+      else if (name === "reverbDecay") values[name] = Math.round(Math.max(0.2, Math.min(12, Number(value) || DEFAULTS[name])) * 10) / 10;
+      else values[name] = clamp(value, name === "delayTime" ? 60 : 0, name === "delayTime" ? 800 : name === "reverbPreDelay" ? 200 : 100, DEFAULTS[name]);
       values.preset = "custom";
       updateCharacter();
       return snapshot();

@@ -78,6 +78,7 @@
   let animateNextRateChange = false;
   let loopRequestId = 0;
   let trackDownloadPending = false;
+  let loopDownloadPending = false;
   let loopState = { active: false, enabled: false, startMs: null, endMs: null, durationMs: null };
   let accessSnapshot = { state: "loading", plan: "free", capabilities: {} };
   let playerToolsSessionId = null;
@@ -543,7 +544,7 @@
     ui.waveformToggle.setAttribute("aria-expanded", String(!waveformCollapsed));
     ui.waveformToggle.setAttribute(
       "aria-label",
-      waveformCollapsed ? "Expand looper" : "Minimize looper"
+      waveformCollapsed ? "Expand looper" : "Collapse looper"
     );
     ui.waveformToggle.title = ui.waveformToggle.getAttribute("aria-label");
     const duration = Number.isFinite(loopState.durationMs) ? loopState.durationMs : 0;
@@ -570,7 +571,10 @@
       : "Set B";
     ui.setA.disabled = !loopState.available;
     ui.setB.disabled = !loopState.available;
-    ui.clearLoop.disabled = !loopState.active && !Number.isFinite(loopState.startMs);
+    const showLoopActions = !waveformCollapsed || loopState.active;
+    ui.waveformActions.hidden = !showLoopActions;
+    ui.clearLoop.disabled = !waveformCollapsed || !loopState.active || loopDownloadPending;
+    ui.downloadLoop.disabled = !waveformCollapsed || !loopState.active || loopDownloadPending;
     for (const [input, value] of [[ui.loopStartTime, loopState.startMs], [ui.loopEndTime, loopState.endMs]]) {
       input.disabled = !loopState.available || duration <= 0;
       if (ui.root.activeElement !== input) input.value = Number.isFinite(value) ? formatLoopTime(value) : "";
@@ -740,7 +744,7 @@
       return;
     }
     const id = `loop-export-${Date.now()}`;
-    ui.downloadLoop.disabled = true;
+    loopDownloadPending = true;
     loopFailure = "Preparing loop download…";
     render();
     const result = await new Promise((resolve) => {
@@ -762,7 +766,7 @@
       document.dispatchEvent(new CustomEvent(LOOP_EXPORT_EVENT));
     });
     document.documentElement.removeAttribute(LOOP_EXPORT_ATTRIBUTE);
-    ui.downloadLoop.disabled = false;
+    loopDownloadPending = false;
     loopFailure = result?.success ? "Loop download started." : (result?.error || "Could not start loop download.");
     render();
   }
@@ -1161,6 +1165,7 @@
         .clear-loop, .download-loop { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 26px; border-radius: 5px; cursor: pointer; font: 600 10px/1 "SCDL UI", sans-serif; }
         .clear-loop { border: 1px solid #484848; color: #fff; background: #292929; }
         .download-loop { border: 1px solid #b84400; color: #fff; background: #ff5500; }
+        .clear-loop:disabled, .download-loop:disabled { cursor: not-allowed; opacity: .45; }
         .clear-loop svg, .download-loop svg { width: 12px; height: 12px; flex: 0 0 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .status { margin-top: 5px; }
 
@@ -1191,37 +1196,34 @@
         .slider::-moz-range-thumb { width: 14px; height: 14px; }
         .limits { padding: 0 7px; }
         .range-label { top: 8px; padding: 0; border-radius: 0; background: transparent; transform: translateX(-50%); }
-        .waveform-shell { position: relative; overflow: hidden; height: 130px; border: 1px solid #343434; border-radius: 11px; background: linear-gradient(#101010, #080808); touch-action: none; transition: height 160ms ease; }
+        .waveform-shell { position: relative; overflow: hidden; height: 130px; border: 1px solid #343434; border-radius: 11px; background: rgba(255,255,255,.025); touch-action: none; transition: height 160ms ease; }
         .waveform-shell.is-collapsed { height: 32px; touch-action: auto; }
         .waveform-stage { position: absolute; inset: 25px 8px 27px; cursor: crosshair; }
         .waveform-canvas { display: block; width: 100%; height: 100%; border-radius: 8px; }
         .waveform-selection { position: absolute; inset: 0 auto 0; border: 0; border-inline: 1px solid #ff741f; background: linear-gradient(90deg, rgba(255, 145, 85, .28), rgba(255, 106, 26, .055) 50%, rgba(255, 145, 85, .28)); cursor: grab; }
         .waveform-marker { position: absolute; z-index: 7; top: -17px; width: 18px; height: 18px; margin-left: -9px; padding: 0; border: 0; border-radius: 5px 5px 3px 3px; color: #fff; background: #ff741f; font: 800 11px/1 "SCDL UI", sans-serif; text-transform: lowercase; cursor: ew-resize; box-shadow: 0 2px 7px rgba(255, 116, 31, .28); }
         .waveform-marker::after { content: ""; position: absolute; top: 18px; left: 50%; width: 1px; height: 90px; background: #ff741f; transform: translateX(-50%); }
-        .waveform-title { position: absolute; z-index: 3; top: 4px; left: 50%; display: inline-flex; align-items: center; gap: 5px; color: #fff; font-size: 11px; font-weight: 700; transform: translateX(-50%); pointer-events: none; }
+        .waveform-title { display: inline-flex; align-items: center; gap: 5px; }
         .waveform-title svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .waveform-times { position: absolute; inset: auto 9px 3px; display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; color: #7e8790; font-size: 10px; font-variant-numeric: tabular-nums; }
         .waveform-start-label { justify-self: start; }
         .waveform-middle-label { justify-self: center; }
         .waveform-end-label { justify-self: end; }
-        .waveform-actions { position: absolute; z-index: 5; top: 4px; right: 6px; display: flex; gap: 4px; }
+        .waveform-actions { position: absolute; z-index: 5; top: 4px; right: 27px; display: flex; gap: 4px; }
+        .waveform-actions[hidden] { display: none; }
         .waveform-setters { display: contents; }
         .waveform-times .setter { z-index: 5; width: 68px; height: 23px; padding: 0 6px; border-radius: 6px; font-size: 10px; transform: translateY(-2px); }
-        .waveform-toggle { position: absolute; z-index: 8; top: 4px; left: 6px; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 1px solid #484848; border-radius: 6px; color: #c8c8c8; background: #202020; cursor: pointer; }
-        .waveform-toggle:hover { color: #ff6a1a; border-color: #ff6a1a; }
+        .waveform-toggle { position: absolute; z-index: 4; inset: 0 0 auto; display: flex; align-items: center; justify-content: flex-start; width: 100%; height: 31px; padding: 0 9px; border: 0; color: #fff; background: transparent; font: 700 11px/1 "SCDL UI", sans-serif; cursor: pointer; }
+        .waveform-toggle:hover { color: #ff7b38; background: rgba(255,255,255,.035); }
         .waveform-toggle:focus-visible { outline: 2px solid #ff5500; outline-offset: 1px; }
-        .waveform-toggle svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 160ms ease; }
-        .waveform-shell.is-collapsed .waveform-toggle svg { transform: rotate(180deg); }
+        .waveform-toggle > svg { position: absolute; right: 9px; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 160ms ease; }
+        .waveform-shell.is-collapsed .waveform-toggle > svg { transform: rotate(180deg); }
         .waveform-shell.is-collapsed .waveform-stage { display: none; }
-        .waveform-shell.is-collapsed .waveform-title { left: 34px; line-height: 22px; transform: none; }
-        .waveform-shell.is-collapsed .waveform-times { inset: 4px 0; grid-template-columns: repeat(2, max-content); justify-content: center; gap: 10px; }
-        .waveform-shell.is-collapsed .waveform-times > span { display: none; }
-        .waveform-shell.is-collapsed .waveform-setters { display: block; }
-        .waveform-shell.is-collapsed .waveform-times .setter { width: auto; height: 22px; padding: 0 7px; transform: none; }
+        .waveform-shell.is-collapsed .waveform-times { display: none; }
         .player-tools-upgrade { display: none; position: absolute; z-index: 12; inset: 3px; border: 1px solid #ff6a1a; border-radius: 7px; color: #fff; background: #3d2115; font: 700 10px/1 "SCDL UI", sans-serif; cursor: pointer; }
         .waveform-shell.is-locked { height: 34px; touch-action: auto; }
         .waveform-shell.is-locked .waveform-stage, .waveform-shell.is-locked .waveform-times, .waveform-shell.is-locked .waveform-actions, .waveform-shell.is-locked .waveform-toggle { display: none; }
-        .waveform-shell.is-locked .waveform-title { left: 9px; line-height: 26px; transform: none; }
+        .waveform-shell.is-locked .waveform-title { position: absolute; top: 9px; left: 9px; }
         .waveform-shell.is-locked .player-tools-upgrade { display: block; left: auto; right: 4px; width: 172px; }
 
         .effects-shell { margin-top: 7px; overflow: hidden; border: 1px solid #30373e; border-radius: 9px; background: rgba(255,255,255,.025); }
@@ -1256,7 +1258,6 @@
         .effect-setting-value { align-self: center; color: #bfc4c8; font: 500 9px/1 "SCDL UI", sans-serif; text-align: right; }
         .effect-room { height: 21px; border: 1px solid #3b4249; border-radius: 4px; color: #e8e8e8; background: #202428; font: 500 9px "SCDL UI", sans-serif; }
         .effects-note { margin: 0 0 3px 69px; color: #858c92; font: 9px/1.2 "SCDL UI", sans-serif; }
-        .effects-export-note { margin: 4px 0 0; color: #9da3a8; font: 9px/1.2 "SCDL UI", sans-serif; }
         .presets { grid-column: 3; grid-row: 1; }
         .panel-tools { display: flex; grid-column: 2; grid-row: 1; justify-self: center; align-self: start; gap: 5px; margin-left: 0; }
         .panel-tool { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 27px; height: 24px; margin: 0; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; color: #fff; background: rgba(255,255,255,.08); cursor: pointer; outline: none; transition: background-color 200ms, border-color 200ms; }
@@ -1340,8 +1341,7 @@
           <label class="pitch-label" title="Keep tone"><input class="pitch-toggle" type="checkbox" aria-label="Keep tone" title="Keep tone" /></label>
         </div>
         <div class="waveform-shell" role="group" aria-label="Loop waveform">
-          <button class="waveform-toggle" type="button" aria-label="Minimize looper" aria-expanded="true" title="Minimize looper"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
-          <span class="waveform-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>Loop Region</span>
+          <button class="waveform-toggle" type="button" aria-label="Collapse looper" aria-expanded="true" title="Collapse looper"><span class="waveform-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>Loop Region</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
           <div class="waveform-actions"><button class="clear-loop" type="button" aria-label="Clear loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button></div>
           <div class="waveform-stage">
             <canvas class="waveform-canvas" aria-hidden="true"></canvas>
@@ -1365,13 +1365,12 @@
           <div class="effects-body">
             <div class="effects-presets" role="group" aria-label="FX presets"><button class="effects-preset" data-fx-preset="subtle" type="button">Subtle</button><button class="effects-preset" data-fx-preset="studio" type="button">Studio</button><button class="effects-preset" data-fx-preset="wide" type="button">Wide</button><button class="effects-preset" data-fx-preset="dub" type="button">Dub</button></div>
             <div class="effect-row"><label class="effect-label" for="scdl-effect-reverb">Reverb</label><input class="effect-slider" id="scdl-effect-reverb" type="range" min="0" max="100" step="1" value="0" aria-label="Reverb mix" title="Reverb mix; 0% turns it off" /><output class="effect-value" data-effect-value="reverb">0%</output><button class="effect-settings-toggle" type="button" data-effect-settings="reverb" aria-label="Reverb settings" aria-expanded="false">⚙</button></div>
-            <div class="effect-settings" data-effect-settings-panel="reverb"><label class="effect-setting-label" for="scdl-effect-reverb-room">Room</label><select class="effect-room" id="scdl-effect-reverb-room" data-effect-character="reverbRoom"><option value="room">Room</option><option value="hall">Hall</option><option value="plate">Plate</option></select><span></span><label class="effect-setting-label" for="scdl-effect-reverb-size">Size</label><input class="effect-setting-slider" id="scdl-effect-reverb-size" type="range" min="0" max="100" value="55" data-effect-character="reverbSize" /><output class="effect-setting-value" data-effect-character-value="reverbSize">55%</output><label class="effect-setting-label" for="scdl-effect-reverb-tone">Tone</label><input class="effect-setting-slider" id="scdl-effect-reverb-tone" type="range" min="0" max="100" value="70" data-effect-character="reverbTone" /><output class="effect-setting-value" data-effect-character-value="reverbTone">70%</output></div>
+            <div class="effect-settings" data-effect-settings-panel="reverb"><label class="effect-setting-label" for="scdl-effect-reverb-room">Room</label><select class="effect-room" id="scdl-effect-reverb-room" data-effect-character="reverbRoom"><option value="room">Room</option><option value="hall">Hall</option><option value="plate">Plate</option></select><span></span><label class="effect-setting-label" for="scdl-effect-reverb-size">Size</label><input class="effect-setting-slider" id="scdl-effect-reverb-size" type="range" min="0" max="100" value="55" data-effect-character="reverbSize" /><output class="effect-setting-value" data-effect-character-value="reverbSize">55%</output><label class="effect-setting-label" for="scdl-effect-reverb-decay">Decay</label><input class="effect-setting-slider" id="scdl-effect-reverb-decay" type="range" min="0.2" max="12" step="0.1" value="2.4" data-effect-character="reverbDecay" /><output class="effect-setting-value" data-effect-character-value="reverbDecay">2.4s</output><label class="effect-setting-label" for="scdl-effect-reverb-predelay">Pre-delay</label><input class="effect-setting-slider" id="scdl-effect-reverb-predelay" type="range" min="0" max="200" value="20" data-effect-character="reverbPreDelay" /><output class="effect-setting-value" data-effect-character-value="reverbPreDelay">20ms</output><label class="effect-setting-label" for="scdl-effect-reverb-tone">Tone</label><input class="effect-setting-slider" id="scdl-effect-reverb-tone" type="range" min="0" max="100" value="70" data-effect-character="reverbTone" /><output class="effect-setting-value" data-effect-character-value="reverbTone">70%</output></div>
             <div class="effect-row"><label class="effect-label" for="scdl-effect-delay">Delay</label><input class="effect-slider" id="scdl-effect-delay" type="range" min="0" max="100" step="1" value="0" aria-label="Delay mix" title="Delay mix; 0% turns it off" /><output class="effect-value" data-effect-value="delay">0%</output><button class="effect-settings-toggle" type="button" data-effect-settings="delay" aria-label="Delay settings" aria-expanded="false">⚙</button></div>
             <div class="effect-settings" data-effect-settings-panel="delay"><label class="effect-setting-label" for="scdl-effect-delay-time">Time</label><input class="effect-setting-slider" id="scdl-effect-delay-time" type="range" min="60" max="800" value="250" data-effect-character="delayTime" /><output class="effect-setting-value" data-effect-character-value="delayTime">250ms</output><label class="effect-setting-label" for="scdl-effect-delay-feedback">Feedback</label><input class="effect-setting-slider" id="scdl-effect-delay-feedback" type="range" min="0" max="100" value="25" data-effect-character="delayFeedback" /><output class="effect-setting-value" data-effect-character-value="delayFeedback">25%</output><label class="effect-setting-label" for="scdl-effect-delay-tone">Tone</label><input class="effect-setting-slider" id="scdl-effect-delay-tone" type="range" min="0" max="100" value="70" data-effect-character="delayTone" /><output class="effect-setting-value" data-effect-character-value="delayTone">70%</output></div>
             <p class="effects-note">Mix · open ⚙ for character</p>
           </div>
         </section>
-        <p class="effects-export-note" hidden>WAV exports without FX.</p>
         <p class="status" role="status" aria-live="polite" hidden></p>
       </section>
     `;
@@ -1497,6 +1496,7 @@
       setB: root.querySelector(".set-b"),
       waveformShell: root.querySelector(".waveform-shell"),
       waveformToggle: root.querySelector(".waveform-toggle"),
+      waveformActions: root.querySelector(".waveform-actions"),
       waveformStage: root.querySelector(".waveform-stage"),
       waveformCanvas: root.querySelector(".waveform-canvas"),
       waveformSelection: root.querySelector(".waveform-selection"),
@@ -1524,7 +1524,6 @@
       effectCharacterValues: Object.fromEntries(
         [...root.querySelectorAll("[data-effect-character-value]")].map((output) => [output.dataset.effectCharacterValue, output])
       ),
-      effectsExportNote: root.querySelector(".effects-export-note"),
     };
 
     ui.trigger.addEventListener("pointerenter", (event) => {
@@ -1575,6 +1574,8 @@
     });
     ui.waveformToggle.addEventListener("click", () => {
       setWaveformCollapsed(!waveformCollapsed);
+      ui.waveformToggle.setAttribute("aria-label", waveformCollapsed ? "Expand looper" : "Collapse looper");
+      ui.waveformToggle.title = ui.waveformToggle.getAttribute("aria-label");
     });
     ui.effectsToggle.addEventListener("click", () => {
       effectsCollapsed = !effectsCollapsed;
@@ -1795,7 +1796,9 @@
       control.value = String(state[name]);
       control.disabled = !state.available;
       const output = ui.effectCharacterValues[name];
-      if (output) output.textContent = name === "delayTime" ? `${state[name]}ms` : `${state[name]}%`;
+      if (output) output.textContent = ["delayTime", "reverbPreDelay"].includes(name)
+        ? `${state[name]}ms`
+        : name === "reverbDecay" ? `${state[name].toFixed(1)}s` : `${state[name]}%`;
     }
     ui.root.querySelectorAll(".effects-preset").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.fxPreset === state.preset));
@@ -1810,7 +1813,6 @@
     });
     ui.effectsShell.classList.toggle("is-collapsed", effectsCollapsed);
     ui.effectsToggle.setAttribute("aria-expanded", String(!effectsCollapsed));
-    ui.effectsExportNote.hidden = state.reverb === 0 && state.delay === 0;
   }
 
   function mount() {

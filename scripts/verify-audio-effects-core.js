@@ -82,7 +82,7 @@ if (!state.initialized || state.reverb !== 40 || state.delay !== 0) {
   throw new Error(`Reverb did not initialize with its requested value: ${JSON.stringify(state)}`);
 }
 const graphNodes = FakeAudioContext.instances[0].nodes;
-const delayNode = graphNodes.find((node) => node.kind === "delay");
+const [reverbPreDelay, delayNode] = graphNodes.filter((node) => node.kind === "delay");
 const feedbackNode = graphNodes.filter((node) => node.kind === "gain")[1];
 const masterNode = graphNodes.filter((node) => node.kind === "gain")[3];
 const limiterNode = graphNodes.find((node) => node.kind === "compressor");
@@ -101,7 +101,7 @@ const impulseEnergy = Array.from({ length: 2 }, (_, channel) => impulse.getChann
 if (!Number.isFinite(impulseEnergy) || Math.abs(impulseEnergy - 0.15) > 1e-5) {
   throw new Error("The reverb impulse response must have bounded energy.");
 }
-if (sourceNode.connections.some((node) => node.kind === "delay")) {
+if (sourceNode.connections.includes(delayNode)) {
   throw new Error("A zero-percent delay must not feed its effect branch.");
 }
 
@@ -113,7 +113,9 @@ effects.setCharacter("delayTime", 500);
 effects.setCharacter("delayFeedback", 60);
 effects.setCharacter("reverbSize", 90);
 effects.setCharacter("reverbRoom", "plate");
-if (delayNode.delayTime.value !== 0.5 || Math.abs(feedbackNode.gain.value - 0.492) > 1e-9 || effects.snapshot().reverbRoom !== "plate") {
+effects.setCharacter("reverbDecay", 6.5);
+effects.setCharacter("reverbPreDelay", 80);
+if (delayNode.delayTime.value !== 0.5 || reverbPreDelay.delayTime.value !== 0.08 || Math.abs(feedbackNode.gain.value - 0.492) > 1e-9 || effects.snapshot().reverbRoom !== "plate" || effects.snapshot().reverbDecay !== 6.5) {
   throw new Error("Advanced FX settings did not update the live audio graph.");
 }
 effects.applyPreset("dub");
@@ -122,7 +124,7 @@ if (effects.snapshot().preset !== "dub" || effects.snapshot().delayFeedback !== 
 }
 effects.set("reverb", -1);
 if (effects.snapshot().reverb !== 0) throw new Error("0% must switch an effect off.");
-if (sourceNode.connections.some((node) => node.kind === "convolver")) {
+if (sourceNode.connections.includes(reverbPreDelay)) {
   throw new Error("The reverb input must disconnect while its tail is cleared.");
 }
 const reverbReturn = graphNodes.filter((node) => node.kind === "gain")[0];
