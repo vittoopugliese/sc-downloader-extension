@@ -21,6 +21,7 @@ $packageItems = @(
     "offscreen.html",
     "assets/icon48.png",
     "assets/icon128.png",
+    "assets/icons/player-toolkit.png",
     "assets/icons",
     "_locales",
     "scripts/background.js",

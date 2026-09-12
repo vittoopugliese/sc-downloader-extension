@@ -5,6 +5,7 @@ let urlCheckInterval = null;
 let urlChangeTimeout = null;
 let lastBulkProgressAt = 0;
 const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
+const EXTENSION_PLAYER_ICON_ATTRIBUTE = "data-scdl-extension-player-icon-url";
 const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
 const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
 const LOOP_EXPORT_EVENT = "scdl:download-loop";
@@ -16,6 +17,10 @@ function exposeTempoControlAssets() {
   document.documentElement?.setAttribute?.(
     EXTENSION_LOGO_ATTRIBUTE,
     chrome.runtime.getURL("assets/icon128.png")
+  );
+  document.documentElement?.setAttribute?.(
+    EXTENSION_PLAYER_ICON_ATTRIBUTE,
+    chrome.runtime.getURL("assets/icons/player-toolkit.png")
   );
   if (typeof document.dispatchEvent === "function" && typeof CustomEvent === "function") {
     document.dispatchEvent(new CustomEvent(EXTENSION_ASSETS_EVENT));

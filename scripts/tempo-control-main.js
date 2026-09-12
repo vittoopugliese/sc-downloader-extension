@@ -17,6 +17,7 @@
   const RATE_ATTRIBUTE = "data-scdl-tempo-rate";
   const PITCH_ATTRIBUTE = "data-scdl-tempo-preserve-pitch";
   const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
+  const EXTENSION_PLAYER_ICON_ATTRIBUTE = "data-scdl-extension-player-icon-url";
   const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
   const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
   const REVIEW_URL = "https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews";
@@ -46,11 +47,6 @@
   const BYPASS_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17.2C22 19.85 19.85 22 17.2 22C15.78 22 14.51 21.38 13.63 20.4C12.87 19.55 12.4 18.43 12.4 17.2C12.4 14.55 14.55 12.4 17.2 12.4C18.57 12.4 19.81 12.98 20.69 13.91C20.68 13.91 20.68 13.91 20.69 13.92C21.5 14.78 22 15.93 22 17.2Z"/><path d="M18.48 18.54L15.95 16M18.45 16.03L15.92 18.57"/><path d="M22 8.69C22 10.66 21.49 12.4 20.69 13.91C19.81 12.98 18.57 12.4 17.2 12.4C14.55 12.4 12.4 14.55 12.4 17.2C12.4 18.43 12.87 19.55 13.63 20.4C13.26 20.57 12.92 20.71 12.62 20.81C12.28 20.93 11.72 20.93 11.38 20.81C8.48 19.82 2 15.69 2 8.69C2 5.6 4.49 3.09998 7.56 3.09998C9.37 3.09998 10.99 3.98002 12 5.33002C13.01 3.98002 14.63 3.09998 16.44 3.09998C19.51 3.09998 22 5.6 22 8.69Z"/></svg>`;
   // Inline copy of assets/icons/settings.svg so the tempo panel matches popup.html.
   const SETTINGS_ICON = `<svg viewBox="0 0 512 512" aria-hidden="true"><path d="M502.325 307.303 463.319 276.498a25.82 25.82 0 0 1-9.668-20.348v-.252a25.88 25.88 0 0 1 9.667-20.396l39.007-30.806a25.89 25.89 0 0 0 7.737-29.701l-17.134-41.366a25.89 25.89 0 0 0-26.472-15.532l-49.366 5.8a25.9 25.9 0 0 1-21.258-7.586l-.354-.356a25.88 25.88 0 0 1-7.552-21.225l5.799-49.363a25.89 25.89 0 0 0-15.531-26.472L337.004 1.939a25.89 25.89 0 0 0-29.701 7.736L276.498 48.68a25.82 25.82 0 0 1-20.349 9.668h-.252a25.88 25.88 0 0 1-20.395-9.667L204.697 9.675a25.89 25.89 0 0 0-29.702-7.736L133.63 19.072a25.89 25.89 0 0 0-15.532 26.473l5.799 49.366a25.9 25.9 0 0 1-7.585 21.257l-.356.356a25.88 25.88 0 0 1-21.226 7.552l-49.363-5.799a25.89 25.89 0 0 0-26.472 15.531L1.939 174.996a25.89 25.89 0 0 0 7.736 29.701l39.006 30.805a25.82 25.82 0 0 1 9.668 20.348v.251a25.88 25.88 0 0 1-9.667 20.395L9.675 307.303a25.89 25.89 0 0 0-7.736 29.701l17.134 41.365a25.89 25.89 0 0 0 26.472 15.532l49.366-5.799a25.9 25.9 0 0 1 21.258 7.586l.356.356a25.88 25.88 0 0 1 7.552 21.226l-5.799 49.364a25.89 25.89 0 0 0 15.532 26.472l41.366 17.134a25.89 25.89 0 0 0 29.701-7.736l30.804-39.005a25.82 25.82 0 0 1 20.348-9.669h.251a25.88 25.88 0 0 1 20.396 9.667l30.806 39.007a25.89 25.89 0 0 0 29.701 7.736l41.366-17.134a25.89 25.89 0 0 0 15.532-26.472l-5.8-49.366a25.9 25.9 0 0 1 7.586-21.257l.356-.356a25.88 25.88 0 0 1 21.225-7.552l49.364 5.799a25.89 25.89 0 0 0 26.472-15.531l17.134-41.365a25.89 25.89 0 0 0-7.737-29.701ZM281.292 329.698a77.75 77.75 0 1 1-59.52-143.695 77.75 77.75 0 0 1 59.52 143.695Z"/></svg>`;
-  // Kept inline because this script runs in the page's MAIN world, where
-  // chrome.runtime.getURL() is intentionally unavailable. The paths match
-  // assets/icons/speed-meter.svg, with fill changed to currentColor.
-  const SPEED_METER_ICON = `<svg class="trigger-icon" viewBox="0 0 612 612" aria-hidden="true" focusable="false"><g><path d="M175.205 239.62c.127-1.965-.533-3.902-1.833-5.381l-58.84-66.941c-1.3-1.479-3.135-2.381-5.102-2.508-1.975-.126-3.902.533-5.381 1.833-27.037 23.766-49.479 51.794-66.706 83.305-.944 1.729-1.165 3.762-.611 5.651.554 1.89 1.836 3.483 3.565 4.427l78.205 42.748a7.46 7.46 0 0 0 3.557.912c2.627 0 5.174-1.398 6.523-3.866 11.386-20.828 26.229-39.359 44.114-55.08 1.482-1.308 2.384-3.143 2.509-5.11Z"/><path d="M201.462 214.829a7.46 7.46 0 0 0 10.041 3.081c20.962-11.117 43.512-18.371 67.025-21.561 4.064-.551 6.913-4.293 6.362-8.358l-11.979-88.316c-.551-4.064-4.304-6.909-8.358-6.362-35.708 4.843-69.949 15.857-101.772 32.736-3.623 1.922-5.002 6.416-3.082 10.041l41.763 78.739Z"/><path d="m105.785 334.345-86.017-23.338a7.47 7.47 0 0 0-9.113 5.224C3.586 342.295 0 369.309 0 396.523c0 4.657.111 9.329.342 14.284.185 3.981 3.468 7.083 7.414 7.083.116 0 .234-.002.35-.008l89.031-4.113a7.46 7.46 0 0 0 7.075-7.762c-.155-3.341-.23-6.444-.23-9.484 0-18.02 2.365-35.873 7.029-53.066a7.46 7.46 0 0 0-5.226-9.112Z"/><path d="M438.731 120.745c-32.411-15.625-67.04-25.308-102.925-28.786a7.46 7.46 0 0 0-8.11 6.677l-8.593 88.712c-.396 4.082 2.594 7.713 6.677 8.108 23.652 2.291 46.463 8.669 67.8 18.954a7.46 7.46 0 0 0 10.14-3.37l38.7-80.287c1.558-3.788.007-8.228-3.689-10.008Z"/><path d="M569.642 245.337a7.46 7.46 0 0 0-.828-5.624c-18.432-30.835-41.933-57.983-69.848-80.686a7.46 7.46 0 0 0-10.447 1.075l-56.237 69.144a7.46 7.46 0 0 0 1.077 10.449c18.47 15.019 34.015 32.975 46.205 53.369a7.46 7.46 0 0 0 10.186 2.564l76.501-45.728a7.46 7.46 0 0 0 3.391-4.562Z"/><path d="M598.044 304.939c-1.228-3.915-5.397-6.096-9.308-4.867l-85.048 26.648c-3.915 1.226-6.093 5.393-4.867 9.306 6.104 19.486 9.199 39.839 9.199 60.494 0 3.041-.076 6.144-.23 9.484a7.46 7.46 0 0 0 7.075 7.762l89.031 4.113.35.008c3.944 0 7.228-3.103 7.414-7.083.229-4.955.342-9.627.342-14.284 0-31.217-4.694-61.912-13.956-91.584Z"/><path d="M305.737 380.755c-1.281 0-2.555.042-3.824.11l-120.65-71.185a7.46 7.46 0 0 0-10.632 10.186l65.815 123.355a69.56 69.56 0 0 0-.371 7.195c0 18.608 7.246 36.101 20.403 49.258 13.158 13.158 30.652 20.404 49.26 20.404s36.101-7.248 49.258-20.404c13.157-13.157 20.403-30.65 20.403-49.258s-7.246-36.101-20.403-49.258c-13.157-13.157-30.652-20.403-49.259-20.403Z"/></g></svg>`;
-
   if (window[INSTALLED_FLAG] || !globalThis.SCTempoControl) return;
   Object.defineProperty(window, INSTALLED_FLAG, { value: true });
 
@@ -165,12 +161,15 @@
 
   function syncBrandLogo() {
     if (!ui) return;
-    const logoUrl = document.documentElement.getAttribute(
-      EXTENSION_LOGO_ATTRIBUTE
-    );
-    if (!logoUrl) return;
-    ui.brandLogo.src = logoUrl;
-    ui.brandLogo.hidden = false;
+    const logoUrl = document.documentElement.getAttribute(EXTENSION_LOGO_ATTRIBUTE);
+    const playerIconUrl = document.documentElement.getAttribute(EXTENSION_PLAYER_ICON_ATTRIBUTE);
+    if (logoUrl) {
+      ui.brandLogo.src = logoUrl;
+      ui.brandLogo.hidden = false;
+    }
+    if (!playerIconUrl) return;
+    ui.triggerLogo.src = playerIconUrl;
+    ui.triggerLogo.hidden = false;
   }
 
   document.addEventListener(EXTENSION_ASSETS_EVENT, syncBrandLogo);
@@ -745,14 +744,6 @@
           border-radius: 2px;
         }
 
-        .trigger-icon {
-          display: block;
-          flex: 0 0 24px;
-          width: 24px;
-          height: 24px;
-          fill: currentColor;
-        }
-
         .trigger-rate {
           flex: 0 0 4ch;
           width: 4ch;
@@ -766,6 +757,13 @@
           transform: translateY(5px);
         }
         .trigger-rate.is-bypassed { color: #d6d6d6; }
+        .trigger-icon {
+          display: block;
+          flex: 0 0 24px;
+          width: 24px;
+          height: 24px;
+          object-fit: contain;
+        }
         .trigger:focus-visible,
         input:focus-visible {
           outline: 2px solid #ff5500;
@@ -1127,7 +1125,7 @@
           aria-label="Playback speed 1x"
           aria-haspopup="dialog"
           aria-expanded="false"
-        >${SPEED_METER_ICON}<span class="trigger-rate">1x</span></button>
+        ><img class="trigger-icon" width="24" height="24" alt="" draggable="false" hidden /><span class="trigger-rate">1x</span></button>
         <button class="clear-rate" type="button" aria-label="Clear selected playback speed" title="Clear selected playback speed">×</button>
       </span>
       <section
@@ -1261,6 +1259,7 @@
       slider: root.querySelector(".slider"),
       pitchToggle: root.querySelector(".pitch-toggle"),
       current: root.querySelector(".current"),
+      triggerLogo: root.querySelector(".trigger-icon"),
       triggerRate: root.querySelector(".trigger-rate"),
       bypass: root.querySelector(".bypass"),
       status: root.querySelector(".status"),

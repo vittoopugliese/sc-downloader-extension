@@ -6,7 +6,7 @@ const projectRoot = path.resolve(__dirname, "..");
 const corePath = path.join(__dirname, "tempo-control-core.js");
 const adapterPath = path.join(__dirname, "tempo-control-main.js");
 const contentPath = path.join(__dirname, "content.js");
-const panelLogo = "assets/icon128.png";
+const panelLogo = "assets/icons/player-toolkit.png";
 const manifest = JSON.parse(
   fs.readFileSync(path.join(projectRoot, "manifest.json"), "utf8")
 );
