@@ -26,15 +26,6 @@ function exposeTempoControlAssets() {
         font-style: normal;
         font-weight: 500;
         font-display: swap;
-        unicode-range: U+0000-002F, U+003A-10FFFF;
-      }
-      @font-face {
-        font-family: "SCDL UI";
-        src: url("${chrome.runtime.getURL("assets/fonts/SmoochSans-Medium.ttf")}") format("truetype");
-        font-style: normal;
-        font-weight: 500;
-        font-display: swap;
-        unicode-range: U+0030-0039;
       }
     `;
     (document.head || document.documentElement)?.appendChild(fontStyle);
