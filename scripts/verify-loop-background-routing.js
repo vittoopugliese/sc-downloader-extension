@@ -24,6 +24,9 @@ const context = vm.createContext({
     canDownload: (track) => Boolean(track?.streamUrl),
     migrate: (track) => track,
   },
+  SCPlayerToolsAccess: {
+    authorize: async () => ({ allowed: true }),
+  },
   BulkJobManager: {
     KEEPALIVE_ALARM: "keepalive",
     recoverRunningJob: async () => {},

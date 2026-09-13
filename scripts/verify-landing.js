@@ -113,24 +113,31 @@ for (const locale of ['en', 'es', 'pt', 'de', 'ru']) {
 }
 assert(i18nSource.includes('write_review') && i18nSource.includes('reviews_show_all'), 'Review CTA locales are incomplete');
 assert(!/(href|action)=["'][^"']*(checkout|stripe|paddle|lemonsqueezy)/i.test(html), 'Checkout must not be active yet');
-assert(!/USD\s*2[.,]99|Looper Pro|Early access|Purchases open soon/i.test(html), 'The free Looper landing must not retain payment copy');
+for (const requiredPlanCopy of [
+  'Downloads are free. Go Pro for the tools.',
+  '20 new A–B loops in total, shared across tracks and tabs.',
+  'Pro purchase is not available on this website yet.'
+]) {
+  assert(html.includes(requiredPlanCopy), `Missing required Player Tools plan copy: ${requiredPlanCopy}`);
+}
 assert(html.includes("text.textContent = review.text"), 'Review text must be rendered with textContent');
 assert(html.includes("badge.textContent = t('implemented_badge')"), 'Implemented review requests need their localized badge');
 assert(html.includes('scroll-snap-type:x mandatory'), 'Reviews should use a horizontal scroll carousel');
 assert(html.includes('id="review-prev"') && html.includes('id="review-next"'), 'Reviews should have previous and next controls');
 assert(!html.includes('looper-player'), 'The retired standalone Looper player must be absent');
 assert(!/<button[^>]+id="loop-export"/.test(html), 'The retired WAV-export UI must be absent');
-assert(/data-loop-handle="start"[\s\S]*data-loop-handle="end"/.test(html), 'The hero Looper preview needs draggable A and B markers');
-assert(html.includes("handle.addEventListener('pointerdown'"), 'The hero Looper markers must support pointer dragging');
-assert(
-  /class="looper-guide"[\s\S]*Open one track[\s\S]*Turn on A–B[\s\S]*Set the range[\s\S]*Zoom in for precise edits[\s\S]*Save the loop/.test(html),
-  'The landing must explain the free Looper workflow, including precision zoom.'
-);
+assert(html.includes('id="looper"'), 'The landing must retain the Player Tools section anchor.');
 assert(html.includes('mailto:it@vpugliese.online'), 'The configured support email is missing');
 assert(!/reviews\.txt/i.test(html), 'Production landing must not fetch the Desktop review source');
 
-const inlineScripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
+const inlineScripts = [...html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)];
 assert(inlineScripts.length > 0, 'Landing must contain its interactive script');
-for (const script of inlineScripts) new Function(script[1]);
+for (const [, attributes, source] of inlineScripts) {
+  if (/type\s*=\s*["']application\/ld\+json["']/i.test(attributes)) {
+    JSON.parse(source);
+  } else {
+    new Function(source);
+  }
+}
 
 console.log(`Landing verification passed (${reviews.length} authentic reviews)`);

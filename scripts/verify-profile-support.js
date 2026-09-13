@@ -43,13 +43,19 @@ const context = vm.createContext({
   location,
   window: { location },
   document: {
-    documentElement: { innerHTML: "" },
+    getElementById: () => null,
+    createElement: () => ({ id: "", textContent: "" }),
+    head: { appendChild() {} },
+    documentElement: { innerHTML: "", setAttribute() {} },
     querySelectorAll: () => [],
+    addEventListener() {},
+    dispatchEvent() {},
   },
   MutationObserver: class { observe() {} },
   chrome: {
     runtime: {
       onMessage: { addListener() {} },
+      getURL: (value) => `chrome-extension://test/${value}`,
       sendMessage: () => Promise.resolve({ success: true }),
     },
   },

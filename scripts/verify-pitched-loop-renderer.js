@@ -131,17 +131,10 @@ function fakeFactory(record) {
   assert.match(progress.join("\n"), /Loading pitch-preservation engine/);
   assert.match(progress.join("\n"), /Rendering preserved pitch 100%/);
 
-  const sourceVendor = fs.readFileSync(
-    path.resolve(
-      __dirname,
-      "../repos/soundcloud-tempo-control-main/vendor/signalsmith/wasm-factory.mjs"
-    )
-  );
   const packagedVendor = fs.readFileSync(
     path.resolve(__dirname, "vendor/signalsmith/wasm-factory.mjs")
   );
   const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
-  assert.equal(sha256(packagedVendor), sha256(sourceVendor));
   assert.equal(
     sha256(packagedVendor),
     "14c2c5858daff55746fb6c61dee3a67a9fc5ba5edf57ce715559297c041d3d89"

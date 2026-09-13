@@ -3,9 +3,8 @@ const path = require("node:path");
 
 const projectRoot = path.resolve(__dirname, "..");
 const quicksand = "assets/fonts/Quicksand-Medium.ttf";
-const smoochSans = "assets/fonts/SmoochSans-Medium.ttf";
 
-for (const fontPath of [quicksand, smoochSans]) {
+for (const fontPath of [quicksand]) {
   const absolutePath = path.join(projectRoot, fontPath);
   if (!fs.existsSync(absolutePath) || fs.statSync(absolutePath).size === 0) {
     throw new Error(`Font asset is missing or empty: ${fontPath}`);
@@ -18,7 +17,7 @@ const manifest = JSON.parse(
 const exposedResources = manifest.web_accessible_resources.flatMap(
   (entry) => entry.resources || []
 );
-for (const fontPath of [quicksand, smoochSans]) {
+for (const fontPath of [quicksand]) {
   if (!exposedResources.includes(fontPath)) {
     throw new Error(`Font is not exposed to the SoundCloud UI: ${fontPath}`);
   }
@@ -48,10 +47,9 @@ for (const [name, source] of [
 ]) {
   if (
     !source.includes("Quicksand-Medium.ttf") ||
-    !source.includes("SmoochSans-Medium.ttf") ||
-    !source.includes("unicode-range: U+0030-0039")
+    !source.includes('font-family: "SCDL UI"')
   ) {
-    throw new Error(`${name} does not define the numeric font split.`);
+    throw new Error(`${name} does not define the extension UI font.`);
   }
 }
 
@@ -66,4 +64,4 @@ for (const [name, source] of [
   }
 }
 
-console.log("Font assets and numeric/text font split verified.");
+console.log("Extension UI font verified.");

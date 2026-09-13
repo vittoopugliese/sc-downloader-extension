@@ -27,6 +27,9 @@ const context = vm.createContext({
   window: { location },
   location,
   document: {
+    getElementById: () => null,
+    createElement: () => ({ id: "", textContent: "" }),
+    head: { appendChild() {} },
     documentElement: {
       innerHTML: 'window.client_id="client-test-12345678901234567890"',
       setAttribute() {},
