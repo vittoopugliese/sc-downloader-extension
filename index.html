@@ -4,16 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f5ef">
-  <meta name="description" content="Download SoundCloud tracks, playlists, likes and artist uploads for free. Bulk downloader with A-B looper, WAV export, and folder selection. Chrome extension with 20,000+ users.">
+  <meta name="description" content="Download SoundCloud tracks, playlists, likes and artist uploads for free. Free full-track and collection downloads. Try Player Tools with 20 A-B loops; Pro adds unlimited tools and WAV exports. Chrome extension with 20,000+ users.">
   <meta name="keywords" content="soundcloud downloader, download soundcloud, soundcloud playlist downloader, soundcloud bulk download, soundcloud to mp3, soundcloud chrome extension, free soundcloud downloader, soundcloud looper">
   <meta property="og:type" content="website">
   <meta property="og:title" content="SoundCloud Track Downloader — Free Bulk Download Chrome Extension">
-  <meta property="og:description" content="Download SoundCloud tracks, playlists & likes in bulk. Free Chrome extension with 20,000+ users. A-B looper with WAV export included. No login required for public tracks.">
+  <meta property="og:description" content="Download SoundCloud tracks, playlists & likes in bulk. Free Chrome extension with 20,000+ users. Player Tools trial included; WAV export requires Pro. No login required for public tracks.">
   <meta property="og:url" content="https://soundcloud-downloader.online/">
   <meta property="og:image" content="https://soundcloud-downloader.online/assets/app-icon-logo-with-background-xl%20(2).png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="SoundCloud Track Downloader — Free Bulk Download">
-  <meta name="twitter:description" content="Download SoundCloud tracks, playlists & likes. Free Chrome extension with A-B looper. 20,000+ users.">
+  <meta name="twitter:description" content="Download SoundCloud tracks, playlists & likes. Free downloader with a Player Tools trial. 20,000+ users.">
   <meta name="twitter:image" content="https://soundcloud-downloader.online/assets/app-icon-logo-with-background-xl%20(2).png">
   <link rel="canonical" href="https://soundcloud-downloader.online/">
   <title>SoundCloud Downloader — Free Bulk Download Chrome Extension | 20K+ Users</title>
@@ -41,7 +41,7 @@
       "price": "0",
       "priceCurrency": "USD"
     },
-    "description": "Download SoundCloud tracks, playlists, likes and artist uploads for free. Bulk downloader with A-B looper, WAV export, and folder selection. Chrome extension with 20,000+ users.",
+    "description": "Download SoundCloud tracks, playlists, likes and artist uploads for free. Free full-track and collection downloads. Try Player Tools with 20 A-B loops; Pro adds unlimited tools and WAV exports. Chrome extension with 20,000+ users.",
     "url": "https://soundcloud-downloader.online/",
     "downloadUrl": "https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb",
     "screenshot": "https://soundcloud-downloader.online/assets/images/readme_preview.png",
@@ -288,6 +288,39 @@
     @media (max-width:1000px) { .review-card { flex-basis:min(340px,calc(100vw - 64px)); } }
     @media (max-width:760px) { .review-card { flex-basis:calc(100vw - 52px); } }
     @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*::before,*::after { transition:none !important; animation:none !important; } }
+
+    .plans { padding:24px 0 64px; scroll-margin-top:28px; }
+    .plans .section-heading { max-width:720px; margin:0 auto 32px; }
+    .plan-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+    .plan-card { padding:34px; border:1px solid var(--line); border-radius:20px; background:#fffdf8; display:flex; flex-direction:column; align-items:flex-start; }
+    .plan-kicker { display:flex; align-items:center; gap:10px; font:700 12px "Sora",sans-serif; letter-spacing:1px; }
+    .plan-kicker span { border:1px solid currentColor; border-radius:5px; padding:4px 7px; font-size:10px; }
+    .plan-card h3 { font:700 25px "Sora",sans-serif; margin:25px 0 8px; }
+    .plan-price { font:700 clamp(32px,4vw,48px) "Sora",sans-serif; letter-spacing:-2px; margin:12px 0; }
+    .plan-price small { font:400 13px "Roboto",sans-serif; letter-spacing:0; color:var(--muted); }
+    .plan-card p,.plan-card li { font-size:14px; line-height:1.7; }
+    .plan-card ul { padding:0; list-style:none; margin:15px 0 24px; }
+    .plan-card li { position:relative; padding:9px 0 9px 25px; border-bottom:1px solid #80808025; }
+    .plan-card li::before { content:"✓"; position:absolute; left:0; color:#648348; font-weight:bold; }
+    .trial-included { padding:20px; background:#edece4; border-radius:12px; margin:0 0 25px; }
+    .trial-included h4 { margin:0 0 8px; font-size:15px; }
+    .trial-included p { margin:8px 0 0; font-size:13px; }
+    .plan-card > .cta { margin-top:auto; }
+    .plan-pro { background:#242922; color:#f7f5ef; border-color:#242922; box-shadow:0 18px 45px #262e2117; }
+    .plan-pro .plan-kicker span { color:#ffac79; }
+    .plan-pro li::before { color:#ffac79; }
+    .plan-pro .launch-badge { color:#ffbd94; background:#ff9c5517; border-radius:6px; padding:5px 10px; margin:24px 0 18px; font-size:12px; font-weight:700; }
+    .reference-price { font-size:13px; color:#c2c8bc; }
+    .reference-price del { margin-left:6px; }
+    .plan-pro .payment-model { margin:0 0 16px; color:#ffbd94; }
+    .plan-pro .availability { color:#c2c8bc; font-size:12px; margin:16px 0 0; }
+    .tools-story { display:grid; grid-template-columns:1fr 1fr; gap:50px; padding:35px 0 50px; border-top:1px solid var(--line); scroll-margin-top:25px; }
+    .tools-story h2 { font:700 32px "Sora",sans-serif; letter-spacing:-1px; margin:14px 0; }
+    .tools-story p { font-size:15px; line-height:1.8; }
+    .tools-story .eyebrow { font-size:11px; }
+    .tools-detail { border-left:3px solid var(--orange); padding-left:25px; align-self:center; }
+    a:focus-visible,button:focus-visible,summary:focus-visible { outline:3px solid #d95810; outline-offset:5px; }
+    @media(max-width:760px) { .plan-grid,.tools-story { grid-template-columns:1fr; } .plan-card { padding:25px; } .tools-story { gap:15px; } .plans { padding-bottom:40px; } }
   </style>
 </head>
 <body>
@@ -312,6 +345,7 @@
       </a>
       <nav aria-label="Main navigation" data-l10n-aria="main_navigation">
         <a href="how-to-download-soundcloud.html">How to Download</a>
+        <a href="#plans" data-l10n="nav_plans">Plans</a>
         <a href="#features" data-l10n="nav_features">Features</a>
         <a href="#reviews" data-l10n="nav_reviews">Reviews</a>
         <a href="#faq" data-l10n="nav_faq">FAQ</a>
@@ -323,7 +357,7 @@
         <div class="hero-copy">
           <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span> <span data-l10n="hero_eyebrow">Free bulk downloader for Chrome</span></div>
           <h1 id="hero-title"><span data-l10n="hero_title_first">Whole collections.</span><br><em data-l10n="hero_title_second">One click.</em></h1>
-          <p class="intro"><span data-l10n="hero_intro_first">Download individual tracks, playlists, likes and complete artist uploads without leaving SoundCloud.</span> <strong data-l10n="hero_intro_second">Choose what you need and let the batch finish in the background.</strong></p>
+          <p class="intro"><span data-l10n="hero_intro_first">Download individual tracks, playlists, likes and complete artist uploads without leaving SoundCloud.</span> <strong data-l10n="hero_intro_second">Keep your downloads free. Discover more ways to listen with Player Tools.</strong></p>
           <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb"><svg class="icon" aria-hidden="true"><use href="#i-chrome"/></svg> <span data-l10n="hero_cta">Add to Chrome — it’s free</span></a>
           <p class="mobile-note" data-l10n="mobile_note">Install on your desktop browser to start downloading.</p>
           <div class="store-proof" aria-label="Chrome Web Store snapshot">
@@ -389,17 +423,64 @@
           <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-background"/></svg><span class="feature-index" data-l10n="feature_background_index">03 / BACKGROUND</span></div><h3 data-l10n="feature_background_title">Close the popup. It keeps going.</h3><p data-l10n="feature_background_copy">Pause, resume or cancel a batch. Progress stays visible on the extension badge and a desktop notification tells you when it finishes.</p><span class="free-label" data-l10n="always_free">Always free</span></article>
         </div>
       </section>
-      <section class="looper-guide" id="looper" aria-labelledby="looper-title">
-        <div class="section-heading"><h2 id="looper-title" data-l10n="looper_web_title">Looper is included. Free.</h2><p data-l10n="looper_web_intro">Repeat the part you need and export only that range as WAV.</p></div>
-        <ol class="looper-steps">
-          <li><h3 data-l10n="looper_web_open_title">Open one track</h3><p data-l10n="looper_web_open">Go to a compatible individual SoundCloud track and wait for it to load or start playing.</p></li>
-          <li><h3 data-l10n="looper_web_enable_title">Turn on A–B</h3><p data-l10n="looper_web_enable">Press the loop button immediately before More actions on the track page.</p></li>
-          <li><h3 data-l10n="looper_web_range_title">Set the range</h3><p data-l10n="looper_web_range">Drag A and B over the waveform. Arrow keys move a marker 100 ms; Shift + Arrow moves it one second.</p></li>
-          <li><h3 data-l10n="looper_web_zoom_title">Zoom in for precise edits</h3><p data-l10n="looper_web_zoom">Scroll up over the waveform to zoom toward the cursor, then scroll down to zoom back out. Fine A–B edits stay easy even on a long track.</p></li>
-          <li><h3 data-l10n="looper_web_save_title">Save the loop</h3><p data-l10n="looper_web_save">Choose Download loop to save the selected A–B range as a WAV file.</p></li>
-        </ol>
-        <p class="looper-guide-note" data-l10n="looper_web_note">Looper is temporary: close it with the cross or Escape; opening another track removes it. WAV reflects the available source and does not restore quality that is not there.</p>
-      </section>
+      <section class="plans" id="plans" aria-labelledby="plans-title">
+        <div class="section-heading">
+        <h2 id="plans-title" data-l10n="plans_title">Downloads are free. Go Pro for the tools.</h2>
+        <p  data-l10n="plans_intro">One extension. A free downloader, a taste of Player Tools, and Pro for the full experience.</p>
+        </div>
+        <div class="plan-grid">
+        <article class="plan-card plan-free">
+        <div class="plan-kicker">DOWNLOADER <span>FREE</span>
+        </div>
+        <h3  data-l10n="free_label">Always free</h3>
+        <div class="plan-price">$0 <small data-l10n="free_price">Forever</small>
+        </div>
+        <p  data-l10n="free_copy">Everything you need to save your music.</p>
+        <ul>
+        <li  data-l10n="free_tracks">Individual tracks, playlists, albums, likes and public artist uploads.</li>
+        <li  data-l10n="free_batch">Select tracks or download a whole collection. Pause, resume and cancel background batches.</li>
+        <li  data-l10n="free_files">Available audio formats, cover art, metadata and your choice of folders.</li>
+        </ul>
+        <div class="trial-included">
+        <h4  data-l10n="trial_title">Included: a taste of Player Tools</h4>
+        <p  data-l10n="trial_copy">20 new A–B loops in total, shared across tracks and tabs. No monthly reset.</p>
+        <p  data-l10n="trial_tools">During the trial: speed from 0.1x to 3x, Keep Tone, four saveable presets, A–B listening, visual range editing and waveform zoom.</p>
+        </div>
+        <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb" data-l10n="hero_cta">Add to Chrome — it’s free</a>
+        </article>
+        <article class="plan-card plan-pro">
+        <div class="plan-kicker">
+        <img src="assets/icons/player-toolkit.png" width="32" height="32" alt=""> PLAYER TOOLS <span>PRO</span>
+        </div>
+        <p class="launch-badge" data-l10n="launch">Launch offer · 46% OFF</p>
+        <div class="reference-price">
+        <span data-l10n="future_price">Future price</span> <del>USD 6.79</del>
+        </div>
+        <div class="plan-price">USD 3.69</div>
+        <p class="payment-model" data-l10n="lifetime">lifetime · one payment</p>
+        <p  data-l10n="pro_copy">All the downloader features. The complete Player Tools experience.</p>
+        <ul>
+        <li  data-l10n="pro_loops">Unlimited A–B loops, speed, Keep Tone and four saveable presets.</li>
+        <li  data-l10n="pro_precision">Editable timestamps and precise marker nudges.</li>
+        <li  data-l10n="pro_wav">Export the selected A–B range as WAV, with or without effects.</li>
+        <li  data-l10n="pro_effects">Download the full track with your Player Tools effects.</li>
+        </ul>
+        <a class="cta" href="#looper" data-l10n="explore">Explore Player Tools</a>
+        <p class="availability" data-l10n="availability">Pro purchase is not available on this website yet.</p>
+        </article>
+        </div>
+        </section>
+        <section class="tools-story" id="looper" aria-labelledby="tools-title">
+        <div>
+        <p class="eyebrow">PLAYER TOOLS</p>
+        <h2 id="tools-title" data-l10n="tools_title">Listen closer. Make it yours.</h2>
+        <p  data-l10n="tools_copy">Slow a passage down, keep its tone, save your favorite speeds and repeat the part you want to hear again. Pro adds precise editing and exports.</p>
+        </div>
+        <div class="tools-detail">
+        <p  data-l10n="trial_tools">During the trial: speed from 0.1x to 3x, Keep Tone, four saveable presets, A–B listening, visual range editing and waveform zoom.</p>
+        <p  data-l10n="pitch_note">Pitch follows speed when Keep Tone is off. Independent pitch shifting and semitone controls are not included.</p>
+        </div>
+        </section>
       <section class="reviews" id="reviews" aria-labelledby="reviews-title">
         <div class="section-heading">
           <h2 id="reviews-title" data-l10n="reviews_title">Every written review. No cherry-picking.</h2>
@@ -422,15 +503,15 @@
       </section>
       <section class="faq" id="faq" aria-labelledby="faq-title">
         <div class="faq-grid">
-          <div class="faq-intro"><h2 id="faq-title" data-l10n="faq_title">Straight answers.</h2><p class="faq-lead" data-l10n="faq_intro">A free downloader and a free creative tool—no hidden tier.</p></div>
-          <div class="faq-list">
+          <div class="faq-intro"><h2 id="faq-title" data-l10n="faq_title">Straight answers.</h2><p class="faq-lead" data-l10n="faq_intro">Free downloads. Clear limits for the tools.</p></div>
+          <div class="faq-list"><details><summary  data-l10n="trial_rules_title">What counts as a trial use?</summary><p  data-l10n="trial_rules">One new, completed and activated A–B range uses one of the 20 loops. Repeating it, adjusting its markers or pausing does not use another. Clearing it and creating a new range does.</p></details><details><summary  data-l10n="trial_end_title">What happens after the trial?</summary><p  data-l10n="trial_end">Your last granted loop continues for its session. Once the trial ends, the musical tools require Pro. Full-track downloads without Player Tools effects remain free.</p></details><details><summary  data-l10n="original_title">What does “free downloads” include?</summary><p  data-l10n="original_copy">Full tracks and collections without Player Tools effects, in the formats available from the source. “Original” means no effects; it does not guarantee the artist’s original upload. WAV export does not improve the source quality.</p></details>
             <details><summary data-l10n="faq_rights_title">What can I download?</summary><p data-l10n="faq_rights_copy">Use the extension only for content you own or have permission to save. It is an independent tool and is not affiliated with, approved by or maintained by SoundCloud.</p></details>
             <details id="privacy"><summary data-l10n="faq_privacy_title">What about privacy?</summary><p><span data-l10n="faq_privacy_copy">The current extension processes audio and downloads in your browser. This landing has no analytics. The optional uninstall-feedback form sends only what you choose to submit and is retained for up to 180 days.</span> <a href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb" target="_blank" rel="noopener noreferrer" data-l10n="faq_privacy_link">View the current Store disclosure</a>.</p></details>
           </div>
         </div>
       </section>
       <section class="closing" aria-labelledby="closing-title">
-        <div><h2 id="closing-title" data-l10n="closing_title">Good music deserves a save button.</h2><p data-l10n="closing_copy">Free to install. Free to use. Built by an independent developer.</p></div>
+        <div><h2 id="closing-title" data-l10n="closing_title">Good music deserves a save button.</h2><p data-l10n="closing_copy">Install free. Keep downloading free. Choose Pro for Player Tools.</p></div>
         <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb"><span data-l10n="closing_cta">Get the free extension</span> <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
       </section>
     </main>

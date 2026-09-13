@@ -1,8 +1,25 @@
 # Player Tools: plan de producto e implementación
 
-Fecha: 2026-09-12. Estado: decisiones registradas; implementación pendiente.
+Fecha: 2026-09-12. Estado: decisiones registradas; implementación parcial, no lista para release.
 Base inspeccionada al escribir: `7f3187e8c777cc42942e6b20f44ccecad4774725`.
 Este documento incorpora las respuestas explícitas del usuario del 12 de septiembre y reemplaza propuestas anteriores incompatibles sobre Free, precios, descargas y rediseño del panel.
+
+## Actualización de implementación — 2026-09-13
+
+Auditoría del árbol lineal desde la base del plan hasta `905943b` (`629b55f`, `817149b`, `c33963f`, `6352d2b`, `905943b`). Había cambios locales sin commit durante la auditoría; no se atribuyen a `HEAD` ni cambian esta lectura de los commits.
+
+| Etapa | Estado real | Evidencia y trabajo que falta |
+| --- | --- | --- |
+| E1 — Promoción propia | Parcial | La franja existe en `popup.html`, muestra ícono y los importes aprobados, y `popup.js` abre una pestaña/panel. El copy está hardcodeado, dice `Tempo & looping tools` en vez del copy aprobado y no tiene claves en los cinco locales. La apertura no implementa handshake, espera de montaje, timeout de intención ni instrucción cuando no hay player. |
+| E2 — Acceso y fixtures | Parcial | Existen `player-tools-policy.js`, `player-tools-access.js` y `player-tools-client.js`; background es el único escritor y serializa operaciones. Falta el tooling/build dev Free/Pro, adapter separado de release y todos los escenarios de fixture. También falta que las capacidades deriven realmente del estado: el snapshot hoy deja tempo, Keep Tone, presets y loops habilitados para Free incluso con `used=20`. |
+| E3 — Trial global | No implementada de forma funcional | `begin-loop` está en las operaciones Free pero `canAuthorize` devuelve `consume: false`; por ello `authorize` nunca incrementa `used` ni crea una concesión. El panel tampoco pide autorización antes de `set-loop`. No están implementados el aviso 2→1, idempotencia por request ID, owner/generación, disputa entre pestañas, gracia del loop 20 ni su recuperación tras reiniciar el worker. |
+| E4 — UI bloqueada | No implementada | Hay CSS y CTA para `.waveform-shell.is-locked`, pero `render()` siempre elimina esa clase y habilita slider, Keep Tone, presets y looper. La CTA abre la guía del looper/popup, no un flujo de disponibilidad Pro. Falta neutralizar el audio efectivo, colapsar el looper, retirar rutas de teclado y gestionar foco/`aria-live`. |
+| E5 — Export Pro | Parcial | `background.js` rechaza `DOWNLOAD_LOOP` y track transformado cuando el acceso no es Pro; original/bulk siguen permitidos. Falta una activación/entitlement de producto integrada y pruebas de las rutas manipuladas, transformaciones efectivas, WAV real y comportamiento Free agotado. El estado Pro sólo puede ser escrito por la superficie interna actual; no existe el tooling dev definido por E2. |
+| E6 — Locales e integración | No implementada | No hay claves Player Tools en los cinco locales ni diccionario MAIN. La ayuda todavía afirma seis presets, dos botones X, rango 0.1x–4x, exportes sin plan y loop gratuito. `npm test` falla en `verify-pitched-loop-renderer.js` porque depende de `repos/soundcloud-tempo-control-main/vendor/signalsmith/wasm-factory.mjs`, ausente del repo. Faltan las pruebas de política/lifecycle y la QA visual/accesible/paquete de la etapa. |
+
+Dos cambios del árbol exceden este plan y deben mantenerse aislados hasta una decisión explícita: `audio-effects-core.js` introduce reverb/delay, aunque el plan difiere audio nuevo; `services/player-tools-license/` introduce checkout, Lemon Squeezy, D1 y webhooks, aunque E8 se asignó a otro chat y no debe integrarse ni publicarse como parte de E1–E6. Ninguno está conectado al flujo de compra de la extensión en `HEAD`.
+
+El pendiente de producto de la sección 6 sigue abierto: el límite de veinte loops no hace finita la prueba para quien sólo usa tempo/Keep Tone/presets. Antes de cerrar E2–E4 hay que decidir la condición que termina esa vía de prueba. Hasta entonces no es correcto declarar listo el producto Free/Pro.
 
 ## 1. Cómo retomar en una sesión en frío
 
