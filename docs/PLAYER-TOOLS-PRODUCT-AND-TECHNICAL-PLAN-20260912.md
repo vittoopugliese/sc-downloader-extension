@@ -4,6 +4,20 @@ Fecha: 2026-09-12. Estado: decisiones registradas; implementación parcial, no l
 Base inspeccionada al escribir: `7f3187e8c777cc42942e6b20f44ccecad4774725`.
 Este documento incorpora las respuestas explícitas del usuario del 12 de septiembre y reemplaza propuestas anteriores incompatibles sobre Free, precios, descargas y rediseño del panel.
 
+## Base de código implementada — 2026-09-13
+
+La instrucción posterior del usuario autorizó implementar las bases importantes y preparar la continuación. Por eso las pausas de las secciones 1 y 18 y la limitación a una entrega exclusivamente documental describen la sesión anterior; no obligan a volver a elegir una etapa para esta base autorizada.
+
+Leer [el contrato y la guía de continuación](PLAYER-TOOLS-FOUNDATION-HANDOFF-20260913.md) antes de editar acceso o conectar el panel. Esta actualización corresponde al árbol de trabajo, no a un commit ni a un release.
+
+- E2: política de capacidades corregida; persistencia estricta, revisión monotónica, inicialización única y almacenamiento inyectable para tests. Se retiró el escritor interno de entitlement de producción. **Sigue faltando el build/herramienta dev Free/Pro.**
+- E3: núcleo de autorización implementado y probado con cola única, rangos válidos, identidad de documento, generación, recibos idempotentes, consumo global y gracia exclusiva del último propietario. **El panel y los otros consumidores de loops todavía no solicitan estos permisos antes de aplicar loops.** No es un trial integrado.
+- Cliente ISOLATED: transporta request ID/generación, limita tamaño de mensajes, refresca ante cambios de storage, descarta snapshots atrasados también en respuestas correlacionadas y publica estado de error con capacidades cerradas.
+- E5: pruebas de routing usan el servicio real de acceso para verificar rechazo Free de loop/track transformado antes de resolver/procesar y continuidad de originales/bulk agotado. No es QA completa de export ni validación de solicitudes malformadas.
+- Verificación: `npm test` pasó con 37 verificadores locales, incluido el renderer Signalsmith empaquetado. El fallo del renderer descrito en la auditoría histórica de abajo ya no se reproduce en este árbol. No se ejecutó QA visual, E2E con extensión real ni empaquetado.
+
+La decisión de fin de trial para uso exclusivo de tempo sigue pendiente. E1, E4, E6, la integración restante de E2/E3/E5 y las restricciones de producto conservan su alcance original.
+
 ## Actualización de implementación — 2026-09-13
 
 Auditoría del árbol lineal desde la base del plan hasta `905943b` (`629b55f`, `817149b`, `c33963f`, `6352d2b`, `905943b`). Había cambios locales sin commit durante la auditoría; no se atribuyen a `HEAD` ni cambian esta lectura de los commits.

@@ -2,6 +2,14 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const policy = require("./player-tools-policy.js");
+const { create, STORAGE_KEY } = require("./player-tools-access.js");
+let accessState = policy.normalize();
+accessState.entitlement = { status: "active" };
+const access = create({ storage: {
+  async get() { return { [STORAGE_KEY]: structuredClone(accessState) }; },
+  async set(value) { accessState = structuredClone(value[STORAGE_KEY]); },
+} });
 
 let messageListener = null;
 const tabMessages = [];
@@ -24,14 +32,20 @@ const context = vm.createContext({
     canDownload: (track) => Boolean(track?.streamUrl),
     migrate: (track) => track,
   },
-  SCPlayerToolsAccess: {
-    authorize: async () => ({ allowed: true }),
-  },
+  SCPlayerToolsAccess: access,
   BulkJobManager: {
     KEEPALIVE_ALARM: "keepalive",
     recoverRunningJob: async () => {},
     ensureJobRunning: async () => {},
     reportBuildProgress: async () => true,
+    async downloadSingleTrack(...args) {
+      downloads.push(args);
+      return { success: true };
+    },
+    async createJob(...args) {
+      downloads.push(args);
+      return { id: "original-bulk" };
+    },
     async downloadLoop(...args) {
       downloads.push(args);
       return { success: true, fileName: "Artist - Track (loop).wav" };
@@ -51,6 +65,7 @@ const context = vm.createContext({
     alarms: { onAlarm: { addListener() {} } },
     cookies: { get() {} },
     tabs: {
+      onRemoved: { addListener() {} },
       sendMessage(tabId, message, options, callback) {
         tabMessages.push({ tabId, message, options });
         callback({ success: true, trackData: resolvedTrack });
@@ -96,6 +111,28 @@ function dispatch(request, sender) {
   assert.equal(downloads[0][0], resolvedTrack);
   assert.deepEqual(downloads[0][2], trimRange);
   assert.deepEqual(downloads[0][3], playbackTransform);
+
+  accessState.entitlement = { status: "free" };
+  accessState.trial.used = 20;
+  const deniedLoop = await dispatch({ type: "DOWNLOAD_LOOP", trackUrl: "https://soundcloud.com/artist/track",
+    trimRange, playbackTransform: { rate: 1 } }, { tab: { id: 42 } });
+  assert.equal(deniedLoop.code, "pro-required");
+  assert.equal(tabMessages.length, 1, "denial precedes track resolution");
+  assert.equal(downloads.length, 1, "denial precedes processing");
+  const deniedTrack = await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack,
+    playbackTransform }, {});
+  assert.equal(deniedTrack.code, "pro-required");
+  assert.equal(downloads.length, 1);
+  const original = await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack }, {});
+  assert.equal(original.success, true);
+  const neutral = await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack,
+    playbackTransform: { rate: 1, preservePitch: true } }, {});
+  assert.equal(neutral.success, true);
+  const bulk = await dispatch({ type: "START_BULK_JOB", tracks: [resolvedTrack], playbackTransform }, {});
+  assert.equal(bulk.success, true);
+  assert.equal(downloads.at(-1).includes(playbackTransform), false, "bulk never inherits effects");
+  accessState.entitlement = { status: "active" };
+  assert.equal((await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack, playbackTransform }, {})).success, true);
 
   console.log("Loop background routing verification passed.");
 })().catch((error) => {

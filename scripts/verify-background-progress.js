@@ -35,6 +35,7 @@ const context = vm.createContext({
     }),
   },
   chrome: {
+    tabs: { onRemoved: { addListener() {} } },
     cookies: { get() {} },
     runtime: {
       onInstalled: { addListener() {} },

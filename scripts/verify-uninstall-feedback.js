@@ -19,6 +19,7 @@ const context = vm.createContext({
   SCDownloadTrack: {},
   SCDownloadSource: { configure: () => ({}) },
   chrome: {
+    tabs: { onRemoved: { addListener() {} } },
     cookies: { get() {} },
     i18n: { getUILanguage: () => "es-419" },
     runtime: {

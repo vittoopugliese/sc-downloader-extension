@@ -128,6 +128,10 @@ chrome.runtime.onStartup.addListener(() => {
   BulkJobManager.recoverRunningJob().catch(() => {});
 });
 
+chrome.tabs.onRemoved.addListener((tabId) => {
+  SCPlayerToolsAccess.endTab(tabId).catch((error) => console.warn("Player Tools session cleanup failed", error.code));
+});
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === BulkJobManager.KEEPALIVE_ALARM) {
     BulkJobManager.ensureJobRunning().catch(() => {});
