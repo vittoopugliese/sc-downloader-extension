@@ -67,6 +67,7 @@
   const { DEFAULTS, clampRate, create, formatRate } = globalThis.SCTempoControl;
   const effectsApi = globalThis.SCTempoEffects;
   const RATE_ANIMATION_DURATION_MS = 220;
+  const DEFAULT_EFFECT_TOGGLE_WET = 20;
   let ui = null;
   let mountQueued = false;
   let playbackFailure = "";
@@ -90,8 +91,6 @@
   let waveformZoom = null;
   let waveformLoadId = 0;
   let waveformDrag = null;
-  let setterHoldTimer = null;
-  let setterLongPressed = false;
   let panelOpenMode = null;
   let hoverOpenTimer = null;
   let hoverCloseTimer = null;
@@ -105,6 +104,7 @@
   let expandedEffectSettings = null;
   let effectsFailure = "";
   let effectsBypassed = false;
+  const effectWetMemory = { reverb: DEFAULT_EFFECT_TOGGLE_WET, delay: DEFAULT_EFFECT_TOGGLE_WET };
   const customRates = CUSTOM_RATE_STORAGE.map((key, index) => {
     try {
       const stored = localStorage.getItem(key);
@@ -563,18 +563,21 @@
       marker.setAttribute("aria-valuenow", String(Math.round(value || 0)));
       marker.setAttribute("aria-valuetext", formatLoopTime(value));
     }
-    ui.setA.textContent = Number.isFinite(loopState.startMs)
-      ? formatLoopTime(loopState.startMs)
-      : "Set A";
-    ui.setB.textContent = Number.isFinite(loopState.endMs)
-      ? formatLoopTime(loopState.endMs)
-      : "Set B";
-    ui.setA.disabled = !loopState.available;
-    ui.setB.disabled = !loopState.available;
-    const showLoopActions = !waveformCollapsed || loopState.active;
-    ui.waveformActions.hidden = !showLoopActions;
-    ui.clearLoop.disabled = !waveformCollapsed || !loopState.active || loopDownloadPending;
-    ui.downloadLoop.disabled = !waveformCollapsed || !loopState.active || loopDownloadPending;
+    for (const button of [ui.setA, ui.headerSetA]) {
+      button.title = Number.isFinite(loopState.startMs)
+        ? `Set A at ${formatLoopTime(loopState.startMs)}`
+        : "Set loop start at the current position";
+      button.disabled = !loopState.available;
+    }
+    for (const button of [ui.setB, ui.headerSetB]) {
+      button.title = Number.isFinite(loopState.endMs)
+        ? `Set B at ${formatLoopTime(loopState.endMs)}`
+        : "Set loop end at the current position";
+      button.disabled = !loopState.available;
+    }
+    const hasLoopMarker = Number.isFinite(loopState.startMs) || Number.isFinite(loopState.endMs);
+    ui.clearLoop.disabled = !loopState.available || !hasLoopMarker || loopDownloadPending;
+    ui.downloadLoop.disabled = !loopState.active || loopDownloadPending;
     for (const [input, value] of [[ui.loopStartTime, loopState.startMs], [ui.loopEndTime, loopState.endMs]]) {
       input.disabled = !loopState.available || duration <= 0;
       if (ui.root.activeElement !== input) input.value = Number.isFinite(value) ? formatLoopTime(value) : "";
@@ -720,21 +723,6 @@
     event.preventDefault();
     waveformZoom = globalThis.SCLooperCore?.zoomWindowAt?.(waveformZoom, loopState.durationMs, focusMs, event.deltaY) || null;
     renderLoop();
-  }
-
-  function installSetterHold(button, marker) {
-    const cancel = () => { if (setterHoldTimer !== null) clearTimeout(setterHoldTimer); setterHoldTimer = null; };
-    button.addEventListener("pointerdown", (event) => {
-      if (event.pointerType === "mouse" && event.button !== 0) return;
-      setterLongPressed = false;
-      cancel();
-      setterHoldTimer = setTimeout(() => { setterHoldTimer = null; setterLongPressed = true; clearLoop(); }, LONG_PRESS_MS);
-    });
-    for (const name of ["pointerup", "pointercancel", "pointerleave"]) button.addEventListener(name, cancel);
-    button.addEventListener("click", (event) => {
-      if (setterLongPressed) { event.preventDefault(); setterLongPressed = false; return; }
-      setLoopPoint(marker);
-    });
   }
 
   async function downloadLoopFromPlayer() {
@@ -1210,7 +1198,9 @@
         .waveform-middle-label { justify-self: center; }
         .waveform-end-label { justify-self: end; }
         .waveform-actions { position: absolute; z-index: 5; top: 4px; right: 27px; display: flex; gap: 4px; }
-        .waveform-actions[hidden] { display: none; }
+        .waveform-header-setters { display: flex; gap: 4px; }
+        .waveform-shell:not(.is-collapsed) .waveform-header-setters { display: none; }
+        .waveform-header-setters .setter { min-width: 39px; height: 23px; padding: 0 6px; border-radius: 5px; font-size: 9px; }
         .waveform-setters { display: contents; }
         .waveform-times .setter { z-index: 5; width: 68px; height: 23px; padding: 0 6px; border-radius: 6px; font-size: 10px; transform: translateY(-2px); }
         .waveform-toggle { position: absolute; z-index: 4; inset: 0 0 auto; display: flex; align-items: center; justify-content: flex-start; width: 100%; height: 31px; padding: 0 9px; border: 0; color: #fff; background: transparent; font: 700 11px/1 "SCDL UI", sans-serif; cursor: pointer; }
@@ -1227,11 +1217,19 @@
         .waveform-shell.is-locked .player-tools-upgrade { display: block; left: auto; right: 4px; width: 172px; }
 
         .effects-shell { margin-top: 7px; overflow: hidden; border: 1px solid #30373e; border-radius: 9px; background: rgba(255,255,255,.025); }
-        .effects-toggle { display: flex; align-items: center; width: 100%; height: 30px; gap: 8px; padding: 0 9px; border: 0; color: #e8e8e8; background: transparent; text-align: left; cursor: pointer; }
+        .effects-header { display: flex; align-items: center; height: 30px; padding: 0 7px 0 9px; gap: 5px; }
+        .effects-toggle { display: flex; flex: 1 1 auto; align-items: center; min-width: 0; height: 30px; gap: 8px; padding: 0; border: 0; color: #e8e8e8; background: transparent; text-align: left; cursor: pointer; }
         .effects-toggle:hover { color: #fff; background: rgba(255,255,255,.035); }
         .effects-icon { display: block; width: 17px; height: 17px; color: #c9cdd1; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
         .effects-title { flex: 1; font: 700 11px/1 "SCDL UI", sans-serif; }
         .effects-chevron { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; transition: transform 140ms ease; }
+        .effect-bypasses { display: flex; gap: 4px; }
+        .effect-bypass { width: 23px; height: 23px; padding: 0; border: 1px solid #4b5157; border-radius: 5px; color: #9ca3aa; background: #202428; font: 800 11px/1 "SCDL UI", sans-serif; cursor: pointer; }
+        .effect-bypass[aria-pressed="true"] { border-color: #c95819; color: #ff7b38; background: #3a251b; }
+        .effect-bypass:hover:not(:disabled) { border-color: #ff7b38; color: #fff; }
+        .effect-bypass:disabled { cursor: not-allowed; opacity: .45; }
+        .effect-bypass:focus-visible { outline: 2px solid #ff5500; outline-offset: 1px; }
+
         .effects-shell.is-collapsed .effects-chevron { transform: rotate(180deg); }
         .effects-body { padding: 0 9px 4px; }
         .effects-shell.is-collapsed .effects-body { display: none; }
@@ -1342,7 +1340,7 @@
         </div>
         <div class="waveform-shell" role="group" aria-label="Loop waveform">
           <button class="waveform-toggle" type="button" aria-label="Collapse looper" aria-expanded="true" title="Collapse looper"><span class="waveform-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>Loop Region</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
-          <div class="waveform-actions"><button class="clear-loop" type="button" aria-label="Clear loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button></div>
+          <div class="waveform-actions"><div class="waveform-header-setters"><button class="setter header-set-a" type="button" aria-label="Set loop start">Set A</button><button class="setter header-set-b" type="button" aria-label="Set loop end">Set B</button></div><button class="clear-loop" type="button" aria-label="Clear loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button></div>
           <div class="waveform-stage">
             <canvas class="waveform-canvas" aria-hidden="true"></canvas>
             <div class="waveform-selection" hidden></div>
@@ -1357,11 +1355,11 @@
           <input class="loop-time loop-end-time" inputmode="decimal" placeholder="B 00:00.000" aria-label="Loop end time" />
         </div>
         <section class="effects-shell is-collapsed" aria-label="Audio effects">
-          <button class="effects-toggle" type="button" aria-expanded="false">
+          <div class="effects-header"><button class="effects-toggle" type="button" aria-expanded="false">
             <svg class="effects-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h2l2-7 4 14 3-11 2 7h2l1-3h2"/></svg>
             <span class="effects-title">FX</span>
             <svg class="effects-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
-          </button>
+          </button><div class="effect-bypasses"><button class="effect-bypass" type="button" data-effect-bypass="reverb" aria-label="Enable reverb" aria-pressed="false">R</button><button class="effect-bypass" type="button" data-effect-bypass="delay" aria-label="Enable delay" aria-pressed="false">D</button></div></div>
           <div class="effects-body">
             <div class="effects-presets" role="group" aria-label="FX presets"><button class="effects-preset" data-fx-preset="subtle" type="button">Subtle</button><button class="effects-preset" data-fx-preset="studio" type="button">Studio</button><button class="effects-preset" data-fx-preset="wide" type="button">Wide</button><button class="effects-preset" data-fx-preset="dub" type="button">Dub</button></div>
             <div class="effect-row"><label class="effect-label" for="scdl-effect-reverb">Reverb</label><input class="effect-slider" id="scdl-effect-reverb" type="range" min="0" max="100" step="1" value="0" aria-label="Reverb mix" title="Reverb mix; 0% turns it off" /><output class="effect-value" data-effect-value="reverb">0%</output><button class="effect-settings-toggle" type="button" data-effect-settings="reverb" aria-label="Reverb settings" aria-expanded="false">⚙</button></div>
@@ -1494,6 +1492,8 @@
       detachButton: root.querySelector(".detach-button"),
       setA: root.querySelector(".set-a"),
       setB: root.querySelector(".set-b"),
+      headerSetA: root.querySelector(".header-set-a"),
+      headerSetB: root.querySelector(".header-set-b"),
       waveformShell: root.querySelector(".waveform-shell"),
       waveformToggle: root.querySelector(".waveform-toggle"),
       waveformActions: root.querySelector(".waveform-actions"),
@@ -1512,6 +1512,9 @@
       playerToolsUpgrade: root.querySelector(".player-tools-upgrade"),
       effectsShell: root.querySelector(".effects-shell"),
       effectsToggle: root.querySelector(".effects-toggle"),
+      effectBypasses: Object.fromEntries(
+        ["reverb", "delay"].map((name) => [name, root.querySelector(`[data-effect-bypass="${name}"]`)])
+      ),
       effectSliders: Object.fromEntries(
         ["reverb", "delay"].map((name) => [name, root.querySelector(`#scdl-effect-${name}`)])
       ),
@@ -1586,11 +1589,23 @@
     for (const [name, slider] of Object.entries(ui.effectSliders)) {
       slider.addEventListener("input", () => {
         const state = effectsController?.set(name, slider.valueAsNumber);
+        if (state?.[name] > 0) effectWetMemory[name] = state[name];
         if (state?.available) {
           effectsFailure = state[name] > 0 && !state.initialized
             ? "Play a track to activate FX."
             : "";
         }
+        render();
+      });
+    }
+    for (const [name, button] of Object.entries(ui.effectBypasses)) {
+      button.addEventListener("click", () => {
+        const current = effectsController?.snapshot();
+        if (!current?.available) return;
+        const nextWet = current[name] > 0 ? 0 : effectWetMemory[name] || DEFAULT_EFFECT_TOGGLE_WET;
+        const state = effectsController.set(name, nextWet);
+        if (state[name] > 0) effectWetMemory[name] = state[name];
+        effectsFailure = state[name] > 0 && !state.initialized ? "Play a track to activate FX." : "";
         render();
       });
     }
@@ -1683,8 +1698,8 @@
       requestLoop("set-global-bypass", { bypassed });
       readLoopState();
     });
-    installSetterHold(ui.setA, "start");
-    installSetterHold(ui.setB, "end");
+    for (const button of [ui.setA, ui.headerSetA]) button.addEventListener("click", () => setLoopPoint("start"));
+    for (const button of [ui.setB, ui.headerSetB]) button.addEventListener("click", () => setLoopPoint("end"));
     for (const [marker, name] of [[ui.waveformStart, "start"], [ui.waveformEnd, "end"]]) {
       marker.addEventListener("pointerdown", (event) => beginWaveformDrag(event, name));
       marker.addEventListener("pointermove", moveWaveformDrag);
@@ -1790,6 +1805,15 @@
       slider.disabled = !state.available;
       slider.dataset.active = String(state[name] > 0);
       ui.effectValues[name].textContent = `${state[name]}%`;
+      if (state[name] > 0) effectWetMemory[name] = state[name];
+      const bypass = ui.effectBypasses[name];
+      const enabled = state[name] > 0;
+      bypass.disabled = !state.available;
+      bypass.setAttribute("aria-pressed", String(enabled));
+      bypass.setAttribute("aria-label", `${enabled ? "Disable" : "Enable"} ${name}`);
+      bypass.title = enabled
+        ? `Disable ${name} (${state[name]}% wet)`
+        : `Enable ${name} (${effectWetMemory[name] || DEFAULT_EFFECT_TOGGLE_WET}% wet)`;
       syncRange(slider);
     }
     for (const [name, control] of Object.entries(ui.effectCharacters)) {

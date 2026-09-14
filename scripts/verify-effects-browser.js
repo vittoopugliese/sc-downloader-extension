@@ -53,6 +53,15 @@ const { chromium } = require("playwright");
     }, process.argv.includes('--constructor') ? 'constructor' : process.argv.includes('--shared'));
     const host = page.locator("#scdl-tempo-control");
     await host.locator(".trigger").click();
+    await host.locator('[data-effect-bypass="reverb"]').click();
+    assert.equal(await host.locator('[data-effect-value="reverb"]').textContent(), "20%",
+      "The compact reverb toggle must enable its default wet amount");
+    await host.locator('[data-effect-bypass="reverb"]').click();
+    assert.equal(await host.locator('[data-effect-value="reverb"]').textContent(), "0%",
+      "The compact reverb toggle must bypass by setting wet to zero");
+    await host.locator('[data-effect-bypass="reverb"]').click();
+    assert.equal(await host.locator('[data-effect-value="reverb"]').textContent(), "20%",
+      "The compact reverb toggle must restore its previous wet amount");
     await host.locator(".effects-toggle").click();
     for (const [name, amount] of [["reverb", 35], ["delay", 28]]) {
       await host.locator(`#scdl-effect-${name}`).fill(String(amount));

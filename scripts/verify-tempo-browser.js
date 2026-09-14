@@ -421,11 +421,11 @@ async function main() {
     if (emptyLoopActions.hidden || !emptyLoopActions.clearDisabled || !emptyLoopActions.downloadDisabled) {
       throw new Error(`Expanded loop actions must be visible and disabled without a loop: ${JSON.stringify(emptyLoopActions)}`);
     }
-    await host.locator(".waveform-toggle").click();
-    if (!(await host.locator(".waveform-actions").isHidden())) {
-      throw new Error("Collapsed loop actions must not render without an active loop.");
+    await host.locator(".waveform-toggle").evaluate((button) => button.click());
+    if (await host.locator(".waveform-actions").isHidden()) {
+      throw new Error("Collapsed loop actions must remain visible without an active loop.");
     }
-    await host.locator(".waveform-toggle").click();
+    await host.locator(".waveform-toggle").evaluate((button) => button.click());
 
     await host.locator(".slider").fill("0.7125");
     const custom = host.locator('.custom-preset[data-custom-index="0"]');
@@ -461,9 +461,9 @@ async function main() {
     }
 
     await page.locator("audio").evaluate((audio) => { audio.currentTime = 12.345; });
-    await host.locator(".set-a").click();
+    await host.locator(".waveform-times .set-a").click();
     await page.locator("audio").evaluate((audio) => { audio.currentTime = 20.678; });
-    await host.locator(".set-b").click();
+    await host.locator(".waveform-times .set-b").click();
     const capturedLoop = await page.evaluate(() =>
       JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session"))
     );
@@ -471,13 +471,14 @@ async function main() {
       capturedLoop.startMs !== 12345 ||
       capturedLoop.endMs !== 20678 ||
       !capturedLoop.enabled ||
-      (await host.locator(".set-a").textContent()).trim() !== "00:12.345"
+      (await host.locator(".waveform-times .set-a").textContent()).trim() !== "Set A" ||
+      !(await host.locator(".waveform-times .set-a").getAttribute("title"))?.includes("00:12.345")
     ) {
-      throw new Error(`Set A/Set B did not capture and display the live player range: ${JSON.stringify({ capturedLoop, label: await host.locator(".set-a").textContent() })}`);
+      throw new Error(`Set A/Set B did not capture the live player range or expose it in their tooltip: ${JSON.stringify({ capturedLoop, label: await host.locator(".waveform-times .set-a").textContent(), title: await host.locator(".waveform-times .set-a").getAttribute("title") })}`);
     }
-    await host.locator(".waveform-toggle").click();
+    await host.locator(".waveform-toggle").evaluate((button) => button.click());
     await host.locator(".download-loop").click();
-    await host.locator(".waveform-toggle").click();
+    await host.locator(".waveform-toggle").evaluate((button) => button.click());
     const loopDownload = await page.evaluate(() => window.loopDownloadRequests.at(-1));
     if (
       loopDownload?.trimRange?.startMs !== 12345 ||
@@ -506,10 +507,12 @@ async function main() {
         canvas: [canvas.width, canvas.height],
         markers: root.querySelectorAll(".waveform-marker:not([hidden])").length,
         customFits: custom.scrollWidth <= custom.clientWidth,
-        setALabel: root.querySelector(".set-a").textContent.trim(),
+        setALabel: root.querySelector(".waveform-times .set-a").textContent.trim(),
+        setAInFooter: root.querySelector(".waveform-times")?.contains(root.querySelector(".waveform-times .set-a")),
+        headerSettersHidden: getComputedStyle(root.querySelector(".waveform-header-setters")).display === "none",
       };
     });
-    if (waveformUi.canvas[0] <= 1 || waveformUi.canvas[1] <= 1 || waveformUi.markers !== 2 || !waveformUi.customFits || waveformUi.setALabel.includes("Set A")) {
+    if (waveformUi.canvas[0] <= 1 || waveformUi.canvas[1] <= 1 || waveformUi.markers !== 2 || !waveformUi.customFits || waveformUi.setALabel !== "Set A" || !waveformUi.setAInFooter || !waveformUi.headerSettersHidden) {
       throw new Error(`Interactive waveform layout is incomplete: ${JSON.stringify(waveformUi)}`);
     }
 
@@ -529,7 +532,7 @@ async function main() {
     const zoomedEndLabel = await host.locator(".waveform-end-label").textContent();
     if (zoomedEndLabel === fullEndLabel) throw new Error("The player waveform did not zoom around the pointer.");
 
-    await host.locator(".waveform-toggle").click();
+    await host.locator(".waveform-toggle").evaluate((button) => button.click());
     await page.evaluate(() => {
       window.waveformFetches = 0;
       window.originalFetch = window.fetch;
@@ -556,7 +559,7 @@ async function main() {
         height: shell.offsetHeight,
         stageDisplay: getComputedStyle(root.querySelector(".waveform-stage")).display,
         header: root.querySelector(".waveform-toggle").textContent.trim(),
-        settersVisible: [...root.querySelectorAll(".waveform-setters .setter")].some(
+        settersVisible: [...root.querySelectorAll(".waveform-header-setters .setter")].every(
           (button) => button.offsetWidth > 0 && button.offsetHeight > 0
         ),
         canvas: [canvas.width, canvas.height],
@@ -568,7 +571,7 @@ async function main() {
       !collapsedLooper.collapsed ||
       collapsedLooper.height !== 32 ||
       collapsedLooper.stageDisplay !== "none" ||
-      collapsedLooper.settersVisible ||
+      !collapsedLooper.settersVisible ||
       !collapsedLooper.header.includes("Loop Region") ||
       collapsedLooper.canvas.join("x") !== "1x1" ||
       collapsedLooper.stored !== "true" ||
@@ -623,7 +626,7 @@ async function main() {
         slider.dispatchEvent(new Event("input", { bubbles: true }));
       });
     }
-    await host.locator(".waveform-toggle").click();
+    await host.locator(".waveform-toggle").evaluate((button) => button.click());
     await page.waitForFunction(() => window.waveformFetches === 1);
     await page.waitForTimeout(220);
     const expandedLooper = await host.evaluate((element) => {
@@ -639,17 +642,14 @@ async function main() {
       throw new Error(`Expanded looper did not lazily render its waveform: ${JSON.stringify(expandedLooper)}`);
     }
 
-    await host.locator(".set-a").dispatchEvent("pointerdown", { pointerType: "mouse", button: 0 });
-    await page.waitForTimeout(700);
-    await host.locator(".set-a").dispatchEvent("pointerup", { pointerType: "mouse", button: 0 });
-    await host.locator(".set-a").click();
+    await host.locator(".clear-loop").click();
     if (await page.evaluate(() => JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session")).active)) {
-      throw new Error("Holding Set A did not clear the loop selection.");
+      throw new Error("Clear did not remove the loop selection.");
     }
     await page.locator("audio").evaluate((audio) => { audio.currentTime = 12.345; });
-    await host.locator(".set-a").click();
+    await host.locator(".waveform-times .set-a").click();
     await page.locator("audio").evaluate((audio) => { audio.currentTime = 20.678; });
-    await host.locator(".set-b").click();
+    await host.locator(".waveform-times .set-b").click();
 
     await host.locator(".slider").evaluate((slider) => {
       slider.value = "0.875";
