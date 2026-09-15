@@ -8,6 +8,7 @@ const excluded = new Set([
   "verify-download-browser.js",
   "verify-loop-browser.js",
   "verify-popup-browser.js",
+  "verify-popup-unsupported-page.js",
   "verify-live-looper.js",
   "verify-live-player-download.js",
   "verify-tempo-browser.js",

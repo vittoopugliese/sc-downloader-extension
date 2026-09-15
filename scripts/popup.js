@@ -381,7 +381,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   selectionViewport.addEventListener("scroll", onSelectionScroll, { passive: true });
 
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-    activeTabId = tabs[0]?.id ?? null;
+    const activeTab = tabs[0];
+    activeTabId = activeTab?.id ?? null;
+
+    if (!isSoundCloudPage(activeTab?.url || activeTab?.pendingUrl)) {
+      showTrackLoadError("not_track");
+      return;
+    }
 
     const jobStatus = await requestJobStatus();
     if (jobStatus?.job && ["running", "paused"].includes(jobStatus.job.status)) {
@@ -400,6 +406,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     startTrackFlow(false);
   });
 });
+
+function isSoundCloudPage(url) {
+  try {
+    const parsedUrl = new URL(url);
+    return parsedUrl.protocol === "https:" && parsedUrl.hostname === "soundcloud.com";
+  } catch {
+    return false;
+  }
+}
 
 async function loadDownloadDestination() {
   try {
