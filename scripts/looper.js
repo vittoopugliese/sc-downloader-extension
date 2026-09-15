@@ -780,7 +780,9 @@ const SCLooper = (() => {
         border-radius: 50%;
         color: #fff;
         background: #ff5500ff;
-        font: 600 10px/18px Arial, sans-serif;
+        font-size: 10px;
+        font-weight: 600;
+        line-height: 18px;
         text-align: center;
         box-sizing: border-box;
       }
@@ -794,7 +796,8 @@ const SCLooper = (() => {
         border-radius: 3px;
         color: #fff;
         background: rgba(0, 0, 0, 0.82);
-        font: 11px/14px Arial, sans-serif;
+        font-size: 11px;
+        line-height: 14px;
         white-space: nowrap;
         opacity: 0;
         transition: opacity 100ms ease;
