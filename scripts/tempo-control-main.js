@@ -24,6 +24,7 @@
   const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
   const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
   const OPEN_PLAYER_TOOLS_PANEL_EVENT = "scdl:open-player-tools-panel";
+  const PLAYER_TOOLS_OPENED_EVENT = "scdl:player-tools-opened";
   const REVIEW_URL = "https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews";
   const LOOP_COMMAND_EVENT = "scdl-looper:command";
   const LOOP_COMMAND_ATTRIBUTE = "data-scdl-looper-command";
@@ -269,6 +270,7 @@
   }
 
   function accessMessage(code) {
+    if (code === "trial-expired") return "Your 7-day Player Tools trial has ended. Player Tools Pro is required to keep using this feature.";
     if (code === "trial-exhausted" || code === "pro-required") return "Player Tools Pro is required to keep using this feature.";
     if (code === "stale-generation") return "The track changed. Please set the loop again.";
     return "Player Tools access could not be confirmed. Please retry.";
@@ -1515,6 +1517,7 @@
     clearHoverTimers();
     panelOpenMode = mode;
     setPanelOpen(true);
+    document.dispatchEvent(new CustomEvent(PLAYER_TOOLS_OPENED_EVENT));
     if (!waveformCollapsed) loadPlayerWaveform();
   }
 

@@ -8,6 +8,7 @@
   const REQUEST_EVENT = "scdl:player-tools-request";
   const RESPONSE_EVENT = "scdl:player-tools-response";
   const SNAPSHOT_EVENT = "scdl:player-tools-access-changed";
+  const OPENED_EVENT = "scdl:player-tools-opened";
   let latestRevision = -1;
   let latestSnapshot = null;
 
@@ -61,6 +62,16 @@
     if (latestSnapshot) result = { ...result, snapshot: latestSnapshot };
     document.documentElement.setAttribute(RESPONSE_ATTRIBUTE, JSON.stringify({ id: request.id, ...result }));
     document.dispatchEvent(new CustomEvent(RESPONSE_EVENT));
+  });
+
+  // MAIN has no runtime authority. It can only announce that Player Tools was
+  // opened; this isolated bridge starts the durable trial through the worker.
+  document.addEventListener(OPENED_EVENT, async () => {
+    try {
+      const result = await chrome.runtime.sendMessage({ type: "START_PLAYER_TOOLS_TRIAL" });
+      if (result?.success && result.snapshot) publish(result.snapshot);
+      else publishUnavailable(result?.code);
+    } catch { publishUnavailable("storage-unavailable"); }
   });
 
   chrome.runtime.onMessage.addListener((message) => {

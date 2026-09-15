@@ -60,6 +60,7 @@ const helpBackBtn = document.getElementById("helpBackBtn");
 const looperPanel = document.getElementById("looperPanel");
 const playerToolsOffer = document.getElementById("playerToolsOffer");
 const playerToolsBtn = document.getElementById("playerToolsBtn");
+const playerToolsTrialStatus = document.getElementById("playerToolsTrialStatus");
 
 let isDownloading = false;
 let isSelectionMode = false;
@@ -1367,10 +1368,21 @@ function requestBulkTracksByIds(ids) {
 
 async function syncPlayerToolsOffer() {
   try {
+    // Opening the download popup is one of the two product-defined trial entry points.
+    await chrome.runtime.sendMessage({ type: "START_PLAYER_TOOLS_TRIAL" });
     const response = await chrome.runtime.sendMessage({ type: "GET_PLAYER_TOOLS_SNAPSHOT" });
-    playerToolsOffer.hidden = response?.snapshot?.plan === "pro";
+    const snapshot = response?.snapshot;
+    playerToolsOffer.hidden = snapshot?.plan === "pro";
+    if (snapshot?.plan !== "pro") {
+      const trial = snapshot?.trial;
+      playerToolsTrialStatus.textContent = snapshot?.state === "trial_expired"
+        ? t("player_tools_trial_expired")
+        : trial?.isLastDay ? t("player_tools_trial_last_day")
+        : t("player_tools_trial_days_remaining", trial?.daysRemaining ?? 7);
+    }
   } catch {
     playerToolsOffer.hidden = false;
+    playerToolsTrialStatus.textContent = "";
   }
 }
 

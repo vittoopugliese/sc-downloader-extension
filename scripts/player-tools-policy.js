@@ -2,10 +2,13 @@
 (function (root) {
   "use strict";
   const TRIAL_LIMIT = 20;
+  const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+  const SCHEMA_VERSION = 2;
   const PRO_OPERATIONS = new Set(["export-loop", "export-track-effects", "edit-loop-precise"]);
   const PLAYBACK_OPERATIONS = new Set(["set-effect", "set-rate", "set-preserve-pitch", "save-preset"]);
   const validId = (value) => typeof value === "string" && value.length > 0 && value.length <= 1024;
   const validGeneration = (value) => Number.isSafeInteger(value) && value >= 0;
+  const validTimestamp = (value) => Number.isSafeInteger(value) && value >= 0;
 
   function invalidState() {
     return Object.assign(new Error("Invalid Player Tools access record"), { code: "access-state-invalid" });
@@ -13,13 +16,20 @@
 
   function normalize(raw) {
     // Only absence initializes a trial. Corrupt/future records must never reset it.
-    if (raw === undefined) raw = { schemaVersion: 1, trial: { used: 0, grants: [], warnedLastUse: false } };
-    if (!raw || raw.schemaVersion !== 1 || !raw.trial ||
+    if (raw === undefined) raw = { schemaVersion: SCHEMA_VERSION, trial: { used: 0, grants: [], warnedLastUse: false, startedAt: null, expiresAt: null } };
+    // Version 1 had the lifetime loop allowance but no clock.  Preserve every
+    // receipt and let the next eligible surface start this version's trial.
+    const sourceVersion = raw?.schemaVersion;
+    if (!raw || ![1, SCHEMA_VERSION].includes(sourceVersion) || !raw.trial ||
         !Number.isInteger(raw.trial.used) || raw.trial.used < 0 || raw.trial.used > TRIAL_LIMIT ||
         !Array.isArray(raw.trial.grants) || raw.trial.grants.length > TRIAL_LIMIT ||
         typeof raw.trial.warnedLastUse !== "boolean" ||
         (raw.revision !== undefined && !validGeneration(raw.revision)) ||
         (raw.entitlement !== undefined && !["active", "free"].includes(raw.entitlement?.status))) throw invalidState();
+    const startedAt = sourceVersion === 1 ? null : raw.trial.startedAt;
+    const expiresAt = sourceVersion === 1 ? null : raw.trial.expiresAt;
+    if (!((startedAt === null && expiresAt === null) ||
+      (validTimestamp(startedAt) && validTimestamp(expiresAt) && expiresAt === startedAt + TRIAL_DURATION_MS))) throw invalidState();
     const sessions = new Set();
     const requests = new Set();
     const owners = new Set();
@@ -39,53 +49,72 @@
     });
     if (grants.length > raw.trial.used) throw invalidState();
     return {
-      schemaVersion: 1,
+      schemaVersion: SCHEMA_VERSION,
       revision: raw.revision ?? 0,
       entitlement: raw.entitlement?.status === "active"
         ? { status: "active", licenseId: typeof raw.entitlement.licenseId === "string" ? raw.entitlement.licenseId : "",
           checkedAt: validGeneration(raw.entitlement.checkedAt) ? raw.entitlement.checkedAt : 0 }
         : { status: "free" },
-      trial: { limit: TRIAL_LIMIT, used: raw.trial.used, warnedLastUse: raw.trial.warnedLastUse, grants },
+      trial: { limit: TRIAL_LIMIT, used: raw.trial.used, warnedLastUse: raw.trial.warnedLastUse, startedAt, expiresAt, grants },
     };
   }
 
-  function snapshot(raw, ownerKey) {
+  function startTrial(raw, now) {
     const state = normalize(raw);
+    if (!validTimestamp(now)) throw invalidState();
+    if (state.entitlement.status === "active" || state.trial.startedAt !== null) return state;
+    state.trial.startedAt = now;
+    state.trial.expiresAt = now + TRIAL_DURATION_MS;
+    return state;
+  }
+
+  function snapshot(raw, ownerKey, now = Date.now()) {
+    const state = normalize(raw);
+    if (!validTimestamp(now)) throw invalidState();
     const grant = state.trial.grants.find((item) => item.active && item.ownerKey === ownerKey);
     const pro = state.entitlement.status === "active";
-    const trialAvailable = state.trial.used < TRIAL_LIMIT;
-    const playback = pro || trialAvailable || Boolean(grant);
+    const started = state.trial.startedAt !== null;
+    const expired = started && now >= state.trial.expiresAt;
+    const trialAvailable = started && !expired && state.trial.used < TRIAL_LIMIT;
+    // Only the owner of the twentieth granted loop keeps the existing grace.
+    const finalLoopGrace = !pro && state.trial.used === TRIAL_LIMIT && Boolean(grant);
+    const playback = pro || trialAvailable || finalLoopGrace;
+    const remainingMs = started && !expired ? state.trial.expiresAt - now : 0;
     return {
       revision: state.revision,
       plan: pro ? "pro" : "free",
-      state: pro ? "pro" : trialAvailable ? "trial_available" : grant ? "trial_last_session" : "free_locked",
+      state: pro ? "pro" : finalLoopGrace ? "trial_last_session" : !started ? "trial_not_started" : expired ? "trial_expired" : trialAvailable ? "trial_available" : "free_locked",
       used: state.trial.used, limit: TRIAL_LIMIT, remaining: TRIAL_LIMIT - state.trial.used,
       warnedLastUse: state.trial.warnedLastUse,
+      trial: { startedAt: state.trial.startedAt, expiresAt: state.trial.expiresAt, expired,
+        daysRemaining: Math.ceil(remainingMs / (24 * 60 * 60 * 1000)),
+        isLastDay: remainingMs > 0 && remainingMs <= 24 * 60 * 60 * 1000 },
       grant: grant ? { sessionId: grant.sessionId, trackIdentity: grant.trackIdentity, generation: grant.generation } : null,
       capabilities: {
-        openPanel: true, beginLoop: pro || (trialAvailable && !grant), editLoop: pro || Boolean(grant),
+        openPanel: true, beginLoop: pro || (trialAvailable && !grant), editLoop: playback,
         tempo: playback, preservePitch: playback, savePreset: playback,
         maximizeLooper: playback, editLoopPrecise: pro, exportLoop: pro, exportTrackEffects: pro,
       },
     };
   }
 
-  function canAuthorize(raw, ownerKey, operation, sessionId) {
+  function canAuthorize(raw, ownerKey, operation, sessionId, now = Date.now()) {
     const result = (allowed, reason = null, consume = false) => ({ allowed, consume, reason });
     if (!PRO_OPERATIONS.has(operation) && !PLAYBACK_OPERATIONS.has(operation) &&
         operation !== "begin-loop" && operation !== "edit-loop") return result(false, "unknown-operation");
-    const current = snapshot(raw, ownerKey);
+    const current = snapshot(raw, ownerKey, now);
     if (current.plan === "pro") return result(true);
     if (PRO_OPERATIONS.has(operation)) return result(false, "pro-required");
-    if (operation === "edit-loop") return current.grant && current.grant.sessionId === sessionId
+    if (operation === "edit-loop") return current.capabilities.editLoop && current.grant && current.grant.sessionId === sessionId
       ? result(true) : result(false, "stale-generation");
     if (operation === "begin-loop") {
       if (current.grant) return current.grant.sessionId === sessionId
-        ? result(true) : result(false, "session-active");
+        ? current.capabilities.editLoop ? result(true) : result(false, current.trial.expired ? "trial-expired" : "trial-exhausted")
+        : result(false, "session-active");
       if (sessionId) return result(false, "stale-generation");
-      return current.remaining > 0 ? result(true, null, true) : result(false, "trial-exhausted");
+      return current.capabilities.beginLoop ? result(true, null, true) : result(false, current.trial.expired ? "trial-expired" : "trial-exhausted");
     }
-    return current.capabilities.tempo ? result(true) : result(false, "trial-exhausted");
+    return current.capabilities.tempo ? result(true) : result(false, current.trial.expired ? "trial-expired" : "trial-exhausted");
   }
 
   function validateLoopRequest(request) {
@@ -99,7 +128,7 @@
     return null;
   }
 
-  const api = { TRIAL_LIMIT, normalize, snapshot, canAuthorize, validateLoopRequest };
+  const api = { TRIAL_LIMIT, TRIAL_DURATION_MS, SCHEMA_VERSION, normalize, startTrial, snapshot, canAuthorize, validateLoopRequest };
   root.SCPlayerToolsPolicy = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);

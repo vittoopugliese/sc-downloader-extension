@@ -502,5 +502,14 @@
   },
   "looper_done": {
     "message": "Voltar ao download"
+  },
+  "player_tools_trial_days_remaining": {
+    "message": "Restam $1 dias do seu teste de 7 dias do Player Tools"
+  },
+  "player_tools_trial_last_day": {
+    "message": "Ultimo dia do seu teste do Player Tools"
+  },
+  "player_tools_trial_expired": {
+    "message": "Seu teste terminou. O Player Tools Pro desbloqueia as ferramentas musicais."
   }
 }

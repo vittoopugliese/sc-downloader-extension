@@ -502,5 +502,14 @@
   },
   "looper_done": {
     "message": "Zurück zum Download"
+  },
+  "player_tools_trial_days_remaining": {
+    "message": "Noch $1 Tage in deinem 7-Tage-Test von Player Tools"
+  },
+  "player_tools_trial_last_day": {
+    "message": "Letzter Tag deines Player-Tools-Tests"
+  },
+  "player_tools_trial_expired": {
+    "message": "Dein Test ist beendet. Player Tools Pro schaltet die Musikwerkzeuge frei."
   }
 }

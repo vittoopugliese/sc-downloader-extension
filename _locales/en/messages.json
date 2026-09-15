@@ -637,5 +637,14 @@
   },
   "looper_done": {
     "message": "Back to download"
+  },
+  "player_tools_trial_days_remaining": {
+    "message": "$1 days left in your 7-day Player Tools trial"
+  },
+  "player_tools_trial_last_day": {
+    "message": "Last day of your Player Tools trial"
+  },
+  "player_tools_trial_expired": {
+    "message": "Your trial ended. Player Tools Pro unlocks the musical tools."
   }
 }

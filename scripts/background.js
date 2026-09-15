@@ -100,6 +100,7 @@ async function resolveLoopTrack(request, sender) {
 }
 
 async function openPlayerToolsPanel() {
+  await SCPlayerToolsAccess.startTrial();
   const tabs = await chrome.tabs.query({ url: "https://soundcloud.com/*" });
   const existing = tabs.find((tab) => tab.active) || tabs[0];
   const tab = existing || await chrome.tabs.create({ url: "https://soundcloud.com/" });
@@ -141,6 +142,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "GET_PLAYER_TOOLS_SNAPSHOT") {
     return respond(SCPlayerToolsAccess.getSnapshot(sender), sendResponse, (snapshot) => ({ snapshot }));
+  }
+
+  if (request.type === "START_PLAYER_TOOLS_TRIAL") {
+    return respond(SCPlayerToolsAccess.startTrial(), sendResponse, (snapshot) => ({ snapshot }));
   }
 
   if (request.type === "AUTHORIZE_PLAYER_TOOLS") {

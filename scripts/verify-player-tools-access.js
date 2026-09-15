@@ -8,6 +8,7 @@ const request = (requestId = "request-a", overrides = {}) => ({ operation: "begi
 
 function fixture(used) {
   let data = {};
+  let clock = 1_800_000_000_000;
   if (used !== undefined) {
     const state = policy.normalize(); state.trial.used = used;
     data[STORAGE_KEY] = state;
@@ -21,14 +22,19 @@ function fixture(used) {
       writes += 1; data = structuredClone(value);
     },
   };
-  return { storage, restart: () => create({ storage }), read: () => structuredClone(data[STORAGE_KEY]),
-    writes: () => writes, fail: (value) => { fail = value; } };
+  return { storage, restart: () => create({ storage, now: () => clock }), read: () => structuredClone(data[STORAGE_KEY]),
+    writes: () => writes, fail: (value) => { fail = value; }, advance: (ms) => { clock += ms; } };
 }
 
 (async () => {
   const f = fixture(); let access = f.restart();
   await Promise.all([access.getSnapshot(owner), access.getSnapshot(other)]);
   assert.equal(f.writes(), 1, "initialization happens exactly once");
+  const started = await access.startTrial();
+  assert.equal(started.trial.daysRemaining, 7);
+  const startsAt = f.read().trial.startedAt;
+  await access.startTrial();
+  assert.equal(f.read().trial.startedAt, startsAt, "reopening either entry point does not extend trial");
   assert.equal(ownerKey({ tab: { id: 1 } }), null, "no shared legacy-document identity");
   assert.equal((await access.authorize({}, request())).code, "owner-gone");
   assert.equal((await access.authorize(owner, request("bad", { payload: { startMs: 0 } }))).allowed, false);
@@ -64,7 +70,7 @@ function fixture(used) {
   assert.equal((await f.restart().authorize(owner, request())).code, "stale-generation");
   assert.equal((await access.authorize(owner, request("after-clear"))).snapshot.used, 2);
 
-  const final = fixture(19); const finalAccess = final.restart();
+  const final = fixture(19); const finalAccess = final.restart(); await finalAccess.startTrial();
   const decisions = await Promise.all([finalAccess.authorize(owner, request()), finalAccess.authorize(other, request())]);
   assert.equal(decisions.filter((d) => d.allowed).length, 1, "only one winner for last use");
   assert.equal(final.read().trial.used, 20);
@@ -74,7 +80,7 @@ function fixture(used) {
   await finalAccess.endTab(1);
   assert.equal((await finalAccess.getSnapshot(owner)).state, "free_locked");
 
-  const warning = fixture(18); const warningAccess = warning.restart();
+  const warning = fixture(18); const warningAccess = warning.restart(); await warningAccess.startTrial();
   assert.equal((await warningAccess.authorize(owner, request())).notice, "last-loop-remaining");
   assert.equal((await warning.restart().authorize(owner, request())).notice, null);
   assert.equal((await warningAccess.getSnapshot(owner)).warnedLastUse, true);
@@ -82,7 +88,7 @@ function fixture(used) {
   assert.equal((await warningAccess.getSnapshot(owner)).state, "free_locked", "only the final owner retains grace");
   assert.equal((await warningAccess.getSnapshot(other)).state, "trial_last_session");
 
-  const broken = fixture(0); const brokenAccess = broken.restart(); broken.fail(true);
+  const broken = fixture(0); const brokenAccess = broken.restart(); await brokenAccess.startTrial(); broken.fail(true);
   await assert.rejects(brokenAccess.authorize(owner, request()), { code: "storage-unavailable" });
   assert.equal(broken.read().trial.used, 0);
   broken.fail(false);
@@ -103,7 +109,7 @@ function fixture(used) {
   assert.equal((await paidAccess.getSnapshot(owner)).used, 19);
   assert.equal((await paidAccess.authorize(owner, { operation: "export-loop" })).code, "pro-required");
   assert.equal(paidAccess.setEntitlement, undefined);
-  const all = fixture(0); const allAccess = all.restart();
+  const all = fixture(0); const allAccess = all.restart(); await allAccess.startTrial();
   for (let i = 0; i < 20; i += 1) {
     const result = await allAccess.authorize(owner, request(`loop-${i}`));
     assert.equal(result.snapshot.used, i + 1);
@@ -112,5 +118,13 @@ function fixture(used) {
   assert.equal((await allAccess.authorize(owner, request("loop-21"))).code, "trial-exhausted");
   assert.equal(all.read().trial.grants.length, 20, "durable receipts have a hard lifetime bound");
   assert.equal((await all.restart().authorize(owner, request("loop-0"))).code, "stale-generation");
+  const expiredTrial = fixture(0); const expiredAccess = expiredTrial.restart(); await expiredAccess.startTrial();
+  expiredTrial.advance(policy.TRIAL_DURATION_MS);
+  assert.equal((await expiredAccess.authorize(owner, request("expired"))).code, "trial-expired");
+  const lastGrace = fixture(19); const lastGraceAccess = lastGrace.restart(); await lastGraceAccess.startTrial();
+  const lastGrant = await lastGraceAccess.authorize(owner, request("last"));
+  lastGrace.advance(policy.TRIAL_DURATION_MS);
+  assert.equal((await lastGraceAccess.getSnapshot(owner)).state, "trial_last_session");
+  assert.equal((await lastGraceAccess.authorize(owner, request("edit-last", { operation: "edit-loop", sessionId: lastGrant.grant.sessionId }))).allowed, true);
   console.log("Player Tools access lifecycle verification passed.");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

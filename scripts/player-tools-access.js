@@ -10,7 +10,7 @@
     return `${sender.tab.id}:${sender.frameId}:${sender.documentId}`;
   }
 
-  function create({ storage, randomUUID = () => crypto.randomUUID() }) {
+  function create({ storage, randomUUID = () => crypto.randomUUID(), now = () => Date.now() }) {
     let queue = Promise.resolve();
     function runExclusive(task) {
       const next = queue.then(task);
@@ -24,7 +24,7 @@
     async function read() {
       const record = (await storageCall("get", STORAGE_KEY))[STORAGE_KEY];
       const state = POLICY.normalize(record);
-      if (record === undefined) await storageCall("set", { [STORAGE_KEY]: state });
+      if (record === undefined || record?.schemaVersion === 1) await storageCall("set", { [STORAGE_KEY]: state });
       return state;
     }
     async function commit(state) {
@@ -32,13 +32,22 @@
       await storageCall("set", { [STORAGE_KEY]: POLICY.normalize(state) });
     }
     function getSnapshot(sender) {
-      return runExclusive(async () => POLICY.snapshot(await read(), ownerKey(sender)));
+      return runExclusive(async () => { const timestamp = now(); return POLICY.snapshot(await read(), ownerKey(sender), timestamp); });
+    }
+    function startTrial() {
+      return runExclusive(async () => {
+        const state = await read(); const timestamp = now();
+        const before = state.trial.startedAt;
+        const started = POLICY.startTrial(state, timestamp);
+        if (started.trial.startedAt !== before) await commit(started);
+        return POLICY.snapshot(started, null, timestamp);
+      });
     }
     function authorize(sender, request) {
       return runExclusive(async () => {
         const owner = ownerKey(sender);
-        const state = await read();
-        const reply = (allowed, code = null, extra = {}) => ({ allowed, code, snapshot: POLICY.snapshot(state, owner), ...extra });
+        const state = await read(); const timestamp = now();
+        const reply = (allowed, code = null, extra = {}) => ({ allowed, code, snapshot: POLICY.snapshot(state, owner, timestamp), ...extra });
         const operation = request?.operation;
         const isLoop = operation === "begin-loop" || operation === "edit-loop";
         if (isLoop) {
@@ -52,14 +61,16 @@
             if (!receipt.active || !matches(receipt) || (request.sessionId && receipt.sessionId !== request.sessionId)) {
               return reply(false, "stale-generation");
             }
-            return reply(true, null, { grant: POLICY.snapshot(state, owner).grant, replayed: true, notice: null });
+            const current = POLICY.snapshot(state, owner, timestamp);
+            if (!current.capabilities.editLoop) return reply(false, current.trial.expired ? "trial-expired" : "trial-exhausted");
+            return reply(true, null, { grant: current.grant, replayed: true, notice: null });
           }
           const active = state.trial.grants.find((g) => g.active && g.ownerKey === owner);
           if (active && (!matches(active) || (request.sessionId && active.sessionId !== request.sessionId))) {
             return reply(false, "stale-generation");
           }
         }
-        const decision = POLICY.canAuthorize(state, owner, operation, request?.sessionId);
+        const decision = POLICY.canAuthorize(state, owner, operation, request?.sessionId, timestamp);
         if (!decision.allowed) return reply(false, decision.reason);
         let notice = null;
         if (decision.consume) {
@@ -75,17 +86,17 @@
           // Commit point: never return a usable grant before this resolves. No automatic refunds.
           await commit(state);
         }
-        return reply(true, null, { grant: POLICY.snapshot(state, owner).grant, notice });
+        return reply(true, null, { grant: POLICY.snapshot(state, owner, timestamp).grant, notice });
       });
     }
     function endSession(sender, request) {
       return runExclusive(async () => {
         const owner = ownerKey(sender);
-        const state = await read();
+        const state = await read(); const timestamp = now();
         if (!owner) return { success: false, code: "owner-gone" };
         const grant = state.trial.grants.find((g) => g.active && g.ownerKey === owner && g.sessionId === request?.sessionId);
         if (grant) { grant.active = false; await commit(state); }
-        return { success: true, snapshot: POLICY.snapshot(state, owner) };
+        return { success: true, snapshot: POLICY.snapshot(state, owner, timestamp) };
       });
     }
     function endTab(tabId) {
@@ -95,7 +106,7 @@
         if (grants.length) { grants.forEach((g) => { g.active = false; }); await commit(state); }
       });
     }
-    return { getSnapshot, authorize, endSession, endTab };
+    return { getSnapshot, startTrial, authorize, endSession, endTab };
   }
   // No entitlement/reset writer is exposed in the production runtime.
   root.SCPlayerToolsAccess = { STORAGE_KEY, ownerKey, create,
