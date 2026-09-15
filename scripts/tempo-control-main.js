@@ -309,6 +309,24 @@
     writeSetting(RATE_STORAGE, state.rate);
   }
 
+  async function resetPlayerTools() {
+    const authorization = await authorizePlayerTools("set-rate", "tempo");
+    if (!authorization) return;
+    playbackFailure = "";
+    animateNextRateChange = true;
+    const state = controller.setRate(DEFAULTS.rate);
+    controller.setPreservePitch(DEFAULTS.preservePitch);
+    controller.setBypassed(false);
+    writeSetting(RATE_STORAGE, state.rate);
+    writeSetting(PITCH_STORAGE, DEFAULTS.preservePitch);
+    effectsController?.set("reverb", 0);
+    effectsController?.set("delay", 0);
+    effectsController?.setBypassed(false);
+    await clearLoop();
+    requestLoop("set-global-bypass", { bypassed: false });
+    readLoopState();
+  }
+
   async function applyPlayerPitch(enabled) {
     const authorization = await authorizePlayerTools("set-preserve-pitch", "preservePitch");
     if (!authorization) return;
@@ -1390,7 +1408,7 @@
           aria-haspopup="dialog"
           aria-expanded="false"
         ><img class="trigger-icon" width="24" height="24" alt="" draggable="false" hidden /><span class="trigger-rate">1x</span></button>
-        <button class="clear-rate" type="button" aria-label="Clear selected playback speed" title="Clear selected playback speed">×</button>
+        <button class="clear-rate" type="button" aria-label="Reset Player Tools" title="Reset Player Tools" hidden>×</button>
       </span>
       <section
         class="panel"
@@ -1662,7 +1680,7 @@
     });
     ui.clearRate.addEventListener("click", (event) => {
       event.stopPropagation();
-      applyPlayerRate(DEFAULTS.rate, { animate: true });
+      resetPlayerTools();
     });
     ui.brandName.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));

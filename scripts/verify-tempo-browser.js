@@ -53,6 +53,7 @@ async function main() {
 
   try {
     const page = await browser.newPage({ viewport: { width: 720, height: 420 } });
+    page.on("pageerror", (error) => console.log("PAGE ERROR", error.message));
     await page.goto(`http://127.0.0.1:${port}`);
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-core.js"),
@@ -154,6 +155,9 @@ async function main() {
     const panelIsOpen = () => host.evaluate((element) =>
       !element.shadowRoot.querySelector(".panel").hidden
     );
+    if (await host.locator(".clear-rate").isVisible()) {
+      throw new Error("Reset control must stay hidden when playback, effects, and loop are neutral.");
+    }
 
     // Hover opens after the intended dwell time, stays open while the pointer
     // is inside the panel, and closes when the pointer leaves it.
@@ -628,6 +632,11 @@ async function main() {
       slider.value = "28";
       slider.dispatchEvent(new Event("change", { bubbles: true }));
     });
+    console.log("FX debug", await host.evaluate((element) => ({
+      values: [...element.shadowRoot.querySelectorAll(".effect-value")].map((value) => value.textContent),
+      sliders: [...element.shadowRoot.querySelectorAll(".effect-sliders input")].map((slider) => slider.value),
+      status: element.shadowRoot.querySelector(".status")?.textContent,
+    })));
     await page.waitForFunction(() => [...document.querySelector("#scdl-tempo-control")?.shadowRoot?.querySelectorAll(".effect-value") || []]
       .map((value) => value.textContent).join("|") === "35%|28%");
     const activeFx = await host.evaluate((element) => {
@@ -816,6 +825,24 @@ async function main() {
     ) {
       throw new Error('Reduced motion must show the selected speed immediately.');
     }
+
+    await host.locator('#scdl-effect-reverb').fill('2');
+    await host.locator('#scdl-effect-reverb').dispatchEvent('change');
+    if (!(await host.locator('.clear-rate').isVisible())) {
+      throw new Error('Reset control must appear when any effect or playback setting is active.');
+    }
+    await host.locator('.clear-rate').click();
+    await page.waitForFunction(() => {
+      const host = document.querySelector('#scdl-tempo-control');
+      const root = host?.shadowRoot;
+      const loop = JSON.parse(document.documentElement.getAttribute('data-scdl-loop-session') || 'null');
+      return root?.querySelector('.slider')?.value === '1' &&
+        root?.querySelector('.pitch-toggle')?.checked === false &&
+        root?.querySelector('#scdl-effect-reverb')?.value === '0' &&
+        root?.querySelector('#scdl-effect-delay')?.value === '0' &&
+        loop?.active === false &&
+        root?.querySelector('.clear-rate')?.hidden === true;
+    });
 
     fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
     await page.screenshot({ path: screenshotPath });
