@@ -145,11 +145,25 @@ if (!sourceNode.connections.includes(masterNode)) {
 
 const replacementAudio = new FakeAudio();
 activeAudio = replacementAudio;
+const replacementNodeStart = graphNodes.length;
 effects.applyToActive();
 if (replacementAudio.sourceCount !== 1) throw new Error("SPA media element replacement was not connected.");
 effects.applyToActive();
 if (replacementAudio.sourceCount !== 1) throw new Error("A media element must only be connected once.");
 if (activeAudio.sourceCount !== 1) throw new Error("Initial player was not connected once.");
+const replacementNodes = graphNodes.slice(replacementNodeStart);
+const replacementReturns = [replacementNodes.filter((node) => node.kind === "gain")[0], replacementNodes.filter((node) => node.kind === "gain")[2]];
+if (replacementReturns[0].gain.value !== 0 || replacementReturns[1].gain.value !== 0.264) {
+  throw new Error("The replacement player must receive the configured effect amounts.");
+}
+effects.setBypassed(true);
+if ([reverbReturn, delayReturn, ...replacementReturns].some((node) => node.gain.value !== 0)) {
+  throw new Error("Global bypass must silence effects on every player graph, including replaced SoundCloud players.");
+}
+effects.setBypassed(false);
+if (delayReturn.gain.value !== 0.264 || replacementReturns[1].gain.value !== 0.264) {
+  throw new Error("Unbypass must restore effects on every player graph.");
+}
 
 const unsafeAudio = new FakeAudio({ crossOrigin: null });
 const unsafeEffects = context.SCTempoEffects.create({

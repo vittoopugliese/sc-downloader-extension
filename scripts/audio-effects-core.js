@@ -91,6 +91,7 @@
     let ownsContext = false;
     let graph = null;
     const graphs = new WeakMap();
+    const graphReferences = new Set();
     let bypassed = false;
     let available = true;
     let reason = "";
@@ -112,27 +113,36 @@
       setParam(targetGraph.feedback.gain, values.delayFeedback / 100 * 0.82);
     }
 
-    function setParam(param, value) {
-      const now = context.currentTime;
+    function setParam(param, value, contextForParam = context) {
+      const now = contextForParam.currentTime;
       param.cancelScheduledValues(now);
       param.setTargetAtTime(value, now, RAMP_SECONDS / 3);
     }
 
-    function updateReturns() {
-      if (!graph || !context) return;
+    function updateReturns(targetGraph = graph) {
+      if (!targetGraph?.context) return;
+      const contextForGraph = targetGraph.context;
       const active = !bypassed && available;
-      setParam(graph.reverbReturn.gain, active ? values.reverb / 100 * MAX_SEND.reverb : 0);
-      setParam(graph.delayReturn.gain, active ? values.delay / 100 * MAX_SEND.delay : 0);
-      if (!graph.ownsSource) return;
+      setParam(targetGraph.reverbReturn.gain, active ? values.reverb / 100 * MAX_SEND.reverb : 0, contextForGraph);
+      setParam(targetGraph.delayReturn.gain, active ? values.delay / 100 * MAX_SEND.delay : 0, contextForGraph);
+      if (!targetGraph.ownsSource) return;
       const useLimiter = active && (values.reverb > 0 || values.delay > 0);
-      if (useLimiter && !graph.processedOutput) {
-        graph.source.disconnect(context.destination);
-        graph.source.connect(graph.master);
-        graph.processedOutput = true;
-      } else if (!useLimiter && graph.processedOutput) {
-        graph.source.disconnect(graph.master);
-        graph.source.connect(context.destination);
-        graph.processedOutput = false;
+      if (useLimiter && !targetGraph.processedOutput) {
+        targetGraph.source.disconnect(contextForGraph.destination);
+        targetGraph.source.connect(targetGraph.master);
+        targetGraph.processedOutput = true;
+      } else if (!useLimiter && targetGraph.processedOutput) {
+        targetGraph.source.disconnect(targetGraph.master);
+        targetGraph.source.connect(contextForGraph.destination);
+        targetGraph.processedOutput = false;
+      }
+    }
+
+    function updateAllReturns() {
+      for (const reference of graphReferences) {
+        const targetGraph = reference.deref();
+        if (targetGraph) updateReturns(targetGraph);
+        else graphReferences.delete(reference);
       }
     }
 
@@ -226,6 +236,7 @@
           processedOutput: false,
         };
         graphs.set(target, targetGraph);
+        graphReferences.add(new WeakRef(targetGraph));
         target.addEventListener("loadstart", resetTail);
         target.addEventListener("emptied", resetTail);
         target.addEventListener("loadedmetadata", restoreAfterTrackChange);
@@ -341,7 +352,7 @@
 
     function setBypassed(value) {
       bypassed = Boolean(value);
-      updateReturns();
+      updateAllReturns();
       return snapshot();
     }
 

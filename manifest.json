@@ -75,7 +75,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["assets/icon48.png", "assets/icon128.png", "assets/icons/player-toolkit.png", "assets/icons/download.svg", "assets/fonts/Quicksand-Medium.ttf"],
+      "resources": ["assets/icon48.png", "assets/icon128.png", "assets/icons/player-toolkit.png", "assets/icons/download.svg"],
       "matches": ["https://soundcloud.com/*"]
     }
   ]

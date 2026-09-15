@@ -1,0 +1,19 @@
+Download SoundCloud Likes, playlists and tracks for free. Get access to the new Pitcher and Looper inside the player tools!
+
+Your SoundCloud favorites should not be trapped in one tab. Open your Likes, a playlist, set, album, or a creator’s public Tracks page; choose the tracks you want or download them all; then save them directly to a folder you choose.
+
+Downloads keep running in the background. Close the popup, switch tabs, or keep browsing SoundCloud while your collection is saved one track at a time.
+
+  • Download your Likes, playlists, sets, albums, and public creator uploads
+  • Choose individual tracks, a preset amount, or All
+  • Download a single track from the popup, the track action bar, or the persistent SoundCloud player
+  • Save collections as numbered files in a folder you choose
+  • Pause, resume, or cancel bulk downloads at any time
+  • See live progress in the extension badge and get a notification when the job finishes
+  • Use the artist’s original file when SoundCloud makes it available
+  • Works with current SoundCloud pages and navigation
+  • No account required for most public tracks
+
+Every full-track download feature is free - for compatible individual tracks, Looper and Player Tools lets you repeat an A–B section and export only that selected range as WAV.
+
+Please download only music you own or have permission to save, and respect artists’ rights and SoundCloud’s Terms of Service!
