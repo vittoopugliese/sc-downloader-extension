@@ -78,12 +78,15 @@
   let displayedRate = null;
   let animateNextRateChange = false;
   let loopRequestId = 0;
+  let loopIntentVersion = 0;
   let trackDownloadPending = false;
   let loopDownloadPending = false;
   let loopState = { active: false, enabled: false, startMs: null, endMs: null, durationMs: null };
   let accessSnapshot = { state: "loading", plan: "free", capabilities: {} };
   let playerToolsSessionId = null;
   let accessRequestId = 0;
+  let accessLocked = false;
+  let accessActionPending = false;
   let loopPollInterval = null;
   let waveformSamples = [];
   let waveformTrackUrl = null;
@@ -225,7 +228,7 @@
     playerToolsSessionId = accessSnapshot?.grant?.sessionId || null;
   }
 
-  function requestAccess(type, operation, payload = {}) {
+  function requestAccess(type, operation, payload = {}, options = {}) {
     const root = document.documentElement;
     const id = `player-tools-${Date.now()}-${accessRequestId += 1}`;
     return new Promise((resolve) => {
@@ -247,7 +250,9 @@
       };
       document.addEventListener(ACCESS_RESPONSE_EVENT, listener);
       root.setAttribute(ACCESS_REQUEST_ATTRIBUTE, JSON.stringify({
-        id, type, operation, sessionId: playerToolsSessionId, payload,
+        id, type, operation, requestId: options.requestId || id,
+        expectedGeneration: options.expectedGeneration,
+        sessionId: options.sessionId === undefined ? playerToolsSessionId : options.sessionId, payload,
       }));
       document.dispatchEvent(new CustomEvent(ACCESS_REQUEST_EVENT));
     });
@@ -259,6 +264,34 @@
     playerToolsSessionId = null;
   }
 
+  function capability(name) {
+    return accessSnapshot?.capabilities?.[name] === true;
+  }
+
+  function accessMessage(code) {
+    if (code === "trial-exhausted" || code === "pro-required") return "Player Tools Pro is required to keep using this feature.";
+    if (code === "stale-generation") return "The track changed. Please set the loop again.";
+    return "Player Tools access could not be confirmed. Please retry.";
+  }
+
+  async function authorizePlayerTools(operation, capabilityName, payload, options) {
+    if (!capability(capabilityName)) {
+      playbackFailure = accessMessage(accessSnapshot?.code || "trial-exhausted");
+      render();
+      return null;
+    }
+    accessActionPending = true;
+    render();
+    const result = await requestAccess("authorize", operation, payload, options).catch(() => ({ success: false, code: "access-error" }));
+    accessActionPending = false;
+    if (!result?.success || !result.allowed) {
+      playbackFailure = accessMessage(result?.code);
+      render();
+      return null;
+    }
+    return result;
+  }
+
   document.addEventListener(ACCESS_EVENT, () => {
     readAccessSnapshot();
     render();
@@ -266,6 +299,8 @@
   readAccessSnapshot();
 
   async function applyPlayerRate(rate, { animate = false } = {}) {
+    const authorization = await authorizePlayerTools("set-rate", "tempo");
+    if (!authorization) return;
     playbackFailure = "";
     animateNextRateChange = animate;
     const state = controller.setRate(rate);
@@ -273,12 +308,16 @@
   }
 
   async function applyPlayerPitch(enabled) {
+    const authorization = await authorizePlayerTools("set-preserve-pitch", "preservePitch");
+    if (!authorization) return;
     playbackFailure = "";
     const state = controller.setPreservePitch(enabled);
     writeSetting(PITCH_STORAGE, state.preservePitch);
   }
 
   async function savePlayerPreset(index) {
+    const authorization = await authorizePlayerTools("save-preset", "savePreset");
+    if (!authorization) return;
     customRates[index] = controller.snapshot().rate;
     writeSetting(CUSTOM_RATE_STORAGE[index], customRates[index]);
     render();
@@ -318,6 +357,17 @@
       render();
     },
   });
+
+  async function applyEffect(change) {
+    const authorization = await authorizePlayerTools("set-effect", "tempo");
+    if (!authorization) return null;
+    const state = change();
+    effectsFailure = state?.available && !state.initialized
+      ? "Play a track to activate FX."
+      : "";
+    render();
+    return state;
+  }
 
   function writeSetting(key, value) {
     try {
@@ -410,7 +460,15 @@
     const response = requestLoop("state");
     const state = response?.state;
     if (!state) return;
-    loopState = state.loop || { active: false, enabled: false };
+    const nextLoop = state.loop || { active: false, enabled: false };
+    if (nextLoop.trackIdentity !== loopState.trackIdentity || nextLoop.generation !== loopState.generation) {
+      loopIntentVersion += 1;
+      const grant = accessSnapshot?.grant;
+      if (grant && (grant.trackIdentity !== nextLoop.trackIdentity || grant.generation !== nextLoop.generation)) {
+        finishLoopSession().catch(() => {});
+      }
+    }
+    loopState = nextLoop;
     loopState.available = state.available === true;
     loopState.currentTimeMs = state.currentTimeMs;
     loopState.durationMs = Number.isFinite(loopState.durationMs)
@@ -451,6 +509,42 @@
         ? "The track changed. Please set the loop again."
         : error ? "Could not update the loop. Please retry." : "";
     render();
+  }
+
+  async function applyAuthorizedLoop(payload) {
+    const intentVersion = loopIntentVersion;
+    const before = requestLoop("state")?.state;
+    const currentLoop = before?.loop;
+    const trackIdentity = currentLoop?.trackIdentity;
+    const generation = currentLoop?.generation;
+    const durationMs = currentLoop?.durationMs || before?.durationMs;
+    if (!trackIdentity || !Number.isInteger(generation) || !Number.isFinite(durationMs)) {
+      setLoopFailure({ error: "waiting-track" });
+      return null;
+    }
+    const operation = currentLoop?.active ? "edit-loop" : "begin-loop";
+    const authorization = await authorizePlayerTools(operation, operation === "begin-loop" ? "beginLoop" : "editLoop", {
+      trackIdentity,
+      generation,
+      startMs: payload.startMs,
+      endMs: payload.endMs,
+      durationMs,
+    }, {
+      expectedGeneration: generation,
+      sessionId: operation === "edit-loop" ? playerToolsSessionId : null,
+    });
+    if (!authorization) return null;
+    const after = requestLoop("state")?.state?.loop;
+    if (intentVersion !== loopIntentVersion || after?.trackIdentity !== trackIdentity || after?.generation !== generation) {
+      playbackFailure = accessMessage("stale-generation");
+      await finishLoopSession();
+      render();
+      return null;
+    }
+    const response = requestLoop("set-loop", { ...payload, expectedGeneration: generation });
+    setLoopFailure(response);
+    readLoopState();
+    return response;
   }
 
   function loopPercent(value) {
@@ -624,8 +718,7 @@
       enabled: true,
       startPlayback: true,
     };
-    setLoopFailure(requestLoop("set-loop", payload));
-    readLoopState();
+    await applyAuthorizedLoop(payload);
   }
 
   async function setLoopFromSliders(marker) {
@@ -637,8 +730,7 @@
       enabled: true,
       startPlayback: activatesLoop,
     };
-    setLoopFailure(requestLoop("set-loop", payload));
-    readLoopState();
+    await applyAuthorizedLoop(payload);
   }
 
   async function commitLoopTime(marker) {
@@ -658,11 +750,11 @@
       return;
     }
     const payload = { marker, startMs, endMs, enabled: true, startPlayback: !loopState.active };
-    setLoopFailure(requestLoop("set-loop", payload));
-    readLoopState();
+    await applyAuthorizedLoop(payload);
   }
 
   async function clearLoop() {
+    loopIntentVersion += 1;
     setLoopFailure(requestLoop("clear-loop"));
     await finishLoopSession();
     readLoopState();
@@ -671,8 +763,7 @@
   async function setWaveformRange(nextRange, marker = null) {
     if (!nextRange) return;
     const payload = { ...nextRange, marker, enabled: true, startPlayback: !loopState.active };
-    setLoopFailure(requestLoop("set-loop", payload));
-    readLoopState();
+    await applyAuthorizedLoop(payload);
   }
 
   function beginWaveformDrag(event, kind) {
@@ -1597,26 +1688,18 @@
       if (!ui.panel.hidden) positionPanel();
     });
     for (const [name, slider] of Object.entries(ui.effectSliders)) {
-      slider.addEventListener("input", () => {
-        const state = effectsController?.set(name, slider.valueAsNumber);
+      slider.addEventListener("change", async () => {
+        const state = await applyEffect(() => effectsController?.set(name, slider.valueAsNumber));
         if (state?.[name] > 0) effectWetMemory[name] = state[name];
-        if (state?.available) {
-          effectsFailure = state[name] > 0 && !state.initialized
-            ? "Play a track to activate FX."
-            : "";
-        }
-        render();
       });
     }
     for (const [name, button] of Object.entries(ui.effectBypasses)) {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", async () => {
         const current = effectsController?.snapshot();
         if (!current?.available) return;
         const nextWet = current[name] > 0 ? 0 : effectWetMemory[name] || DEFAULT_EFFECT_TOGGLE_WET;
-        const state = effectsController.set(name, nextWet);
-        if (state[name] > 0) effectWetMemory[name] = state[name];
-        effectsFailure = state[name] > 0 && !state.initialized ? "Play a track to activate FX." : "";
-        render();
+        const state = await applyEffect(() => effectsController.set(name, nextWet));
+        if (state?.[name] > 0) effectWetMemory[name] = state[name];
       });
     }
     root.querySelectorAll(".effect-settings-toggle").forEach((button) => {
@@ -1629,20 +1712,12 @@
     });
     root.querySelectorAll(".effects-preset").forEach((button) => {
       button.addEventListener("click", () => {
-        effectsController?.applyPreset(button.dataset.fxPreset);
-        effectsFailure = "";
-        render();
+        applyEffect(() => effectsController?.applyPreset(button.dataset.fxPreset));
       });
     });
     for (const [name, control] of Object.entries(ui.effectCharacters)) {
-      control.addEventListener("input", () => {
-        effectsController?.setCharacter(name, control.value);
-        effectsFailure = "";
-        render();
-      });
       control.addEventListener("change", () => {
-        effectsController?.setCharacter(name, control.value);
-        render();
+        applyEffect(() => effectsController?.setCharacter(name, control.value));
       });
     }
     root.querySelectorAll(".preset").forEach((button) => {
@@ -1742,6 +1817,18 @@
 
   function render() {
     if (!ui) return;
+    const playbackAllowed = capability("tempo");
+    if (!playbackAllowed && !accessLocked) {
+      accessLocked = true;
+      controller.setRate(DEFAULTS.rate);
+      controller.setPreservePitch(false);
+      requestLoop("set-global-bypass", { bypassed: true });
+    } else if (playbackAllowed && accessLocked) {
+      accessLocked = false;
+      controller.setRate(readStoredRate());
+      controller.setPreservePitch(readStoredPitch());
+      requestLoop("set-global-bypass", { bypassed: controller.snapshot().bypassed });
+    }
     const state = controller.snapshot();
     const text = formatRate(state.effectiveRate);
     const triggerText = formatTriggerRate(state.effectiveRate);
@@ -1766,13 +1853,13 @@
     );
     ui.detachButton.title = ui.detachButton.getAttribute("aria-label");
     ui.downloadTrackButton.disabled = trackDownloadPending;
-    ui.clearRate.disabled = false;
-    ui.slider.disabled = false;
-    ui.pitchToggle.disabled = !state.preservePitchSupported;
-    ui.bypass.disabled = false;
-    ui.root.querySelectorAll(".preset").forEach((button) => { button.disabled = false; });
-    ui.waveformShell.classList.remove("is-locked");
-    ui.waveformToggle.disabled = false;
+    ui.clearRate.disabled = !playbackAllowed || accessActionPending;
+    ui.slider.disabled = !playbackAllowed || accessActionPending;
+    ui.pitchToggle.disabled = !playbackAllowed || !state.preservePitchSupported || accessActionPending;
+    ui.bypass.disabled = !playbackAllowed || accessActionPending;
+    ui.root.querySelectorAll(".preset").forEach((button) => { button.disabled = !playbackAllowed || accessActionPending; });
+    ui.waveformShell.classList.toggle("is-locked", !playbackAllowed);
+    ui.waveformToggle.disabled = !playbackAllowed || accessActionPending;
     ui.brandLogo.classList.toggle("is-bypassed", state.bypassed);
     ui.root.querySelectorAll(".preset").forEach((button) => {
       const customIndex = Number(button.dataset.customIndex);
@@ -1792,14 +1879,15 @@
     });
     syncRange(ui.slider);
     ui.pitchToggle.checked = state.preservePitch;
-    if (effectsBypassed !== state.bypassed) {
-      effectsBypassed = state.bypassed;
+    const effectiveBypass = state.bypassed || !playbackAllowed;
+    if (effectsBypassed !== effectiveBypass) {
+      effectsBypassed = effectiveBypass;
       effectsController?.setBypassed(effectsBypassed);
     }
     renderRate(state.effectiveRate, animateRate);
     ui.host.setAttribute(RATE_ATTRIBUTE, String(state.effectiveRate));
     ui.host.setAttribute(PITCH_ATTRIBUTE, String(state.preservePitch));
-    const message = playbackFailure || storageFailure || loopFailure || effectsFailure;
+    const message = playbackFailure || (!playbackAllowed ? accessMessage(accessSnapshot?.code || "trial-exhausted") : "") || storageFailure || loopFailure || effectsFailure;
     ui.status.textContent = message;
     ui.status.hidden = !message;
     renderLoop();
@@ -1812,13 +1900,13 @@
     for (const name of ["reverb", "delay"]) {
       const slider = ui.effectSliders[name];
       slider.value = String(state[name]);
-      slider.disabled = !state.available;
+      slider.disabled = !state.available || !capability("tempo") || accessActionPending;
       slider.dataset.active = String(state[name] > 0);
       ui.effectValues[name].textContent = `${state[name]}%`;
       if (state[name] > 0) effectWetMemory[name] = state[name];
       const bypass = ui.effectBypasses[name];
       const enabled = state[name] > 0;
-      bypass.disabled = !state.available;
+      bypass.disabled = !state.available || !capability("tempo") || accessActionPending;
       bypass.setAttribute("aria-pressed", String(enabled));
       bypass.setAttribute("aria-label", `${enabled ? "Disable" : "Enable"} ${name}`);
       bypass.title = enabled
@@ -1828,7 +1916,7 @@
     }
     for (const [name, control] of Object.entries(ui.effectCharacters)) {
       control.value = String(state[name]);
-      control.disabled = !state.available;
+      control.disabled = !state.available || !capability("tempo") || accessActionPending;
       const output = ui.effectCharacterValues[name];
       if (output) output.textContent = ["delayTime", "reverbPreDelay"].includes(name)
         ? `${state[name]}ms`
@@ -1836,7 +1924,7 @@
     }
     ui.root.querySelectorAll(".effects-preset").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.fxPreset === state.preset));
-      button.disabled = !state.available;
+      button.disabled = !state.available || !capability("tempo") || accessActionPending;
     });
     ui.root.querySelectorAll(".effect-settings-toggle").forEach((button) => {
       const expanded = button.dataset.effectSettings === expandedEffectSettings;

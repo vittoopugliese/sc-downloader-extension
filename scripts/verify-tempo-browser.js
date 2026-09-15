@@ -61,6 +61,29 @@ async function main() {
       path: path.join(__dirname, "audio-effects-core.js"),
     });
     await page.evaluate((logoUrl) => {
+      const playerToolsSnapshot = {
+        revision: 1,
+        plan: "pro",
+        state: "pro",
+        grant: null,
+        capabilities: {
+          openPanel: true, beginLoop: true, editLoop: true, tempo: true,
+          preservePitch: true, savePreset: true, maximizeLooper: true,
+          editLoopPrecise: true, exportLoop: true, exportTrackEffects: true,
+        },
+      };
+      document.documentElement.setAttribute(
+        "data-scdl-player-tools-access",
+        JSON.stringify(playerToolsSnapshot)
+      );
+      document.addEventListener("scdl:player-tools-request", () => {
+        const request = JSON.parse(document.documentElement.getAttribute("data-scdl-player-tools-request") || "null");
+        if (!request?.id) return;
+        document.documentElement.setAttribute("data-scdl-player-tools-response", JSON.stringify({
+          id: request.id, success: true, allowed: true, snapshot: playerToolsSnapshot,
+        }));
+        document.dispatchEvent(new CustomEvent("scdl:player-tools-response"));
+      });
       document.documentElement.setAttribute(
         "data-scdl-extension-logo-url",
         logoUrl
@@ -599,12 +622,14 @@ async function main() {
     await host.locator(".effects-toggle").click();
     await host.locator("#scdl-effect-reverb").evaluate((slider) => {
       slider.value = "35";
-      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      slider.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await host.locator("#scdl-effect-delay").evaluate((slider) => {
       slider.value = "28";
-      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      slider.dispatchEvent(new Event("change", { bubbles: true }));
     });
+    await page.waitForFunction(() => [...document.querySelector("#scdl-tempo-control")?.shadowRoot?.querySelectorAll(".effect-value") || []]
+      .map((value) => value.textContent).join("|") === "35%|28%");
     const activeFx = await host.evaluate((element) => {
       const root = element.shadowRoot;
       return {
@@ -623,7 +648,7 @@ async function main() {
     for (const selector of ["#scdl-effect-reverb", "#scdl-effect-delay"]) {
       await host.locator(selector).evaluate((slider) => {
         slider.value = "0";
-        slider.dispatchEvent(new Event("input", { bubbles: true }));
+        slider.dispatchEvent(new Event("change", { bubbles: true }));
       });
     }
     await host.locator(".waveform-toggle").evaluate((button) => button.click());
