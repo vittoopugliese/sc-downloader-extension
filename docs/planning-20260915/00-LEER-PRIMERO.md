@@ -58,7 +58,7 @@ No encontré `NEW_PLAYER_HEADER.png` como imagen en las rutas examinadas; sí un
 1. **Likes Explorer:** fuera de implementación y de discusión Free/Pro en esta entrega. El antecedente local propone Pro lifetime; no se adopta el “FREE” del consejo viejo.
 2. **Header:** prevalece tu anotación “Player Tools [Free]”, ícono propio y sin invitación a calificar en el panel. Pro muestra Pro; Free puede aclarar “prueba limitada”. No adoptar SCTD como título compacto.
 3. **EQ:** pago, como pediste. Reverb/delay Free era una posibilidad planteada, no una aprobación cerrada.
-4. **Trial:** veinte loops globales sigue siendo la base. Falta decidir el límite para quien sólo usa tempo. Las propuestas nuevas quedan señaladas en 01.
+4. **Trial:** Free tiene una prueba global de siete días que comienza al abrir por primera vez el popup de descarga o Player Tools tras instalar o actualizar a la versión de la oferta. Los veinte loops siguen siendo un segundo límite: vence por plazo o al usar el loop 20, lo que ocurra primero. La gracia del loop 20 conserva su sesión ya concedida.
 5. **Precio:** el plan explícito del 12/09 registra USD 3,69 lanzamiento / USD 6,79 referencia futura, lifetime y 46% redondeado. La conversación vieja sugiere USD 2,99, luego 4,99 y 7,99–9,99. No reemplazo una decisión explícita por ese consejo genérico; cambios de precio serán experimentos futuros.
 6. **FX exportados:** distinguir tempo/pitch ya contemplados del procesamiento de reverb/delay/EQ que falta verificar e incorporar.
 7. **Capturas:** la conversación dice “4” pero enumera cinco. Se entregan cinco briefs; el primero está declarado hecho y sólo requiere revisión de vigencia.

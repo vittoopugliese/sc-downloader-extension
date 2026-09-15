@@ -23,19 +23,24 @@ Archivos: `scripts/player-tools-policy.js`, `player-tools-access.js`, `player-to
 
 Cierre: probar 19→20, dos pestañas disputando último uso, Clear/cambio de track con permiso en vuelo, recarga, worker reiniciado, eventos viejos, Free agotado descargando originales y Pro exportando. Verificadores: `npm run test:player-tools`, `node scripts/verify-loop-background-routing.js`, `npm run test:e2e:tempo`, `npm run test:e2e`, y checklist de descargas.
 
-## 1B — Resolver la prueba ilimitada de tempo
+## 1B — Prueba global de siete días
 
-Hecho: si el usuario no crea loops, los veinte usos no se consumen. Endurecer el EQ no cambia esa situación.
+**Decisión confirmada el 15/09/2026:** Free recibe una prueba única de Player Tools de siete días. Comienza cuando la persona abre por primera vez el popup de descarga o Player Tools después de instalar o actualizar a la versión que incorpora esta oferta. Al vencer se bloquean todas las herramientas musicales: velocidad, Keep Tone, loops, presets y FX. Las descargas normales de tracks y colecciones permanecen gratis.
 
-Propuesta para decidir al implementar: **prueba de Player Tools de siete días desde la primera transformación musical efectiva, o veinte loops, lo que ocurra primero**. Siete es un valor inicial propuesto, no una aprobación. Abrir el panel o descargar original no inicia el plazo. Mostrar antes de comenzar una frase clara; aviso de un loop restante se conserva y el plazo necesita información propia.
+Los veinte loops siguen siendo un límite dentro de esos siete días: la prueba termina al vencer el plazo **o** al consumir el loop 20, lo que ocurra primero. La gracia ya concedida al propietario del loop 20 continúa hasta que termine esa sesión, incluso si el reloj vence mientras ese loop está activo; no permite crear otro loop ni exportar.
 
-Ventaja: cubre speed, Keep Tone y FX sin cobrar cada movimiento. Coste: exige plazo persistente, migración y decisión de qué ocurre si vence durante el último loop. Recomiendo respetar la gracia ya concedida hasta que termine su sesión y bloquear nuevos usos; explicar esta excepción.
+### Trabajo pendiente para implementar la decisión
 
-Alternativa: minutos de escucha transformada. Da una prueba proporcional al uso, pero necesita contabilizar play/pause, pestañas simultáneas y audio efectivo. No la elegiría como primera versión para un único desarrollador. Mantener sólo veinte loops es viable únicamente aceptando explícitamente tempo sin vencimiento mientras haya saldo.
+1. Extender el registro durable de acceso con `trial.startedAt` y `trial.expiresAt`, con validación y revisión de schema. Los timestamps se guardan en milisegundos UTC y el cálculo de expiración se centraliza en `player-tools-policy.js`; MAIN nunca calcula ni escribe el reloj.
+2. Iniciar la prueba de forma idempotente desde dos entradas runtime: primera apertura del popup y primera apertura de Player Tools. Ambas llaman al mismo comando del worker; abrir ambas superficies o reintentar tras timeout no cambia la fecha.
+3. Migrar instalaciones existentes sin reiniciar `trial.used`, recibos ni Pro. Una instalación que ya tenía el trial anterior comienza sus siete días en la primera de esas aperturas posterior a la actualización; Pro no recibe ni necesita plazo. Datos corruptos o un storage inaccesible siguen fallando cerrados.
+4. Hacer que snapshots y `canAuthorize` evalúen el vencimiento antes de conceder `set-rate`, `set-preserve-pitch`, `set-effect`, presets y nuevos loops. Mantener la concesión del loop 20 con la semántica de gracia existente.
+5. Exponer estados y copy localizados: días restantes, último día, vencida y motivo del paywall. No iniciar el reloj por abrir una página de SoundCloud, mover un slider ni descargar un original sin abrir el popup.
+6. Añadir fixtures de desarrollo para prueba no iniciada, día 1, último día, vencida, 19/20 loops, Pro, reinicio del worker y dos pestañas. Probar actualización de un registro v1, repetición de apertura y vencimiento durante la sesión final.
 
 Una cuota/reloj local no ofrece protección contra reinstalación o manipulación del perfil. Tratarlo como límite de producto, no como antifraude invulnerable. No construir un sistema antifraude enorme antes de vender.
 
-Entrega concreta de esta subetapa: una regla de vencimiento elegida, copy traducido y migración que no reinicia cuota previa. Mientras no se elija, se puede completar 1A y compra; no declarar cerrado el trial completo.
+Condición de cierre: una instalación actualizada empieza una sola prueba de siete días al abrir popup o Player Tools; al vencer, los controles dejan de afectar el audio y muestran Pro, sin afectar descargas gratis ni borrar preferencias.
 
 ## 1C — Compra, activación y recuperación
 
