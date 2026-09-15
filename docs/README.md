@@ -1,5 +1,7 @@
 # Indice de documentacion y estado
 
+Para la destilación de crecimiento, monetización y próximas implementaciones del 15/09/2026, empezar por [planning-20260915/00-LEER-PRIMERO.md](planning-20260915/00-LEER-PRIMERO.md). Incluye planes separados, EQ Pro, cinco descripciones de Store y guiones vinculados a testing. Likes Explorer queda fuera del trabajo pendiente por indicación actual del usuario. La entrada histórica de abajo conserva su fecha y contexto.
+
 Actualizado: 2026-09-12
 
 Para el trabajo actual de producto, empezar por [`PLAYER-TOOLS-PRODUCT-AND-TECHNICAL-PLAN-20260912.md`](PLAYER-TOOLS-PRODUCT-AND-TECHNICAL-PLAN-20260912.md). Registra decisiones confirmadas sobre oferta, prueba global de veinte loops, Free/Pro, descargas, tooling local y alcance diferido. La próxima sesión debe preguntar qué etapa quiere iniciar el usuario antes de implementar. Las instrucciones de auditoría de abajo pertenecen al contexto histórico de `9dc9f1b`.
