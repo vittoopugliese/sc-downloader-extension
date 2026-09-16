@@ -57,6 +57,7 @@
       if (!response.ok) {
         const code = payload?.error || "service-error";
         const message = code === "activation_failed" ? "That license could not be activated. Check the email and key, then try again."
+          : code === "test_login_failed" ? "Those testing credentials could not activate Pro."
           : code === "license_revoked" ? "This purchase was refunded or revoked. Contact support if this looks wrong."
           : "Player Tools licensing is temporarily unavailable.";
         throw Object.assign(new Error(message), { code, status: response.status });
@@ -115,6 +116,17 @@
         return publicState(state);
       });
     }
+    function activateTest({ username, password }) {
+      return exclusive(async () => {
+        const state = await read();
+        const result = await post("/license/test", { installationId: state.installationId,
+          username: String(username || "").trim(), password: String(password || "") });
+        state.activation = { instanceId: result.instanceId, licenseId: result.licenseId, lastCheckedAt: now() };
+        state.pendingCheckoutAt = null;
+        await applyEntitlement(state, true);
+        return publicState(state);
+      });
+    }
     async function track(name, properties = {}, { once = false, scope = "lifetime" } = {}) {
       if (!ANALYTICS_EVENTS.has(name)) return false;
       return exclusive(async () => {
@@ -142,7 +154,7 @@
         } catch { return false; }
       });
     }
-    return { getState, startCheckout, activate, track };
+    return { getState, startCheckout, activate, activateTest, track };
   }
 
   root.SCPlayerToolsCommerce = { STORAGE_KEY, SESSION_MEASURED_KEY, API_BASE_URL, OFFER, ANALYTICS_EVENTS, create };

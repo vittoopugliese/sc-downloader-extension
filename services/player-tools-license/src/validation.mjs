@@ -24,6 +24,16 @@ export function validateActivation(value) {
   return { ok: true, value: { licenseKey, email, installationId } };
 }
 
+export function validateTestLogin(value) {
+  const username = text(value?.username, 128);
+  const password = text(value?.password, 256);
+  const installationId = text(value?.installationId, 128);
+  if (!username || !password || !installationId || !/^[a-zA-Z0-9_-]{16,128}$/.test(installationId)) {
+    return { ok: false, error: "invalid_request" };
+  }
+  return { ok: true, value: { username, password, installationId } };
+}
+
 export function validateStatus(value) {
   const installationId = text(value?.installationId, 128);
   const instanceId = text(value?.instanceId, 256);

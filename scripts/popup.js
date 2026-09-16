@@ -1496,6 +1496,21 @@ commerceRestoreBtn.addEventListener("click", async () => {
   } catch (error) { commerceStatus.textContent = error?.message || t("player_tools_restore_error"); }
   finally { commerceRestoreBtn.disabled = false; }
 });
+commerceTestBtn.addEventListener("click", async () => {
+  const username = commerceTestUsername.value.trim();
+  const password = commerceTestPassword.value;
+  if (!username || !password) { commerceStatus.textContent = t("player_tools_test_required"); return; }
+  commerceTestBtn.disabled = true;
+  commerceStatus.textContent = t("player_tools_test_working");
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "TEST_PLAYER_TOOLS_PRO", username, password });
+    if (!response?.success) throw new Error(response?.error || t("player_tools_test_error"));
+    commerceTestPassword.value = "";
+    commerceStatus.textContent = t("player_tools_test_success");
+    await syncPlayerToolsOffer();
+  } catch (error) { commerceStatus.textContent = error?.message || t("player_tools_test_error"); }
+  finally { commerceTestBtn.disabled = false; }
+});
 
 syncPlayerToolsOffer();
 

@@ -527,6 +527,15 @@
   "player_tools_restore_working": { "message": "Verificando sua compra…" },
   "player_tools_restore_success": { "message": "Pro ativado. Os controles do Player Tools foram desbloqueados." },
   "player_tools_restore_error": { "message": "Não foi possível restaurar a compra. Verifique os dados ou contate o suporte." },
+  "player_tools_test_access": { "message": "Acesso de teste" },
+  "player_tools_test_access_help": { "message": "Use as credenciais de teste configuradas para este serviço." },
+  "player_tools_test_username": { "message": "Usuário de teste" },
+  "player_tools_test_password": { "message": "Senha de teste" },
+  "player_tools_test_activate": { "message": "Ativar Pro de teste" },
+  "player_tools_test_required": { "message": "Informe as duas credenciais de teste." },
+  "player_tools_test_working": { "message": "Ativando Pro de teste…" },
+  "player_tools_test_success": { "message": "O Pro de teste está ativo nesta instalação." },
+  "player_tools_test_error": { "message": "As credenciais de teste não puderam ativar o Pro." },
   "email": { "message": "Email" },
   "close": { "message": "Fechar" }
 }

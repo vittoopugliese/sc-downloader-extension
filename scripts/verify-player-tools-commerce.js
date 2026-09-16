@@ -25,6 +25,7 @@ function response(status, body) {
     calls.push({ url, body });
     if (url.endsWith("/checkout")) return response(200, { checkoutUrl: "https://store.example/checkout/1" });
     if (url.endsWith("/license/restore")) return response(200, { active: true, licenseId: "license-1", instanceId: "instance-1" });
+    if (url.endsWith("/license/test")) return response(200, { active: true, licenseId: "test-pro", instanceId: "test-instance-1" });
     if (url.endsWith("/license/status")) return revoked
       ? response(403, { active: false, error: "license_revoked" })
       : response(200, { active: true, licenseId: "license-1" });
@@ -50,6 +51,11 @@ function response(status, body) {
   assert.equal(data[STORAGE_KEY].activation.instanceId, "instance-1");
   assert.equal(data[STORAGE_KEY].licenseKey, undefined, "license keys are never persisted by the extension");
   assert.equal(entitlements.at(-1).status, "active");
+
+  const tested = await commerce.activateTest({ username: "tester", password: "test-password" });
+  assert.equal(tested.status, "active");
+  assert.equal(data[STORAGE_KEY].activation.instanceId, "test-instance-1");
+  assert.equal(calls.at(-1).body.password, "test-password");
 
   clock += 1000;
   assert.equal((await commerce.getState({ revalidate: true })).status, "active");

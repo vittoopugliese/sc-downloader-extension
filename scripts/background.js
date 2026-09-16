@@ -197,6 +197,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.type === "TEST_PLAYER_TOOLS_PRO") {
+    playerToolsCommerce.activateTest(request)
+      .then((commerce) => sendResponse({ success: true, commerce }))
+      .catch((error) => sendResponse(errorResponse(error)));
+    return true;
+  }
+
   if (request.type === "TRACK_PLAYER_TOOLS_EVENT") {
     return respond(playerToolsCommerce.track(request.name, request.properties, {
       once: request.once === true, scope: request.scope === "session" ? "session" : "lifetime",

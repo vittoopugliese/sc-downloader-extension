@@ -527,6 +527,15 @@
   "player_tools_restore_working": { "message": "Kauf wird geprüft…" },
   "player_tools_restore_success": { "message": "Pro aktiviert. Player Tools ist freigeschaltet." },
   "player_tools_restore_error": { "message": "Der Kauf konnte nicht wiederhergestellt werden. Angaben prüfen oder Support kontaktieren." },
+  "player_tools_test_access": { "message": "Testzugang" },
+  "player_tools_test_access_help": { "message": "Verwende die für diesen Dienst konfigurierten Testzugangsdaten." },
+  "player_tools_test_username": { "message": "Testbenutzer" },
+  "player_tools_test_password": { "message": "Testpasswort" },
+  "player_tools_test_activate": { "message": "Test-Pro aktivieren" },
+  "player_tools_test_required": { "message": "Gib beide Testzugangsdaten ein." },
+  "player_tools_test_working": { "message": "Test-Pro wird aktiviert…" },
+  "player_tools_test_success": { "message": "Test-Pro ist für diese Installation aktiv." },
+  "player_tools_test_error": { "message": "Die Testzugangsdaten konnten Pro nicht aktivieren." },
   "email": { "message": "E-Mail" },
   "close": { "message": "Schließen" }
 }

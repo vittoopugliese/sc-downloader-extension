@@ -1413,6 +1413,12 @@
                 <p data-i18n="player_tools_restore_help">Already purchased? Enter the email and license key from your receipt.</p>
                 <label><span data-i18n="email">Email</span><input id="commerceEmail" type="email" autocomplete="email" maxlength="320"></label>
                 <label><span data-i18n="player_tools_license_key">License key</span><input id="commerceLicenseKey" type="text" autocomplete="off" maxlength="256"></label>
+                <details class="commerce-test-access"><summary data-i18n="player_tools_test_access">Testing access</summary>
+                    <p data-i18n="player_tools_test_access_help">Use the testing credentials configured for this service.</p>
+                    <label><span data-i18n="player_tools_test_username">Testing user</span><input id="commerceTestUsername" type="text" autocomplete="username" maxlength="128"></label>
+                    <label><span data-i18n="player_tools_test_password">Testing password</span><input id="commerceTestPassword" type="password" autocomplete="current-password" maxlength="256"></label>
+                    <div class="commerce-actions"><button id="commerceTestBtn" type="button" data-i18n="player_tools_test_activate">Activate test Pro</button></div>
+                </details>
                 <p id="commerceStatus" role="status" aria-live="polite"></p>
                 </div>
                 <div class="commerce-actions commerce-footer">

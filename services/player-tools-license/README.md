@@ -53,6 +53,21 @@ observed once and the D1 rows agree:
    but keeps audio preferences and trial history.
 7. Invalid origin, signature, product/variant, email and key all fail closed.
 
+## Testing access
+
+For a manual Pro test without creating an order, set these Worker secrets:
+
+```text
+wrangler secret put TEST_PRO_USERNAME
+wrangler secret put TEST_PRO_PASSWORD
+```
+
+The **Testing access** section in the extension's Activate / restore dialog then
+accepts those values. They remain only in the Worker: do not put them in
+`wrangler.jsonc`, source code, or the extension. Remove both secrets when the
+testing window ends; without them the endpoint fails closed. Use a distinct,
+temporary password if this Worker is exposed to production users.
+
 Run `npm test` in this directory for request-shape validation. The repository's
 `npm run test:player-tools` additionally verifies the extension commerce and
 entitlement lifecycle with a simulated provider.

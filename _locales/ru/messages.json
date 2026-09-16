@@ -527,6 +527,15 @@
   "player_tools_restore_working": { "message": "Проверяем покупку…" },
   "player_tools_restore_success": { "message": "Pro активирован. Player Tools разблокирован." },
   "player_tools_restore_error": { "message": "Не удалось восстановить покупку. Проверьте данные или обратитесь в поддержку." },
+  "player_tools_test_access": { "message": "Тестовый доступ" },
+  "player_tools_test_access_help": { "message": "Используйте тестовые учётные данные, настроенные для этого сервиса." },
+  "player_tools_test_username": { "message": "Тестовый пользователь" },
+  "player_tools_test_password": { "message": "Тестовый пароль" },
+  "player_tools_test_activate": { "message": "Активировать тестовый Pro" },
+  "player_tools_test_required": { "message": "Введите обе тестовые учётные данные." },
+  "player_tools_test_working": { "message": "Активация тестового Pro…" },
+  "player_tools_test_success": { "message": "Тестовый Pro активен в этой установке." },
+  "player_tools_test_error": { "message": "Тестовые учётные данные не смогли активировать Pro." },
   "email": { "message": "Email" },
   "close": { "message": "Закрыть" }
 }
