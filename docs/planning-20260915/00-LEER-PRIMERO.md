@@ -3,6 +3,20 @@
 Fecha: 2026-09-15. Fuente completa: `C:\Users\torib\Desktop\plan_final_destilar_por_etapas.txt`.
 Entrega: planes separados, decisiones, materiales de Store y guiones. No es una implementación ni una publicación.
 
+## Estado de ejecución al 15/09/2026
+
+Las etapas de repositorio **00 y 01 están implementadas y verificadas**. El
+trial, el acceso, el checkout, la activación/recuperación, la revocación y el
+embudo mínimo comparten un único entitlement. La extensión no persiste email ni
+clave y los eventos rechazan títulos, URLs musicales y credenciales.
+
+Queda un gate operativo externo, no trabajo de producto: desplegar el Worker y
+hacer una compra de prueba reconciliada. Este checkout no contiene
+`wrangler.jsonc`, autenticación de Cloudflare ni secretos de Lemon Squeezy, por
+lo que no se declara falsamente esa transacción. El procedimiento está en
+`services/player-tools-license/README.md`. Esto no bloquea comenzar la etapa 02;
+sí bloquea publicar la versión comercial.
+
 ## Mi recomendación
 
 Sí al EQ como próxima mejora musical. Para generar dinero, primero cerrar el recorrido **descubrir Player Tools → probar → entender Pro → comprar → activar**. Una perilla nueva no arregla una compra desconectada o una prueba que no termina.

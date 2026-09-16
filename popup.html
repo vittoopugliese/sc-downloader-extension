@@ -885,23 +885,40 @@
         .player-tools-offer {
             display: flex;
             align-items: center;
-            gap: 9px;
+            gap: 12px;
             margin-top: 10px;
-            padding: 9px;
+            padding: 12px;
             border: 1px solid rgba(255, 106, 26, .52);
-            border-radius: 10px;
+            border-radius: 12px;
             background: linear-gradient(110deg, rgba(255, 85, 0, .17), rgba(26, 26, 26, .92));
         }
         .player-tools-offer[hidden] { display: none; }
-        .player-tools-offer img { width: 31px; height: 31px; border-radius: 7px; }
+        .player-tools-offer img { flex: 0 0 54px; width: 54px; height: 54px; border-radius: 11px; }
         .player-tools-offer-copy { min-width: 0; flex: 1; }
-        .player-tools-offer-title { margin: 0; color: #fff; font-size: 12px; font-weight: 700; }
-        .player-tools-offer-detail { margin: 2px 0 0; color: #c9c9c9; font-size: 10px; line-height: 1.35; }
-        .player-tools-offer-price { color: #ff985d; white-space: nowrap; font-size: 10px; font-weight: 700; }
+        .player-tools-offer-title { margin: 0 0 3px; color: #fff; font-size: 18px; font-weight: 750; line-height: 1.05; letter-spacing: -.02em; }
+        .player-tools-offer-detail { margin: 0; color: #c9c9c9; font-size: 11px; line-height: 1.35; }
+        #playerToolsTrialStatus { margin-top: 2px; color: #e1e1e1; font-size: 12px; }
+        .player-tools-offer-price { margin: 7px 0 0; color: #ff985d; white-space: nowrap; font-size: 13px; font-weight: 750; line-height: 1.2; }
         .player-tools-offer-price del { color: #aaa; font-weight: 500; }
-        #playerToolsBtn { flex: 0 0 auto; padding: 7px 8px; border: 1px solid #ff6a1a; border-radius: 7px; color: #fff; background: #d84a00; font-size: 10px; font-weight: 700; line-height: 1; cursor: pointer; }
-        #playerToolsBtn:hover { background: #ff5a00; }
-        #playerToolsBtn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+        .player-tools-offer-actions { display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; }
+        #playerToolsBtn, #playerToolsProBtn { padding: 9px 10px; border: 1px solid #ff6a1a; border-radius: 8px; color: #fff; background: #d84a00; font-size: 12px; font-weight: 700; line-height: 1; cursor: pointer; }
+        #playerToolsBtn { color: #eee; background: transparent; border-color: #777; }
+        #playerToolsBtn:hover, #playerToolsProBtn:hover { background: #ff5a00; }
+        #playerToolsBtn:focus-visible, #playerToolsProBtn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+        .commerce-panel { position: fixed; z-index: 1001; inset: 0; display: grid; place-items: center; padding: 12px; background: rgba(0,0,0,.72); }
+        .commerce-panel[hidden] { display: none; }
+        .commerce-card { display: flex; flex-direction: column; box-sizing: border-box; width: min(350px, 100%); max-height: calc(100vh - 24px); overflow: hidden; border: 1px solid #555; border-radius: 12px; background: #202020; box-shadow: 0 12px 40px #000; }
+        .commerce-scroll { min-height: 0; padding: 12px 14px 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #666 transparent; }
+        .commerce-card h2 { margin: 0 0 4px; font-size: 17px; color: #fff; }
+        .commerce-card p { margin: 4px 0; color: #ccc; font-size: 11px; line-height: 1.35; }
+        .commerce-card label { display: block; margin-top: 6px; color: #eee; font-size: 11px; }
+        .commerce-card input { box-sizing: border-box; width: 100%; margin-top: 3px; padding: 6px 8px; border: 1px solid #666; border-radius: 6px; color: #fff; background: #111; }
+        .commerce-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+        .commerce-footer { flex: 0 0 auto; margin: 0; padding: 8px 14px 10px; border-top: 1px solid #383838; background: #202020; }
+        .commerce-actions button { padding: 7px 9px; border: 1px solid #777; border-radius: 7px; color: #fff; background: #333; cursor: pointer; }
+        .commerce-actions .is-primary { border-color: #ff6a1a; background: #d84a00; }
+        #commerceStatus { min-height: 16px; color: #ffb184; }
+        #commerceStatus:empty { min-height: 0; margin: 0; }
 
         #artwork {
             inset: -5px;
@@ -911,7 +928,6 @@
 
         .track-info {
             padding: 7px 4px 10px;
-            border-bottom: 1px solid var(--line-soft);
         }
 
         .track-details { gap: 3px; }
@@ -1125,7 +1141,6 @@
         .selection-header {
             gap: 5px;
             padding: 0 34px 6px 0;
-            border-bottom: 1px solid var(--line-soft);
         }
 
         .selection-header-group,
@@ -1306,7 +1321,7 @@
             <div class="track-details">
                 <h2 id="title"></h2>
                 <a id="artistUrl" target="_blank">
-                    <img id="artistArtwork" src="./assets/icon48.png" alt="artist_image" width="30px" height="30px" draggable="false">
+                    <img id="artistArtwork" src="./assets/images/default_avatar.png" alt="" width="30px" height="30px" draggable="false">
                     <h3 id="artist"></h3>
                 </a>
                 <p class="track-meta">
@@ -1378,14 +1393,35 @@
             <ul id="failedDetails" aria-live="polite"></ul>
         </div>
         <section id="playerToolsOffer" class="player-tools-offer" aria-label="Player Tools">
-            <img src="./assets/icons/player-toolkit.png" alt="" width="31" height="31" draggable="false">
+            <img src="./assets/icons/player-toolkit.png" alt="" width="54" height="54" draggable="false">
             <div class="player-tools-offer-copy">
                 <p class="player-tools-offer-title">Player Tools</p>
                 <p class="player-tools-offer-detail">Tempo &amp; looping tools</p>
                 <p id="playerToolsTrialStatus" class="player-tools-offer-detail" aria-live="polite"></p>
-                <p class="player-tools-offer-price"><del>$6.79</del> $3.69 lifetime · 46% OFF</p>
+                <p class="player-tools-offer-price"><del id="playerToolsReferencePrice">$6.79</del> <span id="playerToolsPrice">$3.69</span> <span data-i18n="player_tools_lifetime">lifetime</span></p>
             </div>
-            <button id="playerToolsBtn" type="button" title="Try Player Tools">Try Player Tools</button>
+            <div class="player-tools-offer-actions">
+                <button id="playerToolsProBtn" type="button" data-i18n="player_tools_get_pro" data-i18n-title="player_tools_get_pro" title="Get Pro">Get Pro</button>
+                <button id="playerToolsBtn" type="button" data-i18n="player_tools_try" data-i18n-title="player_tools_try" title="Try Player Tools">Try tools</button>
+            </div>
+        </section>
+        <section id="commercePanel" class="commerce-panel" role="dialog" aria-modal="true" aria-labelledby="commerceTitle" hidden>
+            <div class="commerce-card">
+                <div class="commerce-scroll">
+                <h2 id="commerceTitle" data-i18n="player_tools_pro_title">Player Tools Pro</h2>
+                <p data-i18n="player_tools_pro_copy">One payment unlocks tempo, Keep Tone, loops, effects and Pro exports for this installation.</p>
+                <p><del id="commerceReferencePrice">$6.79</del> <strong id="commercePrice">$3.69 USD</strong> · <span data-i18n="player_tools_lifetime">lifetime</span></p>
+                <div class="commerce-actions"><button id="commerceBuyBtn" class="is-primary" type="button" data-i18n="player_tools_buy" data-i18n-title="player_tools_buy" title="Buy securely">Buy securely</button></div>
+                <p data-i18n="player_tools_restore_help">Already purchased? Enter the email and license key from your receipt.</p>
+                <label><span data-i18n="email">Email</span><input id="commerceEmail" type="email" autocomplete="email" maxlength="320"></label>
+                <label><span data-i18n="player_tools_license_key">License key</span><input id="commerceLicenseKey" type="text" autocomplete="off" maxlength="256"></label>
+                <p id="commerceStatus" role="status" aria-live="polite"></p>
+                </div>
+                <div class="commerce-actions commerce-footer">
+                    <button id="commerceRestoreBtn" class="is-primary" type="button" data-i18n="player_tools_restore" data-i18n-title="player_tools_restore" title="Activate / restore">Activate / restore</button>
+                    <button id="commerceCloseBtn" type="button" data-i18n="close" data-i18n-title="close" title="Close">Close</button>
+                </div>
+            </div>
         </section>
         <section id="helpPanel" aria-labelledby="helpTitle" aria-modal="true" role="dialog">
             <div class="help-header"><button id="helpBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button><h2 id="helpTitle" data-i18n="help_title">How it works</h2></div>

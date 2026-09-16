@@ -2,6 +2,26 @@
 
 Objetivo: convertir una experiencia musical útil en compras verificadas. Depende del acceso existente, no del EQ. Prioridad comercial máxima.
 
+## Estado de implementación al 15/09/2026
+
+- **1A y 1B:** cerradas en código y navegador. Incluyen trial global de siete
+  días, veinte loops, gracia final, carreras y enforcement de audio/export.
+- **1C:** checkout, activación/recuperación idempotente, revalidación offline y
+  revocación están conectados al mismo entitlement. El Worker valida origen,
+  firma y producto; no concede Pro por una URL de success.
+- **1D:** embudo mínimo integrado en extensión y servidor con ID seudónimo,
+  allow-list de eventos/propiedades y compra confirmada desde webhook. La
+  landing declara el alcance; no recibe analytics.
+- **1E:** queda definido como trabajo experimental posterior; no se altera
+  precio/cuota/oferta sin datos del embudo.
+
+Verificación automatizada: `npm run test:player-tools`, `npm test`, popup,
+tempo, loop y descarga E2E. Gate de release pendiente: desplegar infraestructura
+con credenciales reales de test y reconciliar una compra/refund sandbox según
+`services/player-tools-license/README.md`. Sin esas credenciales no es posible
+certificar honestamente la transacción externa, aunque la etapa de código queda
+lista para continuar con 02.
+
 ## Oferta de partida
 
 Downloader original/colecciones: gratis. Player Tools: demostración limitada y Pro lifetime. Conservar los veinte loops globales, gracia del último loop y exportación Pro. No cambiar Likes Explorer.

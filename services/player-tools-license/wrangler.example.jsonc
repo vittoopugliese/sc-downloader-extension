@@ -6,7 +6,7 @@
   "workers_dev": false,
   "routes": [{ "pattern": "sctd.vpugliese.online/api/player-tools/*", "zone_name": "vpugliese.online" }],
   "vars": {
-    "ALLOWED_ORIGIN": "chrome-extension://REPLACE_WITH_EXTENSION_ID",
+    "ALLOWED_ORIGINS": "chrome-extension://ekmbbjdpakacalghjkikfppebgdpoebb,http://localhost:3000",
     "LEMON_STORE_ID": "REPLACE_WITH_LEMON_STORE_ID",
     "LEMON_PRODUCT_ID": "REPLACE_WITH_LEMON_PRODUCT_ID",
     "LEMON_VARIANT_ID": "REPLACE_WITH_LEMON_VARIANT_ID"

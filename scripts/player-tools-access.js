@@ -106,7 +106,21 @@
         if (grants.length) { grants.forEach((g) => { g.active = false; }); await commit(state); }
       });
     }
-    return { getSnapshot, startTrial, authorize, endSession, endTab };
+    function setEntitlement(entitlement) {
+      return runExclusive(async () => {
+        const state = await read();
+        const next = entitlement?.status === "active"
+          ? { status: "active", licenseId: String(entitlement.licenseId || "").slice(0, 256),
+            checkedAt: Number.isSafeInteger(entitlement.checkedAt) ? entitlement.checkedAt : 0 }
+          : { status: "free" };
+        if (JSON.stringify(state.entitlement) !== JSON.stringify(next)) {
+          state.entitlement = next;
+          await commit(state);
+        }
+        return POLICY.snapshot(state, null, now());
+      });
+    }
+    return { getSnapshot, startTrial, authorize, endSession, endTab, setEntitlement };
   }
   // No entitlement/reset writer is exposed in the production runtime.
   root.SCPlayerToolsAccess = { STORAGE_KEY, ownerKey, create,

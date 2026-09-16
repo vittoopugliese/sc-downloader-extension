@@ -639,12 +639,29 @@
     "message": "Back to download"
   },
   "player_tools_trial_days_remaining": {
-    "message": "$1 days left in your 7-day Player Tools trial"
+    "message": "$1 days left in your free trial"
   },
   "player_tools_trial_last_day": {
     "message": "Last day of your Player Tools trial"
   },
-  "player_tools_trial_expired": {
-    "message": "Your trial ended. Player Tools Pro unlocks the musical tools."
-  }
+  "player_tools_trial_expired": { "message": "Your trial ended. Player Tools Pro unlocks the musical tools." },
+  "player_tools_get_pro": { "message": "Get Pro" },
+  "player_tools_try": { "message": "Try tools" },
+  "player_tools_pro_title": { "message": "Player Tools Pro" },
+  "player_tools_pro_copy": { "message": "One payment unlocks tempo, Keep Tone, loops, effects and Pro exports for this installation." },
+  "player_tools_lifetime": { "message": "lifetime" },
+  "player_tools_buy": { "message": "Buy securely" },
+  "player_tools_restore_help": { "message": "Already purchased? Enter the email and license key from your receipt." },
+  "player_tools_license_key": { "message": "License key" },
+  "player_tools_restore": { "message": "Activate / restore" },
+  "player_tools_pro_active": { "message": "Pro is active on this installation." },
+  "player_tools_checkout_opening": { "message": "Opening secure checkout…" },
+  "player_tools_checkout_pending": { "message": "Finish payment in the new tab, then use Activate / restore with your receipt." },
+  "player_tools_checkout_error": { "message": "Checkout is temporarily unavailable." },
+  "player_tools_restore_required": { "message": "Enter both your purchase email and license key." },
+  "player_tools_restore_working": { "message": "Checking your purchase…" },
+  "player_tools_restore_success": { "message": "Pro activated. Your Player Tools controls are unlocked." },
+  "player_tools_restore_error": { "message": "The purchase could not be restored. Check the details or contact support." },
+  "email": { "message": "Email" },
+  "close": { "message": "Close" }
 }

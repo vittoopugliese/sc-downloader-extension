@@ -509,7 +509,24 @@
   "player_tools_trial_last_day": {
     "message": "Last day of your Player Tools trial"
   },
-  "player_tools_trial_expired": {
-    "message": "Your trial ended. Player Tools Pro unlocks the musical tools."
-  }
+  "player_tools_trial_expired": { "message": "Пробный период завершен. Player Tools Pro разблокирует музыкальные инструменты." },
+  "player_tools_get_pro": { "message": "Получить Pro" },
+  "player_tools_try": { "message": "Попробовать" },
+  "player_tools_pro_title": { "message": "Player Tools Pro" },
+  "player_tools_pro_copy": { "message": "Один платеж открывает темп, Keep Tone, петли, эффекты и Pro-экспорт для этой установки." },
+  "player_tools_lifetime": { "message": "навсегда" },
+  "player_tools_buy": { "message": "Купить безопасно" },
+  "player_tools_restore_help": { "message": "Уже купили? Введите email и ключ лицензии из чека." },
+  "player_tools_license_key": { "message": "Ключ лицензии" },
+  "player_tools_restore": { "message": "Активировать / восстановить" },
+  "player_tools_pro_active": { "message": "Pro активирован в этой установке." },
+  "player_tools_checkout_opening": { "message": "Открываем безопасную оплату…" },
+  "player_tools_checkout_pending": { "message": "Завершите оплату в новой вкладке, затем активируйте покупку по чеку." },
+  "player_tools_checkout_error": { "message": "Оплата временно недоступна." },
+  "player_tools_restore_required": { "message": "Введите email покупки и ключ лицензии." },
+  "player_tools_restore_working": { "message": "Проверяем покупку…" },
+  "player_tools_restore_success": { "message": "Pro активирован. Player Tools разблокирован." },
+  "player_tools_restore_error": { "message": "Не удалось восстановить покупку. Проверьте данные или обратитесь в поддержку." },
+  "email": { "message": "Email" },
+  "close": { "message": "Закрыть" }
 }

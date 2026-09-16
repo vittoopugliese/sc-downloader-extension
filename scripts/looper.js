@@ -1517,9 +1517,10 @@ const SCLooper = (() => {
   }
 
   function identityUrl(identity) {
-    return typeof identity === "string" && identity.startsWith("url:")
-      ? normalizeUrl(identity.slice(4))
-      : null;
+    if (typeof identity !== "string") return null;
+    if (identity.startsWith("url:")) return normalizeUrl(identity.slice(4));
+    if (identity.startsWith("permalink:")) return normalizeUrl(identity.slice("permalink:".length));
+    return null;
   }
 
   function readPlaybackTransform() {

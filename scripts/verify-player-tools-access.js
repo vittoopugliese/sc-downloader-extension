@@ -108,7 +108,10 @@ function fixture(used) {
   paidState.entitlement = { status: "free" }; await paid.storage.set({ [STORAGE_KEY]: paidState });
   assert.equal((await paidAccess.getSnapshot(owner)).used, 19);
   assert.equal((await paidAccess.authorize(owner, { operation: "export-loop" })).code, "pro-required");
-  assert.equal(paidAccess.setEntitlement, undefined);
+  await paidAccess.setEntitlement({ status: "active", licenseId: "license-1", checkedAt: 123 });
+  assert.equal((await paidAccess.getSnapshot(owner)).plan, "pro", "validated commerce can grant the shared Pro entitlement");
+  await paidAccess.setEntitlement({ status: "free" });
+  assert.equal((await paidAccess.getSnapshot(owner)).plan, "free", "revocation preserves trial state while removing Pro");
   const all = fixture(0); const allAccess = all.restart(); await allAccess.startTrial();
   for (let i = 0; i < 20; i += 1) {
     const result = await allAccess.authorize(owner, request(`loop-${i}`));

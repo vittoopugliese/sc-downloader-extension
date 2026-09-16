@@ -100,6 +100,7 @@ async function waitForFile(directory, timeoutMs = 30000) {
           <script>window.client_id="client-test-12345678901234567890";</script>
           <div class="track">
             <h1>Loop regression</h1>
+            <a class="playbackSoundBadge__titleLink" href="${trackUrl}" hidden>Loop regression</a>
             <div class="waveform-wrap">
               <div class="waveform" role="slider" aria-label="Waveform" aria-valuemax="20000">
                 <svg id="fixture-waveform" viewBox="0 0 600 120" preserveAspectRatio="none"></svg>
@@ -163,6 +164,10 @@ async function waitForFile(directory, timeoutMs = 30000) {
           ? Promise.resolve(new Response(JSON.stringify({ url })))
           : originalFetch(input, options);
     }, audioUrl);
+
+    // This suite exercises an active trial. Production starts it only from the
+    // popup or the explicit Player Tools entry point, never from a loop click.
+    await worker.evaluate(() => globalThis.SCPlayerToolsAccess.startTrial());
 
     await page.goto(trackUrl);
     await page.waitForFunction(() => Number.isFinite(document.querySelector("audio")?.duration));
@@ -575,6 +580,11 @@ async function waitForFile(directory, timeoutMs = 30000) {
     }
 
     const downloadButton = page.locator("[data-scdl-loop-download]");
+    // Export is a Pro capability; the access-routing suite separately asserts
+    // that Free is rejected before any expensive audio work begins.
+    await worker.evaluate(() => globalThis.SCPlayerToolsAccess.setEntitlement({
+      status: "active", licenseId: "e2e-license", checkedAt: Date.now(),
+    }));
     await downloadButton.click();
     try {
       await page.waitForFunction(

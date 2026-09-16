@@ -639,12 +639,29 @@
     "message": "Volver a descargar"
   },
   "player_tools_trial_days_remaining": {
-    "message": "Quedan $1 dias de tu prueba de Player Tools de 7 dias"
+    "message": "Quedan $1 dias de tu prueba gratis"
   },
   "player_tools_trial_last_day": {
     "message": "Ultimo dia de tu prueba de Player Tools"
   },
-  "player_tools_trial_expired": {
-    "message": "Tu prueba termino. Player Tools Pro desbloquea las herramientas musicales."
-  }
+  "player_tools_trial_expired": { "message": "Tu prueba termino. Player Tools Pro desbloquea las herramientas musicales." },
+  "player_tools_get_pro": { "message": "Obtener Pro" },
+  "player_tools_try": { "message": "Probar herramientas" },
+  "player_tools_pro_title": { "message": "Player Tools Pro" },
+  "player_tools_pro_copy": { "message": "Un solo pago desbloquea tempo, Keep Tone, loops, efectos y exportaciones Pro en esta instalacion." },
+  "player_tools_lifetime": { "message": "de por vida" },
+  "player_tools_buy": { "message": "Comprar de forma segura" },
+  "player_tools_restore_help": { "message": "Ya compraste? Ingresa el email y la clave de licencia de tu recibo." },
+  "player_tools_license_key": { "message": "Clave de licencia" },
+  "player_tools_restore": { "message": "Activar / recuperar" },
+  "player_tools_pro_active": { "message": "Pro esta activo en esta instalacion." },
+  "player_tools_checkout_opening": { "message": "Abriendo el pago seguro…" },
+  "player_tools_checkout_pending": { "message": "Termina el pago en la pestaña nueva y luego usa Activar / recuperar con tu recibo." },
+  "player_tools_checkout_error": { "message": "El pago no esta disponible temporalmente." },
+  "player_tools_restore_required": { "message": "Ingresa el email de compra y la clave de licencia." },
+  "player_tools_restore_working": { "message": "Comprobando tu compra…" },
+  "player_tools_restore_success": { "message": "Pro activado. Tus controles de Player Tools ya estan desbloqueados." },
+  "player_tools_restore_error": { "message": "No se pudo recuperar la compra. Revisa los datos o contacta a soporte." },
+  "email": { "message": "Email" },
+  "close": { "message": "Cerrar" }
 }

@@ -5,6 +5,9 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
 const logoDataUrl = `data:image/png;base64,${fs.readFileSync(
   path.resolve(__dirname, "..", "assets", "icon128.png")
 ).toString("base64")}`;
+const playerToolsDataUrl = `data:image/png;base64,${fs.readFileSync(
+  path.resolve(__dirname, "..", "assets", "icons", "player-toolkit.png")
+).toString("base64")}`;
 const iconDataUrls = Object.fromEntries(
   ["settings.svg", "download.svg", "folder-icon.svg", "back-arrow.svg", "bypass.svg"].map((fileName) => [
     fileName,
@@ -23,11 +26,13 @@ const iconDataUrls = Object.fromEntries(
     const html = fs.readFileSync(path.resolve(__dirname, "..", "popup.html"), "utf8")
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
     await page.setContent(html);
-    await page.evaluate(({ logoUrl, icons }) => {
+    await page.evaluate(({ logoUrl, playerToolsUrl, icons }) => {
       document.querySelector("#loadingOverlay").classList.add("is-hidden");
       document.querySelector("#title").textContent = "t t o r i o - Tracks";
       document.querySelector("#artist").textContent = "t t o r i o";
       document.querySelector("#artistArtwork").src = logoUrl;
+      document.querySelector(".player-tools-offer img").src = playerToolsUrl;
+      document.querySelector("#playerToolsTrialStatus").textContent = "7 days left in your free trial";
       document.querySelectorAll("img[src]").forEach((image) => {
         const fileName = image.getAttribute("src").split("/").at(-1);
         if (icons[fileName]) image.src = icons[fileName];
@@ -40,7 +45,7 @@ const iconDataUrls = Object.fromEntries(
       document.querySelector("#downloadBtn").classList.remove("is-hidden");
       const artwork = document.querySelector("#artwork");
       artwork.style.background = "linear-gradient(135deg, #6b2109, #173342)";
-    }, { logoUrl: logoDataUrl, icons: iconDataUrls });
+    }, { logoUrl: logoDataUrl, playerToolsUrl: playerToolsDataUrl, icons: iconDataUrls });
     const dimensions = await page.evaluate(() => ({
       width: innerWidth,
       scrollWidth: document.documentElement.scrollWidth,
@@ -63,6 +68,12 @@ const iconDataUrls = Object.fromEntries(
         controlRadius: style("#downloadFormat").borderRadius,
         titleSize: style("#title").fontSize,
         divider: style(".track-info").borderBottomStyle,
+        selectionDivider: style(".selection-header").borderBottomStyle,
+        offerImageSize: size(document.querySelector(".player-tools-offer img")),
+        offerTitleSize: style(".player-tools-offer-title").fontSize,
+        offerDetailSize: style(".player-tools-offer-detail").fontSize,
+        offerTrialSize: style("#playerToolsTrialStatus").fontSize,
+        offerPriceSize: style(".player-tools-offer-price").fontSize,
         artworkFilter: style("#artwork").filter,
         collectionControlsAligned: Math.max(...collectionCenters) - Math.min(...collectionCenters) <= 1,
       };
@@ -73,13 +84,51 @@ const iconDataUrls = Object.fromEntries(
       downloadRadius: "7px",
       controlRadius: "7px",
       titleSize: "19px",
-      divider: "solid",
+      divider: "none",
+      selectionDivider: "none",
+      offerImageSize: [54, 54],
+      offerTitleSize: "18px",
+      offerDetailSize: "11px",
+      offerTrialSize: "12px",
+      offerPriceSize: "13px",
       artworkFilter: "brightness(0.641) blur(5px)",
       collectionControlsAligned: true,
     }, "The download popup must use the compact player-panel component system");
+    await page.setViewportSize({ width: 426, height: 350 });
+    const commerceFit = await page.evaluate(() => {
+      const panel = document.querySelector('#commercePanel');
+      document.querySelector('#commerceTitle').textContent = 'Player Tools Pro';
+      panel.querySelector('.commerce-scroll > p').textContent = 'Un solo pago desbloquea tempo, Keep Tone, loops, efectos y exportaciones Pro en esta instalacion.';
+      document.querySelector('#commerceBuyBtn').textContent = 'Comprar de forma segura';
+      document.querySelector('#commerceRestoreBtn').textContent = 'Activar / restaurar';
+      document.querySelector('#commerceCloseBtn').textContent = 'Cerrar';
+      panel.hidden = false;
+      const card = document.querySelector('.commerce-card').getBoundingClientRect();
+      const buttons = ['#commerceBuyBtn', '#commerceRestoreBtn', '#commerceCloseBtn']
+        .map((selector) => document.querySelector(selector).getBoundingClientRect());
+      const scroll = document.querySelector('.commerce-scroll').getBoundingClientRect();
+      const fields = ['#commerceEmail', '#commerceLicenseKey']
+        .map((selector) => document.querySelector(selector).getBoundingClientRect());
+      return {
+        cardTop: Math.round(card.top),
+        cardBottom: Math.round(card.bottom),
+        buttonsVisible: buttons.every((rect) => rect.top >= 0 && rect.bottom <= innerHeight),
+        fieldsVisible: fields.every((rect) => rect.top >= scroll.top && rect.bottom <= scroll.bottom),
+        viewportHeight: innerHeight,
+      };
+    });
+    assert.equal(commerceFit.buttonsVisible, true,
+      `Player Tools commerce actions must remain visible inside the popup: ${JSON.stringify(commerceFit)}`);
+    assert.equal(commerceFit.fieldsVisible, true,
+      `Player Tools license fields must be visible without scrolling: ${JSON.stringify(commerceFit)}`);
     if (deviceScaleFactor === 1) {
       fs.mkdirSync(path.resolve(__dirname, "..", "test-results"), { recursive: true });
-      await page.screenshot({ path: path.resolve(__dirname, "..", "test-results", "popup-main.png") });
+      await page.screenshot({ path: path.resolve(__dirname, "..", "test-results", "popup-commerce.png") });
+    }
+    await page.locator('#commercePanel').evaluate((panel) => { panel.hidden = true; });
+    if (deviceScaleFactor === 1) {
+      fs.mkdirSync(path.resolve(__dirname, "..", "test-results"), { recursive: true });
+      await page.screenshot({ path: path.resolve(__dirname, "..", "test-results", "popup-main.png"), fullPage: true });
     }
     await page.setViewportSize({ width: 432, height: 252 });
     await page.evaluate(() => {

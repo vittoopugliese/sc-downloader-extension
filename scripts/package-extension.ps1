@@ -47,6 +47,7 @@ $packageItems = @(
     "scripts/page-intake.js",
     "scripts/player-tools-access.js",
     "scripts/player-tools-client.js",
+    "scripts/player-tools-commerce.js",
     "scripts/player-tools-policy.js",
     "scripts/popup.js",
     "scripts/soundcloud-http.js",

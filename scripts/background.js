@@ -3,6 +3,7 @@ importScripts(
   "format-utils.js",
   "player-tools-policy.js",
   "player-tools-access.js",
+  "player-tools-commerce.js",
   "directory-storage.js",
   "soundcloud-http.js",
   "stream-selector.js",
@@ -16,6 +17,20 @@ importScripts(
 const t = globalThis.SCDLI18n?.t || ((key) => key);
 
 const UNINSTALL_FEEDBACK_URL = "https://sctd.vpugliese.online/";
+const playerToolsCommerce = globalThis.SCPlayerToolsCommerce?.create
+  ? globalThis.SCPlayerToolsCommerce.create({
+      storage: chrome.storage.local,
+      sessionStorage: chrome.storage.session,
+      access: SCPlayerToolsAccess,
+      version: chrome.runtime.getManifest().version,
+    })
+  // Narrow fallback for legacy verification harnesses that stub importScripts.
+  : {
+      getState: async () => ({ status: "free", canCheckout: false }),
+      startCheckout: async () => { throw Object.assign(new Error("Player Tools licensing is unavailable."), { code: "service-unavailable" }); },
+      activate: async () => { throw Object.assign(new Error("Player Tools licensing is unavailable."), { code: "service-unavailable" }); },
+      track: async () => false,
+    };
 
 async function configureUninstallFeedback() {
   const url = new URL(UNINSTALL_FEEDBACK_URL);
@@ -116,6 +131,7 @@ async function openPlayerToolsPanel() {
       resolve(response);
     });
   });
+  playerToolsCommerce.track("player_tools_opened", { origin: "popup" }).catch(() => {});
   return { tabId: tab.id };
 }
 
@@ -140,6 +156,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === "BULK_JOB_UPDATE" && ["completed", "failed", "cancelled"].includes(request.job?.status)) {
+    playerToolsCommerce.track("download_job_completed", {
+      type: "bulk", count: Number.isSafeInteger(request.job.completed) ? request.job.completed : 0,
+      result: request.job.status,
+    }).catch(() => {});
+    return false;
+  }
+
   if (request.type === "GET_PLAYER_TOOLS_SNAPSHOT") {
     return respond(SCPlayerToolsAccess.getSnapshot(sender), sendResponse, (snapshot) => ({ snapshot }));
   }
@@ -148,9 +172,49 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return respond(SCPlayerToolsAccess.startTrial(), sendResponse, (snapshot) => ({ snapshot }));
   }
 
+  if (request.type === "GET_PLAYER_TOOLS_COMMERCE") {
+    return respond(playerToolsCommerce.getState({ revalidate: request.revalidate === true }), sendResponse, (commerce) => ({ commerce }));
+  }
+
+  if (request.type === "START_PLAYER_TOOLS_CHECKOUT") {
+    playerToolsCommerce.startCheckout(request.locale)
+      .then(async (commerce) => {
+        await chrome.tabs.create({ url: commerce.checkoutUrl });
+        playerToolsCommerce.track("checkout_started", { surface: request.surface || "popup" }).catch(() => {});
+        sendResponse({ success: true, commerce });
+      })
+      .catch((error) => sendResponse(errorResponse(error)));
+    return true;
+  }
+
+  if (request.type === "RESTORE_PLAYER_TOOLS_LICENSE") {
+    playerToolsCommerce.activate(request)
+      .then((commerce) => {
+        playerToolsCommerce.track("license_activated", { result: "active" }).catch(() => {});
+        sendResponse({ success: true, commerce });
+      })
+      .catch((error) => sendResponse(errorResponse(error)));
+    return true;
+  }
+
+  if (request.type === "TRACK_PLAYER_TOOLS_EVENT") {
+    return respond(playerToolsCommerce.track(request.name, request.properties, {
+      once: request.once === true, scope: request.scope === "session" ? "session" : "lifetime",
+    }), sendResponse, (accepted) => ({ accepted }));
+  }
+
   if (request.type === "AUTHORIZE_PLAYER_TOOLS") {
+    const authorization = SCPlayerToolsAccess.authorize(sender, request);
+    authorization.then((result) => {
+      if (!result.allowed && ["pro-required", "trial-expired", "trial-exhausted"].includes(result.code)) {
+        playerToolsCommerce.track("paywall_seen", { cause: result.code }, { once: true, scope: "session" }).catch(() => {});
+        if (result.code === "pro-required") playerToolsCommerce.track("pro_feature_attempted", { feature: request.operation }).catch(() => {});
+      } else if (result.allowed && ["set-rate", "set-effect", "set-preserve-pitch"].includes(request.operation)) {
+        playerToolsCommerce.track("player_tools_value_reached", { category: request.operation }, { once: true }).catch(() => {});
+      }
+    }).catch(() => {});
     return respond(
-      SCPlayerToolsAccess.authorize(sender, request),
+      authorization,
       sendResponse,
       (result) => result
     );
@@ -264,7 +328,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           request.playbackTransform || null
         );
       })
-      .then(sendResponse)
+      .then((result) => {
+        playerToolsCommerce.track("download_job_completed", { type: "single", count: 1, result: "saved" }).catch(() => {});
+        sendResponse(result);
+      })
       .catch((error) => sendResponse(errorResponse(error)));
     return true;
   }
@@ -291,7 +358,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           request.downloadDestination ?? null
         )
       )
-      .then(sendResponse)
+      .then((result) => {
+        playerToolsCommerce.track("download_job_completed", { type: "loop", count: 1, result: "saved" }).catch(() => {});
+        sendResponse(result);
+      })
       .catch((error) => sendResponse(errorResponse(error)));
     return true;
   }

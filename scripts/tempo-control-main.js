@@ -25,6 +25,7 @@
   const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
   const OPEN_PLAYER_TOOLS_PANEL_EVENT = "scdl:open-player-tools-panel";
   const PLAYER_TOOLS_OPENED_EVENT = "scdl:player-tools-opened";
+  const OPEN_PLAYER_TOOLS_PRO_EVENT = "scdl:open-player-tools-pro";
   const REVIEW_URL = "https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews";
   const LOOP_COMMAND_EVENT = "scdl-looper:command";
   const LOOP_COMMAND_ATTRIBUTE = "data-scdl-looper-command";
@@ -1539,7 +1540,7 @@
             <button class="waveform-marker waveform-end" type="button" role="slider" aria-label="Loop end B">B</button>
           </div>
           <div class="waveform-times"><span class="waveform-start-label">00:00.000</span><div class="waveform-setters"><button class="setter set-a" type="button">Set A</button></div><span class="waveform-middle-label">00:00.000</span><div class="waveform-setters"><button class="setter set-b" type="button">Set B</button></div><span class="waveform-end-label">00:00.000</span></div>
-          <button class="player-tools-upgrade" type="button">Try Player Tools — $3.69 lifetime</button>
+          <button class="player-tools-upgrade" type="button">Get Player Tools Pro</button>
         </div>
         <div class="loop-edit">
           <input class="loop-time loop-start-time" inputmode="decimal" placeholder="A 00:00.000" aria-label="Loop start time" />
@@ -1758,6 +1759,10 @@
     ui.downloadTrackButton.addEventListener("click", downloadCurrentTrack);
     ui.settingsButton.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
+    });
+    ui.playerToolsUpgrade.addEventListener("click", (event) => {
+      event.stopPropagation();
+      document.dispatchEvent(new CustomEvent(OPEN_PLAYER_TOOLS_PRO_EVENT));
     });
     ui.detachButton.addEventListener("click", () => {
       panelDetached = !panelDetached;

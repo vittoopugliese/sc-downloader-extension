@@ -504,12 +504,29 @@
     "message": "Voltar ao download"
   },
   "player_tools_trial_days_remaining": {
-    "message": "Restam $1 dias do seu teste de 7 dias do Player Tools"
+    "message": "Restam $1 dias da sua avaliacao gratuita"
   },
   "player_tools_trial_last_day": {
     "message": "Ultimo dia do seu teste do Player Tools"
   },
-  "player_tools_trial_expired": {
-    "message": "Seu teste terminou. O Player Tools Pro desbloqueia as ferramentas musicais."
-  }
+  "player_tools_trial_expired": { "message": "Seu teste terminou. O Player Tools Pro desbloqueia as ferramentas musicais." },
+  "player_tools_get_pro": { "message": "Obter Pro" },
+  "player_tools_try": { "message": "Testar ferramentas" },
+  "player_tools_pro_title": { "message": "Player Tools Pro" },
+  "player_tools_pro_copy": { "message": "Um pagamento desbloqueia tempo, Keep Tone, loops, efeitos e exportações Pro nesta instalação." },
+  "player_tools_lifetime": { "message": "vitalício" },
+  "player_tools_buy": { "message": "Comprar com segurança" },
+  "player_tools_restore_help": { "message": "Já comprou? Informe o email e a chave de licença do recibo." },
+  "player_tools_license_key": { "message": "Chave de licença" },
+  "player_tools_restore": { "message": "Ativar / restaurar" },
+  "player_tools_pro_active": { "message": "Pro está ativo nesta instalação." },
+  "player_tools_checkout_opening": { "message": "Abrindo pagamento seguro…" },
+  "player_tools_checkout_pending": { "message": "Conclua o pagamento na nova aba e use Ativar / restaurar com seu recibo." },
+  "player_tools_checkout_error": { "message": "O pagamento está temporariamente indisponível." },
+  "player_tools_restore_required": { "message": "Informe o email da compra e a chave de licença." },
+  "player_tools_restore_working": { "message": "Verificando sua compra…" },
+  "player_tools_restore_success": { "message": "Pro ativado. Os controles do Player Tools foram desbloqueados." },
+  "player_tools_restore_error": { "message": "Não foi possível restaurar a compra. Verifique os dados ou contate o suporte." },
+  "email": { "message": "Email" },
+  "close": { "message": "Fechar" }
 }

@@ -13,6 +13,7 @@ const LOOP_EXPORT_RESULT_EVENT = "scdl:download-loop-result";
 const LOOP_EXPORT_ATTRIBUTE = "data-scdl-loop-export-request";
 const POPUP_START_VIEW_KEY = "scdl.popup.startView";
 const OPEN_PLAYER_TOOLS_PANEL_EVENT = "scdl:open-player-tools-panel";
+const OPEN_PLAYER_TOOLS_PRO_EVENT = "scdl:open-player-tools-pro";
 
 function exposeTempoControlAssets() {
   document.documentElement?.setAttribute?.(
@@ -44,6 +45,16 @@ onDocumentEvent(OPEN_LOOPER_GUIDE_EVENT, () => {
     .catch(async (error) => {
       await chrome.storage.local.remove(POPUP_START_VIEW_KEY).catch(() => {});
       console.warn("[SC Downloader] Could not open the Looper guide.", error);
+    });
+});
+
+onDocumentEvent(OPEN_PLAYER_TOOLS_PRO_EVENT, () => {
+  chrome.storage.local
+    .set({ [POPUP_START_VIEW_KEY]: "pro" })
+    .then(() => chrome.runtime.sendMessage({ type: "OPEN_EXTENSION_POPUP" }))
+    .catch(async (error) => {
+      await chrome.storage.local.remove(POPUP_START_VIEW_KEY).catch(() => {});
+      console.warn("[SC Downloader] Could not open Player Tools Pro.", error);
     });
 });
 

@@ -60,7 +60,35 @@ const helpBackBtn = document.getElementById("helpBackBtn");
 const looperPanel = document.getElementById("looperPanel");
 const playerToolsOffer = document.getElementById("playerToolsOffer");
 const playerToolsBtn = document.getElementById("playerToolsBtn");
+const playerToolsProBtn = document.getElementById("playerToolsProBtn");
 const playerToolsTrialStatus = document.getElementById("playerToolsTrialStatus");
+const commercePanel = document.getElementById("commercePanel");
+const commerceBuyBtn = document.getElementById("commerceBuyBtn");
+const commerceRestoreBtn = document.getElementById("commerceRestoreBtn");
+const commerceCloseBtn = document.getElementById("commerceCloseBtn");
+const commerceEmail = document.getElementById("commerceEmail");
+const commerceLicenseKey = document.getElementById("commerceLicenseKey");
+const commerceStatus = document.getElementById("commerceStatus");
+const playerToolsReferencePrice = document.getElementById("playerToolsReferencePrice");
+const playerToolsPrice = document.getElementById("playerToolsPrice");
+const commerceReferencePrice = document.getElementById("commerceReferencePrice");
+const commercePrice = document.getElementById("commercePrice");
+
+function setArtistArtwork(image, imageUrl) {
+  const fallbackUrl = "./assets/images/default_avatar.png";
+  image.onerror = null;
+
+  if (!imageUrl) {
+    image.src = fallbackUrl;
+    return;
+  }
+
+  image.onerror = () => {
+    image.onerror = null;
+    image.src = fallbackUrl;
+  };
+  image.src = imageUrl;
+}
 
 let isDownloading = false;
 let isSelectionMode = false;
@@ -141,12 +169,29 @@ function selectHelpTab(selected) {
 async function openRequestedPopupView() {
   try {
     const stored = await chrome.storage.local.get(POPUP_START_VIEW_KEY);
-    if (stored[POPUP_START_VIEW_KEY] !== "looper") return;
+    if (!["looper", "pro"].includes(stored[POPUP_START_VIEW_KEY])) return;
+    const requested = stored[POPUP_START_VIEW_KEY];
     await chrome.storage.local.remove(POPUP_START_VIEW_KEY);
-    openLooperExplainer();
+    if (requested === "pro") openCommercePanel();
+    else openLooperExplainer();
   } catch (error) {
     console.warn("[SC Downloader] Could not restore the requested popup view.", error);
   }
+}
+
+let commerceReturnFocus = null;
+function openCommercePanel() {
+  commerceReturnFocus = document.activeElement;
+  commerceStatus.textContent = "";
+  commercePanel.hidden = false;
+  commerceBuyBtn.focus();
+  chrome.runtime.sendMessage({ type: "TRACK_PLAYER_TOOLS_EVENT", name: "paywall_seen",
+    properties: { cause: "pro-cta", surface: "popup" }, once: true, scope: "session" }).catch(() => {});
+}
+function closeCommercePanel() {
+  commercePanel.hidden = true;
+  commerceReturnFocus?.focus?.();
+  commerceReturnFocus = null;
 }
 
 function trapPanelFocus(event, panel) {
@@ -507,7 +552,7 @@ function renderBulkJobState(job) {
   titleEl.textContent = job.playlistTitle || t("background_download");
   artistEl.textContent = job.artist || t("app_name");
   artistUrl.href = job.artistUrl || "#";
-  artistArtwork.src = job.artistImageUrl || "./assets/icon48.png";
+  setArtistArtwork(artistArtwork, job.artistImageUrl);
   durationEl.textContent = t("tracks", job.total);
   streamFormat.style.display = "none";
   hideDownloadLimitSelector();
@@ -771,7 +816,7 @@ async function renderTrack(trackData) {
   titleEl.textContent = trackData.title;
   artistEl.textContent = trackData.artist;
   artistUrl.href = trackData.artistUrl;
-  artistArtwork.src = trackData.artistImageUrl || "./assets/icon48.png";
+  setArtistArtwork(artistArtwork, trackData.artistImageUrl);
   durationEl.textContent = trackData.duration || "";
 
   if (trackData.artworkUrl) {
@@ -890,7 +935,7 @@ async function renderPlaylist(playlistData) {
   titleEl.textContent = playlistData.title || t("untitled_playlist");
   artistEl.textContent = playlistData.artist || t("unknown_artist");
   artistUrl.href = playlistData.artistUrl || "#";
-  artistArtwork.src = playlistData.artistImageUrl || "./assets/icon48.png";
+  setArtistArtwork(artistArtwork, playlistData.artistImageUrl);
 
   const total =
     playlistData.totalCount ?? playlistData.tracks?.length ?? 0;
@@ -1385,15 +1430,33 @@ async function syncPlayerToolsOffer() {
   try {
     // Opening the download popup is one of the two product-defined trial entry points.
     await chrome.runtime.sendMessage({ type: "START_PLAYER_TOOLS_TRIAL" });
+    const commerceResponse = await chrome.runtime.sendMessage({ type: "GET_PLAYER_TOOLS_COMMERCE", revalidate: true });
     const response = await chrome.runtime.sendMessage({ type: "GET_PLAYER_TOOLS_SNAPSHOT" });
     const snapshot = response?.snapshot;
-    playerToolsOffer.hidden = snapshot?.plan === "pro";
-    if (snapshot?.plan !== "pro") {
+    const offer = commerceResponse?.commerce?.offer;
+    if (offer) {
+      const format = (cents) => new Intl.NumberFormat(chrome.i18n.getUILanguage(), {
+        style: "currency", currency: offer.currency,
+      }).format(cents / 100);
+      playerToolsReferencePrice.textContent = format(offer.referencePriceCents);
+      playerToolsPrice.textContent = format(offer.priceCents);
+      commerceReferencePrice.textContent = format(offer.referencePriceCents);
+      commercePrice.textContent = `${format(offer.priceCents)} ${offer.currency}`;
+    }
+    const active = snapshot?.plan === "pro" || commerceResponse?.commerce?.status === "active";
+    playerToolsOffer.hidden = false;
+    playerToolsProBtn.hidden = active;
+    if (active) {
+      playerToolsTrialStatus.textContent = t("player_tools_pro_active");
+    } else {
       const trial = snapshot?.trial;
       playerToolsTrialStatus.textContent = snapshot?.state === "trial_expired"
         ? t("player_tools_trial_expired")
         : trial?.isLastDay ? t("player_tools_trial_last_day")
         : t("player_tools_trial_days_remaining", trial?.daysRemaining ?? 7);
+      chrome.runtime.sendMessage({ type: "TRACK_PLAYER_TOOLS_EVENT", name: "player_tools_promo_seen",
+        properties: { surface: "popup", locale: chrome.i18n.getUILanguage(), plan: "free", trialState: snapshot?.state || "unknown" },
+        once: true, scope: "session" }).catch(() => {});
     }
   } catch {
     playerToolsOffer.hidden = false;
@@ -1411,6 +1474,40 @@ playerToolsBtn.addEventListener("click", async () => {
     playerToolsBtn.disabled = false;
     downloadStatus.textContent = error?.message || "Could not open SoundCloud Player Tools.";
   }
+});
+
+playerToolsProBtn.addEventListener("click", openCommercePanel);
+commerceCloseBtn.addEventListener("click", closeCommercePanel);
+commercePanel.addEventListener("click", (event) => { if (event.target === commercePanel) closeCommercePanel(); });
+commercePanel.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") { event.preventDefault(); closeCommercePanel(); return; }
+  trapPanelFocus(event, { classList: { contains: () => !commercePanel.hidden }, querySelectorAll: (...args) => commercePanel.querySelectorAll(...args) });
+});
+commerceBuyBtn.addEventListener("click", async () => {
+  commerceBuyBtn.disabled = true;
+  commerceStatus.textContent = t("player_tools_checkout_opening");
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "START_PLAYER_TOOLS_CHECKOUT",
+      locale: chrome.i18n.getUILanguage(), surface: "popup" });
+    if (!response?.success) throw new Error(response?.error || t("player_tools_checkout_error"));
+    commerceStatus.textContent = t("player_tools_checkout_pending");
+  } catch (error) { commerceStatus.textContent = error?.message || t("player_tools_checkout_error"); }
+  finally { commerceBuyBtn.disabled = false; }
+});
+commerceRestoreBtn.addEventListener("click", async () => {
+  const email = commerceEmail.value.trim();
+  const licenseKey = commerceLicenseKey.value.trim();
+  if (!email || !licenseKey) { commerceStatus.textContent = t("player_tools_restore_required"); return; }
+  commerceRestoreBtn.disabled = true;
+  commerceStatus.textContent = t("player_tools_restore_working");
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "RESTORE_PLAYER_TOOLS_LICENSE", email, licenseKey });
+    if (!response?.success) throw new Error(response?.error || t("player_tools_restore_error"));
+    commerceLicenseKey.value = "";
+    commerceStatus.textContent = t("player_tools_restore_success");
+    await syncPlayerToolsOffer();
+  } catch (error) { commerceStatus.textContent = error?.message || t("player_tools_restore_error"); }
+  finally { commerceRestoreBtn.disabled = false; }
 });
 
 syncPlayerToolsOffer();

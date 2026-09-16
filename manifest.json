@@ -11,6 +11,7 @@
     "https://*.sndcdn.com/*",
     "https://*.media-streaming.soundcloud.cloud/*",
     "https://playback.media-streaming.soundcloud.cloud/*"
+    ,"https://sctd.vpugliese.online/*"
   ],
   "background": {
     "service_worker": "scripts/background.js"

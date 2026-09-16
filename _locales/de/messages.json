@@ -504,12 +504,29 @@
     "message": "Zurück zum Download"
   },
   "player_tools_trial_days_remaining": {
-    "message": "Noch $1 Tage in deinem 7-Tage-Test von Player Tools"
+    "message": "Noch $1 Tage in deiner kostenlosen Testphase"
   },
   "player_tools_trial_last_day": {
     "message": "Letzter Tag deines Player-Tools-Tests"
   },
-  "player_tools_trial_expired": {
-    "message": "Dein Test ist beendet. Player Tools Pro schaltet die Musikwerkzeuge frei."
-  }
+  "player_tools_trial_expired": { "message": "Dein Test ist beendet. Player Tools Pro schaltet die Musikwerkzeuge frei." },
+  "player_tools_get_pro": { "message": "Pro holen" },
+  "player_tools_try": { "message": "Tools testen" },
+  "player_tools_pro_title": { "message": "Player Tools Pro" },
+  "player_tools_pro_copy": { "message": "Eine Zahlung schaltet Tempo, Keep Tone, Loops, Effekte und Pro-Exporte für diese Installation frei." },
+  "player_tools_lifetime": { "message": "lebenslang" },
+  "player_tools_buy": { "message": "Sicher kaufen" },
+  "player_tools_restore_help": { "message": "Bereits gekauft? E-Mail und Lizenzschlüssel aus dem Beleg eingeben." },
+  "player_tools_license_key": { "message": "Lizenzschlüssel" },
+  "player_tools_restore": { "message": "Aktivieren / wiederherstellen" },
+  "player_tools_pro_active": { "message": "Pro ist in dieser Installation aktiv." },
+  "player_tools_checkout_opening": { "message": "Sichere Kasse wird geöffnet…" },
+  "player_tools_checkout_pending": { "message": "Zahlung im neuen Tab abschließen und danach mit dem Beleg aktivieren." },
+  "player_tools_checkout_error": { "message": "Die Kasse ist vorübergehend nicht verfügbar." },
+  "player_tools_restore_required": { "message": "Kauf-E-Mail und Lizenzschlüssel eingeben." },
+  "player_tools_restore_working": { "message": "Kauf wird geprüft…" },
+  "player_tools_restore_success": { "message": "Pro aktiviert. Player Tools ist freigeschaltet." },
+  "player_tools_restore_error": { "message": "Der Kauf konnte nicht wiederhergestellt werden. Angaben prüfen oder Support kontaktieren." },
+  "email": { "message": "E-Mail" },
+  "close": { "message": "Schließen" }
 }

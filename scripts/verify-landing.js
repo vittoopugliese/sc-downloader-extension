@@ -116,7 +116,7 @@ assert(!/(href|action)=["'][^"']*(checkout|stripe|paddle|lemonsqueezy)/i.test(ht
 for (const requiredPlanCopy of [
   'Downloads are free. Go Pro for the tools.',
   '20 new A–B loops in total, shared across tracks and tabs.',
-  'Pro purchase is not available on this website yet.'
+  'Open the extension to buy or restore Player Tools Pro securely.'
 ]) {
   assert(html.includes(requiredPlanCopy), `Missing required Player Tools plan copy: ${requiredPlanCopy}`);
 }
