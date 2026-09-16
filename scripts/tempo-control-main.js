@@ -88,6 +88,7 @@
   let accessRequestId = 0;
   let accessLocked = false;
   let accessActionPending = false;
+  let rateIntent = null;
   let loopPollInterval = null;
   let waveformSamples = [];
   let waveformTrackUrl = null;
@@ -301,8 +302,15 @@
   readAccessSnapshot();
 
   async function applyPlayerRate(rate, { animate = false } = {}) {
+    const intent = { rate };
+    rateIntent = intent;
     const authorization = await authorizePlayerTools("set-rate", "tempo");
-    if (!authorization) return;
+    if (rateIntent !== intent) return;
+    rateIntent = null;
+    if (!authorization || !capability("tempo")) {
+      render();
+      return;
+    }
     playbackFailure = "";
     animateNextRateChange = animate;
     const state = controller.setRate(rate);
@@ -310,6 +318,7 @@
   }
 
   async function resetPlayerTools() {
+    rateIntent = null;
     const authorization = await authorizePlayerTools("set-rate", "tempo");
     if (!authorization) return;
     playbackFailure = "";
@@ -1710,7 +1719,8 @@
     });
     for (const [name, slider] of Object.entries(ui.effectSliders)) {
       slider.addEventListener("change", async () => {
-        const state = await applyEffect(() => effectsController?.set(name, slider.valueAsNumber));
+        const value = slider.valueAsNumber;
+        const state = await applyEffect(() => effectsController?.set(name, value));
         if (state?.[name] > 0) effectWetMemory[name] = state[name];
       });
     }
@@ -1738,7 +1748,8 @@
     });
     for (const [name, control] of Object.entries(ui.effectCharacters)) {
       control.addEventListener("change", () => {
-        applyEffect(() => effectsController?.setCharacter(name, control.value));
+        const value = control.value;
+        applyEffect(() => effectsController?.setCharacter(name, value));
       });
     }
     root.querySelectorAll(".preset").forEach((button) => {
@@ -1856,7 +1867,8 @@
     const animateRate = animateNextRateChange;
     animateNextRateChange = false;
     ui.trigger.setAttribute("aria-label", `Playback speed ${triggerText}`);
-    ui.slider.value = String(state.rate);
+    // Keep the thumb under the pointer while access is checked asynchronously.
+    ui.slider.value = String(playbackAllowed && rateIntent ? rateIntent.rate : state.rate);
     ui.slider.setAttribute("aria-valuetext", formatRate(state.rate));
     ui.bypass.setAttribute("aria-pressed", String(state.bypassed));
     ui.current.classList.toggle("is-bypassed", state.bypassed);
@@ -1874,8 +1886,13 @@
     );
     ui.detachButton.title = ui.detachButton.getAttribute("aria-label");
     ui.downloadTrackButton.disabled = trackDownloadPending;
+    const effectsState = effectsController?.snapshot();
+    ui.clearRate.hidden = state.rate === DEFAULTS.rate &&
+      state.preservePitch === DEFAULTS.preservePitch && !state.bypassed &&
+      !(effectsState?.reverb > 0 || effectsState?.delay > 0) && !loopState.active;
     ui.clearRate.disabled = !playbackAllowed || accessActionPending;
-    ui.slider.disabled = !playbackAllowed || accessActionPending;
+    // Disabling a native range during input cancels its ongoing mouse drag.
+    ui.slider.disabled = !playbackAllowed;
     ui.pitchToggle.disabled = !playbackAllowed || !state.preservePitchSupported || accessActionPending;
     ui.bypass.disabled = !playbackAllowed || accessActionPending;
     ui.root.querySelectorAll(".preset").forEach((button) => { button.disabled = !playbackAllowed || accessActionPending; });

@@ -80,10 +80,14 @@ async function main() {
       document.addEventListener("scdl:player-tools-request", () => {
         const request = JSON.parse(document.documentElement.getAttribute("data-scdl-player-tools-request") || "null");
         if (!request?.id) return;
-        document.documentElement.setAttribute("data-scdl-player-tools-response", JSON.stringify({
-          id: request.id, success: true, allowed: true, snapshot: playerToolsSnapshot,
-        }));
-        document.dispatchEvent(new CustomEvent("scdl:player-tools-response"));
+        const respond = () => {
+          document.documentElement.setAttribute("data-scdl-player-tools-response", JSON.stringify({
+            id: request.id, success: true, allowed: !window.denyAccess, snapshot: playerToolsSnapshot,
+          }));
+          document.dispatchEvent(new CustomEvent("scdl:player-tools-response"));
+        };
+        if (window.accessResponseDelay) setTimeout(respond, window.accessResponseDelay);
+        else respond();
       });
       document.documentElement.setAttribute(
         "data-scdl-extension-logo-url",
@@ -394,6 +398,41 @@ async function main() {
       throw new Error(`Playback Speed panel compact styling is incomplete: ${JSON.stringify(compactStyles)}`);
     }
 
+    // Exercise a native drag while the extension's access bridge is asynchronous.
+    await page.evaluate(() => { window.accessResponseDelay = 80; });
+    const speedSlider = host.locator(".slider");
+    const sliderBox = await speedSlider.boundingBox();
+    await page.mouse.move(sliderBox.x + sliderBox.width * .3, sliderBox.y + sliderBox.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(120);
+    const firstDragRate = await page.locator("audio").evaluate((audio) => audio.playbackRate);
+    await page.mouse.move(sliderBox.x + sliderBox.width * .8, sliderBox.y + sliderBox.height / 2, { steps: 8 });
+    await page.waitForTimeout(180);
+    const lastDragRate = await page.locator("audio").evaluate((audio) => audio.playbackRate);
+    await page.mouse.up();
+    if (lastDragRate <= firstDragRate + .2) {
+      throw new Error(`Speed slider stopped following a held mouse drag: ${firstDragRate} -> ${lastDragRate}`);
+    }
+    await page.evaluate(() => { window.accessResponseDelay = 0; });
+    await speedSlider.fill("1");
+
+    // A slow older authorization must not overwrite a newer speed selection.
+    await page.evaluate(() => { window.accessResponseDelay = 250; });
+    await speedSlider.fill("1.5");
+    await page.evaluate(() => { window.accessResponseDelay = 40; });
+    await speedSlider.fill("2");
+    await page.waitForTimeout(300);
+    if (await page.locator("audio").evaluate((audio) => audio.playbackRate) !== 2) {
+      throw new Error("An older access response overwrote the latest speed selection.");
+    }
+    await page.evaluate(() => { window.accessResponseDelay = 0; window.denyAccess = true; });
+    await speedSlider.fill("2.5");
+    if (await page.locator("audio").evaluate((audio) => audio.playbackRate) !== 2) {
+      throw new Error("Speed changed despite denied authorization.");
+    }
+    await page.evaluate(() => { window.denyAccess = false; });
+    await speedSlider.fill("1");
+
     await host.locator(".brand-name").click();
     const looperGuideRequested = await page.evaluate(
       () => window.looperGuideRequests
@@ -632,11 +671,6 @@ async function main() {
       slider.value = "28";
       slider.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    console.log("FX debug", await host.evaluate((element) => ({
-      values: [...element.shadowRoot.querySelectorAll(".effect-value")].map((value) => value.textContent),
-      sliders: [...element.shadowRoot.querySelectorAll(".effect-sliders input")].map((slider) => slider.value),
-      status: element.shadowRoot.querySelector(".status")?.textContent,
-    })));
     await page.waitForFunction(() => [...document.querySelector("#scdl-tempo-control")?.shadowRoot?.querySelectorAll(".effect-value") || []]
       .map((value) => value.textContent).join("|") === "35%|28%");
     const activeFx = await host.evaluate((element) => {
@@ -654,6 +688,13 @@ async function main() {
     ) {
       throw new Error(`FX sliders or WAV notice failed: ${JSON.stringify(activeFx)}`);
     }
+    await host.locator('[data-effect-settings="delay"]').click();
+    await host.locator('#scdl-effect-delay-time').fill('400');
+    await host.locator('#scdl-effect-delay-time').dispatchEvent('change');
+    if (await host.locator('[data-effect-character-value="delayTime"]').textContent() !== '400ms') {
+      throw new Error("FX character setting was reset while requesting authorization.");
+    }
+    await host.locator('[data-effect-settings="delay"]').click();
     for (const selector of ["#scdl-effect-reverb", "#scdl-effect-delay"]) {
       await host.locator(selector).evaluate((slider) => {
         slider.value = "0";
