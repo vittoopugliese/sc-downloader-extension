@@ -687,15 +687,21 @@
       marker.setAttribute("aria-valuetext", formatLoopTime(value));
     }
     for (const button of [ui.setA, ui.headerSetA]) {
-      button.title = Number.isFinite(loopState.startMs)
-        ? `Set A at ${formatLoopTime(loopState.startMs)}`
-        : "Set loop start at the current position";
+      const fixed = Number.isFinite(loopState.startMs);
+      const time = fixed ? formatLoopTime(loopState.startMs) : "";
+      button.textContent = fixed ? time : "Set A";
+      button.classList.toggle("has-loop-point", fixed);
+      button.title = fixed ? `${time} · Hold to remove A` : "Set loop start at the current position";
+      button.setAttribute("aria-label", fixed ? `Loop start A at ${time}. Hold to remove.` : "Set loop start at the current position");
       button.disabled = !loopState.available;
     }
     for (const button of [ui.setB, ui.headerSetB]) {
-      button.title = Number.isFinite(loopState.endMs)
-        ? `Set B at ${formatLoopTime(loopState.endMs)}`
-        : "Set loop end at the current position";
+      const fixed = Number.isFinite(loopState.endMs);
+      const time = fixed ? formatLoopTime(loopState.endMs) : "";
+      button.textContent = fixed ? time : "Set B";
+      button.classList.toggle("has-loop-point", fixed);
+      button.title = fixed ? `${time} · Hold to remove B` : "Set loop end at the current position";
+      button.setAttribute("aria-label", fixed ? `Loop end B at ${time}. Hold to remove.` : "Set loop end at the current position");
       button.disabled = !loopState.available;
     }
     const hasLoopMarker = Number.isFinite(loopState.startMs) || Number.isFinite(loopState.endMs);
@@ -748,6 +754,61 @@
       startPlayback: true,
     };
     await applyAuthorizedLoop(payload);
+  }
+
+  async function unsetLoopPoint(marker) {
+    const liveState = requestLoop("state")?.state;
+    if (liveState) {
+      loopState = { ...(liveState.loop || loopState), available: liveState.available === true, currentTimeMs: liveState.currentTimeMs, durationMs: liveState.loop?.durationMs || liveState.durationMs };
+    }
+    const key = `${marker}Ms`;
+    if (!Number.isFinite(loopState[key])) return;
+    const startMs = marker === "start" ? null : loopState.startMs;
+    const endMs = marker === "end" ? null : loopState.endMs;
+    if (!Number.isFinite(startMs) && !Number.isFinite(endMs)) {
+      await clearLoop();
+      return;
+    }
+    await applyAuthorizedLoop({ marker, startMs, endMs, enabled: false, startPlayback: false });
+    if (!loopState.active) await finishLoopSession();
+  }
+
+  function bindLoopSetter(button, marker) {
+    let timer = null;
+    let longPressed = false;
+    const cancelTimer = () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+    };
+    const beginHold = () => {
+      if (!Number.isFinite(loopState[`${marker}Ms`])) return;
+      longPressed = false;
+      cancelTimer();
+      timer = setTimeout(() => {
+        timer = null;
+        longPressed = true;
+        unsetLoopPoint(marker);
+      }, LONG_PRESS_MS);
+    };
+    button.addEventListener("pointerdown", (event) => { if (event.button === 0) beginHold(); });
+    for (const eventName of ["pointerup", "pointercancel", "pointerleave"]) {
+      button.addEventListener(eventName, cancelTimer);
+    }
+    button.addEventListener("keydown", (event) => {
+      if ((event.key === "Enter" || event.key === " ") && !event.repeat) beginHold();
+    });
+    button.addEventListener("keyup", (event) => {
+      if (event.key === "Enter" || event.key === " ") cancelTimer();
+    });
+    button.addEventListener("blur", cancelTimer);
+    button.addEventListener("click", (event) => {
+      if (longPressed) {
+        event.preventDefault();
+        longPressed = false;
+        return;
+      }
+      setLoopPoint(marker);
+    });
   }
 
   async function setLoopFromSliders(marker) {
@@ -1257,6 +1318,7 @@
         .middle-row { display: grid; grid-template-columns: 159px 1fr; align-items: center; gap: 10px; margin-bottom: 6px; }
         .setters { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
         .setter { min-width: 0; height: 30px; padding: 0 5px; border: 1px solid #484848; border-radius: 6px; background: #292929; color: #fff; font-size: 10px; font-style: italic; font-weight: 600; line-height: 1; cursor: pointer; white-space: nowrap; }
+        .setter.has-loop-point { font-style: normal; font-variant-numeric: tabular-nums; }
         .setter:hover:not(:disabled) { background: #383838; border-color: #777; }
         .setter:disabled { cursor: not-allowed; opacity: .48; }
         .pitch-row { gap: 6px; }
@@ -1316,10 +1378,10 @@
         .range-label { top: 8px; padding: 0; border-radius: 0; background: transparent; transform: translateX(-50%); }
         .waveform-shell { position: relative; overflow: hidden; height: 130px; border: 1px solid #343434; border-radius: 11px; background: rgba(255,255,255,.025); touch-action: none; transition: height 160ms ease; }
         .waveform-shell.is-collapsed { height: 32px; touch-action: auto; }
-        .waveform-stage { position: absolute; inset: 25px 8px 27px; cursor: crosshair; }
+        .waveform-stage { position: absolute; inset: 34px 8px 27px; cursor: crosshair; }
         .waveform-canvas { display: block; width: 100%; height: 100%; border-radius: 8px; }
         .waveform-selection { position: absolute; inset: 0 auto 0; border: 0; border-inline: 1px solid #ff741f; background: linear-gradient(90deg, rgba(255, 145, 85, .28), rgba(255, 106, 26, .055) 50%, rgba(255, 145, 85, .28)); cursor: grab; }
-        .waveform-marker { position: absolute; z-index: 7; top: -17px; width: 18px; height: 18px; margin-left: -9px; padding: 0; border: 0; border-radius: 5px 5px 3px 3px; color: #fff; background: #ff741f; font-size: 11px; font-weight: 800; line-height: 1; text-transform: lowercase; cursor: ew-resize; box-shadow: 0 2px 7px rgba(255, 116, 31, .28); }
+        .waveform-marker { position: absolute; z-index: 7; top: -2px; width: 18px; height: 18px; margin-left: -9px; padding: 0; border: 0; border-radius: 5px 5px 3px 3px; color: #fff; background: #ff741f; font-size: 11px; font-weight: 800; line-height: 1; text-transform: lowercase; cursor: ew-resize; box-shadow: 0 2px 7px rgba(255, 116, 31, .28); }
         .waveform-marker::after { content: ""; position: absolute; top: 18px; left: 50%; width: 1px; height: 90px; background: #ff741f; transform: translateX(-50%); }
         .waveform-title { display: inline-flex; align-items: center; gap: 5px; }
         .waveform-title svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -1333,10 +1395,11 @@
         .waveform-header-setters .setter { min-width: 39px; height: 23px; padding: 0 6px; border-radius: 5px; font-size: 9px; }
         .waveform-setters { display: contents; }
         .waveform-times .setter { z-index: 5; width: 68px; height: 23px; padding: 0 6px; border-radius: 6px; font-size: 10px; transform: translateY(-2px); }
-        .waveform-toggle { position: absolute; z-index: 4; inset: 0 0 auto; display: flex; align-items: center; justify-content: flex-start; width: 100%; height: 31px; padding: 0 9px; border: 0; color: #fff; background: transparent; font-size: 11px; font-weight: 700; line-height: 1; cursor: pointer; }
-        .waveform-toggle:hover { color: #ff7b38; background: rgba(255,255,255,.035); }
-        .waveform-toggle:focus-visible { outline: 2px solid #ff5500; outline-offset: 1px; }
-        .waveform-toggle > svg { position: absolute; right: 9px; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 160ms ease; }
+        .section-header { position: relative; height: 31px; }
+        .waveform-toggle, .effects-toggle { position: absolute; z-index: 4; inset: 0 0 auto; display: flex; align-items: center; justify-content: flex-start; gap: 5px; width: 100%; height: 31px; padding: 0 9px; border: 0; color: #fff; background: #1b1b1b; font-size: 11px; font-weight: 700; line-height: 1; cursor: pointer; }
+        .section-header:hover > .waveform-toggle, .section-header:hover > .effects-toggle { color: #ff7b38; background: #232323; }
+        .waveform-toggle:focus-visible, .effects-toggle:focus-visible { outline: 2px solid #ff5500; outline-offset: -2px; }
+        .waveform-toggle > svg, .effects-chevron { position: absolute; right: 9px; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 160ms ease; }
         .waveform-shell.is-collapsed .waveform-toggle > svg { transform: rotate(180deg); }
         .waveform-shell.is-collapsed .waveform-stage { display: none; }
         .waveform-shell.is-collapsed .waveform-times { display: none; }
@@ -1346,14 +1409,10 @@
         .waveform-shell.is-locked .waveform-title { position: absolute; top: 9px; left: 9px; }
         .waveform-shell.is-locked .player-tools-upgrade { display: block; left: auto; right: 4px; width: 172px; }
 
-        .effects-shell { margin-top: 7px; overflow: hidden; border: 1px solid #30373e; border-radius: 9px; background: rgba(255,255,255,.025); }
-        .effects-header { display: flex; align-items: center; height: 30px; padding: 0 7px 0 9px; gap: 5px; }
-        .effects-toggle { display: flex; flex: 1 1 auto; align-items: center; min-width: 0; height: 30px; gap: 8px; padding: 0; border: 0; color: #e8e8e8; background: transparent; text-align: left; cursor: pointer; }
-        .effects-toggle:hover { color: #fff; background: rgba(255,255,255,.035); }
-        .effects-icon { display: block; width: 17px; height: 17px; color: #c9cdd1; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-        .effects-title { flex: 1; font-size: 11px; font-weight: 700; line-height: 1; }
-        .effects-chevron { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; transition: transform 140ms ease; }
-        .effect-bypasses { display: flex; gap: 4px; }
+        .effects-shell { margin-top: 7px; overflow: hidden; border: 1px solid #343434; border-radius: 11px; background: rgba(255,255,255,.025); }
+        .effects-icon { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .effects-title { font-size: 11px; font-weight: 700; line-height: 1; }
+        .effect-bypasses { position: absolute; z-index: 5; top: 4px; right: 27px; display: flex; gap: 4px; }
         .effect-bypass { width: 23px; height: 23px; padding: 0; border: 1px solid #4b5157; border-radius: 5px; color: #9ca3aa; background: #202428; font-size: 11px; font-weight: 800; line-height: 1; cursor: pointer; }
         .effect-bypass[aria-pressed="true"] { border-color: #c95819; color: #ff7b38; background: #3a251b; }
         .effect-bypass:hover:not(:disabled) { border-color: #ff7b38; color: #fff; }
@@ -1363,7 +1422,7 @@
         .effects-shell.is-collapsed .effects-chevron { transform: rotate(180deg); }
         .effects-body { padding: 0 9px 4px; }
         .effects-shell.is-collapsed .effects-body { display: none; }
-        .effects-presets { display: flex; gap: 4px; padding: 1px 0 5px; }
+        .effects-presets { display: flex; gap: 4px; padding: 3px 0 5px; }
         .effects-preset { flex: 1; height: 22px; padding: 0 3px; border: 1px solid #3b4249; border-radius: 5px; color: #bfc4c8; background: #202428; font-size: 9px; font-weight: 600; line-height: 1; cursor: pointer; }
         .effects-preset:hover, .effects-preset[aria-pressed="true"] { border-color: #ff6a1a; color: #fff; background: #462619; }
         .effect-row { display: grid; grid-template-columns: 62px minmax(0, 1fr) 34px 22px; align-items: center; gap: 7px; min-height: 31px; border-top: 1px solid rgba(255,255,255,.055); }
@@ -1469,8 +1528,10 @@
           <label class="pitch-label" title="Keep tone"><input class="pitch-toggle" type="checkbox" aria-label="Keep tone" title="Keep tone" /></label>
         </div>
         <div class="waveform-shell" role="group" aria-label="Loop waveform">
+          <div class="section-header waveform-header">
           <button class="waveform-toggle" type="button" aria-label="Collapse looper" aria-expanded="true" title="Collapse looper"><span class="waveform-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>Loop Region</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
           <div class="waveform-actions"><div class="waveform-header-setters"><button class="setter header-set-a" type="button" aria-label="Set loop start">Set A</button><button class="setter header-set-b" type="button" aria-label="Set loop end">Set B</button></div><button class="clear-loop" type="button" aria-label="Clear loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button></div>
+          </div>
           <div class="waveform-stage">
             <canvas class="waveform-canvas" aria-hidden="true"></canvas>
             <div class="waveform-selection" hidden></div>
@@ -1485,7 +1546,7 @@
           <input class="loop-time loop-end-time" inputmode="decimal" placeholder="B 00:00.000" aria-label="Loop end time" />
         </div>
         <section class="effects-shell is-collapsed" aria-label="Audio effects">
-          <div class="effects-header"><button class="effects-toggle" type="button" aria-expanded="false">
+          <div class="section-header effects-header"><button class="effects-toggle" type="button" aria-expanded="false">
             <svg class="effects-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h2l2-7 4 14 3-11 2 7h2l1-3h2"/></svg>
             <span class="effects-title">FX</span>
             <svg class="effects-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
@@ -1815,8 +1876,8 @@
       requestLoop("set-global-bypass", { bypassed });
       readLoopState();
     });
-    for (const button of [ui.setA, ui.headerSetA]) button.addEventListener("click", () => setLoopPoint("start"));
-    for (const button of [ui.setB, ui.headerSetB]) button.addEventListener("click", () => setLoopPoint("end"));
+    for (const button of [ui.setA, ui.headerSetA]) bindLoopSetter(button, "start");
+    for (const button of [ui.setB, ui.headerSetB]) bindLoopSetter(button, "end");
     for (const [marker, name] of [[ui.waveformStart, "start"], [ui.waveformEnd, "end"]]) {
       marker.addEventListener("pointerdown", (event) => beginWaveformDrag(event, name));
       marker.addEventListener("pointermove", moveWaveformDrag);

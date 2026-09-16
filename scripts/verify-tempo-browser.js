@@ -1,3 +1,4 @@
+const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
@@ -537,11 +538,31 @@ async function main() {
       capturedLoop.startMs !== 12345 ||
       capturedLoop.endMs !== 20678 ||
       !capturedLoop.enabled ||
-      (await host.locator(".waveform-times .set-a").textContent()).trim() !== "Set A" ||
+      (await host.locator(".waveform-times .set-a").textContent()).trim() !== "00:12.345" ||
+      (await host.locator(".waveform-times .set-b").textContent()).trim() !== "00:20.678" ||
       !(await host.locator(".waveform-times .set-a").getAttribute("title"))?.includes("00:12.345")
     ) {
       throw new Error(`Set A/Set B did not capture the live player range or expose it in their tooltip: ${JSON.stringify({ capturedLoop, label: await host.locator(".waveform-times .set-a").textContent(), title: await host.locator(".waveform-times .set-a").getAttribute("title") })}`);
     }
+    const setA = host.locator(".waveform-times .set-a");
+    await setA.dispatchEvent("pointerdown", { button: 0 });
+    await page.waitForTimeout(700);
+    await setA.dispatchEvent("pointerup", { button: 0 });
+    await setA.click();
+    const partiallyClearedLoop = await page.evaluate(() =>
+      JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session"))
+    );
+    if (
+      partiallyClearedLoop.startMs !== null ||
+      partiallyClearedLoop.endMs !== 20678 ||
+      partiallyClearedLoop.active ||
+      (await setA.textContent()).trim() !== "Set A" ||
+      (await host.locator(".waveform-times .set-b").textContent()).trim() !== "00:20.678"
+    ) {
+      throw new Error(`Holding Set A must remove only A and suppress the following click: ${JSON.stringify(partiallyClearedLoop)}`);
+    }
+    await page.locator("audio").evaluate((audio) => { audio.currentTime = 12.345; });
+    await setA.click();
     await host.locator(".waveform-toggle").evaluate((button) => button.click());
     await host.locator(".download-loop").click();
     await host.locator(".waveform-toggle").evaluate((button) => button.click());
@@ -578,7 +599,7 @@ async function main() {
         headerSettersHidden: getComputedStyle(root.querySelector(".waveform-header-setters")).display === "none",
       };
     });
-    if (waveformUi.canvas[0] <= 1 || waveformUi.canvas[1] <= 1 || waveformUi.markers !== 2 || !waveformUi.customFits || waveformUi.setALabel !== "Set A" || !waveformUi.setAInFooter || !waveformUi.headerSettersHidden) {
+    if (waveformUi.canvas[0] <= 1 || waveformUi.canvas[1] <= 1 || waveformUi.markers !== 2 || !waveformUi.customFits || waveformUi.setALabel !== "00:12.345" || !waveformUi.setAInFooter || !waveformUi.headerSettersHidden) {
       throw new Error(`Interactive waveform layout is incomplete: ${JSON.stringify(waveformUi)}`);
     }
 
@@ -591,6 +612,35 @@ async function main() {
     const draggedEnd = await page.evaluate(() => JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session")).endMs);
     if (!(draggedEnd < 20678)) throw new Error(`Dragging marker B did not update the shared loop session: ${draggedEnd}`);
 
+    if (await host.locator('.waveform-toggle').getAttribute('aria-expanded') === 'false') {
+      await host.locator('.waveform-toggle').click();
+    }
+    const headerLayout = await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      const rect = (selector) => root.querySelector(selector).getBoundingClientRect();
+      return {
+        chevronAfterBypasses: rect('.effects-chevron').left >= rect('.effect-bypasses').right,
+        fxCoversHeader: rect('.effects-toggle').left === rect('.effects-header').left,
+        waveformBelowHeader: rect('.waveform-stage').top >= rect('.waveform-toggle').bottom,
+        waveformHeaderGap: rect('.waveform-stage').top - rect('.waveform-toggle').bottom,
+        waveformHeight: rect('.waveform-stage').height,
+        presetsTopPadding: getComputedStyle(root.querySelector('.effects-presets')).paddingTop,
+      };
+    });
+    assert.deepEqual(headerLayout, {
+      chevronAfterBypasses: true, fxCoversHeader: true, waveformBelowHeader: true,
+      waveformHeaderGap: 3, waveformHeight: 67, presetsTopPadding: '3px',
+    }, 'Headers must span the full row, place FX actions before the chevron, and keep the waveform below');
+    await host.locator('.waveform-toggle').hover();
+    const loopHover = await host.locator('.waveform-toggle').evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { color: style.color, background: style.backgroundColor };
+    });
+    await host.locator('.effect-bypass').first().hover();
+    assert.deepEqual(await host.locator('.effects-toggle').evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { color: style.color, background: style.backgroundColor };
+    }), loopHover, 'Hovering FX actions must highlight the whole header like Loop Region');
     const waveformStage = host.locator(".waveform-stage");
     await waveformStage.hover();
     const fullEndLabel = await host.locator(".waveform-end-label").textContent();
