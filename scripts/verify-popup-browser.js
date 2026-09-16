@@ -80,17 +80,17 @@ const iconDataUrls = Object.fromEntries(
     });
     assert.deepEqual(mainTheme, {
       settingsSize: [27, 24],
-      downloadSize: [44, 32],
+      downloadSize: [50, 38],
       downloadRadius: "7px",
       controlRadius: "7px",
       titleSize: "19px",
       divider: "none",
       selectionDivider: "none",
-      offerImageSize: [54, 54],
-      offerTitleSize: "18px",
-      offerDetailSize: "11px",
-      offerTrialSize: "12px",
-      offerPriceSize: "13px",
+      offerImageSize: [64, 64],
+      offerTitleSize: "20px",
+      offerDetailSize: "12px",
+      offerTrialSize: "13px",
+      offerPriceSize: "14px",
       artworkFilter: "brightness(0.641) blur(5px)",
       collectionControlsAligned: true,
     }, "The download popup must use the compact player-panel component system");

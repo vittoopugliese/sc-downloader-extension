@@ -59,7 +59,6 @@ const helpPanel = document.getElementById("helpPanel");
 const helpBackBtn = document.getElementById("helpBackBtn");
 const looperPanel = document.getElementById("looperPanel");
 const playerToolsOffer = document.getElementById("playerToolsOffer");
-const playerToolsBtn = document.getElementById("playerToolsBtn");
 const playerToolsProBtn = document.getElementById("playerToolsProBtn");
 const playerToolsTrialStatus = document.getElementById("playerToolsTrialStatus");
 const commercePanel = document.getElementById("commercePanel");
@@ -1463,18 +1462,6 @@ async function syncPlayerToolsOffer() {
     playerToolsTrialStatus.textContent = "";
   }
 }
-
-playerToolsBtn.addEventListener("click", async () => {
-  playerToolsBtn.disabled = true;
-  try {
-    const response = await chrome.runtime.sendMessage({ type: "OPEN_PLAYER_TOOLS_PANEL" });
-    if (!response?.success) throw new Error(response?.error || "Could not open SoundCloud Player Tools.");
-    window.close();
-  } catch (error) {
-    playerToolsBtn.disabled = false;
-    downloadStatus.textContent = error?.message || "Could not open SoundCloud Player Tools.";
-  }
-});
 
 playerToolsProBtn.addEventListener("click", openCommercePanel);
 commerceCloseBtn.addEventListener("click", closeCommercePanel);
