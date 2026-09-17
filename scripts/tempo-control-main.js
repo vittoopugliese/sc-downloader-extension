@@ -1363,6 +1363,7 @@
         .free-badge { position: absolute; bottom: 3px; left: 95px; display: inline-flex; align-items: center; height: 13px; margin-left: 6px; padding: 0 4px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font-size: 8px; font-weight: 800; line-height: 1; letter-spacing: .04em; }
         .rating-link { color: #989898; font-size: 10px; font-weight: 500; text-decoration-color: #666; opacity: .82; }
         .rating-link:hover { color: #bdc1c5; opacity: 1; }
+        .likes-explorer-button { display: block; margin-top: 5px; padding: 0; border: 0; background: transparent; color: #e5a47c; font: 500 10px system-ui, sans-serif; cursor: pointer; }
         .setter { height: 28px; padding: 0 8px; border-radius: 7px; font-size: 11px; font-variant-numeric: tabular-nums; }
         .tempo-row { display: grid; grid-template-columns: minmax(0, 1fr) 22px; align-items: center; gap: 5px; margin-bottom: 8px; }
         .pitch-label { display: grid; place-items: center; width: 22px; height: 32px; margin: 0; padding: 0; cursor: help; }
@@ -1494,6 +1495,7 @@
           <div class="brand-copy">
             <div class="brand-title-line"><button class="brand-name" type="button" aria-label="Open the Looper guide">SoundCloud Track <br />Downloader</button><span class="free-badge">FREE</span></div>
             <a class="rating-link" href="${REVIEW_URL}" target="_blank" rel="noopener noreferrer">Please consider rating the app!</a>
+            <button class="likes-explorer-button" type="button" title="Likes Explorer">♡ Likes Explorer ↗</button>
           </div>
         </div>
         <div class="panel-tools" role="group" aria-label="Panel options">
@@ -1757,6 +1759,9 @@
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
     });
     ui.downloadTrackButton.addEventListener("click", downloadCurrentTrack);
+    root.querySelector('.likes-explorer-button').addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('scdl:open-likes-explorer'));
+    });
     ui.settingsButton.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
     });

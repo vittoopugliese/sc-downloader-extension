@@ -670,6 +670,7 @@ const SCPageIntake = (() => {
       resolveBulk,
       selectionList,
       tracksByIds,
+      resolveClientId: () => resolveClientId(doc.documentElement?.innerHTML || ""),
     };
   }
 

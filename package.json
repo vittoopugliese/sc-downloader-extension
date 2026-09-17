@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node scripts/run-verifications.js",
     "test:e2e": "node scripts/verify-loop-browser.js",
+    "test:e2e:likes": "node scripts/likes-explorer.browser-test.js",
     "test:e2e:download": "node scripts/verify-download-browser.js",
     "test:e2e:popup": "node scripts/verify-popup-browser.js && node scripts/verify-popup-unsupported-page.js",
     "test:e2e:feedback": "node scripts/verify-uninstall-feedback-browser.js",
@@ -16,7 +17,7 @@
     "browser:live": "node scripts/open-live-browser.js",
     "test:feedback": "node --test services/uninstall-feedback/test/validation.test.mjs",
     "test:player-tools": "node scripts/verify-player-tools-policy.js && node scripts/verify-player-tools-access.js && node scripts/verify-player-tools-client.js && node scripts/verify-player-tools-commerce.js && npm --prefix services/player-tools-license test",
-    "package:extension": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-extension.ps1"
+    "package:extension": "node scripts/package-extension.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0"

@@ -11,7 +11,10 @@ importScripts(
   "download-source.js",
   "download-destination.js",
   "track-download-execution.js",
-  "bulk-job-manager.js"
+  "bulk-job-manager.js",
+  "soundcloud-likes-source.js",
+  "likes-library.js",
+  "likes-jobs.js"
 );
 
 const t = globalThis.SCDLI18n?.t || ((key) => key);
@@ -29,6 +32,8 @@ const playerToolsCommerce = globalThis.SCPlayerToolsCommerce?.create
       getState: async () => ({ status: "free", canCheckout: false }),
       startCheckout: async () => { throw Object.assign(new Error("Player Tools licensing is unavailable."), { code: "service-unavailable" }); },
       activate: async () => { throw Object.assign(new Error("Player Tools licensing is unavailable."), { code: "service-unavailable" }); },
+      activateTest: async () => { throw Object.assign(new Error("Testing access is unavailable."), { code: "service-unavailable" }); },
+      deactivateTest: async () => { throw Object.assign(new Error("Testing access is unavailable."), { code: "service-unavailable" }); },
       track: async () => false,
     };
 
@@ -55,6 +60,14 @@ function getOAuthToken() {
 const downloadSource = SCDownloadSource.configure({
   request: (url, options) => fetch(url, options),
   getOAuthToken,
+});
+
+const likesJobs = globalThis.SCLikesJobs?.create({ getToken: getOAuthToken, resolveUser: clientId => downloadSource.resolveLoggedInUser(clientId), access: SCPlayerToolsAccess });
+chrome.cookies.onChanged?.addListener(change => {
+  if (change.cookie.name === 'oauth_token' && /(^|\.)soundcloud\.com$/.test(change.cookie.domain.replace(/^\./, ''))) likesJobs?.invalidate();
+});
+chrome.storage?.onChanged?.addListener((changes, area) => {
+  if (area === 'local' && changes['scdl.playerTools.access.v1']) likesJobs?.invalidate();
 });
 
 function errorResponse(error, fallback = t("download_failed")) {
@@ -150,12 +163,16 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'scdl-likes') likesJobs?.tick().catch(() => {});
   if (alarm.name === BulkJobManager.KEEPALIVE_ALARM) {
     BulkJobManager.ensureJobRunning().catch(() => {});
   }
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (['GET_LIKES_LIBRARY_STATUS','START_LIKES_INDEX','REFRESH_LIKES_LIBRARY','CANCEL_LIKES_INDEX','QUERY_LIKES','SAVE_LIKES_VIEW','SAVE_LIKES_BOOKMARK','OPEN_LIKED_TRACK','LOCATE_LIKED_TRACK','START_LIKES_ARTWORK','PAUSE_LIKES_ARTWORK','GET_LIKES_ARTWORK','DELETE_LIKES_ARTWORK','DELETE_LIKES_LIBRARY'].includes(request.type)) {
+    return respond(likesJobs.handle(request, sender), sendResponse);
+  }
   if (request.type === "BULK_JOB_UPDATE" && ["completed", "failed", "cancelled"].includes(request.job?.status)) {
     playerToolsCommerce.track("download_job_completed", {
       type: "bulk", count: Number.isSafeInteger(request.job.completed) ? request.job.completed : 0,
@@ -198,7 +215,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === "TEST_PLAYER_TOOLS_PRO") {
-    playerToolsCommerce.activateTest(request)
+    const action = request.active === false ? playerToolsCommerce.deactivateTest() : playerToolsCommerce.activateTest(request);
+    action
       .then((commerce) => sendResponse({ success: true, commerce }))
       .catch((error) => sendResponse(errorResponse(error)));
     return true;

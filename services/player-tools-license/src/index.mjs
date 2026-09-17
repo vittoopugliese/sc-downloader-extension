@@ -1,4 +1,4 @@
-import { MAX_BODY_BYTES, MAX_WEBHOOK_BYTES, validateActivation, validateCheckout, validateEvent, validateStatus, validateTestLogin } from "./validation.mjs";
+import { MAX_BODY_BYTES, MAX_WEBHOOK_BYTES, validateActivation, validateCheckout, validateEvent, validateStatus } from "./validation.mjs";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" };
 const LEMON_API = "https://api.lemonsqueezy.com/v1";
@@ -47,16 +47,6 @@ async function hmacHex(secret, bytes) {
 async function sha256Hex(value) {
   const digest = await crypto.subtle.digest("SHA-256", typeof value === "string" ? new TextEncoder().encode(value) : value);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-async function testInstanceId(env, installationId) {
-  if (!env.TEST_PRO_PASSWORD) return null;
-  return `test.${installationId}.${(await hmacHex(env.TEST_PRO_PASSWORD, new TextEncoder().encode(installationId))).slice(0, 32)}`;
-}
-async function activateTestAccount(env, value) {
-  // These secrets are intentionally server-only. Do not add their values to the extension.
-  if (!env.TEST_PRO_USERNAME || !env.TEST_PRO_PASSWORD ||
-      !equals(value.username, env.TEST_PRO_USERNAME) || !equals(value.password, env.TEST_PRO_PASSWORD)) return null;
-  return { licenseId: "test-pro", instanceId: await testInstanceId(env, value.installationId) };
 }
 function lemonHeaders(env) { return { Accept: "application/vnd.api+json", "Content-Type": "application/vnd.api+json", Authorization: `Bearer ${env.LEMON_API_KEY}` }; }
 function matchesProduct(meta, env) {
@@ -113,10 +103,6 @@ async function restore(env, value) {
   return activate(env, value);
 }
 async function status(env, value) {
-  if (value.instanceId.startsWith("test.")) {
-    const expected = await testInstanceId(env, value.installationId);
-    return { active: Boolean(expected && equals(value.instanceId, expected)), licenseId: "test-pro" };
-  }
   const activation = await env.LICENSE_DB.prepare(`SELECT licenses.lemon_license_id, licenses.status FROM activations JOIN licenses USING(lemon_license_id)
     WHERE activations.lemon_instance_id = ? AND activations.installation_id = ? AND activations.deactivated_at IS NULL`).bind(value.instanceId, value.installationId).first();
   if (!activation) return { active: false };
@@ -191,10 +177,6 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/player-tools/license/restore") {
         const parsed = validateActivation(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
         const entitlement = await restore(env, parsed.value); return entitlement ? json(200, { active: true, ...entitlement }, corsHeaders) : json(403, { active: false, error: "activation_failed" }, corsHeaders);
-      }
-      if (request.method === "POST" && url.pathname === "/api/player-tools/license/test") {
-        const parsed = validateTestLogin(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
-        const entitlement = await activateTestAccount(env, parsed.value); return entitlement ? json(200, { active: true, ...entitlement }, corsHeaders) : json(403, { active: false, error: "test_login_failed" }, corsHeaders);
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/license/status") {
         const parsed = validateStatus(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);

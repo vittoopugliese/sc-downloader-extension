@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateActivation, validateCheckout, validateEvent, validateStatus, validateTestLogin } from "../src/validation.mjs";
+import { validateActivation, validateCheckout, validateEvent, validateStatus } from "../src/validation.mjs";
 
 const installationId = "installation_1234567890";
 
@@ -9,8 +9,6 @@ test("validates commerce requests", () => {
   assert.equal(validateActivation({ installationId, email: "Buyer@Example.com", licenseKey: "key" }).value.email, "buyer@example.com");
   assert.equal(validateStatus({ installationId, instanceId: "instance-1" }).ok, true);
   assert.equal(validateCheckout({ installationId: "short" }).ok, false);
-  assert.equal(validateTestLogin({ installationId, username: "tester", password: "secret" }).ok, true);
-  assert.equal(validateTestLogin({ installationId, username: "tester" }).ok, false);
 });
 
 test("accepts only the documented anonymous funnel shape", () => {

@@ -25,7 +25,6 @@ function response(status, body) {
     calls.push({ url, body });
     if (url.endsWith("/checkout")) return response(200, { checkoutUrl: "https://store.example/checkout/1" });
     if (url.endsWith("/license/restore")) return response(200, { active: true, licenseId: "license-1", instanceId: "instance-1" });
-    if (url.endsWith("/license/test")) return response(200, { active: true, licenseId: "test-pro", instanceId: "test-instance-1" });
     if (url.endsWith("/license/status")) return revoked
       ? response(403, { active: false, error: "license_revoked" })
       : response(200, { active: true, licenseId: "license-1" });
@@ -52,10 +51,21 @@ function response(status, body) {
   assert.equal(data[STORAGE_KEY].licenseKey, undefined, "license keys are never persisted by the extension");
   assert.equal(entitlements.at(-1).status, "active");
 
-  const tested = await commerce.activateTest({ username: "tester", password: "test-password" });
+  const callsBeforeTestLogin = calls.length;
+  const tested = await commerce.activateTest({ username: "1", password: "1" });
   assert.equal(tested.status, "active");
-  assert.equal(data[STORAGE_KEY].activation.instanceId, "test-instance-1");
-  assert.equal(calls.at(-1).body.password, "test-password");
+  assert.equal(tested.licenseId, "test-pro");
+  assert.equal(data[STORAGE_KEY].activation.instanceId, "local-test");
+  assert.equal(calls.length, callsBeforeTestLogin, "test login stays local");
+  assert.equal((await commerce.getState({ revalidate: true })).status, "active");
+  assert.equal(calls.length, callsBeforeTestLogin, "test Pro does not revalidate against the license service");
+  await assert.rejects(() => commerce.activateTest({ username: "x", password: "x" }), { code: "test_login_failed" });
+  const freeAgain = await commerce.deactivateTest();
+  assert.equal(freeAgain.status, "free");
+  assert.equal(data[STORAGE_KEY].activation, null);
+  assert.equal(entitlements.at(-1).status, "free");
+
+  await commerce.activate({ email: "buyer@example.com", licenseKey: "license-key" });
 
   clock += 1000;
   assert.equal((await commerce.getState({ revalidate: true })).status, "active");

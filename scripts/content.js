@@ -59,6 +59,10 @@ onDocumentEvent(OPEN_PLAYER_TOOLS_PRO_EVENT, () => {
 });
 
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+  if (request.type === 'GET_LIKES_CONTEXT') {
+    intake.resolveClientId().then(clientId => sendResponse({ success: true, clientId })).catch(() => sendResponse({ success: false }));
+    return true;
+  }
   if (request.type !== "OPEN_PLAYER_TOOLS_PANEL") return false;
   document.dispatchEvent(new CustomEvent(OPEN_PLAYER_TOOLS_PANEL_EVENT));
   sendResponse({ success: true });

@@ -25,6 +25,13 @@ $packageItems = @(
     "assets/icons",
     "_locales",
     "scripts/background.js",
+    "scripts/soundcloud-likes-source.js",
+    "scripts/likes-library.js",
+    "scripts/likes-jobs.js",
+    "scripts/likes-explorer-i18n.js",
+    "scripts/likes-explorer.js",
+    "scripts/soundcloud-likes-locator.js",
+    "scripts/likes-popup.js",
     "scripts/audio-effects-core.js",
     "scripts/bulk-job-manager.js",
     "scripts/content.js",
@@ -77,6 +84,18 @@ foreach ($item in $packageItems) {
     New-Item -ItemType Directory -Force -Path $destinationParent | Out-Null
     Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Recurse
 }
+
+$commercePath = Join-Path $stagingRoot "scripts/player-tools-commerce.js"
+$commerceSource = Get-Content -LiteralPath $commercePath -Raw
+$testLoginLine = 'const TEST_LOGIN = Object.freeze({ username: "1", password: "1" });'
+if (-not $commerceSource.Contains($testLoginLine)) { throw "Could not disable the test login in the production package." }
+Set-Content -LiteralPath $commercePath -Value $commerceSource.Replace($testLoginLine, "const TEST_LOGIN = null;") -NoNewline
+
+$popupPath = Join-Path $stagingRoot "popup.html"
+$popupSource = Get-Content -LiteralPath $popupPath -Raw
+$productionPopup = $popupSource -replace '(?s)\s*<!-- TEST_ACCESS_START -->.*?<!-- TEST_ACCESS_END -->', ''
+if ($productionPopup -eq $popupSource) { throw "Could not remove the test login UI from the production package." }
+Set-Content -LiteralPath $popupPath -Value $productionPopup -NoNewline
 
 if (Test-Path -LiteralPath $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force

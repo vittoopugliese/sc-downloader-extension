@@ -68,6 +68,10 @@ const commerceCloseBtn = document.getElementById("commerceCloseBtn");
 const commerceEmail = document.getElementById("commerceEmail");
 const commerceLicenseKey = document.getElementById("commerceLicenseKey");
 const commerceStatus = document.getElementById("commerceStatus");
+const commerceTestAccess = document.getElementById("commerceTestAccess");
+const commerceTestUsername = document.getElementById("commerceTestUsername");
+const commerceTestPassword = document.getElementById("commerceTestPassword");
+const commerceTestBtn = document.getElementById("commerceTestBtn");
 const playerToolsReferencePrice = document.getElementById("playerToolsReferencePrice");
 const playerToolsPrice = document.getElementById("playerToolsPrice");
 const commerceReferencePrice = document.getElementById("commerceReferencePrice");
@@ -109,6 +113,7 @@ let activeBulkJob = null;
 let notTrackRetryCount = 0;
 let currentFormatPreference = SCStreamSelector.DEFAULT_PREFERENCE;
 let currentDownloadDestination = null;
+let isTestProActive = false;
 let helpReturnFocus = null;
 let helpSelectionScrollTop = 0;
 const popupDownloadIntent = SCDownloadIntent.create(chrome.runtime);
@@ -1432,6 +1437,7 @@ async function syncPlayerToolsOffer() {
     const commerceResponse = await chrome.runtime.sendMessage({ type: "GET_PLAYER_TOOLS_COMMERCE", revalidate: true });
     const response = await chrome.runtime.sendMessage({ type: "GET_PLAYER_TOOLS_SNAPSHOT" });
     const snapshot = response?.snapshot;
+    const commerce = commerceResponse?.commerce;
     const offer = commerceResponse?.commerce?.offer;
     if (offer) {
       const format = (cents) => new Intl.NumberFormat(chrome.i18n.getUILanguage(), {
@@ -1442,9 +1448,13 @@ async function syncPlayerToolsOffer() {
       commerceReferencePrice.textContent = format(offer.referencePriceCents);
       commercePrice.textContent = `${format(offer.priceCents)} ${offer.currency}`;
     }
-    const active = snapshot?.plan === "pro" || commerceResponse?.commerce?.status === "active";
+    const active = snapshot?.plan === "pro" || commerce?.status === "active";
+    isTestProActive = commerce?.licenseId === "test-pro";
+    if (commerceTestAccess) commerceTestAccess.hidden = commerce?.testAccessAvailable !== true;
+    if (commerceTestBtn) commerceTestBtn.textContent = t(isTestProActive ? "player_tools_test_deactivate" : "player_tools_test_activate");
     playerToolsOffer.hidden = false;
-    playerToolsProBtn.hidden = active;
+    playerToolsProBtn.hidden = active && !isTestProActive;
+    playerToolsProBtn.textContent = t(isTestProActive ? "player_tools_test_access" : "player_tools_get_pro");
     if (active) {
       playerToolsTrialStatus.textContent = t("player_tools_pro_active");
     } else {
@@ -1496,17 +1506,17 @@ commerceRestoreBtn.addEventListener("click", async () => {
   } catch (error) { commerceStatus.textContent = error?.message || t("player_tools_restore_error"); }
   finally { commerceRestoreBtn.disabled = false; }
 });
-commerceTestBtn.addEventListener("click", async () => {
-  const username = commerceTestUsername.value.trim();
-  const password = commerceTestPassword.value;
-  if (!username || !password) { commerceStatus.textContent = t("player_tools_test_required"); return; }
+commerceTestBtn?.addEventListener("click", async () => {
+  const username = commerceTestUsername?.value.trim() || "";
+  const password = commerceTestPassword?.value || "";
+  if (!isTestProActive && (!username || !password)) { commerceStatus.textContent = t("player_tools_test_required"); return; }
   commerceTestBtn.disabled = true;
-  commerceStatus.textContent = t("player_tools_test_working");
+  commerceStatus.textContent = t(isTestProActive ? "player_tools_test_deactivating" : "player_tools_test_working");
   try {
-    const response = await chrome.runtime.sendMessage({ type: "TEST_PLAYER_TOOLS_PRO", username, password });
+    const response = await chrome.runtime.sendMessage({ type: "TEST_PLAYER_TOOLS_PRO", active: !isTestProActive, username, password });
     if (!response?.success) throw new Error(response?.error || t("player_tools_test_error"));
-    commerceTestPassword.value = "";
-    commerceStatus.textContent = t("player_tools_test_success");
+    if (commerceTestPassword) commerceTestPassword.value = "";
+    commerceStatus.textContent = t(isTestProActive ? "player_tools_test_free_success" : "player_tools_test_success");
     await syncPlayerToolsOffer();
   } catch (error) { commerceStatus.textContent = error?.message || t("player_tools_test_error"); }
   finally { commerceTestBtn.disabled = false; }

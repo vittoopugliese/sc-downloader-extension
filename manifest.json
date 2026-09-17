@@ -61,7 +61,10 @@
         "scripts/page-intake.js",
         "scripts/content.js",
         "scripts/download-intent.js",
-        "scripts/inline-button.js"
+        "scripts/inline-button.js",
+        "scripts/likes-explorer-i18n.js",
+        "scripts/soundcloud-likes-locator.js",
+        "scripts/likes-explorer.js"
       ]
     },
     {

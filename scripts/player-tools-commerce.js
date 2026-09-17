@@ -5,6 +5,8 @@
   const STORAGE_KEY = "scdl.playerTools.commerce.v1";
   const SESSION_MEASURED_KEY = "scdl.playerTools.measured.session.v1";
   const API_BASE_URL = "https://sctd.vpugliese.online/api/player-tools";
+  // The production packager replaces this line with `const TEST_LOGIN = null;`.
+  const TEST_LOGIN = Object.freeze({ username: "1", password: "1" });
   const OFFER = Object.freeze({
     currency: "USD",
     priceCents: 369,
@@ -57,7 +59,6 @@
       if (!response.ok) {
         const code = payload?.error || "service-error";
         const message = code === "activation_failed" ? "That license could not be activated. Check the email and key, then try again."
-          : code === "test_login_failed" ? "Those testing credentials could not activate Pro."
           : code === "license_revoked" ? "This purchase was refunded or revoked. Contact support if this looks wrong."
           : "Player Tools licensing is temporarily unavailable.";
         throw Object.assign(new Error(message), { code, status: response.status });
@@ -67,7 +68,7 @@
     function publicState(state) {
       return { status: state.status, pendingCheckoutAt: state.pendingCheckoutAt,
         offer: OFFER, canCheckout: Boolean(apiBaseUrl), licenseId: state.activation?.licenseId || null,
-        lastCheckedAt: state.activation?.lastCheckedAt || null };
+        lastCheckedAt: state.activation?.lastCheckedAt || null, testAccessAvailable: Boolean(TEST_LOGIN) };
     }
     async function applyEntitlement(state, active, status = active ? "active" : "free") {
       state.status = status;
@@ -79,7 +80,12 @@
     function getState({ revalidate = false } = {}) {
       return exclusive(async () => {
         const state = await read();
-        if (revalidate && state.activation?.instanceId) {
+        if (state.activation?.licenseId === "test-pro") {
+          if (!TEST_LOGIN) {
+            state.activation = null;
+            await applyEntitlement(state, false);
+          }
+        } else if (revalidate && state.activation?.instanceId) {
           try {
             const result = await post("/license/status", { installationId: state.installationId,
               instanceId: state.activation.instanceId });
@@ -119,11 +125,22 @@
     function activateTest({ username, password }) {
       return exclusive(async () => {
         const state = await read();
-        const result = await post("/license/test", { installationId: state.installationId,
-          username: String(username || "").trim(), password: String(password || "") });
-        state.activation = { instanceId: result.instanceId, licenseId: result.licenseId, lastCheckedAt: now() };
+        if (!TEST_LOGIN || String(username || "").trim() !== TEST_LOGIN.username || String(password || "") !== TEST_LOGIN.password) {
+          throw Object.assign(new Error("Those testing credentials could not activate Pro."), { code: "test_login_failed" });
+        }
+        state.activation = { instanceId: "local-test", licenseId: "test-pro", lastCheckedAt: now() };
         state.pendingCheckoutAt = null;
         await applyEntitlement(state, true);
+        return publicState(state);
+      });
+    }
+    function deactivateTest() {
+      return exclusive(async () => {
+        const state = await read();
+        if (!TEST_LOGIN || state.activation?.licenseId !== "test-pro") return publicState(state);
+        state.activation = null;
+        state.pendingCheckoutAt = null;
+        await applyEntitlement(state, false);
         return publicState(state);
       });
     }
@@ -154,7 +171,7 @@
         } catch { return false; }
       });
     }
-    return { getState, startCheckout, activate, activateTest, track };
+    return { getState, startCheckout, activate, activateTest, deactivateTest, track };
   }
 
   root.SCPlayerToolsCommerce = { STORAGE_KEY, SESSION_MEASURED_KEY, API_BASE_URL, OFFER, ANALYTICS_EVENTS, create };
