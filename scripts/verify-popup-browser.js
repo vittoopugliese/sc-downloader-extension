@@ -97,7 +97,7 @@ const iconDataUrls = Object.fromEntries(
       offerDetailSize: "9px",
       offerTrialSize: "9px",
       offerPriceSize: "10px",
-      likesImageSize: [58, 70],
+      likesImageSize: [58, 77],
       productColumns: 2,
       artworkFilter: "brightness(0.641) blur(5px)",
       collectionControlsAligned: true,

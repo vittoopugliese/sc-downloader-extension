@@ -101,7 +101,7 @@ const { chromium } = require('playwright');
         openSingleLine:open.scrollHeight<=open.clientHeight,
       };
     });
-    assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['Abrir para escuchar ↗','⌖'],openSingleLine:true});
+    assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['Abrir ↗','⌖'],openSingleLine:true});
     await page.screenshot({path:'test-results/likes-explorer-desktop.png'});
     for(const width of [390,760,1024]){
       await page.setViewportSize({width,height:800});await page.waitForTimeout(180);

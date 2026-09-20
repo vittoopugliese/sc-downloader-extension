@@ -13,6 +13,8 @@ const ROW_HEIGHT = 40;
 const MAX_SELECTION_HEIGHT = 8 * ROW_HEIGHT;
 const OVERSCAN = 6;
 const POPUP_START_VIEW_KEY = "scdl.popup.startView";
+// Keep true while reviewing the Pro layout; set false to hide product banners for active Pro users.
+const SHOW_PRODUCT_OFFERS_FOR_PRO = true;
 
 const loadingOverlay = document.getElementById("loadingOverlay");
 const loadingText = document.getElementById("loadingText");
@@ -58,6 +60,7 @@ const helpBtn = document.getElementById("helpBtn");
 const helpPanel = document.getElementById("helpPanel");
 const helpBackBtn = document.getElementById("helpBackBtn");
 const looperPanel = document.getElementById("looperPanel");
+const productOffers = document.querySelector(".product-offers");
 const playerToolsOffer = document.getElementById("playerToolsOffer");
 const playerToolsProBtn = document.getElementById("playerToolsProBtn");
 const playerToolsTrialStatus = document.getElementById("playerToolsTrialStatus");
@@ -183,6 +186,7 @@ let commerceReturnFocus = null;
 function openCommercePanel() {
   commerceReturnFocus = document.activeElement;
   commerceStatus.textContent = "";
+  document.body.classList.add("commerce-mode");
   commercePanel.hidden = false;
   commerceBuyBtn.focus();
   chrome.runtime.sendMessage({ type: "TRACK_PLAYER_TOOLS_EVENT", name: "paywall_seen",
@@ -190,6 +194,7 @@ function openCommercePanel() {
 }
 function closeCommercePanel() {
   commercePanel.hidden = true;
+  document.body.classList.remove("commerce-mode");
   commerceReturnFocus?.focus?.();
   commerceReturnFocus = null;
 }
@@ -1447,6 +1452,7 @@ async function syncPlayerToolsOffer() {
     const active = snapshot?.plan === "pro" || commerce?.status === "active";
     isTestProActive = commerce?.licenseId === "test-pro";
     commerceRestoreBtn.textContent = t(isTestProActive ? "player_tools_test_deactivate" : "player_tools_restore");
+    productOffers.hidden = active && !SHOW_PRODUCT_OFFERS_FOR_PRO;
     playerToolsOffer.hidden = false;
     playerToolsProBtn.hidden = active && !isTestProActive;
     playerToolsProBtn.textContent = t(isTestProActive ? "player_tools_test_access" : "player_tools_get_pro");
@@ -1463,6 +1469,7 @@ async function syncPlayerToolsOffer() {
         once: true, scope: "session" }).catch(() => {});
     }
   } catch {
+    productOffers.hidden = false;
     playerToolsOffer.hidden = false;
     playerToolsTrialStatus.textContent = "";
   }

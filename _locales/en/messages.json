@@ -662,7 +662,7 @@
   "player_tools_restore_working": { "message": "Checking your purchase…" },
   "player_tools_restore_success": { "message": "Pro activated. Your Player Tools controls are unlocked." },
   "player_tools_restore_error": { "message": "The purchase could not be restored. Check the details or contact support." },
-  "player_tools_test_access": { "message": "Testing access" },
+  "player_tools_test_access": { "message": "Try for free" },
   "player_tools_test_access_help": { "message": "Enter the local testing credentials." },
   "player_tools_test_username": { "message": "Testing user" },
   "player_tools_test_password": { "message": "Testing password" },

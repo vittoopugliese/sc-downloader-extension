@@ -4,7 +4,7 @@
     gallery: 'Gallery', list: 'List', density: 'Change density', close: 'Close', refresh: 'Refresh library', pause: 'Pause', resume: 'Resume', start: 'Build my library',
     welcome: 'Rediscover what you loved.', intro: 'Keep a private index in this browser. Jump back years without scrolling SoundCloud. No audio is downloaded.',
     empty: 'No tracks here yet.', noResults: 'No matches in your indexed likes.', partial: 'More likes may still be waiting to be indexed.', complete: 'Library ready', indexing: 'Indexing', paused: 'Paused', tracks: 'tracks',
-    open: 'Open to listen', openHint: 'Opens this track in SoundCloud. Press Play there.', around: 'See around this track', locate: 'Find in SoundCloud', locating: 'Loading the SoundCloud list…', located: 'Track found in SoundCloud', locateStopped: 'Search stopped. You can still open this track directly.',
+    open: 'Open', openHint: 'Opens this track in SoundCloud. Press Play there.', around: 'See around this track', locate: 'Find in SoundCloud', locating: 'Loading the SoundCloud list…', located: 'Track found in SoundCloud', locateStopped: 'Search stopped. You can still open this track directly.',
     back: 'Back to results', position: 'Position in indexed likes', map: 'Map of your likes', bookmark: 'Bookmark this place', bookmarks: 'Saved places', bookmarkName: 'Name this place', missing: 'This saved track is no longer in the index.',
     covers: 'Save covers', coverInfo: 'Save small WebP covers in this browser for faster browsing and offline artwork. You can pause or delete them.', later: 'Not now', saving: 'Saving covers', saved: 'covers saved', failed: 'failed', removeCovers: 'Delete saved covers', removeLibrary: 'Delete this library', confirmDelete: 'Delete the local index, saved places and covers for this account? Your SoundCloud likes stay untouched.',
     settings: 'Library storage', previous: 'Previous like', next: 'Next like', cancel: 'Cancel', pro: 'Travel through your likes with Pro', proInfo: 'Included in your existing lifetime Pro. Downloads stay free.', getPro: 'View Pro', retry: 'Try again',
@@ -30,5 +30,6 @@
   const errorLocale = errors[language] || errors[language.split('_')[0]];
   if (errorLocale) errorKeys.forEach((key,i)=>{dictionary[key]=errorLocale[i];});
   dictionary.archive = ({es:'TU ARCHIVO PERSONAL',pt_BR:'SEU ARQUIVO PESSOAL',de:'DEIN PERSÖNLICHES ARCHIV',ru:'ТВОЙ ЛИЧНЫЙ АРХИВ'})[language] || ({es:'TU ARCHIVO PERSONAL',de:'DEIN PERSÖNLICHES ARCHIV',ru:'ТВОЙ ЛИЧНЫЙ АРХИВ'})[language.split('_')[0]] || 'YOUR PERSONAL ARCHIVE';
+  dictionary.open = ({es:'Abrir',pt_BR:'Abrir',de:'Öffnen',ru:'Открыть'})[language] || ({es:'Abrir',de:'Öffnen',ru:'Открыть'})[language.split('_')[0]] || 'Open';
   root.SCLikesText = key => dictionary[key] || dictionary['network-error'];
 })(globalThis);

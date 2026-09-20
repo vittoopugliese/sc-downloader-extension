@@ -56,6 +56,7 @@
             margin: 0;
             padding: 0;
             width: 426px;
+            height: 341px;
             min-height: 200px;
             color: white;
             position: relative;
@@ -115,6 +116,7 @@
         }
 
         body.help-mode { height: 580px; }
+        body.commerce-mode { height: 426px; }
         body #helpPanel.is-visible { display: flex; flex-direction: column; }
         body #helpPanel {
             z-index: 11;
@@ -469,8 +471,10 @@
 
         #helpBtn {
             position: absolute;
-            top: 16px;
-            right: 12px;
+            top: auto;
+            right: auto;
+            bottom: 16px;
+            left: 12px;
             z-index: 1;
             width: 32px;
             min-width: 32px;
@@ -883,11 +887,13 @@
         }
 
         .product-offers {
+            order: -1;
             display: grid;
             grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr);
             gap: 6px;
-            margin-top: 8px;
+            margin: 0 0 4px;
         }
+        .product-offers[hidden] { display: none; }
         .player-tools-offer,
         .likes-explorer-offer {
             position: relative;
@@ -913,16 +919,20 @@
         #playerToolsTrialStatus { margin-top: 2px; color: #d8d8d8; font-size: 9px; }
         .player-tools-offer-price { margin: 3px 0 0; color: #ff985d; white-space: nowrap; font-size: 10px; font-weight: 700; line-height: 1.15; }
         .player-tools-offer-price del { color: #aaa; font-weight: 500; }
-        .player-tools-offer-actions { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto; }
+        .player-tools-offer-actions { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; flex: 0 0 auto; }
+        .player-tools-offer-actions img { flex: 0 0 38px; width: 38px; height: 38px; border-radius: 8px; }
         #playerToolsProBtn { padding: 5px 6px; border: 1px solid #ff6a1a; border-radius: 6px; color: #fff; background: #c94600; font-size: 9px; font-weight: 700; line-height: 1; cursor: pointer; }
         #playerToolsProBtn:hover { background: #ff5a00; }
         #playerToolsProBtn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
         .likes-explorer-offer { display: flex; align-items: stretch; padding: 0; }
-        .likes-explorer-thumb { box-sizing: border-box; width: 58px; min-width: 58px; object-fit: cover; object-position: 96% center; opacity: .88; border-right: 1px solid rgba(255, 255, 255, .08); }
-        .likes-explorer-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; justify-content: center; padding: 7px; }
+        .likes-explorer-media { position: relative; flex: 0 0 58px; width: 58px; min-width: 58px; overflow: hidden; border-right: 1px solid rgba(255, 255, 255, .08); background: rgba(0, 0, 0, .18); }
+        .likes-explorer-thumb { display: block; box-sizing: border-box; width: 58px; height: 100%; object-fit: cover; object-position: 96% center; opacity: .88; }
+        .likes-explorer-logo { position: absolute; right: 7px; bottom: 7px; box-sizing: border-box; width: 30px; height: 30px; padding: 3px; border: 1px solid rgba(255, 255, 255, .34); border-radius: 7px; object-fit: contain; background: rgba(20, 20, 20, .88); box-shadow: 0 2px 6px rgba(0, 0, 0, .45); }
+        .likes-explorer-copy { position: relative; display: flex; flex: 1; min-width: 0; flex-direction: column; justify-content: center; padding: 7px; }
         .likes-explorer-title { color: #fff; font-size: 11px; font-weight: 700; line-height: 1.1; }
         .likes-explorer-detail { margin-top: 3px; color: #aaa; font-size: 8px; line-height: 1.25; }
-        #likesExplorerBtn { align-self: flex-start; margin-top: 5px; padding: 0; border: 0; color: #ff9b63; background: transparent; font-size: 9px; font-weight: 700; cursor: pointer; }
+        .likes-explorer-action-row { display: flex; align-items: flex-end; justify-content: flex-start; gap: 4px; margin-top: 5px; }
+        #likesExplorerBtn { align-self: flex-end; margin: 0; padding: 0; border: 0; color: #ff9b63; background: transparent; font-size: 9px; font-weight: 700; line-height: 1; white-space: nowrap; cursor: pointer; }
         #likesExplorerBtn:hover { color: #fff; }
         #likesExplorerBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         .commerce-panel { position: fixed; z-index: 1001; inset: 0; display: grid; place-items: center; padding: 12px; background: rgba(0,0,0,.72); }
@@ -1041,8 +1051,10 @@
         select.popup-control-btn { color: var(--accent-warm); }
 
         #helpBtn {
-            top: 9px;
-            right: 9px;
+            top: auto;
+            right: auto;
+            bottom: 9px;
+            left: 9px;
             width: 27px;
             min-width: 27px;
             height: 24px;
@@ -1414,7 +1426,6 @@
         </div>
         <div class="product-offers">
             <section id="playerToolsOffer" class="player-tools-offer" aria-label="Player Tools">
-                <img src="./assets/icons/player-toolkit.png" alt="" width="38" height="38" draggable="false">
                 <div class="player-tools-offer-copy">
                     <p class="player-tools-offer-title">Player Tools</p>
                     <p class="player-tools-offer-detail">Tempo, loops &amp; FX</p>
@@ -1422,15 +1433,21 @@
                     <p class="player-tools-offer-price"><del id="playerToolsReferencePrice">$6.79</del> <span id="playerToolsPrice">$3.69</span> <span data-i18n="player_tools_lifetime">lifetime</span></p>
                 </div>
                 <div class="player-tools-offer-actions">
+                    <img src="./assets/icons/player-toolkit.png" alt="" width="38" height="38" draggable="false">
                     <button id="playerToolsProBtn" type="button" data-i18n="player_tools_get_pro" data-i18n-title="player_tools_get_pro" title="Get Pro">Get Pro</button>
                 </div>
             </section>
             <section class="likes-explorer-offer" aria-label="Likes Explorer">
-                <img class="likes-explorer-thumb" src="./assets/images/likes-explorer.png" alt="" draggable="false">
+                <div class="likes-explorer-media">
+                    <img class="likes-explorer-thumb" src="./assets/images/likes-explorer.png" alt="" draggable="false">
+                </div>
                 <div class="likes-explorer-copy">
                     <span class="likes-explorer-title">Likes Explorer</span>
                     <span class="likes-explorer-detail">Explore your Likes visually</span>
-                    <button id="likesExplorerBtn" type="button" title="Likes Explorer">Open ↗</button>
+                    <div class="likes-explorer-action-row">
+                        <button id="likesExplorerBtn" type="button" title="Likes Explorer">Open ↗</button>
+                        <img class="likes-explorer-logo" src="./assets/icons/likes-explorer.png" alt="" width="30" height="30" draggable="false">
+                    </div>
                 </div>
             </section>
         </div>
