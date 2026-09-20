@@ -3,6 +3,296 @@
 Fecha: 2026-09-15. Fuente completa: `C:\Users\torib\Desktop\plan_final_destilar_por_etapas.txt`.
 Entrega: planes separados, decisiones, materiales de Store y guiones. No es una implementación ni una publicación.
 
+## Nueva dirección operativa — release completa, pagos y producción
+
+Esta sección conserva literalmente la conclusión operativa de la revisión más reciente y pasa a ser la guía inmediata para retomar el proyecto.
+
+Analicé los documentos de `docs/`, incluidos los más recientes. La conclusión es:
+
+- La etapa 02 puede considerarse cerrada, según tu indicación y la nota del 20/09.
+- No conviene empezar ahora EQ, presets, Likes Explorer ni SEO avanzado.
+- El bloqueo real para publicar y cobrar es operativo: confiabilidad del descargador, paquete final sin login de prueba, despliegue del Worker y aprobación del proveedor de pagos.
+- La autenticación post pago ya tiene una base técnica: checkout alojado, webhook, activación, restauración, revalidación offline y revocación. Falta probarla con infraestructura y credenciales reales.
+
+### Qué documentos mandan
+
+`docs/planning-20260915/00-LEER-PRIMERO.md` y `01-MONETIZACION-Y-MEDICION.md` son la mejor referencia para monetización. Declaran cerradas en código las etapas 1A–1D, pero dejan pendiente:
+
+1. desplegar el Worker;
+2. configurar secretos reales;
+3. completar una compra sandbox;
+4. reconciliar webhook, activación, restauración y reembolso;
+5. obtener aprobación del proveedor para el producto real.
+
+Los documentos anteriores de `product-launch-plan`, `product-roadmap` y `payment-options` contienen decisiones históricas. Su orden viejo ya no debería dirigir el trabajo.
+
+Los documentos del 20/09 cambian la prioridad:
+
+- `RELIABILITY-IMPLEMENTATION-HANDOFF-20260920.md`: contiene P0 que bloquean un release confiable.
+- `uninstall-diagnosis-20260920.md`: confirma fallos reales de primera instalación, carreras, HLS, reintentos y memoria.
+- `LOOPER-PRODUCT-IMPLEMENTATION-PLAN-20260920.md`: es evolución futura del producto.
+- `LIKES-EXPLORER-OPTIMIZATION-PLAN-20260920.md`: también es posterior al primer release comercial.
+
+### Orden que te recomiendo ahora
+
+#### 0. Ejecutar primero el plan de mitigación de confiabilidad
+
+Antes de pagos, Likes Explorer o cualquier publicación, ejecutar completo `docs/audits/RELIABILITY-MITIGATION-PLAN-20260920.md`.
+
+Este plan corrige los problemas detectados en los últimos diagnósticos de desinstalación y confiabilidad. Son problemas que afectan directamente la posibilidad de publicar una release nueva:
+
+- guardados repetidos o ambiguos después de perder una respuesta;
+- consumo excesivo de memoria antes de aplicar los límites;
+- cuerpos HTTP, portadas y segmentos sin lectura acotada;
+- timeouts y códigos de error que terminan en loading indefinido;
+- bulk sin checkpoint durable o con truncamiento silencioso;
+- borrado, migración y carreras de Likes Explorer;
+- cancelación, cola y ciclo de vida de offscreen;
+- seguridad residual y validación del artefacto final.
+
+El orden interno obligatorio es el del plan de mitigación:
+
+1. M1 — guardado repetible y estados ambiguos;
+2. M2 — límites de memoria antes de reservar memoria;
+3. M3 — HTTP, timeout y errores correctos;
+4. M4 — bulk, checkpoints y All completo;
+5. M5 — borrado, migración y carreras de Explorer;
+6. M6 — rendimiento real de Explorer;
+7. M7 — cancelación, cola y ciclo de vida de offscreen;
+8. M8 — HLS, seguridad residual y artefacto de release.
+
+La salida del Paso 0 exige reproducción antes de cada corrección, prueba de regresión después, ejecución sobre el ZIP cuando corresponda y un informe de lo que quedó demostrado. No se debe declarar lista la release sólo porque pasen las verificaciones sintéticas existentes.
+
+#### 1. Cerrar el release técnico
+
+Primero resolver los P0 de confiabilidad:
+
+- exactamente 50 tracks;
+- estados de login y extracción sin loading infinito;
+- token de SoundCloud aislado del content script;
+- reintentos de segmentos y URLs vencidas;
+- carreras del documento offscreen;
+- serialización y límites de memoria;
+- cancelación y estados terminales;
+- prueba del ZIP extraído, no solamente del código fuente.
+
+El handoff dice explícitamente `do not ship` hasta demostrar estos puntos.
+
+#### 2. Preparar el cobro real en paralelo
+
+Usar Lemon Squeezy como candidato, condicionado a:
+
+- aprobación escrita del producto real;
+- KYC y W-8;
+- confirmación del payout a Argentina/Wise;
+- términos, privacidad, reembolsos y soporte publicados.
+
+El checkout debe seguir alojado fuera de la extensión. El flujo correcto es:
+
+```text
+Usuario pulsa Comprar
+        ↓
+Worker crea checkout
+        ↓
+Lemon Squeezy confirma el pago
+        ↓
+Webhook firmado llega al Worker
+        ↓
+Worker crea o actualiza entitlement
+        ↓
+Usuario introduce email + license key
+        ↓
+Worker activa la instalación
+        ↓
+La extensión recibe Pro y lo persiste firmado
+```
+
+La URL de éxito nunca debe activar Pro por sí sola.
+
+#### 3. Verificar la autenticación después del pago
+
+El criterio mínimo de aceptación debería ser:
+
+- compra cancelada: no concede Pro;
+- compra exitosa: webhook único y deduplicado;
+- activación con email y licencia: concede Pro;
+- repetir activación: no duplica la licencia;
+- reiniciar el service worker: Pro sigue activo;
+- cerrar y abrir el popup: Pro sigue activo;
+- restaurar en la misma instalación: recupera el entitlement;
+- licencia revocada o reembolsada: Pro se desactiva;
+- preferencias de audio y trial no se borran al revocar;
+- caída del Worker: no bloquea las descargas completas gratuitas;
+- datos inválidos, origin inválido y producto incorrecto: fallan cerrados.
+
+Esto es exactamente lo que ya pide `services/player-tools-license/README.md`; falta ejecutar el gate con sandbox real y luego con producción.
+
+#### 4. Sacar el test login al final
+
+El login de prueba debe quedar como último paso del candidato:
+
+1. terminar código y pruebas;
+2. ejecutar pruebas con fixtures separadas;
+3. desactivar `TEST_LOGIN`;
+4. generar el ZIP;
+5. extraer el ZIP;
+6. comprobar que no contiene login, secretos, documentación ni código de test;
+7. ejecutar smoke tests sobre ese ZIP exacto;
+8. registrar versión y SHA-256;
+9. recién después subirlo a Chrome Web Store.
+
+No conviene eliminarlo antes porque todavía sirve para las pruebas locales, pero sí debe estar completamente desactivado en el artefacto publicable.
+
+#### 5. Publicar con el alcance actual
+
+Para la primera publicación comercial, el copy debería prometer únicamente:
+
+- descargas completas gratuitas;
+- Player Tools/Looper según lo realmente habilitado;
+- prueba limitada;
+- compra única;
+- activación y restauración;
+- límites concretos del export.
+
+No anunciar todavía EQ, presets avanzados, exportación completa de FX, mejoras de Likes Explorer ni funciones del plan Looper 20/09 si no están implementadas y verificadas.
+
+### Qué queda fuera por ahora
+
+Deben pasar a después de publicar y cobrar la primera versión:
+
+- EQ;
+- presets persistentes completos;
+- optimización profunda de Likes Explorer;
+- biblioteca avanzada de loops;
+- SEO por múltiples páginas;
+- experimentos de precio;
+- crypto/USDT;
+- analytics más sofisticado;
+- nuevas funciones de marketing.
+
+La ruta correcta queda así:
+
+**confiabilidad → Worker y proveedor → sandbox de compra → autenticación post pago → quitar test login → ZIP exacto → publicación → medición → mejoras posteriores.**
+
+El mayor riesgo actual no es de diseño de producto. Es publicar una extensión que funciona en pruebas locales pero cuya compra, activación o descarga falla en condiciones reales.
+
+## Ampliación solicitada — release nueva con Likes Explorer y cobro en Cloudflare
+
+### Objetivo inmediato
+
+Preparar una nueva release de producción con todo lo que ya existe funcionando de forma verificable, incluyendo Likes Explorer, y con el sistema de pagos y autenticación listo para cobrar sin depender de una activación falsa o de un login de prueba.
+
+Likes Explorer se considera listo para incluir en la release por decisión actual del usuario. Los planes de optimización del 20/09 no deben bloquear esta salida; cualquier mejora que todavía no tenga evidencia de release queda registrada como trabajo posterior.
+
+### Alcance de esta release
+
+- Descargas gratuitas de tracks, playlists, perfiles y likes públicos.
+- Likes Explorer incluido y probado sobre el artefacto final.
+- Player Tools/Looper según el entitlement real.
+- Checkout alojado y creado por el Worker.
+- Activación y restauración posterior al pago.
+- Revalidación offline y revocación por reembolso.
+- Feedback existente en Cloudflare conservado.
+- Sin `TEST_LOGIN` en el ZIP final.
+- Sin secretos de Cloudflare, Lemon Squeezy ni claves de licencia en la extensión.
+
+### Arquitectura Cloudflare para pagos
+
+Cloudflare es la capa operativa principal del producto comercial:
+
+```text
+Chrome extension
+    ↓ HTTPS + CORS de origen publicado
+Cloudflare Worker de Player Tools
+    ├── checkout
+    ├── activation
+    ├── restore
+    ├── license status
+    ├── signed Lemon webhook
+    ├── refund/revocation
+    └── product events allow-listed
+              ↓
+           Cloudflare D1
+              ↓
+       Lemon Squeezy API
+```
+
+El formulario de desinstalación continúa separado, con su propio Worker/D1 y sus propias políticas de validación. Compartir Cloudflare no significa mezclar tablas, secretos ni contratos entre feedback y licencias.
+
+### Entidades mínimas de pago
+
+El Worker debe mantener como mínimo:
+
+- `licenses`: compra, producto, order, customer, estado y hash de licencia;
+- `activations`: instancia, instalación, fechas de activación y última validación;
+- `webhook_events`: hash/idempotencia, evento, fecha y payload necesario para auditoría;
+- `events`: únicamente eventos comerciales permitidos y sin títulos, URLs musicales, cookies, tokens ni credenciales.
+
+La extensión no debe persistir la clave de licencia. Puede conservar únicamente el comprobante o entitlement firmado que necesita para operar offline, junto con el identificador de instalación seudónimo.
+
+### Orden de implementación del pago
+
+1. Leer y validar el Worker existente, sus migraciones y el contrato de la extensión.
+2. Confirmar el producto, variante, moneda, precio y URL de retorno configurados.
+3. Crear la configuración real de Cloudflare sin subir secretos al repositorio.
+4. Crear o verificar D1 y aplicar migraciones.
+5. Configurar secretos del Worker de forma interactiva.
+6. Publicar primero un endpoint de salud que confirme configuración sin revelar secretos.
+7. Configurar Lemon Squeezy en Test Mode y registrar el webhook firmado.
+8. Ejecutar la reconciliación completa de compra, activación, restauración, reinicio y reembolso.
+9. Revisar CORS, origin, producto, variante, firma, email y license key con casos negativos.
+10. Obtener aprobación comercial y completar KYC/payout.
+11. Repetir el flujo en Live Mode con una compra controlada.
+12. Cambiar la extensión al endpoint de producción y ejecutar pruebas sobre el ZIP.
+
+### Gate de autenticación post pago
+
+No se considera terminado hasta que una compra real o de sandbox produzca evidencia correlacionada en tres lugares:
+
+1. respuesta visible de checkout/licencia;
+2. filas coherentes en D1;
+3. entitlement activo observado por la extensión.
+
+Debe existir evidencia también para cancelación, reintento, webhook duplicado, activación repetida, reinicio del Worker, restauración, pérdida temporal de red y reembolso.
+
+### Gate de Likes Explorer
+
+Antes de publicar el ZIP:
+
+- verificar que sus recursos están incluidos en el paquete;
+- probar login y logout;
+- probar likes propios y likes de perfiles públicos;
+- probar colecciones vacías, pequeñas y grandes;
+- probar paginación, selección y descarga;
+- probar aislamiento entre dos cuentas;
+- probar cierre y reinicio del popup/Worker;
+- comprobar que el entitlement de Likes Explorer no bloquea las descargas gratuitas que deben seguir siendo gratis;
+- ejecutar el E2E de Likes sobre el artefacto final, diferenciando mocks de datos reales.
+
+El plan de optimización de Likes Explorer queda después del release salvo que una prueba del candidato revele un bloqueante de publicación.
+
+### Gate del paquete final
+
+El candidato final debe registrar:
+
+- versión única en manifest, package, landing y ficha;
+- ZIP generado desde el código final;
+- SHA-256 del ZIP;
+- ZIP extraído y cargado temporalmente;
+- `TEST_LOGIN` desactivado;
+- ausencia de secretos, documentación y tests en el ZIP;
+- smoke tests de descarga, Player Tools, Likes Explorer y restauración;
+- resultado de las pruebas negativas del Worker;
+- limitaciones conocidas de ChromeOS, red, memoria o fuentes de SoundCloud.
+
+### Estado de decisión
+
+La prioridad vigente queda fijada como:
+
+**Paso 0: mitigación de confiabilidad → release confiable + Likes Explorer → pagos Cloudflare/Lemon Squeezy → autenticación post pago → quitar test login → paquete final → publicación.**
+
+No iniciar EQ, nuevos efectos, optimización profunda de Likes Explorer ni nuevas campañas hasta cerrar esta release y observar sus primeros resultados.
+
 ## Estado de ejecución al 15/09/2026
 
 Las etapas de repositorio **00 y 01 están implementadas y verificadas**. El

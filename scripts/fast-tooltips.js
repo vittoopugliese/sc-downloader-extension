@@ -30,7 +30,7 @@
   let showTimer = null;
 
   function buttonFromEvent(event) {
-    return event.composedPath().find((node) => node instanceof HTMLButtonElement) || null;
+    return event.composedPath().find((node) => node?.nodeType === Node.ELEMENT_NODE && node.tagName === "BUTTON") || null;
   }
 
   function restoreTitle(button) {
@@ -77,16 +77,20 @@
     }, SHOW_DELAY_MS);
   }
 
-  document.addEventListener("pointerover", (event) => {
+  function onPointerOver(event) {
     if (event.pointerType !== "touch") show(buttonFromEvent(event));
-  }, true);
-  document.addEventListener("pointerout", (event) => {
+  }
+  function onPointerOut(event) {
     const button = buttonFromEvent(event);
-    if (button === activeButton && !button.contains(event.relatedTarget)) hide();
-  }, true);
+    if (button && button === activeButton && !button.contains(event.relatedTarget)) hide();
+  }
+  document.addEventListener("pointerover", onPointerOver, true);
+  document.addEventListener("pointerout", onPointerOut, true);
+  document.addEventListener("mouseover", onPointerOver, true);
+  document.addEventListener("mouseout", onPointerOut, true);
   document.addEventListener("focusin", (event) => show(buttonFromEvent(event)), true);
   document.addEventListener("focusout", (event) => {
-    if (buttonFromEvent(event) === activeButton) hide();
+    if (activeButton && buttonFromEvent(event) === activeButton) hide();
   }, true);
   document.addEventListener("scroll", () => activeButton && position(activeButton), true);
   window.addEventListener("resize", () => activeButton && position(activeButton));
