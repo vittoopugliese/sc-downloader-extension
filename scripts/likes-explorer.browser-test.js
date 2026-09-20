@@ -36,11 +36,13 @@ const { chromium } = require('playwright');
       window.fixtureCount=50000;
       window.fixtureCalls=[];
       window.fixturePro=true;
+      window.fixtureLibraryReady=false;
       const items=Array.from({length:50000},(_,i)=>({itemId:String(i+1),trackOrdinal:i,title:`Remember this track ${i+1}`,artistName:`Artist ${i%37}`,likedAt:new Date(Date.UTC(2026-Math.floor(i/4000),i%12,1)).toISOString(),artworkUrl:null,permalink:`https://soundcloud.com/artist/track-${i+1}`}));
       window.chrome={i18n:{getUILanguage:()=> 'es'},runtime:{onMessage:{addListener:fn=>window.fixtureListener=fn},sendMessage:async r=>{
         fixtureCalls.push(r);
         if(!fixturePro)return{success:false,code:'pro-required'};
-        if(r.type==='GET_LIKES_LIBRARY_STATUS')return{success:true,ownerId:'42',displayName:'Your archive',library:{generation:'g1',revision:1,count:fixtureCount,complete:true},job:{phase:'complete',count:fixtureCount},bookmarks:[]};
+        if(r.type==='GET_LIKES_LIBRARY_STATUS')return{success:true,ownerId:'42',sourceUserId:'42',collectionId:'likes:42',displayName:'Your archive',library:fixtureLibraryReady?{generation:'g1',revision:1,count:fixtureCount,complete:true}:null,job:fixtureLibraryReady?{phase:'complete',count:fixtureCount}:null,bookmarks:[],collections:[]};
+        if(r.type==='START_LIKES_INDEX'){fixtureLibraryReady=true;return{success:true};}
         if(r.type==='QUERY_LIKES'){
           const all=items.slice(0,fixtureCount); const filtered=all.filter(x=>(!r.query || `${x.title} ${x.artistName}`.toLowerCase().includes(r.query.toLowerCase()))&&(!r.period || x.likedAt.slice(0,7)===r.period));
           const periods={};for(const x of all){const k=x.likedAt.slice(0,7);periods[k]||={count:0,firstTrackId:x.itemId};periods[k].count++;}
@@ -60,7 +62,12 @@ const { chromium } = require('playwright');
       return{found,cancelledCalls:calls-count};
     });assert.equal(locator.found,true);assert.equal(locator.cancelledCalls,0);
     await page.locator('#scdl-likes-explorer .launch').click();
+    const buildButton=page.locator('#scdl-likes-explorer .canvas .empty .accent');
+    await buildButton.waitFor();
+    await buildButton.click();
     await page.waitForFunction(()=>document.querySelector('#scdl-likes-explorer')?.shadowRoot.querySelectorAll('.card').length>0);
+    assert.equal(await page.locator('#scdl-likes-explorer .canvas > .empty').count(),0);
+    assert.equal(await page.locator('#scdl-likes-explorer .canvas .accent').count(),0);
     assert.ok(await page.locator('#scdl-likes-explorer .card').count()<100);
     assert.equal(await page.locator('#scdl-likes-explorer aside').count(),0);
     const compactLayout=await page.locator('#scdl-likes-explorer .card').evaluateAll(cards=>cards.slice(0,7).map(card=>({top:card.style.top,left:card.style.left})));

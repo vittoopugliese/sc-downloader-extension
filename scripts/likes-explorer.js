@@ -104,6 +104,7 @@
     const focused = shadow.activeElement?.closest('.card');
     const focusedId = focused?.dataset.id;
     if (!count) { cardNodes.clear(); canvas.replaceChildren(); const empty = el('div','empty',text(query || filter ? 'noResults' : 'empty')); if (!r.complete) empty.append(el('p','',text('partial'))); canvas.append(empty); }
+    else canvas.querySelector(':scope > .empty')?.remove();
     const first = visibleOrdinal();
     anchorPixelOffset = viewport.scrollTop % d.height;
     anchor = r.items[Math.max(0,first-start)] || anchor;
