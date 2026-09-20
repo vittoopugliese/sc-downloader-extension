@@ -8,6 +8,12 @@ assert.equal(entry.track_authorization,undefined); assert.equal(entry.media,unde
 assert.equal(source.project({playlist:{id:3}}).kind,'playlist');
 assert.equal(source.project({track:{id:4},created_at:'bad'}).likedAt,null);
 assert.equal(source.project({track:{id:'bad'}}),null);
+const avatarFallback = source.project({track:{id:5,artwork_url:null,user:{username:'Artist',avatar_url:'https://i1.sndcdn.com/avatars-user-large.jpg'}}});
+assert.equal(avatarFallback.artworkUrl,'https://i1.sndcdn.com/avatars-user-large.jpg');
+const invalidArtworkFallback = source.project({track:{id:6,artwork_url:'https://evil.test/cover.jpg',user:{avatar_url:'https://i1.sndcdn.com/avatars-safe-large.jpg'}}});
+assert.equal(invalidArtworkFallback.artworkUrl,'https://i1.sndcdn.com/avatars-safe-large.jpg');
+const artworkPreferred = source.project({track:{id:7,artwork_url:'https://i1.sndcdn.com/cover-large.jpg',user:{avatar_url:'https://i1.sndcdn.com/avatar-large.jpg'}}});
+assert.equal(artworkPreferred.artworkUrl,'https://i1.sndcdn.com/cover-large.jpg');
 assert.equal(source.permalink('https://evil.com/a/b'),null);
 assert.equal(source.artwork('https://sndcdn.com.evil.com/a.jpg'),null);
 assert.equal(source.artwork('https://i1.sndcdn.com/a.mp3'),null);

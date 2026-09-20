@@ -20,10 +20,12 @@
     const kind = item.track ? 'track' : item.playlist ? 'playlist' : null;
     const raw = kind && item[kind];
     if (!raw || !/^\d+$/.test(String(raw.id))) return null;
+    const trackArtworkUrl = artwork(raw.artwork_url);
+    const artistAvatarUrl = artwork(raw.user?.avatar_url);
     return { kind, itemId: String(raw.id), likedAt: date(item.created_at),
       title: String(raw.title || 'Untitled').slice(0, 500), artistName: String(raw.user?.username || '').slice(0, 200),
       artistId: raw.user?.id ? String(raw.user.id) : null, permalink: permalink(raw.permalink_url),
-      artworkUrl: artwork(raw.artwork_url), publicationDate: date(raw.created_at),
+      artworkUrl: trackArtworkUrl || artistAvatarUrl, publicationDate: date(raw.created_at),
       durationMs: Number.isFinite(raw.duration) && raw.duration >= 0 ? raw.duration : null,
       availability: raw.streamable === false ? 'unavailable' : 'unknown' };
   }
