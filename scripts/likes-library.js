@@ -121,11 +121,19 @@
   async function ensureLegacyMigrated(accountId) {
     accountId = String(accountId);
     const state = await get('likesMigrations', accountId);
-    if (state?.complete) return;
+    if (state?.complete) {
+      // Older v2 openings could have marked migration complete before the
+      // artwork job was copied. Backfill that checkpoint once, idempotently.
+      if (state.collectionId && !(await get('collectionArtworkJobs', [accountId, state.collectionId]))) {
+        const oldArtworkJob = await get('artworkJobs', accountId);
+        if (oldArtworkJob) await put('collectionArtworkJobs', { ...oldArtworkJob, accountId, collectionId: state.collectionId, migratedFrom: 1 });
+      }
+      return;
+    }
     const legacy = await get('libraries', accountId);
     if (!legacy) { await put('likesMigrations', { accountId, complete: true, at: Date.now() }); return; }
     const collectionId = collectionKey(accountId), entries = await tracks(accountId, legacy.generation);
-    await transaction(['collections','tracks','collectionEntries','collectionViews','collectionBookmarks','accountArtwork','likesMigrations','views','bookmarks','artwork'], true, async s => {
+    await transaction(['collections','tracks','collectionEntries','collectionViews','collectionBookmarks','accountArtwork','collectionArtworkJobs','likesMigrations','views','bookmarks','artwork','artworkJobs'], true, async s => {
       s('collections').put({ ...legacy, accountId, collectionId, sourceUserId: accountId, sourceUrl: 'https://soundcloud.com/you/likes', name: legacy.displayName || 'Likes', activeGeneration: legacy.generation, migratedFrom: 1 });
       for (const entry of entries) {
         s('tracks').put({ ...entry, accountId, trackId: entry.itemId });
@@ -137,6 +145,8 @@
       for (const value of oldBookmarks.filter(value => value.ownerId === accountId)) s('collectionBookmarks').put({ ...value, accountId, collectionId });
       const oldArtwork = await request(s('artwork').getAll());
       for (const value of oldArtwork.filter(value => value.ownerId === accountId)) s('accountArtwork').put({ ...value, accountId, artworkKey: value.url, formatVersion: value.formatVersion || 1 });
+      const oldArtworkJob = await request(s('artworkJobs').get(accountId));
+      if (oldArtworkJob) s('collectionArtworkJobs').put({ ...oldArtworkJob, accountId, collectionId, generation: legacy.generation, migratedFrom: 1 });
       s('likesMigrations').put({ accountId, complete: true, collectionId, copied: entries.length, at: Date.now() });
     });
   }

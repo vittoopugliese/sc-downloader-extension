@@ -81,7 +81,11 @@
           for(let n=0;n<8;n++) {
             const job=await db.get('collectionJobs',[initial.accountId,initial.collectionId]); if(!job||job.phase!=='indexing')break;
             await valid(ctx); const controller=new AbortController(); controllers.add(controller); const timeout=setTimeout(()=>controller.abort(),15000); let page;
-            try { page=await source.fetchPage({ownerId:job.sourceUserId,nextCursor:job.nextCursor,...ctx,signal:controller.signal}); }
+            // `ctx.ownerId` is the authenticated account. The source profile
+            // is independent and must be applied after spreading the session
+            // context, otherwise third-party collections fetch the account's
+            // own likes.
+            try { page=await source.fetchPage({...ctx,ownerId:job.sourceUserId,nextCursor:job.nextCursor,signal:controller.signal}); }
             finally {clearTimeout(timeout);controllers.delete(controller);}
             const previous=await db.get('collections',[job.accountId,job.collectionId]); await valid(ctx);
             if(!await db.commitCollection(job,page))break;
@@ -213,7 +217,8 @@
       if(r.type==='OPEN_LIKED_TRACK'||r.type==='LOCATE_LIKED_TRACK'){const item=await locate(r.trackId);if(!item?.permalink)throw source.fail('track-missing');await valid(ctx);if(r.type==='OPEN_LIKED_TRACK'){await chrome.tabs.update(sender.tab.id,{url:item.permalink});return{phase:'needs-user-action'};}return{permalink:item.permalink};}
       if(r.type==='GET_LIKES_ARTWORK'){
         if(!Array.isArray(r.trackIds)||r.trackIds.length>24)throw source.fail('invalid-request');const images={};let total=0;
-        for(const id of r.trackIds){const item=await locate(id);if(!item?.artworkUrl)continue;const asset=await db.get('accountArtwork',[accountId,item.artworkUrl]),blob=asset?.variants?.[48];if(!blob||total+blob.size*1.4>512*1024)continue;total+=blob.size*1.4;images[id]='data:image/webp;base64,'+btoa(String.fromCharCode(...new Uint8Array(await blob.arrayBuffer())));}
+        const assets=await db.transaction(['collectionEntries','tracks','accountArtwork'],false,async s=>Promise.all(r.trackIds.map(async id=>{const entry=await db.request(s('collectionEntries').index('track').get([accountId,collectionId,generation,String(id)]));if(!entry)return null;const item=await db.request(s('tracks').get([accountId,String(id)]));const asset=item?.artworkUrl?await db.request(s('accountArtwork').get([accountId,item.artworkUrl])):null;return{id:String(id),asset};})));
+        for(const value of assets){const blob=value?.asset?.variants?.[48];if(!blob||total+blob.size*1.4>512*1024)continue;total+=blob.size*1.4;images[value.id]='data:image/webp;base64,'+btoa(String.fromCharCode(...new Uint8Array(await blob.arrayBuffer())));}
         await valid(ctx);return{images};
       }
       if(r.type==='GET_LIKES_DOWNLOAD_SELECTION'){

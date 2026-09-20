@@ -14,6 +14,10 @@ Archivos de implementación: `scripts/tempo-control-main.js`, `popup.html`, `scr
 
 El boceto real `NEW_PLAYER_HEADER.png` no apareció: se encontró un `.png.txt` vacío. Implementar con el texto y asset existentes es posible; no afirmar haber copiado un boceto que no se vio.
 
+### Nota de UI posterior (20/09/2026)
+
+La composición actual del popup fue revisada y aprobada visualmente; no rediseñarla al retomar este plan. Como único ajuste pendiente de esta tarjeta, mover el logo de Player Tools para que quede **encima** del botón `Acceso de prueba`/`Get Pro`, dentro de la columna de acciones. Así se libera ancho para el texto, el detalle y el precio. Conservar el mismo logo, CTA, jerarquía, estados y comportamiento; este apunte no autoriza otros cambios de `popup.html` sin una nueva revisión de la UI actual.
+
 QA: Free, prueba, agotado y Pro; título largo ruso/alemán; zoom 100/125/150/200%; foco y lector de pantalla; panel anclado y fijado abierto. Captura de antes/después, sin rediseño general.
 
 ## Reseñas después de una descarga

@@ -140,10 +140,10 @@ const { chromium } = require('playwright');
     console.log('Real extension service worker loaded; single compact 48px WebP encoding and decoding passed.');
     const jobsResult=await worker.evaluate(async()=>{
       const originalSend=chrome.tabs.sendMessage, originalQuery=chrome.tabs.query, originalPage=SCLikesSource.fetchPage;
-      let token='fixture-a', allowed=true, changeDuringFetch=true, fetches=0;
+      let token='fixture-a', allowed=true, changeDuringFetch=true, fetches=0, fetchedOwners=[];
       chrome.tabs.sendMessage=async()=>({success:true,clientId:'fixture-client'});
       chrome.tabs.query=async()=>[{id:123,url:'https://soundcloud.com/you/likes'}];
-      SCLikesSource.fetchPage=async()=>{fetches++;if(changeDuringFetch)token='fixture-b';return {entries:[{kind:'track',itemId:'901',title:'Private fixture',artistName:'Fixture',likedAt:null,artworkUrl:null}],rawCount:1,nextCursor:null};};
+      SCLikesSource.fetchPage=async({ownerId})=>{fetches++;fetchedOwners.push(String(ownerId));if(changeDuringFetch)token='fixture-b';return {entries:[{kind:'track',itemId:String(ownerId)==='654'?'902':'901',title:'Private fixture',artistName:'Fixture',likedAt:null,artworkUrl:null}],rawCount:1,nextCursor:null};};
       const jobs=SCLikesJobs.create({getToken:async()=>token,resolveUser:async()=>({user:{id:987,username:'Fixture'},oauthToken:token}),access:{authorize:async()=>({allowed,code:'pro-required'})}});
       const sender={id:chrome.runtime.id,tab:{id:123,url:'https://soundcloud.com/you/likes'},frameId:0,url:'https://soundcloud.com/you/likes'};
       try {
@@ -154,6 +154,9 @@ const { chromium } = require('playwright');
         await SCLikesLibrary.start('987','Fixture',false);await jobs.tick();
         const status=await jobs.handle({type:'GET_LIKES_LIBRARY_STATUS',ownerId:'987'},sender);
         const query=await jobs.handle({type:'QUERY_LIKES',ownerId:'987',limit:10},sender);
+        await SCLikesLibrary.startCollection('987',{collectionId:'likes:654',sourceUserId:'654',name:'Other profile'},true);
+        await jobs.tick();
+        const other=await SCLikesLibrary.get('collections',['987','likes:654']);
         let wrongOwner,wrongSender,free;
         try{await jobs.handle({type:'QUERY_LIKES',ownerId:'888'},sender);}catch(e){wrongOwner=e.code;}
         try{await jobs.handle({type:'QUERY_LIKES',ownerId:'987'},{...sender,frameId:1});}catch(e){wrongSender=e.code;}
@@ -161,10 +164,11 @@ const { chromium } = require('playwright');
         try{await jobs.handle({type:'QUERY_LIKES',ownerId:'987'},sender);}catch(e){free=e.code;}
         await jobs.handle({type:'DELETE_LIKES_LIBRARY',ownerId:'987'},sender);
         const deleted=await SCLikesLibrary.get('libraries','987');
-        return {invalidatedCount:invalidated.count,paused:paused.phase,complete:status.library.complete,count:query.items.length,wrongOwner,wrongSender,free,deleted:!deleted,fetches};
+        return {invalidatedCount:invalidated.count,paused:paused.phase,complete:status.library.complete,count:query.items.length,wrongOwner,wrongSender,free,deleted:!deleted,fetches,otherSource:other?.sourceUserId,externalFetched:fetchedOwners.includes('654')};
       }finally{chrome.tabs.sendMessage=originalSend;chrome.tabs.query=originalQuery;SCLikesSource.fetchPage=originalPage;}
     });
     assert.equal(jobsResult.invalidatedCount,0);assert.equal(jobsResult.paused,'paused');assert.equal(jobsResult.complete,true);assert.equal(jobsResult.count,1);
+    assert.equal(jobsResult.otherSource,'654');assert.equal(jobsResult.externalFetched,true);
     assert.equal(jobsResult.wrongOwner,'owner-mismatch');assert.equal(jobsResult.wrongSender,'invalid-request');assert.equal(jobsResult.free,'pro-required');assert.equal(jobsResult.deleted,true);
     console.log('Worker jobs: account change during fetch blocks commit; resume, sender/owner checks, Pro denial and Free deletion passed.');
     const popup=await context.newPage();await popup.setViewportSize({width:426,height:760});
