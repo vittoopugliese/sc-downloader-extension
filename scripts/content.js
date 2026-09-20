@@ -18,7 +18,7 @@ const OPEN_PLAYER_TOOLS_PRO_EVENT = "scdl:open-player-tools-pro";
 function exposeTempoControlAssets() {
   document.documentElement?.setAttribute?.(
     EXTENSION_LOGO_ATTRIBUTE,
-    chrome.runtime.getURL("assets/icon128.png")
+    chrome.runtime.getURL("assets/LooperPlayerToolkit.png")
   );
   document.documentElement?.setAttribute?.(
     EXTENSION_PLAYER_ICON_ATTRIBUTE,

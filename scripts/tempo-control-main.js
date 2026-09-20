@@ -11,7 +11,7 @@
   const PLAYER_SELECTOR = ".playControls__elements";
   const RATE_STORAGE = "scdl.tempo.rate";
   const PITCH_STORAGE = "scdl.tempo.preservePitch";
-  const DEFAULT_SAVED_RATES = [0.5, 1, 1.5, 2];
+  const DEFAULT_SAVED_RATES = [0.5, 1];
   const CUSTOM_RATE_STORAGE = DEFAULT_SAVED_RATES.map(
     (_, index) => `scdl.tempo.savedRate.${index + 1}`
   );
@@ -26,7 +26,6 @@
   const OPEN_PLAYER_TOOLS_PANEL_EVENT = "scdl:open-player-tools-panel";
   const PLAYER_TOOLS_OPENED_EVENT = "scdl:player-tools-opened";
   const OPEN_PLAYER_TOOLS_PRO_EVENT = "scdl:open-player-tools-pro";
-  const REVIEW_URL = "https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews";
   const LOOP_COMMAND_EVENT = "scdl-looper:command";
   const LOOP_COMMAND_ATTRIBUTE = "data-scdl-looper-command";
   const LOOP_RESPONSE_ATTRIBUTE = "data-scdl-looper-response";
@@ -1370,8 +1369,6 @@
         .brand-logo.is-bypassed { filter: grayscale(1); opacity: .58; }
         .brand-copy { min-width: 0; }
         .brand-name { font-size: 17px; white-space: nowrap; }
-        .rating-link { display: block; margin-top: 3px; color: #fff; font-size: 9px; font-style: italic; font-weight: 600; text-decoration: underline; white-space: nowrap; }
-        .rating-link:hover { color: #ffb18a; }
         .middle-row { display: grid; grid-template-columns: 159px 1fr; align-items: center; gap: 10px; margin-bottom: 6px; }
         .setters { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
         .setter { min-width: 0; height: 30px; padding: 0 5px; border: 1px solid #484848; border-radius: 6px; background: #292929; color: #fff; font-size: 10px; font-style: italic; font-weight: 600; line-height: 1; cursor: pointer; white-space: nowrap; }
@@ -1408,22 +1405,21 @@
 
         /* Expanded player editor, compact enough to stay clear of the player. */
         .panel { width: min(420px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
-        .panel-header { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 92px 92px; gap: 12px; padding-bottom: 10px; }
-        .presets { display: grid; grid-template-columns: repeat(2, 42px); gap: 5px; flex-basis: auto; }
-        .preset { width: 42px; height: 27px; border-radius: 7px; font-size: 12px; }
-        .custom-preset, .custom-preset[data-saved="true"] { width: 42px; padding: 0 2px; font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
-        .brand { grid-column: 1; grid-row: 1; justify-content: flex-start; min-width: 0; }
-        .brand-logo { width: 54px; height: 54px; flex-basis: 54px; border-radius: 11px; }
-        .brand-name { font-size: 16px; line-height: 1.04; text-align: left; }
-        .brand-title-line { position: relative; display: inline-block; min-width: 0; }
-        .free-badge { position: absolute; bottom: 3px; left: 95px; display: inline-flex; align-items: center; height: 13px; margin-left: 6px; padding: 0 4px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font-size: 8px; font-weight: 800; line-height: 1; letter-spacing: .04em; }
-        .rating-link { color: #989898; font-size: 10px; font-weight: 500; text-decoration-color: #666; opacity: .82; }
-        .rating-link:hover { color: #bdc1c5; opacity: 1; }
+        .panel-header { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px 8px; padding-bottom: 10px; }
+        .brand { grid-column: 1 / -1; grid-row: 1; justify-content: flex-start; min-width: 0; }
+        .brand-logo { width: 42px; height: 42px; flex-basis: 42px; border-radius: 11px; object-fit: cover; }
+        .brand-copy { display: flex; align-items: center; min-width: 0; }
+        .brand-title-line { display: flex; align-items: center; gap: 7px; min-width: 0; }
+        .brand-name { font-size: 18px; line-height: 1.1; text-align: left; white-space: nowrap; }
+        .free-badge { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font-size: 9px; font-weight: 800; line-height: 1; letter-spacing: .04em; }
+        .presets { display: grid; grid-column: 1; grid-row: 2; grid-template-columns: repeat(2, 62px); gap: 5px; justify-self: start; flex-basis: auto; }
+        .preset { width: 62px; height: 28px; border-radius: 7px; font-size: 12px; }
+        .custom-preset, .custom-preset[data-saved="true"] { width: 62px; padding: 0 2px; font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
         .setter { height: 28px; padding: 0 8px; border-radius: 7px; font-size: 11px; font-variant-numeric: tabular-nums; }
         .tempo-row { display: grid; grid-template-columns: minmax(0, 1fr) 22px; align-items: center; gap: 5px; margin-bottom: 8px; }
         .pitch-label { display: grid; place-items: center; width: 22px; height: 32px; margin: 0; padding: 0; cursor: help; }
         .pitch-toggle { width: 16px; height: 16px; margin: 0; }
-        .speed-status { position: static; grid-column: 2; grid-row: 1; align-self: end; justify-self: center; min-width: 0; height: 26px; justify-content: center; gap: 2px; }
+        .speed-status { position: static; grid-column: 3; grid-row: 2; align-self: center; justify-self: end; min-width: 0; height: 28px; justify-content: center; gap: 2px; }
         .current { width: 7ch; flex-basis: 7ch; font-size: 17px; }
         .current.is-bypassed { color: #d6d6d6; }
         .slider-wrap { height: 32px; margin: 0; border: 1px solid #30373e; border-radius: 9px; background: rgba(255,255,255,.025); padding: 2px 32px 2px; }
@@ -1502,8 +1498,7 @@
         .effect-setting-value { align-self: center; color: #bfc4c8; font-size: 9px; font-weight: 500; line-height: 1; text-align: right; }
         .effect-room { height: 21px; border: 1px solid #3b4249; border-radius: 4px; color: #e8e8e8; background: #202428; font-size: 9px; font-weight: 500; }
         .effects-note { margin: 0 0 3px 69px; color: #858c92; font-size: 9px; line-height: 1.2; }
-        .presets { grid-column: 3; grid-row: 1; }
-        .panel-tools { display: flex; grid-column: 2; grid-row: 1; justify-self: center; align-self: start; gap: 5px; margin-left: 0; }
+        .panel-tools { display: flex; grid-column: 2; grid-row: 2; justify-self: end; align-self: center; gap: 5px; margin-left: 0; }
         .panel-tool { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 27px; height: 24px; margin: 0; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; color: #fff; background: rgba(255,255,255,.08); cursor: pointer; outline: none; transition: background-color 200ms, border-color 200ms; }
         .panel-tool:hover { color: #fff; border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.14); }
         .panel-tool:focus-visible { border-color: rgba(255,85,0,.65); }
@@ -1546,10 +1541,9 @@
           ${customRates.map((rate, index) => `<button class="preset custom-preset" type="button" data-custom-index="${index}" data-saved="true" aria-pressed="false" title="Saved speed ${formatRate(rate)}. Hold to replace">${formatRate(rate)}</button>`).join("")}
         </div>
         <div class="brand">
-          <img class="brand-logo" width="58" height="58" alt="" draggable="false" hidden />
+          <img class="brand-logo" width="42" height="42" alt="" draggable="false" hidden />
           <div class="brand-copy">
-            <div class="brand-title-line"><button class="brand-name" type="button" aria-label="Open the Looper guide">SoundCloud Track <br />Downloader</button><span class="free-badge">FREE</span></div>
-            <a class="rating-link" href="${REVIEW_URL}" target="_blank" rel="noopener noreferrer">Please consider rating the app!</a>
+            <div class="brand-title-line"><button class="brand-name" type="button" aria-label="Open the Looper guide">SCTD Player Tools</button><span class="free-badge">FREE</span></div>
           </div>
         </div>
         <div class="panel-tools" role="group" aria-label="Panel options">

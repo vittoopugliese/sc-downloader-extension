@@ -11,7 +11,7 @@ const screenshotPath = path.join(
   "tempo-control.png"
 );
 const logoDataUrl = `data:image/png;base64,${fs.readFileSync(
-  path.join(projectRoot, "assets", "icon128.png")
+  path.join(projectRoot, "assets", "LooperPlayerToolkit.png")
 ).toString("base64")}`;
 
 function listen(server) {
@@ -148,7 +148,7 @@ async function main() {
     await host.waitFor();
     await page.waitForFunction(() =>
       document.querySelector("#scdl-tempo-control")?.shadowRoot
-        ?.querySelector(".brand-logo")?.naturalWidth === 128
+        ?.querySelector(".brand-logo")?.naturalWidth === 1254
     );
     const replacedPlayerDownload = await page.evaluate(() => {
       const soundBadge = document.querySelector(".playControls__soundBadge");
@@ -307,12 +307,13 @@ async function main() {
       };
     });
     if (
-      branding.name !== "SoundCloud Track Downloader" ||
-      branding.logoWidth !== 54 ||
-      branding.logoHeight !== 54 ||
+      branding.name !== "SCTD Player Tools" ||
+      branding.logoWidth !== 42 ||
+      branding.logoHeight !== 42 ||
       branding.logoHidden ||
-      branding.titleFontSize !== 16 ||
-      Object.values(branding.badge).join(" ") !== "95px 3px 13px 8px"
+      branding.titleFontSize !== 18 ||
+      branding.badge.height !== "17px" ||
+      branding.badge.fontSize !== "9px"
     ) {
       throw new Error("Playback Speed panel branding is missing or incorrectly sized.");
     }
@@ -356,9 +357,7 @@ async function main() {
         detachButtonSize: [detachButton.offsetWidth, detachButton.offsetHeight],
         detachButtonRadius: getComputedStyle(detachButton).borderRadius,
         detachIconSize: [detachIcon.clientWidth, detachIcon.clientHeight],
-        headerOrder: [brand, tools, presets]
-          .sort((left, right) => left.getBoundingClientRect().left - right.getBoundingClientRect().left)
-          .map((element) => element.className),
+        headerRects: [brand, presets, tools, speedStatus].map((element) => [element.className, Math.round(element.getBoundingClientRect().left), Math.round(element.getBoundingClientRect().top), Math.round(element.getBoundingClientRect().width)]),
         waveformHeight: waveformShell.offsetHeight,
         waveformTitleIconSize: [waveformTitleIcon?.clientWidth, waveformTitleIcon?.clientHeight],
         triggerIconSize: [parseFloat(getComputedStyle(triggerIcon).width), parseFloat(getComputedStyle(triggerIcon).height)],
@@ -373,7 +372,7 @@ async function main() {
     if (
       compactStyles.panelSize[0] !== 420 ||
       compactStyles.padding.join(" ") !== "7px 7px 7px 7px" ||
-      compactStyles.presetSize.join("x") !== "42x27" ||
+      compactStyles.presetSize.join("x") !== "62x28" ||
       compactStyles.toggleSize.join("x") !== "16x16" ||
       compactStyles.pitchText !== "" ||
       compactStyles.pitchTooltip !== "Keep tone" ||
@@ -388,7 +387,9 @@ async function main() {
       compactStyles.detachButtonSize.join("x") !== "27x24" ||
       compactStyles.detachButtonRadius !== "4px" ||
       compactStyles.detachIconSize.join("x") !== "13x13" ||
-      compactStyles.headerOrder.join(" ") !== "brand panel-tools presets" ||
+      !(compactStyles.headerRects[0][2] < compactStyles.headerRects[1][2] &&
+        compactStyles.headerRects[1][1] < compactStyles.headerRects[2][1] &&
+        compactStyles.headerRects[2][1] < compactStyles.headerRects[3][1]) ||
       compactStyles.waveformHeight !== 130 ||
       compactStyles.waveformTitleIconSize.join("x") !== "16x16" ||
       compactStyles.triggerIconSize.join("x") !== "20x20" ||
@@ -451,16 +452,16 @@ async function main() {
         customCount: root.querySelectorAll(".custom-preset").length,
         fixedPresetCount: root.querySelectorAll(".preset:not(.custom-preset)").length,
         savedRateLabels: [...root.querySelectorAll(".custom-preset")].map((button) => button.textContent),
-        reviewHref: root.querySelector(".rating-link")?.href,
+        hasRatingLink: Boolean(root.querySelector(".rating-link")),
         labels: [...root.querySelectorAll(".range-label")].map((node) => node.textContent),
         order: [...root.querySelector(".panel").children].map((node) => node.className),
       };
     });
     if (
-      panelFeatures.customCount !== 4 ||
+      panelFeatures.customCount !== 2 ||
       panelFeatures.fixedPresetCount !== 0 ||
-      panelFeatures.savedRateLabels.join("|") !== "0.500x|1.000x|1.500x|2.000x" ||
-      !panelFeatures.reviewHref.endsWith("/reviews") ||
+      panelFeatures.savedRateLabels.join("|") !== "0.500x|1.000x" ||
+      panelFeatures.hasRatingLink ||
       panelFeatures.labels.join("|") !== "Tone & Velocity" ||
       panelFeatures.order.slice(0, 3).join("|") !==
         "panel-header|tempo-row|waveform-shell"
@@ -502,7 +503,7 @@ async function main() {
     await custom.dispatchEvent("pointerdown");
     await page.waitForTimeout(700);
     await custom.dispatchEvent("pointerup");
-    await host.locator('.custom-preset[data-custom-index="3"]').click();
+    await host.locator('.custom-preset[data-custom-index="1"]').click();
     await custom.click();
     if (
       await page.locator("audio").evaluate((audio) => audio.playbackRate) !== 0.7125 ||
@@ -858,7 +859,7 @@ async function main() {
       throw new Error("Tempo control broke the existing looper media bridge.");
     }
 
-    for (const [index, rate] of [[0, 0.7125], [1, 1], [2, 1.5], [3, 2]]) {
+    for (const [index, rate] of [[0, 0.7125], [1, 1]]) {
       const preset = host.locator(`.custom-preset[data-custom-index="${index}"]`);
       await preset.click();
       if (await page.locator("audio").evaluate((audio) => audio.playbackRate) !== rate ||
