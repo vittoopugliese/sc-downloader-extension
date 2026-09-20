@@ -8,7 +8,7 @@ const root = process.env.SCDL_AUDIT_ROOT || path.resolve(__dirname, '../..');
 async function run(failure) {
   let segmentCalls = 0;
   let saved = 0;
-  const context = vm.createContext({ console, URL, Blob, Uint8Array, ArrayBuffer, TextEncoder, AbortController,
+  const context = vm.createContext({ console, URL, Blob, Uint8Array, ArrayBuffer, TextEncoder, AbortController, DOMException, setTimeout, clearTimeout,
     fetch: async url => {
       if (String(url).endsWith('.m3u8')) return { ok: true, text: async () => '#EXTM3U\n#EXTINF:1,\npart.mp3\n#EXT-X-ENDLIST' };
       segmentCalls++;
@@ -26,7 +26,7 @@ async function run(failure) {
       try {
         const result = await build(request.streamUrl, request.trackData);
         return { success: true, blobUrl: 'blob:diagnosis', fileName: result.fileName };
-      } catch (error) { return { success: false, error: error.message }; }
+      } catch (error) { return { success: false, error: error.message, code: error.code, status: error.status }; }
     },
     saveOutput: async ({ fileName }) => { saved++; return { fileName, destinationName: 'test' }; },
     revokeBlob: async () => {}, abortBuild: async () => {},

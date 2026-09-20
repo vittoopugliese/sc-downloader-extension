@@ -1,4 +1,61 @@
 const SCDownload = (() => {
+  const NETWORK_RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+  const NETWORK_ATTEMPTS = 3;
+
+  function wait(delayMs, signal) {
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new DOMException("Download aborted.", "AbortError"));
+        return;
+      }
+      const onAbort = () => {
+        clearTimeout(timeoutId);
+        reject(new DOMException("Download aborted.", "AbortError"));
+      };
+      const timeoutId = setTimeout(() => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      }, delayMs);
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
+  function retryDelay(response, attempt) {
+    const retryAfter = Number(response?.headers?.get?.("Retry-After"));
+    if (Number.isFinite(retryAfter) && retryAfter >= 0) {
+      return Math.min(retryAfter * 1000, 10000);
+    }
+    return Math.min(500 * 2 ** attempt, 4000);
+  }
+
+  function responseError(label, response) {
+    const error = new Error(`${label} failed with status ${response.status}`);
+    error.code = "http_error";
+    error.status = response.status;
+    return error;
+  }
+
+  async function fetchWithRetry(url, label, signal) {
+    let lastError;
+    for (let attempt = 0; attempt < NETWORK_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await fetch(url, { signal });
+        if (response.ok) return response;
+        lastError = responseError(label, response);
+        if (!NETWORK_RETRY_STATUSES.has(response.status) || attempt === NETWORK_ATTEMPTS - 1) {
+          throw lastError;
+        }
+        await wait(retryDelay(response, attempt), signal);
+      } catch (error) {
+        if (error?.name === "AbortError") throw error;
+        lastError = error;
+        if (error?.code === "http_error" || attempt === NETWORK_ATTEMPTS - 1) throw error;
+        await wait(Math.min(500 * 2 ** attempt, 4000), signal);
+      }
+    }
+    throw lastError || new Error(`${label} failed.`);
+  }
+
   function sanitizeFilename(trackData, extension) {
     const artist = SCFormat.sanitizePathComponent(
       trackData?.artist,
@@ -142,22 +199,12 @@ const SCDownload = (() => {
   }
 
   async function fetchTextOrThrow(url, label, signal) {
-    const response = await fetch(url, { signal });
-
-    if (!response.ok) {
-      throw new Error(`${label} failed with status ${response.status}`);
-    }
-
+    const response = await fetchWithRetry(url, label, signal);
     return response.text();
   }
 
   async function fetchBufferOrThrow(url, label, signal) {
-    const response = await fetch(url, { signal });
-
-    if (!response.ok) {
-      throw new Error(`${label} failed with status ${response.status}`);
-    }
-
+    const response = await fetchWithRetry(url, label, signal);
     return response.arrayBuffer();
   }
 

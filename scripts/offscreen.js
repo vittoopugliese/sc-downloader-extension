@@ -94,7 +94,12 @@ async function handleBuild(message, sendResponse) {
     if (error.name === "AbortError") {
       sendResponse({ success: false, error: "Build aborted." });
     } else {
-      sendResponse({ success: false, error: error.message || "Build failed." });
+      sendResponse({
+        success: false,
+        error: error.message || "Build failed.",
+        code: error.code || "build_failed",
+        status: error.status,
+      });
     }
   } finally {
     clearInterval(keepaliveId);

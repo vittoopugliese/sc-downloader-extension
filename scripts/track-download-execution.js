@@ -29,33 +29,42 @@ const SCTrackDownloadExecution = (() => {
 
       try {
         await onStage("resolving");
-        const resolved = await resolveSource(
-          command.trackData,
-          command.formatPreference || "auto"
-        );
+        let buildResult;
+        for (let sourceAttempt = 0; sourceAttempt < 2; sourceAttempt += 1) {
+          const resolved = await resolveSource(
+            command.trackData,
+            command.formatPreference || "auto"
+          );
 
-        if (await isCancelled()) {
-          return { success: false, cancelled: true };
-        }
+          if (await isCancelled()) {
+            return { success: false, cancelled: true };
+          }
 
-        await onStage("building");
-        buildRequested = true;
-        activeBuildIds.add(buildId);
-        if (typeof command.onProgress === "function") {
-          progressByBuildId.set(buildId, command.onProgress);
+          await onStage(sourceAttempt === 0 ? "building" : "refreshing");
+          buildRequested = true;
+          activeBuildIds.add(buildId);
+          if (typeof command.onProgress === "function") {
+            progressByBuildId.set(buildId, command.onProgress);
+          }
+          buildResult = await buildTrack({
+            buildId,
+            trackData: resolved.trackData,
+            streamUrl: resolved.streamUrl,
+            trimRange: command.trimRange || null,
+            playbackTransform: command.playbackTransform || null,
+          });
+          if (buildResult?.success && buildResult.blobUrl) break;
+          if (sourceAttempt === 0 && [401, 403, 404].includes(buildResult?.status)) continue;
+          break;
         }
-        const buildResult = await buildTrack({
-          buildId,
-          trackData: resolved.trackData,
-          streamUrl: resolved.streamUrl,
-          trimRange: command.trimRange || null,
-          playbackTransform: command.playbackTransform || null,
-        });
         activeBuildIds.delete(buildId);
         progressByBuildId.delete(buildId);
 
         if (!buildResult?.success || !buildResult.blobUrl) {
-          throw new Error(buildResult?.error || "Failed to build audio file.");
+          const error = new Error(buildResult?.error || "Failed to build audio file.");
+          error.code = buildResult?.code;
+          error.status = buildResult?.status;
+          throw error;
         }
 
         blobUrl = buildResult.blobUrl;

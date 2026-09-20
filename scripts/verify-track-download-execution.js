@@ -146,6 +146,26 @@ function createHarness(overrides = {}) {
   );
   assert.equal(failed.calls.at(-1)[0], "abort");
 
+  let expiredBuildAttempts = 0;
+  const refreshed = createHarness({
+    async buildTrack() {
+      expiredBuildAttempts += 1;
+      return expiredBuildAttempts === 1
+        ? { success: false, error: "Signed URL expired", code: "http_error", status: 403 }
+        : { success: true, blobUrl: "blob:refreshed", fileName: "Artist - Track.mp3" };
+    },
+  });
+  const refreshStages = [];
+  const refreshedResult = await refreshed.execution.execute({
+    trackData: { id: 41 },
+    formatPreference: "mp3",
+    onStage: (stage) => refreshStages.push(stage),
+  });
+  assert.equal(refreshedResult.success, true);
+  assert.equal(expiredBuildAttempts, 2);
+  assert.equal(refreshed.calls.filter(([name]) => name === "resolve").length, 2);
+  assert.deepEqual(refreshStages, ["resolving", "building", "refreshing", "saving"]);
+
   let releaseBuild;
   let activeBuildId = null;
   const progressValues = [];
