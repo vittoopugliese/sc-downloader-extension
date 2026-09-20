@@ -101,16 +101,19 @@ const { chromium } = require('playwright');
     await page.locator('#scdl-likes-explorer .card-main').first().click();
     assert.equal(await page.locator('#scdl-likes-explorer .detail').isVisible(),true);
     const footerLayout=await page.locator('#scdl-likes-explorer .main').evaluate(main=>{
-      const detail=main.querySelector('.detail'),toolbar=main.querySelector('.toolbar'),open=detail.querySelector('.accent');
+      const detail=main.querySelector('.detail'),toolbar=main.querySelector('.toolbar'),open=detail.querySelector('.accent'),status=detail.querySelector('.status'),actions=detail.querySelector('.detail-actions');
+      const center=node=>{const rect=node.getBoundingClientRect();return Math.round(rect.top+rect.height/2);};
       return {
         toolbarBelowTrack:toolbar.getBoundingClientRect().top>=detail.getBoundingClientRect().bottom,
         detailButtons:[...detail.querySelectorAll('button')].map(button=>button.textContent.trim()),
+        detailOrder:[...detail.children].map(child=>child.className),
+        oneLine:[status,actions].every(child=>center(child)===center(detail)),
         locateTitle:detail.querySelector('.locate-action')?.title,
         locateIcon:!!detail.querySelector('.locate-action .locate-icon'),
         openSingleLine:open.scrollHeight<=open.clientHeight,
       };
     });
-    assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['Abrir ↗',''],locateTitle:'Teleport to selected track',locateIcon:true,openSingleLine:true});
+    assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['Abrir ↗',''],detailOrder:['cover','detail-copy','status','detail-actions'],oneLine:true,locateTitle:'Teleport to selected track',locateIcon:true,openSingleLine:true});
     await page.screenshot({path:'test-results/likes-explorer-desktop.png'});
     for(const width of [390,760,1024]){
       await page.setViewportSize({width,height:800});await page.waitForTimeout(180);
