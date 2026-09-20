@@ -12,7 +12,7 @@ const likesExplorerDataUrl = `data:image/png;base64,${fs.readFileSync(
   path.resolve(__dirname, "..", "assets", "images", "likes-explorer.png")
 ).toString("base64")}`;
 const iconDataUrls = Object.fromEntries(
-  ["settings.svg", "download.svg", "folder-icon.svg", "back-arrow.svg", "bypass.svg"].map((fileName) => [
+  ["help.svg", "download.svg", "folder-icon.svg", "back-arrow.svg", "bypass.svg"].map((fileName) => [
     fileName,
     `data:image/svg+xml;base64,${fs.readFileSync(path.resolve(__dirname, "..", "assets", "icons", fileName)).toString("base64")}`,
   ])
