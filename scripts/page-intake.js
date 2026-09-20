@@ -417,6 +417,8 @@ const SCPageIntake = (() => {
         },
         data: {
           kind: "likes",
+          sourceUserId: String(profile.user.id),
+          sourceUrl: profile.user.permalink_url || pageUrl,
           title: `${username} - Likes`,
           trackCount: tracks.length,
           totalCount:

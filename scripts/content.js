@@ -60,7 +60,9 @@ onDocumentEvent(OPEN_PLAYER_TOOLS_PRO_EVENT, () => {
 
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.type === 'GET_LIKES_CONTEXT') {
-    intake.resolveClientId().then(clientId => sendResponse({ success: true, clientId })).catch(() => sendResponse({ success: false }));
+    Promise.all([intake.resolveClientId(), intake.getCollection() ? Promise.resolve(intake.getCollection()) : intake.extractCurrent()])
+      .then(([clientId, collection]) => sendResponse({ success: true, clientId, sourceUserId: collection?.sourceUserId || null, sourceName: collection?.artist || null, sourceUrl: collection?.sourceUrl || collection?.pageUrl || null }))
+      .catch(() => sendResponse({ success: false }));
     return true;
   }
   if (request.type !== "OPEN_PLAYER_TOOLS_PANEL") return false;

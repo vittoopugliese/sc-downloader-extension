@@ -3,16 +3,18 @@
   if (window.top !== window) return;
   const text = globalThis.SCLikesText;
   const el = (tag, cls, value) => { const node = document.createElement(tag); if (cls) node.className = cls; if (value !== undefined) node.textContent = value; return node; };
-  let host, shadow, panel, launch, viewport, canvas, rail, mapCanvas, indicator, search, period, status, toolbar, detail, settings, syncAction;
-  let ownerId, generation, revision, total = 0, count = 0, query = '', filter = '', anchor, selected, previousResults, opened = false, routeEpoch = 0, requestEpoch = 0, mapEpoch = 0, statusBusy = false, resizeObserver, focusBefore;
+  let host, shadow, panel, launch, viewport, canvas, rail, mapCanvas, indicator, search, period, collectionSelect, status, toolbar, detail, settings, syncAction;
+  let ownerId, collectionId, sourceUserId, generation, revision, total = 0, count = 0, query = '', filter = '', anchor, selected, previousResults, opened = false, routeEpoch = 0, requestEpoch = 0, mapEpoch = 0, statusBusy = false, resizeObserver, focusBefore;
   let lastStatus, lastPoll = 0, drag, renderTimer, searchTimer, saveTimer, raf, mapManual = false, restored = false;
   const images = new Map();
+  const imageConsumers = new Map();
+  const cardNodes = new Map(), tileNodes = new Map();
   let imageEpoch = 0;
   let highlightId = null, anchorPixelOffset = 0;
   function button(label, action, cls = '') { const b = el('button', cls, label); b.type = 'button'; b.addEventListener('click', () => Promise.resolve(action()).catch(showError)); return b; }
   async function send(type, payload = {}) {
     const epoch = routeEpoch;
-    const r = await chrome.runtime.sendMessage({ type, ownerId, ...payload });
+    const r = await chrome.runtime.sendMessage({ type, ownerId, collectionId, sourceUserId, ...payload });
     if (epoch !== routeEpoch) throw Object.assign(new Error('cancelled'), { code: 'cancelled' });
     if (!r?.success) throw Object.assign(new Error(r?.code || 'network-error'), { code: r?.code || 'network-error' });
     return r;
@@ -46,21 +48,30 @@
     const box = el('span', 'cover'); box.style.setProperty('--hue', String((Number(item.itemId) * 137.508) % 360));
     box.append(el('span', 'cover-mark', '♪'));
     const cached = images.get(`${item.itemId}:${size}`);
-    const url = cached || item.artworkUrl;
-    if (url) { const img = el('img'); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.src = url; img.dataset.id = item.itemId; img.dataset.size = size; img.onerror = () => img.remove(); box.append(img); }
+    const img = el('img'); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.dataset.id = item.itemId; img.dataset.size = size;
+    if (cached) img.src = cached;
+    img.onerror = () => { if (img.src) img.remove(); };
+    const key = `${item.itemId}:${size}`; (imageConsumers.get(key) || imageConsumers.set(key,new Set()).get(key)).add(img);
+    box.append(img);
     return box;
+  }
+  function applyImage(id, size, url) {
+    const key = `${id}:${size}`;
+    for (const img of imageConsumers.get(key) || []) if (img.isConnected && (!img.src || img.src !== url)) img.src = url;
+    const consumers = imageConsumers.get(key); if (consumers) for (const img of [...consumers]) if (!img.isConnected) consumers.delete(img);
   }
   async function cachedArt(items, size, epoch) {
     const artEpoch = imageEpoch;
     const ids = [...new Set(items.filter(i => i.artworkUrl && !images.has(`${i.itemId}:${size}`)).map(i => i.itemId))];
     for (let n = 0; n < ids.length; n += 12) {
-      if (epoch !== routeEpoch || !opened || !lastStatus?.artwork?.saved) return;
+      if (epoch !== routeEpoch || !opened) return;
       const r = await send('GET_LIKES_ARTWORK', { trackIds: ids.slice(n,n+12), variant: size });
       if (artEpoch !== imageEpoch || epoch !== routeEpoch || !opened) return;
       for (const [id,url] of Object.entries(r.images)) {
-        images.set(`${id}:${size}`,url); while (images.size > 320) images.delete(images.keys().next().value);
-        for (const img of shadow.querySelectorAll('img[data-id]')) if (img.dataset.id === id && img.dataset.size === String(size)) img.src = url;
+        images.set(`${id}:${size}`,url); while (images.size > Math.max(400, (canvas?.children.length || 0) + (mapCanvas?.children.length || 0))) images.delete(images.keys().next().value);
+        applyImage(id,size,url);
       }
+      for (const item of items.filter(item => ids.slice(n,n+12).includes(item.itemId) && !r.images[item.itemId])) applyImage(item.itemId,size,item.artworkUrl);
     }
   }
   async function render() {
@@ -74,19 +85,22 @@
     canvas.style.height = `${Math.ceil(count/d.columns)*d.height}px`;
     const focused = shadow.activeElement?.closest('.card');
     const focusedId = focused?.dataset.id;
-    canvas.replaceChildren();
-    if (!count) { const empty = el('div','empty',text(query || filter ? 'noResults' : 'empty')); if (!r.complete) empty.append(el('p','',text('partial'))); canvas.append(empty); }
+    if (!count) { cardNodes.clear(); canvas.replaceChildren(); const empty = el('div','empty',text(query || filter ? 'noResults' : 'empty')); if (!r.complete) empty.append(el('p','',text('partial'))); canvas.append(empty); }
     const first = visibleOrdinal();
     anchorPixelOffset = viewport.scrollTop % d.height;
     anchor = r.items[Math.max(0,first-start)] || anchor;
+    const wanted = new Set(r.items.map(item => item.itemId));
+    for (const [id,node] of cardNodes) if (!wanted.has(id)) { node.remove(); cardNodes.delete(id); }
     for (const [i,item] of r.items.entries()) {
-      const index = start+i, card = el('article',`card ${selected?.itemId === item.itemId || highlightId === item.itemId ? 'selected' : ''}`);
-      card.dataset.id = item.itemId;
+      const index = start+i; let card = cardNodes.get(item.itemId);
+      if (!card) {
+        card = el('article','card'); card.dataset.id = item.itemId;
+        const primary = button('', () => select(item), 'card-main'); primary.setAttribute('aria-label',`${item.title} — ${item.artistName}`);
+        primary.append(art(item,48)); const copy = el('span','card-copy'); copy.append(el('strong','',item.title),el('span','artist',item.artistName)); primary.append(copy); card.append(primary); cardNodes.set(item.itemId,card);
+      }
+      card.classList.toggle('selected',selected?.itemId === item.itemId || highlightId === item.itemId);
       card.style.cssText = `top:${Math.floor(index/d.columns)*d.height}px;left:${d.inset+(index%d.columns)*(d.cell+d.gap)}px;width:${d.cell}px;height:${d.height-d.gap}px`;
-      const primary = button('', () => select(item), 'card-main'); primary.setAttribute('aria-label',`${item.title} — ${item.artistName}`);
-      primary.append(art(item,48));
-      const copy = el('span','card-copy'); copy.append(el('strong','',item.title),el('span','artist',item.artistName)); primary.append(copy);
-      card.append(primary); canvas.append(card);
+      canvas.append(card);
     }
     if (focusedId) { const card = [...canvas.children].find(n=>n.dataset.id===focusedId); (card?.querySelector('.card-main') || viewport).focus({preventScroll:true}); }
     updateIndicator();
@@ -99,10 +113,11 @@
     const pages = await Promise.all(Array.from({length:Math.ceil(amount/200)},(_,i)=>send('QUERY_LIKES',{generation,offset:start+i*200,limit:Math.min(200,amount-i*200)})));
     const r = { items: pages.flatMap(p=>p.items) };
     if (seq !== mapEpoch || !opened) return;
-    mapCanvas.style.height = `${Math.ceil(total/6)*pitch}px`; mapCanvas.replaceChildren();
+    mapCanvas.style.height = `${Math.ceil(total/6)*pitch}px`;
+    const wanted=new Set(r.items.map(item=>item.itemId));for(const [id,node] of tileNodes)if(!wanted.has(id)){node.remove();tileNodes.delete(id);}
     for (const [i,item] of r.items.entries()) {
-      const index = start+i, tile = button('',()=>around(item.itemId),'tile'); tile.title = `${item.title} — ${item.artistName}`; tile.setAttribute('aria-label',tile.title); tile.tabIndex = -1;
-      tile.style.cssText = `top:${Math.floor(index/6)*pitch}px;left:${index%6*pitch}px`; tile.append(art(item,48)); mapCanvas.append(tile);
+      const index = start+i; let tile=tileNodes.get(item.itemId);if(!tile){tile = button('',()=>around(item.itemId),'tile'); tile.title = `${item.title} — ${item.artistName}`; tile.setAttribute('aria-label',tile.title); tile.tabIndex = -1;tile.append(art(item,48));tileNodes.set(item.itemId,tile);}
+      tile.style.cssText = `top:${Math.floor(index/6)*pitch}px;left:${index%6*pitch}px`; mapCanvas.append(tile);
     }
     updateIndicator(); cachedArt(r.items,48,routeEpoch).catch(()=>{});
   }
@@ -158,10 +173,17 @@
   async function poll() {
     if (!opened || statusBusy || drag) return; statusBusy = true;
     try {
-      const r = await send('GET_LIKES_LIBRARY_STATUS'); lastStatus = r; ownerId = r.ownerId;
+      const r = await send('GET_LIKES_LIBRARY_STATUS'); lastStatus = r; ownerId = r.ownerId; collectionId = r.collectionId; sourceUserId = r.sourceUserId;
       const lib = r.library, job = r.job;
       status.textContent = job?.error ? text(job.error) : `${text(job?.phase === 'indexing' ? 'indexing' : job?.phase === 'paused' ? 'paused' : lib?.complete ? 'complete' : 'welcome')}${lib ? ' · '+(job?.count || lib.count).toLocaleString()+' '+text('tracks') : ''}`;
       updateSyncAction(job);
+      if (collectionSelect) {
+        const old = collectionSelect.value;
+        collectionSelect.replaceChildren();
+        for (const value of r.collections || []) collectionSelect.add(new Option(value.name || value.sourceUserId, value.collectionId));
+        if (!collectionSelect.options.length) collectionSelect.add(new Option(r.sourceUserId === r.ownerId ? text('likes') : (r.sourceUserId || text('likes')), r.collectionId));
+        collectionSelect.value = (r.collections || []).some(value => value.collectionId === r.collectionId) ? r.collectionId : old;
+      }
       viewport.hidden = toolbar.hidden = false; rail.parentElement.hidden = !lib;
       if (!lib) {
         canvas.style.height = 'auto'; canvas.replaceChildren(); const intro = el('div','empty'); intro.append(el('div','hero-mark','♡'),el('h2','',text('welcome')),el('p','',text('intro')),button(text('start')+' →',async()=>{ await send('START_LIKES_INDEX'); await pollAfter(); },'accent')); canvas.append(intro); return;
@@ -204,6 +226,7 @@
     search = el('input'); search.type = 'search'; search.placeholder = text('search'); search.maxLength = 200; search.setAttribute('aria-label',text('search'));
     const searchWrap = el('div','search-wrap'); searchWrap.append(search); const closeButton = button('×',close,'close search-close'); closeButton.setAttribute('aria-label',text('close')); closeButton.title = text('close'); searchWrap.append(closeButton); toolbarLine.append(searchWrap);
     period = el('select'); period.setAttribute('aria-label',text('all')); period.add(new Option(text('all'),'')); toolbarLine.append(period);
+    collectionSelect = el('select'); collectionSelect.className = 'collection-select'; collectionSelect.setAttribute('aria-label',text('likes')); toolbarLine.append(collectionSelect);
     syncAction = button('',async()=>{
       syncAction.classList.add('is-loading'); syncAction.disabled = true;
       try { const phase = lastStatus?.job?.phase; await send(phase === 'indexing' ? 'CANCEL_LIKES_INDEX' : phase === 'paused' ? 'START_LIKES_INDEX' : 'REFRESH_LIKES_LIBRARY'); await pollAfter(); }
@@ -221,6 +244,7 @@
     document.body.append(host); layout();
     search.addEventListener('input',()=>{ clearTimeout(searchTimer); searchTimer = setTimeout(()=>{ query = search.value; viewport.scrollTop = 0; render().catch(showError); },160); });
     period.addEventListener('change',()=>{ filter = period.value; viewport.scrollTop = 0; render().catch(showError); });
+    collectionSelect.addEventListener('change',()=>{ const item=(lastStatus?.collections || []).find(value=>value.collectionId===collectionSelect.value); if (!item) return; collectionId=item.collectionId; sourceUserId=item.sourceUserId; generation=null; revision=null; anchor=selected=null; restored=false; viewport.scrollTop=0; pollAfter().catch(showError); });
     viewport.addEventListener('scroll',()=>{ clearTimeout(renderTimer); renderTimer = setTimeout(()=>render().catch(showError),45); });
     rail.addEventListener('wheel',()=>{ mapManual = true; },{passive:true}); rail.addEventListener('scroll',()=>renderMap().catch(showError));
     rail.addEventListener('keydown',event=>{ const shifts = { ArrowDown:6,ArrowUp:-6,PageDown:Math.floor(rail.clientHeight/18)*6,PageUp:-Math.floor(rail.clientHeight/18)*6,Home:-total,End:total }; if (event.key in shifts) { event.preventDefault(); at((anchor?.trackOrdinal || 0)+shifts[event.key]).catch(showError); } });
@@ -246,10 +270,10 @@
     host.style.setProperty('--top',`${top}px`); host.style.setProperty('--bottom',`${bottom}px`);
   }
   function dispose() {
-    routeEpoch++; imageEpoch++; opened = false; endDrag(); resizeObserver?.disconnect(); clearTimeout(renderTimer); clearTimeout(searchTimer); clearTimeout(saveTimer); SCLikesLocator.cancel(); host?.remove(); host = null; generation = null; ownerId = null; anchor = selected = null; restored = false; previousResults = null; query = filter = ''; statusBusy = false; images.clear();
+    routeEpoch++; imageEpoch++; opened = false; endDrag(); resizeObserver?.disconnect(); clearTimeout(renderTimer); clearTimeout(searchTimer); clearTimeout(saveTimer); SCLikesLocator.cancel(); host?.remove(); host = null; generation = null; ownerId = collectionId = sourceUserId = null; anchor = selected = null; restored = false; previousResults = null; query = filter = ''; statusBusy = false; images.clear(); imageConsumers.clear();
   }
   function route() {
-    const eligible = location.origin === 'https://soundcloud.com' && location.pathname.replace(/\/$/,'') === '/you/likes';
+    const eligible = location.origin === 'https://soundcloud.com' && /^\/(?:you|[^/]+)\/likes$/.test(location.pathname.replace(/\/$/,''));
     if (!eligible) { if(host) dispose(); return; }
     if (!host && document.body) mount();
     if (host && location.hash === '#scdl-explore') { history.replaceState(history.state,'',location.pathname+location.search); open().catch(showError); }

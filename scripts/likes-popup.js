@@ -15,7 +15,7 @@
       const tabs = await chrome.tabs.query({ url: 'https://soundcloud.com/*', currentWindow: true });
       const tab = tabs.find(t => t.active) || tabs[0];
       if (tab) {
-        if (new URL(tab.url).pathname.replace(/\/$/,'') === '/you/likes') { await chrome.tabs.update(tab.id,{active:true}); await chrome.tabs.sendMessage(tab.id,{type:'OPEN_LIKES_EXPLORER'},{frameId:0}); }
+        if (/^\/(?:you|[^/]+)\/likes\/?$/.test(new URL(tab.url).pathname)) { await chrome.tabs.update(tab.id,{active:true}); await chrome.tabs.sendMessage(tab.id,{type:'OPEN_LIKES_EXPLORER'},{frameId:0}); }
         else await chrome.tabs.update(tab.id,{url:'https://soundcloud.com/you/likes#scdl-explore',active:true});
       } else await chrome.tabs.create({url:'https://soundcloud.com/you/likes#scdl-explore'});
       window.close();
