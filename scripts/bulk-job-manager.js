@@ -369,8 +369,8 @@ const destinationHandler = SCDownloadDestination.create({
 });
 
 const trackDownloadExecution = SCTrackDownloadExecution.create({
-  resolveSource: (trackData, formatPreference) =>
-    SCDownloadSource.resolve(trackData, formatPreference),
+  resolveSource: (trackData, formatPreference, options) =>
+    SCDownloadSource.resolve(trackData, formatPreference, options),
   buildTrack: ({
     buildId,
     trackData,

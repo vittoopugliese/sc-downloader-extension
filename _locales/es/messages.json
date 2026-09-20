@@ -494,6 +494,19 @@
   "collection_download_hint": {
     "message": "Guarda archivos individuales en la carpeta elegida.\nPodés cerrar este popup mientras descarga."
   },
+  "collection_download_all_hint": {
+    "message": "Descarga todos los tracks disponibles, incluidas las páginas siguientes. Podés cerrar este popup mientras descarga."
+  },
+  "collection_download_count_hint": {
+    "message": "Descargar $1 de aproximadamente $2 tracks en la carpeta elegida."
+  },
+  "collection_invalid_limit": {
+    "message": "Elegí una cantidad válida e intentá de nuevo."
+  },
+  "auth_required_detail": { "message": "Iniciá sesión en SoundCloud y volvé a intentar cargar tus likes." },
+  "rate_limited_detail": { "message": "SoundCloud está limitando las solicitudes. Esperá un momento y reintentá." },
+  "network_timeout_detail": { "message": "SoundCloud tardó demasiado en responder. Revisá tu conexión y reintentá." },
+  "network_error_detail": { "message": "No se pudo conectar con SoundCloud. Revisá tu conexión y reintentá." },
   "load_selector_failed": {
     "message": "No se pudo cargar el selector. Elegí una cantidad o probá Seleccionar otra vez."
   },

@@ -34,6 +34,10 @@ const context = vm.createContext({
   DataView,
   Uint8Array,
   Float32Array,
+  AbortController,
+  TextEncoder,
+  setTimeout,
+  clearTimeout,
   AudioContext: FakeAudioContext,
   async fetch() {
     fetchCount += 1;

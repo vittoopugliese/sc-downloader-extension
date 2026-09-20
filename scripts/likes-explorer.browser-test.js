@@ -52,7 +52,7 @@ const { chromium } = require('playwright');
       }}};
     });
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
-    for(const file of ['likes-explorer-i18n.js','soundcloud-likes-locator.js','likes-explorer.js'])await page.addScriptTag({path:path.join(__dirname,file)});
+    for(const file of ['fast-tooltips.js','likes-explorer-i18n.js','soundcloud-likes-locator.js','likes-explorer.js'])await page.addScriptTag({path:path.join(__dirname,file)});
     const locator=await page.evaluate(async()=>{
       const scroll=document.scrollingElement,original=scroll.scrollTo;let calls=0;
       scroll.scrollTo=()=>{calls++;setTimeout(()=>{const link=document.createElement('a');link.className='soundTitle__title';link.href='https://soundcloud.com/a/target';link.textContent='Target';document.querySelector('.l-main').append(link);},10);};
@@ -114,6 +114,13 @@ const { chromium } = require('playwright');
       };
     });
     assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['Abrir ↗',''],detailOrder:['cover','detail-copy','status','detail-actions'],oneLine:true,locateTitle:'Teleport to selected track',locateIcon:true,openSingleLine:true});
+    const teleportButton=page.locator('#scdl-likes-explorer .locate-action');
+    await teleportButton.hover(); await page.waitForTimeout(130);
+    const teleportTooltip=await teleportButton.evaluate(button=>{
+      const tooltip=document.querySelector('#scdl-fast-tooltip');
+      return {text:tooltip.textContent,visible:tooltip.style.opacity,titleRemoved:!button.hasAttribute('title')};
+    });
+    assert.deepEqual(teleportTooltip,{text:'Teleport to selected track',visible:'1',titleRemoved:true});
     await page.screenshot({path:'test-results/likes-explorer-desktop.png'});
     for(const width of [390,760,1024]){
       await page.setViewportSize({width,height:800});await page.waitForTimeout(180);

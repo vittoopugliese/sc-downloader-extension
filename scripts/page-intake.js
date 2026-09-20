@@ -76,6 +76,8 @@ const SCPageIntake = (() => {
     let extractionRetryCount = 0;
     let pendingRetry = null;
     let extracting = false;
+    let extractionPageUrl = null;
+    let extractionState = { status: "idle" };
 
     selector.getStoredFormatPreference().then((value) => {
       formatPreference = value;
@@ -258,7 +260,11 @@ const SCPageIntake = (() => {
           (extractionId !== null && extractionId !== activeExtractionId)
         ) return null;
         const key = next.toString();
-        if (visited.has(key)) break;
+        if (visited.has(key)) {
+          const error = new Error("SoundCloud repeated a tracks page cursor.");
+          error.code = "cursor_cycle";
+          throw error;
+        }
         visited.add(key);
         const page = await userTracksPage(next, id);
         const values = Array.isArray(page) ? page : page.collection || [];
@@ -271,12 +277,18 @@ const SCPageIntake = (() => {
         }
         const nextHref = Array.isArray(page) ? null : page.next_href;
         next = nextHref ? new URL(nextHref) : null;
+        if (next && (next.origin !== "https://api-v2.soundcloud.com" ||
+            next.pathname !== `/users/${userId}/tracks` || next.username || next.password)) {
+          const error = new Error("SoundCloud returned an invalid tracks cursor.");
+          error.code = "invalid_cursor";
+          throw error;
+        }
         next?.searchParams.set("client_id", id);
       }
       return Number.isFinite(cap) ? tracks.slice(0, cap) : tracks;
     }
 
-    async function likesTracks(userId, id, pageUrl, oauthToken, limit, extractionId, progress = {}) {
+    async function likesTracks(userId, id, pageUrl, authenticated, limit, extractionId, progress = {}) {
       const tracks = [];
       const seen = new Set();
       const visited = new Set();
@@ -289,12 +301,30 @@ const SCPageIntake = (() => {
       while (next && tracks.length < cap) {
         if (extractionId !== null && !isFresh(extractionId, pageUrl)) return null;
         const key = next.toString();
-        if (visited.has(key)) break;
+        if (visited.has(key)) {
+          const error = new Error("SoundCloud repeated a likes page cursor.");
+          error.code = "cursor_cycle";
+          throw error;
+        }
         visited.add(key);
-        const page = await soundCloudHttp.json(next, {
-          label: "Failed to fetch user likes",
-          oauthToken,
-        });
+        let page;
+        if (authenticated) {
+          const response = await runtime.sendMessage({
+            type: "GET_AUTH_LIKES_PAGE",
+            userId,
+            clientId: id,
+            nextHref: next.toString(),
+          });
+          if (!response?.success) {
+            const error = new Error(response?.error || "Could not load your SoundCloud likes.");
+            error.code = response?.code || "network_error";
+            error.status = response?.status;
+            throw error;
+          }
+          page = { collection: response.page.collection, next_href: response.page.nextHref };
+        } else {
+          page = await soundCloudHttp.json(next, { label: "Failed to fetch user likes" });
+        }
         for (const item of page.collection || []) {
           const value = item?.track;
           if (tracks.length >= cap) break;
@@ -304,6 +334,12 @@ const SCPageIntake = (() => {
           progress.onProgress?.(tracks.length, progress.progressTotal);
         }
         next = page.next_href ? new URL(page.next_href) : null;
+        if (next && (next.origin !== "https://api-v2.soundcloud.com" ||
+            next.pathname !== `/users/${userId}/likes` || next.username || next.password)) {
+          const error = new Error("SoundCloud returned an invalid likes cursor.");
+          error.code = "invalid_cursor";
+          throw error;
+        }
         next?.searchParams.set("client_id", id);
       }
       return Number.isFinite(cap) ? tracks.slice(0, cap) : tracks;
@@ -315,12 +351,16 @@ const SCPageIntake = (() => {
           type: "GET_LOGGED_IN_USER",
           clientId: id,
         });
-        return result?.success && result.profile?.user?.id
-          ? result.profile
-          : null;
+        if (!result?.success) {
+          const error = new Error(result?.error || "Sign in to SoundCloud to view your likes.");
+          error.code = result?.code === "unknown_error" ? "auth_required" : result?.code || "auth_required";
+          error.status = result?.status;
+          throw error;
+        }
+        return result.profile?.user?.id ? { user: result.profile.user, authenticated: true } : null;
       }
       const user = hydration.find((item) => item.hydratable === "user")?.data;
-      return user?.id ? { user, oauthToken: null } : null;
+      return user?.id ? { user, authenticated: false } : null;
     }
 
     async function buildResult(kind, hydration, id, pageUrl, extractionId) {
@@ -400,7 +440,7 @@ const SCPageIntake = (() => {
         profile.user.id,
         id,
         pageUrl,
-        profile.oauthToken,
+        profile.authenticated,
         PREVIEW_LIMIT,
         extractionId
       );
@@ -412,7 +452,7 @@ const SCPageIntake = (() => {
           kind: "likes",
           userId: profile.user.id,
           clientId: id,
-          oauthToken: profile.oauthToken || null,
+          authenticated: profile.authenticated,
           pageUrl,
         },
         data: {
@@ -459,11 +499,17 @@ const SCPageIntake = (() => {
     }
 
     async function extractCurrent(capturedId) {
+      if (capturedId == null && extracting && extractionPageUrl === currentUrl()) return null;
       const extractionId = capturedId ?? ++activeExtractionId;
       const pageUrl = currentUrl();
       const kind = classify(pageUrl);
-      if (kind === "other") return null;
+      if (kind === "other") {
+        extractionState = { status: "unsupported", code: "unsupported_page" };
+        return null;
+      }
       extracting = true;
+      extractionPageUrl = pageUrl;
+      extractionState = { status: "loading" };
 
       try {
         const response = await request(win.location.href, {
@@ -473,18 +519,39 @@ const SCPageIntake = (() => {
         const html = await response.text();
         if (!isFresh(extractionId, pageUrl)) return null;
         const hydration = parseHydration(html);
+        if (!response.ok) {
+          const error = new Error(`SoundCloud page returned ${response.status}.`);
+          error.status = response.status;
+          throw error;
+        }
         if (!hydration) {
           retry(extractionId, pageUrl);
+          if (!pendingRetry) extractionState = { status: "error", code: "source_unavailable", retryable: true };
           return null;
         }
         const id = await resolveClientId(html);
-        if (!id || !isFresh(extractionId, pageUrl)) return null;
+        if (!isFresh(extractionId, pageUrl)) return null;
+        if (!id) {
+          extractionState = { status: "error", code: "reload_required", retryable: true };
+          return null;
+        }
         const result = await buildResult(kind, hydration, id, pageUrl, extractionId);
-        if (!result || !isFresh(extractionId, pageUrl)) return null;
+        if (!isFresh(extractionId, pageUrl)) return null;
+        if (!result) {
+          if (!pendingRetry) extractionState = { status: "error", code: "source_unavailable", retryable: true };
+          return null;
+        }
         extractionRetryCount = 0;
+        extractionState = { status: "loaded" };
         return publish(result);
       } catch (error) {
-        console.error("SC Track Downloader Error:", error);
+        if (!isFresh(extractionId, pageUrl)) return null;
+        const status = error?.status;
+        const code = status === 429 ? "rate_limited" :
+          [401, 403].includes(status) && pageUrl.includes("/you/likes") ? "auth_required" :
+          error?.name === "AbortError" ? "network_timeout" :
+          error?.code || "network_error";
+        extractionState = { status: "error", code, stage: "extract", retryable: !["auth_required", "unsupported_page"].includes(code), statusCode: status };
         return null;
       } finally {
         if (extractionId === activeExtractionId) extracting = false;
@@ -494,13 +561,19 @@ const SCPageIntake = (() => {
     function read(forceRefresh = false) {
       const kind = classify(win.location.href);
       const pageUrl = currentUrl();
+      if (extractionPageUrl && extractionPageUrl !== pageUrl) reset();
       const data = kind === "track" ? currentTrack : currentCollection;
       if (data && !forceRefresh && data.pageUrl === pageUrl) {
         return { status: "loaded", kind: kind === "track" ? "track" : "playlist", data };
       }
-      if (kind === "other") return { status: "not_track" };
-      if (forceRefresh || !extracting) extractCurrent();
-      return { status: "loading" };
+      if (kind === "other") return { status: "not_track", code: "unsupported_page" };
+      if (forceRefresh) {
+        reset();
+        extractCurrent();
+      } else if (extractionState.status === "idle") {
+        extractCurrent();
+      }
+      return extractionState;
     }
 
     async function resolvePlayerTrack(trackUrl) {
@@ -579,7 +652,7 @@ const SCPageIntake = (() => {
           bulkContext.userId,
           bulkContext.clientId,
           bulkContext.pageUrl,
-          bulkContext.oauthToken,
+          bulkContext.authenticated,
           limit,
           null,
           progress
@@ -655,6 +728,8 @@ const SCPageIntake = (() => {
       selectionCache = null;
       extractionRetryCount = 0;
       extracting = false;
+      extractionPageUrl = null;
+      extractionState = { status: "idle" };
       if (pendingRetry) cancel(pendingRetry);
       pendingRetry = null;
       onRemoveInline();

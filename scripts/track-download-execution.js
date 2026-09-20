@@ -23,17 +23,19 @@ const SCTrackDownloadExecution = (() => {
 
       const onStage = command.onStage || (() => {});
       const isCancelled = command.isCancelled || (() => false);
-      const buildId = `track_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-      let buildRequested = false;
+      const operationId = `track_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      let activeBuildId = null;
       let blobUrl = null;
 
       try {
         await onStage("resolving");
         let buildResult;
         for (let sourceAttempt = 0; sourceAttempt < 2; sourceAttempt += 1) {
+          if (await isCancelled()) return { success: false, cancelled: true };
           const resolved = await resolveSource(
             command.trackData,
-            command.formatPreference || "auto"
+            command.formatPreference || "auto",
+            { forceRefresh: sourceAttempt > 0, reason: sourceAttempt > 0 ? "expired_media" : "initial", attempt: sourceAttempt }
           );
 
           if (await isCancelled()) {
@@ -41,7 +43,9 @@ const SCTrackDownloadExecution = (() => {
           }
 
           await onStage(sourceAttempt === 0 ? "building" : "refreshing");
-          buildRequested = true;
+          if (await isCancelled()) return { success: false, cancelled: true };
+          const buildId = `${operationId}_${sourceAttempt}`;
+          activeBuildId = buildId;
           activeBuildIds.add(buildId);
           if (typeof command.onProgress === "function") {
             progressByBuildId.set(buildId, command.onProgress);
@@ -53,13 +57,13 @@ const SCTrackDownloadExecution = (() => {
             trimRange: command.trimRange || null,
             playbackTransform: command.playbackTransform || null,
           });
+          activeBuildIds.delete(buildId);
+          progressByBuildId.delete(buildId);
+          activeBuildId = null;
           if (buildResult?.success && buildResult.blobUrl) break;
           if (sourceAttempt === 0 && [401, 403, 404].includes(buildResult?.status)) continue;
           break;
         }
-        activeBuildIds.delete(buildId);
-        progressByBuildId.delete(buildId);
-
         if (!buildResult?.success || !buildResult.blobUrl) {
           const error = new Error(buildResult?.error || "Failed to build audio file.");
           error.code = buildResult?.code;
@@ -87,13 +91,15 @@ const SCTrackDownloadExecution = (() => {
           destinationName: saved.destinationName,
         };
       } finally {
-        activeBuildIds.delete(buildId);
-        progressByBuildId.delete(buildId);
+        if (activeBuildId) {
+          activeBuildIds.delete(activeBuildId);
+          progressByBuildId.delete(activeBuildId);
+        }
 
         if (blobUrl) {
           await revokeBlob(blobUrl).catch(() => {});
-        } else if (buildRequested) {
-          await abortBuild(buildId).catch(() => {});
+        } else if (activeBuildId) {
+          await abortBuild(activeBuildId).catch(() => {});
         }
       }
     }

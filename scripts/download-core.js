@@ -1,6 +1,25 @@
 const SCDownload = (() => {
   const NETWORK_RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
   const NETWORK_ATTEMPTS = 3;
+  const REQUEST_TIMEOUT_MS = 30000;
+  const MAX_RETRY_WAIT_MS = 30000;
+  const MAX_AUDIO_BYTES = 128 * 1024 * 1024;
+  const MAX_PLAYLIST_BYTES = 2 * 1024 * 1024;
+  const MAX_DECODED_PCM_BYTES = 256 * 1024 * 1024;
+
+  function memoryError() {
+    const error = new Error("This audio is too large to process safely in the browser.");
+    error.code = "memory_budget_exceeded";
+    return error;
+  }
+
+  function checkDecodeBudget(trackData, decoded) {
+    const durationMs = Number(trackData?.durationMs);
+    if (!decoded && Number.isFinite(durationMs) && durationMs > 0 &&
+        durationMs / 1000 * 96000 * 2 * 4 > MAX_DECODED_PCM_BYTES) throw memoryError();
+    if (decoded && (!Number.isSafeInteger(decoded.length) ||
+        decoded.length * decoded.numberOfChannels * 4 > MAX_DECODED_PCM_BYTES)) throw memoryError();
+  }
 
   function wait(delayMs, signal) {
     return new Promise((resolve, reject) => {
@@ -21,9 +40,12 @@ const SCDownload = (() => {
   }
 
   function retryDelay(response, attempt) {
-    const retryAfter = Number(response?.headers?.get?.("Retry-After"));
-    if (Number.isFinite(retryAfter) && retryAfter >= 0) {
-      return Math.min(retryAfter * 1000, 10000);
+    const header = response?.headers?.get?.("Retry-After")?.trim();
+    if (header) {
+      const seconds = /^\d+(?:\.\d+)?$/.test(header) ? Number(header) : NaN;
+      const date = Number.isFinite(seconds) ? NaN : Date.parse(header);
+      if (Number.isFinite(seconds)) return seconds * 1000;
+      if (Number.isFinite(date)) return Math.max(0, date - Date.now());
     }
     return Math.min(500 * 2 ** attempt, 4000);
   }
@@ -35,23 +57,63 @@ const SCDownload = (() => {
     return error;
   }
 
-  async function fetchWithRetry(url, label, signal) {
+  async function fetchWithRetry(url, label, signal, readAs, maxBytes) {
     let lastError;
     for (let attempt = 0; attempt < NETWORK_ATTEMPTS; attempt += 1) {
+      const controller = new AbortController();
+      const onAbort = () => controller.abort();
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (signal?.aborted) controller.abort();
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, REQUEST_TIMEOUT_MS);
+      let delay = Math.min(500 * 2 ** attempt, 4000);
       try {
-        const response = await fetch(url, { signal });
-        if (response.ok) return response;
-        lastError = responseError(label, response);
-        if (!NETWORK_RETRY_STATUSES.has(response.status) || attempt === NETWORK_ATTEMPTS - 1) {
-          throw lastError;
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) {
+          lastError = responseError(label, response);
+          if (!NETWORK_RETRY_STATUSES.has(response.status) || attempt === NETWORK_ATTEMPTS - 1) throw lastError;
+          delay = retryDelay(response, attempt);
+          response.body?.cancel?.().catch?.(() => {});
+          if (delay > MAX_RETRY_WAIT_MS) {
+            lastError.code = response.status === 429 ? "rate_limited" : "retry_later";
+            lastError.retryAt = Date.now() + delay;
+            throw lastError;
+          }
+        } else {
+          const declared = Number(response.headers?.get?.("Content-Length"));
+          if (Number.isFinite(declared) && declared > maxBytes) {
+            const error = new Error(`${label} exceeds the safe size limit.`);
+            error.code = "memory_budget_exceeded";
+            response.body?.cancel?.().catch?.(() => {});
+            throw error;
+          }
+          const value = readAs === "text" ? await response.text() : await response.arrayBuffer();
+          if ((readAs === "text" ? new TextEncoder().encode(value).byteLength : value.byteLength) > maxBytes) {
+            const error = new Error(`${label} exceeds the safe size limit.`);
+            error.code = "memory_budget_exceeded";
+            throw error;
+          }
+          return value;
         }
-        await wait(retryDelay(response, attempt), signal);
       } catch (error) {
-        if (error?.name === "AbortError") throw error;
-        lastError = error;
-        if (error?.code === "http_error" || attempt === NETWORK_ATTEMPTS - 1) throw error;
-        await wait(Math.min(500 * 2 ** attempt, 4000), signal);
+        if (signal?.aborted) throw error;
+        if (timedOut) {
+          lastError = new Error(`${label} timed out.`);
+          lastError.code = "network_timeout";
+        } else {
+          lastError = error;
+        }
+        if (lastError.code === "http_error" || lastError.code === "rate_limited" ||
+            lastError.code === "retry_later" || lastError.code === "memory_budget_exceeded" ||
+            attempt === NETWORK_ATTEMPTS - 1) throw lastError;
+      } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
       }
+      await wait(delay, signal);
     }
     throw lastError || new Error(`${label} failed.`);
   }
@@ -182,6 +244,12 @@ const SCDownload = (() => {
     const segmentUrls = [];
 
     for (const line of lines) {
+      if (/^#EXT-X-(KEY|SESSION-KEY|BYTERANGE|I-FRAMES-ONLY):?/.test(line) ||
+          /^#EXT-X-MAP:.*BYTERANGE=/.test(line)) {
+        const error = new Error("This HLS playlist uses unsupported encryption or byte ranges.");
+        error.code = "unsupported_hls";
+        throw error;
+      }
       if (line.startsWith("#EXT-X-MAP:")) {
         const uriMatch = line.match(/URI="([^"]+)"/);
         if (uriMatch) {
@@ -199,16 +267,20 @@ const SCDownload = (() => {
   }
 
   async function fetchTextOrThrow(url, label, signal) {
-    const response = await fetchWithRetry(url, label, signal);
-    return response.text();
+    return fetchWithRetry(url, label, signal, "text", MAX_PLAYLIST_BYTES);
   }
 
   async function fetchBufferOrThrow(url, label, signal) {
-    const response = await fetchWithRetry(url, label, signal);
-    return response.arrayBuffer();
+    return fetchWithRetry(url, label, signal, "buffer", MAX_AUDIO_BYTES);
   }
 
-  async function resolveMediaPlaylist(url, signal) {
+  async function resolveMediaPlaylist(url, signal, visited = new Set()) {
+    if (visited.has(url) || visited.size >= 5) {
+      const error = new Error("HLS playlist contains a cycle or too many variants.");
+      error.code = "unsupported_hls";
+      throw error;
+    }
+    visited.add(url);
     const playlistText = await fetchTextOrThrow(url, "Playlist request", signal);
 
     if (playlistText.includes("#EXT-X-STREAM-INF")) {
@@ -218,7 +290,7 @@ const SCDownload = (() => {
         throw new Error("HLS master playlist did not contain a media playlist.");
       }
 
-      return resolveMediaPlaylist(segmentUrls[0], signal);
+      return resolveMediaPlaylist(segmentUrls[0], signal, visited);
     }
 
     return { baseUrl: url, playlistText };
@@ -228,35 +300,60 @@ const SCDownload = (() => {
     const results = new Array(urls.length);
     let nextIndex = 0;
     let completed = 0;
+    let firstError = null;
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) controller.abort();
 
     async function worker() {
-      while (nextIndex < urls.length) {
-        if (signal?.aborted) {
+      while (nextIndex < urls.length && !firstError) {
+        if (controller.signal.aborted) {
           throw new DOMException("Download aborted.", "AbortError");
         }
 
         const currentIndex = nextIndex;
         nextIndex += 1;
 
-        const buffer = await fetchBufferOrThrow(
-          urls[currentIndex],
-          `Segment ${currentIndex + 1}`,
-          signal
-        );
-        results[currentIndex] = new Uint8Array(buffer);
-        completed += 1;
-        onProgress?.(completed, urls.length);
+        try {
+          const buffer = await fetchBufferOrThrow(
+            urls[currentIndex],
+            `Segment ${currentIndex + 1}`,
+            controller.signal
+          );
+          if (firstError || controller.signal.aborted) return;
+          results[currentIndex] = new Uint8Array(buffer);
+          completed += 1;
+          onProgress?.(completed, urls.length);
+        } catch (error) {
+          if (!firstError) {
+            firstError = error;
+            controller.abort();
+          }
+          return;
+        }
       }
     }
 
     const workerCount = Math.min(concurrency, urls.length);
-    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    try {
+      await Promise.allSettled(Array.from({ length: workerCount }, () => worker()));
+      if (firstError) throw firstError;
+      throwIfAborted(signal);
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+    }
 
     return results;
   }
 
   function combineChunks(chunks) {
     const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    if (!Number.isSafeInteger(totalLength) || totalLength > MAX_AUDIO_BYTES) {
+      const error = new Error("Audio exceeds the safe size limit.");
+      error.code = "memory_budget_exceeded";
+      throw error;
+    }
     const combined = new Uint8Array(totalLength);
     let offset = 0;
 
@@ -373,8 +470,8 @@ const SCDownload = (() => {
     }
 
     onProgress?.("Decoding audio...");
+    checkDecodeBudget(trackData);
     const audioContext = new AudioContextConstructor();
-    let decoded;
     try {
       const sourceBuffer =
         buffer instanceof ArrayBuffer
@@ -383,13 +480,14 @@ const SCDownload = (() => {
               buffer.byteOffset,
               buffer.byteOffset + buffer.byteLength
             );
-      decoded = await audioContext.decodeAudioData(sourceBuffer);
-    } catch (error) {
-      if (error?.name === "AbortError") throw error;
-      throw new Error("The downloaded audio could not be decoded to export this loop.");
-    }
-
-    try {
+      let decoded;
+      try {
+        decoded = await audioContext.decodeAudioData(sourceBuffer);
+      } catch (error) {
+        if (error?.name === "AbortError") throw error;
+        throw new Error("The downloaded audio could not be decoded to export this loop.");
+      }
+      checkDecodeBudget(trackData, decoded);
       throwIfAborted(signal);
       const renderer = globalThis.SCLoopAudioRenderer;
       if (!renderer?.normalizeTransform || !renderer?.render) {
@@ -451,6 +549,7 @@ const SCDownload = (() => {
     }
 
     onProgress?.("Decoding audio...");
+    checkDecodeBudget(trackData);
     const audioContext = new AudioContextConstructor();
     try {
       const sourceBuffer =
@@ -461,6 +560,7 @@ const SCDownload = (() => {
               buffer.byteOffset + buffer.byteLength
             );
       const decoded = await audioContext.decodeAudioData(sourceBuffer);
+      checkDecodeBudget(trackData, decoded);
       throwIfAborted(signal);
       const renderer = globalThis.SCLoopAudioRenderer;
       if (!renderer?.normalizeTransform || !renderer?.render) {
@@ -506,6 +606,7 @@ const SCDownload = (() => {
     playbackTransform = null
   ) {
     const normalizedTrimRange = normalizeTrimRange(trimRange);
+    if (normalizedTrimRange || hasPlaybackTransform(playbackTransform)) checkDecodeBudget(trackData);
     const isHlsStream =
       trackData.streamProtocol === "hls" || streamUrl.includes(".m3u8");
     const isDirectDownload =

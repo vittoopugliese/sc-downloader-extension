@@ -32,7 +32,7 @@
   async function fetchPage({ ownerId, nextCursor, clientId, token, signal }) {
     const url = new URL(cursor(nextCursor, ownerId) || `https://api-v2.soundcloud.com/users/${ownerId}/likes?limit=50&linked_partitioning=1`);
     url.searchParams.set('client_id', clientId);
-    const response = await fetch(url, { headers: { Authorization: `OAuth ${token}` }, signal });
+    const response = await fetch(url, { headers: { Authorization: `OAuth ${token}` }, signal, redirect: 'error' });
     if (!response.ok) throw Object.assign(fail(response.status === 429 ? 'rate-limited' : [401,403].includes(response.status) ? 'auth-required' : 'network-error'), { status: response.status });
     const data = await response.json();
     if (!Array.isArray(data.collection)) throw fail('invalid-response');

@@ -395,6 +395,19 @@
   "collection_download_hint": {
     "message": "Salva arquivos individuais na pasta escolhida. Você pode fechar este pop-up durante o download."
   },
+  "collection_download_all_hint": {
+    "message": "Baixar todas as faixas disponíveis, incluindo as próximas páginas. Você pode fechar este pop-up durante o download."
+  },
+  "collection_download_count_hint": {
+    "message": "Baixar $1 de aproximadamente $2 faixas na pasta escolhida."
+  },
+  "collection_invalid_limit": {
+    "message": "Escolha uma quantidade válida e tente novamente."
+  },
+  "auth_required_detail": { "message": "Entre no SoundCloud e tente carregar suas curtidas novamente." },
+  "rate_limited_detail": { "message": "O SoundCloud está limitando as solicitações. Aguarde e tente novamente." },
+  "network_timeout_detail": { "message": "O SoundCloud demorou para responder. Verifique a conexão e tente novamente." },
+  "network_error_detail": { "message": "Não foi possível acessar o SoundCloud. Verifique a conexão e tente novamente." },
   "load_selector_failed": {
     "message": "Não foi possível carregar o seletor. Escolha uma quantidade ou tente Selecionar novamente."
   },

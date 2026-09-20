@@ -32,6 +32,20 @@ function response(status, data) {
 }
 
 (async () => {
+  let unexpectedRequests = 0;
+  const guarded = create({
+    getOAuthToken: async () => "sentinel",
+    request: async () => { unexpectedRequests += 1; throw new Error("Unexpected request"); },
+  });
+  for (const streamUrl of [
+    "https://evil.test/media/soundcloud:tracks:123/stream",
+    "http://api-v2.soundcloud.com/media/soundcloud:tracks:123/stream",
+    "https://api-v2.soundcloud.com.evil.test/media/soundcloud:tracks:123/stream",
+    "https://user@api-v2.soundcloud.com/media/soundcloud:tracks:123/stream",
+  ]) {
+    await assert.rejects(guarded.resolveStream({ streamUrl }), (error) => error.code === "invalid_stream_destination");
+  }
+  assert.equal(unexpectedRequests, 0);
   for (const protocol of ["progressive", "hls"]) {
     for (const status of [401, 403, 404]) {
       const calls = [];
@@ -45,7 +59,7 @@ function response(status, data) {
         },
       });
       const result = await source.resolveStream({
-        streamUrl: "https://api.test/stream",
+        streamUrl: "https://api-v2.soundcloud.com/media/soundcloud:tracks:123/stream",
         streamProtocol: protocol,
         streamPreset: protocol === "hls" ? "aac_160k" : "mp3_128",
         clientId: "client",
@@ -90,7 +104,7 @@ function response(status, data) {
     },
   });
   assert.equal(
-    (await oauthOnly.resolveStream({ streamUrl: "https://api.test/private" })).authMode,
+    (await oauthOnly.resolveStream({ streamUrl: "https://api-v2.soundcloud.com/media/soundcloud:tracks:123/private" })).authMode,
     "oauth"
   );
 
@@ -106,14 +120,14 @@ function response(status, data) {
           title: "Fresh",
           user: { username: "Artist" },
           media: { transcodings: [{
-            url: "https://api.test/fresh",
+            url: "https://api-v2.soundcloud.com/media/soundcloud:tracks:123/fresh",
             preset: "mp3_128",
             format: { protocol: "progressive", mime_type: "audio/mpeg" },
           }] },
         }]);
       }
-      if (value.startsWith("https://api.test/stale")) return response(404, {});
-      if (value.startsWith("https://api.test/fresh")) return response(200, { url: "https://cdn.test/fresh" });
+      if (value.startsWith("https://api-v2.soundcloud.com/media/soundcloud:tracks:123/stale")) return response(404, {});
+      if (value.startsWith("https://api-v2.soundcloud.com/media/soundcloud:tracks:123/fresh")) return response(200, { url: "https://cdn.test/fresh" });
       throw new Error(`Unexpected request: ${value} ${options.headers.Authorization || "public"}`);
     },
   });
@@ -121,7 +135,7 @@ function response(status, data) {
     id: 20,
     title: "Stale",
     clientId: "client",
-    streamUrl: "https://api.test/stale",
+    streamUrl: "https://api-v2.soundcloud.com/media/soundcloud:tracks:123/stale",
   }, "mp3");
   assert.equal(refreshed.streamUrl, "https://cdn.test/fresh");
   assert.equal(refreshCalls.filter((url) => url.includes("api-v2.soundcloud.com/tracks?")).length, 1);
@@ -141,7 +155,7 @@ function response(status, data) {
     clientId: "client",
     downloadable: true,
     hasDownloadsLeft: true,
-    streamUrl: "https://api.test/transcode",
+    streamUrl: "https://api-v2.soundcloud.com/media/soundcloud:tracks:123/transcode",
   });
   assert.equal(originalResult.streamUrl, "https://cdn.test/original.flac");
   assert.equal(originalResult.trackData.isOriginalDownload, true);
@@ -155,7 +169,7 @@ function response(status, data) {
     },
   });
   await assert.rejects(
-    nonRetryable.resolve({ id: 21, clientId: "client", streamUrl: "https://api.test/error" }, "mp3"),
+    nonRetryable.resolve({ id: 21, clientId: "client", streamUrl: "https://api-v2.soundcloud.com/media/soundcloud:tracks:123/error" }, "mp3"),
     /Network offline/
   );
   assert.equal(refreshAttempted, false, "Non-retryable errors triggered refresh");
@@ -173,7 +187,7 @@ function response(status, data) {
     });
     await assert.rejects(
       source.resolve(
-        { id: status, clientId: "client", streamUrl: `https://api.test/${status}` },
+        { id: status, clientId: "client", streamUrl: `https://api-v2.soundcloud.com/media/soundcloud:tracks:123/${status}` },
         "mp3"
       ),
       (error) => error.status === status

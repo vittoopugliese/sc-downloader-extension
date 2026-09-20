@@ -23,6 +23,8 @@ const context = vm.createContext({
   clearInterval() {},
   chrome: {
     runtime: {
+      id: "test-extension",
+      getURL: (path) => `chrome-extension://test-extension/${path}`,
       onMessage: {
         addListener(listener) {
           messageListener = listener;
@@ -55,22 +57,22 @@ assert.equal(typeof messageListener, "function", "Offscreen message listener mus
 messageListener(
   {
     type: "OFFSCREEN_BUILD",
-    buildId: "long-track",
+    buildId: "track_long_track_0",
     streamUrl: "https://example.com/audio.m3u8",
     trackData: { streamProtocol: "hls" },
   },
-  {},
+  { id: "test-extension", url: "chrome-extension://test-extension/scripts/background.js" },
   () => {}
 );
 
 assert.equal(typeof intervalCallback, "function", "Long builds must schedule a service-worker keepalive");
 assert.ok(intervalDelay <= 15000, `Keepalive interval is too slow: ${intervalDelay}ms`);
 assert.equal(messages[0].type, "OFFSCREEN_BUILD_PROGRESS");
-assert.equal(messages[0].buildId, "long-track");
+assert.equal(messages[0].buildId, "track_long_track_0");
 assert.equal(messages[0].statusText, "Downloading 1/2 parts...");
 intervalCallback();
 assert.equal(messages.length, 2);
 assert.equal(messages[1].type, "OFFSCREEN_KEEPALIVE");
-assert.equal(messages[1].buildId, "long-track");
+assert.equal(messages[1].buildId, "track_long_track_0");
 
 console.log("Offscreen keepalive verification passed.");

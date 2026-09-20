@@ -18,7 +18,26 @@ const SCSoundCloudHttp = (() => {
       Referer: "https://soundcloud.com/",
     };
     if (oauthToken) headers.Authorization = `OAuth ${oauthToken}`;
-    return { method: "GET", credentials: "include", headers };
+    return { method: "GET", credentials: "include", redirect: "error", headers };
+  }
+
+  function authorizedApiUrl(value) {
+    let url;
+    try { url = new URL(value); } catch { return false; }
+    return url.protocol === "https:" && url.hostname === "api-v2.soundcloud.com" &&
+      !url.username && !url.password &&
+      (/^\/users\/\d+\/likes$/.test(url.pathname) ||
+       /^\/tracks\/\d+\/download$/.test(url.pathname) ||
+       url.pathname === "/tracks" || url.pathname === "/me" ||
+       /^\/media\/soundcloud:tracks:\d+\//.test(url.pathname));
+  }
+
+  function resolverUrl(value) {
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && url.hostname === "api-v2.soundcloud.com" &&
+        !url.username && !url.password && /^\/media\/[A-Za-z0-9:_/-]+$/.test(url.pathname);
+    } catch { return false; }
   }
 
   function responseError(response, label) {
@@ -39,6 +58,11 @@ const SCSoundCloudHttp = (() => {
     }
 
     async function json(url, options = {}) {
+      if (options.oauthToken && !authorizedApiUrl(url)) {
+        const error = new Error("Authenticated SoundCloud request has an invalid destination.");
+        error.code = "invalid_auth_destination";
+        throw error;
+      }
       const response = await request(
         url.toString(),
         requestOptions(options.oauthToken)
@@ -50,5 +74,5 @@ const SCSoundCloudHttp = (() => {
     return { json };
   }
 
-  return { create };
+  return { create, resolverUrl };
 })();

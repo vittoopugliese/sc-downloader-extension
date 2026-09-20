@@ -20,6 +20,7 @@ const loadingOverlay = document.getElementById("loadingOverlay");
 const loadingText = document.getElementById("loadingText");
 const retryBtn = document.getElementById("retryBtn");
 const errorOverlay = document.getElementById("errorOverlay");
+const errorRetryBtn = document.getElementById("errorRetryBtn");
 const errorTitle = document.getElementById("errorTitle");
 const errorMessage = document.getElementById("errorMessage");
 const errorHint = document.getElementById("errorHint");
@@ -246,13 +247,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     trapHelpFocus(event);
   });
 
-  retryBtn.addEventListener("click", () => {
+  const retryTrack = () => {
     hasRenderedTrack = false;
     notTrackRetryCount = 0;
     hideRetryButton();
     showLoading();
     startTrackFlow(true);
-  });
+  };
+  retryBtn.addEventListener("click", retryTrack);
+  errorRetryBtn.addEventListener("click", retryTrack);
 
   pauseJobBtn.addEventListener("click", () => {
     chrome.runtime.sendMessage({ type: "PAUSE_BULK_JOB" }, (response) => {
@@ -385,6 +388,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       openSelectionPanel();
     } else {
       previousDownloadLimitValue = downloadLimit.value;
+      updateCollectionDownloadHint();
     }
   });
 
@@ -700,6 +704,11 @@ function requestTrackState(forceRefresh) {
           return;
         }
 
+        if (response?.status === "error") {
+          resolve({ status: "error", code: response.code || "network_error" });
+          return;
+        }
+
         resolve({ status: "loading" });
       }
     );
@@ -744,6 +753,11 @@ function handleTrackState(state) {
   if (state.status === "reload_required") {
     stopPolling();
     showTrackLoadError("load_failed");
+    return;
+  }
+  if (state.status === "error") {
+    stopPolling();
+    showTrackLoadError(state.code);
     return;
   }
 
@@ -881,6 +895,31 @@ function appendSelectOption() {
   downloadLimit.appendChild(selectOption);
 }
 
+function selectedDownloadLimit() {
+  const value = downloadLimit.value;
+  if (value === "all" || value === "select") return value;
+  if (!/^[1-9]\d*$/.test(value) ||
+      ![...downloadLimit.options].some((option) => option.value === value)) {
+    return null;
+  }
+  return Number(value);
+}
+
+function updateCollectionDownloadHint() {
+  if (!currentPlaylistData) return;
+  const selected = selectedDownloadLimit();
+  if (selected === "all") {
+    downloadStatus.textContent = t("collection_download_all_hint");
+  } else if (Number.isSafeInteger(selected)) {
+    downloadStatus.textContent = t("collection_download_count_hint", [
+      selected,
+      currentPlaylistData.totalCount ?? currentPlaylistData.tracks?.length ?? 0,
+    ]);
+  } else {
+    downloadStatus.textContent = t("collection_download_hint");
+  }
+}
+
 function populateDownloadLimitOptions(total) {
   downloadLimit.innerHTML = "";
 
@@ -919,9 +958,9 @@ function populateDownloadLimitOptions(total) {
   downloadLimit.appendChild(allOption);
   appendSelectOption();
 
-  if (total >= 50) {
+  if (total > 50) {
     defaultValue = "50";
-  } else if (presets.length) {
+  } else if (total > 50 && presets.length) {
     defaultValue = String(presets[presets.length - 1]);
   }
 
@@ -967,8 +1006,7 @@ async function renderPlaylist(playlistData) {
     artwork.style.backgroundColor = "black";
   }
 
-  downloadStatus.textContent =
-    t("collection_download_hint");
+  updateCollectionDownloadHint();
 
   errorOverlay.classList.remove("is-visible");
   downloadBtn.classList.remove("is-hidden");
@@ -1282,8 +1320,12 @@ function attachDownloadListener() {
         currentPlaylistData.totalCount ??
         currentPlaylistData.tracks?.length ??
         0;
-      const selectedValue = downloadLimit.value;
-      const limit = selectedValue === "all" ? null : Number(selectedValue);
+      const selectedValue = selectedDownloadLimit();
+      if (selectedValue === null || selectedValue === "select") {
+        alert(t("collection_invalid_limit"));
+        return;
+      }
+      const limit = selectedValue === "all" ? null : selectedValue;
       const effectiveCount = limit ?? total;
 
       if (effectiveCount >= DOWNLOAD_WARN_THRESHOLD) {
@@ -1376,7 +1418,19 @@ function showTrackLoadError(reason) {
   jobHint.classList.add("is-hidden");
   hideDownloadDestination();
 
-  if (reason === "load_failed") {
+  if (reason === "auth_required") {
+    errorTitle.textContent = t("track_load_failed");
+    errorMessage.textContent = t("auth_required_detail");
+    errorHint.textContent = "";
+  } else if (reason === "rate_limited") {
+    errorTitle.textContent = t("track_load_failed");
+    errorMessage.textContent = t("rate_limited_detail");
+    errorHint.textContent = "";
+  } else if (reason === "network_timeout" || reason === "network_error") {
+    errorTitle.textContent = t("track_load_failed");
+    errorMessage.textContent = t(reason === "network_timeout" ? "network_timeout_detail" : "network_error_detail");
+    errorHint.textContent = "";
+  } else if (reason !== "not_track") {
     errorTitle.textContent = t("track_load_failed");
     errorMessage.textContent = t("track_load_failed_detail");
     errorHint.textContent = t("reload_soundcloud");
@@ -1387,6 +1441,7 @@ function showTrackLoadError(reason) {
   }
 
   errorOverlay.classList.add("is-visible");
+  errorRetryBtn.classList.toggle("is-hidden", reason === "not_track" || reason === "auth_required");
 }
 
 function setDownloadState(downloading, statusText) {

@@ -318,6 +318,8 @@
             color: #ff7733;
             max-width: 300px;
         }
+        #errorRetryBtn { border: 1px solid #ff7733; border-radius: 8px; padding: 9px 18px; background: #242424; color: #fff; cursor: pointer; }
+        #errorRetryBtn.is-hidden { display: none; }
 
         #title {
             margin: 0;
@@ -1344,6 +1346,7 @@
         <h2 id="errorTitle" data-i18n="no_track_selected">No track selected</h2>
         <p id="errorMessage" data-i18n="open_soundcloud_page">Open a SoundCloud track page to download it.</p>
         <p id="errorHint"></p>
+        <button id="errorRetryBtn" type="button" class="is-hidden" title="Retry" data-i18n="retry" data-i18n-title="retry">Retry</button>
     </div>
 
     <div id="artwork"></div>
@@ -1517,6 +1520,7 @@
         </div>
         </section>
     </div>
+    <script src="./scripts/fast-tooltips.js"></script>
     <script src="./scripts/i18n.js"></script>
     <script src="./scripts/format-utils.js"></script>
     <script src="./scripts/directory-storage.js"></script>

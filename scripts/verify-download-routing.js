@@ -111,7 +111,7 @@ function assertEqual(actual, expected, label) {
   })`);
 
   await evaluate(`BulkJobManager.downloadSingleTrack(
-    { id: 1, artist: "Исполнитель", title: "Песня", streamUrl: "https://api.test/stream", clientId: "client" },
+    { id: 1, artist: "Исполнитель", title: "Песня", streamUrl: "https://api-v2.soundcloud.com/media/soundcloud:tracks:123/stream", clientId: "client" },
     "auto",
     { id: "chosen-id", name: "Chosen Music" }
   )`);
@@ -124,7 +124,7 @@ function assertEqual(actual, expected, label) {
 
   offscreenMessages.length = 0;
   await evaluate(`BulkJobManager.downloadSingleTrack(
-    { id: 2, artist: "Artist", title: "Title", streamUrl: "https://api.test/stream", clientId: "client" },
+    { id: 2, artist: "Artist", title: "Title", streamUrl: "https://api-v2.soundcloud.com/media/soundcloud:tracks:123/stream", clientId: "client" },
     "auto"
   )`);
   const storedSave = offscreenMessages.find(
@@ -134,7 +134,7 @@ function assertEqual(actual, expected, label) {
 
   storedDestination = null;
   await evaluate(`BulkJobManager.downloadSingleTrack(
-    { id: 3, artist: "Artist", title: "Title", streamUrl: "https://api.test/stream", clientId: "client" },
+    { id: 3, artist: "Artist", title: "Title", streamUrl: "https://api-v2.soundcloud.com/media/soundcloud:tracks:123/stream", clientId: "client" },
     "auto"
   )`);
   assertEqual(downloadCalls.length, 1, "Default Downloads fallback");
@@ -144,7 +144,7 @@ function assertEqual(actual, expected, label) {
 
   offscreenMessages.length = 0;
   await evaluate(`BulkJobManager.downloadLoop(
-    { id: 4, artist: "Artist", title: "Loop Track", streamUrl: "https://api.test/stream", clientId: "client" },
+    { id: 4, artist: "Artist", title: "Loop Track", streamUrl: "https://api-v2.soundcloud.com/media/soundcloud:tracks:123/stream", clientId: "client" },
     "auto",
     { startMs: 1500, endMs: 7250, durationMs: 10000 }
   )`);

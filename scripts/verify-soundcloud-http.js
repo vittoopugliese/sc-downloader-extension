@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const context = vm.createContext({ console });
+const context = vm.createContext({ console, URL });
 vm.runInContext(
   fs.readFileSync(path.resolve(__dirname, "soundcloud-http.js"), "utf8"),
   context
@@ -18,12 +18,16 @@ const create = vm.runInContext("SCSoundCloudHttp.create", context);
   });
 
   assert.deepEqual(await http.json(new URL("https://api.test/tracks")), { id: 1 });
-  await http.json("https://api.test/me", { oauthToken: "token" });
+  await http.json("https://api-v2.soundcloud.com/me", { oauthToken: "token" });
   assert.equal(calls[0].options.method, "GET");
   assert.equal(calls[0].options.credentials, "include");
   assert.equal(calls[0].options.headers.Origin, "https://soundcloud.com");
   assert.equal(calls[0].options.headers.Authorization, undefined);
   assert.equal(calls[1].options.headers.Authorization, "OAuth token");
+  for (const url of ["http://api-v2.soundcloud.com/me", "https://api-v2.soundcloud.com.evil.test/me", "https://user@api-v2.soundcloud.com/me", "https://example.com/me"]) {
+    await assert.rejects(http.json(url, { oauthToken: "sentinel" }), (error) => error.code === "invalid_auth_destination");
+  }
+  assert.equal(calls.length, 2, "Rejected destinations must never receive an authenticated request");
 
   const rejected = create(async () => ({
     ok: false,

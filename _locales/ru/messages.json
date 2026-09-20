@@ -395,6 +395,19 @@
   "collection_download_hint": {
     "message": "Сохраняет отдельные файлы в выбранную папку. Это окно можно закрыть во время скачивания."
   },
+  "collection_download_all_hint": {
+    "message": "Скачать все доступные треки, включая следующие страницы. Во время скачивания это окно можно закрыть."
+  },
+  "collection_download_count_hint": {
+    "message": "Скачать $1 из примерно $2 треков в выбранную папку."
+  },
+  "collection_invalid_limit": {
+    "message": "Выберите допустимое количество и повторите попытку."
+  },
+  "auth_required_detail": { "message": "Войдите в SoundCloud и повторите загрузку понравившихся треков." },
+  "rate_limited_detail": { "message": "SoundCloud ограничивает запросы. Подождите и повторите попытку." },
+  "network_timeout_detail": { "message": "SoundCloud отвечает слишком долго. Проверьте соединение и повторите попытку." },
+  "network_error_detail": { "message": "Не удалось связаться с SoundCloud. Проверьте соединение и повторите попытку." },
   "load_selector_failed": {
     "message": "Не удалось загрузить выбор. Выберите количество или попробуйте ещё раз."
   },

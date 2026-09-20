@@ -179,12 +179,17 @@
       if (page.nextCursor) s('collectionCursors').put({ accountId:job.accountId, collectionId:job.collectionId, generation:job.generation, cursor:page.nextCursor });
       current.nextCursor=page.nextCursor; current.rawCount+=page.rawCount; current.revision++; current.error=null; current.unsupportedCount+=Math.max(0,page.rawCount-page.entries.length); current.phase=page.nextCursor?'indexing':'complete'; s('collectionJobs').put(current);
       const collection=await request(s('collections').get(key));
-      if (!collection.activeGeneration || !page.nextCursor) s('collections').put({ ...collection, generation:job.generation, activeGeneration:job.generation, count:current.count, revision:current.revision, complete:!page.nextCursor, updatedAt:Date.now(), unknownDateCount:current.unknownDateCount, unsupportedCount:current.unsupportedCount, duplicateCount:current.duplicateCount, rawEntriesRead:current.rawCount });
+      if (!collection.activeGeneration || collection.activeGeneration === job.generation || !page.nextCursor) s('collections').put({ ...collection, generation:job.generation, activeGeneration:job.generation, count:current.count, revision:current.revision, complete:!page.nextCursor, updatedAt:Date.now(), unknownDateCount:current.unknownDateCount, unsupportedCount:current.unsupportedCount, duplicateCount:current.duplicateCount, rawEntriesRead:current.rawCount });
       return true;
     });
   }
   async function window(accountId, collectionId, generation, offset, limit) {
-    const entries = await transaction(['collectionEntries'], false, s => cursorValues(s('collectionEntries').index('order'), rangeFor([String(accountId),collectionId,generation]), limit, offset));
+    const start = Math.max(0, Number.isSafeInteger(offset) ? offset : 0);
+    const range = IDBKeyRange.bound(
+      [String(accountId), collectionId, generation, start],
+      [String(accountId), collectionId, generation, Number.MAX_SAFE_INTEGER]
+    );
+    const entries = await transaction(['collectionEntries'], false, s => cursorValues(s('collectionEntries').index('order'), range, limit));
     if (!entries.length) return [];
     return transaction(['tracks'], false, async s => Promise.all(entries.map(async entry => ({ ...(await request(s('tracks').get([String(accountId),entry.trackId]))), ...entry, itemId:entry.trackId, trackOrdinal:entry.ordinal }))));
   }

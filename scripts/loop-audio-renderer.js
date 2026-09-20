@@ -96,6 +96,12 @@
   }
 
   function copySegment(audioBuffer, range) {
+    const outputBytes = range.frameCount * range.sourceChannels * 4;
+    if (!Number.isSafeInteger(outputBytes) || outputBytes > MAX_RENDERED_PCM_BYTES) {
+      const error = new Error("The selected loop is too large to render.");
+      error.code = "memory_budget_exceeded";
+      throw error;
+    }
     const channels = Array.from({ length: range.sourceChannels }, (_, channel) =>
       audioBuffer
         .getChannelData(channel)

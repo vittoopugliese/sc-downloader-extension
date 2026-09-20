@@ -101,6 +101,18 @@ function hasEffectivePlaybackTransform(transform) {
   return Number.isFinite(rate) && Math.abs(rate - 1) > 0.0001;
 }
 
+function isSoundCloudTopFrameSender(sender) {
+  if (sender?.id !== chrome.runtime.id || !sender.tab || sender.frameId !== 0) {
+    return false;
+  }
+  try {
+    const url = new URL(sender.url || sender.tab.url);
+    return url.origin === "https://soundcloud.com";
+  } catch {
+    return false;
+  }
+}
+
 async function requestTopFrameLoopTrack(tabId, trackUrl) {
   if (!Number.isInteger(tabId)) {
     throw new Error(t("soundcloud_tab_not_found"));
@@ -180,6 +192,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (["OFFSCREEN_KEEPALIVE", "OFFSCREEN_BUILD_PROGRESS"].includes(request?.type) &&
+      (sender?.id !== chrome.runtime.id || sender?.tab ||
+       sender?.url !== chrome.runtime.getURL("offscreen.html"))) {
+    sendResponse({ success: false, code: "invalid_sender" });
+    return false;
+  }
   if (['GET_LIKES_LIBRARY_STATUS','START_LIKES_INDEX','REFRESH_LIKES_LIBRARY','CANCEL_LIKES_INDEX','QUERY_LIKES','SAVE_LIKES_VIEW','SAVE_LIKES_BOOKMARK','OPEN_LIKED_TRACK','LOCATE_LIKED_TRACK','START_LIKES_ARTWORK','PAUSE_LIKES_ARTWORK','GET_LIKES_ARTWORK','DELETE_LIKES_ARTWORK','DELETE_LIKES_LIBRARY','GET_LIKES_DOWNLOAD_SELECTION'].includes(request.type)) {
     return respond(likesJobs.handle(request, sender), sendResponse);
   }
@@ -325,11 +343,47 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === "GET_LOGGED_IN_USER") {
+    if (!isSoundCloudTopFrameSender(sender)) {
+      sendResponse({ success: false, code: "invalid_sender" });
+      return false;
+    }
     return respond(
       downloadSource.resolveLoggedInUser(request.clientId),
       sendResponse,
-      (profile) => ({ profile })
+      (profile) => ({ profile: { user: {
+        id: profile.user.id,
+        username: profile.user.username,
+        permalink_url: profile.user.permalink_url,
+        avatar_url: profile.user.avatar_url,
+        public_likes_count: profile.user.public_likes_count,
+        likes_count: profile.user.likes_count,
+      } } })
     );
+  }
+
+  if (request.type === "GET_AUTH_LIKES_PAGE") {
+    if (!isSoundCloudTopFrameSender(sender) ||
+        !/^\d+$/.test(String(request.userId)) ||
+        typeof request.clientId !== "string" || request.clientId.length > 128 ||
+        (request.nextHref != null && (typeof request.nextHref !== "string" || request.nextHref.length > 2048))) {
+      sendResponse({ success: false, code: "invalid_sender" });
+      return false;
+    }
+    return respond((async () => {
+      const profile = await downloadSource.resolveLoggedInUser(request.clientId);
+      const ownerId = String(profile.user.id);
+      if (ownerId !== String(request.userId)) {
+        throw Object.assign(new Error("SoundCloud session changed."), { code: "session_changed" });
+      }
+      const cursor = SCLikesSource.cursor(request.nextHref, ownerId);
+      const url = new URL(cursor || `https://api-v2.soundcloud.com/users/${ownerId}/likes?limit=50&linked_partitioning=1`);
+      url.searchParams.set("client_id", request.clientId);
+      const page = await SCSoundCloudHttp.create(fetch).json(url, { oauthToken: profile.oauthToken });
+      if (!Array.isArray(page.collection)) {
+        throw Object.assign(new Error("SoundCloud returned an invalid likes page."), { code: "invalid_response" });
+      }
+      return { collection: page.collection, nextHref: SCLikesSource.cursor(page.next_href, ownerId) };
+    })(), sendResponse, (page) => ({ page }));
   }
 
   if (request.type === "START_BULK_JOB") {

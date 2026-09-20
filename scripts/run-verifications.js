@@ -6,6 +6,7 @@ const scriptsDirectory = __dirname;
 const excluded = new Set([
   "verify-effects-browser.js",
   "verify-download-browser.js",
+  "verify-bulk-limit-browser.js",
   "verify-loop-browser.js",
   "verify-popup-browser.js",
   "verify-popup-unsupported-page.js",

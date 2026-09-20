@@ -57,6 +57,9 @@ const SCDownloadSource = (() => {
       if (!track?.streamUrl) {
         throw new Error("No downloadable stream was found for this track.");
       }
+      if (!SCSoundCloudHttp.resolverUrl(track.streamUrl)) {
+        throw createError("Stream resolver destination is invalid.", "invalid_stream_destination");
+      }
 
       return tryAuthenticated(track.clientId, [401, 403, 404], async (attempt) => {
         const url = new URL(track.streamUrl);
@@ -121,8 +124,14 @@ const SCDownloadSource = (() => {
       );
     }
 
-    async function resolve(trackData, formatPreference = "auto") {
+    async function resolve(trackData, formatPreference = "auto", options = {}) {
       let track = SCDownloadTrack.migrate(trackData);
+      if (options.forceRefresh) {
+        if (!track.id || !track.clientId) {
+          throw createError("Track metadata cannot be refreshed.", "source_unavailable");
+        }
+        track = await refresh(track.id, track.clientId, formatPreference);
+      }
       if (
         SCStreamSelector.shouldPreferOriginal(track, formatPreference)
       ) {

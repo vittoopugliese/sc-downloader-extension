@@ -174,7 +174,7 @@ function harness(pageUrl, hydration, api, runtimeReply) {
     2,
     "Likes pagination did not stop at a repeated cursor"
   );
-  assert.equal(repeatedLikes.intake.getCollection().tracks.length, 1);
+  assert.equal(repeatedLikes.intake.read().code, "cursor_cycle");
 
   let personalProfileRequested = false;
   const personalLikes = harness(
@@ -189,12 +189,16 @@ function harness(pageUrl, hydration, api, runtimeReply) {
       };
     },
     (message) => {
+      if (message.type === "GET_AUTH_LIKES_PAGE") {
+        return { success: true, page: {
+          collection: [{ track: rawTrack(3) }], nextHref: null,
+        } };
+      }
       personalProfileRequested = message.type === "GET_LOGGED_IN_USER";
       return {
         success: true,
         profile: {
           user: { id: 6, username: "Me", likes_count: 1 },
-          oauthToken: "oauth-token",
         },
       };
     }
@@ -202,6 +206,19 @@ function harness(pageUrl, hydration, api, runtimeReply) {
   await personalLikes.intake.extractCurrent();
   assert.equal(personalProfileRequested, true);
   assert.equal(personalLikes.intake.getCollection().tracks[0].id, 3);
+
+  const loggedOut = harness("https://soundcloud.com/you/likes", [],
+    () => { throw new Error("Unexpected API call"); },
+    () => ({ success: false, code: "unknown_error", error: "No oauth_token cookie" }));
+  await loggedOut.intake.extractCurrent();
+  assert.equal(loggedOut.intake.read().code, "auth_required");
+  assert.equal(loggedOut.intake.read().status, "error", "A terminal auth error must not restart on poll");
+
+  const limited = harness("https://soundcloud.com/listener/likes",
+    [{ hydratable: "user", data: { id: 6, username: "Listener" } }],
+    async () => ({ ok: false, status: 429, headers: { get: () => "60" } }));
+  await limited.intake.extractCurrent();
+  assert.equal(limited.intake.read().code, "rate_limited");
 
   let userPage = 0;
   const userTracks = harness(

@@ -13,8 +13,8 @@ vm.runInContext(source, context, { filename: "track-download-execution.js" });
 function createHarness(overrides = {}) {
   const calls = [];
   const dependencies = {
-    async resolveSource(trackData, formatPreference) {
-      calls.push(["resolve", trackData.id, formatPreference]);
+    async resolveSource(trackData, formatPreference, options) {
+      calls.push(["resolve", trackData.id, formatPreference, options?.forceRefresh === true]);
       return { trackData: { ...trackData, resolved: true }, streamUrl: "stream:test" };
     },
     async buildTrack(request) {
@@ -60,7 +60,7 @@ function createHarness(overrides = {}) {
   assert.equal(singleResult.success, true);
   assert.equal(singleResult.fileName, "Artist - Track.mp3");
   assert.deepEqual(single.calls, [
-    ["resolve", 1, "mp3"],
+    ["resolve", 1, "mp3", false],
     ["build", true, "stream:test"],
     ["save", "Artist - Track.mp3", null, null],
     ["revoke", "blob:test"],
@@ -133,7 +133,7 @@ function createHarness(overrides = {}) {
   });
   assert.equal(cancelledResult.cancelled, true);
   assert.equal(cancelled.calls.some(([name]) => name === "save"), false);
-  assert.deepEqual(cancelled.calls.at(-1), ["revoke", "blob:test"]);
+  assert.equal(cancelled.calls.some(([name]) => name === "build"), false);
 
   const failed = createHarness({
     async buildTrack() {
@@ -164,6 +164,7 @@ function createHarness(overrides = {}) {
   assert.equal(refreshedResult.success, true);
   assert.equal(expiredBuildAttempts, 2);
   assert.equal(refreshed.calls.filter(([name]) => name === "resolve").length, 2);
+  assert.deepEqual(refreshed.calls.filter(([name]) => name === "resolve").map(([, , , forceRefresh]) => forceRefresh), [false, true]);
   assert.deepEqual(refreshStages, ["resolving", "building", "refreshing", "saving"]);
 
   let releaseBuild;
