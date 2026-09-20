@@ -3,8 +3,8 @@
   if (window.top !== window) return;
   const text = globalThis.SCLikesText;
   const el = (tag, cls, value) => { const node = document.createElement(tag); if (cls) node.className = cls; if (value !== undefined) node.textContent = value; return node; };
-  let host, shadow, panel, launch, viewport, canvas, rail, mapCanvas, indicator, search, period, status, footer, position, toolbar, detail, settings;
-  let ownerId, generation, revision, total = 0, count = 0, mode = 'gallery', density = 'comfortable', query = '', filter = '', anchor, selected, previousResults, opened = false, routeEpoch = 0, requestEpoch = 0, mapEpoch = 0, statusBusy = false, resizeObserver, focusBefore;
+  let host, shadow, panel, launch, viewport, canvas, rail, mapCanvas, indicator, search, period, status, toolbar, detail, settings, syncAction;
+  let ownerId, generation, revision, total = 0, count = 0, query = '', filter = '', anchor, selected, previousResults, opened = false, routeEpoch = 0, requestEpoch = 0, mapEpoch = 0, statusBusy = false, resizeObserver, focusBefore;
   let lastStatus, lastPoll = 0, drag, renderTimer, searchTimer, saveTimer, raf, mapManual = false, restored = false;
   const images = new Map();
   let imageEpoch = 0;
@@ -24,15 +24,23 @@
     if (status) status.textContent = text(e.code);
     if (e.code === 'pro-required') gate();
   }
+  function updateSyncAction(job) {
+    if (!syncAction) return;
+    const action = job?.phase === 'indexing' ? 'pause' : job?.phase === 'paused' ? 'resume' : 'refresh';
+    syncAction.querySelector('.action-icon').textContent = action === 'pause' ? 'Ⅱ' : action === 'resume' ? '▶' : '↻';
+    syncAction.title = text(action);
+    syncAction.setAttribute('aria-label', text(action));
+    syncAction.classList.toggle('is-running', job?.phase === 'indexing');
+  }
   function dimensions() {
-    const columns = mode === 'list' ? 1 : Math.max(2, Math.floor((viewport.clientWidth - 24) / (density === 'compact' ? 124 : 166)));
-    const cell = (viewport.clientWidth - 24 - (columns - 1) * 12) / columns;
-    return { columns, height: mode === 'list' ? 76 : cell + 76, cell };
+    const columns = 6, gap = 6, inset = 8;
+    const cell = Math.max(0, (viewport.clientWidth - inset * 2 - (columns - 1) * gap) / columns);
+    return { columns, height: cell + 30, cell, gap, inset };
   }
   function visibleOrdinal() { const d = dimensions(); return Math.min(Math.max(0,count-1), Math.floor(viewport.scrollTop / d.height) * d.columns); }
   function persist() {
     clearTimeout(saveTimer); if (!ownerId || !anchor) return;
-    saveTimer = setTimeout(() => send('SAVE_LIKES_VIEW', { anchorTrackId: anchor.itemId, mode, density, query }).catch(() => {}), 350);
+    saveTimer = setTimeout(() => send('SAVE_LIKES_VIEW', { anchorTrackId: anchor.itemId, query }).catch(() => {}), 350);
   }
   function art(item, size) {
     const box = el('span', 'cover'); box.style.setProperty('--hue', String((Number(item.itemId) * 137.508) % 360));
@@ -65,28 +73,24 @@
     count = r.matchingCount; total = r.indexedCount;
     canvas.style.height = `${Math.ceil(count/d.columns)*d.height}px`;
     const focused = shadow.activeElement?.closest('.card');
-    const focusedId = focused?.dataset.id, focusedPlay = shadow.activeElement?.classList.contains('play');
+    const focusedId = focused?.dataset.id;
     canvas.replaceChildren();
     if (!count) { const empty = el('div','empty',text(query || filter ? 'noResults' : 'empty')); if (!r.complete) empty.append(el('p','',text('partial'))); canvas.append(empty); }
     const first = visibleOrdinal();
     anchorPixelOffset = viewport.scrollTop % d.height;
     anchor = r.items[Math.max(0,first-start)] || anchor;
     for (const [i,item] of r.items.entries()) {
-      const index = start+i, card = el('article',`card ${mode} ${selected?.itemId === item.itemId || highlightId === item.itemId ? 'selected' : ''}`);
+      const index = start+i, card = el('article',`card ${selected?.itemId === item.itemId || highlightId === item.itemId ? 'selected' : ''}`);
       card.dataset.id = item.itemId;
-      card.style.cssText = `top:${Math.floor(index/d.columns)*d.height}px;left:${12+(index%d.columns)*(d.cell+12)}px;width:${d.cell}px;height:${d.height-12}px`;
+      card.style.cssText = `top:${Math.floor(index/d.columns)*d.height}px;left:${d.inset+(index%d.columns)*(d.cell+d.gap)}px;width:${d.cell}px;height:${d.height-d.gap}px`;
       const primary = button('', () => select(item), 'card-main'); primary.setAttribute('aria-label',`${item.title} — ${item.artistName}`);
-      primary.append(art(item,160));
+      primary.append(art(item,48));
       const copy = el('span','card-copy'); copy.append(el('strong','',item.title),el('span','artist',item.artistName)); primary.append(copy);
-      const meta = el('div','card-meta'); meta.append(el('span','',`#${(item.trackOrdinal+1).toLocaleString()}`));
-      const play = button('↗', () => openTrack(item), 'play'); play.title = `${text('open')}: ${item.title}`; play.setAttribute('aria-label',play.title); meta.append(play);
-      card.append(primary,meta); canvas.append(card);
+      card.append(primary); canvas.append(card);
     }
-    if (focusedId) { const card = [...canvas.children].find(n=>n.dataset.id===focusedId); (card?.querySelector(focusedPlay ? '.play' : '.card-main') || viewport).focus({preventScroll:true}); }
-    position.max = Math.max(0,total-1); position.value = anchor?.trackOrdinal || 0;
-    footer.textContent = `${count ? first+1 : 0}–${Math.min(count,first+Math.ceil(viewport.clientHeight/d.height)*d.columns)} / ${count.toLocaleString()} ${text('tracks')}${r.complete ? '' : ' · '+text('partial')}`;
+    if (focusedId) { const card = [...canvas.children].find(n=>n.dataset.id===focusedId); (card?.querySelector('.card-main') || viewport).focus({preventScroll:true}); }
     updateIndicator();
-    cachedArt(r.items,160,epoch).catch(() => {}); persist();
+    cachedArt(r.items,48,epoch).catch(() => {}); persist();
   }
   async function renderMap() {
     if (!opened || !generation) return;
@@ -128,42 +132,36 @@
     if (r.items[0]) await around(r.items[0].itemId);
   }
   async function openTrack(item) {
-    anchor = item; await send('SAVE_LIKES_VIEW',{anchorTrackId:item.itemId,mode,density,query});
+    anchor = item; await send('SAVE_LIKES_VIEW',{anchorTrackId:item.itemId,query});
     await send('OPEN_LIKED_TRACK',{generation,trackId:item.itemId});
   }
   function select(item) {
     selected = item; detail.hidden = false; detail.replaceChildren(); detail.append(art(item,48));
     const copy = el('div','detail-copy'); copy.append(el('strong','',item.title),el('span','',item.artistName)); detail.append(copy);
-    detail.append(button('‹',()=>neighbor(-1),'small'),button('›',()=>neighbor(1),'small'));
-    detail.children[2].title = text('previous'); detail.children[3].title = text('next');
     const open = button(text('open')+' ↗',()=>openTrack(item),'accent'); open.title = text('openHint'); detail.append(open);
-    detail.append(button('◎',()=>around(item.itemId),'small'),button('⌖',()=>locate(item),'small'));
-    detail.lastChild.title = text('locate'); detail.children[5].title = text('around'); render().catch(showError);
+    const locateButton = button('⌖',()=>locate(item),'small locate-action'); locateButton.title = text('locate'); locateButton.setAttribute('aria-label',text('locate')); detail.append(locateButton);
+    render().catch(showError);
   }
-  async function neighbor(direction) { const r = await send('QUERY_LIKES',{generation,offset:Math.max(0,Math.min(total-1,selected.trackOrdinal+direction)),limit:1}); if (r.items[0]) { await around(r.items[0].itemId); select(r.items[0]); } }
   async function locate(item) {
     const r = await send('LOCATE_LIKED_TRACK',{generation,trackId:item.itemId});
     status.textContent = text('locating'); const cancel = button(text('cancel'),()=>SCLikesLocator.cancel(),'small'); status.append(cancel);
-    const found = await SCLikesLocator.locate(r.permalink, n => { footer.textContent = `${text('locating')} ${n}`; });
+    const found = await SCLikesLocator.locate(r.permalink, n => { status.textContent = `${text('locating')} ${n}`; });
     status.textContent = text(found ? 'located' : 'locateStopped');
   }
   function gate() {
     viewport.hidden = rail.parentElement.hidden = toolbar.hidden = true;
     const empty = el('div','gate'); empty.append(el('span','eyebrow','LIFETIME PRO'),el('h2','',text('pro')),el('p','',text('proInfo')),button(text('getPro')+' ↗',()=>document.dispatchEvent(new CustomEvent('scdl:open-player-tools-pro')),'accent'));
     empty.append(button(text('removeLibrary'),async()=>{ if(confirm(text('confirmDelete'))) { await send('DELETE_LIKES_LIBRARY'); images.clear(); status.textContent = text('empty'); } },'danger'));
+    empty.append(button(text('close'),close,'small'));
     settings.replaceChildren(empty); settings.hidden = false;
   }
   async function poll() {
     if (!opened || statusBusy || drag) return; statusBusy = true;
     try {
       const r = await send('GET_LIKES_LIBRARY_STATUS'); lastStatus = r; ownerId = r.ownerId;
-      shadow.querySelector('.owner').textContent = r.displayName || '';
       const lib = r.library, job = r.job;
       status.textContent = job?.error ? text(job.error) : `${text(job?.phase === 'indexing' ? 'indexing' : job?.phase === 'paused' ? 'paused' : lib?.complete ? 'complete' : 'welcome')}${lib ? ' · '+(job?.count || lib.count).toLocaleString()+' '+text('tracks') : ''}`;
-      const artworkStatus = shadow.querySelector('.artwork-status');
-      artworkStatus.hidden = !r.artwork;
-      if (r.artwork) artworkStatus.textContent = `${r.artwork.phase === 'saving' ? text('saving')+' · ' : ''}${r.artwork.saved} ${text('saved')} · ${(r.artwork.bytes/1048576).toFixed(1)} MB${r.artwork.failed ? ' · '+r.artwork.failed+' '+text('failed') : ''}${r.artwork.error ? ' · '+text(r.artwork.error) : ''}`;
-      shadow.querySelector('.sync').textContent = text(job?.phase === 'indexing' ? 'pause' : job?.phase === 'paused' ? 'resume' : 'refresh');
+      updateSyncAction(job);
       viewport.hidden = toolbar.hidden = false; rail.parentElement.hidden = !lib;
       if (!lib) {
         canvas.style.height = 'auto'; canvas.replaceChildren(); const intro = el('div','empty'); intro.append(el('div','hero-mark','♡'),el('h2','',text('welcome')),el('p','',text('intro')),button(text('start')+' →',async()=>{ await send('START_LIKES_INDEX'); await pollAfter(); },'accent')); canvas.append(intro); return;
@@ -174,7 +172,7 @@
         const r2 = await send('QUERY_LIKES',{generation,limit:1});
         const value = period.value; period.replaceChildren(new Option(text('all'),''));
         for (const [key,p] of Object.entries(r2.periods)) period.add(new Option(`${key === 'unknown' ? text('unknown') : new Date(key+'-02').toLocaleDateString(undefined,{year:'numeric',month:'short'})} · ${p.count}${lib.complete ? '' : '+'}`,key)); period.value = value;
-        if (!restored) { restored = true; mode = r.view?.mode || mode; density = r.view?.density || density; query = r.view?.query || ''; search.value = query; if (r.view?.anchorTrackId) await restoreAnchor(r.view.anchorTrackId); else await render(); }
+        if (!restored) { restored = true; query = r.view?.query || ''; search.value = query; if (r.view?.anchorTrackId) await restoreAnchor(r.view.anchorTrackId); else await render(); }
         else if (anchor && changed) await restoreAnchor(anchor.itemId); else await render();
         await renderMap();
       }
@@ -202,22 +200,23 @@
     launch = button('♡  Likes',open,'launch'); launch.title = text('title'); shadow.append(launch);
     panel = el('section','shell'); panel.hidden = true; panel.setAttribute('aria-label',text('title')); shadow.append(panel);
     const main = el('div','main'); panel.append(main);
-    const head = el('header'); const brand = el('div'); brand.append(el('span','eyebrow',text('archive')),el('h1','',text('title')),el('p','subtitle',text('tagline'))); head.append(brand,button('×',close,'close')); head.lastChild.setAttribute('aria-label',text('close')); main.append(head);
-    const info = el('div','info'); info.append(el('span','owner')); status = el('span','status'); status.setAttribute('role','status'); info.append(status); main.append(info);
-    toolbar = el('div','toolbar'); search = el('input'); search.type = 'search'; search.placeholder = text('search'); search.maxLength = 200; search.setAttribute('aria-label',text('search')); toolbar.append(search);
-    const controls = el('div','controls'); period = el('select'); period.setAttribute('aria-label',text('all')); period.add(new Option(text('all'),'')); controls.append(period);
-    controls.append(button('▦',async()=>{ mode = mode === 'gallery' ? 'list' : 'gallery'; if (anchor) await restoreAnchor(anchor.itemId); else await render(); },'small'));
-    controls.lastChild.title = `${text('gallery')} / ${text('list')}`;
-    controls.append(button('⊞',async()=>{ density = density === 'compact' ? 'comfortable' : 'compact'; if (anchor) await restoreAnchor(anchor.itemId); },'small')); controls.lastChild.title = text('density');
-    controls.append(button(text('refresh'),async()=>{ const phase = lastStatus?.job?.phase; await send(phase === 'indexing' ? 'CANCEL_LIKES_INDEX' : phase === 'paused' ? 'START_LIKES_INDEX' : 'REFRESH_LIKES_LIBRARY'); await poll(); },'sync'));
-    controls.append(button('⚙',storagePanel,'small')); controls.lastChild.title = text('settings');
-    const bookmark = button('☆',async()=>{ if (!anchor) return; const name = prompt(text('bookmarkName'),anchor.title); if (name) await send('SAVE_LIKES_BOOKMARK',{trackId:anchor.itemId,name}); },'small'); bookmark.title = text('bookmark'); controls.append(bookmark);
-    toolbar.append(controls); main.append(toolbar);
+    toolbar = el('div','toolbar'); const toolbarLine = el('div','toolbar-line');
+    search = el('input'); search.type = 'search'; search.placeholder = text('search'); search.maxLength = 200; search.setAttribute('aria-label',text('search'));
+    const searchWrap = el('div','search-wrap'); searchWrap.append(search); const closeButton = button('×',close,'close search-close'); closeButton.setAttribute('aria-label',text('close')); closeButton.title = text('close'); searchWrap.append(closeButton); toolbarLine.append(searchWrap);
+    period = el('select'); period.setAttribute('aria-label',text('all')); period.add(new Option(text('all'),'')); toolbarLine.append(period);
+    syncAction = button('',async()=>{
+      syncAction.classList.add('is-loading'); syncAction.disabled = true;
+      try { const phase = lastStatus?.job?.phase; await send(phase === 'indexing' ? 'CANCEL_LIKES_INDEX' : phase === 'paused' ? 'START_LIKES_INDEX' : 'REFRESH_LIKES_LIBRARY'); await pollAfter(); }
+      finally { syncAction.classList.remove('is-loading'); syncAction.disabled = false; }
+    },'sync action-button');
+    syncAction.append(el('span','action-icon','↻'),el('span','action-spinner')); toolbarLine.append(syncAction);
+    const storage = button('',storagePanel,'small action-button icon-only'); storage.append(el('span','action-icon','▣')); storage.title = text('settings'); storage.setAttribute('aria-label',text('settings')); toolbarLine.append(storage);
+    const bookmark = button('',async()=>{ if (!anchor) return; const name = prompt(text('bookmarkName'),anchor.title); if (name) await send('SAVE_LIKES_BOOKMARK',{trackId:anchor.itemId,name}); },'small action-button icon-only'); bookmark.append(el('span','action-icon','☆')); bookmark.title = text('bookmark'); bookmark.setAttribute('aria-label',text('bookmark')); toolbarLine.append(bookmark);
+    toolbar.append(toolbarLine); status = el('span','status'); status.setAttribute('role','status'); toolbar.append(status);
     const back = button('← '+text('back'),async()=>{ if (!previousResults) return; const saved = previousResults; query = saved.query; filter = saved.filter; search.value = query; period.value = filter; previousResults = null; back.hidden = true; if(saved.anchor) await restoreAnchor(saved.anchor); else {viewport.scrollTop = 0; await render();} },'back-results'); back.hidden = true; main.append(back);
     settings = el('div','settings'); settings.hidden = true; main.append(settings);
     viewport = el('div','viewport'); viewport.tabIndex = 0; viewport.setAttribute('aria-label',text('likes')); canvas = el('div','canvas'); viewport.append(canvas); main.append(viewport);
-    detail = el('div','detail'); detail.hidden = true; main.append(detail);
-    const bottom = el('div','bottom'); footer = el('div','footer'); position = el('input'); position.type = 'range'; position.min = 0; position.max = 0; position.value = 0; position.setAttribute('aria-label',text('position')); const artworkStatus = el('div','footer artwork-status'); artworkStatus.hidden = true; bottom.append(footer,position,artworkStatus); main.append(bottom);
+    detail = el('div','detail'); detail.hidden = true; main.append(detail,toolbar);
     const aside = el('aside'); aside.append(el('span','map-label','LIKES MAP')); rail = el('div','rail'); rail.tabIndex = 0; rail.setAttribute('aria-label',text('map')); mapCanvas = el('div','map-canvas'); indicator = el('div','indicator'); indicator.setAttribute('role','slider'); indicator.setAttribute('aria-label',text('position')); rail.append(mapCanvas,indicator); aside.append(rail); panel.append(aside);
     document.body.append(host); layout();
     search.addEventListener('input',()=>{ clearTimeout(searchTimer); searchTimer = setTimeout(()=>{ query = search.value; viewport.scrollTop = 0; render().catch(showError); },160); });
@@ -225,7 +224,6 @@
     viewport.addEventListener('scroll',()=>{ clearTimeout(renderTimer); renderTimer = setTimeout(()=>render().catch(showError),45); });
     rail.addEventListener('wheel',()=>{ mapManual = true; },{passive:true}); rail.addEventListener('scroll',()=>renderMap().catch(showError));
     rail.addEventListener('keydown',event=>{ const shifts = { ArrowDown:6,ArrowUp:-6,PageDown:Math.floor(rail.clientHeight/18)*6,PageUp:-Math.floor(rail.clientHeight/18)*6,Home:-total,End:total }; if (event.key in shifts) { event.preventDefault(); at((anchor?.trackOrdinal || 0)+shifts[event.key]).catch(showError); } });
-    position.addEventListener('change',()=>at(Number(position.value)).catch(showError));
     indicator.addEventListener('pointerdown',event=>{ if (!total) return; event.preventDefault(); drag = {pointerId:event.pointerId,y:event.clientY,grab:event.clientY-rail.getBoundingClientRect().top+rail.scrollTop-parseFloat(indicator.style.top),busy:false,last:-1}; indicator.setPointerCapture(event.pointerId); mapManual = true; dragFrame(); });
     indicator.addEventListener('pointermove',e=>{ if(drag) drag.y = e.clientY; }); for (const name of ['pointerup','pointercancel','lostpointercapture']) indicator.addEventListener(name,endDrag);
     shadow.addEventListener('keydown',e=>{ if(e.key === 'Escape') { if(drag) endDrag(); else if (!settings.hidden) settings.hidden = true; else close(); } });
@@ -261,10 +259,11 @@
   document.addEventListener('scdl:open-likes-explorer',()=>{ location.href = 'https://soundcloud.com/you/likes#scdl-explore'; });
   const CSS = `
     :host{all:initial;--top:60px;--bottom:88px;font:13px/1.45 system-ui,-apple-system,sans-serif;color:#ece9e4;position:fixed;inset:0;z-index:2147483600;pointer-events:none;color-scheme:dark}
-    *{box-sizing:border-box} [hidden]{display:none!important} button,input,select{font:inherit}button{cursor:pointer;color:inherit;border:1px solid #ffffff15;background:#ffffff06;border-radius:8px;padding:7px 10px;transition:background .15s,border-color .15s}button:hover{background:#ffffff12;border-color:#ffffff38}button:focus-visible,input:focus-visible,select:focus-visible,.rail:focus-visible,.viewport:focus-visible{outline:2px solid #ff996a;outline-offset:2px}button:disabled{opacity:.4}input,select{color:inherit;background:#141416;border:1px solid #ffffff15;border-radius:8px;padding:9px;min-width:0}input[type=range]{padding:0;accent-color:#fc8958;width:100%;height:16px}h1,h2,h3,p{margin:0}h1{font-size:26px;letter-spacing:-1.1px;font-weight:650}h2{font-size:25px;line-height:1.2;letter-spacing:-.7px}h3{font-size:14px}p{color:#a9a5a1}strong{font-weight:550} .launch{pointer-events:auto;position:absolute;right:12px;top:45%;background:#202023ed;color:#d9d4cf;box-shadow:0 4px 20px #0003;padding:11px 12px;border-radius:14px 5px 5px 14px;font-size:12px}
-    .shell{pointer-events:auto;position:absolute;top:var(--top);bottom:var(--bottom);right:12px;display:flex;gap:10px;max-width:calc(100vw - 24px);filter:drop-shadow(0 20px 35px #0005)}.main{width:560px;max-width:calc(100vw - 152px);display:flex;flex-direction:column;min-height:0;background:#1b1b1e;border:1px solid #ffffff1f;border-radius:18px;overflow:hidden}header{display:flex;justify-content:space-between;align-items:flex-start;padding:22px 22px 12px;background:radial-gradient(ellipse at 90% 0,#73422935,transparent 70%)}.eyebrow{font-size:9px;letter-spacing:2px;color:#c39379;font-weight:600}.subtitle{font-size:12px;margin-top:4px}.close{border:0;background:transparent;font-size:24px;line-height:1;padding:3px 6px;color:#aaa}.info{padding:0 22px 14px;display:flex;gap:10px;font-size:10px;color:#96918b;justify-content:space-between}.owner{color:#c9c3bc;white-space:nowrap;max-width:30%;overflow:hidden;text-overflow:ellipsis}.status{min-width:0;text-align:right}.toolbar{padding:0 16px 12px;border-bottom:1px solid #ffffff0b}.toolbar input{width:100%;padding:11px 13px;font-size:12px}.controls{display:flex;gap:5px;margin-top:8px;align-items:center}.controls select{flex:1;width:110px;font-size:11px;padding:7px}.small{padding:5px 8px;min-width:30px;min-height:30px}.sync{font-size:10px;white-space:nowrap}.viewport{position:relative;flex:1;min-height:80px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#55514d transparent;padding-top:12px}.canvas{position:relative}.card{position:absolute;overflow:hidden;border-radius:10px;padding:5px;background:transparent;border:1px solid transparent}.card:hover{background:#ffffff05;border-color:#ffffff12}.card.selected{background:#ff915710;border-color:#ff915755}.card-main{padding:0;border:0;background:none!important;display:block;width:100%;text-align:left}.cover{position:relative;display:block;aspect-ratio:1;background:linear-gradient(140deg,hsl(var(--hue) 23% 28%),hsl(var(--hue) 18% 13%));border-radius:7px;overflow:hidden}.cover-mark{position:absolute;inset:0;display:grid;place-items:center;font-size:32px;color:#ffffff30}.cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.card-copy{display:block;padding:8px 2px 0;min-width:0}.card-copy strong,.artist{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px}.artist{font-size:10px;color:#98928c;margin-top:2px}.card-meta{display:flex;justify-content:space-between;align-items:center;font-size:9px;color:#77716b;padding:0 2px}.play{border:0;padding:1px 8px;color:#f0a37e;font-size:16px;min-width:30px}.card.list{display:flex;gap:6px}.list .card-main{display:flex;gap:12px;align-items:center;min-width:0}.list .cover{width:54px;height:54px;flex-shrink:0}.list .card-copy{padding:0}.list .card-meta{flex-direction:column;justify-content:center;min-width:40px}.bottom{border-top:1px solid #ffffff0b;padding:10px 18px 12px}.footer{font-size:9px;color:#99938d;min-height:16px}.empty{padding:40px 28px;text-align:center;max-width:420px;margin:auto}.empty p{font-size:12px;margin:12px 0 22px;line-height:1.7}.hero-mark{font-size:55px;color:#db9574;margin-bottom:12px}.accent{background:#e99b74!important;color:#221b17!important;border-color:#e99b74!important;font-weight:600;font-size:11px;padding:9px 13px}.detail{display:flex;gap:7px;align-items:center;border-top:1px solid #ffffff12;padding:10px 12px;background:#252326}.detail>.cover{width:36px;height:36px;flex-shrink:0}.detail-copy{flex:1;min-width:0;font-size:11px}.detail-copy>*{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.detail-copy span{font-size:10px;color:#aaa}.detail .accent{font-size:10px;max-width:110px;padding:6px}.detail .small{padding:4px;min-width:24px}.back-results{margin:8px 16px 0;text-align:left;font-size:11px;color:#e8a581;border:0}.settings{padding:18px;overflow:auto;max-height:55%;background:#242326;border-bottom:1px solid #ffffff15}.settings p{font-size:12px;margin:8px 0 12px}.settings button{font-size:11px;margin:4px}.settings h3:not(:first-child){margin-top:16px}.danger{color:#efa699}.gate{padding:20px 10px}.gate h2{margin:12px 0}.gate p{line-height:1.7}.shell:has(.gate) .settings{max-height:none}.shell:has(.gate) .bottom{display:none}
+    *{box-sizing:border-box} [hidden]{display:none!important} button,input,select{font:inherit}button{cursor:pointer;color:inherit;border:1px solid #ffffff15;background:#ffffff06;border-radius:8px;padding:7px 10px;transition:background .15s,border-color .15s}button:hover{background:#ffffff12;border-color:#ffffff38}button:focus-visible,input:focus-visible,select:focus-visible,.rail:focus-visible,.viewport:focus-visible{outline:2px solid #ff996a;outline-offset:2px}button:disabled{opacity:.4}input,select{color:inherit;background:#141416;border:1px solid #ffffff15;border-radius:8px;padding:9px;min-width:0}h2,h3,p{margin:0}h2{font-size:25px;line-height:1.2;letter-spacing:-.7px}h3{font-size:14px}p{color:#a9a5a1}strong{font-weight:550} .launch{pointer-events:auto;position:absolute;right:12px;top:45%;background:#202023ed;color:#d9d4cf;box-shadow:0 4px 20px #0003;padding:11px 12px;border-radius:14px 5px 5px 14px;font-size:12px}
+    .shell{pointer-events:auto;position:absolute;top:var(--top);bottom:var(--bottom);right:12px;display:flex;gap:10px;max-width:calc(100vw - 24px);filter:drop-shadow(0 20px 35px #0005)}.main{width:520px;max-width:calc(100vw - 152px);display:flex;flex-direction:column;min-height:0;background:#1b1b1e;border:1px solid #ffffff1f;border-radius:14px;overflow:hidden}.eyebrow{font-size:9px;letter-spacing:2px;color:#c39379;font-weight:600}.close{border:0;background:transparent;font-size:22px;line-height:1;padding:3px 6px;color:#aaa;flex:0 0 auto}.toolbar{padding:9px 10px 7px;border-bottom:1px solid #ffffff0b}.toolbar-line{display:flex;align-items:center;gap:5px}.search-wrap{position:relative;flex:1;min-width:130px}.toolbar input{width:100%;height:28px;padding:7px 29px 7px 9px;font-size:10px}.search-close{position:absolute;top:50%;right:3px;transform:translateY(-50%);width:24px;height:24px;padding:0;font-size:16px}.toolbar select{width:98px;height:28px;flex:0 0 auto;font-size:9px;padding:6px}.status{display:block;min-height:12px;margin-top:4px;color:#96918b;font-size:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.small{padding:4px 7px;min-width:28px;min-height:28px}.action-button{display:inline-flex;align-items:center;justify-content:center;gap:4px;height:28px;padding:4px 7px}.icon-only{width:28px;padding:0}.action-icon{font-size:12px;line-height:1}.sync{width:28px;padding:0;overflow:hidden;font-size:9px;white-space:nowrap}.action-spinner{display:none;width:10px;height:10px;border:2px solid #ffffff35;border-top-color:#f1a078;border-radius:50%;animation:spin .7s linear infinite}.sync.is-loading .action-icon,.sync.is-running .action-icon{display:none}.sync.is-loading .action-spinner,.sync.is-running .action-spinner{display:inline-block}@keyframes spin{to{transform:rotate(360deg)}}.viewport{position:relative;flex:1;min-height:80px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#55514d transparent;padding-top:6px}.canvas{position:relative}.card{position:absolute;overflow:hidden;border-radius:7px;padding:3px;background:transparent;border:1px solid transparent}.card:hover{background:#ffffff05;border-color:#ffffff12}.card.selected{background:#ff915710;border-color:#ff915755}.card-main{padding:0;border:0;background:none!important;display:block;width:100%;text-align:left}.cover{position:relative;display:block;aspect-ratio:1;background:linear-gradient(140deg,hsl(var(--hue) 23% 28%),hsl(var(--hue) 18% 13%));border-radius:5px;overflow:hidden}.cover-mark{position:absolute;inset:0;display:grid;place-items:center;font-size:24px;color:#ffffff30}.cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.card-copy{display:block;padding:4px 1px 0;min-width:0}.card-copy strong,.artist{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:10px;line-height:1.15}.artist{font-size:9px;color:#98928c;margin-top:2px}.empty{padding:40px 28px;text-align:center;max-width:420px;margin:auto}.empty p{font-size:12px;margin:12px 0 22px;line-height:1.7}.hero-mark{font-size:55px;color:#db9574;margin-bottom:12px}.accent{background:#e99b74!important;color:#221b17!important;border-color:#e99b74!important;font-weight:600;font-size:11px;padding:9px 13px}.detail{display:flex;gap:7px;align-items:center;border-top:1px solid #ffffff12;padding:8px 10px;background:#252326}.detail>.cover{width:34px;height:34px;flex-shrink:0}.detail-copy{flex:1;min-width:0;font-size:11px}.detail-copy>*{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.detail-copy span{font-size:10px;color:#aaa}.detail .accent{font-size:10px;max-width:110px;padding:6px}.detail .small{padding:4px;min-width:24px}.back-results{margin:6px 10px 0;text-align:left;font-size:10px;color:#e8a581;border:0}.settings{padding:18px;overflow:auto;max-height:55%;background:#242326;border-bottom:1px solid #ffffff15}.settings p{font-size:12px;margin:8px 0 12px}.settings button{font-size:11px;margin:4px}.settings h3:not(:first-child){margin-top:16px}.danger{color:#efa699}.gate{padding:20px 10px}.gate h2{margin:12px 0}.gate p{line-height:1.7}.shell:has(.gate) .settings{max-height:none}
     aside{width:124px;background:#1b1b1eeF;border:1px solid #ffffff1f;border-radius:14px;padding:10px 7px;display:flex;flex-direction:column;overflow:hidden}.map-label{font-size:8px;letter-spacing:1.7px;color:#a3988f;text-align:center;padding:2px 0 10px}.rail{flex:1;position:relative;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:none;min-height:0;width:108px}.map-canvas{position:relative;width:108px}.tile{position:absolute;width:16px;height:16px;padding:0;border:0;border-radius:2px}.tile .cover{border-radius:2px}.tile .cover-mark{font-size:10px}.indicator{position:absolute;left:0;width:108px;border:2px solid #f6ccaf;box-shadow:0 0 0 1px #0008;background:#e8ceae25;border-radius:3px;touch-action:none;cursor:grab;min-height:18px;pointer-events:auto}.indicator:active{cursor:grabbing}.indicator::after{content:'';display:block;width:22px;height:3px;background:#ffe2cf;border-radius:3px;position:absolute;left:41px;top:50%}
-    @media(max-width:759px){aside{display:none}.main{width:560px;max-width:calc(100vw - 24px)}header{padding:16px 16px 10px}.info{padding:0 16px 12px}.detail{flex-wrap:wrap}.detail-copy{min-width:80px}.controls{flex-wrap:wrap}.controls select{min-width:100px}}@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+    .toolbar{border-top:1px solid #ffffff12;border-bottom:0}.detail{border-top:1px solid #ffffff12}.detail .accent{display:inline-flex;align-items:center;justify-content:center;max-width:none;white-space:nowrap;line-height:1}.locate-action{flex:0 0 28px;padding:4px}
+    @media(max-width:759px){aside{display:none}.main{width:520px;max-width:calc(100vw - 24px)}.detail{flex-wrap:wrap}.detail-copy{min-width:80px}.toolbar select{width:92px}}@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}.action-spinner{animation:none!important}}
   `;
   setInterval(route,500); window.addEventListener('popstate',route); window.addEventListener('resize',layout); route();
 })();

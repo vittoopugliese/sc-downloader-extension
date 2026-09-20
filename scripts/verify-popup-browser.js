@@ -8,6 +8,9 @@ const logoDataUrl = `data:image/png;base64,${fs.readFileSync(
 const playerToolsDataUrl = `data:image/png;base64,${fs.readFileSync(
   path.resolve(__dirname, "..", "assets", "icons", "player-toolkit.png")
 ).toString("base64")}`;
+const likesExplorerDataUrl = `data:image/png;base64,${fs.readFileSync(
+  path.resolve(__dirname, "..", "assets", "images", "likes-explorer.png")
+).toString("base64")}`;
 const iconDataUrls = Object.fromEntries(
   ["settings.svg", "download.svg", "folder-icon.svg", "back-arrow.svg", "bypass.svg"].map((fileName) => [
     fileName,
@@ -26,12 +29,13 @@ const iconDataUrls = Object.fromEntries(
     const html = fs.readFileSync(path.resolve(__dirname, "..", "popup.html"), "utf8")
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
     await page.setContent(html);
-    await page.evaluate(({ logoUrl, playerToolsUrl, icons }) => {
+    await page.evaluate(({ logoUrl, playerToolsUrl, likesExplorerUrl, icons }) => {
       document.querySelector("#loadingOverlay").classList.add("is-hidden");
       document.querySelector("#title").textContent = "t t o r i o - Tracks";
       document.querySelector("#artist").textContent = "t t o r i o";
       document.querySelector("#artistArtwork").src = logoUrl;
       document.querySelector(".player-tools-offer img").src = playerToolsUrl;
+      document.querySelector(".likes-explorer-thumb").src = likesExplorerUrl;
       document.querySelector("#playerToolsTrialStatus").textContent = "7 days left in your free trial";
       document.querySelectorAll("img[src]").forEach((image) => {
         const fileName = image.getAttribute("src").split("/").at(-1);
@@ -45,7 +49,7 @@ const iconDataUrls = Object.fromEntries(
       document.querySelector("#downloadBtn").classList.remove("is-hidden");
       const artwork = document.querySelector("#artwork");
       artwork.style.background = "linear-gradient(135deg, #6b2109, #173342)";
-    }, { logoUrl: logoDataUrl, playerToolsUrl: playerToolsDataUrl, icons: iconDataUrls });
+    }, { logoUrl: logoDataUrl, playerToolsUrl: playerToolsDataUrl, likesExplorerUrl: likesExplorerDataUrl, icons: iconDataUrls });
     const dimensions = await page.evaluate(() => ({
       width: innerWidth,
       scrollWidth: document.documentElement.scrollWidth,
@@ -74,6 +78,8 @@ const iconDataUrls = Object.fromEntries(
         offerDetailSize: style(".player-tools-offer-detail").fontSize,
         offerTrialSize: style("#playerToolsTrialStatus").fontSize,
         offerPriceSize: style(".player-tools-offer-price").fontSize,
+        likesImageSize: size(document.querySelector(".likes-explorer-thumb")),
+        productColumns: style(".product-offers").gridTemplateColumns.split(" ").length,
         artworkFilter: style("#artwork").filter,
         collectionControlsAligned: Math.max(...collectionCenters) - Math.min(...collectionCenters) <= 1,
       };
@@ -86,11 +92,13 @@ const iconDataUrls = Object.fromEntries(
       titleSize: "19px",
       divider: "none",
       selectionDivider: "none",
-      offerImageSize: [64, 64],
-      offerTitleSize: "20px",
-      offerDetailSize: "12px",
-      offerTrialSize: "13px",
-      offerPriceSize: "14px",
+      offerImageSize: [38, 38],
+      offerTitleSize: "13px",
+      offerDetailSize: "9px",
+      offerTrialSize: "9px",
+      offerPriceSize: "10px",
+      likesImageSize: [58, 70],
+      productColumns: 2,
       artworkFilter: "brightness(0.641) blur(5px)",
       collectionControlsAligned: true,
     }, "The download popup must use the compact player-panel component system");

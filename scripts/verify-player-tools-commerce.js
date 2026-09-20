@@ -9,6 +9,7 @@ function response(status, body) {
   let data = {};
   const calls = [];
   const entitlements = [];
+  let entitlementConfirmed = false;
   let clock = 1_800_000_000_000;
   let revoked = false;
   const storage = {
@@ -34,7 +35,10 @@ function response(status, body) {
   let id = 0;
   const commerce = create({ storage, sessionStorage, request, apiBaseUrl: "https://api.example", now: () => clock,
     version: "1.2.3", randomUUID: () => `00000000-0000-4000-8000-${String(++id).padStart(12, "0")}`,
-    access: { async setEntitlement(value) { entitlements.push(value); } } });
+    access: { async setEntitlement(value) {
+      entitlements.push(value);
+      entitlementConfirmed = value.status === "active";
+    } } });
 
   const initial = await commerce.getState();
   assert.equal(initial.status, "free");
@@ -57,7 +61,9 @@ function response(status, body) {
   assert.equal(tested.licenseId, "test-pro");
   assert.equal(data[STORAGE_KEY].activation.instanceId, "local-test");
   assert.equal(calls.length, callsBeforeTestLogin, "test login stays local");
+  entitlementConfirmed = false; // Simulate access state lost or left stale across an extension reload.
   assert.equal((await commerce.getState({ revalidate: true })).status, "active");
+  assert.equal(entitlementConfirmed, true, "test Pro state must re-confirm the shared Player Tools entitlement");
   assert.equal(calls.length, callsBeforeTestLogin, "test Pro does not revalidate against the license service");
   await assert.rejects(() => commerce.activateTest({ username: "x", password: "x" }), { code: "test_login_failed" });
   const freeAgain = await commerce.deactivateTest();

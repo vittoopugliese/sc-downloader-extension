@@ -23,6 +23,7 @@ $packageItems = @(
     "assets/icon128.png",
     "assets/icons/player-toolkit.png",
     "assets/icons",
+    "assets/images/likes-explorer.png",
     "_locales",
     "scripts/background.js",
     "scripts/soundcloud-likes-source.js",
@@ -90,12 +91,6 @@ $commerceSource = Get-Content -LiteralPath $commercePath -Raw
 $testLoginLine = 'const TEST_LOGIN = Object.freeze({ username: "1", password: "1" });'
 if (-not $commerceSource.Contains($testLoginLine)) { throw "Could not disable the test login in the production package." }
 Set-Content -LiteralPath $commercePath -Value $commerceSource.Replace($testLoginLine, "const TEST_LOGIN = null;") -NoNewline
-
-$popupPath = Join-Path $stagingRoot "popup.html"
-$popupSource = Get-Content -LiteralPath $popupPath -Raw
-$productionPopup = $popupSource -replace '(?s)\s*<!-- TEST_ACCESS_START -->.*?<!-- TEST_ACCESS_END -->', ''
-if ($productionPopup -eq $popupSource) { throw "Could not remove the test login UI from the production package." }
-Set-Content -LiteralPath $popupPath -Value $productionPopup -NoNewline
 
 if (Test-Path -LiteralPath $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force

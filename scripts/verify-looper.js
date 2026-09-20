@@ -36,6 +36,22 @@ assert.deepEqual(plain(core.createInitialRange(5000, 4900)), {
 });
 assert.equal(core.createInitialRange(249, 0), null);
 assert.equal(core.createInitialRange(Number.NaN, 0), null);
+assert.deepEqual(plain(core.createRangeFromSelection(10000, 2000, 7000)), {
+  startMs: 2000,
+  endMs: 7000,
+  durationMs: 10000,
+});
+assert.deepEqual(plain(core.createRangeFromSelection(10000, 7000, 2000)), {
+  startMs: 2000,
+  endMs: 7000,
+  durationMs: 10000,
+});
+assert.deepEqual(plain(core.createRangeFromSelection(10000, 9950, 9950)), {
+  startMs: 9750,
+  endMs: 10000,
+  durationMs: 10000,
+});
+assert.equal(core.createRangeFromSelection(249, 0, 100), null);
 
 const base = { startMs: 1000, endMs: 3000, durationMs: 5000 };
 assert.equal(core.moveMarker(base, "start", -100).startMs, 0);

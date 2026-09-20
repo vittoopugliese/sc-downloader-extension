@@ -63,21 +63,48 @@ const { chromium } = require('playwright');
     await page.waitForFunction(()=>document.querySelector('#scdl-likes-explorer')?.shadowRoot.querySelectorAll('.card').length>0);
     assert.ok(await page.locator('#scdl-likes-explorer .card').count()<100);
     assert.ok(await page.locator('#scdl-likes-explorer .tile').count()<=600);
-    const slider=page.locator('#scdl-likes-explorer input[type=range]');
-    await slider.evaluate(n=>{n.value=n.max;n.dispatchEvent(new Event('change'));});
+    const compactLayout=await page.locator('#scdl-likes-explorer .card').evaluateAll(cards=>cards.slice(0,7).map(card=>({top:card.style.top,left:card.style.left})));
+    assert.equal(new Set(compactLayout.slice(0,6).map(card=>card.top)).size,1);
+    assert.notEqual(compactLayout[5].left,compactLayout[0].left);
+    assert.notEqual(compactLayout[6].top,compactLayout[0].top);
+    assert.equal(await page.locator('#scdl-likes-explorer header').count(),0);
+    assert.equal(await page.locator('#scdl-likes-explorer .bottom').count(),0);
+    assert.ok(!(await page.locator('#scdl-likes-explorer .main').textContent()).includes('Your archive'));
+    const toolbarLayout=await page.locator('#scdl-likes-explorer .toolbar-line').evaluate(line=>{
+      const search=line.querySelector('.search-wrap').getBoundingClientRect(), close=line.querySelector('.search-close').getBoundingClientRect();
+      const tops=[...line.children].map(child=>Math.round(child.getBoundingClientRect().top));
+      return {oneLine:new Set(tops).size===1,closeInside:close.left>=search.left&&close.right<=search.right};
+    });
+    assert.deepEqual(toolbarLayout,{oneLine:true,closeInside:true});
+    assert.deepEqual(await page.locator('#scdl-likes-explorer .action-button').evaluateAll(buttons=>buttons.map(button=>button.title)),['Actualizar biblioteca','Almacenamiento','Guardar este lugar']);
+    assert.equal(await page.locator('#scdl-likes-explorer .action-spinner').count(),1);
+    const visibleCards=await page.locator('#scdl-likes-explorer .card').evaluateAll(cards=>{const viewport=cards[0]?.closest('.viewport').getBoundingClientRect();return cards.filter(card=>{const rect=card.getBoundingClientRect();return rect.top>=viewport.top&&rect.bottom<=viewport.bottom;}).length;});
+    assert.ok(visibleCards>=24);
+    const rail=page.locator('#scdl-likes-explorer .rail');
+    await rail.press('End');
     await page.waitForFunction(()=>document.querySelector('#scdl-likes-explorer').shadowRoot.querySelector('.canvas').textContent.includes('50000'));
     await page.locator('#scdl-likes-explorer .toolbar input').fill('Artist 12');
     await page.waitForTimeout(300);
     assert.ok((await page.locator('#scdl-likes-explorer .card').first().textContent()).includes('Artist 12'));
-    await slider.evaluate(n=>{n.value=22000;n.dispatchEvent(new Event('change'));});
+    await rail.press('Home');
     await page.waitForTimeout(250);
     assert.equal(await page.locator('#scdl-likes-explorer .toolbar input').inputValue(),'');
     assert.equal(await page.locator('#scdl-likes-explorer .back-results').isVisible(),true);
+    const beforeDrag=Number(await page.locator('#scdl-likes-explorer .card').first().getAttribute('data-id'));
     const handle=page.locator('#scdl-likes-explorer .indicator');const handleRect=await handle.boundingBox();
     await page.mouse.move(handleRect.x+30,handleRect.y+5);await page.mouse.down();await page.mouse.move(handleRect.x+30,handleRect.y+100,{steps:6});await page.mouse.up();await page.waitForTimeout(200);
-    assert.ok(Number(await slider.inputValue())>22000);
+    assert.ok(Number(await page.locator('#scdl-likes-explorer .card').first().getAttribute('data-id'))>beforeDrag);
     await page.locator('#scdl-likes-explorer .card-main').first().click();
     assert.equal(await page.locator('#scdl-likes-explorer .detail').isVisible(),true);
+    const footerLayout=await page.locator('#scdl-likes-explorer .main').evaluate(main=>{
+      const detail=main.querySelector('.detail'),toolbar=main.querySelector('.toolbar'),open=detail.querySelector('.accent');
+      return {
+        toolbarBelowTrack:toolbar.getBoundingClientRect().top>=detail.getBoundingClientRect().bottom,
+        detailButtons:[...detail.querySelectorAll('button')].map(button=>button.textContent.trim()),
+        openSingleLine:open.scrollHeight<=open.clientHeight,
+      };
+    });
+    assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['Abrir para escuchar ↗','⌖'],openSingleLine:true});
     await page.screenshot({path:'test-results/likes-explorer-desktop.png'});
     for(const width of [390,760,1024]){
       await page.setViewportSize({width,height:800});await page.waitForTimeout(180);
@@ -109,8 +136,8 @@ const { chromium } = require('playwright');
         return {sizes,bytes:result.bytes};
       }finally{globalThis.fetch=originalFetch;}
     });
-    assert.deepEqual(result.sizes,[{size:48,type:'image/webp',width:48,height:48},{size:160,type:'image/webp',width:160,height:160}]);assert.ok(result.bytes>0);
-    console.log('Real extension service worker loaded; WebP encoding and decoding passed at 48px and 160px.');
+    assert.deepEqual(result.sizes,[{size:48,type:'image/webp',width:48,height:48}]);assert.ok(result.bytes>0&&result.bytes<16*1024);
+    console.log('Real extension service worker loaded; single compact 48px WebP encoding and decoding passed.');
     const jobsResult=await worker.evaluate(async()=>{
       const originalSend=chrome.tabs.sendMessage, originalQuery=chrome.tabs.query, originalPage=SCLikesSource.fetchPage;
       let token='fixture-a', allowed=true, changeDuringFetch=true, fetches=0;
@@ -142,7 +169,7 @@ const { chromium } = require('playwright');
     console.log('Worker jobs: account change during fetch blocks commit; resume, sender/owner checks, Pro denial and Free deletion passed.');
     const popup=await context.newPage();await popup.setViewportSize({width:426,height:760});
     await popup.goto(`chrome-extension://${new URL(worker.url()).host}/popup.html`);
-    const entry=popup.getByRole('button',{name:'♡ Likes Explorer ↗'});
+    const entry=popup.locator('#likesExplorerBtn');
     await entry.waitFor();assert.equal(await entry.isVisible(),true);
     console.log('Real extension popup exposes the Likes Explorer entry.');
   }finally{await context.close();fs.rmSync(profile,{recursive:true,force:true});}

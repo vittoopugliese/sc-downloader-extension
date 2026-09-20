@@ -97,6 +97,8 @@
   let waveformZoom = null;
   let waveformLoadId = 0;
   let waveformDrag = null;
+  let waveformDrawPreview = null;
+  let suppressWaveformClick = false;
   let panelOpenMode = null;
   let hoverOpenTimer = null;
   let hoverCloseTimer = null;
@@ -284,10 +286,13 @@
       render();
       return null;
     }
-    accessActionPending = true;
-    render();
+    const showPendingUi = options?.showPendingUi !== false;
+    if (showPendingUi) {
+      accessActionPending = true;
+      render();
+    }
     const result = await requestAccess("authorize", operation, payload, options).catch(() => ({ success: false, code: "access-error" }));
-    accessActionPending = false;
+    if (showPendingUi) accessActionPending = false;
     if (!result?.success || !result.allowed) {
       playbackFailure = accessMessage(result?.code);
       render();
@@ -541,7 +546,7 @@
     render();
   }
 
-  async function applyAuthorizedLoop(payload) {
+  async function applyAuthorizedLoop(payload, options = {}) {
     const intentVersion = loopIntentVersion;
     const before = requestLoop("state")?.state;
     const currentLoop = before?.loop;
@@ -553,6 +558,21 @@
       return null;
     }
     const operation = currentLoop?.active ? "edit-loop" : "begin-loop";
+    // A single marker is a draft, not an activated loop or a trial use.
+    if (!Number.isFinite(payload.startMs) || !Number.isFinite(payload.endMs)) {
+      if (!capability(operation === "begin-loop" ? "beginLoop" : "editLoop")) {
+        playbackFailure = accessMessage(accessSnapshot?.code || "trial-exhausted");
+        render();
+        return null;
+      }
+      const response = requestLoop("set-loop", {
+        ...payload, enabled: false, startPlayback: false, expectedGeneration: generation,
+      });
+      if (response?.ok) playbackFailure = "";
+      setLoopFailure(response);
+      readLoopState();
+      return response;
+    }
     const authorization = await authorizePlayerTools(operation, operation === "begin-loop" ? "beginLoop" : "editLoop", {
       trackIdentity,
       generation,
@@ -562,6 +582,7 @@
     }, {
       expectedGeneration: generation,
       sessionId: operation === "edit-loop" ? playerToolsSessionId : null,
+      showPendingUi: options.showPendingUi,
     });
     if (!authorization) return null;
     const after = requestLoop("state")?.state?.loop;
@@ -572,6 +593,7 @@
       return null;
     }
     const response = requestLoop("set-loop", { ...payload, expectedGeneration: generation });
+    if (response?.ok) playbackFailure = "";
     setLoopFailure(response);
     readLoopState();
     return response;
@@ -617,9 +639,10 @@
     const last = Math.max(first + 1, Math.ceil(windowRange.endMs / durationMs * samples.length));
     const visible = samples.slice(first, last);
     const maximum = Math.max(1, ...visible.map((sample) => Math.abs(Number(sample) || 0)));
-    const complete = Number.isFinite(loopState.startMs) && Number.isFinite(loopState.endMs);
-    const start = complete ? loopPercentInWindow(loopState.startMs, windowRange) : -1;
-    const end = complete ? loopPercentInWindow(loopState.endMs, windowRange) : -1;
+    const displayedRange = waveformDrawPreview || loopState;
+    const complete = Number.isFinite(displayedRange.startMs) && Number.isFinite(displayedRange.endMs);
+    const start = complete ? loopPercentInWindow(displayedRange.startMs, windowRange) : -1;
+    const end = complete ? loopPercentInWindow(displayedRange.endMs, windowRange) : -1;
     const barWidth = width / visible.length;
     for (let index = 0; index < visible.length; index += 1) {
       const percent = index / Math.max(1, visible.length - 1) * 100;
@@ -672,15 +695,16 @@
     );
     ui.waveformToggle.title = ui.waveformToggle.getAttribute("aria-label");
     const duration = Number.isFinite(loopState.durationMs) ? loopState.durationMs : 0;
-    const start = Number.isFinite(loopState.startMs) ? loopState.startMs : 0;
-    const end = Number.isFinite(loopState.endMs) ? loopState.endMs : duration;
+    const displayedRange = waveformDrawPreview || loopState;
+    const start = Number.isFinite(displayedRange.startMs) ? displayedRange.startMs : 0;
+    const end = Number.isFinite(displayedRange.endMs) ? displayedRange.endMs : duration;
     const windowRange = visibleWaveformWindow();
     const startPercent = loopPercentInWindow(start, windowRange);
     const endPercent = loopPercentInWindow(end, windowRange);
     ui.waveformSelection.style.left = `${startPercent}%`;
     ui.waveformSelection.style.width = `${Math.max(0, endPercent - startPercent)}%`;
-    ui.waveformSelection.hidden = !loopState.active;
-    for (const [marker, value, letter] of [[ui.waveformStart, loopState.startMs, "a"], [ui.waveformEnd, loopState.endMs, "b"]]) {
+    ui.waveformSelection.hidden = !waveformDrawPreview && !loopState.active;
+    for (const [marker, value, letter] of [[ui.waveformStart, displayedRange.startMs, "a"], [ui.waveformEnd, displayedRange.endMs, "b"]]) {
       marker.hidden = !Number.isFinite(value) || !windowRange || value < windowRange.startMs || value > windowRange.endMs;
       marker.style.left = `${loopPercentInWindow(value, windowRange)}%`;
       marker.textContent = letter;
@@ -851,10 +875,10 @@
     readLoopState();
   }
 
-  async function setWaveformRange(nextRange, marker = null) {
+  async function setWaveformRange(nextRange, marker = null, options = {}) {
     if (!nextRange) return;
     const payload = { ...nextRange, marker, enabled: true, startPlayback: !loopState.active };
-    await applyAuthorizedLoop(payload);
+    await applyAuthorizedLoop(payload, options);
   }
 
   function beginWaveformDrag(event, kind) {
@@ -864,7 +888,14 @@
     event.stopPropagation();
     const target = event.currentTarget;
     target.setPointerCapture(event.pointerId);
-    waveformDrag = { kind, pointerId: event.pointerId, startX: event.clientX, range: { startMs: loopState.startMs, endMs: loopState.endMs, durationMs: loopState.durationMs } };
+    waveformDrag = {
+      kind,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      anchorMs: kind === "create" ? waveformTime(event.clientX) : null,
+      moved: false,
+      range: { startMs: loopState.startMs, endMs: loopState.endMs, durationMs: loopState.durationMs },
+    };
   }
 
   function moveWaveformDrag(event) {
@@ -873,20 +904,44 @@
     const core = globalThis.SCLooperCore;
     const timeMs = waveformTime(event.clientX);
     if (!core || timeMs === null) return;
+    if (waveformDrag.kind === "create" && Math.abs(event.clientX - waveformDrag.startX) < 3) return;
     let nextRange;
-    if (waveformDrag.kind === "selection") {
+    if (waveformDrag.kind === "create") {
+      waveformDrag.moved = true;
+      nextRange = core.createRangeFromSelection(
+        waveformDrag.range.durationMs,
+        waveformDrag.anchorMs,
+        timeMs
+      );
+      waveformDrawPreview = nextRange;
+      renderLoop();
+      return;
+    } else if (waveformDrag.kind === "selection") {
       const startTime = waveformTime(waveformDrag.startX);
       nextRange = core.moveRange(waveformDrag.range, timeMs - startTime);
     } else {
       nextRange = core.moveMarker(waveformDrag.range, waveformDrag.kind, timeMs);
     }
-    setWaveformRange(nextRange, waveformDrag.kind === "selection" ? null : waveformDrag.kind);
+    // Pointer movement can issue several overlapping authorization requests.
+    // Keep unrelated header controls interactive while those edits are checked.
+    setWaveformRange(nextRange, ["selection", "create"].includes(waveformDrag.kind) ? null : waveformDrag.kind, {
+      showPendingUi: false,
+    });
   }
 
   function endWaveformDrag(event) {
     if (!waveformDrag || waveformDrag.pointerId !== event.pointerId) return;
     moveWaveformDrag(event);
     event.currentTarget.releasePointerCapture(event.pointerId);
+    if (waveformDrag.kind === "create" && waveformDrag.moved) {
+      suppressWaveformClick = true;
+      const nextRange = waveformDrawPreview;
+      setTimeout(() => { suppressWaveformClick = false; }, 0);
+      setWaveformRange(nextRange, null, { showPendingUi: false }).finally(() => {
+        if (waveformDrawPreview === nextRange) waveformDrawPreview = null;
+        renderLoop();
+      });
+    }
     waveformDrag = null;
   }
 
@@ -1899,9 +1954,21 @@
     ui.waveformSelection.addEventListener("pointermove", moveWaveformDrag);
     ui.waveformSelection.addEventListener("pointerup", endWaveformDrag);
     ui.waveformSelection.addEventListener("pointercancel", endWaveformDrag);
+    ui.waveformCanvas.addEventListener("pointerdown", (event) => beginWaveformDrag(event, "create"));
+    ui.waveformCanvas.addEventListener("pointermove", moveWaveformDrag);
+    ui.waveformCanvas.addEventListener("pointerup", endWaveformDrag);
+    ui.waveformCanvas.addEventListener("pointercancel", endWaveformDrag);
     ui.waveformStage.addEventListener("wheel", handleWaveformWheel, { passive: false });
     ui.waveformStage.addEventListener("dblclick", () => { waveformZoom = null; renderLoop(); });
-    ui.waveformCanvas.addEventListener("click", (event) => { const timeMs = waveformTime(event.clientX); if (timeMs !== null) requestLoop("seek", { timeMs }); });
+    ui.waveformCanvas.addEventListener("click", (event) => {
+      if (suppressWaveformClick) {
+        suppressWaveformClick = false;
+        event.preventDefault();
+        return;
+      }
+      const timeMs = waveformTime(event.clientX);
+      if (timeMs !== null) requestLoop("seek", { timeMs });
+    });
     for (const [input, marker] of [[ui.loopStartTime, "start"], [ui.loopEndTime, "end"]]) {
       input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); commitLoopTime(marker); input.blur(); } if (event.key === "Escape") { input.value = Number.isFinite(loopState[`${marker}Ms`]) ? formatLoopTime(loopState[`${marker}Ms`]) : ""; input.blur(); } });
       input.addEventListener("blur", () => { if (input.value.trim()) commitLoopTime(marker); });

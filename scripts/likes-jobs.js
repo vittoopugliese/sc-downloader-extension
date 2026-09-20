@@ -121,11 +121,11 @@
       try {
         if (bitmap.width * bitmap.height > 16000000) throw source.fail('invalid-image');
         const variants = {}; let total = 0;
-        for (const size of [48, 160]) {
+        for (const size of [48]) {
           const canvas = new OffscreenCanvas(size, size), ctx = canvas.getContext('2d');
           const side = Math.min(bitmap.width, bitmap.height);
           ctx.drawImage(bitmap, (bitmap.width-side)/2, (bitmap.height-side)/2, side, side, 0, 0, size, size);
-          const blob = await canvas.convertToBlob({ type: 'image/webp', quality: size === 48 ? .65 : .75 });
+          const blob = await canvas.convertToBlob({ type: 'image/webp', quality: .55 });
           if (blob.type !== 'image/webp') throw source.fail('webp-unavailable');
           variants[size] = blob; total += blob.size;
         }
@@ -186,7 +186,7 @@
         const images = {}; let total = 0;
         for (const id of r.trackIds) {
           const item = items.find(i => i.itemId === id); if (!item?.artworkUrl) continue;
-          const asset = await db.get('artwork', [ownerId, item.artworkUrl]), blob = asset?.variants[r.variant === 48 ? 48 : 160];
+          const asset = await db.get('artwork', [ownerId, item.artworkUrl]), blob = asset?.variants[48];
           if (!blob || total + blob.size * 1.4 > 512 * 1024) continue;
           total += blob.size * 1.4; images[id] = 'data:image/webp;base64,' + btoa(String.fromCharCode(...new Uint8Array(await blob.arrayBuffer())));
         }

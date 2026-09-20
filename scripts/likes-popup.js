@@ -1,10 +1,14 @@
 (function () {
-  const button = document.createElement('button');
-  button.type = 'button'; button.className = 'popup-control-btn'; button.textContent = '♡  Likes Explorer ↗';
-  button.title = 'Likes Explorer';
-  button.style.cssText = 'margin:8px 16px 12px;width:calc(100% - 32px);font-size:12px';
-  const container = document.querySelector('#downloadPanel') || document.querySelector('.container') || document.body;
-  container.append(button);
+  const button = document.getElementById('likesExplorerBtn');
+  if (!button) return;
+  const title = document.querySelector('.likes-explorer-title');
+  const detail = document.querySelector('.likes-explorer-detail');
+  if (globalThis.SCLikesText) {
+    title.textContent = SCLikesText('title');
+    detail.textContent = SCLikesText('tagline');
+    button.textContent = `${SCLikesText('open')} ↗`;
+    button.title = SCLikesText('title');
+  }
   button.addEventListener('click', async () => {
     button.disabled = true;
     try {

@@ -57,6 +57,7 @@ const SCLooper = (() => {
   let loopDownloadOperationId = 0;
   let downloadResetTimeout = null;
   let selectionDrag = null;
+  let rangeDraw = null;
   let zoomWindow = null;
   let zoomRenderFrameId = null;
   let pendingZoomWindow = null;
@@ -668,6 +669,15 @@ const SCLooper = (() => {
         pointer-events: auto;
         touch-action: none;
       }
+      .scdl-loop-range-draw {
+        position: absolute;
+        z-index: 1;
+        inset: 0;
+        background: transparent;
+        cursor: crosshair;
+        pointer-events: auto;
+        touch-action: none;
+      }
       .scdl-loop-zoom-playhead {
         position: absolute;
         z-index: 1;
@@ -959,6 +969,14 @@ const SCLooper = (() => {
     zoomInteraction.hidden = true;
     zoomInteraction.addEventListener("pointerdown", stopZoomInteractionEvent);
     zoomInteraction.addEventListener("click", handleZoomInteractionClick);
+    const rangeDrawInteraction = document.createElement("div");
+    rangeDrawInteraction.className = "scdl-loop-range-draw";
+    rangeDrawInteraction.setAttribute("aria-hidden", "true");
+    rangeDrawInteraction.addEventListener("pointerdown", handleRangeDrawPointerDown);
+    rangeDrawInteraction.addEventListener("pointermove", handleRangeDrawPointerMove);
+    rangeDrawInteraction.addEventListener("pointerup", handleRangeDrawPointerEnd);
+    rangeDrawInteraction.addEventListener("pointercancel", handleRangeDrawPointerEnd);
+    rangeDrawInteraction.addEventListener("click", stopMarkerEvent);
     const zoomPlayhead = document.createElement("div");
     zoomPlayhead.className = "scdl-loop-zoom-playhead";
     zoomPlayhead.setAttribute("role", "presentation");
@@ -977,6 +995,7 @@ const SCLooper = (() => {
     overlay.append(
       zoomLayer,
       zoomInteraction,
+      rangeDrawInteraction,
       before,
       selection,
       after,
@@ -987,6 +1006,7 @@ const SCLooper = (() => {
       overlay,
       zoomLayer,
       zoomInteraction,
+      rangeDrawInteraction,
       zoomPlayhead,
       before,
       selection,
@@ -1393,6 +1413,7 @@ const SCLooper = (() => {
     cancelPendingZoomRender();
     if (!view) return;
     selectionDrag = null;
+    rangeDraw = null;
     restoreZoomSource(view);
     restoreNativeWaveform(view);
     view.zoomVisualActive = false;
@@ -1804,6 +1825,87 @@ const SCLooper = (() => {
     updateOverlay();
     publishRangeToSession(false);
     seekIfOutsideRange();
+  }
+
+  function updateRangeFromDrawPointer(clientX) {
+    if (!rangeDraw || !range || !view) return;
+    if (Math.abs(clientX - rangeDraw.startClientX) < 3) return;
+    const rect = view.waveform.getBoundingClientRect();
+    const focusMs = SCLooperCore.positionToTime(
+      clientX,
+      rect.left,
+      rect.width,
+      getVisibleWaveformWindow()
+    );
+    if (focusMs === null) return;
+    const nextRange = SCLooperCore.createRangeFromSelection(
+      range.durationMs,
+      rangeDraw.anchorMs,
+      focusMs
+    );
+    if (!nextRange) return;
+    rangeDraw.moved = true;
+    range = nextRange;
+    updateOverlay();
+    publishRangeToSession(false);
+  }
+
+  function handleRangeDrawPointerDown(event) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (!range || !view) return;
+    stopMarkerEvent(event);
+    const rect = view.waveform.getBoundingClientRect();
+    const anchorMs = SCLooperCore.positionToTime(
+      event.clientX,
+      rect.left,
+      rect.width,
+      getVisibleWaveformWindow()
+    );
+    if (anchorMs === null) return;
+    rangeDraw = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      anchorMs,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleRangeDrawPointerMove(event) {
+    if (
+      !rangeDraw ||
+      rangeDraw.pointerId !== event.pointerId ||
+      !event.currentTarget.hasPointerCapture(event.pointerId)
+    ) {
+      return;
+    }
+    stopMarkerEvent(event);
+    updateRangeFromDrawPointer(event.clientX);
+  }
+
+  function handleRangeDrawPointerEnd(event) {
+    if (
+      !rangeDraw ||
+      rangeDraw.pointerId !== event.pointerId ||
+      !event.currentTarget.hasPointerCapture(event.pointerId)
+    ) {
+      return;
+    }
+    stopMarkerEvent(event);
+    if (event.type !== "pointercancel") updateRangeFromDrawPointer(event.clientX);
+    const moved = rangeDraw.moved;
+    const anchorMs = rangeDraw.anchorMs;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    rangeDraw = null;
+    if (moved) {
+      seekIfOutsideRange();
+      return;
+    }
+    if (event.type !== "pointercancel") {
+      lastSeekAttemptAt = Number.NEGATIVE_INFINITY;
+      player?.seekToMs(anchorMs);
+      updateZoomPlayhead(anchorMs);
+    }
   }
 
   function updateMarkerFromPointer(marker, clientX) {

@@ -62,6 +62,7 @@ async function main() {
     await page.addScriptTag({
       path: path.join(__dirname, "audio-effects-core.js"),
     });
+    await page.addScriptTag({ path: path.join(__dirname, "player-tools-policy.js") });
     await page.evaluate((logoUrl) => {
       const playerToolsSnapshot = {
         revision: 1,
@@ -82,8 +83,10 @@ async function main() {
         const request = JSON.parse(document.documentElement.getAttribute("data-scdl-player-tools-request") || "null");
         if (!request?.id) return;
         const respond = () => {
+          const code = ["begin-loop", "edit-loop"].includes(request.operation)
+            ? window.SCPlayerToolsPolicy.validateLoopRequest(request) : null;
           document.documentElement.setAttribute("data-scdl-player-tools-response", JSON.stringify({
-            id: request.id, success: true, allowed: !window.denyAccess, snapshot: playerToolsSnapshot,
+            id: request.id, success: true, allowed: !window.denyAccess && !code, code, snapshot: playerToolsSnapshot,
           }));
           document.dispatchEvent(new CustomEvent("scdl:player-tools-response"));
         };
@@ -529,6 +532,12 @@ async function main() {
 
     await page.locator("audio").evaluate((audio) => { audio.currentTime = 12.345; });
     await host.locator(".waveform-times .set-a").click();
+    const draftLoop = await page.evaluate(() =>
+      JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session"))
+    );
+    assert.equal(draftLoop.startMs, 12345, "Set A must retain the first marker before B exists");
+    assert.equal(draftLoop.endMs, null);
+    assert.equal(draftLoop.active, false, "A draft marker must not activate a loop");
     await page.locator("audio").evaluate((audio) => { audio.currentTime = 20.678; });
     await host.locator(".waveform-times .set-b").click();
     const capturedLoop = await page.evaluate(() =>
@@ -605,12 +614,41 @@ async function main() {
 
     const endMarker = host.locator(".waveform-end");
     const markerBox = await endMarker.boundingBox();
+    await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      const controls = [root.querySelector(".pitch-toggle"), ...root.querySelectorAll(".effect-bypass")];
+      window.headerDisableFlashes = 0;
+      window.headerDisableObserver = new MutationObserver(() => {
+        if (controls.some((control) => control.disabled)) window.headerDisableFlashes += 1;
+      });
+      controls.forEach((control) => window.headerDisableObserver.observe(control, {
+        attributes: true,
+        attributeFilter: ["disabled"],
+      }));
+    });
     await page.mouse.move(markerBox.x + markerBox.width / 2, markerBox.y + markerBox.height / 2);
     await page.mouse.down();
     await page.mouse.move(markerBox.x - 32, markerBox.y + markerBox.height / 2, { steps: 4 });
     await page.mouse.up();
+    const headerDisableFlashes = await page.evaluate(() => {
+      window.headerDisableObserver.disconnect();
+      return window.headerDisableFlashes;
+    });
+    assert.equal(headerDisableFlashes, 0,
+      "Dragging the waveform must not flash Keep Tone or the FX R/D buttons through transient disabled states");
     const draggedEnd = await page.evaluate(() => JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session")).endMs);
     if (!(draggedEnd < 20678)) throw new Error(`Dragging marker B did not update the shared loop session: ${draggedEnd}`);
+
+    const waveformCanvas = host.locator(".waveform-canvas");
+    const canvasBox = await waveformCanvas.boundingBox();
+    await page.mouse.move(canvasBox.x + canvasBox.width * .8, canvasBox.y + canvasBox.height * .75);
+    await page.mouse.down();
+    await page.mouse.move(canvasBox.x + canvasBox.width * .2, canvasBox.y + canvasBox.height * .75, { steps: 5 });
+    await page.mouse.up();
+    await page.waitForFunction(() => {
+      const loop = JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session") || "null");
+      return Math.abs(loop?.startMs - 24000) < 100 && Math.abs(loop?.endMs - 96000) < 100;
+    });
 
     if (await host.locator('.waveform-toggle').getAttribute('aria-expanded') === 'false') {
       await host.locator('.waveform-toggle').click();

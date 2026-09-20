@@ -255,6 +255,18 @@ async function waitForFile(directory, timeoutMs = 30000) {
       "Clicks inside the A-B selection must not open SoundCloud comment mode"
     );
 
+    const drawSurface = page.locator(".scdl-loop-range-draw");
+    const drawBox = await drawSurface.boundingBox();
+    await page.mouse.move(drawBox.x + drawBox.width * 0.85, drawBox.y + drawBox.height * 0.75);
+    await page.mouse.down();
+    await page.mouse.move(drawBox.x + drawBox.width * 0.15, drawBox.y + drawBox.height * 0.75, { steps: 5 });
+    await page.mouse.up();
+    assert.ok(
+      Math.abs(Number(await startMarker.getAttribute("aria-valuenow")) - 3000) < 25 &&
+        Math.abs(Number(await endMarker.getAttribute("aria-valuenow")) - 17000) < 25,
+      "Holding the primary button across the waveform must detect and order A/B automatically"
+    );
+
     const rangeBeforeCommentMode = {
       start: await startMarker.getAttribute("aria-valuenow"),
       end: await endMarker.getAttribute("aria-valuenow"),

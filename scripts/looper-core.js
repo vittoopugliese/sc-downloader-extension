@@ -62,6 +62,23 @@ const SCLooperCore = (() => {
     });
   }
 
+  function createRangeFromSelection(durationMs, anchorMs, focusMs) {
+    const duration = normalizeDuration(durationMs);
+    if (
+      duration === null ||
+      !isFiniteNumber(anchorMs) ||
+      !isFiniteNumber(focusMs)
+    ) {
+      return null;
+    }
+
+    return normalizeRange({
+      startMs: Math.min(anchorMs, focusMs),
+      endMs: Math.max(anchorMs, focusMs),
+      durationMs: duration,
+    });
+  }
+
   function moveMarker(range, marker, timeMs) {
     const normalized = normalizeRange(range);
     if (!normalized || !isFiniteNumber(timeMs)) return normalized;
@@ -218,6 +235,7 @@ const SCLooperCore = (() => {
     DEFAULT_RANGE_MS,
     normalizeRange,
     createInitialRange,
+    createRangeFromSelection,
     moveMarker,
     moveRange,
     positionToTime,

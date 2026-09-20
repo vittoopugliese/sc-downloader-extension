@@ -84,7 +84,7 @@
           if (!TEST_LOGIN) {
             state.activation = null;
             await applyEntitlement(state, false);
-          }
+          } else await applyEntitlement(state, true);
         } else if (revalidate && state.activation?.instanceId) {
           try {
             const result = await post("/license/status", { installationId: state.installationId,

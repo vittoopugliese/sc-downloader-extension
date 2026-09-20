@@ -882,28 +882,49 @@
             background: rgba(0, 0, 0, 0.54);
         }
 
+        .product-offers {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr);
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .player-tools-offer,
+        .likes-explorer-offer {
+            position: relative;
+            min-width: 0;
+            min-height: 72px;
+            box-sizing: border-box;
+            overflow: hidden;
+            border: 1px solid rgba(255, 106, 26, .34);
+            border-radius: 9px;
+            background: linear-gradient(120deg, rgba(255, 85, 0, .1), rgba(24, 24, 24, .94));
+        }
         .player-tools-offer {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-top: 10px;
-            padding: 6px;
-            border: 1px solid rgba(255, 106, 26, .52);
-            border-radius: 12px;
-            background: linear-gradient(110deg, rgba(255, 85, 0, .17), rgba(26, 26, 26, .92));
+            gap: 6px;
+            padding: 7px;
         }
         .player-tools-offer[hidden] { display: none; }
-        .player-tools-offer img { flex: 0 0 64px; width: 64px; height: 64px; border-radius: 11px; }
+        .player-tools-offer img { flex: 0 0 38px; width: 38px; height: 38px; border-radius: 8px; }
         .player-tools-offer-copy { min-width: 0; flex: 1; }
-        .player-tools-offer-title { margin: 0 0 3px; color: #fff; font-size: 20px; font-weight: 750; line-height: 1.05; letter-spacing: -.02em; }
-        .player-tools-offer-detail { margin: 0; color: #c9c9c9; font-size: 12px; line-height: 1.35; }
-        #playerToolsTrialStatus { margin-top: 2px; color: #e1e1e1; font-size: 13px; }
-        .player-tools-offer-price { margin: 7px 0 0; color: #ff985d; white-space: nowrap; font-size: 14px; font-weight: 750; line-height: 1.2; }
+        .player-tools-offer-title { margin: 0 0 2px; color: #fff; font-size: 13px; font-weight: 700; line-height: 1.05; letter-spacing: -.01em; }
+        .player-tools-offer-detail { margin: 0; color: #bdbdbd; font-size: 9px; line-height: 1.25; }
+        #playerToolsTrialStatus { margin-top: 2px; color: #d8d8d8; font-size: 9px; }
+        .player-tools-offer-price { margin: 3px 0 0; color: #ff985d; white-space: nowrap; font-size: 10px; font-weight: 700; line-height: 1.15; }
         .player-tools-offer-price del { color: #aaa; font-weight: 500; }
         .player-tools-offer-actions { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto; }
-        #playerToolsProBtn { padding: 7px 9px; border: 1px solid #ff6a1a; border-radius: 8px; color: #fff; background: #d84a00; font-size: 11px; font-weight: 700; line-height: 1; cursor: pointer; }
+        #playerToolsProBtn { padding: 5px 6px; border: 1px solid #ff6a1a; border-radius: 6px; color: #fff; background: #c94600; font-size: 9px; font-weight: 700; line-height: 1; cursor: pointer; }
         #playerToolsProBtn:hover { background: #ff5a00; }
         #playerToolsProBtn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+        .likes-explorer-offer { display: flex; align-items: stretch; padding: 0; }
+        .likes-explorer-thumb { box-sizing: border-box; width: 58px; min-width: 58px; object-fit: cover; object-position: 96% center; opacity: .88; border-right: 1px solid rgba(255, 255, 255, .08); }
+        .likes-explorer-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; justify-content: center; padding: 7px; }
+        .likes-explorer-title { color: #fff; font-size: 11px; font-weight: 700; line-height: 1.1; }
+        .likes-explorer-detail { margin-top: 3px; color: #aaa; font-size: 8px; line-height: 1.25; }
+        #likesExplorerBtn { align-self: flex-start; margin-top: 5px; padding: 0; border: 0; color: #ff9b63; background: transparent; font-size: 9px; font-weight: 700; cursor: pointer; }
+        #likesExplorerBtn:hover { color: #fff; }
+        #likesExplorerBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         .commerce-panel { position: fixed; z-index: 1001; inset: 0; display: grid; place-items: center; padding: 12px; background: rgba(0,0,0,.72); }
         .commerce-panel[hidden] { display: none; }
         .commerce-card { display: flex; flex-direction: column; box-sizing: border-box; width: min(350px, 100%); max-height: calc(100vh - 24px); overflow: hidden; border: 1px solid #555; border-radius: 12px; background: #202020; box-shadow: 0 12px 40px #000; }
@@ -1391,18 +1412,28 @@
             <p id="failedSummary"></p>
             <ul id="failedDetails" aria-live="polite"></ul>
         </div>
-        <section id="playerToolsOffer" class="player-tools-offer" aria-label="Player Tools">
-            <div class="player-tools-offer-copy">
-                <p class="player-tools-offer-title">Player Tools</p>
-                <p class="player-tools-offer-detail">Tempo &amp; looping tools</p>
-                <p id="playerToolsTrialStatus" class="player-tools-offer-detail" aria-live="polite"></p>
-                <p class="player-tools-offer-price"><del id="playerToolsReferencePrice">$6.79</del> <span id="playerToolsPrice">$3.69</span> <span data-i18n="player_tools_lifetime">lifetime</span></p>
-            </div>
-            <div class="player-tools-offer-actions">
-                <img src="./assets/icons/player-toolkit.png" alt="" width="64" height="64" draggable="false">
-                <button id="playerToolsProBtn" type="button" data-i18n="player_tools_get_pro" data-i18n-title="player_tools_get_pro" title="Get Pro">Get Pro</button>
-            </div>
-        </section>
+        <div class="product-offers">
+            <section id="playerToolsOffer" class="player-tools-offer" aria-label="Player Tools">
+                <img src="./assets/icons/player-toolkit.png" alt="" width="38" height="38" draggable="false">
+                <div class="player-tools-offer-copy">
+                    <p class="player-tools-offer-title">Player Tools</p>
+                    <p class="player-tools-offer-detail">Tempo, loops &amp; FX</p>
+                    <p id="playerToolsTrialStatus" class="player-tools-offer-detail" aria-live="polite"></p>
+                    <p class="player-tools-offer-price"><del id="playerToolsReferencePrice">$6.79</del> <span id="playerToolsPrice">$3.69</span> <span data-i18n="player_tools_lifetime">lifetime</span></p>
+                </div>
+                <div class="player-tools-offer-actions">
+                    <button id="playerToolsProBtn" type="button" data-i18n="player_tools_get_pro" data-i18n-title="player_tools_get_pro" title="Get Pro">Get Pro</button>
+                </div>
+            </section>
+            <section class="likes-explorer-offer" aria-label="Likes Explorer">
+                <img class="likes-explorer-thumb" src="./assets/images/likes-explorer.png" alt="" draggable="false">
+                <div class="likes-explorer-copy">
+                    <span class="likes-explorer-title">Likes Explorer</span>
+                    <span class="likes-explorer-detail">Explore your Likes visually</span>
+                    <button id="likesExplorerBtn" type="button" title="Likes Explorer">Open ↗</button>
+                </div>
+            </section>
+        </div>
         <section id="commercePanel" class="commerce-panel" role="dialog" aria-modal="true" aria-labelledby="commerceTitle" hidden>
             <div class="commerce-card">
                 <div class="commerce-scroll">
@@ -1413,14 +1444,6 @@
                 <p data-i18n="player_tools_restore_help">Already purchased? Enter the email and license key from your receipt.</p>
                 <label><span data-i18n="email">Email</span><input id="commerceEmail" type="email" autocomplete="email" maxlength="320"></label>
                 <label><span data-i18n="player_tools_license_key">License key</span><input id="commerceLicenseKey" type="text" autocomplete="off" maxlength="256"></label>
-                <!-- TEST_ACCESS_START -->
-                <details id="commerceTestAccess" class="commerce-test-access"><summary data-i18n="player_tools_test_access">Testing access</summary>
-                    <p data-i18n="player_tools_test_access_help">Enter the local testing credentials.</p>
-                    <label><span data-i18n="player_tools_test_username">Testing user</span><input id="commerceTestUsername" type="text" autocomplete="username" maxlength="128"></label>
-                    <label><span data-i18n="player_tools_test_password">Testing password</span><input id="commerceTestPassword" type="password" autocomplete="current-password" maxlength="256"></label>
-                    <div class="commerce-actions"><button id="commerceTestBtn" type="button" title="Activate test Pro" data-i18n="player_tools_test_activate">Activate test Pro</button></div>
-                </details>
-                <!-- TEST_ACCESS_END -->
                 <p id="commerceStatus" role="status" aria-live="polite"></p>
                 </div>
                 <div class="commerce-actions commerce-footer">

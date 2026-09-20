@@ -25,11 +25,6 @@ if (process.platform === 'win32') {
     const commerceSource = fs.readFileSync(commercePath,'utf8');
     if (!commerceSource.includes(testLoginLine)) throw new Error('Could not disable the test login in the production package.');
     fs.writeFileSync(commercePath,commerceSource.replace(testLoginLine,'const TEST_LOGIN = null;'));
-    const popupPath = path.join(stage,'popup.html');
-    const popupSource = fs.readFileSync(popupPath,'utf8');
-    const productionPopup = popupSource.replace(/\s*<!-- TEST_ACCESS_START -->[\s\S]*?<!-- TEST_ACCESS_END -->/,'');
-    if (productionPopup === popupSource) throw new Error('Could not remove the test login UI from the production package.');
-    fs.writeFileSync(popupPath,productionPopup);
     const temporary = path.join(stage,'extension.zip');
     execFileSync('zip',['-q','-r',temporary,...fs.readdirSync(stage)],{cwd:stage});
     fs.copyFileSync(temporary,output);

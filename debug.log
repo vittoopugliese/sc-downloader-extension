@@ -18,3 +18,4 @@
 [0912/175509.688:WARNING:net\spdy\spdy_session.cc:3143] Received WINDOW_UPDATE for invalid stream 3
 [0912/202829.729:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)
 [0912/202917.459:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)
+[0920/001514.226:WARNING:net\extras\sqlite\sqlite_persistent_store_backend_base.cc:181] Failed to post task from operator()@net\extras\sqlite\sqlite_persistent_shared_dictionary_store.cc:259 to client_task_runner_.
