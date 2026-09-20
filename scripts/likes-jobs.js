@@ -188,6 +188,9 @@
     function checkSender(sender) {
       if (sender?.id !== chrome.runtime.id || sender.frameId !== 0 || !sender.tab?.id || new URL(sender.url || sender.tab.url).origin !== 'https://soundcloud.com') throw source.fail('invalid-request');
     }
+    function sourceNameFromUrl(value) {
+      try { const segment = new URL(value).pathname.split('/').filter(Boolean)[0]; return segment ? decodeURIComponent(segment).slice(0, 200) : null; } catch { return null; }
+    }
     async function handle(r, sender) {
       checkSender(sender); const deleting=['DELETE_LIKES_LIBRARY','DELETE_LIKES_ARTWORK'].includes(r.type); if(!deleting)await authorize(sender);
       const ctx=await context(sender,r.accountId||r.ownerId); const accountId=ctx.ownerId; await db.ensureLegacyMigrated(accountId);
@@ -197,7 +200,9 @@
       const collectionId=String(r.collectionId||db.collectionKey(requestedSource)); if(collectionId!==db.collectionKey(requestedSource)&&!/^likes:[A-Za-z0-9_-]{1,80}$/.test(collectionId))throw source.fail('invalid-request');
       const key=[accountId,collectionId];
       if(r.type==='START_LIKES_INDEX'||r.type==='REFRESH_LIKES_LIBRARY'){
-        const job=await db.startCollection(accountId,{collectionId,sourceUserId:requestedSource,sourceUrl:r.sourceUrl||pageContext?.sourceUrl||null,name:String(r.sourceName||pageContext?.sourceName||ctx.displayName).slice(0,200)},r.type==='REFRESH_LIKES_LIBRARY');
+        const sourceUrl = r.sourceUrl || pageContext?.sourceUrl || null;
+        const sourceName = r.sourceName || pageContext?.sourceName || sourceNameFromUrl(sourceUrl) || (requestedSource === accountId ? ctx.displayName : `Likes · ${requestedSource}`);
+        const job=await db.startCollection(accountId,{collectionId,sourceUserId:requestedSource,sourceUrl,name:String(sourceName).slice(0,200)},r.type==='REFRESH_LIKES_LIBRARY');
         chrome.alarms.create('scdl-likes',{periodInMinutes:1});tick().catch(()=>{});return{ownerId:accountId,accountId,collectionId,operationId:job?.operationId};
       }
       if(r.type==='CANCEL_LIKES_INDEX'){const job=await db.get('collectionJobs',key);if(job)await db.put('collectionJobs',{...job,phase:'paused',epoch:job.epoch+1,retryAt:null});return{};}
