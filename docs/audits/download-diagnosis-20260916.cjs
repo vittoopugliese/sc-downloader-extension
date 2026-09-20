@@ -46,14 +46,16 @@ const root = path.resolve(__dirname, '../..');
     popup.on('pageerror', error => errors.push(error.message));
     await popup.goto(`chrome-extension://${id}/popup.html`);
     await popup.waitForTimeout(16000);
-    console.log('POPUP_BEFORE_RELOAD', JSON.stringify(await popup.evaluate(() => ({
+    const popupBeforeReload = await popup.evaluate(() => ({
       loading: document.querySelector('#loadingText')?.textContent,
       status: document.querySelector('#downloadStatus')?.textContent,
       error: document.querySelector('#errorMessage')?.textContent,
+      hint: document.querySelector('#errorHint')?.textContent,
       retry: document.querySelector('#retryBtn')?.textContent,
       retryVisible: document.querySelector('#retryBtn')?.classList.contains('is-visible'),
       downloadHidden: document.querySelector('#downloadBtn')?.classList.contains('is-hidden'),
-    }))));
+    }));
+    console.log('POPUP_BEFORE_RELOAD', JSON.stringify(popupBeforeReload));
     console.log('POPUP_JS_ERRORS', JSON.stringify(errors));
     await page.reload({ waitUntil: 'domcontentloaded' });
     let state;
@@ -85,7 +87,9 @@ const root = path.resolve(__dirname, '../..');
     console.log('CONCURRENT_DOWNLOADS', JSON.stringify(concurrent));
     console.log('FILES', JSON.stringify(await Promise.all((await fs.readdir(downloads)).map(async name => ({ name, bytes: (await fs.stat(path.join(downloads, name))).size })))));
     assert.ok(concurrent.every(result => result.success), 'Concurrent downloads must both save files');
-    assert.equal(initial.status, 'loaded', 'An already open SoundCloud tab must become usable after installation');
+    assert.match(initial.error || '', /Receiving end does not exist/i, 'The late-install control did not reproduce');
+    assert.match(popupBeforeReload.hint || '', /reload/i, 'Popup must immediately ask for a SoundCloud reload');
+    assert.equal(popupBeforeReload.retryVisible, false, 'Popup must not offer a retry that cannot attach content scripts');
   } finally {
     await context.close();
     if (path.dirname(profile) !== path.resolve(os.tmpdir()) || !path.basename(profile).startsWith('scdl-diagnosis-')) throw new Error('Unsafe cleanup path');

@@ -1,6 +1,8 @@
 const SESSION_KEY = "scdl_active_job";
 const KEEPALIVE_ALARM = "scdl_bulk_keepalive";
-const MAX_IN_FLIGHT = 2;
+// Keep audio assembly sequential. Two decoded/combined tracks can exhaust memory
+// on Chromebooks and other constrained devices even when network concurrency is safe.
+const MAX_IN_FLIGHT = 1;
 const JOB_STATUS = Object.freeze({
   RUNNING: "running",
   PAUSED: "paused",
@@ -38,11 +40,22 @@ let jobControl = { jobId: null, state: null };
 let activeLoopPromise = null;
 let activeLoopJobId = null;
 let stateQueue = Promise.resolve();
+let singleDownloadQueue = Promise.resolve();
+let creatingOffscreenDocument = null;
 let singleDownloadsInFlight = 0;
 
 function withJobState(fn) {
   const run = stateQueue.then(fn);
   stateQueue = run.then(
+    () => {},
+    () => {}
+  );
+  return run;
+}
+
+function queueSingleDownload(fn) {
+  const run = singleDownloadQueue.then(fn);
+  singleDownloadQueue = run.then(
     () => {},
     () => {}
   );
@@ -270,15 +283,30 @@ async function stopKeepalive() {
 }
 
 async function ensureOffscreenDocument() {
+  if (creatingOffscreenDocument) {
+    await creatingOffscreenDocument;
+    return;
+  }
+  const offscreenUrl = chrome.runtime.getURL?.("offscreen.html");
   const existingContexts = await chrome.runtime.getContexts({
     contextTypes: ["OFFSCREEN_DOCUMENT"],
+    ...(offscreenUrl ? { documentUrls: [offscreenUrl] } : {}),
   });
   if (existingContexts.length > 0) return;
-  await chrome.offscreen.createDocument({
+  if (creatingOffscreenDocument) {
+    await creatingOffscreenDocument;
+    return;
+  }
+  creatingOffscreenDocument = chrome.offscreen.createDocument({
     url: "offscreen.html",
     reasons: ["BLOBS"],
     justification: "Assemble HLS audio tracks and save them to the selected destination.",
   });
+  try {
+    await creatingOffscreenDocument;
+  } finally {
+    creatingOffscreenDocument = null;
+  }
 }
 
 async function closeOffscreenDocument() {
@@ -454,6 +482,7 @@ async function processTrack(jobId, trackIndex) {
         const statusByStage = {
           resolving: "Resolving stream...",
           building: "Downloading...",
+          refreshing: "Refreshing expired stream...",
           saving: "Saving...",
         };
         return updateTrackProgress(
@@ -643,12 +672,14 @@ const BulkJobManager = {
       );
       await startKeepalive();
       await ensureOffscreenDocument();
-      return await trackDownloadExecution.execute({
-        trackData,
-        formatPreference: formatPreference || "auto",
-        destination: resolvedDestination,
-        playbackTransform,
-      });
+      return await queueSingleDownload(() =>
+        trackDownloadExecution.execute({
+          trackData,
+          formatPreference: formatPreference || "auto",
+          destination: resolvedDestination,
+          playbackTransform,
+        })
+      );
     } finally {
       singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);
       const activeJob = await loadJob().catch(() => null);
@@ -686,13 +717,15 @@ const BulkJobManager = {
       );
       await startKeepalive();
       await ensureOffscreenDocument();
-      return await trackDownloadExecution.execute({
-        trackData,
-        formatPreference: formatPreference || "auto",
-        destination: resolvedDestination,
-        trimRange,
-        playbackTransform,
-      });
+      return await queueSingleDownload(() =>
+        trackDownloadExecution.execute({
+          trackData,
+          formatPreference: formatPreference || "auto",
+          destination: resolvedDestination,
+          trimRange,
+          playbackTransform,
+        })
+      );
     } finally {
       singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);
       const activeJob = await loadJob().catch(() => null);

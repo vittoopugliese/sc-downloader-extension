@@ -15,9 +15,10 @@ function createHarness(options = {}) {
   let maxActive = 0;
   let automatic = options.automatic !== false;
   let failIds = new Set(options.failIds || []);
+  let offscreenExists = options.offscreenInitiallyMissing !== true;
   const releases = [];
   const starts = [];
-  const effects = { close: 0, notifications: 0, abort: 0 };
+  const effects = { create: 0, close: 0, notifications: 0, abort: 0 };
 
   const execution = {
     async execute(request) {
@@ -71,7 +72,8 @@ function createHarness(options = {}) {
     chrome: {
       runtime: {
         lastError: null,
-        getContexts: async () => [{ contextType: "OFFSCREEN_DOCUMENT" }],
+        getURL: (value) => `chrome-extension://test/${value}`,
+        getContexts: async () => offscreenExists ? [{ contextType: "OFFSCREEN_DOCUMENT" }] : [],
         sendMessage: async () => ({ success: true }),
       },
       storage: {
@@ -92,8 +94,12 @@ function createHarness(options = {}) {
         },
       },
       offscreen: {
-        createDocument: async () => {},
-        closeDocument: async () => { effects.close += 1; },
+        createDocument: async () => {
+          effects.create += 1;
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          offscreenExists = true;
+        },
+        closeDocument: async () => { effects.close += 1; offscreenExists = false; },
       },
     },
   });
@@ -136,7 +142,7 @@ async function waitFor(predicate, label, timeout = 3000) {
   assert.equal(partial.job.status, "completed");
   assert.equal(partial.job.completed, 2);
   assert.equal(partial.job.failed.length, 1);
-  assert.equal(partial.maxActive, 2);
+  assert.equal(partial.maxActive, 1, "Bulk downloads must limit peak audio memory");
   assert.equal(partial.effects.notifications, 1);
   assert.equal(partial.effects.close, 1);
   partial.setFailIds([]);
@@ -150,13 +156,13 @@ async function waitFor(predicate, label, timeout = 3000) {
 
   const paused = createHarness({ automatic: false });
   await paused.manager.createJob(tracks(3), "Paused set");
-  await waitFor(() => paused.starts.length === 2, "two in-flight tracks");
+  await waitFor(() => paused.starts.length === 1, "one in-flight track");
   assert.equal((await paused.manager.pauseJob()).success, true);
   assert.equal((await paused.manager.pauseJob()).success, false);
   paused.releaseAll();
-  await waitFor(() => paused.job?.completed === 2, "in-flight tracks saved while paused");
+  await waitFor(() => paused.job?.completed === 1, "in-flight track saved while paused");
   assert.equal(paused.job.status, "paused");
-  assert.equal(paused.starts.length, 2, "Pause dispatched another track");
+  assert.equal(paused.starts.length, 1, "Pause dispatched another track");
   paused.setAutomatic(true);
   assert.equal((await paused.manager.resumeJob()).success, true);
   await waitFor(() => paused.job?.status === "completed", "resumed job");
@@ -164,7 +170,7 @@ async function waitFor(predicate, label, timeout = 3000) {
 
   const cancelled = createHarness({ automatic: false });
   await cancelled.manager.createJob(tracks(3), "Cancelled set");
-  await waitFor(() => cancelled.starts.length === 2, "cancel in-flight tracks");
+  await waitFor(() => cancelled.starts.length === 1, "cancel in-flight track");
   const cancelResult = await cancelled.manager.cancelJob();
   assert.equal(cancelResult.success, true);
   await cancelled.updateTrackProgress(
@@ -234,6 +240,15 @@ async function waitFor(predicate, label, timeout = 3000) {
     1,
     "A bulk job and single-track download started concurrently"
   );
+
+  const offscreenRace = createHarness({ offscreenInitiallyMissing: true });
+  const simultaneousSingles = await Promise.all([
+    offscreenRace.manager.downloadSingleTrack(tracks(1)[0]),
+    offscreenRace.manager.downloadSingleTrack(tracks(1)[0]),
+  ]);
+  assert.equal(simultaneousSingles.length, 2);
+  assert.equal(offscreenRace.effects.create, 1, "Concurrent downloads created two offscreen documents");
+  assert.equal(offscreenRace.maxActive, 1, "Concurrent single downloads were not serialized");
   console.log("Bulk job state machine verification passed.");
 })().catch((error) => {
   console.error(error);

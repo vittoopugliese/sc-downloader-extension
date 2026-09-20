@@ -10,7 +10,10 @@
   const MAX_RATE = 4;
   const DEFAULT_RATE = 1;
   const QUANTUM = 128;
-  const MAX_RENDERED_PCM_BYTES = 512 * 1024 * 1024;
+  // The rendered Float32 output is only one part of the peak: decoded input,
+  // renderer working buffers, WAV bytes and the final Blob coexist briefly.
+  // Keeping this at 128 MiB prevents multi-gigabyte peaks on Chromebooks.
+  const MAX_RENDERED_PCM_BYTES = 128 * 1024 * 1024;
   const FACTORY_URL = "scripts/vendor/signalsmith/wasm-factory.mjs";
   let factoryPromise = null;
 
