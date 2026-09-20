@@ -66,8 +66,22 @@ function startServer() {
       turnstileApi: "function",
       submitDisabled: false,
     });
+    await page.goto(`http://127.0.0.1:${port}/?view=welcome&locale=es-ES&version=2026.9.10`, { waitUntil: "domcontentloaded" });
+    const welcome = await page.evaluate(() => ({
+      lang: document.documentElement.lang,
+      title: document.querySelector("#welcome-title")?.textContent,
+      copy: document.querySelector(".welcome-lead")?.textContent,
+      steps: [...document.querySelectorAll(".welcome li")].map((item) => item.textContent),
+      action: document.querySelector(".welcome-action")?.getAttribute("href"),
+    }));
+    assert.equal(welcome.lang, "es");
+    assert.match(welcome.title, /Extensión instalada.*Ahora recargá SoundCloud/i);
+    assert.match(welcome.copy, /Luego de instalar la extensión.*pestañas de SoundCloud/i);
+    assert.equal(welcome.steps.length, 3);
+    assert.match(welcome.steps[1], /Ctrl\+R/);
+    assert.equal(welcome.action, "https://soundcloud.com/");
     assert.deepEqual(pageErrors, []);
-    console.log("Uninstall feedback browser verification passed.");
+    console.log("Install welcome and uninstall feedback browser verification passed.");
   } finally {
     await browser.close();
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));

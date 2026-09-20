@@ -677,7 +677,12 @@ function requestTrackState(forceRefresh) {
       { type: "GET_TRACK_DATA", forceRefresh },
       (response) => {
         if (chrome.runtime.lastError) {
-          resolve({ status: "loading" });
+          const message = chrome.runtime.lastError.message || "";
+          resolve({
+            status: /receiving end does not exist|could not establish connection/i.test(message)
+              ? "reload_required"
+              : "loading",
+          });
           return;
         }
 
@@ -734,6 +739,11 @@ function handleTrackState(state) {
     stopPolling();
     hideLoading();
     showTrackLoadError("not_track");
+    return;
+  }
+  if (state.status === "reload_required") {
+    stopPolling();
+    showTrackLoadError("load_failed");
     return;
   }
 

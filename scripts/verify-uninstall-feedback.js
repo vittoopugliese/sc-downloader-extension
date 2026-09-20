@@ -6,6 +6,7 @@ const vm = require("node:vm");
 let installedListener;
 let startupListener;
 const uninstallUrls = [];
+const openedTabs = [];
 
 const context = vm.createContext({
   console,
@@ -19,7 +20,10 @@ const context = vm.createContext({
   SCDownloadTrack: {},
   SCDownloadSource: { configure: () => ({}) },
   chrome: {
-    tabs: { onRemoved: { addListener() {} } },
+    tabs: {
+      onRemoved: { addListener() {} },
+      create: async options => { openedTabs.push(options); },
+    },
     cookies: { get() {} },
     i18n: { getUILanguage: () => "es-419" },
     runtime: {
@@ -40,7 +44,7 @@ vm.runInContext(source, context, { filename: "background.js" });
   assert.equal(typeof installedListener, "function");
   assert.equal(typeof startupListener, "function");
 
-  installedListener({ reason: "update" });
+  installedListener({ reason: "install" });
   await new Promise(resolve => setImmediate(resolve));
   startupListener();
   await new Promise(resolve => setImmediate(resolve));
@@ -54,6 +58,17 @@ vm.runInContext(source, context, { filename: "background.js" });
     assert.equal(url.searchParams.get("locale"), "es-419");
     assert.equal(url.searchParams.get("version"), "2026.9.10");
   }
+
+  assert.equal(openedTabs.length, 1);
+  const welcomeUrl = new URL(openedTabs[0].url);
+  assert.equal(welcomeUrl.origin, "https://sctd.vpugliese.online");
+  assert.equal(welcomeUrl.searchParams.get("view"), "welcome");
+  assert.equal(welcomeUrl.searchParams.get("locale"), "es-419");
+  assert.equal(welcomeUrl.searchParams.get("version"), "2026.9.10");
+
+  installedListener({ reason: "update" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(openedTabs.length, 1, "Updates must not reopen onboarding");
 
   console.log("Uninstall feedback URL verification passed.");
 })().catch(error => {
