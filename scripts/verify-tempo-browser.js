@@ -285,7 +285,8 @@ async function main() {
     }
 
     const branding = await host.locator(".brand").evaluate((brand) => {
-      const badgeStyle = getComputedStyle(brand.querySelector(".free-badge"));
+      const badge = brand.querySelector(".free-badge");
+      const badgeStyle = getComputedStyle(badge);
       return {
         name: brand.querySelector(".brand-name")?.textContent?.trim(),
         logoWidth: parseFloat(
@@ -299,6 +300,9 @@ async function main() {
           getComputedStyle(brand.querySelector(".brand-name")).fontSize
         ),
         badge: {
+          text: badge?.textContent?.trim(),
+          isPro: badge?.classList.contains("is-pro"),
+          ariaLabel: badge?.getAttribute("aria-label"),
           left: badgeStyle.left,
           bottom: badgeStyle.bottom,
           height: badgeStyle.height,
@@ -313,9 +317,12 @@ async function main() {
       branding.logoHidden ||
       branding.titleFontSize !== 18 ||
       branding.badge.height !== "17px" ||
-      branding.badge.fontSize !== "9px"
+      branding.badge.fontSize !== "9px" ||
+      branding.badge.text !== "PRO" ||
+      !branding.badge.isPro ||
+      branding.badge.ariaLabel !== "Player Tools Pro active"
     ) {
-      throw new Error("Playback Speed panel branding is missing or incorrectly sized.");
+      throw new Error("Playback Speed panel branding does not reflect the active Pro plan.");
     }
 
     const compactStyles = await host.locator(".panel").evaluate((panel) => {

@@ -1412,6 +1412,8 @@
         .brand-title-line { display: flex; align-items: center; gap: 7px; min-width: 0; }
         .brand-name { font-size: 18px; line-height: 1.1; text-align: left; white-space: nowrap; }
         .free-badge { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font-size: 9px; font-weight: 800; line-height: 1; letter-spacing: .04em; }
+        .free-badge.is-pro { border-color: #8b5cf6; color: #f5f3ff; background: #32105e; box-shadow: 0 0 0 0 rgba(139, 92, 246, .32); animation: pro-badge-glow 2.8s ease-in-out infinite; }
+        @keyframes pro-badge-glow { 50% { border-color: #a78bfa; box-shadow: 0 0 0 2px rgba(139, 92, 246, .14), 0 0 10px rgba(124, 58, 237, .22); } }
         .presets { display: grid; grid-column: 1; grid-row: 2; grid-template-columns: repeat(2, 62px); gap: 5px; justify-self: start; flex-basis: auto; }
         .preset { width: 62px; height: 28px; border-radius: 7px; font-size: 12px; }
         .custom-preset, .custom-preset[data-saved="true"] { width: 62px; padding: 0 2px; font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -1543,7 +1545,7 @@
         <div class="brand">
           <img class="brand-logo" width="42" height="42" alt="" draggable="false" hidden />
           <div class="brand-copy">
-            <div class="brand-title-line"><button class="brand-name" type="button" aria-label="Open the Looper guide">SCTD Player Tools</button><span class="free-badge">FREE</span></div>
+            <div class="brand-title-line"><button class="brand-name" type="button" aria-label="Open the Looper guide">SCTD Player Tools</button><span class="free-badge" aria-label="Player Tools Free plan">FREE</span></div>
           </div>
         </div>
         <div class="panel-tools" role="group" aria-label="Panel options">
@@ -1730,6 +1732,7 @@
       status: root.querySelector(".status"),
       brandLogo: root.querySelector(".brand-logo"),
       brandName: root.querySelector(".brand-name"),
+      planBadge: root.querySelector(".free-badge"),
       downloadTrackButton: root.querySelector(".download-track-button"),
       settingsButton: root.querySelector(".settings-button"),
       detachButton: root.querySelector(".detach-button"),
@@ -1978,6 +1981,10 @@
   function render() {
     if (!ui) return;
     const playbackAllowed = capability("tempo");
+    const isPro = accessSnapshot?.plan === "pro";
+    ui.planBadge.textContent = isPro ? "PRO" : "FREE";
+    ui.planBadge.classList.toggle("is-pro", isPro);
+    ui.planBadge.setAttribute("aria-label", isPro ? "Player Tools Pro active" : "Player Tools Free plan");
     if (!playbackAllowed && !accessLocked) {
       accessLocked = true;
       controller.setRate(DEFAULTS.rate);

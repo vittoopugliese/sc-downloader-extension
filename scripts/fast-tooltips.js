@@ -1,97 +1,46 @@
 (() => {
-  "use strict";
+  const delay = 100;
+  const tip = document.createElement("div");
+  tip.id = "scdl-fast-tooltip";
+  tip.setAttribute("role", "tooltip");
+  tip.style.cssText = "position:fixed;z-index:2147483647;padding:3px 5px;border-radius:4px;color:#fff;background:#222;font:10px/1.2 system-ui,sans-serif;pointer-events:none;visibility:hidden;transform:translate(-50%,-100%)";
+  document.documentElement.append(tip);
 
-  const SHOW_DELAY_MS = 100;
-  const tooltip = document.createElement("div");
-  tooltip.id = "scdl-fast-tooltip";
-  tooltip.setAttribute("role", "tooltip");
-  Object.assign(tooltip.style, {
-    position: "fixed",
-    zIndex: "2147483647",
-    maxWidth: "min(280px, calc(100vw - 16px))",
-    padding: "6px 8px",
-    border: "1px solid rgba(255, 255, 255, .2)",
-    borderRadius: "6px",
-    color: "#fff",
-    background: "rgba(20, 20, 22, .96)",
-    boxShadow: "0 3px 12px rgba(0, 0, 0, .35)",
-    font: "500 12px/1.25 system-ui, -apple-system, sans-serif",
-    letterSpacing: "normal",
-    pointerEvents: "none",
-    opacity: "0",
-    transform: "translate(-50%, -4px)",
-    transition: "opacity 80ms ease, transform 80ms ease",
-    visibility: "hidden",
-  });
-  document.documentElement.append(tooltip);
-
-  let activeButton = null;
-  let activeTitle = "";
-  let showTimer = null;
-
-  function buttonFromEvent(event) {
-    return event.composedPath().find((node) => node?.nodeType === Node.ELEMENT_NODE && node.tagName === "BUTTON") || null;
-  }
-
-  function restoreTitle(button) {
-    if (button && !button.hasAttribute("title") && button.dataset.scdlTooltipTitle) {
-      button.title = button.dataset.scdlTooltipTitle;
-    }
-    button?.removeAttribute("data-scdl-tooltip-title");
-  }
-
-  function hide() {
-    clearTimeout(showTimer);
-    showTimer = null;
-    tooltip.style.opacity = "0";
-    tooltip.style.transform = "translate(-50%, -4px)";
-    tooltip.style.visibility = "hidden";
-    restoreTitle(activeButton);
-    activeButton = null;
-    activeTitle = "";
-  }
-
-  function position(button) {
-    const rect = button.getBoundingClientRect();
-    const top = rect.top > 42 ? rect.top - 8 : rect.bottom + 8;
-    tooltip.style.left = `${Math.min(Math.max(rect.left + rect.width / 2, 8), window.innerWidth - 8)}px`;
-    tooltip.style.top = `${top}px`;
-    tooltip.style.transform = rect.top > 42 ? "translate(-50%, -100%)" : "translate(-50%, 4px)";
-  }
-
-  function show(button) {
-    if (activeButton === button) return;
+  let active, timer;
+  const button = (event) => event.composedPath().find((node) => node?.tagName === "BUTTON");
+  const restore = () => {
+    if (active && !active.hasAttribute("title")) active.title = active.dataset.scdlTooltip;
+    active?.removeAttribute("data-scdl-tooltip");
+  };
+  const hide = () => {
+    clearTimeout(timer);
+    tip.style.visibility = "hidden";
+    restore();
+    active = null;
+  };
+  const show = (target) => {
+    if (!target || target === active) return;
     hide();
-    const title = button.getAttribute("title");
-    if (!title) return;
-    activeButton = button;
-    activeTitle = title;
-    button.dataset.scdlTooltipTitle = title;
-    button.removeAttribute("title");
-    showTimer = setTimeout(() => {
-      if (activeButton !== button || !button.isConnected) return;
-      tooltip.textContent = activeTitle;
-      tooltip.style.visibility = "visible";
-      position(button);
-      tooltip.style.opacity = "1";
-    }, SHOW_DELAY_MS);
-  }
+    const text = target.title;
+    if (!text) return;
+    active = target;
+    target.dataset.scdlTooltip = text;
+    target.removeAttribute("title");
+    timer = setTimeout(() => {
+      if (target !== active || !target.isConnected) return;
+      const rect = target.getBoundingClientRect();
+      tip.textContent = text;
+      tip.style.left = `${Math.min(Math.max(rect.left + rect.width / 2, 8), innerWidth - 8)}px`;
+      tip.style.top = `${rect.top - 4}px`;
+      tip.style.visibility = "visible";
+    }, delay);
+  };
 
-  function onPointerOver(event) {
-    if (event.pointerType !== "touch") show(buttonFromEvent(event));
-  }
-  function onPointerOut(event) {
-    const button = buttonFromEvent(event);
-    if (button && button === activeButton && !button.contains(event.relatedTarget)) hide();
-  }
-  document.addEventListener("pointerover", onPointerOver, true);
-  document.addEventListener("pointerout", onPointerOut, true);
-  document.addEventListener("mouseover", onPointerOver, true);
-  document.addEventListener("mouseout", onPointerOut, true);
-  document.addEventListener("focusin", (event) => show(buttonFromEvent(event)), true);
-  document.addEventListener("focusout", (event) => {
-    if (activeButton && buttonFromEvent(event) === activeButton) hide();
+  document.addEventListener("pointerover", (event) => {
+    if (event.pointerType !== "touch") show(button(event));
   }, true);
-  document.addEventListener("scroll", () => activeButton && position(activeButton), true);
-  window.addEventListener("resize", () => activeButton && position(activeButton));
+  document.addEventListener("pointerout", (event) => {
+    const target = button(event);
+    if (target && target === active && !target.contains(event.relatedTarget)) hide();
+  }, true);
 })();

@@ -119,9 +119,9 @@ const { chromium } = require('playwright');
     await teleportButton.hover(); await page.waitForTimeout(130);
     const teleportTooltip=await teleportButton.evaluate(button=>{
       const tooltip=document.querySelector('#scdl-fast-tooltip');
-      return {text:tooltip.textContent,visible:tooltip.style.opacity,titleRemoved:!button.hasAttribute('title')};
+      return {text:tooltip.textContent,visible:tooltip.style.visibility,titleRemoved:!button.hasAttribute('title')};
     });
-    assert.deepEqual(teleportTooltip,{text:'Teleport to selected track',visible:'1',titleRemoved:true});
+    assert.deepEqual(teleportTooltip,{text:'Teleport to selected track',visible:'visible',titleRemoved:true});
     await page.screenshot({path:'test-results/likes-explorer-desktop.png'});
     for(const width of [390,760,1024]){
       await page.setViewportSize({width,height:800});await page.waitForTimeout(180);
