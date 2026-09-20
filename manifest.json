@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "SoundCloud Track Downloader",
   "default_locale": "en",
-  "version": "2026.9.10",
+  "version": "2026.9.20",
   "permissions": ["cookies", "tabs", "downloads", "offscreen", "notifications", "storage", "alarms"],
   "host_permissions": [
     "https://soundcloud.com/*",
