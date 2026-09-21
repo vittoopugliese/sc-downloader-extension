@@ -34,7 +34,10 @@
   }
 
   function buttonFromEvent(event) {
-    return event.composedPath().find((node) => node?.tagName === "BUTTON") || null;
+    return event.composedPath().find((node) =>
+      node?.tagName === "BUTTON" ||
+      (node?.tagName === "SELECT" && node.classList.contains("popup-control-btn"))
+    ) || null;
   }
 
   function position() {

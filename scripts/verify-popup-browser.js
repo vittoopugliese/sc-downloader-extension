@@ -77,6 +77,21 @@ const iconDataUrls = Object.fromEntries(
       await page.locator("#downloadBtn").hover();
       await page.waitForTimeout(130);
       assert.equal(await page.locator("#scdl-fast-tooltip").textContent(), "Download");
+      for (const [selector, label] of [
+        ["#downloadFormat", "Download format"],
+        ["#downloadLimit", "Download amount"],
+      ]) {
+        const select = page.locator(selector);
+        await select.hover();
+        await page.waitForTimeout(130);
+        assert.equal(await page.locator("#scdl-fast-tooltip").textContent(), label);
+        assert.equal(await page.locator("#scdl-fast-tooltip").evaluate((tip) => tip.style.visibility), "visible");
+        assert.equal(await select.getAttribute("title"), null);
+        await page.mouse.move(425, 240);
+        assert.equal(await select.getAttribute("title"), label);
+      }
+      assert.ok((await page.locator("#downloadFormat").boundingBox()).width <= 90,
+        "The format selector should fit its short option labels");
     }
     const dimensions = await page.evaluate(() => ({
       width: innerWidth,

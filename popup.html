@@ -1002,7 +1002,8 @@
 
         .track-meta:has(#downloadLimit:not(.is-hidden)) {
             display: grid;
-            grid-template-columns: max-content 4px minmax(92px, 1fr) 68px max-content;
+            grid-template-columns: max-content 4px 88px 68px max-content;
+            justify-content: center;
             width: 100%;
             gap: 5px;
         }
@@ -1364,7 +1365,7 @@
                     <span id="metaSep" class="meta-sep">&middot;</span>
                     <span id="streamFormat"></span>
                     <span id="downloadFormatSlot" class="control-slot">
-                        <select id="downloadFormat" class="popup-control-btn is-hidden" aria-label="Download format" data-i18n-aria-label="download_format">
+                        <select id="downloadFormat" class="popup-control-btn is-hidden" aria-label="Download format" title="Download format" data-i18n-aria-label="download_format" data-i18n-title="download_format">
                             <option value="auto" data-i18n="auto">Auto</option>
                             <option value="original" data-i18n="original">Original</option>
                             <option value="mp3">MP3</option>
@@ -1372,7 +1373,7 @@
                             <option value="opus">Opus</option>
                         </select>
                     </span>
-                    <select id="downloadLimit" class="popup-control-btn is-hidden" aria-label="Download amount" data-i18n-aria-label="download_amount">
+                    <select id="downloadLimit" class="popup-control-btn is-hidden" aria-label="Download amount" title="Download amount" data-i18n-aria-label="download_amount" data-i18n-title="download_amount">
                         <option value="50">50</option>
                     </select>
                     <span id="downloadFolderSlot" class="control-slot">
