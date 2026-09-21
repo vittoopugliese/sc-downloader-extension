@@ -20,7 +20,7 @@ importScripts(
 const t = globalThis.SCDLI18n?.t || ((key) => key);
 
 const UNINSTALL_FEEDBACK_URL = "https://sctd.vpugliese.online/";
-const INSTALL_WELCOME_URL = "https://sctd.vpugliese.online/";
+const INSTALL_LIKES_URL = "https://soundcloud.com/you/likes";
 const playerToolsCommerce = globalThis.SCPlayerToolsCommerce?.create
   ? globalThis.SCPlayerToolsCommerce.create({
       storage: chrome.storage.local,
@@ -46,12 +46,9 @@ async function configureUninstallFeedback() {
   await chrome.runtime.setUninstallURL(url.toString());
 }
 
-async function openInstallWelcome() {
-  const url = new URL(INSTALL_WELCOME_URL);
-  url.searchParams.set("view", "welcome");
-  url.searchParams.set("locale", chrome.i18n.getUILanguage());
-  url.searchParams.set("version", chrome.runtime.getManifest().version);
-  await chrome.tabs.create({ url: url.toString() });
+async function openInstallLikes() {
+  await SCPlayerToolsAccess.startTrial();
+  await chrome.tabs.create({ url: INSTALL_LIKES_URL });
 }
 
 function getOAuthToken() {
@@ -172,7 +169,7 @@ async function openPlayerToolsPanel() {
 chrome.runtime.onInstalled.addListener((details) => {
   configureUninstallFeedback().catch(() => {});
   BulkJobManager.recoverRunningJob().catch(() => {});
-  if (details?.reason === "install") openInstallWelcome().catch(() => {});
+  if (details?.reason === "install") openInstallLikes().catch(() => {});
 });
 
 chrome.runtime.onStartup.addListener(() => {

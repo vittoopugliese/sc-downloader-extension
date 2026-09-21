@@ -7,6 +7,8 @@ const initial = policy.startTrial(notStarted, NOW);
 const exhausted = { ...initial, trial: { ...initial.trial, used: 20 } };
 assert.equal(policy.snapshot(initial, "owner", NOW).state, "trial_available");
 assert.equal(policy.snapshot(initial, "owner", NOW).trial.daysRemaining, 7);
+assert.equal(policy.snapshot(initial, "owner", NOW).capabilities.likesExplorer, true);
+assert.equal(policy.canAuthorize(initial, "owner", "explore-likes", null, NOW).allowed, true);
 assert.equal(policy.canAuthorize(initial, "owner", "begin-loop", null, NOW).consume, true);
 assert.equal(policy.canAuthorize(initial, "owner", "edit-loop", null, NOW).allowed, false);
 for (const operation of ["set-rate", "set-preserve-pitch", "save-preset", "set-effect"]) {
@@ -28,7 +30,9 @@ assert.equal(policy.canAuthorize(last, "other", "begin-loop", null, NOW).reason,
 const expired = policy.snapshot(initial, "owner", initial.trial.expiresAt);
 assert.equal(expired.state, "trial_expired");
 assert.equal(expired.capabilities.tempo, false);
+assert.equal(expired.capabilities.likesExplorer, false);
 assert.equal(policy.canAuthorize(initial, "owner", "set-rate", null, initial.trial.expiresAt).reason, "trial-expired");
+assert.equal(policy.canAuthorize(initial, "owner", "explore-likes", null, initial.trial.expiresAt).reason, "trial-expired");
 assert.equal(policy.snapshot(last, "owner", initial.trial.expiresAt).state, "trial_last_session", "loop 20 grace survives clock expiry");
 const pro = { ...exhausted, entitlement: { status: "active" } };
 for (const operation of ["begin-loop", "export-loop", "export-track-effects", "edit-loop-precise"]) {

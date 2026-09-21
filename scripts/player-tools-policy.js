@@ -4,7 +4,7 @@
   const TRIAL_LIMIT = 20;
   const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
   const SCHEMA_VERSION = 2;
-  const PRO_OPERATIONS = new Set(["export-loop", "export-track-effects", "edit-loop-precise", "explore-likes"]);
+  const PRO_OPERATIONS = new Set(["export-loop", "export-track-effects", "edit-loop-precise"]);
   const PLAYBACK_OPERATIONS = new Set(["set-effect", "set-rate", "set-preserve-pitch", "save-preset"]);
   const validId = (value) => typeof value === "string" && value.length > 0 && value.length <= 1024;
   const validGeneration = (value) => Number.isSafeInteger(value) && value >= 0;
@@ -93,7 +93,8 @@
       capabilities: {
         openPanel: true, beginLoop: pro || (trialAvailable && !grant), editLoop: playback,
         tempo: playback, preservePitch: playback, savePreset: playback,
-        maximizeLooper: playback, editLoopPrecise: pro, exportLoop: pro, exportTrackEffects: pro, likesExplorer: pro,
+        maximizeLooper: playback, editLoopPrecise: pro, exportLoop: pro, exportTrackEffects: pro,
+        likesExplorer: pro || trialAvailable,
       },
     };
   }
@@ -101,9 +102,14 @@
   function canAuthorize(raw, ownerKey, operation, sessionId, now = Date.now()) {
     const result = (allowed, reason = null, consume = false) => ({ allowed, consume, reason });
     if (!PRO_OPERATIONS.has(operation) && !PLAYBACK_OPERATIONS.has(operation) &&
-        operation !== "begin-loop" && operation !== "edit-loop") return result(false, "unknown-operation");
+        operation !== "begin-loop" && operation !== "edit-loop" && operation !== "explore-likes") return result(false, "unknown-operation");
     const current = snapshot(raw, ownerKey, now);
     if (current.plan === "pro") return result(true);
+    if (operation === "explore-likes") {
+      return current.capabilities.likesExplorer
+        ? result(true)
+        : result(false, current.trial.expired ? "trial-expired" : "pro-required");
+    }
     if (PRO_OPERATIONS.has(operation)) return result(false, "pro-required");
     if (operation === "edit-loop") return current.capabilities.editLoop && current.grant && current.grant.sessionId === sessionId
       ? result(true) : result(false, "stale-generation");

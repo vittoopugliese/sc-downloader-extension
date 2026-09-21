@@ -3,6 +3,21 @@
 Fecha: 2026-09-15. Fuente completa: `C:\Users\torib\Desktop\plan_final_destilar_por_etapas.txt`.
 Entrega: planes separados, decisiones, materiales de Store y guiones. No es una implementación ni una publicación.
 
+## Siguiente paso al cerrar este documento — onboarding de Likes Explorer
+
+En la primera instalación, la extensión debe abrir directamente
+`https://soundcloud.com/you/likes`, en lugar de la landing de bienvenida. Ese
+evento debe iniciar una única prueba de siete días y dar acceso temporal a
+Likes Explorer, para que una persona que ya inició sesión en SoundCloud pueda
+probarlo desde sus propios Likes sin pasos intermedios. Las actualizaciones no
+deben volver a abrir la pestaña ni reiniciar o extender la prueba.
+
+La prueba habilita Likes Explorer durante esos siete días; los exports y las
+demás capacidades exclusivamente Pro continúan requiriendo el entitlement de
+pago. Antes del siguiente paquete, comprobar una instalación limpia con y sin
+sesión de SoundCloud, confirmar que el Explorer abre durante la prueba y que,
+al vencimiento, vuelve a solicitar Pro.
+
 ## Nueva dirección operativa — release completa, pagos y producción
 
 Esta sección conserva literalmente la conclusión operativa de la revisión más reciente y pasa a ser la guía inmediata para retomar el proyecto.

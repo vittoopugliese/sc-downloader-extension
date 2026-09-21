@@ -7,6 +7,7 @@ let installedListener;
 let startupListener;
 const uninstallUrls = [];
 const openedTabs = [];
+let trialStarts = 0;
 
 const context = vm.createContext({
   console,
@@ -19,6 +20,7 @@ const context = vm.createContext({
   },
   SCDownloadTrack: {},
   SCDownloadSource: { configure: () => ({}) },
+  SCPlayerToolsAccess: { startTrial: async () => { trialStarts += 1; } },
   chrome: {
     tabs: {
       onRemoved: { addListener() {} },
@@ -60,15 +62,13 @@ vm.runInContext(source, context, { filename: "background.js" });
   }
 
   assert.equal(openedTabs.length, 1);
-  const welcomeUrl = new URL(openedTabs[0].url);
-  assert.equal(welcomeUrl.origin, "https://sctd.vpugliese.online");
-  assert.equal(welcomeUrl.searchParams.get("view"), "welcome");
-  assert.equal(welcomeUrl.searchParams.get("locale"), "es-419");
-  assert.equal(welcomeUrl.searchParams.get("version"), "2026.9.10");
+  assert.equal(openedTabs[0].url, "https://soundcloud.com/you/likes");
+  assert.equal(trialStarts, 1, "Fresh installs start the seven-day trial once");
 
   installedListener({ reason: "update" });
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(openedTabs.length, 1, "Updates must not reopen onboarding");
+  assert.equal(trialStarts, 1, "Updates must not extend the trial");
 
   console.log("Uninstall feedback URL verification passed.");
 })().catch(error => {

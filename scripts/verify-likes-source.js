@@ -21,6 +21,8 @@ assert.equal(source.cursor('https://api-v2.soundcloud.com/users/42/likes?offset=
 assert.throws(()=>source.cursor('https://evil.com/users/42/likes','42'));
 assert.throws(()=>source.cursor('https://api-v2.soundcloud.com/users/43/likes','42'));
 assert.equal(policy.canAuthorize(undefined,null,'explore-likes').reason,'pro-required');
+const trial=policy.startTrial(policy.normalize(), Date.now());
+assert.equal(policy.canAuthorize(trial,null,'explore-likes').allowed,true);
 const pro=policy.normalize(undefined); pro.entitlement={status:'active'};
 assert.equal(policy.canAuthorize(pro,null,'explore-likes').allowed,true);
 assert.equal(policy.canAuthorize(pro,null,'explore-likes').consume,false);
