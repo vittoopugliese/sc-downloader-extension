@@ -10,6 +10,7 @@ let storedDestination = { id: "stored-id", name: "Stored Music" };
 const context = vm.createContext({
   console,
   URL,
+  AbortController,
   setTimeout,
   clearTimeout,
   SCDownloadDirectory: {

@@ -1,8 +1,17 @@
 const SCSoundCloudHttp = (() => {
+  const DEFAULT_TIMEOUT_MS = 15000;
+  const DEFAULT_MAX_JSON_BYTES = 2 * 1024 * 1024;
   const STATUS_CODE = Object.freeze({
     401: "unauthorized",
     403: "forbidden",
     404: "not_found",
+    408: "network_timeout",
+    425: "service_unavailable",
+    429: "rate_limited",
+    500: "service_unavailable",
+    502: "service_unavailable",
+    503: "service_unavailable",
+    504: "service_unavailable",
   });
 
   const STATUS_MESSAGE = Object.freeze({
@@ -49,7 +58,67 @@ const SCSoundCloudHttp = (() => {
     error.code = STATUS_CODE[status] || "http_error";
     error.status = status;
     error.retryAfter = response.headers?.get?.("Retry-After") || null;
+    const retrySeconds = /^\d+(?:\.\d+)?$/.test(error.retryAfter || "")
+      ? Number(error.retryAfter) : NaN;
+    const retryDate = Number.isFinite(retrySeconds) ? NaN : Date.parse(error.retryAfter || "");
+    if (Number.isFinite(retrySeconds)) error.retryAt = Date.now() + retrySeconds * 1000;
+    else if (Number.isFinite(retryDate)) error.retryAt = retryDate;
     return error;
+  }
+
+  function typedError(message, code, cause) {
+    const error = new Error(message);
+    error.code = code;
+    if (cause) error.cause = cause;
+    return error;
+  }
+
+  async function readJson(response, maxBytes) {
+    const header = response.headers?.get?.("Content-Length");
+    const declared = header == null ? null : Number(header);
+    if (declared !== null && (!Number.isSafeInteger(declared) || declared < 0 || declared > maxBytes)) {
+      response.body?.cancel?.().catch?.(() => {});
+      throw typedError("SoundCloud returned an oversized response.", "response_too_large");
+    }
+
+    const reader = response.body?.getReader?.();
+    if (!reader) {
+      try {
+        return await response.json();
+      } catch (error) {
+        throw typedError("SoundCloud returned invalid JSON.", "invalid_response", error);
+      }
+    }
+
+    const chunks = [];
+    let size = 0;
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!(value instanceof Uint8Array) || size + value.byteLength > maxBytes) {
+          throw typedError("SoundCloud returned an oversized response.", "response_too_large");
+        }
+        size += value.byteLength;
+        chunks.push(value);
+      }
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      try {
+        return JSON.parse(new TextDecoder().decode(bytes));
+      } catch (error) {
+        throw typedError("SoundCloud returned invalid JSON.", "invalid_response", error);
+      }
+    } catch (error) {
+      await reader.cancel().catch(() => {});
+      throw error;
+    } finally {
+      reader.releaseLock?.();
+    }
   }
 
   function create(request) {
@@ -63,12 +132,45 @@ const SCSoundCloudHttp = (() => {
         error.code = "invalid_auth_destination";
         throw error;
       }
-      const response = await request(
-        url.toString(),
-        requestOptions(options.oauthToken)
-      );
-      if (!response.ok) throw responseError(response, options.label);
-      return response.json();
+      const timeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
+        ? options.timeoutMs : DEFAULT_TIMEOUT_MS;
+      const maxBytes = Number.isFinite(options.maxBytes) && options.maxBytes > 0
+        ? options.maxBytes : DEFAULT_MAX_JSON_BYTES;
+      const controller = new AbortController();
+      let timedOut = false;
+      const onAbort = () => controller.abort();
+      options.signal?.addEventListener?.("abort", onAbort, { once: true });
+      if (options.signal?.aborted) controller.abort();
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+          reject(typedError("SoundCloud request timed out.", "network_timeout"));
+        }, timeoutMs);
+      });
+      try {
+        return await Promise.race([(async () => {
+          const response = await request(url.toString(), {
+            ...requestOptions(options.oauthToken),
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            response.body?.cancel?.().catch?.(() => {});
+            throw responseError(response, options.label);
+          }
+          return readJson(response, maxBytes);
+        })(), timeout]);
+      } catch (error) {
+        if (timedOut) throw typedError("SoundCloud request timed out.", "network_timeout", error);
+        if (options.signal?.aborted) throw error;
+        if (error?.code) throw error;
+        if (error?.name === "AbortError") throw error;
+        throw typedError(error?.message || "SoundCloud request failed.", "network_error", error);
+      } finally {
+        clearTimeout(timer);
+        options.signal?.removeEventListener?.("abort", onAbort);
+      }
     }
 
     return { json };

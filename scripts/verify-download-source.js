@@ -6,6 +6,9 @@ const vm = require("node:vm");
 const context = vm.createContext({
   console,
   URL,
+  AbortController,
+  setTimeout,
+  clearTimeout,
   SCStreamSelector: {
     extractStreamInfo: (track) => ({
       url: track.media.transcodings[0].url,

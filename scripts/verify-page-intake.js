@@ -209,7 +209,7 @@ function harness(pageUrl, hydration, api, runtimeReply) {
 
   const loggedOut = harness("https://soundcloud.com/you/likes", [],
     () => { throw new Error("Unexpected API call"); },
-    () => ({ success: false, code: "unknown_error", error: "No oauth_token cookie" }));
+    () => ({ success: false, code: "auth_required", error: "No oauth_token cookie" }));
   await loggedOut.intake.extractCurrent();
   assert.equal(loggedOut.intake.read().code, "auth_required");
   assert.equal(loggedOut.intake.read().status, "error", "A terminal auth error must not restart on poll");
@@ -309,6 +309,40 @@ function harness(pageUrl, hydration, api, runtimeReply) {
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(retryIntake.getTrack().id, 1);
   assert.equal(retryCalls, 2);
+
+  let bodyAborted = false;
+  const stalledBody = create({
+    window: { location: { href: oldUrl, origin: "https://soundcloud.com",
+      hostname: "soundcloud.com", pathname: "/artist/track-1" } },
+    document: { documentElement: { innerHTML: "" }, querySelectorAll: () => [] },
+    fetch: async (_url, options) => {
+      options.signal?.addEventListener("abort", () => { bodyAborted = true; });
+      return { ok: true, text: () => new Promise(() => {}) };
+    },
+    runtime: { sendMessage: async () => ({}) },
+    streamSelector: selector,
+    downloadTrack: trackModule,
+    requestTimeoutMs: 20,
+  });
+  await Promise.race([
+    stalledBody.extractCurrent(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("HTML body hung past timeout")), 200)),
+  ]);
+  assert.equal(bodyAborted, true);
+  assert.equal(stalledBody.read().code, "network_timeout");
+
+  const unavailablePage = create({
+    window: { location: { href: oldUrl, origin: "https://soundcloud.com",
+      hostname: "soundcloud.com", pathname: "/artist/track-1" } },
+    document: { documentElement: { innerHTML: "" }, querySelectorAll: () => [] },
+    fetch: async () => ({ ok: false, status: 503, text: () => new Promise(() => {}) }),
+    runtime: { sendMessage: async () => ({}) },
+    streamSelector: selector,
+    downloadTrack: trackModule,
+    requestTimeoutMs: 20,
+  });
+  await unavailablePage.extractCurrent();
+  assert.equal(unavailablePage.read().code, "service_unavailable");
   console.log("Page Intake verification passed.");
 })().catch((error) => {
   console.error(error);

@@ -63,6 +63,8 @@ const SCPageIntake = (() => {
     const onData = deps.onData || (() => {});
     const schedule = deps.timers?.setTimeout || setTimeout;
     const cancel = deps.timers?.clearTimeout || clearTimeout;
+    const requestTimeoutMs = Number.isFinite(deps.requestTimeoutMs) && deps.requestTimeoutMs > 0
+      ? deps.requestTimeoutMs : 15000;
 
     let currentTrack = null;
     let currentCollection = null;
@@ -121,11 +123,23 @@ const SCPageIntake = (() => {
       return null;
     }
 
-    async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+    async function fetchWithTimeout(url, options = {}, read = (response) => response) {
       const controller = new AbortController();
-      const timeoutId = schedule(() => controller.abort(), timeoutMs);
+      let timeoutId;
+      const timeout = new Promise((_, reject) => {
+        timeoutId = schedule(() => {
+          const error = new Error("SoundCloud request timed out.");
+          error.code = "network_timeout";
+          reject(error);
+          controller.abort();
+        }, requestTimeoutMs);
+      });
       try {
-        return await request(url, { ...options, signal: controller.signal });
+        return await Promise.race([
+          Promise.resolve().then(() => request(url, { ...options, signal: controller.signal }))
+            .then(read),
+          timeout,
+        ]);
       } finally {
         cancel(timeoutId);
       }
@@ -143,8 +157,8 @@ const SCPageIntake = (() => {
       const scripts = [...doc.querySelectorAll('script[src*="a-v2.sndcdn.com"]')];
       for (const script of scripts) {
         try {
-          const text = await fetchWithTimeout(script.src, { cache: "force-cache" })
-            .then((response) => response.text());
+          const text = await fetchWithTimeout(script.src, { cache: "force-cache" },
+            (response) => response.text());
           const found = findClientId(text);
           if (found) {
             clientId = found;
@@ -353,7 +367,7 @@ const SCPageIntake = (() => {
         });
         if (!result?.success) {
           const error = new Error(result?.error || "Sign in to SoundCloud to view your likes.");
-          error.code = result?.code === "unknown_error" ? "auth_required" : result?.code || "auth_required";
+          error.code = result?.code || "network_error";
           error.status = result?.status;
           throw error;
         }
@@ -512,18 +526,20 @@ const SCPageIntake = (() => {
       extractionState = { status: "loading" };
 
       try {
-        const response = await request(win.location.href, {
+        const { response, html } = await fetchWithTimeout(win.location.href, {
           cache: "no-store",
           credentials: "include",
-        });
-        const html = await response.text();
+        }, async (response) => ({
+          response,
+          html: response.ok ? await response.text() : null,
+        }));
         if (!isFresh(extractionId, pageUrl)) return null;
-        const hydration = parseHydration(html);
         if (!response.ok) {
           const error = new Error(`SoundCloud page returned ${response.status}.`);
           error.status = response.status;
           throw error;
         }
+        const hydration = parseHydration(html);
         if (!hydration) {
           retry(extractionId, pageUrl);
           if (!pendingRetry) extractionState = { status: "error", code: "source_unavailable", retryable: true };
@@ -549,6 +565,7 @@ const SCPageIntake = (() => {
         const status = error?.status;
         const code = status === 429 ? "rate_limited" :
           [401, 403].includes(status) && pageUrl.includes("/you/likes") ? "auth_required" :
+          status >= 500 && status <= 599 ? "service_unavailable" :
           error?.name === "AbortError" ? "network_timeout" :
           error?.code || "network_error";
         extractionState = { status: "error", code, stage: "extract", retryable: !["auth_required", "unsupported_page"].includes(code), statusCode: status };
@@ -589,7 +606,7 @@ const SCPageIntake = (() => {
           const url = new URL("https://api-v2.soundcloud.com/resolve");
           url.searchParams.set("url", normalized);
           url.searchParams.set("client_id", id);
-          const response = await fetchWithTimeout(url.toString(), {
+          const resolved = await fetchWithTimeout(url.toString(), {
             cache: "no-store",
             credentials: "include",
             headers: {
@@ -597,9 +614,9 @@ const SCPageIntake = (() => {
               Origin: "https://soundcloud.com",
               Referer: "https://soundcloud.com/",
             },
-          });
-          if (response.ok) {
-            const value = await response.json();
+          }, async (response) => response.ok ? response.json() : null);
+          if (resolved) {
+            const value = resolved;
             if (value?.id && value?.title && (value.media?.transcodings?.length || value.downloadable)) {
               return toTrack(value, id, normalized, "auto");
             }
@@ -609,12 +626,14 @@ const SCPageIntake = (() => {
         }
       }
 
-      const response = await fetchWithTimeout(normalized, {
+      const { response, html } = await fetchWithTimeout(normalized, {
         cache: "no-store",
         credentials: "include",
-      });
+      }, async (response) => ({
+        response,
+        html: response.ok ? await response.text() : null,
+      }));
       if (!response.ok) throw new Error(`Could not load the current track (${response.status}).`);
-      const html = await response.text();
       const hydration = parseHydration(html);
       const sound = hydration?.find((item) => {
         if (item?.hydratable !== "sound" || !item.data) return false;

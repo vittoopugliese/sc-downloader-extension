@@ -58,7 +58,7 @@ function getOAuthToken() {
       (cookie) =>
         cookie?.value
           ? resolve(cookie.value)
-          : reject(new Error("No oauth_token cookie"))
+          : reject(Object.assign(new Error("No oauth_token cookie"), { code: "auth_required" }))
     );
   });
 }
