@@ -367,6 +367,35 @@ function harness(pageUrl, hydration, api, runtimeReply, overrides = {}) {
     [1, 2, 3]
   );
 
+  let releaseBulkPage;
+  let bulkRequestAborted = false;
+  let bulkRequestCount = 0;
+  const staleBulk = harness(
+    "https://soundcloud.com/artist/tracks",
+    [{ hydratable: "user", data: { id: 8, username: "Artist", track_count: 2 } }],
+    () => { throw new Error("The injected HTTP adapter should handle API calls"); },
+    null,
+    {
+      soundCloudHttp: {
+        async json(_url, options) {
+          bulkRequestCount += 1;
+          if (bulkRequestCount === 1) {
+            return { collection: [rawTrack(1)], next_href: null };
+          }
+          options.signal?.addEventListener("abort", () => { bulkRequestAborted = true; });
+          return new Promise((resolve) => { releaseBulkPage = resolve; });
+        },
+      },
+    }
+  );
+  await staleBulk.intake.extractCurrent();
+  const pendingBulkPage = staleBulk.intake.bulkPage();
+  await new Promise((resolve) => setImmediate(resolve));
+  staleBulk.intake.reset();
+  assert.equal(bulkRequestAborted, true, "Reset did not abort the pending bulk request");
+  releaseBulkPage({ collection: [rawTrack(2)], next_href: null });
+  await assert.rejects(pendingBulkPage, error => error.code === "stale_context");
+
   const player = harness(
     "https://soundcloud.com/discover",
     [],

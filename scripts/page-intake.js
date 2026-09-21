@@ -80,6 +80,8 @@ const SCPageIntake = (() => {
     let clientIdAt = 0;
     let activeExtractionId = 0;
     let activeExtractionController = null;
+    let bulkGeneration = 0;
+    const activeBulkControllers = new Set();
     let extractionRetryCount = 0;
     let pendingRetry = null;
     let extracting = false;
@@ -557,7 +559,7 @@ const SCPageIntake = (() => {
         currentTrack = result.data;
         rawTrack = result.raw;
         currentCollection = null;
-        bulkContext = null;
+        invalidateBulkContext();
         if (changed) onData("TRACK_DATA", currentTrack);
         onInline(currentTrack);
         return currentTrack;
@@ -567,7 +569,13 @@ const SCPageIntake = (() => {
       currentCollection = result.data;
       currentTrack = null;
       rawTrack = null;
-      bulkContext = result.bulk;
+      invalidateBulkContext();
+      bulkContext = Object.freeze({
+        ...result.bulk,
+        ...(result.bulk.orderedEntries
+          ? { orderedEntries: Object.freeze([...result.bulk.orderedEntries]) }
+          : {}),
+      });
       if (changed) onData("PLAYLIST_DATA", currentCollection);
       onInline();
       return currentCollection;
@@ -774,73 +782,105 @@ const SCPageIntake = (() => {
       return url;
     }
 
-    async function bulkPage(cursor = null, pageSize = USER_TRACKS_PAGE_SIZE, expectedPageUrl = null) {
-      if (!bulkContext || bulkContext.pageUrl !== currentUrl() ||
-          (expectedPageUrl && normalizeUrl(expectedPageUrl) !== bulkContext.pageUrl)) {
-        throw Object.assign(new Error("Bulk download context changed."), { code: "stale_context" });
-      }
-      const signal = activeExtractionController?.signal;
-      const size = Math.min(USER_TRACKS_PAGE_SIZE, Math.max(1, Number(pageSize) || USER_TRACKS_PAGE_SIZE));
-      formatPreference = await selector.getStoredFormatPreference();
+    function staleBulkContext() {
+      return Object.assign(new Error("Bulk download context changed."), { code: "stale_context" });
+    }
 
-      if (bulkContext.kind === "playlist") {
-        const offset = checkedBulkCursor(cursor, "playlist") || 0;
-        const entries = bulkContext.orderedEntries.slice(offset, offset + size);
-        const tracks = await playlistTracks(entries, bulkContext.clientId, bulkContext.pageUrl, null, {}, signal);
-        const nextOffset = offset + entries.length;
+    function invalidateBulkContext() {
+      bulkGeneration += 1;
+      for (const controller of activeBulkControllers) controller.abort();
+      activeBulkControllers.clear();
+      bulkContext = null;
+    }
+
+    function assertBulkContext(context, generation) {
+      if (bulkContext !== context || bulkGeneration !== generation || context.pageUrl !== currentUrl()) {
+        throw staleBulkContext();
+      }
+    }
+
+    async function bulkPage(cursor = null, pageSize = USER_TRACKS_PAGE_SIZE, expectedPageUrl = null) {
+      const context = bulkContext;
+      const generation = bulkGeneration;
+      if (!context || context.pageUrl !== currentUrl() ||
+          (expectedPageUrl && normalizeUrl(expectedPageUrl) !== context.pageUrl)) {
+        throw staleBulkContext();
+      }
+      const controller = new AbortController();
+      const signal = controller.signal;
+      activeBulkControllers.add(controller);
+      const size = Math.min(USER_TRACKS_PAGE_SIZE, Math.max(1, Number(pageSize) || USER_TRACKS_PAGE_SIZE));
+      try {
+        formatPreference = await selector.getStoredFormatPreference();
+        assertBulkContext(context, generation);
+
+        if (context.kind === "playlist") {
+          const offset = checkedBulkCursor(cursor, "playlist") || 0;
+          const entries = context.orderedEntries.slice(offset, offset + size);
+          const tracks = await playlistTracks(entries, context.clientId, context.pageUrl, null, {}, signal);
+          assertBulkContext(context, generation);
+          const nextOffset = offset + entries.length;
+          return {
+            items: tracks,
+            enumerated: entries.length,
+            skipped: { unavailable: Math.max(0, entries.length - tracks.length) },
+            nextCursor: nextOffset < context.orderedEntries.length ? `playlist:${nextOffset}` : null,
+            done: nextOffset >= context.orderedEntries.length,
+          };
+        }
+
+        const kind = context.kind;
+        const userId = context.userId;
+        let next = checkedBulkCursor(cursor, kind, userId);
+        if (!next) {
+          next = new URL(`https://api-v2.soundcloud.com/users/${userId}/${kind === "likes" ? "likes" : "tracks"}`);
+          next.searchParams.set("limit", String(kind === "likes" ? LIKES_PAGE_SIZE : size));
+          next.searchParams.set("linked_partitioning", "1");
+        }
+        next.searchParams.set("client_id", context.clientId);
+
+        let page;
+        if (kind === "likes" && context.authenticated) {
+          const response = await runtime.sendMessage({
+            type: "GET_AUTH_LIKES_PAGE",
+            userId,
+            clientId: context.clientId,
+            nextHref: next.toString(),
+          });
+          assertBulkContext(context, generation);
+          if (!response?.success) {
+            const error = new Error(response?.error || "Could not load your SoundCloud likes.");
+            error.code = response?.code || "network_error";
+            error.retryAt = response?.retryAt;
+            throw error;
+          }
+          page = { collection: response.page.collection, next_href: response.page.nextHref };
+        } else {
+          page = kind === "likes"
+            ? await soundCloudHttp.json(next, { label: "Failed to fetch user likes", signal })
+            : await userTracksPage(next, context.clientId, { signal });
+        }
+        assertBulkContext(context, generation);
+        const values = Array.isArray(page) ? page : page.collection || [];
+        const rawTracks = kind === "likes" ? values.map(item => item?.track) : values;
+        const tracks = rawTracks.filter(value => value?.id && value.title)
+          .map(value => toTrack(value, context.clientId, context.pageUrl));
+        const nextHref = Array.isArray(page) ? null : page.next_href;
+        const checkedNext = nextHref ? checkedBulkCursor(nextHref, kind, userId) : null;
+        checkedNext?.searchParams.set("client_id", context.clientId);
         return {
           items: tracks,
-          enumerated: entries.length,
-          skipped: { unavailable: Math.max(0, entries.length - tracks.length) },
-          nextCursor: nextOffset < bulkContext.orderedEntries.length ? `playlist:${nextOffset}` : null,
-          done: nextOffset >= bulkContext.orderedEntries.length,
+          enumerated: values.length,
+          skipped: { unavailable: Math.max(0, values.length - tracks.length) },
+          nextCursor: checkedNext?.toString() || null,
+          done: !checkedNext,
         };
+      } catch (error) {
+        if (bulkContext !== context || bulkGeneration !== generation) throw staleBulkContext();
+        throw error;
+      } finally {
+        activeBulkControllers.delete(controller);
       }
-
-      const kind = bulkContext.kind;
-      const userId = bulkContext.userId;
-      let next = checkedBulkCursor(cursor, kind, userId);
-      if (!next) {
-        next = new URL(`https://api-v2.soundcloud.com/users/${userId}/${kind === "likes" ? "likes" : "tracks"}`);
-        next.searchParams.set("limit", String(kind === "likes" ? LIKES_PAGE_SIZE : size));
-        next.searchParams.set("linked_partitioning", "1");
-      }
-      next.searchParams.set("client_id", bulkContext.clientId);
-
-      let page;
-      if (kind === "likes" && bulkContext.authenticated) {
-        const response = await runtime.sendMessage({
-          type: "GET_AUTH_LIKES_PAGE",
-          userId,
-          clientId: bulkContext.clientId,
-          nextHref: next.toString(),
-        });
-        if (!response?.success) {
-          const error = new Error(response?.error || "Could not load your SoundCloud likes.");
-          error.code = response?.code || "network_error";
-          error.retryAt = response?.retryAt;
-          throw error;
-        }
-        page = { collection: response.page.collection, next_href: response.page.nextHref };
-      } else {
-        page = kind === "likes"
-          ? await soundCloudHttp.json(next, { label: "Failed to fetch user likes", signal })
-          : await userTracksPage(next, bulkContext.clientId, { signal });
-      }
-      const values = Array.isArray(page) ? page : page.collection || [];
-      const rawTracks = kind === "likes" ? values.map(item => item?.track) : values;
-      const tracks = rawTracks.filter(value => value?.id && value.title)
-        .map(value => toTrack(value, bulkContext.clientId, bulkContext.pageUrl));
-      const nextHref = Array.isArray(page) ? null : page.next_href;
-      const checkedNext = nextHref ? checkedBulkCursor(nextHref, kind, userId) : null;
-      checkedNext?.searchParams.set("client_id", bulkContext.clientId);
-      return {
-        items: tracks,
-        enumerated: values.length,
-        skipped: { unavailable: Math.max(0, values.length - tracks.length) },
-        nextCursor: checkedNext?.toString() || null,
-        done: !checkedNext,
-      };
     }
 
     function selectionProjection(tracks) {
@@ -897,7 +937,7 @@ const SCPageIntake = (() => {
       currentTrack = null;
       currentCollection = null;
       rawTrack = null;
-      bulkContext = null;
+      invalidateBulkContext();
       selectionCache = null;
       extractionRetryCount = 0;
       extracting = false;
