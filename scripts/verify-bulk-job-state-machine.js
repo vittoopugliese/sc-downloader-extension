@@ -93,6 +93,7 @@ function createHarness(options = {}) {
           callback();
         },
       },
+      downloads: { search: async ({ id }) => [{ id, state: options.downloadState || "complete" }] },
       offscreen: {
         createDocument: async () => {
           effects.create += 1;
@@ -138,8 +139,8 @@ async function waitFor(predicate, label, timeout = 3000) {
 (async () => {
   const partial = createHarness({ failIds: [2] });
   await partial.manager.createJob(tracks(3), "Set");
-  await waitFor(() => ["completed", "failed"].includes(partial.job?.status), "partial job");
-  assert.equal(partial.job.status, "completed");
+  await waitFor(() => ["completed_with_errors", "failed"].includes(partial.job?.status), "partial job");
+  assert.equal(partial.job.status, "completed_with_errors");
   assert.equal(partial.job.completed, 2);
   assert.equal(partial.job.failed.length, 1);
   assert.equal(partial.maxActive, 1, "Bulk downloads must limit peak audio memory");
@@ -209,6 +210,27 @@ async function waitFor(predicate, label, timeout = 3000) {
   ]);
   await waitFor(() => recovered.job?.status === "completed", "recovered job");
   assert.deepEqual([...recovered.starts].sort(), [1, 2]);
+
+  const uncertain = createHarness({ storedJob: {
+    ...recoveredJob, id: "uncertain", trackStatus: ["saving", "done"],
+    completed: 1, currentIndex: 2,
+  } });
+  await uncertain.manager.recoverRunningJob();
+  await waitFor(() => uncertain.job?.status === "completed_with_errors", "ambiguous save recovery");
+  assert.deepEqual(uncertain.starts, [], "An uncertain save must never start another download");
+  assert.equal(uncertain.job.trackStatus[0], "ambiguous_save");
+  assert.equal(uncertain.job.failed[0].ambiguous, true);
+  assert.equal((await uncertain.manager.retryFailedJob()).success, false);
+
+  const chromeSaved = createHarness({ storedJob: {
+    ...recoveredJob, id: "chrome-saved", trackStatus: ["saving", "done"],
+    downloadIds: { 0: 42 }, completed: 1, currentIndex: 2,
+  } });
+  await chromeSaved.manager.recoverRunningJob();
+  await waitFor(() => chromeSaved.job?.status === "completed", "Chrome save recovery");
+  assert.deepEqual(chromeSaved.starts, []);
+  assert.equal(chromeSaved.job.completed, 2);
+  assert.equal(chromeSaved.job.failed.length, 0);
 
   const concurrent = createHarness({ automatic: false });
   const concurrentStarts = await Promise.allSettled([

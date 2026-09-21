@@ -5,7 +5,10 @@ const SCDownload = (() => {
   const MAX_RETRY_WAIT_MS = 30000;
   const MAX_AUDIO_BYTES = 128 * 1024 * 1024;
   const MAX_PLAYLIST_BYTES = 2 * 1024 * 1024;
+  const MAX_COVER_BYTES = 5 * 1024 * 1024;
   const MAX_DECODED_PCM_BYTES = 256 * 1024 * 1024;
+  const MAX_WAV_BYTES = 128 * 1024 * 1024;
+  const MAX_WORKING_BYTES = 384 * 1024 * 1024;
 
   function memoryError() {
     const error = new Error("This audio is too large to process safely in the browser.");
@@ -19,6 +22,26 @@ const SCDownload = (() => {
         durationMs / 1000 * 96000 * 2 * 4 > MAX_DECODED_PCM_BYTES) throw memoryError();
     if (decoded && (!Number.isSafeInteger(decoded.length) ||
         decoded.length * decoded.numberOfChannels * 4 > MAX_DECODED_PCM_BYTES)) throw memoryError();
+  }
+
+  function checkRenderBudget(decoded, range, transform, compressedBytes) {
+    const rate = Number(transform?.rate || 1);
+    const channels = Number(decoded.numberOfChannels);
+    const sampleRate = Number(decoded.sampleRate);
+    const sourceFrames = Number(decoded.length);
+    const durationMs = Math.max(0, Number(range.endMs) - Number(range.startMs));
+    if (!Number.isSafeInteger(channels) || channels < 1 || channels > 8 ||
+        !Number.isFinite(sampleRate) || sampleRate < 1 || sampleRate > 192000 ||
+        !Number.isSafeInteger(sourceFrames) || sourceFrames < 1 ||
+        !Number.isFinite(durationMs) || !Number.isFinite(rate) || rate <= 0) throw memoryError();
+    const outputFrames = Math.ceil(durationMs / 1000 * sampleRate / rate);
+    const outputChannels = Math.min(channels, 2);
+    const wavBytes = 44 + outputFrames * outputChannels * 2;
+    const workingBytes = compressedBytes * 2 + sourceFrames * channels * 4 +
+      outputFrames * outputChannels * 4 + wavBytes;
+    if (!Number.isSafeInteger(outputFrames) || !Number.isSafeInteger(wavBytes) ||
+        !Number.isSafeInteger(workingBytes) || wavBytes > MAX_WAV_BYTES ||
+        workingBytes > MAX_WORKING_BYTES) throw memoryError();
   }
 
   function wait(delayMs, signal) {
@@ -57,7 +80,50 @@ const SCDownload = (() => {
     return error;
   }
 
-  async function fetchWithRetry(url, label, signal, readAs, maxBytes) {
+  async function readBounded(response, label, maxBytes, readAs, sharedBudget = null) {
+    const header = response.headers?.get?.("Content-Length");
+    const declared = header == null ? null : Number(header);
+    if (declared !== null && (!Number.isSafeInteger(declared) || declared < 0 ||
+        declared > maxBytes || (sharedBudget && sharedBudget.used + declared > sharedBudget.limit))) {
+      response.body?.cancel?.().catch?.(() => {});
+      throw memoryError();
+    }
+    const reader = response.body?.getReader?.();
+    if (!reader) {
+      response.body?.cancel?.().catch?.(() => {});
+      const error = new Error(`${label} cannot be read with a safe size limit.`);
+      error.code = "invalid_response";
+      throw error;
+    }
+    const chunks = [];
+    let size = 0;
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!(value instanceof Uint8Array) || size + value.byteLength > maxBytes ||
+            (sharedBudget && sharedBudget.used + value.byteLength > sharedBudget.limit)) throw memoryError();
+        size += value.byteLength;
+        if (sharedBudget) sharedBudget.used += value.byteLength;
+        chunks.push(value);
+      }
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      return readAs === "text" ? new TextDecoder().decode(bytes) : bytes.buffer;
+    } catch (error) {
+      if (sharedBudget) sharedBudget.used -= size;
+      await reader.cancel().catch(() => {});
+      throw error;
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  async function fetchWithRetry(url, label, signal, readAs, maxBytes, sharedBudget = null) {
     let lastError;
     for (let attempt = 0; attempt < NETWORK_ATTEMPTS; attempt += 1) {
       const controller = new AbortController();
@@ -83,20 +149,7 @@ const SCDownload = (() => {
             throw lastError;
           }
         } else {
-          const declared = Number(response.headers?.get?.("Content-Length"));
-          if (Number.isFinite(declared) && declared > maxBytes) {
-            const error = new Error(`${label} exceeds the safe size limit.`);
-            error.code = "memory_budget_exceeded";
-            response.body?.cancel?.().catch?.(() => {});
-            throw error;
-          }
-          const value = readAs === "text" ? await response.text() : await response.arrayBuffer();
-          if ((readAs === "text" ? new TextEncoder().encode(value).byteLength : value.byteLength) > maxBytes) {
-            const error = new Error(`${label} exceeds the safe size limit.`);
-            error.code = "memory_budget_exceeded";
-            throw error;
-          }
-          return value;
+          return await readBounded(response, label, maxBytes, readAs, sharedBudget);
         }
       } catch (error) {
         if (signal?.aborted) throw error;
@@ -108,6 +161,7 @@ const SCDownload = (() => {
         }
         if (lastError.code === "http_error" || lastError.code === "rate_limited" ||
             lastError.code === "retry_later" || lastError.code === "memory_budget_exceeded" ||
+            lastError.code === "invalid_response" ||
             attempt === NETWORK_ATTEMPTS - 1) throw lastError;
       } finally {
         clearTimeout(timer);
@@ -184,7 +238,7 @@ const SCDownload = (() => {
         return null;
       }
 
-      return new Uint8Array(await response.arrayBuffer());
+      return new Uint8Array(await readBounded(response, "Cover", MAX_COVER_BYTES, "buffer"));
     } catch (error) {
       if (error?.name === "AbortError") {
         throw error;
@@ -270,8 +324,8 @@ const SCDownload = (() => {
     return fetchWithRetry(url, label, signal, "text", MAX_PLAYLIST_BYTES);
   }
 
-  async function fetchBufferOrThrow(url, label, signal) {
-    return fetchWithRetry(url, label, signal, "buffer", MAX_AUDIO_BYTES);
+  async function fetchBufferOrThrow(url, label, signal, sharedBudget = null) {
+    return fetchWithRetry(url, label, signal, "buffer", MAX_AUDIO_BYTES, sharedBudget);
   }
 
   async function resolveMediaPlaylist(url, signal, visited = new Set()) {
@@ -298,6 +352,7 @@ const SCDownload = (() => {
 
   async function fetchSegmentsWithConcurrency(urls, concurrency, onProgress, signal) {
     const results = new Array(urls.length);
+    const sharedBudget = { used: 0, limit: MAX_AUDIO_BYTES };
     let nextIndex = 0;
     let completed = 0;
     let firstError = null;
@@ -319,7 +374,8 @@ const SCDownload = (() => {
           const buffer = await fetchBufferOrThrow(
             urls[currentIndex],
             `Segment ${currentIndex + 1}`,
-            controller.signal
+            controller.signal,
+            sharedBudget
           );
           if (firstError || controller.signal.aborted) return;
           results[currentIndex] = new Uint8Array(buffer);
@@ -397,6 +453,10 @@ const SCDownload = (() => {
 
   function encodeWavSegment(audioBuffer, trimRange, signal) {
     const sampleRate = audioBuffer.sampleRate;
+    if (!Number.isFinite(sampleRate) || sampleRate < 1 || sampleRate > 192000 ||
+        !Number.isSafeInteger(audioBuffer.length) || audioBuffer.length < 1 ||
+        !Number.isSafeInteger(audioBuffer.numberOfChannels) ||
+        audioBuffer.numberOfChannels < 1) throw memoryError();
     const channelCount = Math.min(Math.max(audioBuffer.numberOfChannels, 1), 2);
     const startFrame = Math.max(
       0,
@@ -414,6 +474,7 @@ const SCDownload = (() => {
 
     const bytesPerSample = 2;
     const dataLength = frameCount * channelCount * bytesPerSample;
+    if (!Number.isSafeInteger(dataLength) || 44 + dataLength > MAX_WAV_BYTES) throw memoryError();
     const output = new ArrayBuffer(44 + dataLength);
     const view = new DataView(output);
 
@@ -494,6 +555,7 @@ const SCDownload = (() => {
         throw new Error("The loop audio renderer is unavailable.");
       }
       const transform = renderer.normalizeTransform(playbackTransform);
+      checkRenderBudget(decoded, trimRange, transform, buffer.byteLength);
       const rendered = await renderer.render(decoded, trimRange, transform, {
         onProgress,
         signal,
@@ -567,6 +629,7 @@ const SCDownload = (() => {
         throw new Error("The audio renderer is unavailable.");
       }
       const transform = renderer.normalizeTransform(playbackTransform);
+      checkRenderBudget(decoded, { startMs: 0, endMs: decoded.duration * 1000 }, transform, buffer.byteLength);
       const rendered = await renderer.render(
         decoded,
         { startMs: 0, endMs: decoded.duration * 1000 },
@@ -590,6 +653,7 @@ const SCDownload = (() => {
       };
     } catch (error) {
       if (error?.name === "AbortError") throw error;
+      if (error?.code === "memory_budget_exceeded") throw error;
       if (error?.message?.includes("could not be decoded")) throw error;
       throw new Error(`The downloaded audio could not be processed: ${error.message}`);
     } finally {

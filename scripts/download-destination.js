@@ -38,7 +38,9 @@ const SCDownloadDestination = (() => {
         }
 
         const timeoutId = setTimeout(() => {
-          settle(reject, new Error("Download timed out."));
+          const error = new Error("Chrome download status timed out. Check Downloads before retrying.");
+          error.code = "ambiguous_save";
+          settle(reject, error);
         }, timeoutMs);
 
         chromeApi.downloads.onChanged.addListener(handleChange);
@@ -57,7 +59,7 @@ const SCDownloadDestination = (() => {
       });
     }
 
-    function save(blobUrl, fileName) {
+    function save(blobUrl, fileName, onDownloadStarted) {
       return new Promise((resolve, reject) => {
         chromeApi.downloads.download(
           {
@@ -68,13 +70,17 @@ const SCDownloadDestination = (() => {
           },
           (downloadId) => {
             if (chromeApi.runtime.lastError || !downloadId) {
-              reject(
-                new Error(chromeApi.runtime.lastError?.message || "Download failed.")
-              );
+              const error = new Error(chromeApi.runtime.lastError?.message || "Chrome may have started the download. Check Downloads before retrying.");
+              error.code = "ambiguous_save";
+              reject(error);
               return;
             }
-
-            waitForComplete(downloadId)
+            Promise.resolve().then(() => onDownloadStarted?.(downloadId)).catch(() => {
+              const error = new Error("Download started, but its checkpoint could not be saved. Check Downloads before retrying.");
+              error.code = "ambiguous_save";
+              throw error;
+            })
+              .then(() => waitForComplete(downloadId))
               .then(() => resolve(fileName))
               .catch(reject);
           }
@@ -86,9 +92,10 @@ const SCDownloadDestination = (() => {
   }
 
   function createSelectedDirectoryAdapter(sendOffscreenMessage) {
-    async function save(blobUrl, fileName, destination) {
+    async function save(blobUrl, fileName, destination, operationId) {
       const result = await sendOffscreenMessage({
         type: "OFFSCREEN_SAVE_TO_DIRECTORY",
+        operationId,
         blobUrl,
         fileName,
         directoryId: destination.id,
@@ -144,7 +151,7 @@ const SCDownloadDestination = (() => {
       return normalize(candidate || (await getRememberedDirectory()));
     }
 
-    async function save({ blobUrl, fileName, destination = null, collection = null }) {
+    async function save({ operationId, blobUrl, fileName, destination = null, collection = null, onDownloadStarted }) {
       const outputFileName = createCollectionFileName(fileName, collection);
       const selected = normalize(destination);
 
@@ -153,7 +160,8 @@ const SCDownloadDestination = (() => {
           const savedFileName = await selectedDirectory.save(
             blobUrl,
             outputFileName,
-            selected
+            selected,
+            operationId
           );
           return { fileName: savedFileName, destinationName: selected.name };
         } catch (error) {
@@ -161,7 +169,7 @@ const SCDownloadDestination = (() => {
             throw error;
           }
 
-          await browserDownloads.save(blobUrl, outputFileName);
+          await browserDownloads.save(blobUrl, outputFileName, onDownloadStarted);
           return {
             fileName: outputFileName,
             destinationName: "Downloads (folder unavailable)",
@@ -172,7 +180,7 @@ const SCDownloadDestination = (() => {
       const browserFileName = collection?.folderName
         ? `${collection.folderName}/${outputFileName}`
         : outputFileName;
-      await browserDownloads.save(blobUrl, browserFileName);
+      await browserDownloads.save(blobUrl, browserFileName, onDownloadStarted);
       return { fileName: outputFileName, destinationName: "Downloads" };
     }
 

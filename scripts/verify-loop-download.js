@@ -36,6 +36,7 @@ const context = vm.createContext({
   Float32Array,
   AbortController,
   TextEncoder,
+  TextDecoder,
   setTimeout,
   clearTimeout,
   AudioContext: FakeAudioContext,
@@ -43,9 +44,10 @@ const context = vm.createContext({
     fetchCount += 1;
     return {
       ok: true,
-      async arrayBuffer() {
-        return new Uint8Array([0xff, 0xfb, 0, 0]).buffer;
-      },
+      body: { getReader() { let sent = false; return {
+        async read() { if (sent) return { done: true }; sent = true; return { done: false, value: new Uint8Array([0xff, 0xfb, 0, 0]) }; },
+        releaseLock() {}, async cancel() {},
+      }; } },
     };
   },
 });
@@ -151,6 +153,14 @@ const download = vm.runInContext("SCDownload", context);
     /selected loop range is invalid/
   );
   assert.equal(fetchCount, 3, "Invalid ranges must fail before downloading audio");
+
+  Object.assign(decodedAudio, { sampleRate: 48000, numberOfChannels: 2,
+    length: 48000 * 600, duration: 600 });
+  await assert.rejects(download.buildTrackBlob(
+    "https://example.com/audio.mp3",
+    { streamProtocol: "progressive" }, undefined, undefined, null,
+    { rate: 0.5, preservePitch: false }
+  ), (error) => error.code === "memory_budget_exceeded");
 
   const looperSource = fs.readFileSync(
     path.resolve(__dirname, "looper.js"),

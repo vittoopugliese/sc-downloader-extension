@@ -8,11 +8,14 @@ const JOB_STATUS = Object.freeze({
   PAUSED: "paused",
   CANCELLED: "cancelled",
   COMPLETED: "completed",
+  COMPLETED_WITH_ERRORS: "completed_with_errors",
   FAILED: "failed",
 });
 const TRACK_STATUS = Object.freeze({
   DONE: "done",
   FAILED: "failed",
+  SAVING: "saving",
+  AMBIGUOUS: "ambiguous_save",
 });
 const ACTIVE_JOB_STATUSES = Object.freeze([
   JOB_STATUS.RUNNING,
@@ -21,6 +24,7 @@ const ACTIVE_JOB_STATUSES = Object.freeze([
 const TERMINAL_JOB_STATUSES = Object.freeze([
   JOB_STATUS.CANCELLED,
   JOB_STATUS.COMPLETED,
+  JOB_STATUS.COMPLETED_WITH_ERRORS,
   JOB_STATUS.FAILED,
 ]);
 const JOB_TRANSITIONS = Object.freeze({
@@ -33,6 +37,7 @@ const JOB_TRANSITIONS = Object.freeze({
     ...TERMINAL_JOB_STATUSES,
   ]),
   [JOB_STATUS.COMPLETED]: new Set([JOB_STATUS.RUNNING]),
+  [JOB_STATUS.COMPLETED_WITH_ERRORS]: new Set([JOB_STATUS.RUNNING]),
   [JOB_STATUS.FAILED]: new Set([JOB_STATUS.RUNNING]),
 });
 
@@ -101,7 +106,7 @@ function syncJobCountersFromTrackStatus(job) {
   ).length;
   job.currentIndex = job.trackStatus.reduce(
     (max, status, index) =>
-      status === TRACK_STATUS.DONE || status === TRACK_STATUS.FAILED
+      status === TRACK_STATUS.DONE || status === TRACK_STATUS.FAILED || status === TRACK_STATUS.AMBIGUOUS
         ? Math.max(max, index + 1)
         : max,
     0
@@ -151,7 +156,7 @@ function getPendingTrackIndices(job) {
     .map((status, index) => ({ status, index }))
     .filter(
       ({ status }) =>
-        status !== TRACK_STATUS.DONE && status !== TRACK_STATUS.FAILED
+        status !== TRACK_STATUS.DONE && status !== TRACK_STATUS.FAILED && status !== TRACK_STATUS.AMBIGUOUS
     )
     .map(({ index }) => index);
 }
@@ -255,7 +260,7 @@ async function safeCreateNotification(title, message) {
 async function notifyJobFinished(job) {
   let title = null;
   let message = null;
-  if (job.status === JOB_STATUS.COMPLETED) {
+  if ([JOB_STATUS.COMPLETED, JOB_STATUS.COMPLETED_WITH_ERRORS].includes(job.status)) {
     const failedCount = job.failed.length;
     const destination = job.downloadDestination?.name
       ? job.downloadDestination.name
@@ -327,7 +332,8 @@ async function sendOffscreenMessage(message, retries = 12) {
   await ensureOffscreenDocument();
   await sleep(250);
 
-  for (let attempt = 0; attempt < retries; attempt += 1) {
+  const hasSideEffect = message.type === "OFFSCREEN_SAVE_TO_DIRECTORY";
+  for (let attempt = 0; attempt < (hasSideEffect ? 1 : retries); attempt += 1) {
     try {
       const response = await new Promise((resolve, reject) => {
         chrome.runtime.sendMessage(message, (result) => {
@@ -343,8 +349,19 @@ async function sendOffscreenMessage(message, retries = 12) {
       if (response !== undefined) {
         return response;
       }
-    } catch {
+    } catch (error) {
+      if (hasSideEffect) {
+        const ambiguous = new Error("Folder save may have completed. Check the folder before retrying.");
+        ambiguous.code = "ambiguous_save";
+        throw ambiguous;
+      }
       // Offscreen may still be loading its scripts.
+    }
+
+    if (hasSideEffect) {
+      const ambiguous = new Error("Folder save may have completed. Check the folder before retrying.");
+      ambiguous.code = "ambiguous_save";
+      throw ambiguous;
     }
 
     await sleep(200);
@@ -416,6 +433,14 @@ async function recordTrackSuccess(jobId, trackIndex) {
   });
 }
 
+async function recordDownloadStarted(jobId, trackIndex, downloadId) {
+  return mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, (job) => {
+    job.downloadIds ||= {};
+    job.downloadIds[trackIndex] = downloadId;
+    job.trackStatus[trackIndex] = TRACK_STATUS.SAVING;
+  });
+}
+
 async function recordTrackFailure(jobId, trackIndex, title, errorMessage) {
   return mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, (job) => {
     if (job.trackStatus[trackIndex] === TRACK_STATUS.FAILED) {
@@ -432,6 +457,16 @@ async function recordTrackFailure(jobId, trackIndex, title, errorMessage) {
     ];
     syncJobCountersFromTrackStatus(job);
     job.currentTrackStatus = `Failed: ${title || "Unknown track"}`;
+  });
+}
+
+async function recordAmbiguousSave(jobId, trackIndex, title, errorMessage) {
+  return mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, (job) => {
+    if (job.trackStatus[trackIndex] !== TRACK_STATUS.SAVING) return false;
+    job.trackStatus[trackIndex] = TRACK_STATUS.AMBIGUOUS;
+    job.failed = [...(job.failed || []), { index: trackIndex + 1, title: title || "Unknown track", error: errorMessage, ambiguous: true }];
+    syncJobCountersFromTrackStatus(job);
+    job.currentTrackStatus = `Check folder: ${title || "Unknown track"}`;
   });
 }
 
@@ -462,6 +497,7 @@ async function processTrack(jobId, trackIndex) {
 
   try {
     const result = await trackDownloadExecution.execute({
+      operationId: `track_${jobId.replace(/[^A-Za-z0-9_]/g, "")}_${trackIndex}`,
       trackData,
       formatPreference: job.formatPreference || "auto",
       destination: job.downloadDestination,
@@ -470,6 +506,7 @@ async function processTrack(jobId, trackIndex) {
         trackNumber,
         totalTracks: total,
       },
+      onDownloadStarted: (downloadId) => recordDownloadStarted(jobId, trackIndex, downloadId),
       isCancelled: async () => {
         const currentJob = await loadJob();
         return (
@@ -478,7 +515,12 @@ async function processTrack(jobId, trackIndex) {
           jobControl.state === JOB_STATUS.CANCELLED
         );
       },
-      onStage: (stage) => {
+      onStage: async (stage) => {
+        if (stage === "saving") {
+          await mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, (current) => {
+            current.trackStatus[trackIndex] = TRACK_STATUS.SAVING;
+          });
+        }
         const statusByStage = {
           resolving: "Resolving stream...",
           building: "Downloading...",
@@ -516,6 +558,10 @@ async function processTrack(jobId, trackIndex) {
       return;
     }
 
+    if (error.code === "ambiguous_save") {
+      await recordAmbiguousSave(jobId, trackIndex, trackData?.title, error.message);
+      return;
+    }
     await recordTrackFailure(
       jobId,
       trackIndex,
@@ -607,8 +653,9 @@ async function runJobLoopInternal(jobId) {
       job.status === JOB_STATUS.RUNNING &&
       getPendingTrackIndices(job).length === 0
     ) {
-      const finalStatus =
-        job.completed > 0 ? JOB_STATUS.COMPLETED : JOB_STATUS.FAILED;
+      const finalStatus = job.completed > 0
+        ? job.failed.length ? JOB_STATUS.COMPLETED_WITH_ERRORS : JOB_STATUS.COMPLETED
+        : JOB_STATUS.FAILED;
       await finalizeJob(
         jobId,
         finalStatus,
@@ -843,14 +890,14 @@ const BulkJobManager = {
   async retryFailedJob() {
     const job = await mutateJob(
       null,
-      { statuses: [JOB_STATUS.COMPLETED, JOB_STATUS.FAILED], broadcast: false },
+      { statuses: [JOB_STATUS.COMPLETED, JOB_STATUS.COMPLETED_WITH_ERRORS, JOB_STATUS.FAILED], broadcast: false },
       (value) => {
-        if (!value.failed?.length) return false;
+        if (!value.trackStatus.includes(TRACK_STATUS.FAILED)) return false;
 
         value.trackStatus = value.trackStatus.map((status) =>
           status === TRACK_STATUS.FAILED ? null : status
         );
-        value.failed = [];
+        value.failed = value.failed.filter((failure) => failure.ambiguous);
         transitionJob(value, JOB_STATUS.RUNNING);
         value.finishedAt = null;
         value.error = null;
@@ -897,7 +944,26 @@ const BulkJobManager = {
       return;
     }
 
-    await updateBadge(job);
+    for (let index = 0; index < job.trackStatus.length; index += 1) {
+      if (job.trackStatus[index] === TRACK_STATUS.SAVING) {
+        const downloadId = job.downloadIds?.[index];
+        if (downloadId) {
+          const items = await chrome.downloads.search({ id: downloadId }).catch(() => []);
+          if (items?.[0]?.state === "complete") {
+            await recordTrackSuccess(job.id, index);
+            continue;
+          }
+          if (items?.[0]?.state === "interrupted") {
+            await recordTrackFailure(job.id, index, job.tracks[index]?.title,
+              "Chrome interrupted the download.");
+            continue;
+          }
+        }
+        await recordAmbiguousSave(job.id, index, job.tracks[index]?.title,
+          "Save was interrupted. Check the destination before retrying.");
+      }
+    }
+    await updateBadge(await loadJob());
     await startKeepalive();
     jobControl = { jobId: job.id, state: job.status };
     runJobLoop(job.id);

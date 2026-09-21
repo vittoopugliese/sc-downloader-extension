@@ -451,7 +451,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    if (jobStatus?.job && ["completed", "cancelled", "failed"].includes(jobStatus.job.status)) {
+    if (jobStatus?.job && ["completed", "completed_with_errors", "cancelled", "failed"].includes(jobStatus.job.status)) {
       activeBulkJob = jobStatus.job;
       renderBulkJobSummary(jobStatus.job);
     }
@@ -607,11 +607,12 @@ function renderBulkJobSummary(job) {
   jobHint.classList.add("is-hidden");
   pauseJobBtn.classList.add("is-hidden");
   resumeJobBtn.classList.add("is-hidden");
-  retryFailedJobBtn.classList.toggle("is-hidden", !job.failed?.length);
+  const hasRetryableFailures = job.failed?.some((failure) => !failure.ambiguous);
+  retryFailedJobBtn.classList.toggle("is-hidden", !hasRetryableFailures);
   cancelJobBtn.classList.add("is-hidden");
-  jobControls.classList.toggle("is-visible", Boolean(job.failed?.length));
+  jobControls.classList.toggle("is-visible", Boolean(hasRetryableFailures));
 
-  if (job.status === "completed") {
+  if (["completed", "completed_with_errors"].includes(job.status)) {
     const destination = job.destinationName || `${t("downloads_folder")}/${job.folderName}`;
     downloadStatus.textContent = t("saved_tracks_to", [job.completed, job.total, destination]);
   } else if (job.status === "cancelled") {

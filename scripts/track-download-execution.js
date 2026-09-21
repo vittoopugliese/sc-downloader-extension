@@ -23,7 +23,7 @@ const SCTrackDownloadExecution = (() => {
 
       const onStage = command.onStage || (() => {});
       const isCancelled = command.isCancelled || (() => false);
-      const operationId = `track_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const operationId = command.operationId || `track_${globalThis.crypto?.randomUUID?.().replaceAll("-", "") || `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`}`;
       let activeBuildId = null;
       let blobUrl = null;
 
@@ -78,10 +78,12 @@ const SCTrackDownloadExecution = (() => {
 
         await onStage("saving");
         const saved = await saveOutput({
+          operationId,
           blobUrl,
           fileName: buildResult.fileName,
           destination: command.destination,
           collection: command.collection,
+          onDownloadStarted: command.onDownloadStarted,
         });
 
         return {

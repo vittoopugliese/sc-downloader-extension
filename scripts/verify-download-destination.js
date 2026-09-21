@@ -77,6 +77,7 @@ function plain(value) {
   const browserResult = await destination.save({
     blobUrl: "blob:downloads",
     fileName: "Artist - Track.mp3",
+    onDownloadStarted(id) { assert.equal(id, 1); },
     collection: { folderName: "Set", trackNumber: 3, totalTracks: 120 },
   });
   assert.deepEqual(plain(downloadCalls[0]), {
