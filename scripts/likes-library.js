@@ -4,7 +4,7 @@
   const request = r => new Promise((resolve, reject) => { r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
   function open() {
     return opening ||= new Promise((resolve, reject) => {
-      const r = indexedDB.open('scdl_likes_explorer', 2);
+      const r = indexedDB.open('scdl_likes_explorer', 3);
       r.onupgradeneeded = () => {
         const db = r.result;
         if (!db.objectStoreNames.contains('libraries')) {
@@ -13,7 +13,6 @@
           entries.createIndex('order', ['ownerId', 'generation', 'trackOrdinal'], { unique: true });
           entries.createIndex('library', ['ownerId', 'generation']);
           db.createObjectStore('cursors', { keyPath: ['ownerId', 'generation', 'cursor'] });
-          db.createObjectStore('bookmarks', { keyPath: ['ownerId', 'id'] });
           db.createObjectStore('artwork', { keyPath: ['ownerId', 'url'] });
         }
         if (!db.objectStoreNames.contains('collections')) {
@@ -27,11 +26,13 @@
           collectionEntries.createIndex('track', ['accountId', 'collectionId', 'generation', 'trackId'], { unique: true });
           collectionEntries.createIndex('generation', ['accountId', 'collectionId', 'generation']);
           for (const name of ['collectionJobs', 'collectionViews', 'collectionArtworkJobs']) db.createObjectStore(name, { keyPath: ['accountId', 'collectionId'] });
-          db.createObjectStore('collectionBookmarks', { keyPath: ['accountId', 'collectionId', 'id'] });
           const artwork = db.createObjectStore('accountArtwork', { keyPath: ['accountId', 'artworkKey'] });
           artwork.createIndex('account', 'accountId');
           db.createObjectStore('collectionCursors', { keyPath: ['accountId', 'collectionId', 'generation', 'cursor'] });
           db.createObjectStore('likesMigrations', { keyPath: 'accountId' });
+        }
+        for (const name of ['bookmarks', 'collectionBookmarks']) {
+          if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name);
         }
       };
       r.onsuccess = () => resolve(r.result); r.onerror = () => { opening = null; reject(r.error); };
@@ -85,7 +86,7 @@
     return transaction(['jobs'], true, async s => { const job = await request(s('jobs').get(ownerId)); if (job && job.phase !== 'complete') { job.phase = 'paused'; job.error = error; job.retryAt = null; job.epoch++; s('jobs').put(job); } });
   }
   async function erase(ownerId, imagesOnly = false) {
-    const names = imagesOnly ? ['artwork', 'artworkJobs'] : ['libraries','jobs','views','entries','cursors','bookmarks','artwork','artworkJobs'];
+    const names = imagesOnly ? ['artwork', 'artworkJobs'] : ['libraries','jobs','views','entries','cursors','artwork','artworkJobs'];
     return transaction(names, true, async s => {
       for (const name of names) await new Promise((resolve, reject) => {
         const r = s(name).openCursor(); r.onerror = () => reject(r.error); r.onsuccess = () => { const c = r.result; if (!c) return resolve(); if (c.value.ownerId === ownerId) c.delete(); c.continue(); };
@@ -133,7 +134,7 @@
     const legacy = await get('libraries', accountId);
     if (!legacy) { await put('likesMigrations', { accountId, complete: true, at: Date.now() }); return; }
     const collectionId = collectionKey(accountId), entries = await tracks(accountId, legacy.generation);
-    await transaction(['collections','tracks','collectionEntries','collectionViews','collectionBookmarks','accountArtwork','collectionArtworkJobs','likesMigrations','views','bookmarks','artwork','artworkJobs'], true, async s => {
+    await transaction(['collections','tracks','collectionEntries','collectionViews','accountArtwork','collectionArtworkJobs','likesMigrations','views','artwork','artworkJobs'], true, async s => {
       s('collections').put({ ...legacy, accountId, collectionId, sourceUserId: accountId, sourceUrl: 'https://soundcloud.com/you/likes', name: legacy.displayName || 'Likes', activeGeneration: legacy.generation, migratedFrom: 1 });
       for (const entry of entries) {
         s('tracks').put({ ...entry, accountId, trackId: entry.itemId });
@@ -141,8 +142,6 @@
       }
       const view = await request(s('views').get(accountId));
       if (view) s('collectionViews').put({ ...view, accountId, collectionId });
-      const oldBookmarks = await request(s('bookmarks').getAll());
-      for (const value of oldBookmarks.filter(value => value.ownerId === accountId)) s('collectionBookmarks').put({ ...value, accountId, collectionId });
       const oldArtwork = await request(s('artwork').getAll());
       for (const value of oldArtwork.filter(value => value.ownerId === accountId)) s('accountArtwork').put({ ...value, accountId, artworkKey: value.url, formatVersion: value.formatVersion || 1 });
       const oldArtworkJob = await request(s('artworkJobs').get(accountId));
@@ -199,7 +198,7 @@
   }
   async function collectionTracks(accountId, collectionId, generation) { return window(accountId,collectionId,generation,0,Number.MAX_SAFE_INTEGER); }
   async function eraseCollection(accountId, collectionId, imagesOnly=false) {
-    accountId=String(accountId); const names=imagesOnly?['accountArtwork','collectionArtworkJobs']:['collections','collectionJobs','collectionViews','collectionEntries','collectionCursors','collectionBookmarks','collectionArtworkJobs'];
+    accountId=String(accountId); const names=imagesOnly?['accountArtwork','collectionArtworkJobs']:['collections','collectionJobs','collectionViews','collectionEntries','collectionCursors','collectionArtworkJobs'];
     return transaction(names,true,async s=>{ for(const name of names) await new Promise((resolve,reject)=>{const r=s(name).openCursor();r.onerror=()=>reject(r.error);r.onsuccess=()=>{const c=r.result;if(!c)return resolve();const v=c.value;if(v.accountId===accountId&&(imagesOnly||v.collectionId===collectionId))c.delete();c.continue();};}); });
   }
   async function pruneCollection(accountId, collectionId, keep) {

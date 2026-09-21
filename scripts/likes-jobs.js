@@ -211,14 +211,13 @@
       const collection=await db.get('collections',key);
       if(r.type==='GET_LIKES_LIBRARY_STATUS'){
         const collections=await db.listCollections(accountId),job=await db.get('collectionJobs',key),artwork=await db.get('collectionArtworkJobs',key),view=await db.get('collectionViews',key),stats=await db.storageStats(accountId);
-        const bookmarks=(await db.all('collectionBookmarks')).filter(b=>b.accountId===accountId&&b.collectionId===collectionId);await valid(ctx);
-        return{ownerId:accountId,accountId,collectionId,sourceUserId:requestedSource,displayName:ctx.displayName,library:collection?{...collection,generation:collection.activeGeneration}:null,collection:collection||null,collections,job,artwork,view,bookmarks,storage:stats};
+        await valid(ctx);
+        return{ownerId:accountId,accountId,collectionId,sourceUserId:requestedSource,displayName:ctx.displayName,library:collection?{...collection,generation:collection.activeGeneration}:null,collection:collection||null,collections,job,artwork,view,storage:stats};
       }
       if(!collection)throw source.fail('not-indexed');const generation=collection.activeGeneration;
       if(r.generation&&r.generation!==generation)throw source.fail('stale-generation');
       if(r.type==='SAVE_LIKES_VIEW'){await db.put('collectionViews',{accountId,collectionId,anchorTrackId:String(r.anchorTrackId||'').slice(0,30),query:String(r.query||'').slice(0,200),period:String(r.period||'').slice(0,7),offset:Number(r.offset)||0});return{};}
       const locate=async id=>{const ordinal=await db.position(accountId,collectionId,generation,id);if(ordinal<0)throw source.fail('track-missing');return(await db.window(accountId,collectionId,generation,ordinal,1))[0];};
-      if(r.type==='SAVE_LIKES_BOOKMARK'){const item=await locate(r.trackId);await db.put('collectionBookmarks',{accountId,collectionId,id:item.itemId,anchorTrackId:item.itemId,name:String(r.name||item.title).slice(0,80),likedAt:item.likedAt});return{};}
       if(r.type==='OPEN_LIKED_TRACK'||r.type==='LOCATE_LIKED_TRACK'){const item=await locate(r.trackId);if(!item?.permalink)throw source.fail('track-missing');await valid(ctx);if(r.type==='OPEN_LIKED_TRACK'){await chrome.tabs.update(sender.tab.id,{url:item.permalink});return{phase:'needs-user-action'};}return{permalink:item.permalink};}
       if(r.type==='GET_LIKES_ARTWORK'){
         if(!Array.isArray(r.trackIds)||r.trackIds.length>24)throw source.fail('invalid-request');const images={};let total=0;

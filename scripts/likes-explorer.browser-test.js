@@ -9,9 +9,20 @@ const { chromium } = require('playwright');
     const page = await browser.newPage({viewport:{width:1360,height:960}});
     await page.route('https://soundcloud.com/**',route=>route.fulfill({contentType:'text/html',body:'<body style="background:#eee"><header class="header" style="height:48px">SoundCloud</header><main class="l-main">Your likes</main></body>'}));
     await page.goto('https://soundcloud.com/you/likes');
+    await page.evaluate(() => new Promise((resolve, reject) => {
+      const request = indexedDB.open('scdl_likes_explorer', 2);
+      request.onupgradeneeded = () => {
+        request.result.createObjectStore('bookmarks', {keyPath:['ownerId','id']});
+        request.result.createObjectStore('collectionBookmarks', {keyPath:['accountId','collectionId','id']});
+      };
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => { request.result.close(); resolve(); };
+    }));
     for(const file of ['soundcloud-likes-source.js','likes-library.js']) await page.addScriptTag({path:path.join(__dirname,file)});
     const dbResult = await page.evaluate(async()=>{
       const db=SCLikesLibrary;
+      const opened = await db.open();
+      const assertMissingBookmarks = !opened.objectStoreNames.contains('bookmarks') && !opened.objectStoreNames.contains('collectionBookmarks');
       const j=await db.start('42','Test',false);
       const entry=id=>({kind:'track',itemId:String(id),title:'Track '+id,artistName:'Artist',likedAt:'2020-01-01T00:00:00.000Z',permalink:'https://soundcloud.com/a/b',artworkUrl:null});
       await db.commit(j,{entries:[entry(1),entry(1),{kind:'playlist',itemId:'9'}],rawCount:3,nextCursor:'https://api-v2.soundcloud.com/users/42/likes?offset=50'});
@@ -26,8 +37,9 @@ const { chromium } = require('playwright');
       await db.commit(await db.get('jobs','42'),{entries:[entry(4)],rawCount:1,nextCursor:null});
       const after=await db.get('libraries','42');
       const tracks=await db.tracks('42',after.generation);
-      return {first,replay,late,complete,during,after,tracks};
+      return {assertMissingBookmarks,first,replay,late,complete,during,after,tracks};
     });
+    assert.equal(dbResult.assertMissingBookmarks,true);
     assert.equal(dbResult.first.count,1); assert.equal(dbResult.replay,false); assert.equal(dbResult.late,false);
     assert.equal(dbResult.complete.count,2); assert.equal(dbResult.complete.complete,true);
     assert.equal(dbResult.during.generation,dbResult.complete.generation); assert.notEqual(dbResult.after.generation,dbResult.complete.generation);
@@ -41,7 +53,7 @@ const { chromium } = require('playwright');
       window.chrome={i18n:{getUILanguage:()=> 'es'},runtime:{onMessage:{addListener:fn=>window.fixtureListener=fn},sendMessage:async r=>{
         fixtureCalls.push(r);
         if(!fixturePro)return{success:false,code:'pro-required'};
-        if(r.type==='GET_LIKES_LIBRARY_STATUS')return{success:true,ownerId:'42',sourceUserId:'42',collectionId:'likes:42',displayName:'Your archive',library:fixtureLibraryReady?{generation:'g1',revision:1,count:fixtureCount,complete:true}:null,job:fixtureLibraryReady?{phase:'complete',count:fixtureCount}:null,bookmarks:[],collections:[]};
+        if(r.type==='GET_LIKES_LIBRARY_STATUS')return{success:true,ownerId:'42',sourceUserId:'42',collectionId:'likes:42',displayName:'Your archive',library:fixtureLibraryReady?{generation:'g1',revision:1,count:fixtureCount,complete:true}:null,job:fixtureLibraryReady?{phase:'complete',count:fixtureCount}:null,collections:[]};
         if(r.type==='START_LIKES_INDEX'){fixtureLibraryReady=true;return{success:true};}
         if(r.type==='LOCATE_LIKED_TRACK')return{success:true,permalink:`https://soundcloud.com/artist/track-${r.trackId}`};
         if(r.type==='QUERY_LIKES'){
@@ -84,7 +96,7 @@ const { chromium } = require('playwright');
       return {oneLine:new Set(tops).size===1,closeInside:close.left>=search.left&&close.right<=search.right};
     });
     assert.deepEqual(toolbarLayout,{oneLine:true,closeInside:true});
-    assert.deepEqual(await page.locator('#scdl-likes-explorer .action-button').evaluateAll(buttons=>buttons.map(button=>button.title)),['Actualizar biblioteca','Almacenamiento','Guardar este lugar']);
+    assert.deepEqual(await page.locator('#scdl-likes-explorer .action-button').evaluateAll(buttons=>buttons.map(button=>button.title)),['Actualizar biblioteca','Almacenamiento']);
     assert.equal(await page.locator('#scdl-likes-explorer .action-spinner').count(),1);
     const visibleCards=await page.locator('#scdl-likes-explorer .card').evaluateAll(cards=>{const viewport=cards[0]?.closest('.viewport').getBoundingClientRect();return cards.filter(card=>{const rect=card.getBoundingClientRect();return rect.top>=viewport.top&&rect.bottom<=viewport.bottom;}).length;});
     assert.ok(visibleCards>=24);
