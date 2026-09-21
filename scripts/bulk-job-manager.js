@@ -5,12 +5,15 @@ const RECOVER_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 // on Chromebooks and other constrained devices even when network concurrency is safe.
 const MAX_IN_FLIGHT = 1;
 const JOB_STATUS = Object.freeze({
+  ENUMERATING: "enumerating",
+  READY: "ready",
   RUNNING: "running",
   PAUSED: "paused",
   CANCELLED: "cancelled",
   COMPLETED: "completed",
   COMPLETED_WITH_ERRORS: "completed_with_errors",
   FAILED: "failed",
+  PARTIAL: "partial",
 });
 const TRACK_STATUS = Object.freeze({
   DONE: "done",
@@ -19,6 +22,8 @@ const TRACK_STATUS = Object.freeze({
   AMBIGUOUS: "ambiguous_save",
 });
 const ACTIVE_JOB_STATUSES = Object.freeze([
+  JOB_STATUS.ENUMERATING,
+  JOB_STATUS.READY,
   JOB_STATUS.RUNNING,
   JOB_STATUS.PAUSED,
 ]);
@@ -27,6 +32,7 @@ const TERMINAL_JOB_STATUSES = Object.freeze([
   JOB_STATUS.COMPLETED,
   JOB_STATUS.COMPLETED_WITH_ERRORS,
   JOB_STATUS.FAILED,
+  JOB_STATUS.PARTIAL,
 ]);
 const JOB_TRANSITIONS = Object.freeze({
   [JOB_STATUS.RUNNING]: new Set([
@@ -50,6 +56,8 @@ let singleDownloadQueue = Promise.resolve();
 let creatingOffscreenDocument = null;
 let singleDownloadsInFlight = 0;
 let legacyMigrationPromise = null;
+let activeEnumerationPromise = null;
+let activeEnumerationJobId = null;
 
 function withJobState(fn) {
   const run = stateQueue.then(fn);
@@ -238,11 +246,12 @@ function getPublicJobSnapshot(job) {
 
   return {
     id: job.jobId,
-    status: job.status,
+    status: [JOB_STATUS.ENUMERATING, JOB_STATUS.READY].includes(job.status)
+      ? JOB_STATUS.RUNNING : job.status,
     playlistTitle: job.playlistTitle,
     folderName: job.folderName,
     destinationName: job.downloadDestination?.name || null,
-    total: job.eligible,
+    total: job.enumerating && job.requestedLimit != null ? job.requestedLimit : job.eligible,
     currentIndex: job.currentIndex || 0,
     completed: job.saved,
     failed: job.recentFailures || [],
@@ -771,6 +780,141 @@ function runJobLoop(jobId) {
   return activeLoopPromise;
 }
 
+function requestBulkPage(job) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(job.enumerationTabId, {
+      type: "GET_BULK_PAGE",
+      cursor: job.nextCursor,
+      sourceUrl: job.sourceUrl,
+      pageSize: 200,
+    }, { frameId: 0 }, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(Object.assign(new Error(chrome.runtime.lastError.message), { code: "stale_context" }));
+        return;
+      }
+      if (!response?.success) {
+        reject(Object.assign(new Error(response?.error || "Could not enumerate the collection."), {
+          code: response?.code || "network_error",
+          retryAt: response?.retryAt,
+        }));
+        return;
+      }
+      resolve(response.page);
+    });
+  });
+}
+
+async function finishEnumeration(job) {
+  const running = await SCBulkLibrary.updateJob(job.jobId, [JOB_STATUS.READY], {
+    status: JOB_STATUS.RUNNING,
+    enumerating: false,
+    currentTrackStatus: null,
+    error: null,
+  });
+  if (!running) return null;
+  jobControl = { jobId: running.jobId, state: JOB_STATUS.RUNNING };
+  await persistJobSummary(running);
+  await updateBadge(running);
+  broadcastJobUpdate(running);
+  runJobLoop(running.jobId);
+  return running;
+}
+
+async function failEnumeration(job, error) {
+  if (["rate_limited", "network_error", "network_timeout", "service_unavailable"].includes(error.code)) {
+    let paused = await SCBulkLibrary.pause(job.jobId, {
+      epoch: job.epoch,
+      code: error.code,
+      retryAt: error.retryAt,
+    });
+    paused = await SCBulkLibrary.updateJob(job.jobId, [JOB_STATUS.PAUSED], {
+      currentTrackStatus: error.message,
+      enumerating: true,
+    }) || paused;
+    jobControl = { jobId: job.jobId, state: JOB_STATUS.PAUSED };
+    await persistJobSummary(paused);
+    await updateBadge(paused);
+    broadcastJobUpdate(paused);
+    return paused;
+  }
+  const status = job.eligible > 0 ? JOB_STATUS.PARTIAL : JOB_STATUS.FAILED;
+  const failed = await SCBulkLibrary.updateJob(job.jobId, [JOB_STATUS.ENUMERATING], {
+    status,
+    enumerating: false,
+    error: error.message || "Collection enumeration failed.",
+    errorCode: error.code || "enumeration_failed",
+    currentTrackStatus: null,
+    finishedAt: Date.now(),
+  });
+  if (failed) {
+    await persistJobSummary(failed);
+    await finishJobResources(failed);
+    broadcastJobUpdate(failed);
+  }
+  return failed;
+}
+
+async function runEnumerationInternal(jobId) {
+  let job = await loadJob();
+  if (!job || job.jobId !== jobId) return null;
+  if (job.status === JOB_STATUS.READY) return finishEnumeration(job);
+  if (job.status !== JOB_STATUS.ENUMERATING) return job;
+  try {
+    while (job.status === JOB_STATUS.ENUMERATING) {
+      const epoch = job.epoch;
+      const page = await requestBulkPage(job);
+      const tracks = (page?.items || []).filter(track => SCDownloadTrack.canDownload(track));
+      const skipped = { ...(page?.skipped || {}) };
+      skipped.invalid = (Number(skipped.invalid) || 0) + Math.max(0, (page?.items?.length || 0) - tracks.length);
+      const committed = await SCBulkLibrary.commitPage(jobId, {
+        epoch,
+        expectedCursor: job.nextCursor,
+        nextCursor: page?.nextCursor ?? null,
+        done: page?.done === true,
+        enumerated: page?.enumerated,
+        skipped,
+        items: tracks.map(track => ({ trackId: String(track.id), track })),
+      });
+      job = committed.job;
+      if (job.status === JOB_STATUS.ENUMERATING) {
+        job = await SCBulkLibrary.updateJob(jobId, [JOB_STATUS.ENUMERATING], {
+          currentTrackStatus: `Found ${job.eligible} downloadable tracks...`,
+        }) || job;
+      }
+      await persistJobSummary(job);
+      await updateBadge(job);
+      broadcastJobUpdate(job);
+    }
+    if (job.status === JOB_STATUS.READY) return finishEnumeration(job);
+    if (job.status === JOB_STATUS.PARTIAL) {
+      job = await SCBulkLibrary.updateJob(jobId, [JOB_STATUS.PARTIAL], {
+        error: "SoundCloud repeated a collection cursor. The job is incomplete.",
+        errorCode: job.error || "cursor_cycle",
+      }) || job;
+      await persistJobSummary(job);
+      await finishJobResources(job);
+      broadcastJobUpdate(job);
+    }
+    return job;
+  } catch (error) {
+    const current = await SCBulkLibrary.getJob(jobId);
+    if (!current || current.status === JOB_STATUS.CANCELLED) return current;
+    return failEnumeration(current, error);
+  }
+}
+
+function runEnumeration(jobId) {
+  if (activeEnumerationPromise && activeEnumerationJobId === jobId) return activeEnumerationPromise;
+  activeEnumerationJobId = jobId;
+  activeEnumerationPromise = runEnumerationInternal(jobId).finally(() => {
+    if (activeEnumerationJobId === jobId) {
+      activeEnumerationPromise = null;
+      activeEnumerationJobId = null;
+    }
+  });
+  return activeEnumerationPromise;
+}
+
 const BulkJobManager = {
   SESSION_KEY,
   KEEPALIVE_ALARM,
@@ -927,6 +1071,59 @@ const BulkJobManager = {
     });
   },
 
+  async createPagedJob(
+    tabId,
+    collection,
+    requestedLimit = null,
+    formatPreference = "auto",
+    downloadDestination = null
+  ) {
+    if (!Number.isInteger(tabId) || !collection?.title) {
+      throw Object.assign(new Error("Bulk collection context is invalid."), { code: "invalid_request" });
+    }
+    if (requestedLimit != null && (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1)) {
+      throw Object.assign(new Error("Bulk download limit is invalid."), { code: "invalid_request" });
+    }
+    const resolvedDestination = await destinationHandler.resolve(downloadDestination);
+    return withJobState(async () => {
+      const existing = await loadJob();
+      if (existing && isActiveJobStatus(existing.status)) {
+        throw new Error("A bulk download is already in progress.");
+      }
+      if (singleDownloadsInFlight > 0) throw new Error("A track download is already in progress.");
+
+      const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      await SCBulkLibrary.createJob({
+        jobId,
+        sourceType: collection.kind || "collection",
+        sourceUserId: collection.sourceUserId,
+        sourceUrl: collection.pageUrl || collection.sourceUrl,
+        mode: requestedLimit == null ? "all" : "limit",
+        requestedLimit,
+      });
+      const job = await SCBulkLibrary.updateJob(jobId, [JOB_STATUS.ENUMERATING], {
+        enumerating: true,
+        enumerationTabId: tabId,
+        playlistTitle: collection.title,
+        folderName: sanitizeFolderName(collection.title),
+        downloadDestination: resolvedDestination,
+        formatPreference: formatPreference || "auto",
+        clientId: collection.clientId || null,
+        currentTrackStatus: "Loading collection pages...",
+        artworkUrl: collection.artworkUrl || null,
+        artist: collection.artist || null,
+        artistImageUrl: collection.artistImageUrl || null,
+        artistUrl: collection.artistUrl || null,
+      });
+      await persistJobSummary(job);
+      await updateBadge(job);
+      await startKeepalive();
+      jobControl = { jobId, state: JOB_STATUS.ENUMERATING };
+      runEnumeration(jobId);
+      return getPublicJobSnapshot(job);
+    });
+  },
+
   async getStatus() {
     await BulkJobManager.ensureJobRunning();
     const job = await loadJob();
@@ -934,6 +1131,19 @@ const BulkJobManager = {
   },
 
   async pauseJob() {
+    const current = await loadJob();
+    if (current?.status === JOB_STATUS.ENUMERATING) {
+      const job = await SCBulkLibrary.updateJob(current.jobId, [JOB_STATUS.ENUMERATING], {
+        status: JOB_STATUS.PAUSED,
+        enumerating: true,
+        pausedAt: Date.now(),
+        currentTrackStatus: "Collection loading paused.",
+      });
+      jobControl = { jobId: current.jobId, state: JOB_STATUS.PAUSED };
+      await persistJobSummary(job);
+      broadcastJobUpdate(job);
+      return { success: true, job: getPublicJobSnapshot(job) };
+    }
     const job = await mutateJob(
       null,
       { statuses: [JOB_STATUS.RUNNING] },
@@ -949,6 +1159,22 @@ const BulkJobManager = {
   },
 
   async resumeJob() {
+    const current = await loadJob();
+    if (current?.status === JOB_STATUS.PAUSED && current.enumerating) {
+      const job = await SCBulkLibrary.updateJob(current.jobId, [JOB_STATUS.PAUSED], {
+        status: JOB_STATUS.ENUMERATING,
+        pausedAt: null,
+        error: null,
+        retryAt: null,
+        currentTrackStatus: `Found ${current.eligible} downloadable tracks...`,
+      });
+      jobControl = { jobId: job.jobId, state: JOB_STATUS.ENUMERATING };
+      await startKeepalive();
+      await persistJobSummary(job);
+      runEnumeration(job.jobId);
+      broadcastJobUpdate(job);
+      return { success: true, job: getPublicJobSnapshot(job) };
+    }
     const job = await mutateJob(
       null,
       { statuses: [JOB_STATUS.PAUSED], broadcast: false },
@@ -993,6 +1219,15 @@ const BulkJobManager = {
   },
 
   async cancelJob() {
+    const current = await loadJob();
+    if (current && [JOB_STATUS.ENUMERATING, JOB_STATUS.READY].includes(current.status)) {
+      const job = await SCBulkLibrary.cancel(current.jobId);
+      jobControl = { jobId: current.jobId, state: JOB_STATUS.CANCELLED };
+      await persistJobSummary(job);
+      await finishJobResources(job);
+      broadcastJobUpdate(job);
+      return { success: true, job: getPublicJobSnapshot(job) };
+    }
     const job = await mutateJob(
       null,
       { statuses: ACTIVE_JOB_STATUSES, badge: false, broadcast: false },
@@ -1013,6 +1248,18 @@ const BulkJobManager = {
   async recoverRunningJob() {
     const job = await loadJob();
     if (!job || !isActiveJobStatus(job.status)) {
+      return;
+    }
+
+    if (job.status === JOB_STATUS.ENUMERATING || job.status === JOB_STATUS.READY) {
+      await startKeepalive();
+      jobControl = { jobId: job.jobId, state: job.status };
+      runEnumeration(job.jobId);
+      return;
+    }
+    if (job.status === JOB_STATUS.PAUSED && job.enumerating) {
+      await updateBadge(job);
+      jobControl = { jobId: job.jobId, state: JOB_STATUS.PAUSED };
       return;
     }
 
