@@ -46,7 +46,7 @@ function html(hydration) {
     `<script>client_id=\"${CLIENT}\"</script>`;
 }
 
-function harness(pageUrl, hydration, api, runtimeReply) {
+function harness(pageUrl, hydration, api, runtimeReply, overrides = {}) {
   const parsed = new URL(pageUrl);
   const windowObject = {
     location: {
@@ -75,6 +75,7 @@ function harness(pageUrl, hydration, api, runtimeReply) {
     streamSelector: selector,
     downloadTrack: trackModule,
     onData: (type, data) => published.push({ type, data }),
+    ...overrides,
   });
   return { intake, windowObject, published };
 }
@@ -207,6 +208,27 @@ function harness(pageUrl, hydration, api, runtimeReply) {
   assert.equal(personalProfileRequested, true);
   assert.equal(personalLikes.intake.getCollection().tracks[0].id, 3);
 
+  let resolveOldProfile;
+  const accountChanged = harness(
+    "https://soundcloud.com/you/likes",
+    [],
+    () => { throw new Error("Unexpected API call"); },
+    () => new Promise((resolve) => { resolveOldProfile = resolve; })
+  );
+  const oldAccountExtraction = accountChanged.intake.extractCurrent();
+  await new Promise((resolve) => setImmediate(resolve));
+  accountChanged.intake.reset();
+  resolveOldProfile({
+    success: true,
+    profile: { user: { id: 6, username: "Old account", likes_count: 0 } },
+  });
+  await oldAccountExtraction;
+  assert.equal(
+    accountChanged.intake.getCollection(),
+    null,
+    "An account response from the invalidated generation was published"
+  );
+
   const loggedOut = harness("https://soundcloud.com/you/likes", [],
     () => { throw new Error("Unexpected API call"); },
     () => ({ success: false, code: "auth_required", error: "No oauth_token cookie" }));
@@ -239,6 +261,84 @@ function harness(pageUrl, hydration, api, runtimeReply) {
   assert.equal(longRetry.intake.read().code, "rate_limited");
   assert.equal(longRetryCalls, 1, "A long Retry-After must not be shortened into an early retry");
 
+  let retryNow = 1000;
+  let budgetRetryCalls = 0;
+  const retryDelays = [];
+  const retryBudget = harness(
+    "https://soundcloud.com/artist/tracks",
+    [{ hydratable: "user", data: { id: 8, username: "Artist", track_count: 1 } }],
+    () => { throw new Error("The injected HTTP adapter should handle API calls"); },
+    null,
+    {
+      now: () => retryNow,
+      soundCloudHttp: {
+        async json() {
+          budgetRetryCalls += 1;
+          const error = new Error("wait");
+          error.status = 429;
+          error.code = "rate_limited";
+          error.retryAt = retryNow + 4000;
+          throw error;
+        },
+      },
+      timers: {
+        setTimeout(callback, delay) {
+          if (delay < 15000) {
+            retryDelays.push(delay);
+            retryNow += delay;
+            queueMicrotask(callback);
+          }
+          return { delay };
+        },
+        clearTimeout() {},
+      },
+    }
+  );
+  await retryBudget.intake.extractCurrent();
+  assert.deepEqual(retryDelays, [4000, 4000]);
+  assert.equal(budgetRetryCalls, 3, "Retries exceeded the total interactive time budget");
+  assert.equal(retryBudget.intake.read().code, "rate_limited");
+
+  let retryWaitCallback = null;
+  let retryWaitCancelled = false;
+  let cancelledRetryCalls = 0;
+  const cancelledRetry = harness(
+    "https://soundcloud.com/artist/tracks",
+    [{ hydratable: "user", data: { id: 8, username: "Artist", track_count: 1 } }],
+    () => { throw new Error("The injected HTTP adapter should handle API calls"); },
+    null,
+    {
+      soundCloudHttp: {
+        async json() {
+          cancelledRetryCalls += 1;
+          const error = new Error("wait");
+          error.status = 429;
+          error.code = "rate_limited";
+          throw error;
+        },
+      },
+      timers: {
+        setTimeout(callback, delay) {
+          const timer = { delay };
+          if (delay === 1000) retryWaitCallback = callback;
+          return timer;
+        },
+        clearTimeout(timer) {
+          if (timer?.delay === 1000) retryWaitCancelled = true;
+        },
+      },
+    }
+  );
+  const waitingRetry = cancelledRetry.intake.extractCurrent();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(typeof retryWaitCallback, "function", "The retry wait was not reached");
+  cancelledRetry.intake.reset();
+  await waitingRetry;
+  retryWaitCallback();
+  await Promise.resolve();
+  assert.equal(retryWaitCancelled, true, "Reset did not clean the retry timer");
+  assert.equal(cancelledRetryCalls, 1, "Abort during retry wait emitted another request");
+
   let userPage = 0;
   const userTracks = harness(
     "https://soundcloud.com/artist/tracks",
@@ -269,6 +369,7 @@ function harness(pageUrl, hydration, api, runtimeReply) {
   assert.equal(playerTrack.id, 4);
 
   let firstPageResolve;
+  let stalePageAborted = false;
   const oldUrl = "https://soundcloud.com/artist/track-1";
   const stale = harness(oldUrl, [], () => { throw new Error("Unexpected API call"); });
   stale.intake.reset();
@@ -277,9 +378,10 @@ function harness(pageUrl, hydration, api, runtimeReply) {
   const staleIntake = create({
     window: { location: originalFetch },
     document: { documentElement: { innerHTML: "" }, querySelectorAll: () => [] },
-    fetch: async (url) => {
+    fetch: async (url, options) => {
       pageCalls += 1;
       if (pageCalls === 1) {
+        options.signal.addEventListener("abort", () => { stalePageAborted = true; });
         return new Promise((resolve) => { firstPageResolve = resolve; });
       }
       return { ok: true, text: async () => html([{ hydratable: "sound", data: rawTrack(2) }]) };
@@ -289,9 +391,11 @@ function harness(pageUrl, hydration, api, runtimeReply) {
     downloadTrack: trackModule,
   });
   const oldExtraction = staleIntake.extractCurrent();
+  await Promise.resolve();
   originalFetch.href = "https://soundcloud.com/artist/track-2";
   originalFetch.pathname = "/artist/track-2";
   staleIntake.reset();
+  assert.equal(stalePageAborted, true, "Navigation did not abort the previous page request");
   await staleIntake.extractCurrent();
   firstPageResolve({ ok: true, text: async () => html([{ hydratable: "sound", data: rawTrack(1) }]) });
   await oldExtraction;

@@ -15,6 +15,7 @@ const SCPageIntake = (() => {
   const LIKES_PAGE_SIZE = 50;
   const USER_TRACKS_PAGE_SIZE = 200;
   const API_RETRY_LIMIT = 3;
+  const API_RETRY_BUDGET_MS = 10000;
   const MAX_EXTRACTION_RETRIES = 3;
   const CLIENT_ID_TTL_MS = 60 * 60 * 1000;
 
@@ -63,6 +64,9 @@ const SCPageIntake = (() => {
     const onData = deps.onData || (() => {});
     const schedule = deps.timers?.setTimeout || setTimeout;
     const cancel = deps.timers?.clearTimeout || clearTimeout;
+    const now = deps.now || Date.now;
+    const apiRetryBudgetMs = Number.isFinite(deps.apiRetryBudgetMs) && deps.apiRetryBudgetMs > 0
+      ? deps.apiRetryBudgetMs : API_RETRY_BUDGET_MS;
     const requestTimeoutMs = Number.isFinite(deps.requestTimeoutMs) && deps.requestTimeoutMs > 0
       ? deps.requestTimeoutMs : 15000;
 
@@ -75,6 +79,7 @@ const SCPageIntake = (() => {
     let clientId = null;
     let clientIdAt = 0;
     let activeExtractionId = 0;
+    let activeExtractionController = null;
     let extractionRetryCount = 0;
     let pendingRetry = null;
     let extracting = false;
@@ -125,7 +130,19 @@ const SCPageIntake = (() => {
 
     async function fetchWithTimeout(url, options = {}, read = (response) => response) {
       const controller = new AbortController();
+      const externalSignal = options.signal;
       let timeoutId;
+      let rejectAbort;
+      const aborted = new Promise((_, reject) => { rejectAbort = reject; });
+      const onAbort = () => {
+        controller.abort();
+        const error = new Error("SoundCloud request was cancelled.");
+        error.name = "AbortError";
+        error.code = "request_cancelled";
+        rejectAbort(error);
+      };
+      externalSignal?.addEventListener?.("abort", onAbort, { once: true });
+      if (externalSignal?.aborted) onAbort();
       const timeout = new Promise((_, reject) => {
         timeoutId = schedule(() => {
           const error = new Error("SoundCloud request timed out.");
@@ -139,30 +156,32 @@ const SCPageIntake = (() => {
           Promise.resolve().then(() => request(url, { ...options, signal: controller.signal }))
             .then(read),
           timeout,
+          aborted,
         ]);
       } finally {
         cancel(timeoutId);
+        externalSignal?.removeEventListener?.("abort", onAbort);
       }
     }
 
-    async function resolveClientId(html) {
-      if (clientId && Date.now() - clientIdAt < CLIENT_ID_TTL_MS) return clientId;
+    async function resolveClientId(html, signal) {
+      if (clientId && now() - clientIdAt < CLIENT_ID_TTL_MS) return clientId;
       const inline = findClientId(html);
       if (inline) {
         clientId = inline;
-        clientIdAt = Date.now();
+        clientIdAt = now();
         return inline;
       }
 
       const scripts = [...doc.querySelectorAll('script[src*="a-v2.sndcdn.com"]')];
       for (const script of scripts) {
         try {
-          const text = await fetchWithTimeout(script.src, { cache: "force-cache" },
+          const text = await fetchWithTimeout(script.src, { cache: "force-cache", signal },
             (response) => response.text());
           const found = findClientId(text);
           if (found) {
             clientId = found;
-            clientIdAt = Date.now();
+            clientIdAt = now();
             return found;
           }
         } catch {
@@ -194,7 +213,7 @@ const SCPageIntake = (() => {
       scheduleRetry(extractionId, pageUrl, delay);
     }
 
-    async function fetchTracksByIds(ids, id, progress = {}) {
+    async function fetchTracksByIds(ids, id, progress = {}, signal) {
       const tracks = new Map();
       let loaded = 0;
       for (let offset = 0; offset < ids.length; offset += TRACKS_BATCH_SIZE) {
@@ -204,6 +223,7 @@ const SCPageIntake = (() => {
         url.searchParams.set("client_id", id);
         const values = await soundCloudHttp.json(url, {
           label: "Failed to fetch playlist tracks",
+          signal,
         });
         for (const value of values) if (value?.id) tracks.set(value.id, value);
         loaded += chunk.length;
@@ -215,7 +235,7 @@ const SCPageIntake = (() => {
       return tracks;
     }
 
-    async function playlistTracks(entries, id, pageUrl, limit, progress = {}) {
+    async function playlistTracks(entries, id, pageUrl, limit, progress = {}, signal) {
       const selected = entries.slice(0, limit ?? entries.length);
       const titled = selected.filter((value) => value.title).length;
       const partialIds = selected
@@ -225,7 +245,7 @@ const SCPageIntake = (() => {
         ? await fetchTracksByIds(partialIds, id, {
             ...progress,
             progressOffset: titled,
-          })
+          }, signal)
         : new Map();
       if (!partialIds.length) progress.onProgress?.(titled, progress.progressTotal);
 
@@ -238,28 +258,61 @@ const SCPageIntake = (() => {
       return result;
     }
 
-    async function userTracksPage(url, id, attempt = 0) {
+    function waitForRetry(delay, signal) {
+      return new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+          const error = new Error("SoundCloud request was cancelled.");
+          error.name = "AbortError";
+          error.code = "request_cancelled";
+          reject(error);
+          return;
+        }
+        let timer;
+        const cleanup = () => signal?.removeEventListener?.("abort", onAbort);
+        const onAbort = () => {
+          cancel(timer);
+          cleanup();
+          const error = new Error("SoundCloud request was cancelled.");
+          error.name = "AbortError";
+          error.code = "request_cancelled";
+          reject(error);
+        };
+        signal?.addEventListener?.("abort", onAbort, { once: true });
+        timer = schedule(() => {
+          cleanup();
+          resolve();
+        }, delay);
+      });
+    }
+
+    async function userTracksPage(url, id, options = {}) {
+      const attempt = options.attempt || 0;
+      const startedAt = options.startedAt ?? now();
+      const signal = options.signal;
       if (!url.searchParams.has("client_id")) url.searchParams.set("client_id", id);
       try {
         return await soundCloudHttp.json(url, {
           label: "Failed to fetch user tracks",
+          signal,
         });
       } catch (error) {
         if (error.status !== 429 || attempt >= API_RETRY_LIMIT) throw error;
         const delay = Number.isFinite(error.retryAt)
-          ? Math.max(0, error.retryAt - Date.now())
+          ? Math.max(0, error.retryAt - now())
           : 1000 * 2 ** attempt;
-        if (delay > 10000) {
+        const elapsed = Math.max(0, now() - startedAt);
+        const remaining = Math.max(0, apiRetryBudgetMs - elapsed);
+        if (delay >= remaining) {
           error.code = "rate_limited";
-          error.retryAt ||= Date.now() + delay;
+          error.retryAt ||= now() + delay;
           throw error;
         }
-        await new Promise((resolve) => schedule(resolve, delay));
-        return userTracksPage(url, id, attempt + 1);
+        await waitForRetry(delay, signal);
+        return userTracksPage(url, id, { attempt: attempt + 1, startedAt, signal });
       }
     }
 
-    async function userTracks(userId, id, pageUrl, limit, extractionId, progress = {}) {
+    async function userTracks(userId, id, pageUrl, limit, extractionId, progress = {}, signal) {
       const tracks = [];
       const seen = new Set();
       const visited = new Set();
@@ -284,7 +337,7 @@ const SCPageIntake = (() => {
           throw error;
         }
         visited.add(key);
-        const page = await userTracksPage(next, id);
+        const page = await userTracksPage(next, id, { signal });
         const values = Array.isArray(page) ? page : page.collection || [];
         for (const value of values) {
           if (tracks.length >= cap) break;
@@ -306,7 +359,7 @@ const SCPageIntake = (() => {
       return Number.isFinite(cap) ? tracks.slice(0, cap) : tracks;
     }
 
-    async function likesTracks(userId, id, pageUrl, authenticated, limit, extractionId, progress = {}) {
+    async function likesTracks(userId, id, pageUrl, authenticated, limit, extractionId, progress = {}, signal) {
       const tracks = [];
       const seen = new Set();
       const visited = new Set();
@@ -333,6 +386,7 @@ const SCPageIntake = (() => {
             clientId: id,
             nextHref: next.toString(),
           });
+          if (signal?.aborted) return null;
           if (!response?.success) {
             const error = new Error(response?.error || "Could not load your SoundCloud likes.");
             error.code = response?.code || "network_error";
@@ -341,7 +395,7 @@ const SCPageIntake = (() => {
           }
           page = { collection: response.page.collection, next_href: response.page.nextHref };
         } else {
-          page = await soundCloudHttp.json(next, { label: "Failed to fetch user likes" });
+          page = await soundCloudHttp.json(next, { label: "Failed to fetch user likes", signal });
         }
         for (const item of page.collection || []) {
           const value = item?.track;
@@ -363,12 +417,13 @@ const SCPageIntake = (() => {
       return Number.isFinite(cap) ? tracks.slice(0, cap) : tracks;
     }
 
-    async function loggedInOrHydratedUser(hydration, id, pageUrl) {
+    async function loggedInOrHydratedUser(hydration, id, pageUrl, signal) {
       if (new URL(pageUrl).pathname.toLowerCase() === "/you/likes") {
         const result = await runtime.sendMessage({
           type: "GET_LOGGED_IN_USER",
           clientId: id,
         });
+        if (signal?.aborted) return null;
         if (!result?.success) {
           const error = new Error(result?.error || "Sign in to SoundCloud to view your likes.");
           error.code = result?.code || "network_error";
@@ -381,7 +436,7 @@ const SCPageIntake = (() => {
       return user?.id ? { user, authenticated: false } : null;
     }
 
-    async function buildResult(kind, hydration, id, pageUrl, extractionId) {
+    async function buildResult(kind, hydration, id, pageUrl, extractionId, signal) {
       if (kind === "track") {
         const raw = hydration.find((item) => item.hydratable === "sound")?.data;
         if (!raw) return null;
@@ -397,7 +452,7 @@ const SCPageIntake = (() => {
         const playlist = hydration.find((item) => item.hydratable === "playlist")?.data;
         if (!playlist) return null;
         const entries = playlist.tracks || [];
-        const tracks = await playlistTracks(entries, id, pageUrl, PREVIEW_LIMIT);
+        const tracks = await playlistTracks(entries, id, pageUrl, PREVIEW_LIMIT, {}, signal);
         return {
           kind,
           bulk: { kind, orderedEntries: entries, clientId: id, pageUrl },
@@ -427,7 +482,7 @@ const SCPageIntake = (() => {
           return null;
         }
         const tracks = await userTracks(
-          userEntry.id, id, pageUrl, PREVIEW_LIMIT, extractionId
+          userEntry.id, id, pageUrl, PREVIEW_LIMIT, extractionId, {}, signal
         );
         if (!tracks) return null;
         const username = userEntry.username || "Unknown user";
@@ -452,7 +507,7 @@ const SCPageIntake = (() => {
         };
       }
 
-      const profile = await loggedInOrHydratedUser(hydration, id, pageUrl);
+      const profile = await loggedInOrHydratedUser(hydration, id, pageUrl, signal);
       if (!profile?.user?.id) return null;
       const tracks = await likesTracks(
         profile.user.id,
@@ -460,7 +515,9 @@ const SCPageIntake = (() => {
         pageUrl,
         profile.authenticated,
         PREVIEW_LIMIT,
-        extractionId
+        extractionId,
+        {},
+        signal
       );
       if (!tracks) return null;
       const username = profile.user.username || "Unknown user";
@@ -520,11 +577,16 @@ const SCPageIntake = (() => {
       if (capturedId == null && extracting && extractionPageUrl === currentUrl()) return null;
       const extractionId = capturedId ?? ++activeExtractionId;
       const pageUrl = currentUrl();
+      if (capturedId != null && !isFresh(extractionId, pageUrl)) return null;
       const kind = classify(pageUrl);
       if (kind === "other") {
         extractionState = { status: "unsupported", code: "unsupported_page" };
         return null;
       }
+      const extractionController = new AbortController();
+      activeExtractionController?.abort();
+      activeExtractionController = extractionController;
+      const signal = extractionController.signal;
       extracting = true;
       extractionPageUrl = pageUrl;
       extractionState = { status: "loading" };
@@ -533,6 +595,7 @@ const SCPageIntake = (() => {
         const { response, html } = await fetchWithTimeout(win.location.href, {
           cache: "no-store",
           credentials: "include",
+          signal,
         }, async (response) => ({
           response,
           html: response.ok ? await response.text() : null,
@@ -549,13 +612,13 @@ const SCPageIntake = (() => {
           if (!pendingRetry) extractionState = { status: "error", code: "source_unavailable", retryable: true };
           return null;
         }
-        const id = await resolveClientId(html);
+        const id = await resolveClientId(html, signal);
         if (!isFresh(extractionId, pageUrl)) return null;
         if (!id) {
           extractionState = { status: "error", code: "reload_required", retryable: true };
           return null;
         }
-        const result = await buildResult(kind, hydration, id, pageUrl, extractionId);
+        const result = await buildResult(kind, hydration, id, pageUrl, extractionId, signal);
         if (!isFresh(extractionId, pageUrl)) return null;
         if (!result) {
           if (!pendingRetry) extractionState = { status: "error", code: "source_unavailable", retryable: true };
@@ -575,6 +638,7 @@ const SCPageIntake = (() => {
         extractionState = { status: "error", code, stage: "extract", retryable: !["auth_required", "unsupported_page"].includes(code), statusCode: status };
         return null;
       } finally {
+        if (activeExtractionController === extractionController) activeExtractionController = null;
         if (extractionId === activeExtractionId) extracting = false;
       }
     }
@@ -743,6 +807,8 @@ const SCPageIntake = (() => {
     }
 
     function reset() {
+      activeExtractionController?.abort();
+      activeExtractionController = null;
       activeExtractionId += 1;
       currentTrack = null;
       currentCollection = null;

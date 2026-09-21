@@ -4,7 +4,9 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 let messageListener = null;
+let cookieChangedListener = null;
 const progressCalls = [];
+const authChangeMessages = [];
 
 const manager = {
   KEEPALIVE_ALARM: "keepalive",
@@ -38,8 +40,19 @@ const context = vm.createContext({
     }),
   },
   chrome: {
-    tabs: { onRemoved: { addListener() {} } },
-    cookies: { get() {} },
+    tabs: {
+      onRemoved: { addListener() {} },
+      query: async () => [{ id: 4 }, { id: 5 }, { id: null }],
+      sendMessage: async (tabId, message) => {
+        authChangeMessages.push({ tabId, message });
+        if (tabId === 5) throw new Error("No receiving end");
+        return { success: true };
+      },
+    },
+    cookies: {
+      get() {},
+      onChanged: { addListener(listener) { cookieChangedListener = listener; } },
+    },
     runtime: {
       id: "test-extension",
       getURL: (path) => `chrome-extension://test-extension/${path}`,
@@ -60,6 +73,13 @@ vm.runInContext(source, context, { filename: "background.js" });
 
 (async () => {
   assert.equal(typeof messageListener, "function");
+  assert.equal(typeof cookieChangedListener, "function");
+  cookieChangedListener({ cookie: { name: "oauth_token", domain: ".soundcloud.com" } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(JSON.parse(JSON.stringify(authChangeMessages)), [
+    { tabId: 4, message: { type: "SOUNDCLOUD_AUTH_CHANGED" } },
+    { tabId: 5, message: { type: "SOUNDCLOUD_AUTH_CHANGED" } },
+  ]);
   const response = await new Promise((resolve) => {
     const keepChannelOpen = messageListener(
       {

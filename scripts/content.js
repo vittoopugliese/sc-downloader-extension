@@ -150,6 +150,12 @@ function reportBulkFetchProgress(loaded, total) {
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === "SOUNDCLOUD_AUTH_CHANGED") {
+    intake.reset();
+    if (intake.classify() !== "other") scheduleCurrentPageExtraction(250);
+    sendResponse({ success: true });
+    return false;
+  }
   if (request.type === "GET_TRACK_DATA") {
     sendResponse(intake.read(request.forceRefresh === true));
     return true;

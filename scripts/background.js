@@ -70,7 +70,13 @@ const downloadSource = SCDownloadSource.configure({
 
 const likesJobs = globalThis.SCLikesJobs?.create({ getToken: getOAuthToken, resolveUser: clientId => downloadSource.resolveLoggedInUser(clientId), access: SCPlayerToolsAccess });
 chrome.cookies.onChanged?.addListener(change => {
-  if (change.cookie.name === 'oauth_token' && /(^|\.)soundcloud\.com$/.test(change.cookie.domain.replace(/^\./, ''))) likesJobs?.invalidate();
+  if (change.cookie.name !== 'oauth_token' || !/(^|\.)soundcloud\.com$/.test(change.cookie.domain.replace(/^\./, ''))) return;
+  likesJobs?.invalidate();
+  chrome.tabs.query({ url: 'https://soundcloud.com/*' })
+    .then(tabs => Promise.allSettled(tabs
+      .filter(tab => Number.isInteger(tab.id))
+      .map(tab => chrome.tabs.sendMessage(tab.id, { type: 'SOUNDCLOUD_AUTH_CHANGED' }))))
+    .catch(() => {});
 });
 chrome.storage?.onChanged?.addListener((changes, area) => {
   if (area === 'local' && changes['scdl.playerTools.access.v1']) likesJobs?.invalidate();
