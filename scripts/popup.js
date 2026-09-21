@@ -41,6 +41,7 @@ const resumeJobBtn = document.getElementById("resumeJobBtn");
 const retryFailedJobBtn = document.getElementById("retryFailedJobBtn");
 const cancelJobBtn = document.getElementById("cancelJobBtn");
 const downloadStatus = document.getElementById("downloadStatus");
+const downloadAnnouncement = document.getElementById("downloadAnnouncement");
 const jobHint = document.getElementById("jobHint");
 const failedSummary = document.getElementById("failedSummary");
 const failedDetails = document.getElementById("failedDetails");
@@ -110,6 +111,8 @@ let currentPlaylistData = null;
 let hasRenderedTrack = false;
 let downloadListenerAttached = false;
 let activeBulkJob = null;
+let lastAnnouncedDownloadStatus = "";
+let lastAnnouncedBulkState = "";
 let notTrackRetryCount = 0;
 let currentFormatPreference = SCStreamSelector.DEFAULT_PREFERENCE;
 let currentDownloadDestination = null;
@@ -117,6 +120,13 @@ let isTestProActive = false;
 let helpReturnFocus = null;
 let helpSelectionScrollTop = 0;
 const popupDownloadIntent = SCDownloadIntent.create(chrome.runtime);
+
+function announceDownloadStatus(message) {
+  const text = String(message || "").trim();
+  if (!text || text === lastAnnouncedDownloadStatus) return;
+  lastAnnouncedDownloadStatus = text;
+  downloadAnnouncement.textContent = text;
+}
 
 function openHelp() {
   helpReturnFocus = document.activeElement;
@@ -591,6 +601,11 @@ function renderBulkJobState(job) {
     downloadStatus.textContent =
       job.currentTrackStatus ||
       t("job_progress", [statusPrefix, job.completed + (job.failedCount ?? job.failed.length), job.total]);
+    const bulkState = `${job.id}:${job.status}`;
+    if (bulkState !== lastAnnouncedBulkState) {
+      lastAnnouncedBulkState = bulkState;
+      announceDownloadStatus(downloadStatus.textContent);
+    }
     failedSummary.classList.remove("is-visible");
     failedSummary.textContent = "";
     failedDetails.classList.remove("is-visible");
@@ -620,6 +635,8 @@ function renderBulkJobSummary(job) {
   } else {
     downloadStatus.textContent = job.error || DOWNLOAD_ERROR_STATUS;
   }
+  lastAnnouncedBulkState = `${job.id}:${job.status}`;
+  announceDownloadStatus(downloadStatus.textContent);
 
   if ((job.failedCount ?? job.failed?.length ?? 0) > 0) {
     failedSummary.textContent = t("tracks_failed", job.failedCount ?? job.failed.length);
@@ -1188,6 +1205,7 @@ function restoreCollectionAfterSelectionError() {
   showDownloadDestination();
   metaSep.style.display = "";
   downloadStatus.textContent = t("load_selector_failed");
+  announceDownloadStatus(downloadStatus.textContent);
 }
 
 async function openSelectionPanel(options = {}) {
@@ -1460,6 +1478,7 @@ function setDownloadState(downloading, statusText) {
   }
 
   downloadStatus.textContent = statusText || DEFAULT_DOWNLOAD_STATUS;
+  announceDownloadStatus(downloadStatus.textContent);
 }
 
 function requestFromActiveTab(message) {

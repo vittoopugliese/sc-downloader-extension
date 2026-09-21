@@ -674,6 +674,18 @@
             white-space: pre-line;
         }
 
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
         #jobControls {
             display: none;
             justify-content: center;
@@ -1432,6 +1444,7 @@
                 <button id="cancelJobBtn" type="button" class="job-btn is-danger" title="Cancel download" data-i18n="cancel" data-i18n-title="cancel">Cancel</button>
             </div>
             <p id="downloadStatus" data-i18n="ready_to_download">Ready to download</p>
+            <p id="downloadAnnouncement" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
             <p id="jobHint" class="is-hidden" data-i18n="background_download_hint">You can close this popup — the download continues in the background.</p>
             <p id="failedSummary"></p>
             <ul id="failedDetails" aria-live="polite"></ul>

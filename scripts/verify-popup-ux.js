@@ -9,6 +9,13 @@ const buttonTags = [...popup.matchAll(/<button\b[^>]*>/g)].map(
 );
 
 assert(
+  /id="downloadAnnouncement"[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-atomic="true"/.test(popup) &&
+    /function announceDownloadStatus\(message\)/.test(popupScript) &&
+    /bulkState !== lastAnnouncedBulkState/.test(popupScript),
+  "Download progress and outcomes need a polite status region without repeating every track update."
+);
+
+assert(
   /id="helpBtn"[^>]*data-i18n-aria-label="settings_and_help"/.test(popup) &&
     /id="helpPanel"[^>]*role="dialog"/.test(popup) &&
     /id="helpBackBtn"/.test(popup),
