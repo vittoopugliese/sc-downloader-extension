@@ -54,6 +54,7 @@ function createHarness(options = {}) {
         (left.updatedAt || left.createdAt || 0));
       return clone(jobs[0] || null);
     },
+    async cleanupTerminalJobs() { return []; },
     async getTrack(jobId, index) { return clone(durableTracks.get(jobId)?.[index] || null); },
     async getTracksByState(jobId, state, limit) {
       return clone((durableTracks.get(jobId) || []).filter(record => record.state === state).slice(0, limit));

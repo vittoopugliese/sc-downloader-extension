@@ -112,6 +112,39 @@ const { chromium } = require('playwright');
     assert.equal(edgeCases.limitedTracks.length, 50);
     assert.equal(edgeCases.staleCode, 'stale_job');
 
+    const retention = await page.evaluate(async () => {
+      const item = id => ({ trackId: String(id), track: { id, title: `Cleanup ${id}` } });
+      const finishedBase = Date.now() + 100000;
+      for (let index = 0; index < 4; index += 1) {
+        const jobId = `cleanup-${index}`;
+        const job = await SCBulkLibrary.createJob({ jobId, createdAt: index + 1 });
+        await SCBulkLibrary.commitPage(jobId, {
+          epoch: job.epoch, expectedCursor: null, items: [item(index)], nextCursor: null, done: true,
+        });
+        await SCBulkLibrary.updateJob(jobId, ['ready'], {
+          status: index === 0 ? 'failed' : 'completed',
+          finishedAt: finishedBase + index,
+        });
+      }
+      const removed = await SCBulkLibrary.cleanupTerminalJobs({
+        maxCompleted: 1,
+        maxAgeMs: 24 * 60 * 60 * 1000,
+        now: finishedBase + 4,
+      });
+      return {
+        removed: removed.filter(jobId => jobId.startsWith('cleanup-')),
+        failed: await SCBulkLibrary.getJob('cleanup-0'),
+        oldCompleted: await SCBulkLibrary.getJob('cleanup-1'),
+        oldTracks: await SCBulkLibrary.getTracks('cleanup-1'),
+        newestCompleted: await SCBulkLibrary.getJob('cleanup-3'),
+      };
+    });
+    assert.deepEqual(retention.removed.sort(), ['cleanup-1', 'cleanup-2']);
+    assert.equal(retention.failed.status, 'failed', 'Jobs requiring intervention must be retained');
+    assert.equal(retention.oldCompleted, undefined);
+    assert.deepEqual(retention.oldTracks, []);
+    assert.equal(retention.newestCompleted.status, 'completed');
+
     const runner = await page.evaluate(async () => {
       const item = id => ({ trackId: `runner-${id}`, track: { id, title: `Runner ${id}` } });
       const created = await SCBulkLibrary.createJob({ jobId: 'runner-job', mode: 'limit', requestedLimit: 4 });

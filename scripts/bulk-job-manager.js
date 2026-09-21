@@ -1033,6 +1033,7 @@ const BulkJobManager = {
       if (existing && isActiveJobStatus(existing.status)) {
         throw new Error("A bulk download is already in progress.");
       }
+      await SCBulkLibrary.cleanupTerminalJobs();
 
       if (singleDownloadsInFlight > 0) {
         throw new Error("A track download is already in progress.");
@@ -1094,6 +1095,7 @@ const BulkJobManager = {
       if (existing && isActiveJobStatus(existing.status)) {
         throw new Error("A bulk download is already in progress.");
       }
+      await SCBulkLibrary.cleanupTerminalJobs();
       if (singleDownloadsInFlight > 0) throw new Error("A track download is already in progress.");
 
       const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;

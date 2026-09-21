@@ -6,6 +6,7 @@
   const FIRST_CURSOR = '__first__';
   const ACTIVE_STATUSES = new Set(['enumerating', 'paused', 'ready', 'downloading', 'running']);
   const TERMINAL_STATUSES = new Set(['completed', 'completed_with_errors', 'failed', 'cancelled', 'partial']);
+  const AUTO_CLEANUP_STATUSES = Object.freeze(['completed', 'cancelled']);
   const request = value => new Promise((resolve, reject) => {
     value.onsuccess = () => resolve(value.result);
     value.onerror = () => reject(value.error || new Error('indexeddb-request-failed'));
@@ -454,20 +455,41 @@
       const job = await request(store('jobs').get(jobId));
       if (!job) return false;
       if (!TERMINAL_STATUSES.has(job.status)) throw fail('job_active');
-      for (const name of ['tracks', 'seen', 'cursors']) {
-        await new Promise((resolve, reject) => {
-          const opened = store(name).openCursor();
-          opened.onerror = () => reject(opened.error || fail('storage_error'));
-          opened.onsuccess = () => {
-            const cursor = opened.result;
-            if (!cursor) return resolve();
-            if (cursor.value.jobId === jobId) cursor.delete();
-            cursor.continue();
-          };
-        });
-      }
-      store('jobs').delete(jobId);
+      const range = IDBKeyRange.bound([jobId], [jobId, []]);
+      await Promise.all([
+        request(store('tracks').delete(range)),
+        request(store('seen').delete(range)),
+        request(store('cursors').delete(range)),
+        request(store('jobs').delete(jobId)),
+      ]);
       return true;
+    });
+  }
+
+  async function cleanupTerminalJobs(options = {}) {
+    const maxCompleted = Math.max(0, Number.isSafeInteger(options.maxCompleted)
+      ? options.maxCompleted : 10);
+    const maxAgeMs = Math.max(0, Number.isFinite(options.maxAgeMs)
+      ? options.maxAgeMs : 30 * 24 * 60 * 60 * 1000);
+    const cutoff = (Number.isFinite(options.now) ? options.now : Date.now()) - maxAgeMs;
+    return transaction(['jobs', 'tracks', 'seen', 'cursors'], 'readwrite', async store => {
+      const status = store('jobs').index('status');
+      const groups = await Promise.all(AUTO_CLEANUP_STATUSES.map(value => request(status.getAll(value))));
+      const candidates = groups.flat().sort((left, right) =>
+        (right.finishedAt || right.updatedAt || right.createdAt || 0) -
+        (left.finishedAt || left.updatedAt || left.createdAt || 0));
+      const expired = candidates.filter((job, index) =>
+        index >= maxCompleted || (job.finishedAt || job.updatedAt || job.createdAt || 0) < cutoff);
+      for (const job of expired) {
+        const range = IDBKeyRange.bound([job.jobId], [job.jobId, []]);
+        await Promise.all([
+          request(store('tracks').delete(range)),
+          request(store('seen').delete(range)),
+          request(store('cursors').delete(range)),
+          request(store('jobs').delete(job.jobId)),
+        ]);
+      }
+      return expired.map(job => job.jobId);
     });
   }
 
@@ -488,5 +510,6 @@
     resume,
     cancel,
     deleteJob,
+    cleanupTerminalJobs,
   });
 })(globalThis);
