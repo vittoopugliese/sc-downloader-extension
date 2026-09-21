@@ -7,6 +7,11 @@ Checked against `docs/audits/RELIABILITY-MITIGATION-PLAN-20260920.md` on the cur
 - M1: bulk tracks have stable operation IDs. Offscreen joins duplicate builds and directory saves with the same ID and rejects a changed payload. A lost directory save response is not retried automatically. Bulk records `saving` before the save, checkpoints Chrome `downloadId` as soon as it is returned, and checks `downloads.search` after worker recovery. A save whose outcome cannot be proved becomes `ambiguous_save`, remains visible, and is excluded from automatic and failed-track retries. Confirmed saves retain their result if blob cleanup fails. Jobs with some failures end as `completed_with_errors`.
 - M2: audio, playlist and cover responses are read by a bounded stream reader. It checks headers and counts chunks before concatenation. HLS workers share a 128 MiB segment budget. Covers are limited to 5 MiB. WAV size and a combined compressed/decoded/rendered/WAV estimate are checked before the final WAV allocation. `memory_budget_exceeded` stays typed through transformed export.
 
+## Continuation on the 2026.10.5 checkout
+
+- M1 recovery now keeps a known Chrome `downloadId` in `saving` while Chrome reports `in_progress`. It subscribes to `downloads.onChanged` before searching, then marks the track `done` or `failed` when Chrome reports `complete` or `interrupted`. A missing result, search error, or five-minute wait becomes `ambiguous_save`; it never starts another file for that track automatically.
+- Reproduced the prior failure with a state-machine test: recovery immediately changed an active download from `saving` to `ambiguous_save`. The same test now passes, including completion and interruption events with zero repeated track executions. `npm test` passed 41 verifications and `git diff --check` passed. `npm run test:e2e:download` passed outside the macOS sandbox with browser fixtures for offscreen, Chrome Downloads, selected folder and fallback. The recovery event itself remains source-level fixture evidence; browser worker suspension timing and the exact ZIP are not yet demonstrated.
+
 ## Evidence
 
 - Local: `npm test` passed 41 verifications. Added tests for concurrent duplicate offscreen builds/saves, interrupted bulk recovery, Chrome ID reconciliation, unbounded chunked bodies, and synthetic large WAV output.

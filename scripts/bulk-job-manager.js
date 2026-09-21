@@ -1,5 +1,6 @@
 const SESSION_KEY = "scdl_active_job";
 const KEEPALIVE_ALARM = "scdl_bulk_keepalive";
+const RECOVER_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 // Keep audio assembly sequential. Two decoded/combined tracks can exhaust memory
 // on Chromebooks and other constrained devices even when network concurrency is safe.
 const MAX_IN_FLIGHT = 1;
@@ -467,6 +468,33 @@ async function recordAmbiguousSave(jobId, trackIndex, title, errorMessage) {
     job.failed = [...(job.failed || []), { index: trackIndex + 1, title: title || "Unknown track", error: errorMessage, ambiguous: true }];
     syncJobCountersFromTrackStatus(job);
     job.currentTrackStatus = `Check folder: ${title || "Unknown track"}`;
+  });
+}
+
+function waitForStartedDownload(downloadId) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (state) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      chrome.downloads.onChanged.removeListener(onChanged);
+      resolve(state);
+    };
+    const onChanged = (delta) => {
+      if (delta.id === downloadId && ["complete", "interrupted"].includes(delta.state?.current)) {
+        finish(delta.state.current);
+      }
+    };
+    const timeoutId = setTimeout(() => finish("unknown"), RECOVER_DOWNLOAD_TIMEOUT_MS);
+    chrome.downloads.onChanged.addListener(onChanged);
+    // Subscribe before searching so a completion between these steps is not missed.
+    chrome.downloads.search({ id: downloadId })
+      .then((items) => {
+        const state = items?.[0]?.state;
+        if (state !== "in_progress") finish(state || "unknown");
+      })
+      .catch(() => finish("unknown"));
   });
 }
 
@@ -948,12 +976,12 @@ const BulkJobManager = {
       if (job.trackStatus[index] === TRACK_STATUS.SAVING) {
         const downloadId = job.downloadIds?.[index];
         if (downloadId) {
-          const items = await chrome.downloads.search({ id: downloadId }).catch(() => []);
-          if (items?.[0]?.state === "complete") {
+          const state = await waitForStartedDownload(downloadId);
+          if (state === "complete") {
             await recordTrackSuccess(job.id, index);
             continue;
           }
-          if (items?.[0]?.state === "interrupted") {
+          if (state === "interrupted") {
             await recordTrackFailure(job.id, index, job.tracks[index]?.title,
               "Chrome interrupted the download.");
             continue;

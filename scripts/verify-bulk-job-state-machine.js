@@ -19,6 +19,8 @@ function createHarness(options = {}) {
   const releases = [];
   const starts = [];
   const effects = { create: 0, close: 0, notifications: 0, abort: 0 };
+  const downloadListeners = new Set();
+  const downloadStates = new Map(Object.entries(options.downloadStates || {}).map(([id, state]) => [Number(id), state]));
 
   const execution = {
     async execute(request) {
@@ -93,7 +95,13 @@ function createHarness(options = {}) {
           callback();
         },
       },
-      downloads: { search: async ({ id }) => [{ id, state: options.downloadState || "complete" }] },
+      downloads: {
+        search: async ({ id }) => [{ id, state: downloadStates.get(id) || options.downloadState || "complete" }],
+        onChanged: {
+          addListener(listener) { downloadListeners.add(listener); },
+          removeListener(listener) { downloadListeners.delete(listener); },
+        },
+      },
       offscreen: {
         createDocument: async () => {
           effects.create += 1;
@@ -115,6 +123,10 @@ function createHarness(options = {}) {
     releaseAll() { releases.splice(0).forEach((resolve) => resolve()); },
     setAutomatic(value) { automatic = value; },
     setFailIds(ids) { failIds = new Set(ids); },
+    setDownloadState(id, state) {
+      downloadStates.set(id, state);
+      for (const listener of downloadListeners) listener({ id, state: { current: state } });
+    },
   };
 }
 
@@ -231,6 +243,32 @@ async function waitFor(predicate, label, timeout = 3000) {
   assert.deepEqual(chromeSaved.starts, []);
   assert.equal(chromeSaved.job.completed, 2);
   assert.equal(chromeSaved.job.failed.length, 0);
+
+  const chromeInProgress = createHarness({ storedJob: {
+    ...recoveredJob, id: "chrome-in-progress", trackStatus: ["saving", "done"],
+    downloadIds: { 0: 43 }, completed: 1, currentIndex: 2,
+  }, downloadStates: { 43: "in_progress" } });
+  const pendingRecovery = chromeInProgress.manager.recoverRunningJob();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(chromeInProgress.job.trackStatus[0], "saving");
+  assert.deepEqual(chromeInProgress.starts, [], "Recovery restarted an active Chrome download");
+  chromeInProgress.setDownloadState(43, "complete");
+  await pendingRecovery;
+  await waitFor(() => chromeInProgress.job?.status === "completed", "active Chrome save recovery");
+  assert.deepEqual(chromeInProgress.starts, []);
+  assert.equal(chromeInProgress.job.completed, 2);
+
+  const chromeInterrupted = createHarness({ storedJob: {
+    ...recoveredJob, id: "chrome-interrupted", trackStatus: ["saving", "done"],
+    downloadIds: { 0: 44 }, completed: 1, currentIndex: 2,
+  }, downloadStates: { 44: "in_progress" } });
+  const interruptedRecovery = chromeInterrupted.manager.recoverRunningJob();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  chromeInterrupted.setDownloadState(44, "interrupted");
+  await interruptedRecovery;
+  await waitFor(() => chromeInterrupted.job?.status === "completed_with_errors", "interrupted Chrome save recovery");
+  assert.deepEqual(chromeInterrupted.starts, []);
+  assert.equal(chromeInterrupted.job.trackStatus[0], "failed");
 
   const concurrent = createHarness({ automatic: false });
   const concurrentStarts = await Promise.allSettled([
