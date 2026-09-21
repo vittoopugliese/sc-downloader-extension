@@ -11,6 +11,7 @@ importScripts(
   "download-source.js",
   "download-destination.js",
   "track-download-execution.js",
+  "bulk-library.js",
   "bulk-job-manager.js",
   "soundcloud-likes-source.js",
   "likes-library.js",

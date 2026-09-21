@@ -7,6 +7,7 @@
     "test": "node scripts/run-verifications.js",
     "test:e2e": "node scripts/verify-loop-browser.js",
     "test:e2e:likes": "node scripts/likes-explorer.browser-test.js",
+    "test:e2e:bulk-store": "node scripts/bulk-library.browser-test.js",
     "test:e2e:download": "node scripts/verify-download-browser.js",
     "test:e2e:popup": "node scripts/verify-popup-browser.js && node scripts/verify-popup-unsupported-page.js",
     "test:e2e:feedback": "node scripts/verify-uninstall-feedback-browser.js",
