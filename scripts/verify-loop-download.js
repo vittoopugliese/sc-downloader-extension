@@ -5,6 +5,7 @@ const vm = require("node:vm");
 
 let fetchCount = 0;
 let decoderClosed = false;
+let decodeSampleRate = 48000;
 const decodedAudio = {
   sampleRate: 4,
   numberOfChannels: 1,
@@ -16,6 +17,10 @@ const decodedAudio = {
 };
 
 class FakeAudioContext {
+  constructor() {
+    this.sampleRate = decodeSampleRate;
+  }
+
   async decodeAudioData(input) {
     assert.equal(input.byteLength, 4);
     return decodedAudio;
@@ -73,6 +78,7 @@ const download = vm.runInContext("SCDownload", context);
     {
       artist: "Artist",
       title: "Track",
+      durationMs: 10 * 60 * 1000,
       streamProtocol: "progressive",
       streamMimeType: "audio/mpeg",
     },
@@ -153,6 +159,16 @@ const download = vm.runInContext("SCDownload", context);
     /selected loop range is invalid/
   );
   assert.equal(fetchCount, 3, "Invalid ranges must fail before downloading audio");
+
+  decodeSampleRate = 96000;
+  await assert.rejects(download.buildTrackBlob(
+    "https://example.com/audio.mp3",
+    { durationMs: 10 * 60 * 1000, streamProtocol: "progressive" },
+    undefined,
+    undefined,
+    { startMs: 1000, endMs: 2000 }
+  ), (error) => error.code === "memory_budget_exceeded");
+  decodeSampleRate = 48000;
 
   Object.assign(decodedAudio, { sampleRate: 48000, numberOfChannels: 2,
     length: 48000 * 600, duration: 600 });

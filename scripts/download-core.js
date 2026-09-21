@@ -9,6 +9,8 @@ const SCDownload = (() => {
   const MAX_DECODED_PCM_BYTES = 256 * 1024 * 1024;
   const MAX_WAV_BYTES = 128 * 1024 * 1024;
   const MAX_WORKING_BYTES = 384 * 1024 * 1024;
+  const DEFAULT_DECODE_SAMPLE_RATE = 48000;
+  const EXPECTED_DECODE_CHANNELS = 2;
 
   function memoryError() {
     const error = new Error("This audio is too large to process safely in the browser.");
@@ -16,10 +18,15 @@ const SCDownload = (() => {
     return error;
   }
 
-  function checkDecodeBudget(trackData, decoded) {
+  function checkDecodeBudget(trackData, decoded, decodeSampleRate = null) {
     const durationMs = Number(trackData?.durationMs);
+    const sampleRate = Number(decodeSampleRate);
     if (!decoded && Number.isFinite(durationMs) && durationMs > 0 &&
-        durationMs / 1000 * 96000 * 2 * 4 > MAX_DECODED_PCM_BYTES) throw memoryError();
+        durationMs / 1000 * (
+          Number.isFinite(sampleRate) && sampleRate > 0
+            ? sampleRate
+            : DEFAULT_DECODE_SAMPLE_RATE
+        ) * EXPECTED_DECODE_CHANNELS * 4 > MAX_DECODED_PCM_BYTES) throw memoryError();
     if (decoded && (!Number.isSafeInteger(decoded.length) ||
         decoded.length * decoded.numberOfChannels * 4 > MAX_DECODED_PCM_BYTES)) throw memoryError();
   }
@@ -531,9 +538,11 @@ const SCDownload = (() => {
     }
 
     onProgress?.("Decoding audio...");
-    checkDecodeBudget(trackData);
     const audioContext = new AudioContextConstructor();
     try {
+      // decodeAudioData resamples into the context's sample rate. Validate the
+      // actual rate before decoding so high-rate output devices remain bounded.
+      checkDecodeBudget(trackData, null, audioContext.sampleRate);
       const sourceBuffer =
         buffer instanceof ArrayBuffer
           ? buffer.slice(0)
@@ -611,9 +620,9 @@ const SCDownload = (() => {
     }
 
     onProgress?.("Decoding audio...");
-    checkDecodeBudget(trackData);
     const audioContext = new AudioContextConstructor();
     try {
+      checkDecodeBudget(trackData, null, audioContext.sampleRate);
       const sourceBuffer =
         buffer instanceof ArrayBuffer
           ? buffer.slice(0)
