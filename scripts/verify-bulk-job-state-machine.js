@@ -23,12 +23,13 @@ function createHarness(options = {}) {
   const effects = { create: 0, close: 0, notifications: 0, abort: 0 };
   const downloadListeners = new Set();
   const downloadStates = new Map(Object.entries(options.downloadStates || {}).map(([id, state]) => [Number(id), state]));
+  const bulkPageCalls = [];
 
   const bulkLibrary = {
     async createJob(spec) {
       const job = { jobId: spec.jobId, status: "enumerating", epoch: 0, revision: 0,
         eligible: 0, saved: 0, failed: 0, remaining: 0, createdAt: spec.createdAt || Date.now(),
-        recentFailures: [] };
+        recentFailures: [], requestedLimit: spec.requestedLimit ?? null, nextCursor: spec.initialCursor ?? null };
       durableJobs.set(job.jobId, job);
       durableTracks.set(job.jobId, []);
       return clone(job);
@@ -36,12 +37,14 @@ function createHarness(options = {}) {
     async commitPage(jobId, page) {
       const job = durableJobs.get(jobId);
       const records = durableTracks.get(jobId);
-      for (const item of page.items) records.push({ jobId, index: records.length, trackId: item.trackId,
+      const allowed = job.requestedLimit == null ? page.items : page.items.slice(0, Math.max(0, job.requestedLimit - records.length));
+      for (const item of allowed) records.push({ jobId, index: records.length, trackId: item.trackId,
         track: clone(item.track), state: "pending", attempts: 0, downloadId: null, error: null });
       job.eligible = records.length;
       job.remaining = records.length;
-      if (page.done) job.status = "ready";
-      return { job: clone(job), inserted: page.items.length };
+      job.nextCursor = page.nextCursor;
+      if (page.done || page.nextCursor == null || (job.requestedLimit != null && job.eligible >= job.requestedLimit)) job.status = "ready";
+      return { job: clone(job), inserted: allowed.length };
     },
     async getJob(jobId) { return clone(durableJobs.get(jobId) || null); },
     async getTrack(jobId, index) { return clone(durableTracks.get(jobId)?.[index] || null); },
@@ -134,6 +137,7 @@ function createHarness(options = {}) {
     SCDownloadTrack: {
       migrate: (track) => ({ ...track, artworkUrl: track.artworkUrl || track.coverUrl || null }),
       toDurable: (track, album) => ({ ...track, album: track.album || album || null }),
+      canDownload: (track) => Boolean(track?.streamUrl),
     },
     SCDownloadSource: { resolve: async (trackData) => ({ trackData, streamUrl: trackData.streamUrl }) },
     SCDownloadDestination: {
@@ -151,6 +155,16 @@ function createHarness(options = {}) {
         getURL: (value) => `chrome-extension://test/${value}`,
         getContexts: async () => offscreenExists ? [{ contextType: "OFFSCREEN_DOCUMENT" }] : [],
         sendMessage: async () => ({ success: true }),
+      },
+      tabs: {
+        sendMessage(_tabId, message, _options, callback) {
+          bulkPageCalls.push(message.cursor ?? null);
+          const key = message.cursor ?? "first";
+          const page = options.bulkPages?.[key];
+          setTimeout(() => callback(page
+            ? { success: true, page: clone(page) }
+            : { success: false, code: "stale_context", error: "Missing bulk fixture page." }), 0);
+        },
       },
       storage: {
         session: {
@@ -191,6 +205,7 @@ function createHarness(options = {}) {
     manager: vm.runInContext("BulkJobManager", context),
     updateTrackProgress: vm.runInContext("updateTrackProgress", context),
     starts,
+    bulkPageCalls,
     effects,
     get maxActive() { return maxActive; },
     get job() {
@@ -395,6 +410,24 @@ async function waitFor(predicate, label, timeout = 3000) {
   assert.equal(simultaneousSingles.length, 2);
   assert.equal(offscreenRace.effects.create, 1, "Concurrent downloads created two offscreen documents");
   assert.equal(offscreenRace.maxActive, 1, "Concurrent single downloads were not serialized");
+
+  const paged = createHarness({ bulkPages: {
+    first: { items: tracks(2), enumerated: 2, nextCursor: "page-2", done: false },
+    "page-2": { items: tracks(1).map(track => ({ ...track, id: 3, title: "Track 3" })), enumerated: 1, nextCursor: null, done: true },
+  } });
+  await paged.manager.createPagedJob(7, { kind: "user_tracks", title: "Paged set", pageUrl: "https://soundcloud.com/a/tracks" });
+  await waitFor(() => paged.job?.status === "completed", "paged collection job");
+  assert.deepEqual(paged.bulkPageCalls, [null, "page-2"]);
+  assert.deepEqual(paged.starts, [1, 2, 3]);
+  assert.equal(Object.hasOwn(paged.session, "tracks"), false);
+
+  const limited = createHarness({ bulkPages: {
+    first: { items: tracks(3), enumerated: 3, nextCursor: "unused", done: false },
+  } });
+  await limited.manager.createPagedJob(8, { kind: "playlist", title: "Limited set" }, 2);
+  await waitFor(() => limited.job?.status === "completed", "limited paged job");
+  assert.deepEqual(limited.bulkPageCalls, [null]);
+  assert.deepEqual(limited.starts, [1, 2]);
   console.log("Bulk job state machine verification passed.");
 })().catch((error) => {
   console.error(error);

@@ -759,6 +759,90 @@ const SCPageIntake = (() => {
       return tracks;
     }
 
+    function checkedBulkCursor(value, kind, userId) {
+      if (value == null) return null;
+      if (kind === "playlist") {
+        const match = /^playlist:(\d+)$/.exec(value);
+        if (!match) throw Object.assign(new Error("Playlist cursor is invalid."), { code: "invalid_cursor" });
+        return Number(match[1]);
+      }
+      const url = new URL(value);
+      const path = kind === "likes" ? `/users/${userId}/likes` : `/users/${userId}/tracks`;
+      if (url.origin !== "https://api-v2.soundcloud.com" || url.pathname !== path || url.username || url.password) {
+        throw Object.assign(new Error("SoundCloud cursor is invalid."), { code: "invalid_cursor" });
+      }
+      return url;
+    }
+
+    async function bulkPage(cursor = null, pageSize = USER_TRACKS_PAGE_SIZE, expectedPageUrl = null) {
+      if (!bulkContext || bulkContext.pageUrl !== currentUrl() ||
+          (expectedPageUrl && normalizeUrl(expectedPageUrl) !== bulkContext.pageUrl)) {
+        throw Object.assign(new Error("Bulk download context changed."), { code: "stale_context" });
+      }
+      const signal = activeExtractionController?.signal;
+      const size = Math.min(USER_TRACKS_PAGE_SIZE, Math.max(1, Number(pageSize) || USER_TRACKS_PAGE_SIZE));
+      formatPreference = await selector.getStoredFormatPreference();
+
+      if (bulkContext.kind === "playlist") {
+        const offset = checkedBulkCursor(cursor, "playlist") || 0;
+        const entries = bulkContext.orderedEntries.slice(offset, offset + size);
+        const tracks = await playlistTracks(entries, bulkContext.clientId, bulkContext.pageUrl, null, {}, signal);
+        const nextOffset = offset + entries.length;
+        return {
+          items: tracks,
+          enumerated: entries.length,
+          skipped: { unavailable: Math.max(0, entries.length - tracks.length) },
+          nextCursor: nextOffset < bulkContext.orderedEntries.length ? `playlist:${nextOffset}` : null,
+          done: nextOffset >= bulkContext.orderedEntries.length,
+        };
+      }
+
+      const kind = bulkContext.kind;
+      const userId = bulkContext.userId;
+      let next = checkedBulkCursor(cursor, kind, userId);
+      if (!next) {
+        next = new URL(`https://api-v2.soundcloud.com/users/${userId}/${kind === "likes" ? "likes" : "tracks"}`);
+        next.searchParams.set("limit", String(kind === "likes" ? LIKES_PAGE_SIZE : size));
+        next.searchParams.set("linked_partitioning", "1");
+      }
+      next.searchParams.set("client_id", bulkContext.clientId);
+
+      let page;
+      if (kind === "likes" && bulkContext.authenticated) {
+        const response = await runtime.sendMessage({
+          type: "GET_AUTH_LIKES_PAGE",
+          userId,
+          clientId: bulkContext.clientId,
+          nextHref: next.toString(),
+        });
+        if (!response?.success) {
+          const error = new Error(response?.error || "Could not load your SoundCloud likes.");
+          error.code = response?.code || "network_error";
+          error.retryAt = response?.retryAt;
+          throw error;
+        }
+        page = { collection: response.page.collection, next_href: response.page.nextHref };
+      } else {
+        page = kind === "likes"
+          ? await soundCloudHttp.json(next, { label: "Failed to fetch user likes", signal })
+          : await userTracksPage(next, bulkContext.clientId, { signal });
+      }
+      const values = Array.isArray(page) ? page : page.collection || [];
+      const rawTracks = kind === "likes" ? values.map(item => item?.track) : values;
+      const tracks = rawTracks.filter(value => value?.id && value.title)
+        .map(value => toTrack(value, bulkContext.clientId, bulkContext.pageUrl));
+      const nextHref = Array.isArray(page) ? null : page.next_href;
+      const checkedNext = nextHref ? checkedBulkCursor(nextHref, kind, userId) : null;
+      checkedNext?.searchParams.set("client_id", bulkContext.clientId);
+      return {
+        items: tracks,
+        enumerated: values.length,
+        skipped: { unavailable: Math.max(0, values.length - tracks.length) },
+        nextCursor: checkedNext?.toString() || null,
+        done: !checkedNext,
+      };
+    }
+
     function selectionProjection(tracks) {
       const width = String(tracks.length).length;
       return tracks.map((value, index) => ({
@@ -834,6 +918,7 @@ const SCPageIntake = (() => {
       getCollection: () => currentCollection,
       resolvePlayerTrack,
       resolveBulk,
+      bulkPage,
       selectionList,
       tracksByIds,
       resolveClientId: () => resolveClientId(doc.documentElement?.innerHTML || ""),

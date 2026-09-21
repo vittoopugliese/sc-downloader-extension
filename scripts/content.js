@@ -189,6 +189,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.type === "GET_BULK_PAGE") {
+    intake
+      .bulkPage(request.cursor ?? null, request.pageSize, request.sourceUrl)
+      .then((page) => sendResponse({ success: true, page }))
+      .catch((error) => sendResponse({
+        success: false,
+        error: error?.message || "Could not load the collection page.",
+        code: error?.code || "network_error",
+        retryAt: error?.retryAt || null,
+      }));
+    return true;
+  }
+
   if (request.type === "GET_BULK_SELECTION_LIST") {
     intake
       .selectionList({

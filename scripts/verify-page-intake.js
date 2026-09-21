@@ -126,6 +126,16 @@ function harness(pageUrl, hydration, api, runtimeReply, overrides = {}) {
     [2, 1]
   );
   assert.equal((await playlist.intake.resolveBulk(1)).length, 1);
+  const playlistPage1 = await playlist.intake.bulkPage(null, 1);
+  const playlistPage2 = await playlist.intake.bulkPage(playlistPage1.nextCursor, 1);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify([playlistPage1.items[0].id, playlistPage2.items[0].id])),
+    [1, 2]
+  );
+  assert.equal(playlistPage1.nextCursor, "playlist:1");
+  assert.equal(playlistPage2.nextCursor, null);
+  assert.equal(playlistPage2.done, true);
+  await assert.rejects(playlist.intake.bulkPage("playlist:bad", 1), error => error.code === "invalid_cursor");
 
   const publicLikes = harness(
     "https://soundcloud.com/listener/likes",

@@ -451,7 +451,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    if (jobStatus?.job && ["completed", "completed_with_errors", "cancelled", "failed"].includes(jobStatus.job.status)) {
+    if (jobStatus?.job && ["completed", "completed_with_errors", "cancelled", "failed", "partial"].includes(jobStatus.job.status)) {
       activeBulkJob = jobStatus.job;
       renderBulkJobSummary(jobStatus.job);
     }
@@ -1341,18 +1341,11 @@ function attachDownloadListener() {
 
       try {
         await ensureDownloadDestinationPermission();
-        const bulkResult = await requestBulkTracks(limit);
-
-        if (!bulkResult?.success || !bulkResult.tracks?.length) {
-          setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-          alert(bulkResult?.error || t("no_downloadable_tracks"));
-          return;
-        }
-
-        const startResult = await popupDownloadIntent.downloadCollection(
-          bulkResult.tracks,
+        const startResult = await popupDownloadIntent.downloadPagedCollection(
+          activeTabId,
           currentPlaylistData,
           {
+            limit,
             formatPreference: await getFormatPreference(),
             downloadDestination: currentDownloadDestination,
           }

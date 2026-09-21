@@ -89,6 +89,7 @@ function errorResponse(error, fallback = t("download_failed")) {
     error: error?.message || fallback,
     code: error?.code || "unknown_error",
     status: error?.status,
+    retryAt: error?.retryAt,
   };
 }
 
@@ -205,7 +206,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (['GET_LIKES_LIBRARY_STATUS','START_LIKES_INDEX','REFRESH_LIKES_LIBRARY','CANCEL_LIKES_INDEX','QUERY_LIKES','SAVE_LIKES_VIEW','OPEN_LIKED_TRACK','LOCATE_LIKED_TRACK','START_LIKES_ARTWORK','PAUSE_LIKES_ARTWORK','GET_LIKES_ARTWORK','DELETE_LIKES_ARTWORK','DELETE_LIKES_LIBRARY','GET_LIKES_DOWNLOAD_SELECTION'].includes(request.type)) {
     return respond(likesJobs.handle(request, sender), sendResponse);
   }
-  if (request.type === "BULK_JOB_UPDATE" && ["completed", "completed_with_errors", "failed", "cancelled"].includes(request.job?.status)) {
+  if (request.type === "BULK_JOB_UPDATE" && ["completed", "completed_with_errors", "failed", "cancelled", "partial"].includes(request.job?.status)) {
     playerToolsCommerce.track("download_job_completed", {
       type: "bulk", count: Number.isSafeInteger(request.job.completed) ? request.job.completed : 0,
       result: request.job.status,
@@ -395,6 +396,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       request.tracks,
       request.playlistTitle,
       request.playlistMeta || {},
+      request.formatPreference || "auto",
+      request.downloadDestination ?? null
+    )
+      .then((job) => sendResponse({ success: true, job }))
+      .catch((error) => sendResponse(errorResponse(error)));
+    return true;
+  }
+
+  if (request.type === "START_PAGED_BULK_JOB") {
+    BulkJobManager.createPagedJob(
+      request.tabId,
+      request.collection,
+      request.requestedLimit ?? null,
       request.formatPreference || "auto",
       request.downloadDestination ?? null
     )

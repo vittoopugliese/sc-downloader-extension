@@ -39,6 +39,10 @@ const intent = create({
   assert.equal(messages[1].type, "START_BULK_JOB");
   assert.equal(messages[1].playlistMeta.artworkUrl, "cover");
   assert.equal(messages[1].formatPreference, "opus");
+  await intent.downloadPagedCollection(17, { kind: "likes", title: "Likes", pageUrl: "https://soundcloud.com/a/likes" }, { limit: 50 });
+  assert.equal(messages[2].type, "START_PAGED_BULK_JOB");
+  assert.equal(messages[2].tabId, 17);
+  assert.equal(messages[2].requestedLimit, 50);
   await assert.rejects(intent.downloadTrack({ id: 3 }), /No downloadable stream/);
   console.log("Download intent verification passed.");
 })().catch((error) => {

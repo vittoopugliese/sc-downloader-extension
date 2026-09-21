@@ -47,7 +47,32 @@ const SCDownloadIntent = (() => {
       });
     }
 
-    return { downloadTrack, downloadCollection };
+    async function downloadPagedCollection(tabId, collection, options = {}) {
+      if (!Number.isInteger(tabId) || !collection?.title) {
+        throw new Error("Collection information is unavailable.");
+      }
+      return send({
+        type: "START_PAGED_BULK_JOB",
+        tabId,
+        collection: {
+          kind: collection.kind || "collection",
+          title: collection.title,
+          sourceUserId: collection.sourceUserId || null,
+          sourceUrl: collection.sourceUrl || null,
+          pageUrl: collection.pageUrl || null,
+          clientId: collection.clientId || null,
+          artworkUrl: collection.artworkUrl || null,
+          artist: collection.artist || null,
+          artistImageUrl: collection.artistImageUrl || null,
+          artistUrl: collection.artistUrl || null,
+        },
+        requestedLimit: options.limit ?? null,
+        formatPreference: options.formatPreference || "auto",
+        downloadDestination: options.downloadDestination ?? null,
+      });
+    }
+
+    return { downloadTrack, downloadCollection, downloadPagedCollection };
   }
 
   function isJobAlreadyRunning(error) {
