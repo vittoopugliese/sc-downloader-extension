@@ -29,6 +29,7 @@ const iconDataUrls = Object.fromEntries(
     const html = fs.readFileSync(path.resolve(__dirname, "..", "popup.html"), "utf8")
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
     await page.setContent(html);
+    await page.addScriptTag({ path: path.join(__dirname, "fast-tooltips.js") });
     await page.evaluate(({ logoUrl, playerToolsUrl, likesExplorerUrl, icons }) => {
       document.querySelector("#loadingOverlay").classList.add("is-hidden");
       document.querySelector("#title").textContent = "t t o r i o - Tracks";
@@ -50,6 +51,33 @@ const iconDataUrls = Object.fromEntries(
       const artwork = document.querySelector("#artwork");
       artwork.style.background = "linear-gradient(135deg, #6b2109, #173342)";
     }, { logoUrl: logoDataUrl, playerToolsUrl: playerToolsDataUrl, likesExplorerUrl: likesExplorerDataUrl, icons: iconDataUrls });
+    if (deviceScaleFactor === 1) {
+      const helpButton = page.locator("#helpBtn");
+      await helpButton.hover();
+      await page.waitForTimeout(130);
+      const helpTooltip = await helpButton.evaluate((button) => {
+        const tip = document.querySelector("#scdl-fast-tooltip");
+        const rect = tip.getBoundingClientRect();
+        return {
+          text: tip.textContent,
+          visible: tip.style.visibility,
+          titleRemoved: !button.hasAttribute("title"),
+          insideViewport: rect.top >= 0 && rect.left >= 0 && rect.right <= innerWidth,
+        };
+      });
+      assert.deepEqual(helpTooltip, {
+        text: "Help and settings", visible: "visible", titleRemoved: true, insideViewport: true,
+      }, "The top popup button must show its custom tooltip inside the viewport");
+      await page.mouse.move(425, 240);
+      assert.equal(await helpButton.getAttribute("title"), "Help and settings");
+      await helpButton.focus();
+      await page.waitForTimeout(130);
+      assert.equal(await page.locator("#scdl-fast-tooltip").textContent(), "Help and settings");
+      assert.equal(await page.locator("#scdl-fast-tooltip").evaluate((tip) => tip.style.visibility), "visible");
+      await page.locator("#downloadBtn").hover();
+      await page.waitForTimeout(130);
+      assert.equal(await page.locator("#scdl-fast-tooltip").textContent(), "Download");
+    }
     const dimensions = await page.evaluate(() => ({
       width: innerWidth,
       scrollWidth: document.documentElement.scrollWidth,

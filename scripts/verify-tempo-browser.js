@@ -55,6 +55,7 @@ async function main() {
   try {
     const page = await browser.newPage({ viewport: { width: 720, height: 420 } });
     page.on("pageerror", (error) => console.log("PAGE ERROR", error.message));
+    await page.addInitScript({ path: path.join(__dirname, "fast-tooltips.js") });
     await page.goto(`http://127.0.0.1:${port}`);
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-core.js"),
@@ -170,7 +171,12 @@ async function main() {
     // Hover opens after the intended dwell time, stays open while the pointer
     // is inside the panel, and closes when the pointer leaves it.
     await host.locator(".trigger").hover();
-    await page.waitForTimeout(220);
+    await page.waitForTimeout(130);
+    assert.deepEqual(await page.locator("#scdl-fast-tooltip").evaluate((tip) => ({
+      text: tip.textContent, visible: tip.style.visibility,
+    })), { text: "Playback speed 1.0x", visible: "visible" },
+    "The Player Tools trigger must show a custom tooltip from its aria-label");
+    await page.waitForTimeout(80);
     if (await panelIsOpen()) {
       throw new Error("Playback Speed panel opened before 254ms of hover.");
     }
@@ -193,6 +199,13 @@ async function main() {
     if (!(await panel.isVisible())) {
       throw new Error("Playback Speed panel did not open.");
     }
+    await page.mouse.move(10, 10);
+    await host.locator(".download-track-button").hover();
+    await page.waitForTimeout(130);
+    assert.deepEqual(await page.locator("#scdl-fast-tooltip").evaluate((tip) => ({
+      text: tip.textContent, visible: tip.style.visibility,
+    })), { text: "Download current playing", visible: "visible" },
+    "A Player Tools button in the shadow panel must show its custom tooltip");
     await page.mouse.move(10, 10);
     if (!(await panelIsOpen())) {
       throw new Error("Click-opened Playback Speed panel did not stay open after pointer leave.");
