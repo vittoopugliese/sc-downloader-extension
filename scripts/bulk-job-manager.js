@@ -49,6 +49,7 @@ let stateQueue = Promise.resolve();
 let singleDownloadQueue = Promise.resolve();
 let creatingOffscreenDocument = null;
 let singleDownloadsInFlight = 0;
+let legacyMigrationPromise = null;
 
 function withJobState(fn) {
   const run = stateQueue.then(fn);
@@ -100,76 +101,134 @@ function transitionJob(job, nextStatus, options = {}) {
   }
 }
 
-function syncJobCountersFromTrackStatus(job) {
-  if (!Array.isArray(job.trackStatus)) return;
-  job.completed = job.trackStatus.filter(
-    (status) => status === TRACK_STATUS.DONE
-  ).length;
-  job.currentIndex = job.trackStatus.reduce(
-    (max, status, index) =>
-      status === TRACK_STATUS.DONE || status === TRACK_STATUS.FAILED || status === TRACK_STATUS.AMBIGUOUS
-        ? Math.max(max, index + 1)
-        : max,
-    0
-  );
+const JOB_MUTABLE_FIELDS = Object.freeze([
+  "status", "playlistTitle", "folderName", "downloadDestination", "formatPreference",
+  "clientId", "currentIndex", "currentTrackTitle", "currentTrackStatus", "pausedAt",
+  "finishedAt", "error", "artworkUrl", "artist", "artistImageUrl", "artistUrl",
+]);
+
+async function persistJobSummary(job) {
+  await chrome.storage.session.set({
+    [SESSION_KEY]: {
+      version: 2,
+      activeJobId: job.jobId,
+      job: getPublicJobSnapshot(job),
+    },
+  });
 }
 
-function migrateJobTrackStatus(job) {
-  if (!job?.tracks?.length) return job;
-
-  job.tracks = job.tracks.map((track) =>
-    SCDownloadTrack.toDurable(track, job.playlistTitle)
-  );
-
-  if (job.trackStatus?.length === job.tracks.length) {
-    syncJobCountersFromTrackStatus(job);
-    return job;
-  }
-
-  const trackStatus = new Array(job.tracks.length).fill(null);
-
+function legacyTrackStatuses(job) {
+  if (job.trackStatus?.length === job.tracks.length) return job.trackStatus;
+  const states = new Array(job.tracks.length).fill("pending");
   for (const failure of job.failed || []) {
     const index = (failure.index || 0) - 1;
-    if (index >= 0 && index < trackStatus.length) {
-      trackStatus[index] = TRACK_STATUS.FAILED;
-    }
+    if (index >= 0 && index < states.length) states[index] = TRACK_STATUS.FAILED;
   }
-
-  let doneMarked = 0;
-  for (
-    let index = 0;
-    index < trackStatus.length && doneMarked < (job.completed || 0);
-    index += 1
-  ) {
-    if (trackStatus[index] === TRACK_STATUS.FAILED) continue;
-    trackStatus[index] = TRACK_STATUS.DONE;
-    doneMarked += 1;
+  let marked = 0;
+  for (let index = 0; index < states.length && marked < (job.completed || 0); index += 1) {
+    if (states[index] === TRACK_STATUS.FAILED) continue;
+    states[index] = TRACK_STATUS.DONE;
+    marked += 1;
   }
-
-  job.trackStatus = trackStatus;
-  syncJobCountersFromTrackStatus(job);
-  return job;
+  return states;
 }
 
-function getPendingTrackIndices(job) {
-  migrateJobTrackStatus(job);
-  return job.trackStatus
-    .map((status, index) => ({ status, index }))
-    .filter(
-      ({ status }) =>
-        status !== TRACK_STATUS.DONE && status !== TRACK_STATUS.FAILED && status !== TRACK_STATUS.AMBIGUOUS
-    )
-    .map(({ index }) => index);
+async function createStoredJob(jobId, tracks, metadata = {}, initialStates = null) {
+  const fallbackAlbum = metadata.playlistTitle || "Untitled playlist";
+  const durableTracks = tracks.map(track => SCDownloadTrack.toDurable(track, fallbackAlbum));
+  let created = await SCBulkLibrary.getJob(jobId);
+  if (!created) {
+    created = await SCBulkLibrary.createJob({
+      jobId,
+      sourceType: metadata.sourceType || "legacy_message",
+      mode: "limit",
+      requestedLimit: durableTracks.length,
+      createdAt: metadata.startedAt,
+    });
+  }
+  const pageSize = 500;
+  for (let offset = created.status === "enumerating" ? created.eligible : durableTracks.length;
+    offset < durableTracks.length; offset += pageSize) {
+    const page = durableTracks.slice(offset, offset + pageSize);
+    const nextOffset = offset + page.length;
+    await SCBulkLibrary.commitPage(jobId, {
+      epoch: created.epoch,
+      expectedCursor: offset === 0 ? null : `import:${offset}`,
+      nextCursor: nextOffset < durableTracks.length ? `import:${nextOffset}` : null,
+      done: nextOffset >= durableTracks.length,
+      enumerated: page.length,
+      items: page.map((track, index) => ({
+        trackId: `track:${String(track.id ?? "unknown").replace(/[^A-Za-z0-9:_-]/g, "_").slice(0, 90)}:${offset + index}`,
+        track,
+      })),
+    });
+  }
+  let stored = await SCBulkLibrary.updateJob(jobId, ["ready", metadata.status || JOB_STATUS.RUNNING], {
+    status: metadata.status || JOB_STATUS.RUNNING,
+    playlistTitle: metadata.playlistTitle || "Untitled playlist",
+    folderName: metadata.folderName || sanitizeFolderName(metadata.playlistTitle),
+    downloadDestination: metadata.downloadDestination || null,
+    formatPreference: metadata.formatPreference || "auto",
+    clientId: metadata.clientId || null,
+    currentIndex: metadata.currentIndex || 0,
+    currentTrackTitle: metadata.currentTrackTitle || null,
+    currentTrackStatus: metadata.currentTrackStatus || null,
+    pausedAt: metadata.pausedAt || null,
+    finishedAt: metadata.finishedAt || null,
+    error: metadata.error || null,
+    artworkUrl: metadata.artworkUrl || null,
+    artist: metadata.artist || null,
+    artistImageUrl: metadata.artistImageUrl || null,
+    artistUrl: metadata.artistUrl || null,
+    recentFailures: (metadata.failed || []).slice(-100),
+  });
+  if (!stored) stored = await SCBulkLibrary.getJob(jobId);
+  if (initialStates) {
+    for (let index = 0; index < initialStates.length; index += 1) {
+      const state = initialStates[index];
+      if (!state || state === "pending") continue;
+      const failure = (metadata.failed || []).find(value => value.index === index + 1);
+      const updated = await SCBulkLibrary.updateTrackState(jobId, index, state, {
+        downloadId: metadata.downloadIds?.[index],
+        error: failure?.error || null,
+      });
+      if (updated) stored = updated.job;
+    }
+  }
+  return stored;
 }
 
 async function loadJob() {
   const result = await chrome.storage.session.get(SESSION_KEY);
-  const job = result[SESSION_KEY] || null;
-  return job ? migrateJobTrackStatus(job) : null;
+  const session = result[SESSION_KEY] || null;
+  if (!session) return null;
+  if (Array.isArray(session.tracks)) {
+    if (!legacyMigrationPromise) {
+      legacyMigrationPromise = (async () => {
+        const migrated = await createStoredJob(
+          session.id,
+          session.tracks,
+          session,
+          legacyTrackStatuses(session)
+        );
+        await persistJobSummary(migrated);
+        return migrated;
+      })().catch(error => {
+        legacyMigrationPromise = null;
+        throw error;
+      });
+    }
+    return legacyMigrationPromise;
+  }
+  const jobId = session.activeJobId || session.job?.id;
+  return jobId ? SCBulkLibrary.getJob(jobId) : null;
 }
 
 async function saveJob(job) {
-  await chrome.storage.session.set({ [SESSION_KEY]: job });
+  const patch = Object.fromEntries(JOB_MUTABLE_FIELDS.map(key => [key, job[key]]));
+  const stored = await SCBulkLibrary.updateJob(job.jobId, null, patch);
+  if (stored) await persistJobSummary(stored);
+  return stored;
 }
 
 function getPublicJobSnapshot(job) {
@@ -177,25 +236,24 @@ function getPublicJobSnapshot(job) {
     return null;
   }
 
-  migrateJobTrackStatus(job);
-
   return {
-    id: job.id,
+    id: job.jobId,
     status: job.status,
     playlistTitle: job.playlistTitle,
     folderName: job.folderName,
     destinationName: job.downloadDestination?.name || null,
-    total: job.tracks.length,
-    currentIndex: job.currentIndex,
-    completed: job.completed,
-    failed: job.failed,
+    total: job.eligible,
+    currentIndex: job.currentIndex || 0,
+    completed: job.saved,
+    failed: job.recentFailures || [],
+    failedCount: job.failed,
     currentTrackTitle: job.currentTrackTitle || null,
     currentTrackStatus: job.currentTrackStatus || null,
     artworkUrl: job.artworkUrl || null,
     artist: job.artist || null,
     artistImageUrl: job.artistImageUrl || null,
     artistUrl: job.artistUrl || null,
-    startedAt: job.startedAt,
+    startedAt: job.startedAt || job.createdAt,
     finishedAt: job.finishedAt || null,
     error: job.error || null,
   };
@@ -206,7 +264,7 @@ async function mutateJob(jobId, options, change) {
     const job = await loadJob();
     if (
       !job ||
-      (jobId && job.id !== jobId) ||
+      (jobId && job.jobId !== jobId) ||
       (options.statuses && !options.statuses.includes(job.status))
     ) {
       return null;
@@ -214,10 +272,11 @@ async function mutateJob(jobId, options, change) {
 
     const changed = await change(job);
     if (changed === false) return job;
-    await saveJob(job);
-    if (options.badge !== false) await updateBadge(job);
-    if (options.broadcast !== false) broadcastJobUpdate(job);
-    return job;
+    const saved = await saveJob(job);
+    if (!saved) return null;
+    if (options.badge !== false) await updateBadge(saved);
+    if (options.broadcast !== false) broadcastJobUpdate(saved);
+    return saved;
   });
 }
 
@@ -233,9 +292,8 @@ async function updateBadge(job) {
     return;
   }
 
-  migrateJobTrackStatus(job);
-  const done = job.completed + job.failed.length;
-  const total = job.tracks.length;
+  const done = job.saved + job.failed;
+  const total = job.eligible;
   const text = total > 999 ? `${done}` : `${done}/${total}`;
   await chrome.action.setBadgeText({ text });
   await chrome.action.setBadgeBackgroundColor({ color: "#FF5500" });
@@ -262,18 +320,18 @@ async function notifyJobFinished(job) {
   let title = null;
   let message = null;
   if ([JOB_STATUS.COMPLETED, JOB_STATUS.COMPLETED_WITH_ERRORS].includes(job.status)) {
-    const failedCount = job.failed.length;
+    const failedCount = job.failed;
     const destination = job.downloadDestination?.name
       ? job.downloadDestination.name
       : `Downloads/${job.folderName}`;
     title = "Download complete";
     message =
       failedCount > 0
-        ? `${job.completed}/${job.tracks.length} tracks saved to ${destination}. ${failedCount} failed.`
-        : `${job.completed}/${job.tracks.length} tracks saved to ${destination}.`;
+        ? `${job.saved}/${job.eligible} tracks saved to ${destination}. ${failedCount} failed.`
+        : `${job.saved}/${job.eligible} tracks saved to ${destination}.`;
   } else if (job.status === JOB_STATUS.CANCELLED) {
     title = "Download cancelled";
-    message = `${job.completed} tracks were saved before cancellation.`;
+    message = `${job.saved} tracks were saved before cancellation.`;
   } else if (job.status === JOB_STATUS.FAILED) {
     title = "Download failed";
     message = job.error || "The bulk download could not be completed.";
@@ -423,50 +481,44 @@ async function updateTrackProgress(jobId, trackIndex, total, title, statusText) 
 }
 
 async function recordTrackSuccess(jobId, trackIndex) {
-  return mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, (job) => {
-    if (job.trackStatus[trackIndex] === TRACK_STATUS.DONE) {
-      return false;
-    }
-    job.trackStatus[trackIndex] = TRACK_STATUS.DONE;
-    syncJobCountersFromTrackStatus(job);
+  const result = await SCBulkLibrary.updateTrackState(jobId, trackIndex, TRACK_STATUS.DONE, {
+    expectedJobStatuses: ACTIVE_JOB_STATUSES,
+  });
+  if (!result || !isActiveJobStatus(result.job.status)) return null;
+  return mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, job => {
     job.currentTrackTitle = null;
-    job.currentTrackStatus = `Saved ${job.completed}/${job.tracks.length}`;
+    job.currentTrackStatus = `Saved ${result.job.saved}/${result.job.eligible}`;
   });
 }
 
 async function recordDownloadStarted(jobId, trackIndex, downloadId) {
-  return mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, (job) => {
-    job.downloadIds ||= {};
-    job.downloadIds[trackIndex] = downloadId;
-    job.trackStatus[trackIndex] = TRACK_STATUS.SAVING;
+  const result = await SCBulkLibrary.updateTrackState(jobId, trackIndex, TRACK_STATUS.SAVING, {
+    downloadId,
+    expectedJobStatuses: ACTIVE_JOB_STATUSES,
   });
+  if (result) await persistJobSummary(result.job);
+  return result?.job || null;
 }
 
 async function recordTrackFailure(jobId, trackIndex, title, errorMessage) {
-  return mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, (job) => {
-    if (job.trackStatus[trackIndex] === TRACK_STATUS.FAILED) {
-      return false;
-    }
-    job.trackStatus[trackIndex] = TRACK_STATUS.FAILED;
-    job.failed = [
-      ...(job.failed || []),
-      {
-        index: trackIndex + 1,
-        title: title || "Unknown track",
-        error: errorMessage || "Unknown error",
-      },
-    ];
-    syncJobCountersFromTrackStatus(job);
+  const result = await SCBulkLibrary.updateTrackState(jobId, trackIndex, TRACK_STATUS.FAILED, {
+    error: errorMessage || "Unknown error",
+    expectedJobStatuses: ACTIVE_JOB_STATUSES,
+  });
+  if (!result || !isActiveJobStatus(result.job.status)) return null;
+  return mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, job => {
     job.currentTrackStatus = `Failed: ${title || "Unknown track"}`;
   });
 }
 
 async function recordAmbiguousSave(jobId, trackIndex, title, errorMessage) {
-  return mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, (job) => {
-    if (job.trackStatus[trackIndex] !== TRACK_STATUS.SAVING) return false;
-    job.trackStatus[trackIndex] = TRACK_STATUS.AMBIGUOUS;
-    job.failed = [...(job.failed || []), { index: trackIndex + 1, title: title || "Unknown track", error: errorMessage, ambiguous: true }];
-    syncJobCountersFromTrackStatus(job);
+  const result = await SCBulkLibrary.updateTrackState(jobId, trackIndex, TRACK_STATUS.AMBIGUOUS, {
+    expectedStates: [TRACK_STATUS.SAVING],
+    expectedJobStatuses: ACTIVE_JOB_STATUSES,
+    error: errorMessage,
+  });
+  if (!result || !isActiveJobStatus(result.job.status)) return null;
+  return mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, job => {
     job.currentTrackStatus = `Check folder: ${title || "Unknown track"}`;
   });
 }
@@ -515,13 +567,15 @@ async function finalizeJob(jobId, status, error) {
 
 async function processTrack(jobId, trackIndex) {
   const job = await loadJob();
-  if (!job || job.id !== jobId) {
+  if (!job || job.jobId !== jobId) {
     return;
   }
 
-  const trackData = job.tracks[trackIndex];
+  const trackRecord = await SCBulkLibrary.getTrack(jobId, trackIndex);
+  if (!trackRecord || !["pending", TRACK_STATUS.SAVING].includes(trackRecord.state)) return;
+  const trackData = trackRecord.track;
   const trackNumber = trackIndex + 1;
-  const total = job.tracks.length;
+  const total = job.eligible;
 
   try {
     const result = await trackDownloadExecution.execute({
@@ -539,14 +593,14 @@ async function processTrack(jobId, trackIndex) {
         const currentJob = await loadJob();
         return (
           !currentJob ||
-          currentJob.id !== jobId ||
+          currentJob.jobId !== jobId ||
           jobControl.state === JOB_STATUS.CANCELLED
         );
       },
       onStage: async (stage) => {
         if (stage === "saving") {
-          await mutateJob(jobId, { statuses: ACTIVE_JOB_STATUSES }, (current) => {
-            current.trackStatus[trackIndex] = TRACK_STATUS.SAVING;
+          await SCBulkLibrary.updateTrackState(jobId, trackIndex, TRACK_STATUS.SAVING, {
+            expectedJobStatuses: ACTIVE_JOB_STATUSES,
           });
         }
         const statusByStage = {
@@ -603,11 +657,13 @@ async function runJobLoopInternal(jobId) {
   await ensureOffscreenDocument();
 
   let job = await loadJob();
-  if (!job || job.id !== jobId || !isActiveJobStatus(job.status)) {
+  if (!job || job.jobId !== jobId || !isActiveJobStatus(job.status)) {
     return;
   }
 
-  jobControl = { jobId, state: job.status };
+  if (jobControl.jobId !== jobId) {
+    jobControl = { jobId, state: job.status };
+  }
 
   const inFlight = new Map();
 
@@ -623,7 +679,7 @@ async function runJobLoopInternal(jobId) {
       }
 
       job = await loadJob();
-      if (!job || job.id !== jobId || job.status === JOB_STATUS.CANCELLED) {
+      if (!job || job.jobId !== jobId || job.status === JOB_STATUS.CANCELLED) {
         break;
       }
 
@@ -641,9 +697,9 @@ async function runJobLoopInternal(jobId) {
       }
 
       job = await loadJob();
-      const pending = getPendingTrackIndices(job).filter(
-        (trackIndex) => !inFlight.has(trackIndex)
-      );
+      const pending = (await SCBulkLibrary.getTracksByState(jobId, "pending", MAX_IN_FLIGHT + 1))
+        .map(record => record.index)
+        .filter(trackIndex => !inFlight.has(trackIndex));
 
       if (pending.length === 0) {
         if (inFlight.size === 0) {
@@ -666,7 +722,7 @@ async function runJobLoopInternal(jobId) {
     }
 
     job = await loadJob();
-    if (!job || job.id !== jobId) {
+    if (!job || job.jobId !== jobId) {
       return;
     }
 
@@ -679,15 +735,15 @@ async function runJobLoopInternal(jobId) {
 
     if (
       job.status === JOB_STATUS.RUNNING &&
-      getPendingTrackIndices(job).length === 0
+      (await SCBulkLibrary.getTracksByState(jobId, "pending", 1)).length === 0
     ) {
-      const finalStatus = job.completed > 0
-        ? job.failed.length ? JOB_STATUS.COMPLETED_WITH_ERRORS : JOB_STATUS.COMPLETED
+      const finalStatus = job.saved > 0
+        ? job.failed ? JOB_STATUS.COMPLETED_WITH_ERRORS : JOB_STATUS.COMPLETED
         : JOB_STATUS.FAILED;
       await finalizeJob(
         jobId,
         finalStatus,
-        job.completed > 0 ? null : "Could not download any tracks."
+        job.saved > 0 ? null : "Could not download any tracks."
       );
     }
   } catch (error) {
@@ -834,43 +890,38 @@ const BulkJobManager = {
         throw new Error("A track download is already in progress.");
       }
 
-      const fallbackAlbum = playlistTitle || "Untitled playlist";
       const collectionFolder = sanitizeFolderName(playlistTitle);
-      const job = {
-        id: `job_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const firstTrack = SCDownloadTrack.migrate(tracks[0]);
+      const job = await createStoredJob(jobId, tracks, {
         status: JOB_STATUS.RUNNING,
         playlistTitle: playlistTitle || "Untitled playlist",
         folderName: collectionFolder,
         downloadDestination: resolvedDestination,
         artworkUrl:
           playlistMeta.artworkUrl ||
-          SCDownloadTrack.migrate(tracks[0])?.artworkUrl ||
+          firstTrack?.artworkUrl ||
           null,
         artist: playlistMeta.artist || tracks[0]?.artist || null,
         artistImageUrl:
           playlistMeta.artistImageUrl || tracks[0]?.artistImageUrl || null,
         artistUrl: playlistMeta.artistUrl || tracks[0]?.artistUrl || null,
-        tracks: tracks.map((track) =>
-          SCDownloadTrack.toDurable(track, fallbackAlbum)
-        ),
         formatPreference: formatPreference || "auto",
-        trackStatus: new Array(tracks.length).fill(null),
         clientId: tracks[0]?.clientId || null,
         currentIndex: 0,
-        completed: 0,
         failed: [],
         currentTrackTitle: null,
         currentTrackStatus: null,
         startedAt: Date.now(),
         finishedAt: null,
         error: null,
-      };
+      });
 
-      await saveJob(job);
+      await persistJobSummary(job);
       await updateBadge(job);
       await startKeepalive();
-      jobControl = { jobId: job.id, state: JOB_STATUS.RUNNING };
-      runJobLoop(job.id);
+      jobControl = { jobId: job.jobId, state: JOB_STATUS.RUNNING };
+      runJobLoop(job.jobId);
 
       return getPublicJobSnapshot(job);
     });
@@ -888,7 +939,7 @@ const BulkJobManager = {
       { statuses: [JOB_STATUS.RUNNING] },
       (value) => {
         transitionJob(value, JOB_STATUS.PAUSED);
-        jobControl = { jobId: value.id, state: JOB_STATUS.PAUSED };
+        jobControl = { jobId: value.jobId, state: JOB_STATUS.PAUSED };
       }
     );
     if (!job) {
@@ -903,47 +954,40 @@ const BulkJobManager = {
       { statuses: [JOB_STATUS.PAUSED], broadcast: false },
       (value) => {
         transitionJob(value, JOB_STATUS.RUNNING);
-        jobControl = { jobId: value.id, state: JOB_STATUS.RUNNING };
+        jobControl = { jobId: value.jobId, state: JOB_STATUS.RUNNING };
       }
     );
     if (!job) {
       return { success: false, error: "No paused job to resume." };
     }
     await startKeepalive();
-    runJobLoop(job.id);
+    runJobLoop(job.jobId);
     broadcastJobUpdate(job);
     return { success: true, job: getPublicJobSnapshot(job) };
   },
 
   async retryFailedJob() {
-    const job = await mutateJob(
-      null,
-      { statuses: [JOB_STATUS.COMPLETED, JOB_STATUS.COMPLETED_WITH_ERRORS, JOB_STATUS.FAILED], broadcast: false },
-      (value) => {
-        if (!value.trackStatus.includes(TRACK_STATUS.FAILED)) return false;
-
-        value.trackStatus = value.trackStatus.map((status) =>
-          status === TRACK_STATUS.FAILED ? null : status
-        );
-        value.failed = value.failed.filter((failure) => failure.ambiguous);
-        transitionJob(value, JOB_STATUS.RUNNING);
-        value.finishedAt = null;
-        value.error = null;
-        value.currentTrackTitle = null;
-        value.currentTrackStatus = null;
-        syncJobCountersFromTrackStatus(value);
-        jobControl = { jobId: value.id, state: JOB_STATUS.RUNNING };
-      }
-    );
-    if (!job || !job.trackStatus.includes(null)) {
+    const current = await loadJob();
+    if (!current || ![JOB_STATUS.COMPLETED, JOB_STATUS.COMPLETED_WITH_ERRORS, JOB_STATUS.FAILED].includes(current.status)) {
       return { success: false, error: "No failed tracks are available to retry." };
     }
+    const retried = await SCBulkLibrary.retryFailed(current.jobId);
+    if (!retried?.reset) return { success: false, error: "No failed tracks are available to retry." };
+    const job = await SCBulkLibrary.updateJob(current.jobId, [current.status], {
+      status: JOB_STATUS.RUNNING,
+      finishedAt: null,
+      error: null,
+      currentTrackTitle: null,
+      currentTrackStatus: null,
+    });
+    jobControl = { jobId: job.jobId, state: JOB_STATUS.RUNNING };
+    await persistJobSummary(job);
 
-    if (activeLoopPromise && activeLoopJobId === job.id) {
+    if (activeLoopPromise && activeLoopJobId === job.jobId) {
       await activeLoopPromise;
     }
     await startKeepalive();
-    runJobLoop(job.id);
+    runJobLoop(job.jobId);
     broadcastJobUpdate(job);
     return { success: true, job: getPublicJobSnapshot(job) };
   },
@@ -954,7 +998,7 @@ const BulkJobManager = {
       { statuses: ACTIVE_JOB_STATUSES, badge: false, broadcast: false },
       (value) => {
         transitionJob(value, JOB_STATUS.CANCELLED);
-        jobControl = { jobId: value.id, state: JOB_STATUS.CANCELLED };
+        jobControl = { jobId: value.jobId, state: JOB_STATUS.CANCELLED };
       }
     );
     if (!job) {
@@ -972,29 +1016,29 @@ const BulkJobManager = {
       return;
     }
 
-    for (let index = 0; index < job.trackStatus.length; index += 1) {
-      if (job.trackStatus[index] === TRACK_STATUS.SAVING) {
-        const downloadId = job.downloadIds?.[index];
+    const saving = await SCBulkLibrary.getTracksByState(job.jobId, TRACK_STATUS.SAVING, 500);
+    for (const record of saving) {
+        const index = record.index;
+        const downloadId = record.downloadId;
         if (downloadId) {
           const state = await waitForStartedDownload(downloadId);
           if (state === "complete") {
-            await recordTrackSuccess(job.id, index);
+            await recordTrackSuccess(job.jobId, index);
             continue;
           }
           if (state === "interrupted") {
-            await recordTrackFailure(job.id, index, job.tracks[index]?.title,
+            await recordTrackFailure(job.jobId, index, record.track?.title,
               "Chrome interrupted the download.");
             continue;
           }
         }
-        await recordAmbiguousSave(job.id, index, job.tracks[index]?.title,
+        await recordAmbiguousSave(job.jobId, index, record.track?.title,
           "Save was interrupted. Check the destination before retrying.");
-      }
     }
     await updateBadge(await loadJob());
     await startKeepalive();
-    jobControl = { jobId: job.id, state: job.status };
-    runJobLoop(job.id);
+    jobControl = { jobId: job.jobId, state: job.status };
+    runJobLoop(job.jobId);
   },
 
   async ensureJobRunning() {
@@ -1003,7 +1047,7 @@ const BulkJobManager = {
       return;
     }
 
-    if (activeLoopPromise !== null && activeLoopJobId === job.id) {
+    if (activeLoopPromise !== null && activeLoopJobId === job.jobId) {
       await updateBadge(job);
       return;
     }

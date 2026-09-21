@@ -11,6 +11,8 @@ function clone(value) {
 
 function createHarness(options = {}) {
   let storedJob = clone(options.storedJob || null);
+  const durableJobs = new Map();
+  const durableTracks = new Map();
   let active = 0;
   let maxActive = 0;
   let automatic = options.automatic !== false;
@@ -21,6 +23,77 @@ function createHarness(options = {}) {
   const effects = { create: 0, close: 0, notifications: 0, abort: 0 };
   const downloadListeners = new Set();
   const downloadStates = new Map(Object.entries(options.downloadStates || {}).map(([id, state]) => [Number(id), state]));
+
+  const bulkLibrary = {
+    async createJob(spec) {
+      const job = { jobId: spec.jobId, status: "enumerating", epoch: 0, revision: 0,
+        eligible: 0, saved: 0, failed: 0, remaining: 0, createdAt: spec.createdAt || Date.now(),
+        recentFailures: [] };
+      durableJobs.set(job.jobId, job);
+      durableTracks.set(job.jobId, []);
+      return clone(job);
+    },
+    async commitPage(jobId, page) {
+      const job = durableJobs.get(jobId);
+      const records = durableTracks.get(jobId);
+      for (const item of page.items) records.push({ jobId, index: records.length, trackId: item.trackId,
+        track: clone(item.track), state: "pending", attempts: 0, downloadId: null, error: null });
+      job.eligible = records.length;
+      job.remaining = records.length;
+      if (page.done) job.status = "ready";
+      return { job: clone(job), inserted: page.items.length };
+    },
+    async getJob(jobId) { return clone(durableJobs.get(jobId) || null); },
+    async getTrack(jobId, index) { return clone(durableTracks.get(jobId)?.[index] || null); },
+    async getTracksByState(jobId, state, limit) {
+      return clone((durableTracks.get(jobId) || []).filter(record => record.state === state).slice(0, limit));
+    },
+    async updateJob(jobId, expected, patch) {
+      const job = durableJobs.get(jobId);
+      if (!job || (expected?.length && !expected.includes(job.status))) return null;
+      Object.assign(job, typeof patch === "function" ? await patch(clone(job)) : clone(patch));
+      job.revision += 1;
+      return clone(job);
+    },
+    async updateTrackState(jobId, index, state, detail = {}) {
+      const job = durableJobs.get(jobId);
+      const record = durableTracks.get(jobId)?.[index];
+      if (!job || !record || (detail.expectedStates?.length && !detail.expectedStates.includes(record.state))) return null;
+      if (detail.expectedJobStatuses?.length && !detail.expectedJobStatuses.includes(job.status)) return null;
+      if (record.state === "done") job.saved -= 1;
+      if (["failed", "ambiguous_save"].includes(record.state)) job.failed -= 1;
+      record.state = state;
+      if (detail.downloadId != null) record.downloadId = detail.downloadId;
+      if (Object.hasOwn(detail, "error")) record.error = detail.error;
+      if (state === "done") job.saved += 1;
+      if (["failed", "ambiguous_save"].includes(state)) {
+        job.failed += 1;
+        job.recentFailures = [...job.recentFailures.filter(value => value.index !== index + 1), {
+          index: index + 1, title: record.track.title, error: record.error || "Unknown error",
+          ...(state === "ambiguous_save" ? { ambiguous: true } : {}),
+        }];
+      } else if (["done", "pending"].includes(state)) {
+        job.recentFailures = job.recentFailures.filter(value => value.index !== index + 1);
+      }
+      job.remaining = Math.max(0, job.eligible - job.saved - job.failed);
+      job.currentIndex = Math.max(job.currentIndex || 0, ["done", "failed", "ambiguous_save"].includes(state) ? index + 1 : 0);
+      return { job: clone(job), track: clone(record) };
+    },
+    async retryFailed(jobId) {
+      const job = durableJobs.get(jobId);
+      let reset = 0;
+      for (const record of durableTracks.get(jobId) || []) {
+        if (record.state !== "failed") continue;
+        record.state = "pending";
+        record.error = null;
+        reset += 1;
+      }
+      job.failed -= reset;
+      job.remaining += reset;
+      job.recentFailures = job.recentFailures.filter(value => value.ambiguous);
+      return { job: clone(job), reset };
+    },
+  };
 
   const execution = {
     async execute(request) {
@@ -71,6 +144,7 @@ function createHarness(options = {}) {
     },
     SCTrackDownloadExecution: { create: () => execution },
     SCDownloadDirectory: { getCurrent: async () => null },
+    SCBulkLibrary: bulkLibrary,
     chrome: {
       runtime: {
         lastError: null,
@@ -119,7 +193,17 @@ function createHarness(options = {}) {
     starts,
     effects,
     get maxActive() { return maxActive; },
-    get job() { return clone(storedJob); },
+    get job() {
+      const jobId = storedJob?.activeJobId;
+      const durable = jobId && durableJobs.get(jobId);
+      if (!durable) return clone(storedJob);
+      const records = durableTracks.get(jobId) || [];
+      return clone({ ...durable, id: durable.jobId, tracks: records.map(value => value.track),
+        trackStatus: records.map(value => value.state === "pending" ? null : value.state),
+        downloadIds: Object.fromEntries(records.filter(value => value.downloadId != null).map(value => [value.index, value.downloadId])),
+        completed: durable.saved, failed: durable.recentFailures });
+    },
+    get session() { return clone(storedJob); },
     releaseAll() { releases.splice(0).forEach((resolve) => resolve()); },
     setAutomatic(value) { automatic = value; },
     setFailIds(ids) { failIds = new Set(ids); },
@@ -155,6 +239,8 @@ async function waitFor(predicate, label, timeout = 3000) {
   assert.equal(partial.job.status, "completed_with_errors");
   assert.equal(partial.job.completed, 2);
   assert.equal(partial.job.failed.length, 1);
+  assert.equal(Object.hasOwn(partial.session, "tracks"), false);
+  assert.equal(partial.session.version, 2);
   assert.equal(partial.maxActive, 1, "Bulk downloads must limit peak audio memory");
   assert.equal(partial.effects.notifications, 1);
   assert.equal(partial.effects.close, 1);

@@ -590,7 +590,7 @@ function renderBulkJobState(job) {
     const statusPrefix = job.status === "paused" ? t("paused") : t("downloading");
     downloadStatus.textContent =
       job.currentTrackStatus ||
-      t("job_progress", [statusPrefix, job.completed + job.failed.length, job.total]);
+      t("job_progress", [statusPrefix, job.completed + (job.failedCount ?? job.failed.length), job.total]);
     failedSummary.classList.remove("is-visible");
     failedSummary.textContent = "";
     failedDetails.classList.remove("is-visible");
@@ -621,8 +621,8 @@ function renderBulkJobSummary(job) {
     downloadStatus.textContent = job.error || DOWNLOAD_ERROR_STATUS;
   }
 
-  if (job.failed?.length) {
-    failedSummary.textContent = t("tracks_failed", job.failed.length);
+  if ((job.failedCount ?? job.failed?.length ?? 0) > 0) {
+    failedSummary.textContent = t("tracks_failed", job.failedCount ?? job.failed.length);
     failedSummary.classList.add("is-visible");
     failedDetails.replaceChildren(
       ...job.failed.map((failed) => {

@@ -108,6 +108,45 @@ const { chromium } = require('playwright');
     assert.equal(edgeCases.limitedTracks.length, 50);
     assert.equal(edgeCases.staleCode, 'stale_job');
 
+    const runner = await page.evaluate(async () => {
+      const item = id => ({ trackId: `runner-${id}`, track: { id, title: `Runner ${id}` } });
+      const created = await SCBulkLibrary.createJob({ jobId: 'runner-job', mode: 'limit', requestedLimit: 4 });
+      await SCBulkLibrary.commitPage(created.jobId, {
+        epoch: created.epoch, expectedCursor: null,
+        items: [item(1), item(2), item(3), item(4)], nextCursor: null, done: true,
+      });
+      await SCBulkLibrary.updateJob(created.jobId, ['ready'], { status: 'running', playlistTitle: 'Runner' });
+      await SCBulkLibrary.updateTrackState(created.jobId, 0, 'saving', { downloadId: 77 });
+      await SCBulkLibrary.updateTrackState(created.jobId, 0, 'done');
+      await SCBulkLibrary.updateTrackState(created.jobId, 1, 'failed', { error: 'network' });
+      await SCBulkLibrary.updateTrackState(created.jobId, 2, 'saving');
+      await SCBulkLibrary.updateTrackState(created.jobId, 2, 'ambiguous_save', {
+        expectedStates: ['saving'], error: 'check folder',
+      });
+      const beforeRetry = await SCBulkLibrary.getJob(created.jobId);
+      const saving = await SCBulkLibrary.getTracksByState(created.jobId, 'saving');
+      const retry = await SCBulkLibrary.retryFailed(created.jobId);
+      const pending = await SCBulkLibrary.getTracksByState(created.jobId, 'pending');
+      return {
+        beforeRetry,
+        retry,
+        saving,
+        pending: pending.map(value => value.index),
+        first: await SCBulkLibrary.getTrack(created.jobId, 0),
+        afterRetry: await SCBulkLibrary.getJob(created.jobId),
+      };
+    });
+    assert.equal(runner.beforeRetry.saved, 1);
+    assert.equal(runner.beforeRetry.failed, 2);
+    assert.equal(runner.beforeRetry.remaining, 1);
+    assert.equal(runner.saving.length, 0);
+    assert.equal(runner.retry.reset, 1);
+    assert.deepEqual(runner.pending, [1, 3]);
+    assert.equal(runner.first.downloadId, 77);
+    assert.equal(runner.afterRetry.failed, 1, 'Ambiguous saves must not be retried');
+    assert.equal(runner.afterRetry.recentFailures.length, 1);
+    assert.equal(runner.afterRetry.recentFailures[0].ambiguous, true);
+
     const scale = await page.evaluate(async () => {
       const job = await SCBulkLibrary.createJob({ jobId: 'scale-50000', sourceType: 'user_tracks', mode: 'all' });
       const started = performance.now();

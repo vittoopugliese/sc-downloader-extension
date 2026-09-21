@@ -4,7 +4,7 @@
   const DB_NAME = 'scdl_bulk_jobs';
   const DB_VERSION = 1;
   const FIRST_CURSOR = '__first__';
-  const ACTIVE_STATUSES = new Set(['enumerating', 'paused', 'ready', 'downloading']);
+  const ACTIVE_STATUSES = new Set(['enumerating', 'paused', 'ready', 'downloading', 'running']);
   const TERMINAL_STATUSES = new Set(['completed', 'completed_with_errors', 'failed', 'cancelled', 'partial']);
   const request = value => new Promise((resolve, reject) => {
     value.onsuccess = () => resolve(value.result);
@@ -267,6 +267,131 @@
     }));
   }
 
+  async function getTrack(jobId, index) {
+    return transaction(['tracks'], 'readonly', store =>
+      request(store('tracks').get([jobId, index]))
+    );
+  }
+
+  async function getTracksByState(jobId, state, limit = 100) {
+    limit = Math.min(500, Math.max(1, Number.isSafeInteger(limit) ? limit : 100));
+    return transaction(['tracks'], 'readonly', store => new Promise((resolve, reject) => {
+      const values = [];
+      const opened = store('tracks').index('state').openCursor(IDBKeyRange.only([jobId, state]));
+      opened.onerror = () => reject(opened.error || fail('storage_error'));
+      opened.onsuccess = () => {
+        const cursor = opened.result;
+        if (!cursor || values.length >= limit) return resolve(values);
+        values.push(cursor.value);
+        cursor.continue();
+      };
+    }));
+  }
+
+  async function updateJob(jobId, expectedStatuses, patch) {
+    return transaction(['jobs'], 'readwrite', async store => {
+      const jobs = store('jobs');
+      const job = await request(jobs.get(jobId));
+      if (!job) return null;
+      if (expectedStatuses?.length && !expectedStatuses.includes(job.status)) return null;
+      const values = typeof patch === 'function' ? await patch({ ...job }) : patch;
+      if (values === false) return job;
+      Object.assign(job, values || {});
+      job.revision += 1;
+      job.updatedAt = Date.now();
+      jobs.put(job);
+      return job;
+    });
+  }
+
+  function failureSummary(record, ambiguous) {
+    return {
+      index: record.index + 1,
+      title: record.track?.title || 'Unknown track',
+      error: record.error || 'Unknown error',
+      ...(ambiguous ? { ambiguous: true } : {}),
+    };
+  }
+
+  async function updateTrackState(jobId, index, state, detail = {}) {
+    const allowed = new Set(['pending', 'saving', 'done', 'failed', 'ambiguous_save']);
+    if (!allowed.has(state)) throw fail('invalid_track_state');
+    return transaction(['jobs', 'tracks'], 'readwrite', async store => {
+      const jobs = store('jobs');
+      const tracks = store('tracks');
+      const job = await request(jobs.get(jobId));
+      const record = await request(tracks.get([jobId, index]));
+      if (!job || !record) return null;
+      if (detail.expectedJobStatuses?.length && !detail.expectedJobStatuses.includes(job.status)) return null;
+      if (detail.expectedStates?.length && !detail.expectedStates.includes(record.state)) return null;
+      if (record.state === state && (detail.downloadId == null || record.downloadId === detail.downloadId)) {
+        return { job, track: record };
+      }
+
+      if (record.state === 'done') job.saved = Math.max(0, job.saved - 1);
+      if (record.state === 'failed' || record.state === 'ambiguous_save') {
+        job.failed = Math.max(0, job.failed - 1);
+      }
+      if (state === 'done') job.saved += 1;
+      if (state === 'failed' || state === 'ambiguous_save') job.failed += 1;
+
+      record.state = state;
+      if (detail.downloadId != null) record.downloadId = detail.downloadId;
+      if (Object.hasOwn(detail, 'error')) record.error = detail.error || null;
+      if (detail.incrementAttempt) record.attempts = (record.attempts || 0) + 1;
+      record.updatedAt = Date.now();
+      job.remaining = Math.max(0, job.eligible - job.saved - job.failed);
+      job.currentIndex = Math.max(job.currentIndex || 0,
+        ['done', 'failed', 'ambiguous_save'].includes(state) ? index + 1 : 0);
+      if (state === 'failed' || state === 'ambiguous_save') {
+        const failures = Array.isArray(job.recentFailures) ? job.recentFailures : [];
+        job.recentFailures = [...failures.filter(value => value.index !== index + 1),
+          failureSummary(record, state === 'ambiguous_save')].slice(-100);
+      } else if (state === 'done' || state === 'pending') {
+        job.recentFailures = (job.recentFailures || []).filter(value => value.index !== index + 1);
+      }
+      job.revision += 1;
+      job.updatedAt = record.updatedAt;
+      tracks.put(record);
+      jobs.put(job);
+      return { job, track: record };
+    });
+  }
+
+  async function retryFailed(jobId) {
+    return transaction(['jobs', 'tracks'], 'readwrite', async store => {
+      const jobs = store('jobs');
+      const tracks = store('tracks');
+      const job = await request(jobs.get(jobId));
+      if (!job) return null;
+      let reset = 0;
+      await new Promise((resolve, reject) => {
+        const opened = tracks.index('state').openCursor(IDBKeyRange.only([jobId, 'failed']));
+        opened.onerror = () => reject(opened.error || fail('storage_error'));
+        opened.onsuccess = () => {
+          const cursor = opened.result;
+          if (!cursor) return resolve();
+          const record = cursor.value;
+          record.state = 'pending';
+          record.error = null;
+          record.downloadId = null;
+          record.attempts = (record.attempts || 0) + 1;
+          cursor.update(record);
+          reset += 1;
+          cursor.continue();
+        };
+      });
+      if (!reset) return { job, reset: 0 };
+      job.failed = Math.max(0, job.failed - reset);
+      job.remaining = Math.max(0, job.eligible - job.saved - job.failed);
+      job.recentFailures = (job.recentFailures || []).filter(value => value.ambiguous);
+      job.revision += 1;
+      job.updatedAt = Date.now();
+      jobs.put(job);
+      return { job, reset };
+    });
+  }
+
   async function pause(jobId, detail = {}) {
     return transaction(['jobs'], 'readwrite', async store => {
       const job = await request(store('jobs').get(jobId));
@@ -337,6 +462,11 @@
     commitPage,
     getJob,
     getTracks,
+    getTrack,
+    getTracksByState,
+    updateJob,
+    updateTrackState,
+    retryFailed,
     pause,
     resume,
     cancel,
