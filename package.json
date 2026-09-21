@@ -1,6 +1,6 @@
 {
   "name": "sc-downloader-extension",
-  "version": "2026.9.20",
+  "version": "2026.10.5",
   "private": true,
   "description": "SoundCloud downloader browser extension",
   "scripts": {

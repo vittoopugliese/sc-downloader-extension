@@ -29,6 +29,16 @@
   };
   const errorLocale = errors[language] || errors[language.split('_')[0]];
   if (errorLocale) errorKeys.forEach((key,i)=>{dictionary[key]=errorLocale[i];});
+  const teleportCopy = {
+    en: ['Teleporting…','Click or interact to stop teleporting.'],
+    es: ['Teletransportando…','Hacé clic o interactuá para detener el teletransporte.'],
+    pt_BR: ['Teletransportando…','Clique ou interaja para parar o teletransporte.'],
+    de: ['Teleport läuft…','Klicke oder interagiere, um den Teleport zu stoppen.'],
+    ru: ['Телепортация…','Нажмите или взаимодействуйте, чтобы остановить телепортацию.']
+  };
+  const [teleporting, teleportStopHint] = teleportCopy[language] || teleportCopy[language.split('_')[0]] || teleportCopy.en;
+  dictionary.teleporting = teleporting;
+  dictionary.teleportStopHint = teleportStopHint;
   dictionary.archive = ({es:'TU ARCHIVO PERSONAL',pt_BR:'SEU ARQUIVO PESSOAL',de:'DEIN PERSÖNLICHES ARCHIV',ru:'ТВОЙ ЛИЧНЫЙ АРХИВ'})[language] || ({es:'TU ARCHIVO PERSONAL',de:'DEIN PERSÖNLICHES ARCHIV',ru:'ТВОЙ ЛИЧНЫЙ АРХИВ'})[language.split('_')[0]] || 'YOUR PERSONAL ARCHIVE';
   dictionary.open = ({es:'Abrir',pt_BR:'Abrir',de:'Öffnen',ru:'Открыть'})[language] || ({es:'Abrir',de:'Öffnen',ru:'Открыть'})[language.split('_')[0]] || 'Open';
   root.SCLikesText = key => dictionary[key] || dictionary['network-error'];

@@ -43,6 +43,7 @@ const { chromium } = require('playwright');
         if(!fixturePro)return{success:false,code:'pro-required'};
         if(r.type==='GET_LIKES_LIBRARY_STATUS')return{success:true,ownerId:'42',sourceUserId:'42',collectionId:'likes:42',displayName:'Your archive',library:fixtureLibraryReady?{generation:'g1',revision:1,count:fixtureCount,complete:true}:null,job:fixtureLibraryReady?{phase:'complete',count:fixtureCount}:null,bookmarks:[],collections:[]};
         if(r.type==='START_LIKES_INDEX'){fixtureLibraryReady=true;return{success:true};}
+        if(r.type==='LOCATE_LIKED_TRACK')return{success:true,permalink:`https://soundcloud.com/artist/track-${r.trackId}`};
         if(r.type==='QUERY_LIKES'){
           const all=items.slice(0,fixtureCount); const filtered=all.filter(x=>(!r.query || `${x.title} ${x.artistName}`.toLowerCase().includes(r.query.toLowerCase()))&&(!r.period || x.likedAt.slice(0,7)===r.period));
           const periods={};for(const x of all){const k=x.likedAt.slice(0,7);periods[k]||={count:0,firstTrackId:x.itemId};periods[k].count++;}
@@ -122,6 +123,16 @@ const { chromium } = require('playwright');
       return {text:tooltip.textContent,visible:tooltip.style.visibility,titleRemoved:!button.hasAttribute('title')};
     });
     assert.deepEqual(teleportTooltip,{text:'Teleport to selected track',visible:'visible',titleRemoved:true});
+    await teleportButton.click();
+    const teleportOverlay=page.locator('#scdl-likes-explorer .teleport-overlay');
+    await teleportOverlay.waitFor({state:'visible'});
+    assert.match(await teleportOverlay.innerText(),/Teletransportando…/);
+    assert.match(await teleportOverlay.innerText(),/Hacé clic o interactuá para detener/);
+    assert.equal(await teleportOverlay.locator('img').getAttribute('src'),'assets/icons/teleport-to-selected-track.svg');
+    assert.equal(await teleportOverlay.evaluate(node=>getComputedStyle(node).backgroundColor),'rgba(0, 0, 0, 0.2)');
+    await teleportOverlay.click();
+    await teleportOverlay.waitFor({state:'hidden'});
+    assert.match(await page.locator('#scdl-likes-explorer .detail .status').innerText(),/Búsqueda detenida/);
     await page.screenshot({path:'test-results/likes-explorer-desktop.png'});
     for(const width of [390,760,1024]){
       await page.setViewportSize({width,height:800});await page.waitForTimeout(180);
