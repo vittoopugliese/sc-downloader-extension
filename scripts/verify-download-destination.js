@@ -172,6 +172,31 @@ function plain(value) {
     destinationName: "Downloads (folder unavailable)",
   });
 
+  const ambiguousDirectory = vm.runInContext(
+    "SCDownloadDestination.create",
+    context
+  )({
+    chromeApi: context.chrome,
+    getRememberedDirectory: async () => null,
+    sendOffscreenMessage: async () => ({
+      success: false,
+      code: "ambiguous_save",
+      error: "Folder access expired during write.",
+    }),
+  });
+  const downloadsBeforeAmbiguousSave = downloadCalls.length;
+  await assert.rejects(
+    ambiguousDirectory.save({
+      operationId: "track_uncertain",
+      blobUrl: "blob:uncertain",
+      fileName: "Track.mp3",
+      destination: { id: "music", name: "Music" },
+    }),
+    (error) => error.code === "ambiguous_save"
+  );
+  assert.equal(downloadCalls.length, downloadsBeforeAmbiguousSave,
+    "An uncertain folder write must not trigger a second browser download");
+
   console.log("Download destination verification passed.");
 })().catch((error) => {
   console.error(error);

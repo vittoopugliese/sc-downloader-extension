@@ -152,15 +152,18 @@
     }
 
     const fileName = await findAvailableName(directoryHandle, requestedName);
-    const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
-    const writable = await fileHandle.createWritable();
-
+    let writable = null;
     try {
+      // Once creation is requested, a failed API call may have left a file behind.
+      const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
+      writable = await fileHandle.createWritable();
       await writable.write(blob);
       await writable.close();
     } catch (error) {
-      await writable.abort().catch(() => {});
-      throw error;
+      await writable?.abort().catch(() => {});
+      const uncertain = new Error(error?.message || "The folder write may have started.");
+      uncertain.code = "ambiguous_save";
+      throw uncertain;
     }
 
     return fileName;

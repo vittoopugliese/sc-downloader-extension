@@ -6,6 +6,7 @@ const vm = require("node:vm");
 let listener;
 let buildCount = 0;
 let saveCount = 0;
+let failSave = false;
 let finishBuild;
 const context = vm.createContext({
   console, AbortController, Blob, setInterval, clearInterval,
@@ -21,7 +22,11 @@ const context = vm.createContext({
     await new Promise((resolve) => { finishBuild = resolve; });
     return { blob: new Blob(["audio"]), fileName: "Track.mp3" };
   } },
-  SCDownloadDirectory: { async saveBlob() { saveCount += 1; return "Track.mp3"; } },
+  SCDownloadDirectory: { async saveBlob() {
+    saveCount += 1;
+    if (failSave) throw Object.assign(new Error("Folder access expired during write."), { code: "ambiguous_save" });
+    return "Track.mp3";
+  } },
   fetch: async () => ({ ok: true, blob: async () => new Blob(["audio"]) }),
 });
 vm.runInContext(fs.readFileSync(path.join(__dirname, "offscreen.js"), "utf8"), context);
@@ -52,5 +57,9 @@ function send(message) {
   assert.deepEqual(await send(save), saved);
   assert.equal(saveCount, 1);
   assert.equal((await send({ ...save, fileName: "Other.mp3" })).code, "operation_conflict");
+  failSave = true;
+  const uncertainSave = await send({ ...save, operationId: "track_uncertain" });
+  assert.equal(uncertainSave.success, false);
+  assert.equal(uncertainSave.code, "ambiguous_save");
   console.log("Offscreen idempotency verification passed.");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

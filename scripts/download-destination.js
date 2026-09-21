@@ -102,7 +102,9 @@ const SCDownloadDestination = (() => {
       });
 
       if (!result?.success) {
-        throw new Error(result?.error || "Could not save to the selected folder.");
+        const error = new Error(result?.error || "Could not save to the selected folder.");
+        error.code = result?.code || "save_failed";
+        throw error;
       }
 
       return result.fileName || fileName;
@@ -165,7 +167,7 @@ const SCDownloadDestination = (() => {
           );
           return { fileName: savedFileName, destinationName: selected.name };
         } catch (error) {
-          if (!isUnavailableDirectoryError(error)) {
+          if (error.code === "ambiguous_save" || !isUnavailableDirectoryError(error)) {
             throw error;
           }
 

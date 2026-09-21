@@ -45,6 +45,7 @@ const files = new Map([["Artist - Song.mp3", { existing: true }]]);
 let pickerOptions = null;
 let directoryPermission = "granted";
 let permissionRequests = 0;
+let failWrite = false;
 const directoryHandle = {
   name: "My Music",
   queryPermission: async () => directoryPermission,
@@ -68,6 +69,7 @@ const directoryHandle = {
       async createWritable() {
         return {
           async write(blob) {
+            if (failWrite) throw new Error("Folder access expired during write.");
             files.set(name, { blob });
           },
           async close() {},
@@ -167,6 +169,13 @@ function evaluate(expression) {
   if (!files.get(restartedSaveName)?.blob) {
     throw new Error("The track was not saved after restoring folder access.");
   }
+
+  failWrite = true;
+  await require("node:assert/strict").rejects(
+    evaluate(`SCDownloadDirectory.saveBlob("directory-id", "Uncertain.mp3", new Blob(["audio"]))`),
+    (error) => error.code === "ambiguous_save"
+  );
+  failWrite = false;
 
   console.log("Directory storage verification passed.");
 })().catch((error) => {

@@ -103,6 +103,7 @@ async function handleDirectorySave(message) {
     return {
       success: false,
       error: error.message || "Could not save to the selected folder.",
+      code: error.code || "save_failed",
     };
   }
 }
