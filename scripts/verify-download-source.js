@@ -201,6 +201,20 @@ function response(status, data) {
       `HTTP ${status} incorrectly triggered metadata refresh`
     );
   }
+
+  const profileCases = [
+    { name: "auth", request: async () => response(401, {}), code: "auth_required" },
+    { name: "rate limit", request: async () => response(429, {}), code: "rate_limited" },
+    { name: "service", request: async () => response(503, {}), code: "service_unavailable" },
+    { name: "network", request: async () => { throw new TypeError("offline"); }, code: "network_error" },
+    { name: "invalid JSON", request: async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError("bad"); } }), code: "invalid_response" },
+    { name: "invalid profile", request: async () => response(200, {}), code: "invalid_response" },
+  ];
+  for (const scenario of profileCases) {
+    const profileSource = create({ getOAuthToken: async () => "oauth", request: scenario.request });
+    await assert.rejects(profileSource.resolveLoggedInUser("client"),
+      error => error.code === scenario.code, `${scenario.name} profile failure lost its typed code`);
+  }
   console.log("Download Source verification passed.");
 })().catch((error) => {
   console.error(error);

@@ -163,13 +163,21 @@ const SCDownloadSource = (() => {
     }
 
     async function resolveLoggedInUser(clientId) {
-      if (!clientId) throw new Error("Missing client_id.");
+      if (!clientId) throw createError("Missing client_id.", "missing_client_id");
       const oauthToken = await adapter.getOAuthToken();
       const url = new URL("https://api-v2.soundcloud.com/me");
       url.searchParams.set("client_id", clientId);
-      const user = await http.json(url, { oauthToken });
+      let user;
+      try {
+        user = await http.json(url, { oauthToken });
+      } catch (error) {
+        if ([401, 403].includes(error?.status)) {
+          throw createError("SoundCloud sign-in is required.", "auth_required", error.status);
+        }
+        throw error;
+      }
       if (!user?.id) {
-        throw new Error("SoundCloud did not return a logged-in user profile.");
+        throw createError("SoundCloud returned an invalid user profile.", "invalid_response");
       }
       return { user, oauthToken };
     }

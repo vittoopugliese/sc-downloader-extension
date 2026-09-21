@@ -164,12 +164,42 @@
       }
       if ((await db.all('artworkJobs')).some(j => j.phase === 'saving')) setTimeout(() => tick().catch(() => {}), 500);
     }
-    async function convertArtwork(url) {
+    async function convertArtwork(url, { request = fetch, timeoutMs = 15000 } = {}) {
       if (!source.artwork(url)) throw source.fail('invalid-request');
-      const response = await fetch(url.replace(/-large\./, '-t200x200.'), { credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(15000) });
-      if (!response.ok || !/^image\/(jpeg|png|webp)/.test(response.headers.get('content-type') || '')) throw source.fail('invalid-image');
-      const reader = response.body.getReader(), chunks = []; let bytes = 0;
-      while (true) { const r = await reader.read(); if (r.done) break; bytes += r.value.length; if (bytes > 2 * 1024 * 1024) { await reader.cancel(); throw source.fail('invalid-image'); } chunks.push(r.value); }
+      const controller = new AbortController(); let timedOut = false; let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => { timedOut = true; controller.abort(); reject(source.fail('network-timeout')); }, timeoutMs);
+      });
+      let chunks;
+      try {
+        chunks = await Promise.race([(async () => {
+          const response = await request(url.replace(/-large\./, '-t200x200.'), { credentials: 'omit', redirect: 'error', signal: controller.signal });
+          const contentType = response.headers?.get?.('content-type') || '';
+          const declaredValue = response.headers?.get?.('content-length');
+          const declared = declaredValue == null ? null : Number(declaredValue);
+          if (!response.ok || !/^image\/(jpeg|png|webp)/.test(contentType) ||
+              (declared !== null && (!Number.isSafeInteger(declared) || declared < 0 || declared > 2 * 1024 * 1024))) {
+            response.body?.cancel?.().catch?.(() => {}); throw source.fail('invalid-image');
+          }
+          const reader = response.body?.getReader?.();
+          if (!reader) throw source.fail('invalid-image');
+          const values = []; let bytes = 0;
+          try {
+            while (true) {
+              const result = await reader.read(); if (result.done) break;
+              if (!(result.value instanceof Uint8Array) || bytes + result.value.byteLength > 2 * 1024 * 1024) throw source.fail('invalid-image');
+              bytes += result.value.byteLength; values.push(result.value);
+            }
+            return values;
+          } catch (error) {
+            await reader.cancel().catch(() => {}); throw error;
+          } finally { reader.releaseLock?.(); }
+        })(), timeout]);
+      } catch (error) {
+        if (timedOut) throw source.fail('network-timeout');
+        if (error?.code) throw error;
+        throw Object.assign(source.fail('network-error'), { cause: error });
+      } finally { clearTimeout(timer); }
       const bitmap = await createImageBitmap(new Blob(chunks));
       try {
         if (bitmap.width * bitmap.height > 16000000) throw source.fail('invalid-image');

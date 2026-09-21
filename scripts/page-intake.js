@@ -246,10 +246,14 @@ const SCPageIntake = (() => {
         });
       } catch (error) {
         if (error.status !== 429 || attempt >= API_RETRY_LIMIT) throw error;
-        const retryAfter = Number(error.retryAfter);
-        const delay = Number.isFinite(retryAfter)
-          ? Math.min(retryAfter * 1000, 10000)
+        const delay = Number.isFinite(error.retryAt)
+          ? Math.max(0, error.retryAt - Date.now())
           : 1000 * 2 ** attempt;
+        if (delay > 10000) {
+          error.code = "rate_limited";
+          error.retryAt ||= Date.now() + delay;
+          throw error;
+        }
         await new Promise((resolve) => schedule(resolve, delay));
         return userTracksPage(url, id, attempt + 1);
       }

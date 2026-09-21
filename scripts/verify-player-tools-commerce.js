@@ -89,6 +89,50 @@ function response(status, body) {
   assert.equal(event.body.offer, OFFER.version);
   assert.equal(await commerce.track("unknown_event", {}), false);
 
+  let timeoutData = {};
+  let timeoutCalls = 0;
+  let timeoutAborted = false;
+  const timeoutCommerce = create({
+    storage: {
+      async get() { return structuredClone(timeoutData); },
+      async set(value) { timeoutData = structuredClone(value); },
+    },
+    requestTimeoutMs: 20,
+    randomUUID: () => "00000000-0000-4000-8000-000000000099",
+    access: { async setEntitlement() {} },
+    request: async (_url, options) => {
+      timeoutCalls += 1;
+      if (timeoutCalls === 1) {
+        options.signal.addEventListener("abort", () => { timeoutAborted = true; });
+        return new Promise(() => {});
+      }
+      return response(200, { checkoutUrl: "https://store.example/checkout/recovered" });
+    },
+  });
+  await assert.rejects(timeoutCommerce.startCheckout("en"), { code: "network-timeout" });
+  assert.equal(timeoutAborted, true);
+  assert.equal((await timeoutCommerce.startCheckout("en")).checkoutUrl,
+    "https://store.example/checkout/recovered", "A timed-out POST must not leave the commerce queue blocked");
+
+  let oversizedData = {};
+  let responseCancelled = false;
+  const oversizedCommerce = create({
+    storage: {
+      async get() { return structuredClone(oversizedData); },
+      async set(value) { oversizedData = structuredClone(value); },
+    },
+    maxResponseBytes: 8,
+    randomUUID: () => "00000000-0000-4000-8000-000000000100",
+    access: { async setEntitlement() {} },
+    request: async () => ({
+      ok: true, status: 200,
+      headers: { get: name => name === "Content-Length" ? "9" : null },
+      body: { cancel: async () => { responseCancelled = true; } },
+    }),
+  });
+  await assert.rejects(oversizedCommerce.startCheckout("en"), { code: "response-too-large" });
+  assert.equal(responseCancelled, true);
+
   const broken = create({ storage: { async get() { return { [STORAGE_KEY]: null }; } }, request, access: { setEntitlement() {} } });
   await assert.rejects(broken.getState(), { code: "commerce-state-invalid" });
   console.log("Player Tools commerce lifecycle verification passed.");

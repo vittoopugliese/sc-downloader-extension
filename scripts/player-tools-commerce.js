@@ -5,6 +5,8 @@
   const STORAGE_KEY = "scdl.playerTools.commerce.v1";
   const SESSION_MEASURED_KEY = "scdl.playerTools.measured.session.v1";
   const API_BASE_URL = "https://sctd.vpugliese.online/api/player-tools";
+  const REQUEST_TIMEOUT_MS = 15000;
+  const MAX_RESPONSE_BYTES = 256 * 1024;
   // The production packager replaces this line with `const TEST_LOGIN = null;`.
   const TEST_LOGIN = Object.freeze({ username: "1", password: "1" });
   const OFFER = Object.freeze({
@@ -21,7 +23,8 @@
   ]);
 
   function create({ storage, sessionStorage = null, request = fetch, randomUUID = () => crypto.randomUUID(),
-    access, apiBaseUrl = API_BASE_URL, now = () => Date.now(), version = "unknown" }) {
+    access, apiBaseUrl = API_BASE_URL, now = () => Date.now(), version = "unknown",
+    requestTimeoutMs = REQUEST_TIMEOUT_MS, maxResponseBytes = MAX_RESPONSE_BYTES }) {
     let queue = Promise.resolve();
     const exclusive = (task) => {
       const next = queue.then(task);
@@ -44,18 +47,66 @@
       return structuredClone(raw);
     }
     const write = (state) => storage.set({ [STORAGE_KEY]: state });
-    async function post(path, body) {
-      let response;
-      try {
-        response = await request(`${apiBaseUrl}${path}`, {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
-        });
-      } catch (cause) {
-        throw Object.assign(new Error("Player Tools licensing is temporarily unavailable.", { cause }), { code: "service-unavailable" });
+    async function readResponse(response) {
+      const declaredValue = response.headers?.get?.("Content-Length");
+      const declared = declaredValue == null ? null : Number(declaredValue);
+      if (declared !== null && (!Number.isSafeInteger(declared) || declared < 0 || declared > maxResponseBytes)) {
+        response.body?.cancel?.().catch?.(() => {});
+        throw Object.assign(new Error("Licensing returned an oversized response."), { code: "response-too-large" });
       }
-      let payload = null;
-      try { payload = await response.json(); } catch {}
+      const reader = response.body?.getReader?.();
+      if (!reader) return response.json();
+      const chunks = []; let size = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!(value instanceof Uint8Array) || size + value.byteLength > maxResponseBytes) {
+            throw Object.assign(new Error("Licensing returned an oversized response."), { code: "response-too-large" });
+          }
+          size += value.byteLength; chunks.push(value);
+        }
+        const bytes = new Uint8Array(size); let offset = 0;
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+        return JSON.parse(new TextDecoder().decode(bytes));
+      } catch (error) {
+        await reader.cancel().catch(() => {});
+        throw error;
+      } finally {
+        reader.releaseLock?.();
+      }
+    }
+    async function post(path, body) {
+      const controller = new AbortController();
+      let timedOut = false; let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          timedOut = true; controller.abort();
+          reject(Object.assign(new Error("Player Tools licensing timed out."), { code: "network-timeout" }));
+        }, requestTimeoutMs);
+      });
+      let response; let payload = null;
+      try {
+        ({ response, payload } = await Promise.race([(async () => {
+          const received = await request(`${apiBaseUrl}${path}`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify(body), signal: controller.signal,
+          });
+          let parsed = null;
+          try { parsed = await readResponse(received); }
+          catch (error) {
+            if (error?.code === "response-too-large") throw error;
+            if (received.ok) throw Object.assign(new Error("Licensing returned an invalid response."), { code: "invalid-response", cause: error });
+          }
+          return { response: received, payload: parsed };
+        })(), timeout]));
+      } catch (cause) {
+        if (timedOut || cause?.code === "network-timeout") throw Object.assign(new Error("Player Tools licensing timed out.", { cause }), { code: "network-timeout" });
+        if (["response-too-large", "invalid-response"].includes(cause?.code)) throw cause;
+        throw Object.assign(new Error("Player Tools licensing is temporarily unavailable.", { cause }), { code: "service-unavailable" });
+      } finally {
+        clearTimeout(timer);
+      }
       if (!response.ok) {
         const code = payload?.error || "service-error";
         const message = code === "activation_failed" ? "That license could not be activated. Check the email and key, then try again."

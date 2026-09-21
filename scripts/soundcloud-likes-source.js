@@ -1,5 +1,7 @@
 (function (root) {
   'use strict';
+  const REQUEST_TIMEOUT_MS = 15000;
+  const MAX_JSON_BYTES = 2 * 1024 * 1024;
   const fail = (code) => Object.assign(new Error(code), { code });
   const date = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null;
   function permalink(value) {
@@ -29,12 +31,73 @@
       durationMs: Number.isFinite(raw.duration) && raw.duration >= 0 ? raw.duration : null,
       availability: raw.streamable === false ? 'unavailable' : 'unknown' };
   }
-  async function fetchPage({ ownerId, nextCursor, clientId, token, signal }) {
+  function responseError(response) {
+    const code = response.status === 429 ? 'rate-limited'
+      : [401, 403].includes(response.status) ? 'auth-required'
+      : response.status >= 500 ? 'service-unavailable' : 'network-error';
+    const error = Object.assign(fail(code), { status: response.status });
+    const header = response.headers?.get?.('Retry-After')?.trim();
+    const seconds = /^\d+(?:\.\d+)?$/.test(header || '') ? Number(header) : NaN;
+    const retryDate = Number.isFinite(seconds) ? NaN : Date.parse(header || '');
+    if (Number.isFinite(seconds)) error.retryAt = Date.now() + seconds * 1000;
+    else if (Number.isFinite(retryDate)) error.retryAt = retryDate;
+    return error;
+  }
+  async function readJson(response, maxBytes) {
+    const declaredValue = response.headers?.get?.('Content-Length');
+    const declared = declaredValue == null ? null : Number(declaredValue);
+    if (declared !== null && (!Number.isSafeInteger(declared) || declared < 0 || declared > maxBytes)) {
+      response.body?.cancel?.().catch?.(() => {});
+      throw fail('response-too-large');
+    }
+    const reader = response.body?.getReader?.();
+    if (!reader) {
+      try { return await response.json(); }
+      catch (cause) { throw Object.assign(fail('invalid-response'), { cause }); }
+    }
+    const chunks = []; let size = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!(value instanceof Uint8Array) || size + value.byteLength > maxBytes) throw fail('response-too-large');
+        size += value.byteLength; chunks.push(value);
+      }
+      const bytes = new Uint8Array(size); let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      try { return JSON.parse(new TextDecoder().decode(bytes)); }
+      catch (cause) { throw Object.assign(fail('invalid-response'), { cause }); }
+    } catch (error) {
+      await reader.cancel().catch(() => {}); throw error;
+    } finally { reader.releaseLock?.(); }
+  }
+  async function fetchPage({ ownerId, nextCursor, clientId, token, signal, request = fetch,
+    timeoutMs = REQUEST_TIMEOUT_MS, maxBytes = MAX_JSON_BYTES }) {
     const url = new URL(cursor(nextCursor, ownerId) || `https://api-v2.soundcloud.com/users/${ownerId}/likes?limit=50&linked_partitioning=1`);
     url.searchParams.set('client_id', clientId);
-    const response = await fetch(url, { headers: { Authorization: `OAuth ${token}` }, signal, redirect: 'error' });
-    if (!response.ok) throw Object.assign(fail(response.status === 429 ? 'rate-limited' : [401,403].includes(response.status) ? 'auth-required' : 'network-error'), { status: response.status });
-    const data = await response.json();
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    signal?.addEventListener?.('abort', onAbort, { once: true });
+    if (signal?.aborted) controller.abort();
+    let timedOut = false; let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => { timedOut = true; controller.abort(); reject(fail('network-timeout')); }, timeoutMs);
+    });
+    let data;
+    try {
+      data = await Promise.race([(async () => {
+        const response = await request(url, { headers: { Authorization: `OAuth ${token}` }, signal: controller.signal, redirect: 'error' });
+        if (!response.ok) { response.body?.cancel?.().catch?.(() => {}); throw responseError(response); }
+        return readJson(response, maxBytes);
+      })(), timeout]);
+    } catch (error) {
+      if (timedOut) throw fail('network-timeout');
+      if (signal?.aborted) throw fail('request-cancelled');
+      if (error?.code) throw error;
+      throw Object.assign(fail('network-error'), { cause: error });
+    } finally {
+      clearTimeout(timer); signal?.removeEventListener?.('abort', onAbort);
+    }
     if (!Array.isArray(data.collection)) throw fail('invalid-response');
     return { entries: data.collection.map(project).filter(Boolean), rawCount: data.collection.length, nextCursor: cursor(data.next_href, ownerId) };
   }

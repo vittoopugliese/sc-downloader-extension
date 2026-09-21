@@ -28,4 +28,32 @@ assert.equal(policy.canAuthorize(pro,null,'explore-likes').allowed,true);
 assert.equal(policy.canAuthorize(pro,null,'explore-likes').consume,false);
 assert.equal(policy.snapshot(pro,null).capabilities.likesExplorer,true);
 assert.equal(policy.canAuthorize(pro,null,'invented-operation').allowed,false);
-console.log('Likes source privacy, cursor, dates and Pro policy passed.');
+(async () => {
+  const base = { ownerId: '42', clientId: 'client', token: 'token' };
+  let aborted = false;
+  await assert.rejects(source.fetchPage({ ...base, timeoutMs: 20, request: async (_url, options) => {
+    options.signal.addEventListener('abort', () => { aborted = true; });
+    return { ok: true, json: () => new Promise(() => {}) };
+  } }), error => error.code === 'network-timeout');
+  assert.equal(aborted, true);
+
+  let cancelled = false;
+  await assert.rejects(source.fetchPage({ ...base, maxBytes: 8, request: async () => ({
+    ok: true, headers: { get: name => name === 'Content-Length' ? '9' : null },
+    body: { cancel: async () => { cancelled = true; } },
+  }) }), error => error.code === 'response-too-large');
+  assert.equal(cancelled, true);
+
+  const unavailable = source.fetchPage({ ...base, request: async () => ({
+    ok: false, status: 503, headers: { get: () => null },
+    body: { cancel: async () => {} },
+  }) });
+  await assert.rejects(unavailable, error => error.code === 'service-unavailable' && error.status === 503);
+
+  const limited = source.fetchPage({ ...base, request: async () => ({
+    ok: false, status: 429, headers: { get: name => name === 'Retry-After' ? '60' : null },
+    body: { cancel: async () => {} },
+  }) });
+  await assert.rejects(limited, error => error.code === 'rate-limited' && error.retryAt > Date.now() + 59000);
+  console.log('Likes source privacy, cursor, dates, HTTP bounds and Pro policy passed.');
+})().catch(error => { console.error(error); process.exitCode = 1; });

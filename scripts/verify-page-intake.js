@@ -214,11 +214,30 @@ function harness(pageUrl, hydration, api, runtimeReply) {
   assert.equal(loggedOut.intake.read().code, "auth_required");
   assert.equal(loggedOut.intake.read().status, "error", "A terminal auth error must not restart on poll");
 
+  for (const code of ["network_error", "network_timeout", "rate_limited", "service_unavailable", "invalid_response"]) {
+    const failedProfile = harness("https://soundcloud.com/you/likes", [],
+      () => { throw new Error("Unexpected API call"); },
+      () => ({ success: false, code, error: code }));
+    await failedProfile.intake.extractCurrent();
+    assert.equal(failedProfile.intake.read().code, code, `Profile error ${code} was rewritten as another cause`);
+  }
+
   const limited = harness("https://soundcloud.com/listener/likes",
     [{ hydratable: "user", data: { id: 6, username: "Listener" } }],
     async () => ({ ok: false, status: 429, headers: { get: () => "60" } }));
   await limited.intake.extractCurrent();
   assert.equal(limited.intake.read().code, "rate_limited");
+
+  let longRetryCalls = 0;
+  const longRetry = harness("https://soundcloud.com/artist/tracks",
+    [{ hydratable: "user", data: { id: 8, username: "Artist", track_count: 1 } }],
+    async () => {
+      longRetryCalls += 1;
+      return { ok: false, status: 429, headers: { get: name => name === "Retry-After" ? "60" : null } };
+    });
+  await longRetry.intake.extractCurrent();
+  assert.equal(longRetry.intake.read().code, "rate_limited");
+  assert.equal(longRetryCalls, 1, "A long Retry-After must not be shortened into an early retry");
 
   let userPage = 0;
   const userTracks = harness(

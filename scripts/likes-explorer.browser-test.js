@@ -173,10 +173,16 @@ const { chromium } = require('playwright');
         const result=await likesJobs.convertArtwork('https://i1.sndcdn.com/test-large.jpg');
         const sizes=[];
         for(const [size,blob] of Object.entries(result.variants)){const image=await createImageBitmap(blob);sizes.push({size:Number(size),type:blob.type,width:image.width,height:image.height});image.close();}
-        return {sizes,bytes:result.bytes};
+        let timeoutCode=null,timeoutAborted=false;
+        try{await likesJobs.convertArtwork('https://i1.sndcdn.com/test-large.jpg',{timeoutMs:20,request:async(_url,options)=>{options.signal.addEventListener('abort',()=>{timeoutAborted=true;});return{ok:true,headers:{get:name=>name==='content-type'?'image/png':null},body:{getReader:()=>({read:()=>new Promise(()=>{}),cancel:async()=>{},releaseLock(){}})}};}});}catch(error){timeoutCode=error.code;}
+        let oversizedCode=null,responseCancelled=false;
+        try{await likesJobs.convertArtwork('https://i1.sndcdn.com/test-large.jpg',{request:async()=>({ok:true,headers:{get:name=>name==='content-type'?'image/png':name==='content-length'?String(2*1024*1024+1):null},body:{cancel:async()=>{responseCancelled=true;}}})});}catch(error){oversizedCode=error.code;}
+        return {sizes,bytes:result.bytes,timeoutCode,timeoutAborted,oversizedCode,responseCancelled};
       }finally{globalThis.fetch=originalFetch;}
     });
     assert.deepEqual(result.sizes,[{size:48,type:'image/webp',width:48,height:48}]);assert.ok(result.bytes>0&&result.bytes<16*1024);
+    assert.equal(result.timeoutCode,'network-timeout');assert.equal(result.timeoutAborted,true);
+    assert.equal(result.oversizedCode,'invalid-image');assert.equal(result.responseCancelled,true);
     console.log('Real extension service worker loaded; single compact 48px WebP encoding and decoding passed.');
     const jobsResult=await worker.evaluate(async()=>{
       const originalSend=chrome.tabs.sendMessage, originalQuery=chrome.tabs.query, originalPage=SCLikesSource.fetchPage;
