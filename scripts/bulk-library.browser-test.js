@@ -65,6 +65,10 @@ const { chromium } = require('playwright');
     assert.equal(recovered.committed.job.enumerationComplete, true);
     assert.deepEqual(recovered.tracks.map(value => value.trackId), ['1', '2', '3']);
 
+    const activeJob = await page.evaluate(() => SCBulkLibrary.getActiveJob());
+    assert.equal(activeJob.jobId, 'resume-job');
+    assert.equal(activeJob.status, 'ready');
+
     const edgeCases = await page.evaluate(async () => {
       const item = id => ({ trackId: String(id), track: { id, title: `Track ${id}` } });
       const cycle = await SCBulkLibrary.createJob({ jobId: 'cycle-job', mode: 'all' });

@@ -47,6 +47,13 @@ function createHarness(options = {}) {
       return { job: clone(job), inserted: allowed.length };
     },
     async getJob(jobId) { return clone(durableJobs.get(jobId) || null); },
+    async getActiveJob() {
+      const activeStatuses = new Set(["enumerating", "ready", "running", "paused"]);
+      const jobs = [...durableJobs.values()].filter(job => activeStatuses.has(job.status));
+      jobs.sort((left, right) => (right.updatedAt || right.createdAt || 0) -
+        (left.updatedAt || left.createdAt || 0));
+      return clone(jobs[0] || null);
+    },
     async getTrack(jobId, index) { return clone(durableTracks.get(jobId)?.[index] || null); },
     async getTracksByState(jobId, state, limit) {
       return clone((durableTracks.get(jobId) || []).filter(record => record.state === state).slice(0, limit));
@@ -219,6 +226,7 @@ function createHarness(options = {}) {
         completed: durable.saved, failed: durable.recentFailures });
     },
     get session() { return clone(storedJob); },
+    clearSession() { storedJob = null; },
     releaseAll() { releases.splice(0).forEach((resolve) => resolve()); },
     setAutomatic(value) { automatic = value; },
     setFailIds(ids) { failIds = new Set(ids); },
@@ -388,6 +396,17 @@ async function waitFor(predicate, label, timeout = 3000) {
   );
   await concurrent.manager.cancelJob();
   concurrent.releaseAll();
+
+  const durableRecovery = createHarness({ automatic: false });
+  await durableRecovery.manager.createJob(tracks(1), "Durable recovery");
+  durableRecovery.clearSession();
+  const recoveredWithoutSession = await durableRecovery.manager.getStatus();
+  assert.equal(recoveredWithoutSession.job?.status, "running");
+  assert.equal(recoveredWithoutSession.job?.playlistTitle, "Durable recovery");
+  assert.equal(durableRecovery.session?.activeJobId, recoveredWithoutSession.job.id,
+    "Durable recovery did not restore the session cache");
+  await durableRecovery.manager.cancelJob();
+  durableRecovery.releaseAll();
 
   const mixed = createHarness({ automatic: false });
   const bulkStart = mixed.manager.createJob(tracks(2), "Bulk");

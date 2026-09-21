@@ -209,8 +209,7 @@ async function createStoredJob(jobId, tracks, metadata = {}, initialStates = nul
 async function loadJob() {
   const result = await chrome.storage.session.get(SESSION_KEY);
   const session = result[SESSION_KEY] || null;
-  if (!session) return null;
-  if (Array.isArray(session.tracks)) {
+  if (Array.isArray(session?.tracks)) {
     if (!legacyMigrationPromise) {
       legacyMigrationPromise = (async () => {
         const migrated = await createStoredJob(
@@ -228,8 +227,13 @@ async function loadJob() {
     }
     return legacyMigrationPromise;
   }
-  const jobId = session.activeJobId || session.job?.id;
-  return jobId ? SCBulkLibrary.getJob(jobId) : null;
+  const jobId = session?.activeJobId || session?.job?.id;
+  const sessionJob = jobId ? await SCBulkLibrary.getJob(jobId) : null;
+  if (sessionJob) return sessionJob;
+
+  const durableJob = await SCBulkLibrary.getActiveJob();
+  if (durableJob) await persistJobSummary(durableJob);
+  return durableJob;
 }
 
 async function saveJob(job) {

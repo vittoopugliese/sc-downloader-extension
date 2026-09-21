@@ -247,6 +247,22 @@
     return transaction(['jobs'], 'readonly', store => request(store('jobs').get(jobId)));
   }
 
+  async function getActiveJob() {
+    return transaction(['jobs'], 'readonly', async store => {
+      const status = store('jobs').index('status');
+      const candidates = await Promise.all(
+        [...ACTIVE_STATUSES].map(value => request(status.getAll(value)))
+      );
+      return candidates.flat().reduce((latest, job) => {
+        if (!latest) return job;
+        if ((job.updatedAt || 0) !== (latest.updatedAt || 0)) {
+          return (job.updatedAt || 0) > (latest.updatedAt || 0) ? job : latest;
+        }
+        return (job.createdAt || 0) > (latest.createdAt || 0) ? job : latest;
+      }, null);
+    });
+  }
+
   async function getTracks(jobId, offset = 0, limit = 200) {
     offset = Math.max(0, Number.isSafeInteger(offset) ? offset : 0);
     limit = Math.min(500, Math.max(1, Number.isSafeInteger(limit) ? limit : 200));
@@ -461,6 +477,7 @@
     createJob,
     commitPage,
     getJob,
+    getActiveJob,
     getTracks,
     getTrack,
     getTracksByState,
