@@ -27,10 +27,11 @@
   let activeButton = null;
   let savedTitle = null;
   let showTimer = null;
+  const listenedRoots = new WeakSet();
 
   function mount() {
     // Content scripts run at document_start, before <html> exists.
-    if (document.documentElement && !tooltip.isConnected) document.documentElement.append(tooltip);
+    if (document.body && !tooltip.isConnected) document.documentElement.append(tooltip);
   }
 
   function buttonFromEvent(event) {
@@ -68,7 +69,7 @@
   function show(button) {
     if (button === activeButton) return;
     hide();
-    if (!button || button.disabled || button.hidden) return;
+    if (!button || button.hidden) return;
     const title = button.getAttribute("title");
     const label = title || button.getAttribute("aria-label") || button.textContent?.trim();
     if (!label) return;
@@ -84,17 +85,52 @@
     }, SHOW_DELAY_MS);
   }
 
-  document.addEventListener("pointerover", (event) => {
+  function onPointerOver(event) {
     if (event.pointerType !== "touch") show(buttonFromEvent(event));
-  }, true);
-  document.addEventListener("pointerout", (event) => {
+  }
+
+  function onPointerMove(event) {
+    if (event.pointerType !== "touch") show(buttonFromEvent(event));
+  }
+
+  function onPointerOut(event) {
     const button = buttonFromEvent(event);
     if (button && button === activeButton && !button.contains(event.relatedTarget)) hide();
-  }, true);
-  document.addEventListener("focusin", (event) => show(buttonFromEvent(event)), true);
-  document.addEventListener("focusout", (event) => {
+  }
+
+  function onFocusIn(event) {
+    show(buttonFromEvent(event));
+  }
+
+  function onFocusOut(event) {
     if (buttonFromEvent(event) === activeButton) hide();
-  }, true);
+  }
+
+  function listen(root) {
+    if (listenedRoots.has(root)) return;
+    listenedRoots.add(root);
+    root.addEventListener("pointerover", onPointerOver, true);
+    root.addEventListener("pointermove", onPointerMove, true);
+    root.addEventListener("pointerout", onPointerOut, true);
+    root.addEventListener("focusin", onFocusIn, true);
+    root.addEventListener("focusout", onFocusOut, true);
+  }
+
+  function discoverShadowRoots(node) {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
+    if (node.shadowRoot) listen(node.shadowRoot);
+    node.querySelectorAll?.("*").forEach((element) => {
+      if (element.shadowRoot) listen(element.shadowRoot);
+    });
+  }
+
+  listen(document);
+  discoverShadowRoots(document.documentElement);
+  new MutationObserver((records) => {
+    for (const record of records) {
+      record.addedNodes.forEach(discoverShadowRoots);
+    }
+  }).observe(document, { childList: true, subtree: true });
   document.addEventListener("scroll", () => {
     if (activeButton && tooltip.style.visibility === "visible") position();
   }, true);

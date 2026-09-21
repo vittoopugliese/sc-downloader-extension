@@ -199,13 +199,18 @@ async function main() {
     if (!(await panel.isVisible())) {
       throw new Error("Playback Speed panel did not open.");
     }
-    await page.mouse.move(10, 10);
     await host.locator(".download-track-button").hover();
     await page.waitForTimeout(130);
     assert.deepEqual(await page.locator("#scdl-fast-tooltip").evaluate((tip) => ({
       text: tip.textContent, visible: tip.style.visibility,
     })), { text: "Download current playing", visible: "visible" },
     "A Player Tools button in the shadow panel must show its custom tooltip");
+    await host.locator(".clear-loop").hover();
+    await page.waitForTimeout(130);
+    assert.deepEqual(await page.locator("#scdl-fast-tooltip").evaluate((tip) => ({
+      text: tip.textContent, visible: tip.style.visibility,
+    })), { text: "Clear loop", visible: "visible" },
+    "A Player Tools button without title must use its accessible label");
     await page.mouse.move(10, 10);
     if (!(await panelIsOpen())) {
       throw new Error("Click-opened Playback Speed panel did not stay open after pointer leave.");
