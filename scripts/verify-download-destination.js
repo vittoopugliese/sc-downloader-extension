@@ -122,6 +122,29 @@ function plain(value) {
     /Download was interrupted/
   );
 
+  const rejectedChrome = {
+    runtime: {},
+    downloads: {
+      download(_options, callback) {
+        rejectedChrome.runtime.lastError = { message: "Invalid filename" };
+        callback(undefined);
+        delete rejectedChrome.runtime.lastError;
+      },
+    },
+  };
+  const rejectedDestination = vm.runInContext(
+    "SCDownloadDestination.create",
+    context
+  )({
+    chromeApi: rejectedChrome,
+    getRememberedDirectory: async () => null,
+    sendOffscreenMessage: async () => ({ success: true }),
+  });
+  await assert.rejects(
+    rejectedDestination.save({ blobUrl: "blob:rejected", fileName: "Track.mp3" }),
+    (error) => error.message === "Invalid filename" && error.code !== "ambiguous_save"
+  );
+
   const unavailableDirectory = vm.runInContext(
     "SCDownloadDestination.create",
     context

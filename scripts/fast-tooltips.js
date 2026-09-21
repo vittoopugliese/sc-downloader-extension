@@ -9,6 +9,7 @@
     position: "fixed",
     zIndex: "2147483647",
     boxSizing: "border-box",
+    width: "max-content",
     maxWidth: "min(280px, calc(100vw - 16px))",
     padding: "6px 8px",
     border: "1px solid rgba(255, 255, 255, .2)",
@@ -21,6 +22,7 @@
     textAlign: "center",
     whiteSpace: "normal",
     pointerEvents: "none",
+    transform: "translateX(-50%)",
     visibility: "hidden",
   });
 
@@ -35,7 +37,9 @@
   }
 
   function buttonFromEvent(event) {
-    return event.composedPath().find((node) =>
+    const path = event.composedPath();
+    path.filter((node) => node?.nodeType === Node.DOCUMENT_FRAGMENT_NODE && node.host).forEach(listen);
+    return path.find((node) =>
       node?.tagName === "BUTTON" ||
       (node?.tagName === "SELECT" && node.classList.contains("popup-control-btn"))
     ) || null;
@@ -114,6 +118,11 @@
     root.addEventListener("pointerout", onPointerOut, true);
     root.addEventListener("focusin", onFocusIn, true);
     root.addEventListener("focusout", onFocusOut, true);
+    root.addEventListener("scroll", onScroll, true);
+  }
+
+  function onScroll() {
+    if (activeButton && tooltip.style.visibility === "visible") position();
   }
 
   function discoverShadowRoots(node) {
@@ -131,9 +140,6 @@
       record.addedNodes.forEach(discoverShadowRoots);
     }
   }).observe(document, { childList: true, subtree: true });
-  document.addEventListener("scroll", () => {
-    if (activeButton && tooltip.style.visibility === "visible") position();
-  }, true);
   window.addEventListener("resize", () => {
     if (activeButton && tooltip.style.visibility === "visible") position();
   });

@@ -71,7 +71,7 @@ const SCDownloadDestination = (() => {
           (downloadId) => {
             if (chromeApi.runtime.lastError || !downloadId) {
               const error = new Error(chromeApi.runtime.lastError?.message || "Chrome may have started the download. Check Downloads before retrying.");
-              error.code = "ambiguous_save";
+              if (!chromeApi.runtime.lastError) error.code = "ambiguous_save";
               reject(error);
               return;
             }

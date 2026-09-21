@@ -127,6 +127,9 @@ const iconDataUrls = Object.fromEntries(
         collectionControlsAligned: Math.max(...collectionCenters) - Math.min(...collectionCenters) <= 1,
       };
     });
+    assert.equal(mainTheme.likesImageSize[0], 58);
+    assert.ok(mainTheme.likesImageSize[1] >= 77, "The Likes Explorer image must fill its offer card");
+    delete mainTheme.likesImageSize;
     assert.deepEqual(mainTheme, {
       settingsSize: [27, 24],
       downloadSize: [50, 38],
@@ -140,7 +143,6 @@ const iconDataUrls = Object.fromEntries(
       offerDetailSize: "9px",
       offerTrialSize: "9px",
       offerPriceSize: "10px",
-      likesImageSize: [58, 77],
       productColumns: 2,
       artworkFilter: "brightness(0.641) blur(5px)",
       collectionControlsAligned: true,
