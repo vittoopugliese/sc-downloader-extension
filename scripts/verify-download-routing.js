@@ -16,6 +16,9 @@ const context = vm.createContext({
   SCDownloadDirectory: {
     getCurrent: async () => storedDestination,
   },
+  SCBulkLibrary: {
+    getActiveJob: async () => null,
+  },
   SCStreamSelector: {
     extractStreamInfo: () => null,
     getStreamFormatLabel: () => null,
