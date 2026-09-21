@@ -28,7 +28,8 @@ function createHarness(options = {}) {
   const bulkLibrary = {
     async createJob(spec) {
       const job = { jobId: spec.jobId, status: "enumerating", epoch: 0, revision: 0,
-        eligible: 0, saved: 0, failed: 0, remaining: 0, createdAt: spec.createdAt || Date.now(),
+        eligible: 0, saved: 0, failed: 0, retryableFailedCount: 0, ambiguousCount: 0,
+        remaining: 0, createdAt: spec.createdAt || Date.now(),
         recentFailures: [], requestedLimit: spec.requestedLimit ?? null, nextCursor: spec.initialCursor ?? null };
       durableJobs.set(job.jobId, job);
       durableTracks.set(job.jobId, []);
@@ -55,6 +56,7 @@ function createHarness(options = {}) {
       return clone(jobs[0] || null);
     },
     async cleanupTerminalJobs() { return []; },
+    async recountFailures(jobId) { return clone(durableJobs.get(jobId) || null); },
     async getTrack(jobId, index) { return clone(durableTracks.get(jobId)?.[index] || null); },
     async getTracksByState(jobId, state, limit) {
       return clone((durableTracks.get(jobId) || []).filter(record => record.state === state).slice(0, limit));
@@ -73,16 +75,20 @@ function createHarness(options = {}) {
       if (detail.expectedJobStatuses?.length && !detail.expectedJobStatuses.includes(job.status)) return null;
       if (record.state === "done") job.saved -= 1;
       if (["failed", "ambiguous_save"].includes(record.state)) job.failed -= 1;
+      if (record.state === "failed") job.retryableFailedCount -= 1;
+      if (record.state === "ambiguous_save") job.ambiguousCount -= 1;
       record.state = state;
       if (detail.downloadId != null) record.downloadId = detail.downloadId;
       if (Object.hasOwn(detail, "error")) record.error = detail.error;
       if (state === "done") job.saved += 1;
       if (["failed", "ambiguous_save"].includes(state)) {
         job.failed += 1;
+        if (state === "failed") job.retryableFailedCount += 1;
+        if (state === "ambiguous_save") job.ambiguousCount += 1;
         job.recentFailures = [...job.recentFailures.filter(value => value.index !== index + 1), {
           index: index + 1, title: record.track.title, error: record.error || "Unknown error",
           ...(state === "ambiguous_save" ? { ambiguous: true } : {}),
-        }];
+        }].slice(-100);
       } else if (["done", "pending"].includes(state)) {
         job.recentFailures = job.recentFailures.filter(value => value.index !== index + 1);
       }
@@ -100,6 +106,7 @@ function createHarness(options = {}) {
         reset += 1;
       }
       job.failed -= reset;
+      job.retryableFailedCount -= reset;
       job.remaining += reset;
       job.recentFailures = job.recentFailures.filter(value => value.ambiguous);
       return { job: clone(job), reset };
@@ -228,6 +235,9 @@ function createHarness(options = {}) {
     },
     get session() { return clone(storedJob); },
     clearSession() { storedJob = null; },
+    markTrackState(jobId, index, state, detail) {
+      return bulkLibrary.updateTrackState(jobId, index, state, detail);
+    },
     releaseAll() { releases.splice(0).forEach((resolve) => resolve()); },
     setAutomatic(value) { automatic = value; },
     setFailIds(ids) { failIds = new Set(ids); },
@@ -408,6 +418,23 @@ async function waitFor(predicate, label, timeout = 3000) {
     "Durable recovery did not restore the session cache");
   await durableRecovery.manager.cancelJob();
   durableRecovery.releaseAll();
+
+  const truncatedFailures = createHarness({ automatic: false });
+  const truncatedJob = await truncatedFailures.manager.createJob(tracks(101), "Truncated failures");
+  await truncatedFailures.markTrackState(truncatedJob.id, 0, "failed", { error: "retry me" });
+  for (let index = 1; index < 101; index += 1) {
+    await truncatedFailures.markTrackState(truncatedJob.id, index, "ambiguous_save", {
+      error: "check folder",
+    });
+  }
+  const truncatedStatus = await truncatedFailures.manager.getStatus();
+  assert.equal(truncatedStatus.job.failed.length, 100);
+  assert.equal(truncatedStatus.job.failed.every(value => value.ambiguous), true);
+  assert.equal(truncatedStatus.job.retryableFailedCount, 1);
+  assert.equal(truncatedStatus.job.ambiguousCount, 100);
+  assert.equal(truncatedStatus.job.canRetry, true);
+  await truncatedFailures.manager.cancelJob();
+  truncatedFailures.releaseAll();
 
   const mixed = createHarness({ automatic: false });
   const bulkStart = mixed.manager.createJob(tracks(2), "Bulk");

@@ -607,7 +607,7 @@ function renderBulkJobSummary(job) {
   jobHint.classList.add("is-hidden");
   pauseJobBtn.classList.add("is-hidden");
   resumeJobBtn.classList.add("is-hidden");
-  const hasRetryableFailures = job.failed?.some((failure) => !failure.ambiguous);
+  const hasRetryableFailures = job.canRetry === true;
   retryFailedJobBtn.classList.toggle("is-hidden", !hasRetryableFailures);
   cancelJobBtn.classList.add("is-hidden");
   jobControls.classList.toggle("is-visible", Boolean(hasRetryableFailures));

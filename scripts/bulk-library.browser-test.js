@@ -184,6 +184,31 @@ const { chromium } = require('playwright');
     assert.equal(runner.afterRetry.recentFailures.length, 1);
     assert.equal(runner.afterRetry.recentFailures[0].ambiguous, true);
 
+    const retryCapability = await page.evaluate(async () => {
+      const job = await SCBulkLibrary.createJob({ jobId: 'retry-capability', requestedLimit: 101 });
+      await SCBulkLibrary.commitPage(job.jobId, {
+        epoch: job.epoch,
+        expectedCursor: null,
+        items: Array.from({ length: 101 }, (_, index) => ({
+          trackId: `failure-${index}`,
+          track: { id: index, title: `Failure ${index}` },
+        })),
+        nextCursor: null,
+        done: true,
+      });
+      await SCBulkLibrary.updateJob(job.jobId, ['ready'], { status: 'running' });
+      await SCBulkLibrary.updateTrackState(job.jobId, 0, 'failed', { error: 'retry me' });
+      for (let index = 1; index < 101; index += 1) {
+        await SCBulkLibrary.updateTrackState(job.jobId, index, 'ambiguous_save', { error: 'check folder' });
+      }
+      return SCBulkLibrary.getJob(job.jobId);
+    });
+    assert.equal(retryCapability.failed, 101);
+    assert.equal(retryCapability.retryableFailedCount, 1);
+    assert.equal(retryCapability.ambiguousCount, 100);
+    assert.equal(retryCapability.recentFailures.length, 100);
+    assert.equal(retryCapability.recentFailures.every(value => value.ambiguous), true);
+
     const scale = await page.evaluate(async () => {
       const job = await SCBulkLibrary.createJob({ jobId: 'scale-50000', sourceType: 'user_tracks', mode: 'all' });
       const started = performance.now();

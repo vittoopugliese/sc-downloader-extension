@@ -129,6 +129,8 @@
       skipped: normalizeSkipped(),
       saved: 0,
       failed: 0,
+      retryableFailedCount: 0,
+      ambiguousCount: 0,
       remaining: 0,
       nextCursor: spec.initialCursor ?? null,
       enumerationComplete: false,
@@ -330,6 +332,31 @@
     };
   }
 
+  async function ensureFailureCounts(job, tracks) {
+    if (Number.isSafeInteger(job.retryableFailedCount) && Number.isSafeInteger(job.ambiguousCount)) {
+      return false;
+    }
+    const state = tracks.index('state');
+    const [retryable, ambiguous] = await Promise.all([
+      request(state.count(IDBKeyRange.only([job.jobId, 'failed']))),
+      request(state.count(IDBKeyRange.only([job.jobId, 'ambiguous_save']))),
+    ]);
+    job.retryableFailedCount = retryable;
+    job.ambiguousCount = ambiguous;
+    job.failed = retryable + ambiguous;
+    return true;
+  }
+
+  async function recountFailures(jobId) {
+    return transaction(['jobs', 'tracks'], 'readwrite', async store => {
+      const jobs = store('jobs');
+      const job = await request(jobs.get(jobId));
+      if (!job) return null;
+      if (await ensureFailureCounts(job, store('tracks'))) jobs.put(job);
+      return job;
+    });
+  }
+
   async function updateTrackState(jobId, index, state, detail = {}) {
     const allowed = new Set(['pending', 'saving', 'done', 'failed', 'ambiguous_save']);
     if (!allowed.has(state)) throw fail('invalid_track_state');
@@ -339,6 +366,7 @@
       const job = await request(jobs.get(jobId));
       const record = await request(tracks.get([jobId, index]));
       if (!job || !record) return null;
+      await ensureFailureCounts(job, tracks);
       if (detail.expectedJobStatuses?.length && !detail.expectedJobStatuses.includes(job.status)) return null;
       if (detail.expectedStates?.length && !detail.expectedStates.includes(record.state)) return null;
       if (record.state === state && (detail.downloadId == null || record.downloadId === detail.downloadId)) {
@@ -349,8 +377,16 @@
       if (record.state === 'failed' || record.state === 'ambiguous_save') {
         job.failed = Math.max(0, job.failed - 1);
       }
+      if (record.state === 'failed') {
+        job.retryableFailedCount = Math.max(0, job.retryableFailedCount - 1);
+      }
+      if (record.state === 'ambiguous_save') {
+        job.ambiguousCount = Math.max(0, job.ambiguousCount - 1);
+      }
       if (state === 'done') job.saved += 1;
       if (state === 'failed' || state === 'ambiguous_save') job.failed += 1;
+      if (state === 'failed') job.retryableFailedCount += 1;
+      if (state === 'ambiguous_save') job.ambiguousCount += 1;
 
       record.state = state;
       if (detail.downloadId != null) record.downloadId = detail.downloadId;
@@ -381,6 +417,7 @@
       const tracks = store('tracks');
       const job = await request(jobs.get(jobId));
       if (!job) return null;
+      await ensureFailureCounts(job, tracks);
       let reset = 0;
       await new Promise((resolve, reject) => {
         const opened = tracks.index('state').openCursor(IDBKeyRange.only([jobId, 'failed']));
@@ -400,6 +437,7 @@
       });
       if (!reset) return { job, reset: 0 };
       job.failed = Math.max(0, job.failed - reset);
+      job.retryableFailedCount = Math.max(0, job.retryableFailedCount - reset);
       job.remaining = Math.max(0, job.eligible - job.saved - job.failed);
       job.recentFailures = (job.recentFailures || []).filter(value => value.ambiguous);
       job.revision += 1;
@@ -500,6 +538,7 @@
     commitPage,
     getJob,
     getActiveJob,
+    recountFailures,
     getTracks,
     getTrack,
     getTracksByState,

@@ -228,10 +228,18 @@ async function loadJob() {
     return legacyMigrationPromise;
   }
   const jobId = session?.activeJobId || session?.job?.id;
-  const sessionJob = jobId ? await SCBulkLibrary.getJob(jobId) : null;
+  let sessionJob = jobId ? await SCBulkLibrary.getJob(jobId) : null;
+  if (sessionJob && (!Number.isSafeInteger(sessionJob.retryableFailedCount) ||
+      !Number.isSafeInteger(sessionJob.ambiguousCount))) {
+    sessionJob = await SCBulkLibrary.recountFailures(sessionJob.jobId);
+  }
   if (sessionJob) return sessionJob;
 
-  const durableJob = await SCBulkLibrary.getActiveJob();
+  let durableJob = await SCBulkLibrary.getActiveJob();
+  if (durableJob && (!Number.isSafeInteger(durableJob.retryableFailedCount) ||
+      !Number.isSafeInteger(durableJob.ambiguousCount))) {
+    durableJob = await SCBulkLibrary.recountFailures(durableJob.jobId);
+  }
   if (durableJob) await persistJobSummary(durableJob);
   return durableJob;
 }
@@ -260,6 +268,9 @@ function getPublicJobSnapshot(job) {
     completed: job.saved,
     failed: job.recentFailures || [],
     failedCount: job.failed,
+    retryableFailedCount: job.retryableFailedCount || 0,
+    ambiguousCount: job.ambiguousCount || 0,
+    canRetry: (job.retryableFailedCount || 0) > 0,
     currentTrackTitle: job.currentTrackTitle || null,
     currentTrackStatus: job.currentTrackStatus || null,
     artworkUrl: job.artworkUrl || null,
