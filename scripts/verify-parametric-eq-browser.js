@@ -183,8 +183,18 @@ const { chromium } = require("playwright");
         onChange: (value) => { window.saved = JSON.parse(JSON.stringify(value)); } });
       editor.setVisible(true);
     });
+    assert.equal(await page.locator(".peq-header-control").evaluateAll((buttons) => buttons.every((button) => !button.getClientRects().length)), true,
+      "Minimized EQ must keep the three editing controls out of the header");
+    assert.equal(await page.locator(".peq-pro").isVisible(), true, "Minimized EQ must keep the Pro badge visible");
+    assert.equal(await page.locator(".peq-header-bypass").isVisible(), true, "Minimized EQ must keep the bypass visible");
     await page.locator(".peq-toggle").click();
-    assert.equal(await page.locator(".peq-toolbar button").count(), 3, "Expanded EQ toolbar must have only Point, hard clip and Reset");
+    assert.equal(await page.locator(".peq-toolbar button").count(), 0, "EQ body must not duplicate header controls");
+    assert.equal(await page.locator(".peq-header-control").count(), 3, "Expanded EQ header must show Point, hard clip and Reset");
+    assert.equal(await page.locator(".peq-add svg").evaluate((icon) => getComputedStyle(icon).stroke !== "none"), true,
+      "The add-point control must render its plus icon");
+    assert.deepEqual(await page.locator(".tool-section-actions > *").evaluateAll((elements) => elements.map((element) => element.className)),
+      ["peq-bypass peq-header-bypass", "peq-add peq-header-control", "peq-clip peq-header-control", "peq-reset peq-header-control", "peq-pro"],
+      "EQ header actions must be ordered bypass, editing controls, then Pro badge");
     assert.equal(await page.locator(".peq-bypass").count(), 1, "EQ bypass must appear only in the header");
     await page.locator(".peq-canvas").dblclick({ position: { x: 180, y: 70 } });
     await page.waitForFunction(() => window.saved?.bands.length === 1);

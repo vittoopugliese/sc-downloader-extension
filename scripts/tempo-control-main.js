@@ -27,6 +27,7 @@
   const EXTENSION_DETACH_ICON_ATTRIBUTE = "data-scdl-extension-detach-icon-url";
   const EXTENSION_TRASH_ICON_ATTRIBUTE = "data-scdl-extension-trash-icon-url";
   const EXTENSION_EXPAND_ICON_ATTRIBUTE = "data-scdl-extension-expand-icon-url";
+  const EXTENSION_CROSS_ICON_ATTRIBUTE = "data-scdl-extension-cross-url";
   const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
   const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
   const OPEN_PLAYER_TOOLS_PANEL_EVENT = "scdl:open-player-tools-panel";
@@ -248,6 +249,7 @@
     const detachIconUrl = document.documentElement.getAttribute(EXTENSION_DETACH_ICON_ATTRIBUTE);
     const trashIconUrl = document.documentElement.getAttribute(EXTENSION_TRASH_ICON_ATTRIBUTE);
     const expandIconUrl = document.documentElement.getAttribute(EXTENSION_EXPAND_ICON_ATTRIBUTE);
+    const crossIconUrl = document.documentElement.getAttribute(EXTENSION_CROSS_ICON_ATTRIBUTE);
     if (logoUrl) {
       ui.brandLogo.src = logoUrl;
       ui.brandLogo.hidden = false;
@@ -261,6 +263,7 @@
     if (detachIconUrl && ui.detachIcon) { ui.detachIcon.src = detachIconUrl; ui.detachIcon.hidden = false; }
     if (trashIconUrl && ui.trashIcon) { ui.trashIcon.src = trashIconUrl; ui.trashIcon.hidden = false; }
     if (expandIconUrl && ui.visibilityExpandIcon) ui.visibilityExpandIcon.src = expandIconUrl;
+    if (crossIconUrl) ui.crossIcons.forEach((icon) => { icon.src = crossIconUrl; });
   }
 
   document.addEventListener(EXTENSION_ASSETS_EVENT, syncBrandLogo);
@@ -1492,12 +1495,11 @@
           border: 0;
           color: #fff;
           background: transparent;
-          font-size: 13px;
-          font-weight: 700;
-          line-height: 14px;
           cursor: pointer;
           opacity: .9;
         }
+
+        .clear-rate .cross-icon { width: 12px; height: 12px; }
 
         .clear-rate:hover { color: #fff; opacity: 1; }
         .clear-rate:focus-visible {
@@ -1814,7 +1816,7 @@
         .save-loop-pad:hover, .save-loop-pad[aria-pressed="true"] { color: #fff; border-color: #ff7b38; }
         .save-loop-pad svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
         .clear-loop:disabled, .download-loop:disabled, .save-loop-pad:disabled { cursor: not-allowed; opacity: .45; }
-        .clear-loop svg, .download-loop svg { width: 12px; height: 12px; flex: 0 0 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .clear-loop svg, .clear-loop img, .download-loop svg { width: 12px; height: 12px; flex: 0 0 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .status { margin-top: 5px; }
 
         /* Expanded player editor, compact enough to stay clear of the player. */
@@ -1925,6 +1927,7 @@
         .panel-tool:disabled { opacity: .48; cursor: wait; }
         .panel-tool[aria-pressed="true"] { color: #ff6a1a; border-color: #ff6a1a; }
         .panel-tool svg { display: block; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .panel-tool .cross-icon { display:block; width:12px; height:12px; }
         .panel-tool-icon { display:block; width:13px; height:13px; object-fit:contain; filter:brightness(0) invert(1); }
         .detach-button[aria-pressed="true"] .panel-tool-icon { filter:brightness(0) saturate(100%) invert(56%) sepia(93%) saturate(1985%) hue-rotate(336deg) brightness(104%) contrast(101%); }
         .settings-button svg { width: 12px; height: 12px; fill: currentColor; stroke: none; }
@@ -1976,7 +1979,7 @@
           aria-haspopup="dialog"
           aria-expanded="false"
         ><img class="trigger-icon" width="24" height="24" alt="" draggable="false" hidden /><span class="trigger-rate">1x</span></button>
-        <button class="clear-rate" type="button" aria-label="Reset Player Tools" title="Reset Player Tools" hidden>×</button>
+        <button class="clear-rate" type="button" aria-label="Reset Player Tools" title="Reset Player Tools" hidden><img class="cross-icon" alt="" aria-hidden="true" /></button>
       </span>
       <section
         class="panel"
@@ -2006,7 +2009,7 @@
           </button>
           <button class="panel-tool visibility-button" type="button" aria-controls="scdl-sampler scdl-loop-region scdl-audio-effects scdl-parametric-eq" aria-label="Collapse all controls" title="Collapse all controls"><svg class="visibility-symbol visibility-up-icon" viewBox="0 0 16 16" aria-hidden="true" hidden><path d="M3.5 8h9" /></svg><svg class="visibility-symbol visibility-down-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 6.5 4.5 4 4.5-4" /></svg><img class="panel-tool-icon visibility-expand-icon" alt="" aria-hidden="true" hidden /></button>
           <button class="panel-tool close-button" type="button" aria-label="Close panel" title="Close panel">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            <img class="cross-icon" alt="" aria-hidden="true" />
           </button>
         </div>
         </div>
@@ -2043,7 +2046,7 @@
           <p class="drum-message" role="status" aria-live="polite" hidden></p>
         </section>
         <section class="waveform-shell" id="scdl-loop-region" role="group" aria-label="Loop Region">
-          ${collapsible.header({ title: "Loop Region", bodyId: "scdl-loop-region-body", toggleClass: "waveform-toggle", headerClass: "waveform-header", actionsClass: "waveform-actions", icon: '<svg class="tool-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>', actions: '<div class="waveform-header-setters"><button class="setter header-set-a" type="button" aria-label="Set loop start">Set A</button><button class="setter header-set-b" type="button" aria-label="Set loop end">Set B</button></div><button class="clear-loop" type="button" aria-label="Clear loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button><button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>' })}
+          ${collapsible.header({ title: "Loop Region", bodyId: "scdl-loop-region-body", toggleClass: "waveform-toggle", headerClass: "waveform-header", actionsClass: "waveform-actions", icon: '<svg class="tool-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>', actions: '<div class="waveform-header-setters"><button class="setter header-set-a" type="button" aria-label="Set loop start">Set A</button><button class="setter header-set-b" type="button" aria-label="Set loop end">Set B</button></div><button class="clear-loop" type="button" aria-label="Clear loop"><img class="cross-icon" alt="" aria-hidden="true" /><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button><button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>' })}
           <div class="waveform-body" id="scdl-loop-region-body">
           <div class="waveform-stage">
             <canvas class="waveform-canvas" aria-hidden="true"></canvas>
@@ -2185,6 +2188,7 @@
       root,
       trigger: root.querySelector(".trigger"),
       clearRate: root.querySelector(".clear-rate"),
+      crossIcons: [...root.querySelectorAll(".cross-icon")],
       panel: root.querySelector(".panel"),
       drumButtons: [...root.querySelectorAll(".drum-pad")],
       drumFiles: [...root.querySelectorAll(".drum-file")],

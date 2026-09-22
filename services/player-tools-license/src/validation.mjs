@@ -32,6 +32,23 @@ export function validateStatus(value) {
     : { ok: false, error: "invalid_request" };
 }
 
+export function validateTrialStart(value) {
+  const installationId = text(value?.installationId, 128);
+  return installationId && /^[a-zA-Z0-9_-]{16,128}$/.test(installationId)
+    ? { ok: true, value: { installationId } }
+    : { ok: false, error: "invalid_request" };
+}
+
+export function validateTrialConsume(value) {
+  const installationId = text(value?.installationId, 128);
+  const requestId = text(value?.requestId, 128);
+  const trackIdentity = text(value?.trackIdentity, 1024);
+  return installationId && requestId && trackIdentity &&
+      /^[a-zA-Z0-9_-]{16,128}$/.test(installationId)
+    ? { ok: true, value: { installationId, requestId, trackIdentity } }
+    : { ok: false, error: "invalid_request" };
+}
+
 const EVENT_NAMES = new Set([
   "player_tools_promo_seen", "player_tools_opened", "player_tools_value_reached",
   "pro_feature_attempted", "paywall_seen", "checkout_started", "license_activated",

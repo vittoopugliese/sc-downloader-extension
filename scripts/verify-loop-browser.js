@@ -203,7 +203,7 @@ async function waitForFile(directory, timeoutMs = 30000) {
     );
     assert.equal(
       await loopButton.locator(".scdl-loop-button-icon path").getAttribute("d"),
-      "M6 6l12 12M18 6L6 18",
+      "M5 5 19 19M19 5 5 19",
       "The remounted active loop control must show the close cross"
     );
     const waveform = page.locator('[role="slider"][aria-label="Waveform"]');
@@ -292,7 +292,7 @@ async function waitForFile(directory, timeoutMs = 30000) {
     );
     assert.equal(
       await loopButton.locator(".scdl-loop-button-icon path").getAttribute("d"),
-      "M6 6l12 12M18 6L6 18",
+      "M5 5 19 19M19 5 5 19",
       "Closing comment mode must restore the active loop close icon"
     );
     await loopButton.click();

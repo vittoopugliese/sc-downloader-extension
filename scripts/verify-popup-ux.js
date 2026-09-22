@@ -111,7 +111,7 @@ assert(
   "The compact folder-picker button is missing."
 );
 assert(
-  /id="resetDownloadFolder"[^>]*data-i18n-title="reset_download_folder"[^>]*>×<\/button>/.test(popup) &&
+  /id="resetDownloadFolder"[^>]*data-i18n-title="reset_download_folder"[^>]*>[\s\S]*assets\/icons\/cross\.svg[\s\S]*<\/button>/.test(popup) &&
     /SCDownloadDirectory\.clearCurrent\(\)/.test(popupScript),
   "The popup must provide a way back to the browser Downloads folder."
 );

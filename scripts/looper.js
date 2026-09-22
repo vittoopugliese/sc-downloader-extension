@@ -833,11 +833,12 @@ const SCLooper = (() => {
 
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     if (active) {
-      path.setAttribute("d", "M6 6l12 12M18 6L6 18");
+      path.setAttribute("d", "M5 5 19 19M19 5 5 19");
       path.setAttribute("fill", "none");
       path.setAttribute("stroke", "currentColor");
       path.setAttribute("stroke-width", "1.8");
-      path.setAttribute("stroke-linecap", "square");
+      path.setAttribute("stroke-linecap", "round");
+      path.setAttribute("stroke-linejoin", "round");
     } else {
       path.setAttribute(
         "d",

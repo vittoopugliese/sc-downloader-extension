@@ -198,7 +198,7 @@ vm.runInContext("globalThis.__setLooperButtonState", lifecycleContext)(
 );
 assert.equal(
   rerenderedActiveButton.child?.child?.attributes.d,
-  "M6 6l12 12M18 6L6 18",
+  "M5 5 19 19M19 5 5 19",
   "An active loop button must restore its close icon after SoundCloud rerenders it"
 );
 

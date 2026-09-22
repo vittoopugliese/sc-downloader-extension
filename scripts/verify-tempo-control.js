@@ -55,7 +55,7 @@ if (!fs.existsSync(path.join(projectRoot, "assets/icons/eq.svg")) ||
     !packageScript.includes('"assets/icons"')) {
   throw new Error("The EQ icon must be packaged and exposed to SoundCloud.");
 }
-for (const name of ["detach", "trash", "expand"]) {
+for (const name of ["cross", "detach", "trash", "expand"]) {
   const asset = `assets/icons/${name}.svg`;
   if (!fs.existsSync(path.join(projectRoot, asset)) ||
       !manifest.web_accessible_resources?.some((entry) => entry.resources?.includes(asset)) ||

@@ -7,6 +7,7 @@ let lastBulkProgressAt = 0;
 const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
 const EXTENSION_PLAYER_ICON_ATTRIBUTE = "data-scdl-extension-player-icon-url";
 const EXTENSION_EQ_ICON_ATTRIBUTE = "data-scdl-extension-eq-url";
+const EXTENSION_CROSS_ICON_ATTRIBUTE = "data-scdl-extension-cross-url";
 const EXTENSION_DRUM_SAMPLES_ATTRIBUTE = "data-scdl-extension-drum-samples-url";
 const EXTENSION_MEGAPHONE_ATTRIBUTE = "data-scdl-extension-megaphone-url";
 const EXTENSION_SOCIAL_BADGE_ATTRIBUTE = "data-scdl-extension-social-badge-url";
@@ -34,6 +35,10 @@ function exposeTempoControlAssets() {
   document.documentElement?.setAttribute?.(
     EXTENSION_EQ_ICON_ATTRIBUTE,
     chrome.runtime.getURL("assets/icons/eq.svg")
+  );
+  document.documentElement?.setAttribute?.(
+    EXTENSION_CROSS_ICON_ATTRIBUTE,
+    chrome.runtime.getURL("assets/icons/cross.svg")
   );
   document.documentElement?.setAttribute?.(
     EXTENSION_DRUM_SAMPLES_ATTRIBUTE,
