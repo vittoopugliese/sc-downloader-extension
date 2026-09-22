@@ -147,7 +147,83 @@ test("activation fails closed for incomplete or mismatched provider responses", 
   }), { ...env, LICENSE_DB });
   assert.equal(response.status, 403);
   assert.deepEqual(await response.json(), { active: false, error: "activation_failed" });
-  assert.equal(LICENSE_DB.statements.length, 0);
+  assert.equal(LICENSE_DB.statements.length, 1);
+  assert.match(LICENSE_DB.statements[0].sql, /INSERT INTO activation_operations/);
+});
+
+test("two concurrent profiles reserve the only seats atomically and a third never reaches Lemon", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  const LICENSE_DB = sqliteD1();
+  let providerCalls = 0;
+  globalThis.fetch = async (_url, options) => {
+    providerCalls += 1;
+    const installation = new URLSearchParams(options.body).get("instance_name");
+    return new Response(JSON.stringify({ ...activationResponse(), instance: { id: `instance-${installation}`, name: installation } }), { status: 200 });
+  };
+  const profiles = ["profile_0000000001", "profile_0000000002", "profile_0000000003"];
+  const responses = await Promise.all(profiles.map((profile) => worker.fetch(request("/api/player-tools/license/activate", {
+    installationId: profile, email: "buyer@example.com", licenseKey: "license-key",
+  }), { ...env, LICENSE_DB })));
+  assert.deepEqual(responses.map((response) => response.status).sort(), [200, 200, 409]);
+  assert.equal(providerCalls, 2);
+  assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM activation_operations WHERE state='active'").get().count, 2);
+  assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM activations WHERE deactivated_at IS NULL").get().count, 2);
+});
+
+test("a duplicate activation waits for its durable operation and retry reuses the same seat", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  const LICENSE_DB = sqliteD1();
+  let providerCalls = 0;
+  let resolveProvider;
+  const providerResult = new Promise((resolve) => { resolveProvider = resolve; });
+  globalThis.fetch = async () => {
+    providerCalls += 1;
+    await providerResult;
+    return new Response(JSON.stringify(activationResponse()), { status: 200 });
+  };
+  const body = { installationId, email: "buyer@example.com", licenseKey: "license-key" };
+  const first = worker.fetch(request("/api/player-tools/license/activate", body), { ...env, LICENSE_DB });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const duplicate = await worker.fetch(request("/api/player-tools/license/activate", body), { ...env, LICENSE_DB });
+  assert.equal(duplicate.status, 409);
+  assert.deepEqual(await duplicate.json(), { active: false, error: "activation_in_progress" });
+  assert.equal(providerCalls, 1);
+  resolveProvider();
+  assert.equal((await first).status, 200);
+  const retry = await worker.fetch(request("/api/player-tools/license/activate", body), { ...env, LICENSE_DB });
+  assert.equal(retry.status, 200);
+  assert.equal(providerCalls, 1);
+  assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM activation_operations").get().count, 1);
+});
+
+test("a D1 interruption after Lemon activation is retried through the original reservation", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  const LICENSE_DB = sqliteD1();
+  const originalBatch = LICENSE_DB.batch.bind(LICENSE_DB);
+  let failPersistence = true;
+  LICENSE_DB.batch = async (statements) => {
+    if (failPersistence) { failPersistence = false; throw new Error("simulated D1 interruption"); }
+    return originalBatch(statements);
+  };
+  let providerCalls = 0;
+  globalThis.fetch = async () => {
+    providerCalls += 1;
+    return new Response(JSON.stringify(activationResponse()), { status: 200 });
+  };
+  const body = { installationId, email: "buyer@example.com", licenseKey: "license-key" };
+  const first = await worker.fetch(request("/api/player-tools/license/activate", body), { ...env, LICENSE_DB });
+  assert.equal(first.status, 409);
+  assert.deepEqual(await first.json(), { active: false, error: "activation_in_progress" });
+  assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM activation_operations").get().count, 1);
+  LICENSE_DB.database.prepare("UPDATE activation_operations SET lease_expires_at=0 WHERE installation_id=?").run(installationId);
+  const retry = await worker.fetch(request("/api/player-tools/license/activate", body), { ...env, LICENSE_DB });
+  assert.equal(retry.status, 200);
+  assert.equal(providerCalls, 2);
+  assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM activation_operations WHERE state='active'").get().count, 1);
+  assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM activations").get().count, 1);
 });
 
 test("webhooks reject a validly signed order from another product before writing D1", async () => {

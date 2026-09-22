@@ -4,6 +4,8 @@ const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache
 const LEMON_API = "https://api.lemonsqueezy.com/v1";
 const MAX_PROVIDER_RESPONSE_BYTES = 256 * 1024;
 const PROVIDER_TIMEOUT_MS = 12_000;
+const ACTIVATION_LEASE_MS = 30_000;
+const MAX_ACTIVE_PROFILES = 2;
 
 function json(status, value, extra = {}) { return new Response(JSON.stringify(value), { status, headers: { ...JSON_HEADERS, ...extra } }); }
 function now() { return Date.now(); }
@@ -144,14 +146,44 @@ function validLicenseActivation(result, email, env) {
     license?.status === "active" && (!expiresAt || expiresAt > now()) && matchesProduct(meta, env) &&
     String(meta?.customer_email || "").toLowerCase() === email);
 }
-async function recordActivation(env, result, email, installationId) {
+async function acquireActivationOperation(env, keyHash, installationId) {
+  const timestamp = now();
+  const token = crypto.randomUUID();
+  // INSERT ... SELECT is deliberately one statement: D1 serializes writes,
+  // so three concurrent profiles can create at most two reservations.
+  const inserted = await env.LICENSE_DB.prepare(`INSERT INTO activation_operations
+    (license_key_hash, installation_id, state, lease_token, lease_expires_at, created_at, updated_at)
+    SELECT ?, ?, 'pending', ?, ?, ?, ?
+    WHERE (SELECT COUNT(*) FROM activation_operations
+      WHERE license_key_hash=? AND state IN ('pending', 'active')) < ?
+    ON CONFLICT(license_key_hash, installation_id) DO NOTHING`)
+    .bind(keyHash, installationId, token, timestamp + ACTIVATION_LEASE_MS, timestamp, timestamp,
+      keyHash, MAX_ACTIVE_PROFILES).run();
+  if (Number(inserted.meta?.changes || 0) > 0) return { kind: 'owned', token };
+
+  const existing = await env.LICENSE_DB.prepare(`SELECT state, lease_expires_at, lemon_license_id, lemon_instance_id
+    FROM activation_operations WHERE license_key_hash=? AND installation_id=?`)
+    .bind(keyHash, installationId).first();
+  if (!existing) return { kind: 'seat_limit' };
+  if (existing.state === 'active' && existing.lemon_license_id && existing.lemon_instance_id) {
+    return { kind: 'active', licenseId: existing.lemon_license_id, instanceId: existing.lemon_instance_id };
+  }
+  if (Number(existing.lease_expires_at || 0) > timestamp) return { kind: 'in_progress' };
+  const reclaimed = await env.LICENSE_DB.prepare(`UPDATE activation_operations
+    SET lease_token=?, lease_expires_at=?, updated_at=?
+    WHERE license_key_hash=? AND installation_id=? AND state='pending'
+      AND (lease_expires_at IS NULL OR lease_expires_at <= ?)`)
+    .bind(token, timestamp + ACTIVATION_LEASE_MS, timestamp, keyHash, installationId, timestamp).run();
+  return Number(reclaimed.meta?.changes || 0) > 0 ? { kind: 'owned', token } : { kind: 'in_progress' };
+}
+async function recordActivation(env, result, email, installationId, keyHash, operationToken) {
   const timestamp = now();
   const license = result?.license_key;
   const instance = result?.instance;
   const meta = result?.meta;
   const licenseId = String(license?.id || "");
   const instanceId = String(instance?.id || "");
-  const keyHash = await sha256Hex(String(license?.key || ""));
+  const providerKeyHash = await sha256Hex(String(license?.key || ""));
   if (!licenseId || !instanceId) throw new Error("Lemon returned an incomplete license activation.");
   const results = await env.LICENSE_DB.batch([
     env.LICENSE_DB.prepare(`INSERT INTO licenses (lemon_license_id, lemon_order_id, lemon_customer_id, lemon_key_hash, customer_email, status, created_at, updated_at)
@@ -161,20 +193,43 @@ async function recordActivation(env, result, email, installationId) {
         status=CASE WHEN licenses.status='revoked' THEN 'revoked' ELSE 'active' END,
         revoked_at=CASE WHEN licenses.status='revoked' THEN licenses.revoked_at ELSE NULL END,
         updated_at=MAX(licenses.updated_at, excluded.updated_at)`)
-      .bind(licenseId, String(meta?.order_id || "") || null, String(meta?.customer_id || "") || null, keyHash, email, timestamp, timestamp),
+      .bind(licenseId, String(meta?.order_id || "") || null, String(meta?.customer_id || "") || null, providerKeyHash, email, timestamp, timestamp),
     env.LICENSE_DB.prepare(`INSERT INTO activations (lemon_instance_id, lemon_license_id, installation_id, activated_at, last_validated_at)
       SELECT ?, ?, ?, ?, ? FROM licenses WHERE lemon_license_id=? AND status='active'
-      ON CONFLICT(lemon_instance_id) DO UPDATE SET installation_id=excluded.installation_id, last_validated_at=excluded.last_validated_at, deactivated_at=NULL`)
+      ON CONFLICT(lemon_license_id, installation_id) DO UPDATE SET
+        last_validated_at=excluded.last_validated_at, deactivated_at=NULL`)
       .bind(instanceId, licenseId, installationId, timestamp, timestamp, licenseId),
+    env.LICENSE_DB.prepare(`UPDATE activation_operations SET state='active', lemon_license_id=?, lemon_instance_id=?,
+      lease_token=NULL, lease_expires_at=NULL, updated_at=?
+      WHERE license_key_hash=? AND installation_id=? AND state='pending' AND lease_token=?
+        AND EXISTS (SELECT 1 FROM licenses WHERE lemon_license_id=? AND status='active')`)
+      .bind(licenseId, instanceId, timestamp, keyHash, installationId, operationToken, licenseId),
   ]);
-  return Number(results?.[1]?.meta?.changes || 0) > 0 ? { licenseId, instanceId } : null;
+  return Number(results?.[2]?.meta?.changes || 0) > 0 ? { licenseId, instanceId } : null;
 }
 async function activate(env, value) {
+  const keyHash = await sha256Hex(value.licenseKey);
+  const operation = await acquireActivationOperation(env, keyHash, value.installationId);
+  if (operation.kind === 'active') return operation;
+  if (operation.kind !== 'owned') return operation;
   const result = await lemonLicenseAction("activate", { license_key: value.licenseKey, instance_name: value.installationId });
-  if (!validLicenseActivation(result, value.email, env)) {
-    return null;
+  if (!validLicenseActivation(result, value.email, env) || keyHash !== await sha256Hex(String(result?.license_key?.key || ""))) {
+    return { kind: 'failed' };
   }
-  return recordActivation(env, result, value.email, value.installationId);
+  let entitlement;
+  try {
+    entitlement = await recordActivation(env, result, value.email, value.installationId, keyHash, operation.token);
+  } catch (error) {
+    // Lemon may already have created the instance. Keep the reservation and
+    // report a retryable state instead of asking the client to activate again.
+    console.error(JSON.stringify({ message: "activation persistence deferred", error: error instanceof Error ? error.message : String(error) }));
+    return { kind: 'in_progress' };
+  }
+  // If D1 fails after Lemon succeeded, this pending reservation survives. The
+  // same profile retries it after the lease; it cannot consume another seat.
+  if (entitlement) return entitlement;
+  const license = await env.LICENSE_DB.prepare("SELECT status FROM licenses WHERE lemon_license_id=?").bind(String(result.license_key.id)).first();
+  return license?.status === 'revoked' ? { kind: 'failed' } : { kind: 'in_progress' };
 }
 async function restore(env, value) {
   const keyHash = await sha256Hex(value.licenseKey);
@@ -183,7 +238,7 @@ async function restore(env, value) {
     WHERE licenses.lemon_key_hash=? AND licenses.customer_email=? AND licenses.status='active'
       AND activations.installation_id=? AND activations.deactivated_at IS NULL`)
     .bind(keyHash, value.email, value.installationId).first();
-  if (existing) return { licenseId: existing.lemon_license_id, instanceId: existing.lemon_instance_id };
+  if (existing) return { kind: 'active', licenseId: existing.lemon_license_id, instanceId: existing.lemon_instance_id };
   return activate(env, value);
 }
 async function status(env, value) {
@@ -317,11 +372,19 @@ export default {
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/license/activate") {
         const parsed = validateActivation(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
-        const entitlement = await activate(env, parsed.value); return entitlement ? json(200, { active: true, ...entitlement }, corsHeaders) : json(403, { active: false, error: "activation_failed" }, corsHeaders);
+        const entitlement = await activate(env, parsed.value);
+        if (entitlement?.kind === 'active' || (entitlement?.licenseId && entitlement?.instanceId)) return json(200, { active: true, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId }, corsHeaders);
+        if (entitlement?.kind === 'seat_limit') return json(409, { active: false, error: 'seat_limit' }, corsHeaders);
+        if (entitlement?.kind === 'in_progress') return json(409, { active: false, error: 'activation_in_progress' }, corsHeaders);
+        return json(403, { active: false, error: "activation_failed" }, corsHeaders);
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/license/restore") {
         const parsed = validateActivation(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
-        const entitlement = await restore(env, parsed.value); return entitlement ? json(200, { active: true, ...entitlement }, corsHeaders) : json(403, { active: false, error: "activation_failed" }, corsHeaders);
+        const entitlement = await restore(env, parsed.value);
+        if (entitlement?.kind === 'active' || (entitlement?.licenseId && entitlement?.instanceId)) return json(200, { active: true, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId }, corsHeaders);
+        if (entitlement?.kind === 'seat_limit') return json(409, { active: false, error: 'seat_limit' }, corsHeaders);
+        if (entitlement?.kind === 'in_progress') return json(409, { active: false, error: 'activation_in_progress' }, corsHeaders);
+        return json(403, { active: false, error: "activation_failed" }, corsHeaders);
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/license/status") {
         const parsed = validateStatus(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);

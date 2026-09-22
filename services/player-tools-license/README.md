@@ -13,9 +13,12 @@ service; Lemon credentials never ship in the extension.
   upserts and durable full-refund tombstones. Partial refunds are recorded but
   intentionally require manual review.
 - Activation/recovery persists the documented sibling `license_key`, `instance`
-  and `meta` objects without storing the license key in the extension. Sequential
-  recovery is idempotent; concurrent provider activation and orphan
-  reconciliation are still release blockers.
+  and `meta` objects without storing the license key in the extension. A durable,
+  leased reservation keyed by license hash and installation ID atomically limits
+  a license to two profiles before contacting Lemon. Repeating an active profile
+  returns its existing activation; an interrupted persistence can be recovered
+  by retrying that same reservation after its lease. Real-provider orphan
+  reconciliation remains a release blocker.
 - Local status lookup and refund/revocation propagation. Provider reconciliation
   and signed 30-day entitlement receipts are still release blockers.
 - A strict event allow-list that rejects track titles, music URLs, emails and keys.
@@ -58,8 +61,8 @@ observed once and the D1 rows agree:
 3. One successful test order creates one deduplicated `order_created` webhook
    and one `purchase_confirmed` event with the same installation ID.
 4. Email + license key activates Pro; repeating recovery returns the same
-   license/instance. Also verify concurrent requests and a lost provider
-   response do not consume another activation; local tests do not yet prove it.
+   license/instance. Verify two profiles activate, a third is rejected, and a
+   lost provider response can be retried without consuming another reservation.
 5. Restarting the service worker and reopening the popup keeps Pro active.
 6. A test refund produces `order_refunded`; the next revalidation removes Pro
    but keeps audio preferences and trial history.

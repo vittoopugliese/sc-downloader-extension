@@ -110,6 +110,8 @@
       if (!response.ok) {
         const code = payload?.error || "service-error";
         const message = code === "activation_failed" ? "That license could not be activated. Check the email and key, then try again."
+          : code === "seat_limit" ? "This license already has two active Chrome profiles. Contact support to release one."
+          : code === "activation_in_progress" ? "This activation is still being confirmed. Please try again shortly."
           : code === "license_revoked" ? "This purchase was refunded or revoked. Contact support if this looks wrong."
           : "Player Tools licensing is temporarily unavailable.";
         throw Object.assign(new Error(message), { code, status: response.status });
