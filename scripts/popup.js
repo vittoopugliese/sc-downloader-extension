@@ -6,7 +6,6 @@ const MAX_NOT_TRACK_RETRIES = 2;
 const t = globalThis.SCDLI18n?.t || ((key) => key);
 const DEFAULT_DOWNLOAD_STATUS = t("ready_to_download");
 const DOWNLOAD_ERROR_STATUS = t("error_retry");
-const DOWNLOAD_PRESETS = [10, 25, 50, 100, 150, 200, 300];
 const DOWNLOAD_WARN_THRESHOLD = 200;
 const SELECT_WARN_THRESHOLD = 1000;
 const ROW_HEIGHT = 40;
@@ -30,11 +29,17 @@ const artistUrl = document.getElementById("artistUrl");
 const artistArtwork = document.getElementById("artistArtwork");
 const artistEl = document.getElementById("artist");
 const durationEl = document.getElementById("duration");
-const metaSep = document.getElementById("metaSep");
-const streamFormat = document.getElementById("streamFormat");
+const downloadToolbar = document.getElementById("downloadToolbar");
 const downloadFormat = document.getElementById("downloadFormat");
+const downloadLimitControl = document.getElementById("downloadLimitControl");
 const downloadLimit = document.getElementById("downloadLimit");
+const downloadLimitToggle = document.getElementById("downloadLimitToggle");
+const downloadLimitMenu = document.getElementById("downloadLimitMenu");
+const downloadLimitAll = document.getElementById("downloadLimitAll");
+const downloadLimitSelect = document.getElementById("downloadLimitSelect");
 const downloadBtn = document.getElementById("downloadBtn");
+const downloadButtonContainer = document.querySelector(".download-button-container");
+const statusRow = document.getElementById("statusRow");
 const jobControls = document.getElementById("jobControls");
 const pauseJobBtn = document.getElementById("pauseJobBtn");
 const resumeJobBtn = document.getElementById("resumeJobBtn");
@@ -47,12 +52,10 @@ const failedSummary = document.getElementById("failedSummary");
 const failedDetails = document.getElementById("failedDetails");
 const chooseDownloadFolder = document.getElementById("chooseDownloadFolder");
 const resetDownloadFolder = document.getElementById("resetDownloadFolder");
-const downloadFolderName = document.getElementById("downloadFolderName");
-const downloadFormatSlot = document.getElementById("downloadFormatSlot");
-const downloadFolderSlot = document.getElementById("downloadFolderSlot");
 const selectionPanel = document.getElementById("selectionPanel");
 const selectionBackBtn = document.getElementById("selectionBackBtn");
 const selectionHeaderOptions = document.getElementById("selectionHeaderOptions");
+const selectionHeaderActions = document.querySelector(".selection-header-actions");
 const selectAllBtn = document.getElementById("selectAllBtn");
 const clearAllBtn = document.getElementById("clearAllBtn");
 const selectionViewport = document.getElementById("selectionViewport");
@@ -100,6 +103,8 @@ let isOpeningSelection = false;
 let selectionItems = [];
 let selectedIds = new Set();
 let previousDownloadLimitValue = "50";
+let downloadLimitMode = "number";
+let suppressLimitFocus = false;
 let selectionScrollRaf = null;
 let selectionRowsListenerAttached = false;
 let activeTabId = null;
@@ -393,17 +398,68 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  downloadLimit.addEventListener("change", () => {
-    if (downloadLimit.value === "select") {
-      openSelectionPanel();
-    } else {
-      previousDownloadLimitValue = downloadLimit.value;
-      updateCollectionDownloadHint();
+  downloadLimit.addEventListener("focus", () => {
+    if (suppressLimitFocus) return;
+    openDownloadLimitMenu();
+    downloadLimit.select();
+  });
+  downloadLimit.addEventListener("input", () => {
+    const total = getCollectionTotal();
+    const digits = downloadLimit.value.replace(/\D/g, "");
+    const amount = digits ? Math.min(Number(digits), total) : null;
+    downloadLimitMode = "number";
+    downloadLimit.value = amount === null ? "" : String(amount);
+    if (amount !== null) previousDownloadLimitValue = downloadLimit.value;
+    downloadLimitAll.setAttribute("aria-selected", "false");
+    updateCollectionDownloadHint();
+    updateCollectionControlHints();
+  });
+  downloadLimit.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      openDownloadLimitMenu();
+      (event.key === "ArrowDown" ? downloadLimitAll : downloadLimitSelect).focus();
+    } else if (event.key === "Escape" || event.key === "Enter") {
+      closeDownloadLimitMenu();
+      if (event.key === "Enter") event.preventDefault();
     }
+  });
+  downloadLimitToggle.addEventListener("click", () => {
+    downloadLimit.focus();
+    openDownloadLimitMenu();
+  });
+  downloadLimitAll.addEventListener("click", () => {
+    setDownloadLimit("all");
+    closeDownloadLimitMenu();
+    downloadLimitToggle.focus();
+  });
+  downloadLimitSelect.addEventListener("click", () => {
+    closeDownloadLimitMenu();
+    downloadLimitToggle.focus();
+    openSelectionPanel();
+  });
+  downloadLimitMenu.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeDownloadLimitMenu();
+      suppressLimitFocus = true;
+      downloadLimit.focus();
+      suppressLimitFocus = false;
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      (document.activeElement === downloadLimitAll ? downloadLimitSelect : downloadLimitAll).focus();
+    }
+  });
+  downloadLimitControl.addEventListener("focusout", (event) => {
+    if (!downloadLimitControl.contains(event.relatedTarget)) closeDownloadLimitMenu();
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (!downloadLimitControl.contains(event.target)) closeDownloadLimitMenu();
   });
 
   downloadFormat.addEventListener("change", async () => {
     currentFormatPreference = downloadFormat.value;
+    updateFormatHint(currentTrackData);
     await SCStreamSelector.setStoredFormatPreference(currentFormatPreference);
 
     if (!activeTabId) {
@@ -423,13 +479,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (response?.success && response.data) {
           currentTrackData = response.data;
-          const label =
-            response.data.streamFormatLabel ||
-            (response.data.streamProtocol
-              ? response.data.streamProtocol.toUpperCase()
-              : "");
-          streamFormat.textContent = label;
-          streamFormat.style.display = label ? "" : "none";
           configureFormatDropdown(response.data);
         }
       }
@@ -509,19 +558,21 @@ async function ensureDownloadDestinationPermission() {
 
 function renderDownloadDestination() {
   const folderName = currentDownloadDestination?.name || t("folder");
-  downloadFolderName.textContent = currentDownloadDestination?.name || t("downloads_folder");
   resetDownloadFolder.classList.toggle("is-hidden", !currentDownloadDestination);
-  chooseDownloadFolder.title = currentDownloadDestination
+  chooseDownloadFolder.classList.toggle("has-custom-folder", !!currentDownloadDestination);
+  setControlHint(chooseDownloadFolder, currentDownloadDestination
     ? t("change_download_folder", folderName)
-    : t("choose_folder");
+    : t("choose_folder"));
 }
 
 function showDownloadDestination() {
   chooseDownloadFolder.classList.remove("is-hidden");
+  resetDownloadFolder.classList.toggle("is-hidden", !currentDownloadDestination);
 }
 
 function hideDownloadDestination() {
   chooseDownloadFolder.classList.add("is-hidden");
+  resetDownloadFolder.classList.add("is-hidden");
 }
 
 function requestJobStatus() {
@@ -573,9 +624,9 @@ function renderBulkJobState(job) {
   artistUrl.href = job.artistUrl || "#";
   setArtistArtwork(artistArtwork, job.artistImageUrl);
   durationEl.textContent = t("tracks", job.total);
-  streamFormat.style.display = "none";
+  durationEl.style.display = "";
+  downloadToolbar.classList.add("is-hidden");
   hideDownloadLimitSelector();
-  metaSep.style.display = "none";
   hideDownloadDestination();
 
   if (job.artworkUrl) {
@@ -810,6 +861,80 @@ async function getFormatPreference() {
   return currentFormatPreference || SCStreamSelector.DEFAULT_PREFERENCE;
 }
 
+function setControlHint(control, message) {
+  control.title = message;
+  control.setAttribute("aria-label", message);
+}
+
+function formatCount(value) {
+  return new Intl.NumberFormat(chrome.i18n.getUILanguage()).format(value);
+}
+
+function getCollectionTotal() {
+  return currentPlaylistData?.totalCount ?? currentPlaylistData?.tracks?.length ?? 0;
+}
+
+function openDownloadLimitMenu() {
+  if (downloadLimitControl.classList.contains("is-hidden")) return;
+  downloadLimitMenu.hidden = false;
+  downloadLimit.setAttribute("aria-expanded", "true");
+}
+
+function closeDownloadLimitMenu() {
+  downloadLimitMenu.hidden = true;
+  downloadLimit.setAttribute("aria-expanded", "false");
+}
+
+function setDownloadLimit(value) {
+  downloadLimitMode = value === "all" ? "all" : "number";
+  downloadLimit.value = value === "all" ? t("all") : String(value);
+  previousDownloadLimitValue = value;
+  downloadLimitAll.setAttribute("aria-selected", String(value === "all"));
+  updateCollectionDownloadHint();
+  updateCollectionControlHints();
+}
+
+function expectedAutoFormat(trackData) {
+  if (trackData?.availableFormats?.original || trackData?.streamFormatLabel === "Original file") return t("original");
+  if (trackData?.availableFormats?.mp3) return "MP3";
+  if (trackData?.availableFormats?.m4a) return "M4A";
+  if (trackData?.availableFormats?.opus) return "Opus";
+  const preset = trackData?.streamPreset || "";
+  const mimeType = trackData?.streamMimeType || "";
+  if (preset.startsWith("mp3") || mimeType.includes("audio/mpeg") || trackData?.streamProtocol === "progressive") return "MP3";
+  if (preset.startsWith("aac") || mimeType.includes("mp4")) return "M4A";
+  if (preset.includes("opus") || mimeType.includes("opus")) return "Opus";
+  return "";
+}
+
+function updateFormatHint(trackData = null) {
+  const autoOption = downloadFormat.querySelector('option[value="auto"]');
+  const expected = trackData ? expectedAutoFormat(trackData) : "";
+  const autoLabel = isSelectionMode ? "Auto" : t("auto");
+  autoOption.textContent = expected ? `${autoLabel} · ${expected}` : autoLabel;
+  const hint = downloadFormat.value === "auto"
+    ? expected ? t("auto_format_expected", expected) : t("auto_format_collection")
+    : t("download_format_preference", downloadFormat.selectedOptions[0]?.textContent || "");
+  setControlHint(downloadFormat, hint);
+}
+
+function updateCollectionControlHints() {
+  if (!currentPlaylistData) return;
+  const total = getCollectionTotal();
+  const selected = selectedDownloadLimit();
+  const totalLabel = formatCount(total);
+  const hint = selected === "all"
+    ? t("download_all_count", totalLabel)
+    : selected === null
+      ? t("download_amount_range", totalLabel)
+      : selected === 0
+        ? t("download_zero_hint")
+      : t("download_part_count", [formatCount(selected), totalLabel]);
+  setControlHint(downloadLimit, hint);
+  setControlHint(downloadBtn, hint);
+  downloadBtn.disabled = selected === null || selected === 0;
+}
+
 function configureFormatDropdown(trackData) {
   const available = trackData?.availableFormats || {};
 
@@ -829,6 +954,7 @@ function configureFormatDropdown(trackData) {
 
   downloadFormat.value = trackData?.formatPreference || currentFormatPreference;
   downloadFormat.classList.remove("is-hidden");
+  updateFormatHint(trackData);
 }
 
 function showFormatDropdownForBulk() {
@@ -838,6 +964,7 @@ function showFormatDropdownForBulk() {
 
   downloadFormat.value = currentFormatPreference;
   downloadFormat.classList.remove("is-hidden");
+  updateFormatHint();
 }
 
 function hideFormatDropdown() {
@@ -865,6 +992,8 @@ async function renderTrack(trackData) {
   artistUrl.href = trackData.artistUrl;
   setArtistArtwork(artistArtwork, trackData.artistImageUrl);
   durationEl.textContent = trackData.duration || "";
+  durationEl.style.display = trackData.duration ? "" : "none";
+  downloadToolbar.classList.remove("is-hidden");
 
   if (trackData.artworkUrl) {
     artwork.style.backgroundImage = `url(${trackData.artworkUrl})`;
@@ -874,15 +1003,10 @@ async function renderTrack(trackData) {
     artwork.style.backgroundColor = "black";
   }
 
-  const formatLabel =
-    trackData.streamFormatLabel ||
-    (trackData.streamProtocol ? trackData.streamProtocol.toUpperCase() : "");
-
-  streamFormat.textContent = formatLabel;
-  streamFormat.style.display = formatLabel ? "" : "none";
   hideDownloadLimitSelector();
   configureFormatDropdown(trackData);
-  metaSep.style.display = trackData.duration ? "" : "none";
+  setControlHint(downloadBtn, t("download_track_hint"));
+  downloadBtn.disabled = false;
 
   downloadStatus.textContent = trackData.clientId
     ? DEFAULT_DOWNLOAD_STATUS
@@ -898,29 +1022,15 @@ async function renderTrack(trackData) {
 }
 
 function hideDownloadLimitSelector() {
-  downloadLimit.classList.add("is-hidden");
-}
-
-function hideFormatAndLimitSelectors() {
-  hideDownloadLimitSelector();
-  hideFormatDropdown();
-}
-
-function appendSelectOption() {
-  const selectOption = document.createElement("option");
-  selectOption.value = "select";
-  selectOption.textContent = t("select");
-  downloadLimit.appendChild(selectOption);
+  closeDownloadLimitMenu();
+  downloadLimitControl.classList.add("is-hidden");
 }
 
 function selectedDownloadLimit() {
-  const value = downloadLimit.value;
-  if (value === "all" || value === "select") return value;
-  if (!/^[1-9]\d*$/.test(value) ||
-      ![...downloadLimit.options].some((option) => option.value === value)) {
-    return null;
-  }
-  return Number(value);
+  if (downloadLimitMode === "all") return "all";
+  if (!/^\d+$/.test(downloadLimit.value)) return null;
+  const amount = Number(downloadLimit.value);
+  return Number.isSafeInteger(amount) && amount <= getCollectionTotal() ? amount : null;
 }
 
 function updateCollectionDownloadHint() {
@@ -928,6 +1038,8 @@ function updateCollectionDownloadHint() {
   const selected = selectedDownloadLimit();
   if (selected === "all") {
     downloadStatus.textContent = t("collection_download_all_hint");
+  } else if (selected === 0) {
+    downloadStatus.textContent = t("download_zero_hint");
   } else if (Number.isSafeInteger(selected)) {
     downloadStatus.textContent = t("collection_download_count_hint", [
       selected,
@@ -939,53 +1051,15 @@ function updateCollectionDownloadHint() {
 }
 
 function populateDownloadLimitOptions(total) {
-  downloadLimit.innerHTML = "";
-
   if (!total) {
     hideDownloadLimitSelector();
-    metaSep.style.display = "none";
     return;
   }
-
-  if (total <= 25) {
-    const allOption = document.createElement("option");
-    allOption.value = "all";
-    allOption.textContent = t("all");
-    downloadLimit.appendChild(allOption);
-    appendSelectOption();
-    downloadLimit.value = "all";
-    previousDownloadLimitValue = "all";
-    downloadLimit.classList.remove("is-hidden");
-    metaSep.style.display = "";
-    return;
-  }
-
-  const presets = DOWNLOAD_PRESETS.filter((preset) => preset < total);
-  let defaultValue = "all";
-
-  for (const preset of presets) {
-    const option = document.createElement("option");
-    option.value = String(preset);
-    option.textContent = String(preset);
-    downloadLimit.appendChild(option);
-  }
-
-  const allOption = document.createElement("option");
-  allOption.value = "all";
-  allOption.textContent = t("all");
-  downloadLimit.appendChild(allOption);
-  appendSelectOption();
-
-  if (total > 50) {
-    defaultValue = "50";
-  } else if (total > 50 && presets.length) {
-    defaultValue = String(presets[presets.length - 1]);
-  }
-
-  downloadLimit.value = defaultValue;
-  previousDownloadLimitValue = defaultValue;
-  downloadLimit.classList.remove("is-hidden");
-  metaSep.style.display = "";
+  downloadLimit.maxLength = String(total).length;
+  downloadLimitAll.textContent = `${t("all")} · ${formatCount(total)}`;
+  setControlHint(downloadLimitAll, t("download_all_count", formatCount(total)));
+  downloadLimitControl.classList.remove("is-hidden");
+  setDownloadLimit(total <= 50 ? "all" : "50");
 }
 
 async function renderPlaylist(playlistData) {
@@ -1011,8 +1085,9 @@ async function renderPlaylist(playlistData) {
 
   const total =
     playlistData.totalCount ?? playlistData.tracks?.length ?? 0;
-  durationEl.textContent = t("tracks", total);
-  streamFormat.style.display = "none";
+  durationEl.textContent = "";
+  durationEl.style.display = "none";
+  downloadToolbar.classList.remove("is-hidden");
   showFormatDropdownForBulk();
   populateDownloadLimitOptions(total);
 
@@ -1142,19 +1217,23 @@ function updateSelectionCount() {
     count === 0
       ? t("select_tracks_to_download")
       : count === 1 ? t("track_selected", count) : t("tracks_selected", count);
+  setControlHint(downloadBtn, count === 0
+    ? t("select_tracks_to_download")
+    : t("download_selected_count", formatCount(count)));
+  downloadBtn.disabled = count === 0;
 }
 
-function moveDownloadControlsToSelectionHeader() {
-  selectionHeaderOptions.append(
-    downloadFormat,
-    chooseDownloadFolder,
-    resetDownloadFolder
-  );
+function moveControlsToSelectionView() {
+  selectionHeaderOptions.append(downloadFormat, chooseDownloadFolder, resetDownloadFolder);
+  selectionHeaderActions.append(helpBtn);
+  downloadButtonContainer.prepend(downloadBtn);
+  updateFormatHint();
 }
 
-function restoreDownloadControlsToTrackMeta() {
-  downloadFormatSlot.append(downloadFormat);
-  downloadFolderSlot.append(chooseDownloadFolder, resetDownloadFolder);
+function restoreControlsToMainView() {
+  downloadToolbar.append(downloadFormat, downloadLimitControl, chooseDownloadFolder, resetDownloadFolder, downloadBtn);
+  statusRow.prepend(helpBtn);
+  updateFormatHint();
 }
 
 function enterSelectionMode(items, selectAllByDefault = false) {
@@ -1163,12 +1242,12 @@ function enterSelectionMode(items, selectAllByDefault = false) {
   selectedIds = selectAllByDefault
     ? new Set(items.map((item) => item.id))
     : new Set();
+  closeDownloadLimitMenu();
   document.body.classList.add("selection-mode");
   selectionPanel.classList.remove("is-hidden");
   selectionPanel.classList.add("is-visible");
-  moveDownloadControlsToSelectionHeader();
-  downloadLimit.classList.add("is-hidden");
-  metaSep.style.display = "none";
+  moveControlsToSelectionView();
+  downloadLimitControl.classList.add("is-hidden");
   selectionViewport.scrollTop = 0;
   updateSelectionCount();
   renderVisibleSelectionRows();
@@ -1183,27 +1262,26 @@ function exitSelectionMode() {
   document.body.classList.remove("selection-mode");
   selectionPanel.classList.add("is-hidden");
   selectionPanel.classList.remove("is-visible");
-  restoreDownloadControlsToTrackMeta();
+  restoreControlsToMainView();
   selectionRows.replaceChildren();
   selectionViewport.style.height = "320px";
   selectionSpacer.style.height = "0px";
   selectionViewport.scrollTop = 0;
 
   if (currentPlaylistData) {
-    downloadLimit.value = previousDownloadLimitValue;
-    downloadLimit.classList.remove("is-hidden");
-    metaSep.style.display = "";
-    downloadStatus.textContent = t("collection_download_hint");
+    downloadLimitControl.classList.remove("is-hidden");
+    setDownloadLimit(previousDownloadLimitValue);
+    updateCollectionDownloadHint();
   }
 }
 
 function restoreCollectionAfterSelectionError() {
-  downloadLimit.value = previousDownloadLimitValue;
-  downloadLimit.classList.remove("is-hidden");
+  downloadLimitControl.classList.remove("is-hidden");
+  setDownloadLimit(previousDownloadLimitValue);
   downloadBtn.classList.remove("is-hidden");
   showFormatDropdownForBulk();
   showDownloadDestination();
-  metaSep.style.display = "";
+  updateCollectionControlHints();
   downloadStatus.textContent = t("load_selector_failed");
   announceDownloadStatus(downloadStatus.textContent);
 }
@@ -1224,7 +1302,7 @@ async function openSelectionPanel(options = {}) {
     );
 
     if (!proceed) {
-      downloadLimit.value = previousDownloadLimitValue;
+      updateCollectionControlHints();
       return;
     }
   }
@@ -1330,17 +1408,12 @@ function attachDownloadListener() {
         return;
       }
 
-      if (downloadLimit.value === "select") {
-        await openSelectionPanel();
-        return;
-      }
-
       const total =
         currentPlaylistData.totalCount ??
         currentPlaylistData.tracks?.length ??
         0;
       const selectedValue = selectedDownloadLimit();
-      if (selectedValue === null || selectedValue === "select") {
+      if (selectedValue === null || selectedValue === 0) {
         alert(t("collection_invalid_limit"));
         return;
       }
@@ -1423,7 +1496,7 @@ function showTrackLoadError(reason) {
   hideRetryButton();
   downloadBtn.classList.add("is-hidden");
   hideDownloadLimitSelector();
-  metaSep.style.display = "none";
+  downloadToolbar.classList.add("is-hidden");
   artwork.style.backgroundImage = "none";
   artwork.style.backgroundColor = "#000000";
   jobControls.classList.remove("is-visible");
@@ -1464,15 +1537,12 @@ function setDownloadState(downloading, statusText) {
   resetDownloadFolder.disabled = downloading;
 
   if (downloading) {
-    downloadLimit.classList.add("is-hidden");
-    hideFormatDropdown();
-    if (currentPlaylistData && !isSelectionMode) {
-      metaSep.style.display = "none";
-    }
+    downloadLimitControl.classList.add("is-hidden");
+    if (!isSelectionMode) hideFormatDropdown();
   } else if (currentPlaylistData && !isSelectionMode) {
-    downloadLimit.classList.remove("is-hidden");
+    downloadLimitControl.classList.remove("is-hidden");
     showFormatDropdownForBulk();
-    metaSep.style.display = "";
+    updateCollectionControlHints();
   } else if (currentTrackData) {
     configureFormatDropdown(currentTrackData);
   }

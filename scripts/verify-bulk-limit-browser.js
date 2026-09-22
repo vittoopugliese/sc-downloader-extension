@@ -35,16 +35,82 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
       const popup = await context.newPage();
       await popup.goto(`chrome-extension://${extensionId}/popup.html`);
       if (count > 0) {
-        await popup.waitForFunction(() => !document.querySelector("#downloadLimit").classList.contains("is-hidden"));
-        const state = await popup.evaluate(() => ({
+        await popup.waitForFunction(() => !document.querySelector("#downloadLimitControl").classList.contains("is-hidden"));
+        const state = await popup.evaluate((count) => ({
           value: document.querySelector("#downloadLimit").value,
-          options: [...document.querySelector("#downloadLimit").options].map(option => option.value),
+          allLabel: document.querySelector("#downloadLimitAll").textContent,
+          selectLabel: document.querySelector("#downloadLimitSelect").textContent,
+          totalLabel: new Intl.NumberFormat(chrome.i18n.getUILanguage()).format(count),
           parsed: selectedDownloadLimit(),
-        }));
-        const expected = count > 50 ? "50" : "all";
-        assert.equal(state.value, expected, `Default for ${count}`);
-        assert(state.options.includes(state.value), `Default must be a real option for ${count}`);
-        assert(state.parsed === "all" || state.parsed > 0, `Invalid limit for ${count}`);
+        }), count);
+        const expected = count > 50 ? 50 : "all";
+        assert.equal(state.parsed, expected, `Default for ${count}`);
+        assert(state.value === "50" || state.value.length > 0, `Default must be visible for ${count}`);
+        assert(state.allLabel.endsWith(` · ${state.totalLabel}`),
+          `All must show the total for ${count}`);
+        assert(state.selectLabel.length > 0, "Select must be available");
+        if (count === 1000) {
+          await popup.locator("#downloadLimit").focus();
+          assert.equal(await popup.locator("#downloadLimitMenu").isVisible(), true);
+          await fs.mkdir(path.join(root, "test-results"), { recursive: true });
+          await popup.locator("body").screenshot({ path: path.join(root, "test-results", "popup-amount-menu.png") });
+          await popup.locator("#downloadLimit").fill("32");
+          const selected = await popup.evaluate(() => {
+            const control = document.querySelector("#downloadLimit");
+            const total = new Intl.NumberFormat(chrome.i18n.getUILanguage()).format(1000);
+            const amount = new Intl.NumberFormat(chrome.i18n.getUILanguage()).format(32);
+            return {
+              amount: selectedDownloadLimit(),
+              tooltip: control.title,
+              expectedTooltip: t("download_part_count", [amount, total]),
+              buttonTooltip: document.querySelector("#downloadBtn").title,
+            };
+          });
+          assert.equal(selected.amount, 32);
+          assert.equal(selected.tooltip, selected.expectedTooltip);
+          assert.equal(selected.buttonTooltip, selected.expectedTooltip);
+          await popup.locator("#downloadLimit").fill("99999");
+          assert.equal(await popup.evaluate(() => selectedDownloadLimit()), 1000,
+            "Typed amounts must stop at the collection total");
+          await popup.locator("#downloadLimit").fill("0");
+          assert.equal(await popup.evaluate(() => selectedDownloadLimit()), 0);
+          assert.equal(await popup.locator("#downloadBtn").isDisabled(), true);
+          await popup.locator("#downloadLimitAll").click();
+          assert.equal(await popup.evaluate(() => selectedDownloadLimit()), "all");
+          assert.equal(await popup.locator("#downloadBtn").isEnabled(), true);
+        }
+        if (count === 25) {
+          await popup.evaluate(() => {
+            currentDownloadDestination = { id: "test", name: "Music" };
+            renderDownloadDestination();
+            enterSelectionMode(Array.from({ length: 8 }, (_, index) => ({
+              id: index + 1, index: index + 1, title: `Track ${index + 1}`, duration: "3:00",
+            })));
+          });
+          const layout = await popup.evaluate(() => {
+            const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
+            const header = ["#selectionBackBtn", "#downloadFormat", "#chooseDownloadFolder", "#resetDownloadFolder", "#clearAllBtn", "#selectAllBtn", "#helpBtn"]
+              .map((selector) => rect(selector));
+            return {
+              height: document.body.offsetHeight,
+              headerAligned: Math.max(...header.map((item) => item.top)) - Math.min(...header.map((item) => item.top)) <= 3,
+              formatWidth: rect("#downloadFormat").width,
+              offersVisible: rect(".product-offers").bottom < rect(".selection-header").top,
+              downloadBelowList: rect("#downloadBtn").top > rect("#selectionViewport").bottom,
+              footerVisible: rect(".download-button-container").bottom <= rect("body").bottom,
+              helpInHeader: document.querySelector("#helpBtn").closest(".selection-header") !== null,
+            };
+          });
+          assert.equal(layout.height, 580);
+          assert.equal(layout.headerAligned, true);
+          assert(layout.formatWidth <= 85);
+          assert.equal(layout.offersVisible, true);
+          assert.equal(layout.downloadBelowList, true);
+          assert.equal(layout.footerVisible, true);
+          assert.equal(layout.helpInHeader, true);
+          await fs.mkdir(path.join(root, "test-results"), { recursive: true });
+          await popup.locator("body").screenshot({ path: path.join(root, "test-results", "popup-selection.png") });
+        }
       }
       await popup.close();
     }

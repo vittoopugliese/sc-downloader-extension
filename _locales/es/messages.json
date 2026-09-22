@@ -23,6 +23,17 @@
   "download_amount": {
     "message": "Cantidad a descargar"
   },
+  "download_amount_options": { "message": "Opciones de cantidad" },
+  "download_amount_range": { "message": "Ingresá de 0 a $1 tracks" },
+  "download_zero_hint": { "message": "Ingresá al menos 1 track para descargar" },
+  "download_part_count": { "message": "Vas a descargar $1 de $2 tracks" },
+  "download_all_count": { "message": "Vas a descargar los $1 tracks" },
+  "download_selected_count": { "message": "Descargá $1 tracks seleccionados" },
+  "download_track_hint": { "message": "Descargá este track" },
+  "auto_format_expected": { "message": "Auto: se espera $1" },
+  "auto_format_collection": { "message": "Auto elige el formato de cada track" },
+  "download_format_preference": { "message": "Preferir $1 para la descarga" },
+  "reset_download_folder": { "message": "Restablecer Descargas del navegador" },
   "choose_folder": {
     "message": "Elegir carpeta de descarga"
   },
@@ -132,13 +143,13 @@
     "message": "Elegí una colección"
   },
   "help_collection": {
-    "message": "Para playlists, Likes y tracks de usuarios, elegí una cantidad o Seleccionar para elegir tracks individuales. Las descargas siguen si cerrás este popup."
+    "message": "Para playlists, Likes y tracks de usuarios, escribí una cantidad, elegí Todo o usá Elegir para tracks individuales. Las descargas siguen si cerrás este popup."
   },
   "help_folder_title": {
     "message": "Elegí una carpeta"
   },
   "help_folder": {
-    "message": "Usá el botón de carpeta para elegir dónde se guardan los archivos. Elegí Descargas para volver a la carpeta de descargas normal de Chrome."
+    "message": "Usá el botón de carpeta para elegir dónde se guardan los archivos. Usá × para volver a Descargas del navegador."
   },
   "help_format_title": {
     "message": "Formatos y calidad"

@@ -42,11 +42,15 @@ const iconDataUrls = Object.fromEntries(
         const fileName = image.getAttribute("src").split("/").at(-1);
         if (icons[fileName]) image.src = icons[fileName];
       });
-      document.querySelector("#duration").textContent = "1632 tracks";
-      document.querySelector("#streamFormat").style.display = "none";
+      document.querySelector("#duration").style.display = "none";
       document.querySelector("#downloadFormat").classList.remove("is-hidden");
-      document.querySelector("#downloadLimit").classList.remove("is-hidden");
+      document.querySelector("#downloadLimitControl").classList.remove("is-hidden");
+      document.querySelector("#downloadLimit").value = "300";
+      document.querySelector("#downloadLimitAll").textContent = "All · 1,632";
+      document.querySelector("#downloadLimit").title = "Will download 300 of 1,632 tracks";
       document.querySelector("#chooseDownloadFolder").classList.remove("is-hidden");
+      document.querySelector("#chooseDownloadFolder").classList.add("has-custom-folder");
+      document.querySelector("#resetDownloadFolder").classList.remove("is-hidden");
       document.querySelector("#downloadBtn").classList.remove("is-hidden");
       const artwork = document.querySelector("#artwork");
       artwork.style.background = "linear-gradient(135deg, #6b2109, #173342)";
@@ -54,7 +58,7 @@ const iconDataUrls = Object.fromEntries(
     if (deviceScaleFactor === 1) {
       const helpButton = page.locator("#helpBtn");
       await helpButton.hover();
-      await page.waitForTimeout(184);
+      await page.waitForTimeout(410);
       const helpTooltip = await helpButton.evaluate((button) => {
         const tip = document.querySelector("#scdl-fast-tooltip");
         const rect = tip.getBoundingClientRect();
@@ -71,27 +75,27 @@ const iconDataUrls = Object.fromEntries(
       await page.mouse.move(425, 240);
       assert.equal(await helpButton.getAttribute("title"), "Help and settings");
       await helpButton.focus();
-      await page.waitForTimeout(184);
+      await page.waitForTimeout(410);
       assert.equal(await page.locator("#scdl-fast-tooltip").textContent(), "Help and settings");
       assert.equal(await page.locator("#scdl-fast-tooltip").evaluate((tip) => tip.style.visibility), "visible");
       await page.locator("#downloadBtn").hover();
-      await page.waitForTimeout(184);
+      await page.waitForTimeout(410);
       assert.equal(await page.locator("#scdl-fast-tooltip").textContent(), "Download");
       for (const [selector, label] of [
         ["#downloadFormat", "Download format"],
-        ["#downloadLimit", "Download amount"],
+        ["#downloadLimit", "Will download 300 of 1,632 tracks"],
       ]) {
         const select = page.locator(selector);
         await select.hover();
-        await page.waitForTimeout(184);
+        await page.waitForTimeout(410);
         assert.equal(await page.locator("#scdl-fast-tooltip").textContent(), label);
         assert.equal(await page.locator("#scdl-fast-tooltip").evaluate((tip) => tip.style.visibility), "visible");
         assert.equal(await select.getAttribute("title"), null);
         await page.mouse.move(425, 240);
         assert.equal(await select.getAttribute("title"), label);
       }
-      assert.ok((await page.locator("#downloadFormat").boundingBox()).width <= 90,
-        "The format selector should fit its short option labels");
+      assert.ok((await page.locator("#downloadFormat").boundingBox()).width <= 150,
+        "The format selector should fit the toolbar");
     }
     const dimensions = await page.evaluate(() => ({
       width: innerWidth,
@@ -105,7 +109,7 @@ const iconDataUrls = Object.fromEntries(
     const mainTheme = await page.evaluate(() => {
       const size = (element) => [element.offsetWidth, element.offsetHeight];
       const style = (selector) => getComputedStyle(document.querySelector(selector));
-      const collectionCenters = ["#duration", "#metaSep", "#downloadFormat", "#downloadLimit", "#chooseDownloadFolder"]
+      const collectionCenters = ["#downloadFormat", "#downloadLimitControl", "#chooseDownloadFolder", "#resetDownloadFolder", "#downloadBtn"]
         .map((selector) => document.querySelector(selector).getBoundingClientRect())
         .map((rect) => Math.round(rect.top + rect.height / 2));
       return {
@@ -132,7 +136,7 @@ const iconDataUrls = Object.fromEntries(
     delete mainTheme.likesImageSize;
     assert.deepEqual(mainTheme, {
       settingsSize: [27, 24],
-      downloadSize: [50, 38],
+      downloadSize: [42, 32],
       downloadRadius: "7px",
       controlRadius: "7px",
       titleSize: "19px",
@@ -182,6 +186,26 @@ const iconDataUrls = Object.fromEntries(
     if (deviceScaleFactor === 1) {
       fs.mkdirSync(path.resolve(__dirname, "..", "test-results"), { recursive: true });
       await page.screenshot({ path: path.resolve(__dirname, "..", "test-results", "popup-main.png"), fullPage: true });
+      const trackLayout = await page.evaluate(() => {
+        document.querySelector("#title").textContent = "Last Piece (1)";
+        document.querySelector("#artist").textContent = "Julie Hannon";
+        const duration = document.querySelector("#duration");
+        duration.textContent = "3:22";
+        duration.style.display = "";
+        document.querySelector('#downloadFormat option[value="auto"]').textContent = "Auto · MP3";
+        document.querySelector("#downloadLimitControl").classList.add("is-hidden");
+        document.querySelector("#resetDownloadFolder").classList.add("is-hidden");
+        document.querySelector("#chooseDownloadFolder").classList.remove("has-custom-folder");
+        const controls = ["#downloadFormat", "#chooseDownloadFolder", "#downloadBtn"]
+          .map((selector) => document.querySelector(selector).getBoundingClientRect());
+        return {
+          aligned: Math.max(...controls.map((rect) => rect.top)) - Math.min(...controls.map((rect) => rect.top)) <= 1,
+          durationAbove: duration.getBoundingClientRect().bottom < controls[0].top,
+        };
+      });
+      assert.deepEqual(trackLayout, { aligned: true, durationAbove: true },
+        "Single-track duration must sit above one toolbar row");
+      await page.screenshot({ path: path.resolve(__dirname, "..", "test-results", "popup-track.png"), fullPage: true });
     }
     await page.setViewportSize({ width: 432, height: 252 });
     await page.evaluate(() => {

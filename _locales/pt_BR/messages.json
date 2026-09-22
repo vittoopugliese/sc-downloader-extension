@@ -23,6 +23,17 @@
   "download_amount": {
     "message": "Quantidade para baixar"
   },
+  "download_amount_options": { "message": "Opções de quantidade" },
+  "download_amount_range": { "message": "Digite de 0 a $1 faixas" },
+  "download_zero_hint": { "message": "Digite pelo menos 1 faixa para baixar" },
+  "download_part_count": { "message": "Baixará $1 de $2 faixas" },
+  "download_all_count": { "message": "Baixará todas as $1 faixas" },
+  "download_selected_count": { "message": "Baixar $1 faixas selecionadas" },
+  "download_track_hint": { "message": "Baixar esta faixa" },
+  "auto_format_expected": { "message": "Auto: $1 esperado" },
+  "auto_format_collection": { "message": "Auto escolhe o formato de cada faixa" },
+  "download_format_preference": { "message": "Preferir $1 no download" },
+  "reset_download_folder": { "message": "Restaurar Downloads do navegador" },
   "choose_folder": {
     "message": "Escolher pasta de download"
   },
@@ -117,13 +128,13 @@
     "message": "Escolha uma coleção"
   },
   "help_collection": {
-    "message": "Para playlists, Curtidas e faixas de usuários, escolha uma quantidade ou Selecionar para escolher faixas individuais. Os downloads continuam se você fechar este pop-up."
+    "message": "Para playlists, Curtidas e faixas de usuários, digite uma quantidade, escolha Todas ou use Selecionar para faixas individuais. Os downloads continuam se você fechar este pop-up."
   },
   "help_folder_title": {
     "message": "Escolha uma pasta"
   },
   "help_folder": {
-    "message": "Use o botão de pasta para escolher onde salvar os arquivos. Escolha Downloads para voltar à pasta normal de Downloads do Chrome."
+    "message": "Use o botão de pasta para escolher onde salvar os arquivos. Use × para voltar à pasta Downloads do navegador."
   },
   "help_format_title": {
     "message": "Formatos e qualidade"

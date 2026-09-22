@@ -67,13 +67,14 @@
         body.selection-mode .track-details > h2,
         body.selection-mode #artistUrl,
         body.selection-mode #duration,
-        body.selection-mode #metaSep,
-        body.selection-mode #downloadLimit {
+        body.selection-mode #downloadLimitControl {
             display: none !important;
         }
 
-        body.selection-mode .track-details {
-            gap: 0;
+        body.selection-mode { height: 580px; }
+
+        body.selection-mode .track-info {
+            display: none;
         }
 
         *::selection {
@@ -411,35 +412,84 @@
             display: block;
         }
 
-        .track-meta {
-            margin: 0;
+        .download-toolbar {
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 7px;
-            color: #c4c4c4;
-            font-size: 14px;
+            flex-wrap: nowrap;
+            gap: 6px;
+            width: 100%;
         }
 
-        .meta-sep {
-            color: #7e7e7e;
-            font-size: 20px;
-        }
-
-        #downloadLimit {
-            min-width: 0;
-            max-width: 62px;
-        }
-
-        #downloadLimit.is-hidden {
-            display: none;
-        }
-
-        #downloadLimit option,
         #downloadFormat option {
             background: #1a1a1a;
             color: #ffffff;
         }
+
+        .download-limit-control {
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 0;
+        }
+        .download-limit-control:focus-within {
+            border-color: var(--accent);
+            outline: 2px solid rgba(255, 85, 0, 0.5);
+            outline-offset: 1px;
+        }
+
+        #downloadLimit {
+            flex: 1;
+            min-width: 0;
+            height: 100%;
+            padding: 0 2px 0 9px;
+            border: 0;
+            outline: 0;
+            background: transparent;
+            color: var(--accent-warm);
+            font: inherit;
+            font-size: 11px;
+            user-select: text;
+        }
+
+        #downloadLimitToggle {
+            flex: 0 0 25px;
+            height: 100%;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            color: var(--accent-warm);
+            cursor: pointer;
+        }
+
+        .download-limit-menu {
+            position: absolute;
+            z-index: 5;
+            top: calc(100% + 4px);
+            left: 0;
+            display: grid;
+            width: max-content;
+            min-width: 100%;
+            padding: 4px;
+            border: 1px solid var(--line-control);
+            border-radius: var(--radius-control);
+            background: #242424;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, .35);
+        }
+
+        .download-limit-menu[hidden] { display: none; }
+        .download-limit-menu button {
+            padding: 7px 9px;
+            border: 0;
+            border-radius: 4px;
+            background: transparent;
+            color: #eee;
+            text-align: left;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .download-limit-menu button:hover,
+        .download-limit-menu button:focus-visible { background: var(--control-hover); outline: 2px solid var(--accent); }
 
         #downloadFormat {
             max-width: 150px;
@@ -460,24 +510,7 @@
             justify-content: center;
         }
 
-        .action-row {
-            position: relative;
-            width: 100%;
-            height: 38px;
-        }
-
-        .action-row > button {
-            position: absolute;
-            top: 0;
-        }
-
         #helpBtn {
-            position: absolute;
-            top: auto;
-            right: auto;
-            bottom: 16px;
-            left: 12px;
-            z-index: 1;
             width: 32px;
             min-width: 32px;
             padding: 0;
@@ -490,8 +523,6 @@
             filter: invert(1);
         }
 
-        #downloadBtn { left: 50%; transform: translateX(-50%); }
-        #downloadBtn:hover { transform: translateX(-50%) scale(0.93); }
         #looperActionSlot { position: absolute; right: 0; top: 0; display: flex; justify-content: flex-end; min-width: 120px; height: 32px; }
         #looperEntryBtn {
             min-width: 0;
@@ -570,22 +601,14 @@
         .looper-tip { margin: 3px 0 0; padding: 12px; border: 1px solid rgba(255, 126, 74, 0.35); border-radius: 8px; color: #d8d8d8; background: rgba(255, 85, 0, 0.08); font-size: 11px; line-height: 1.5; }
         .looper-done-btn { display: flex; min-height: 36px; margin: 16px auto 0; padding: 8px 16px; font-size: 11px; }
 
-        #chooseDownloadFolder {
-            width: auto;
-            max-width: 150px;
-            gap: 5px;
-            padding-right: 7px;
-        }
+        #chooseDownloadFolder { width: 32px; flex: 0 0 32px; }
 
         #chooseDownloadFolder:disabled {
             cursor: default;
             opacity: 0.55;
         }
 
-        #resetDownloadFolder {
-            padding-left: 7px;
-            padding-right: 7px;
-        }
+        #resetDownloadFolder { width: 32px; flex: 0 0 32px; padding: 0; font-size: 20px; line-height: 1; }
 
         .folder-icon,
         .back-icon {
@@ -598,13 +621,6 @@
         .back-icon {
             width: 16px;
             height: 16px;
-        }
-
-        #downloadFolderName {
-            max-width: 108px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
         }
 
         .selection-action-icon {
@@ -788,13 +804,8 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            /* Keep the fixed settings button clear of the list actions. */
             box-sizing: border-box;
-            padding: 0 44px 0 4px;
-        }
-
-        .control-slot {
-            display: contents;
+            padding: 0 4px;
         }
 
         .selection-header-group,
@@ -1005,38 +1016,36 @@
             letter-spacing: 0.08em;
         }
 
-        .track-meta {
-            flex-wrap: wrap;
-            gap: 5px;
+        #duration {
+            display: block;
+            margin: 0 0 7px;
             color: #a5a5a5;
             font-size: 12px;
         }
 
-        .track-meta:has(#downloadLimit:not(.is-hidden)) {
-            display: grid;
-            grid-template-columns: max-content 4px 88px 68px max-content;
-            justify-content: center;
+        .download-toolbar .popup-control-btn {
+            height: 32px;
+        }
+
+        #downloadFormat {
+            width: 150px;
+            max-width: 150px;
+            flex: 0 1 150px;
+            min-width: 0;
+        }
+
+        #downloadLimit {
             width: 100%;
-            gap: 5px;
         }
 
-        .track-meta:has(#downloadLimit:not(.is-hidden)) #downloadFormat {
-            width: 100%;
-            max-width: none;
+        #downloadLimitControl {
+            width: 118px;
+            flex: 0 1 118px;
+            min-width: 0;
         }
 
-        .track-meta:has(#downloadLimit:not(.is-hidden)) #downloadLimit {
-            width: 68px;
-            max-width: 68px;
-        }
-
-        .track-meta:has(#downloadLimit:not(.is-hidden)) #chooseDownloadFolder {
-            max-width: 112px;
-        }
-
-        .meta-sep {
-            color: #5f5f5f;
-            font-size: 16px;
+        #chooseDownloadFolder.has-custom-folder {
+            border-color: var(--accent);
         }
 
         .popup-control-btn,
@@ -1066,10 +1075,6 @@
         select.popup-control-btn { color: var(--accent-warm); }
 
         #helpBtn {
-            top: auto;
-            right: auto;
-            bottom: 9px;
-            left: 9px;
             width: 27px;
             min-width: 27px;
             height: 24px;
@@ -1087,11 +1092,24 @@
             margin-top: 8px;
         }
 
-        .action-row { height: 34px; }
+        .status-row {
+            display: grid;
+            grid-template-columns: 27px minmax(0, 1fr) 27px;
+            align-items: center;
+            width: 100%;
+        }
+
+        #downloadStatus { grid-column: 2; justify-self: center; }
+
+        body.selection-mode .download-button-container { margin-top: auto; }
+        body.selection-mode #downloadBtn { width: 50px; height: 38px; flex-basis: 50px; }
+        body.selection-mode .selection-header #downloadFormat { width: 80px; max-width: 80px; flex: 0 0 80px; }
+        body.selection-mode .selection-header #helpBtn { flex: 0 0 27px; }
 
         #downloadBtn {
-            width: 50px;
-            height: 38px;
+            width: 42px;
+            height: 32px;
+            flex: 0 0 42px;
             border: 1px solid var(--line-control);
             border-radius: var(--radius-control);
             color: #ffffff;
@@ -1105,7 +1123,7 @@
             background: var(--control-hover);
             box-shadow: none;
             filter: none;
-            transform: translateX(-50%);
+            transform: none;
         }
 
         #downloadBtn:focus-visible {
@@ -1195,7 +1213,7 @@
 
         .selection-header {
             gap: 5px;
-            padding: 0 34px 6px 0;
+            padding: 0 0 6px;
         }
 
         .selection-header-group,
@@ -1372,7 +1390,6 @@
 
     <div id="artwork"></div>
     <div class="container">
-        <button id="helpBtn" type="button" class="popup-control-btn" aria-label="Help and settings" title="Help and settings" data-i18n-aria-label="settings_and_help" data-i18n-title="settings_and_help"><img class="settings-icon" src="./assets/icons/help.svg" alt="" width="15" height="15" draggable="false"></button>
         <div class="track-info">
             <div class="track-details">
                 <h2 id="title"></h2>
@@ -1380,30 +1397,32 @@
                     <img id="artistArtwork" src="./assets/images/default_avatar.png" alt="" width="30px" height="30px" draggable="false">
                     <h3 id="artist"></h3>
                 </a>
-                <p class="track-meta">
-                    <span id="duration"></span>
-                    <span id="metaSep" class="meta-sep">&middot;</span>
-                    <span id="streamFormat"></span>
-                    <span id="downloadFormatSlot" class="control-slot">
-                        <select id="downloadFormat" class="popup-control-btn is-hidden" aria-label="Download format" title="Download format" data-i18n-aria-label="download_format" data-i18n-title="download_format">
-                            <option value="auto" data-i18n="auto">Auto</option>
-                            <option value="original" data-i18n="original">Original</option>
-                            <option value="mp3">MP3</option>
-                            <option value="m4a">M4A</option>
-                            <option value="opus">Opus</option>
-                        </select>
-                    </span>
-                    <select id="downloadLimit" class="popup-control-btn is-hidden" aria-label="Download amount" title="Download amount" data-i18n-aria-label="download_amount" data-i18n-title="download_amount">
-                        <option value="50">50</option>
+                <span id="duration"></span>
+                <div id="downloadToolbar" class="download-toolbar">
+                    <select id="downloadFormat" class="popup-control-btn is-hidden" aria-label="Download format" title="Download format" data-i18n-aria-label="download_format" data-i18n-title="download_format">
+                        <option value="auto" data-i18n="auto">Auto</option>
+                        <option value="original" data-i18n="original">Original</option>
+                        <option value="mp3">MP3</option>
+                        <option value="m4a">M4A</option>
+                        <option value="opus">Opus</option>
                     </select>
-                    <span id="downloadFolderSlot" class="control-slot">
-                        <button id="chooseDownloadFolder" type="button" class="popup-control-btn is-hidden" aria-label="Choose download folder" title="Choose download folder" data-i18n-aria-label="choose_folder" data-i18n-title="choose_folder">
-                            <img class="folder-icon" src="./assets/icons/folder-icon.svg" alt="" width="20" height="20" draggable="false">
-                            <span id="downloadFolderName" data-i18n="downloads_folder">Downloads</span>
-                        </button>
-                        <button id="resetDownloadFolder" type="button" class="popup-control-btn is-hidden" aria-label="Use browser Downloads folder" title="Use browser Downloads folder" data-i18n-aria-label="use_downloads_folder" data-i18n-title="use_downloads_folder" data-i18n="downloads_folder">Downloads</button>
-                    </span>
-                </p>
+                    <div id="downloadLimitControl" class="download-limit-control popup-control-btn is-hidden">
+                        <input id="downloadLimit" type="text" class="popup-control-input" inputmode="numeric" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="downloadLimitMenu" aria-label="Download amount" title="Download amount" data-i18n-aria-label="download_amount" data-i18n-title="download_amount" value="50">
+                        <button id="downloadLimitToggle" type="button" aria-label="Download amount options" title="Download amount options" data-i18n-aria-label="download_amount_options" data-i18n-title="download_amount_options">⌄</button>
+                        <div id="downloadLimitMenu" class="download-limit-menu" role="listbox" aria-label="Download amount options" data-i18n-aria-label="download_amount_options" hidden>
+                            <button id="downloadLimitAll" type="button" role="option" aria-selected="false" title="Download all tracks">All</button>
+                            <button id="downloadLimitSelect" type="button" role="option" aria-selected="false" title="Select individual tracks" data-i18n="select" data-i18n-title="select_tracks_to_download">Select</button>
+                        </div>
+                    </div>
+                    <button id="chooseDownloadFolder" type="button" class="popup-control-btn is-hidden" aria-label="Choose download folder" title="Choose download folder" data-i18n-aria-label="choose_folder" data-i18n-title="choose_folder">
+                        <img class="folder-icon" src="./assets/icons/folder-icon.svg" alt="" width="20" height="20" draggable="false">
+                    </button>
+                    <button id="resetDownloadFolder" type="button" class="popup-control-btn is-hidden" aria-label="Reset to browser Downloads" title="Reset to browser Downloads" data-i18n-aria-label="reset_download_folder" data-i18n-title="reset_download_folder">×</button>
+                    <button id="downloadBtn" type="button" aria-label="Download" title="Download" data-i18n-aria-label="download" data-i18n-title="download" class="is-hidden">
+                        <img class="dl-icon" src="./assets/icons/download.svg" alt="" width="22" height="22" draggable="false">
+                        <span class="dl-spinner" aria-hidden="true"></span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -1431,19 +1450,16 @@
         </div>
 
         <div class="download-button-container">
-            <div class="action-row">
-                <button id="downloadBtn" type="button" aria-label="Download" title="Download" data-i18n-aria-label="download" data-i18n-title="download" class="is-hidden">
-                    <img class="dl-icon" src="./assets/icons/download.svg" alt="" width="22" height="22" draggable="false">
-                    <span class="dl-spinner" aria-hidden="true"></span>
-                </button>
-            </div>
             <div id="jobControls">
                 <button id="pauseJobBtn" type="button" class="job-btn" title="Pause download" data-i18n="pause" data-i18n-title="pause">Pause</button>
                 <button id="resumeJobBtn" type="button" class="job-btn is-primary is-hidden" title="Resume download" data-i18n="resume" data-i18n-title="resume">Resume</button>
                 <button id="retryFailedJobBtn" type="button" class="job-btn is-primary is-hidden" title="Retry failed downloads" data-i18n="retry" data-i18n-title="retry">Retry</button>
                 <button id="cancelJobBtn" type="button" class="job-btn is-danger" title="Cancel download" data-i18n="cancel" data-i18n-title="cancel">Cancel</button>
             </div>
-            <p id="downloadStatus" data-i18n="ready_to_download">Ready to download</p>
+            <div id="statusRow" class="status-row">
+                <button id="helpBtn" type="button" class="popup-control-btn" aria-label="Help and settings" title="Help and settings" data-i18n-aria-label="settings_and_help" data-i18n-title="settings_and_help"><img class="settings-icon" src="./assets/icons/help.svg" alt="" width="15" height="15" draggable="false"></button>
+                <p id="downloadStatus" data-i18n="ready_to_download">Ready to download</p>
+            </div>
             <p id="downloadAnnouncement" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
             <p id="jobHint" class="is-hidden" data-i18n="background_download_hint">You can close this popup — the download continues in the background.</p>
             <p id="failedSummary"></p>
@@ -1507,8 +1523,8 @@
             <section id="downloadsHelp" role="tabpanel" aria-labelledby="downloadsTab">
             <p class="help-copy" data-i18n="help_intro">Download tracks you own or have permission to download.</p>
             <div class="help-section"><h3 data-i18n="help_getting_started_title">Download from SoundCloud</h3><p data-i18n="help_getting_started">Open a track, playlist, Likes, or a user's Tracks page. Use the Download button here or the download button on the SoundCloud page.</p></div>
-            <div class="help-section"><h3 data-i18n="help_collection_title">Choose a collection</h3><p data-i18n="help_collection">For playlists, Likes, and user tracks, choose a preset or Select to pick individual tracks. Downloads keep running if you close this popup.</p></div>
-            <div class="help-section"><h3 data-i18n="help_folder_title">Choose a folder</h3><p data-i18n="help_folder">Use the folder button to select where files are saved. Choose Downloads to return to Chrome's normal Downloads folder.</p></div>
+            <div class="help-section"><h3 data-i18n="help_collection_title">Choose a collection</h3><p data-i18n="help_collection">For playlists, Likes, and user tracks, enter an amount, choose All, or use Select for individual tracks. Downloads keep running if you close this popup.</p></div>
+            <div class="help-section"><h3 data-i18n="help_folder_title">Choose a folder</h3><p data-i18n="help_folder">Use the folder button to choose where files are saved. Use × to return to the browser Downloads folder.</p></div>
             <div class="help-section"><h3 data-i18n="help_format_title">Formats and quality</h3><p data-i18n="help_format">Auto selects the available stream. Original is available only when the artist has enabled an original download. Source quality varies by track.</p></div>
             <div class="help-section"><h3 data-i18n="help_progress_title">Progress and errors</h3><p data-i18n="help_progress">The status shows progress and saved files. If a track cannot be read or saved, retry after reloading SoundCloud or choosing the folder again.</p></div>
         </section>

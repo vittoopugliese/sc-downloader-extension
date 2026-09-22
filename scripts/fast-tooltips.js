@@ -41,7 +41,8 @@
     path.filter((node) => node?.nodeType === Node.DOCUMENT_FRAGMENT_NODE && node.host).forEach(listen);
     return path.find((node) =>
       node?.tagName === "BUTTON" ||
-      (node?.tagName === "SELECT" && node.classList.contains("popup-control-btn"))
+      (node?.tagName === "SELECT" && node.classList.contains("popup-control-btn")) ||
+      (node?.tagName === "INPUT" && node.classList.contains("popup-control-input"))
     ) || null;
   }
 

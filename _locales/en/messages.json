@@ -23,6 +23,17 @@
   "download_amount": {
     "message": "Download amount"
   },
+  "download_amount_options": { "message": "Amount options" },
+  "download_amount_range": { "message": "Enter 0–$1 tracks" },
+  "download_zero_hint": { "message": "Enter at least 1 track to download" },
+  "download_part_count": { "message": "Will download $1 of $2 tracks" },
+  "download_all_count": { "message": "Will download all $1 tracks" },
+  "download_selected_count": { "message": "Download $1 selected tracks" },
+  "download_track_hint": { "message": "Download this track" },
+  "auto_format_expected": { "message": "Auto: $1 expected" },
+  "auto_format_collection": { "message": "Auto chooses each track's format" },
+  "download_format_preference": { "message": "Prefer $1 for download" },
+  "reset_download_folder": { "message": "Reset to browser Downloads" },
   "choose_folder": {
     "message": "Choose download folder"
   },
@@ -132,13 +143,13 @@
     "message": "Choose a collection"
   },
   "help_collection": {
-    "message": "For playlists, Likes, and user tracks, choose a preset or Select to pick individual tracks. Downloads keep running if you close this popup."
+    "message": "For playlists, Likes, and user tracks, enter an amount, choose All, or use Select for individual tracks. Downloads keep running if you close this popup."
   },
   "help_folder_title": {
     "message": "Choose a folder"
   },
   "help_folder": {
-    "message": "Use the folder button to select where files are saved. Choose Downloads to return to Chrome's normal Downloads folder."
+    "message": "Use the folder button to choose where files are saved. Use × to return to the browser Downloads folder."
   },
   "help_format_title": {
     "message": "Formats and quality"

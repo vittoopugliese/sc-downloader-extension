@@ -53,7 +53,7 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 ### Playlists, sets & albums
 - Open any `soundcloud.com/{user}/sets/{name}` page
 - See the collection title, artist, total track count, and waveform preview (first track)
-- Pick how many tracks to download from the preset selector
+- Enter how many tracks to download, or choose All or Select
 - Download everything as numbered files in `Downloads/{Playlist Name}/`
 
 ### Likes
@@ -62,8 +62,8 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 - Same folder-based bulk download flow as playlists
 
 ### Bulk download controls
-- Presets: **10 · 25 · 50 · 100 · 150 · 200 · 300 · All**
-- Options adapt to the actual collection size (e.g. a 30-track playlist shows `25` and `All`)
+- Enter any amount from 0 up to the collection size; 0 pauses the action until an amount is entered
+- The amount menu offers **All** and **Select** for choosing individual tracks
 - Warning prompt before large downloads (200+ tracks)
 - **Pause / resume / cancel** while a bulk job is running
 - **Extension badge** shows progress (e.g. `30/500`)
@@ -158,9 +158,9 @@ One popup, two modes ~ same look, same feel:
 
 | Track page | Playlist / Likes page |
 |---|---|
-| Title · artist · duration · format | Title · artist · `{N} tracks · [preset]` |
+| Title · artist · duration · format | Title · artist · editable amount / All / Select |
 | Waveform | Waveform (first track) |
-| Inline button + popup download | Inline button (full list) or popup with preset selector |
+| Inline button + popup download | Inline button (full list) or popup with editable amount |
 
 Dark blurred artwork background, SoundCloud-orange accents, spinner states, and status text that actually tells you what's going on.
 

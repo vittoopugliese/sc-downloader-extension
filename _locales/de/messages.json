@@ -23,6 +23,17 @@
   "download_amount": {
     "message": "Downloadmenge"
   },
+  "download_amount_options": { "message": "Mengenoptionen" },
+  "download_amount_range": { "message": "0 bis $1 Tracks eingeben" },
+  "download_zero_hint": { "message": "Mindestens 1 Track zum Herunterladen eingeben" },
+  "download_part_count": { "message": "$1 von $2 Tracks werden heruntergeladen" },
+  "download_all_count": { "message": "Alle $1 Tracks werden heruntergeladen" },
+  "download_selected_count": { "message": "$1 ausgewählte Tracks herunterladen" },
+  "download_track_hint": { "message": "Diesen Track herunterladen" },
+  "auto_format_expected": { "message": "Auto: $1 erwartet" },
+  "auto_format_collection": { "message": "Auto wählt das Format für jeden Track" },
+  "download_format_preference": { "message": "$1 für den Download bevorzugen" },
+  "reset_download_folder": { "message": "Browser-Downloads wiederherstellen" },
   "choose_folder": {
     "message": "Downloadordner wählen"
   },
@@ -117,13 +128,13 @@
     "message": "Eine Sammlung auswählen"
   },
   "help_collection": {
-    "message": "Wähle für Playlists, Likes und Nutzer-Tracks eine Menge oder Auswählen, um einzelne Tracks zu wählen. Downloads laufen weiter, wenn du dieses Pop-up schließt."
+    "message": "Gib für Playlists, Likes und Nutzer-Tracks eine Menge ein, wähle Alle oder Auswählen für einzelne Tracks. Downloads laufen weiter, wenn du dieses Pop-up schließt."
   },
   "help_folder_title": {
     "message": "Einen Ordner auswählen"
   },
   "help_folder": {
-    "message": "Mit dem Ordner-Button legst du den Speicherort fest. Wähle Downloads, um wieder Chromes normalen Downloadordner zu verwenden."
+    "message": "Mit dem Ordner-Button legst du den Speicherort fest. Mit × kehrst du zum Downloadordner des Browsers zurück."
   },
   "help_format_title": {
     "message": "Formate und Qualität"

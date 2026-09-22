@@ -22,10 +22,10 @@ assert(
   "The popup must provide an internal, keyboard-accessible Help view."
 );
 assert(
-  /\.action-row\s*\{[^}]*position:\s*relative/s.test(popup) &&
-    /#downloadBtn\s*\{[^}]*left:\s*50%;[^}]*translateX\(-50%\)/s.test(popup) &&
+  /\.download-toolbar\s*\{[^}]*flex-wrap:\s*nowrap/s.test(popup) &&
+    /id="downloadToolbar"[\s\S]*id="downloadFormat"[\s\S]*id="downloadLimit"[\s\S]*id="chooseDownloadFolder"[\s\S]*id="resetDownloadFolder"[\s\S]*id="downloadBtn"/.test(popup) &&
     /id="looperTab"[^>]*data-help-tab="looperPanel"/.test(popup),
-  "Download must remain centered and the Help view must expose the Looper guide."
+  "Download controls must share one toolbar and the Help view must expose the Looper guide."
 );
 assert(
   /id="looperPanel"[^>]*role="tabpanel"/.test(popup) &&
@@ -111,7 +111,7 @@ assert(
   "The compact folder-picker button is missing."
 );
 assert(
-  /id="resetDownloadFolder"[^>]*>Downloads<\/button>/.test(popup) &&
+  /id="resetDownloadFolder"[^>]*data-i18n-title="reset_download_folder"[^>]*>×<\/button>/.test(popup) &&
     /SCDownloadDirectory\.clearCurrent\(\)/.test(popupScript),
   "The popup must provide a way back to the browser Downloads folder."
 );
@@ -126,8 +126,10 @@ assert(
   "The folder-picker icon asset is missing."
 );
 assert(
-  /id="downloadFolderName"[^>]*>Downloads<\/span>/.test(popup),
-  "The active download destination must be visible next to the folder icon."
+  /id="chooseDownloadFolder"[^>]*data-i18n-aria-label="choose_folder"/.test(popup) &&
+    /has-custom-folder/.test(popup) &&
+    /t\("change_download_folder", folderName\)/.test(popupScript),
+  "The folder icon must expose the selected destination through its tooltip."
 );
 assert(
   /\.folder-icon\s*,\s*\.back-icon\s*\{[^}]*filter:\s*invert\(1\);/s.test(
@@ -158,8 +160,11 @@ assert(
   "The selection action icons should use the compact inverted icon style."
 );
 assert(
-  /id="downloadLimit"[^>]*class="[^"]*popup-control-btn/.test(popup),
-  "The download preset selector does not use the shared control style."
+  /id="downloadLimitControl"[^>]*class="[^"]*popup-control-btn/.test(popup) &&
+    /id="downloadLimit"[^>]*role="combobox"/.test(popup) &&
+    /id="downloadLimitAll"[^>]*role="option"/.test(popup) &&
+    /id="downloadLimitSelect"[^>]*role="option"/.test(popup),
+  "The editable amount control must offer All and Select."
 );
 assert(
   buttonTags.length > 0 && buttonTags.every((tag) => /\btitle="[^"]+"/.test(tag)),
@@ -203,11 +208,11 @@ assert(
   "Failed tracks must show their individual save or download reason before retrying."
 );
 
-const presets = popupScript.match(/const DOWNLOAD_PRESETS = \[([^\]]+)\]/);
-assert(presets, "Could not find the bulk download presets.");
 assert(
-  presets[1].replace(/\s/g, "") === "10,25,50,100,150,200,300",
-  `Bulk presets do not match the README: [${presets[1]}].`
+  !/DOWNLOAD_PRESETS/.test(popupScript) &&
+    /function selectedDownloadLimit\(\)/.test(popupScript) &&
+    /amount <= getCollectionTotal\(\)/.test(popupScript),
+  "The popup must accept custom amounts up to the collection total."
 );
 
 console.log("Popup UX verification passed.");

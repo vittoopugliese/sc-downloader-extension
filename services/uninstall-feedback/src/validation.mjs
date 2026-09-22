@@ -1,4 +1,5 @@
 const REASONS = new Set([
+  "yes",
   "downloads_did_not_work",
   "confusing_to_use",
   "missing_feature",
