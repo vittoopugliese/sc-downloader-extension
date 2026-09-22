@@ -66,9 +66,9 @@ async function main() {
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-core.js"),
     });
-    await page.addScriptTag({
-      path: path.join(__dirname, "audio-effects-core.js"),
-    });
+    for (const file of ["parametric-eq.js", "audio-effects-core.js", "parametric-eq-ui.js"]) {
+      await page.addScriptTag({ path: path.join(__dirname, file) });
+    }
     await page.addScriptTag({ path: path.join(__dirname, "player-tools-policy.js") });
     await page.evaluate((logoUrl) => {
       const playerToolsSnapshot = {
@@ -77,7 +77,7 @@ async function main() {
         state: "pro",
         grant: null,
         capabilities: {
-          openPanel: true, beginLoop: true, editLoop: true, tempo: true,
+          openPanel: true, beginLoop: true, editLoop: true, tempo: true, parametricEq: true,
           preservePitch: true, savePreset: true, maximizeLooper: true,
           editLoopPrecise: true, exportLoop: true, exportTrackEffects: true,
         },
@@ -1149,6 +1149,24 @@ async function main() {
     await panel.evaluate((element) => { element.scrollTop = 0; });
     await page.screenshot({ path: screenshotPath });
 
+    // Exercise the EQ inside the real panel, including the access bridge and persistence.
+    await page.setViewportSize({ width: 720, height: 780 });
+    await host.locator(".peq summary").click();
+    await host.locator(".peq-add").click();
+    await host.locator(".peq-frequency").fill("1000");
+    await host.locator(".peq-gain").fill("-9");
+    await host.locator(".peq-gain").press("Tab");
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem("scdl.parametric-eq.v1"))?.bands[0]?.gain === -9);
+    await host.locator(".peq-add").click();
+    await host.locator(".peq-frequency").fill("4500");
+    await host.locator(".peq-gain").fill("4");
+    await host.locator(".peq-gain").press("Tab");
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem("scdl.parametric-eq.v1"))?.bands[1]?.gain === 4);
+    await panel.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await page.screenshot({ path: path.join(projectRoot, "test-results", "parametric-eq.png") });
+    await host.locator(".peq-bypass").click();
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem("scdl.parametric-eq.v1"))?.enabled === false);
+
     await page.evaluate(() => {
       const listeners = [];
       window.chrome = {
@@ -1201,6 +1219,19 @@ async function main() {
       };
     }));
     assert.equal(persistedName, "Rendered Loop", "A saved pad must survive a page reload.");
+    await page.evaluate(() => {
+      document.documentElement.setAttribute("data-scdl-player-tools-access", JSON.stringify({
+        plan: "pro", state: "pro", capabilities: { tempo: true, parametricEq: true },
+      }));
+    });
+    for (const file of ["tempo-control-core.js", "parametric-eq.js", "audio-effects-core.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
+      await page.addScriptTag({ path: path.join(__dirname, file) });
+    }
+    await host.locator(".trigger").click();
+    await host.locator(".peq summary").click();
+    assert.equal(await host.locator(".peq-point").count(), 2, "EQ points must survive reload");
+    assert.equal(await host.locator(".peq-gain").inputValue(), "-9");
+    assert.equal(await host.locator(".peq-bypass").getAttribute("aria-pressed"), "true", "EQ bypass must survive reload");
     console.log(`Tempo browser verification passed: ${screenshotPath}`);
   } finally {
     await browser.close();

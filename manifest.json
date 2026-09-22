@@ -47,7 +47,7 @@
       "matches": ["https://soundcloud.com/*"],
       "run_at": "document_start",
       "world": "MAIN",
-      "js": ["scripts/tempo-control-core.js", "scripts/audio-effects-core.js", "scripts/tempo-control-main.js"]
+      "js": ["scripts/tempo-control-core.js", "scripts/parametric-eq.js", "scripts/audio-effects-core.js", "scripts/parametric-eq-ui.js", "scripts/tempo-control-main.js"]
     },
     {
       "matches": ["https://soundcloud.com/*"],

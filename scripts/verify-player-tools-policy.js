@@ -35,10 +35,12 @@ assert.equal(policy.canAuthorize(initial, "owner", "set-rate", null, initial.tri
 assert.equal(policy.canAuthorize(initial, "owner", "explore-likes", null, initial.trial.expiresAt).reason, "trial-expired");
 assert.equal(policy.snapshot(last, "owner", initial.trial.expiresAt).state, "trial_last_session", "loop 20 grace survives clock expiry");
 const pro = { ...exhausted, entitlement: { status: "active" } };
-for (const operation of ["begin-loop", "export-loop", "export-track-effects", "edit-loop-precise"]) {
+for (const operation of ["begin-loop", "export-loop", "export-track-effects", "edit-loop-precise", "set-eq"]) {
   assert.deepEqual(policy.canAuthorize(pro, "owner", operation, null, NOW), { allowed: true, consume: false, reason: null });
   if (operation !== "begin-loop") assert.equal(policy.canAuthorize(initial, "owner", operation, null, NOW).reason, "pro-required");
 }
+assert.equal(policy.snapshot(initial, "owner", NOW).capabilities.parametricEq, false);
+assert.equal(policy.snapshot(pro, "owner", NOW).capabilities.parametricEq, true);
 assert.equal(policy.canAuthorize(pro, "owner", "activate-pro", null, NOW).reason, "unknown-operation");
 for (const corrupt of [null, {}, { ...initial, schemaVersion: 3 },
   { ...initial, trial: { ...initial.trial, used: -1 } },

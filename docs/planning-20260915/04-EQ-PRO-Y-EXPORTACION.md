@@ -1,5 +1,36 @@
 # 04 — EQ Pro para escuchar y exportar
 
+## Alcance vigente — EQ paramétrico en vivo, 21/09/2026
+
+El usuario adelantó esta función y reemplazó la V1 fija de tres bandas por un EQ
+paramétrico de hasta ocho puntos con espectro de frecuencias en vivo. Confirmó
+explícitamente **sólo al escuchar por ahora**. Exportar EQ a WAV/pads queda pendiente;
+las secciones E3 y los criterios históricos de exportación no bloquean esta V1.
+
+Implementación local: `parametric-eq.js`, `parametric-eq-ui.js`, integración en
+`audio-effects-core.js` y `tempo-control-main.js`. Doble clic agrega un punto;
+arrastrar cambia frecuencia/ganancia; rueda sobre el punto cambia Q; Suprimir lo
+elimina; doble clic en un punto vuelve a 0 dB. Incluye controles numéricos,
+teclado, bypass, reset y persistencia local. Rango 20 Hz–20 kHz, ±18 dB, Q 0,1–18.
+La curva muestra la respuesta de los filtros; la compensación conservadora de
+ganancia se indica como Auto headroom. El espectro representa la salida del EQ.
+
+Se conserva EQ exclusivamente Pro (`set-eq` / `parametricEq`). Al perder acceso o
+activar bypass global, la cadena vuelve a respuesta neutra sin borrar los puntos.
+Se observan las conexiones de la fuente desde `document_start` y se inserta la
+cadena antes de sus destinos registrados, conservando controles de volumen/mute.
+No requiere permisos nuevos. Recargar la extensión y la pestaña después de instalar.
+
+Pruebas: `npm run test:e2e:eq` mide atenuación real con fuente propia, compartida y
+constructor interceptado, bypass, revocación, reemplazo SPA y controles del editor.
+`test:e2e:tempo` cubre integración y persistencia. Las pruebas usan Chromium con
+fixtures; queda pendiente la comprobación manual contra SoundCloud real y en el
+ZIP final. No declarar cerrada la release comercial por estas pruebas.
+
+Después de esta V1 se retoma C1 del plan 10: confiabilidad de guardados, offscreen y
+colecciones; luego contrato/licencias y gates comerciales. El alcance histórico
+siguiente se conserva como referencia para la futura exportación del EQ.
+
 Objetivo: completar el tercer FX básico con un ecualizador útil para escuchar SoundCloud y exportar loop/track con el mismo ajuste. EQ siempre Pro, como pidió el usuario.
 
 ## Alcance propuesto de V1

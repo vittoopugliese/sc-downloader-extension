@@ -5,6 +5,7 @@ const path = require("node:path");
 const scriptsDirectory = __dirname;
 const excluded = new Set([
   "verify-effects-browser.js",
+  "verify-parametric-eq-browser.js",
   "verify-download-browser.js",
   "verify-bulk-limit-browser.js",
   "verify-loop-browser.js",

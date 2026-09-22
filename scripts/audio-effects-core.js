@@ -1,29 +1,80 @@
 /*
  * Small Web Audio effects graph for the SoundCloud Player Tools.
- * This module uses browser-native nodes and does not process exported audio.
+ * Native live effects and offline pad rendering.
  */
 (() => {
   "use strict";
 
   if (globalThis.SCTempoEffects) return;
   // Observe sources from document_start: a media element can only have one.
-  // When the page owns that source, add wet returns without altering its dry path.
+  // Observe the site's source early so EQ can preserve its downstream dry path.
   const mediaSources = new WeakMap();
+  const sourceRoutes = new WeakMap();
+  function rememberSource(target, source) {
+    mediaSources.set(target, source);
+    if (sourceRoutes.has(source)) return source;
+    const connect = source.connect;
+    const disconnect = source.disconnect;
+    const route = { edges: [], output: null, eq: null, connect, disconnect };
+    sourceRoutes.set(source, route);
+    // Observe only this source's outgoing edges, before the site connects it.
+    // Once EQ is installed, future site connections/disconnections use its output.
+    source.connect = function (...args) {
+      const result = connect.apply(route.output || source, args);
+      if (!route.edges.some((edge) => edge[0] === args[0] && (edge[1] || 0) === (args[1] || 0) && (edge[2] || 0) === (args[2] || 0))) route.edges.push(args);
+      return result;
+    };
+    source.disconnect = function (...args) {
+      const result = disconnect.apply(route.output || source, args);
+      route.edges = route.edges.filter((edge) => {
+        if (!args.length) return false;
+        if (typeof args[0] === "number") return (edge[1] || 0) !== args[0];
+        return edge[0] !== args[0] || (args.length > 1 && (edge[1] || 0) !== args[1]) ||
+          (args.length > 2 && (edge[2] || 0) !== args[2]);
+      });
+      return result;
+    };
+    return source;
+  }
+
+  function insertEqualizer(source) {
+    const route = sourceRoutes.get(source);
+    if (!route || !globalThis.SCParametricEQ) throw new Error("Reload SoundCloud to enable the equalizer.");
+    if (route.eq) return route.eq;
+    const eq = globalThis.SCParametricEQ.createGraph(source.context, { analyse: true });
+    const moved = [];
+    try {
+      // Disconnect only recorded edges; preserve the site's volume/mute graph.
+      for (const edge of route.edges) {
+        const exactEdge = typeof edge[0]?.numberOfInputs === "number"
+          ? [edge[0], edge[1] || 0, edge[2] || 0] : [edge[0], edge[1] || 0];
+        route.disconnect.apply(source, exactEdge);
+        moved.push(edge);
+        route.connect.apply(eq.output, edge);
+      }
+      route.connect.call(source, eq.input);
+      route.output = eq.output;
+      route.eq = eq;
+      return eq;
+    } catch (error) {
+      eq.output.disconnect();
+      for (const edge of moved) route.connect.apply(source, edge);
+      throw error;
+    }
+  }
   const contextPrototype = (globalThis.AudioContext || globalThis.webkitAudioContext)?.prototype;
   if (contextPrototype?.createMediaElementSource) {
     const nativeCreateSource = contextPrototype.createMediaElementSource;
     contextPrototype.createMediaElementSource = function (target) {
       const source = nativeCreateSource.call(this, target);
-      mediaSources.set(target, source);
-      return source;
+      return rememberSource(target, source);
     };
   }
   if (typeof globalThis.MediaElementAudioSourceNode === "function") {
     globalThis.MediaElementAudioSourceNode = new Proxy(globalThis.MediaElementAudioSourceNode, {
       construct(target, args, newTarget) {
         const source = Reflect.construct(target, args, newTarget);
-        mediaSources.set(source.mediaElement, source);
-        return source;
+        return rememberSource(source.mediaElement, source);
       },
     });
   }
@@ -165,9 +216,50 @@
     let reason = "";
     let resetTimer = null;
     const values = { ...DEFAULTS };
+    let eqSettings = globalThis.SCParametricEQ?.normalize(null);
+    let eqAllowed = false;
+    let eqRequested = false;
+    let eqRevision = 0;
 
     function snapshot() {
-      return Object.freeze({ ...values, bypassed, available, reason, initialized: Boolean(graph) });
+      return Object.freeze({ ...values, eq: globalThis.SCParametricEQ?.normalize(eqSettings), bypassed, available, reason, initialized: Boolean(graph) });
+    }
+
+    function updateEqualizer(targetGraph = graph) {
+      if (!targetGraph) return;
+      if (eqRequested && eqAllowed && !targetGraph.eq) targetGraph.eq = insertEqualizer(targetGraph.source);
+      const key = `${eqRevision}:${bypassed}:${eqAllowed}`;
+      if (targetGraph.eq && targetGraph.eqKey !== key) {
+        targetGraph.eq.apply(eqSettings, bypassed || !eqAllowed);
+        targetGraph.eqKey = key;
+      }
+    }
+
+    function setEqualizer(value) {
+      eqSettings = globalThis.SCParametricEQ.validate(value);
+      eqRevision++;
+      eqRequested = true;
+      if (eqAllowed) {
+        if (!graph) initialize();
+        else applyToActive();
+        updateEqualizer();
+      }
+      return snapshot();
+    }
+
+    function setEqualizerAllowed(value) {
+      if (eqAllowed === Boolean(value)) return;
+      eqAllowed = Boolean(value);
+      for (const reference of graphReferences) updateEqualizer(reference.deref());
+    }
+
+    function analyseEqualizer() {
+      if (!eqAllowed) return null;
+      eqRequested = true;
+      applyToActive();
+      if (!graph) initialize();
+      updateEqualizer();
+      return graph?.eq || null;
     }
 
     function updateCharacter(targetGraph = graph) {
@@ -189,6 +281,7 @@
 
     function updateReturns(targetGraph = graph) {
       if (!targetGraph?.context) return;
+      updateEqualizer(targetGraph);
       const contextForGraph = targetGraph.context;
       const active = !bypassed && available;
       setParam(targetGraph.reverbReturn.gain, active ? values.reverb / 100 * MAX_SEND.reverb : 0, contextForGraph);
@@ -431,21 +524,22 @@
       if (!graph) audio = candidate;
       else if (
         candidate !== audio && context &&
-        (values.reverb > 0 || values.delay > 0)
+        (values.reverb > 0 || values.delay > 0 || (eqRequested && eqAllowed))
       ) connectAudio(candidate);
     }
 
     function applyToActive() {
       const candidate = getActiveAudio();
       if (candidate && candidate !== audio) {
-        if (graph && context && (values.reverb > 0 || values.delay > 0)) connectAudio(candidate);
+        if (graph && context && (values.reverb > 0 || values.delay > 0 || (eqRequested && eqAllowed))) connectAudio(candidate);
         else audio = candidate;
       }
-      if (!graph && available && (values.reverb > 0 || values.delay > 0)) initialize();
+      if (!graph && available && (values.reverb > 0 || values.delay > 0 || (eqRequested && eqAllowed))) initialize();
       return snapshot();
     }
 
-    return Object.freeze({ applyPreset, applyToActive, discover, set, setBypassed, setCharacter, snapshot });
+    return Object.freeze({ applyPreset, applyToActive, discover, set, setBypassed, setCharacter, snapshot,
+      setEqualizer, setEqualizerAllowed, analyseEqualizer });
   }
 
   globalThis.SCTempoEffects = Object.freeze({ create, renderSample, clampPercent, DEFAULTS, PRESETS, REVERB_ROOMS });

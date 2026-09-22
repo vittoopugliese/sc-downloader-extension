@@ -11,7 +11,16 @@ const { chromium } = require("playwright");
       body: '<div class="playControls__elements"><div class="playControls__soundBadge"></div></div>',
     }));
     await page.goto("https://soundcloud.com/");
-    for (const file of ["tempo-control-core.js", "audio-effects-core.js", "tempo-control-main.js"]) {
+    await page.evaluate(() => {
+      const snapshot = { plan: "pro", state: "pro", capabilities: { tempo: true, preservePitch: true, savePreset: true, parametricEq: true } };
+      document.documentElement.setAttribute("data-scdl-player-tools-access", JSON.stringify(snapshot));
+      document.addEventListener("scdl:player-tools-request", () => {
+        const request = JSON.parse(document.documentElement.getAttribute("data-scdl-player-tools-request"));
+        document.documentElement.setAttribute("data-scdl-player-tools-response", JSON.stringify({ id: request.id, success: true, allowed: true, snapshot }));
+        document.dispatchEvent(new CustomEvent("scdl:player-tools-response"));
+      });
+    });
+    for (const file of ["tempo-control-core.js", "parametric-eq.js", "audio-effects-core.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
     await page.evaluate(async (shared) => {

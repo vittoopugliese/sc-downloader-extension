@@ -82,6 +82,8 @@
   const RATE_ANIMATION_DURATION_MS = 220;
   const DEFAULT_EFFECT_TOGGLE_WET = 20;
   let ui = null;
+  let equalizerUi = null;
+  const EQ_STORAGE = "scdl.parametric-eq.v1";
   let mountQueued = false;
   let playbackFailure = "";
   let storageFailure = "";
@@ -528,6 +530,10 @@
     writeSetting(PITCH_STORAGE, DEFAULTS.preservePitch);
     effectsController?.set("reverb", 0);
     effectsController?.set("delay", 0);
+    if (globalThis.SCParametricEQ) {
+      effectsController?.setEqualizer(globalThis.SCParametricEQ.normalize(null));
+      writeSetting(EQ_STORAGE, JSON.stringify(globalThis.SCParametricEQ.normalize(null)));
+    }
     effectsController?.setBypassed(false);
     await clearLoop();
     requestLoop("set-global-bypass", { bypassed: false });
@@ -584,6 +590,13 @@
       render();
     },
   });
+
+  if (globalThis.SCParametricEQ && effectsController) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(EQ_STORAGE) || "null");
+      if (saved) effectsController.setEqualizer(globalThis.SCParametricEQ.validate(saved));
+    } catch { /* Invalid stored EQ must never prevent playback. */ }
+  }
 
   async function applyEffect(change) {
     const authorization = await authorizePlayerTools("set-effect", "tempo");
@@ -1933,6 +1946,7 @@
   function setPanelOpen(open) {
     if (!ui) return;
     ui.panel.hidden = !open;
+    equalizerUi?.setVisible(open);
     ui.trigger.setAttribute("aria-expanded", String(open));
     setVolumeLayerOpen(open);
     if (open) positionPanel();
@@ -2330,6 +2344,18 @@
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
     });
 
+    if (globalThis.SCParametricEQUI && effectsController) {
+      equalizerUi = globalThis.SCParametricEQUI.mount({
+        container: ui.panel,
+        effects: effectsController,
+        isAllowed: () => capability("parametricEq"),
+        authorize: () => authorizePlayerTools("set-eq", "parametricEq", {}, { showPendingUi: false }),
+        onChange(settings) {
+          writeSetting(EQ_STORAGE, JSON.stringify(settings));
+          render();
+        },
+      });
+    }
     render();
     syncBrandLogo();
     hydrateDrumPads();
@@ -2341,6 +2367,7 @@
     if (!ui) return;
     const playbackAllowed = capability("tempo");
     const isPro = accessSnapshot?.plan === "pro";
+    effectsController?.setEqualizerAllowed(capability("parametricEq"));
     ui.planBadge.textContent = isPro ? "PRO" : "FREE";
     ui.planBadge.classList.toggle("is-pro", isPro);
     ui.planBadge.setAttribute("aria-label", isPro ? "Player Tools Pro active" : "Player Tools Free plan");
@@ -2383,7 +2410,7 @@
     const effectsState = effectsController?.snapshot();
     ui.clearRate.hidden = state.rate === DEFAULTS.rate &&
       state.preservePitch === DEFAULTS.preservePitch && !state.bypassed &&
-      !(effectsState?.reverb > 0 || effectsState?.delay > 0) && !loopState.active;
+      !(effectsState?.reverb > 0 || effectsState?.delay > 0 || effectsState?.eq?.bands.length) && !loopState.active;
     ui.clearRate.disabled = !playbackAllowed || accessActionPending;
     // Disabling a native range during input cancels its ongoing mouse drag.
     ui.slider.disabled = !playbackAllowed;
@@ -2424,6 +2451,7 @@
     ui.status.hidden = !message;
     renderLoop();
     renderEffects();
+    equalizerUi?.sync();
   }
 
   function renderEffects() {
