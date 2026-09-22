@@ -3,6 +3,7 @@ importScripts(
   "format-utils.js",
   "player-tools-policy.js",
   "player-tools-access.js",
+  "player-tools-receipts.js",
   "player-tools-commerce.js",
   "directory-storage.js",
   "soundcloud-http.js",
@@ -25,7 +26,9 @@ const INSTALL_LIKES_URL = "https://soundcloud.com/you/likes";
 const playerToolsCommerce = globalThis.SCPlayerToolsCommerce?.create
   ? globalThis.SCPlayerToolsCommerce.create({
       storage: chrome.storage.local,
+      identityStorage: chrome.storage.sync,
       sessionStorage: chrome.storage.session,
+      alarms: chrome.alarms,
       access: SCPlayerToolsAccess,
       version: chrome.runtime.getManifest().version,
     })
@@ -36,8 +39,15 @@ const playerToolsCommerce = globalThis.SCPlayerToolsCommerce?.create
       activate: async () => { throw Object.assign(new Error("Player Tools licensing is unavailable."), { code: "service-unavailable" }); },
       activateTest: async () => { throw Object.assign(new Error("Testing access is unavailable."), { code: "service-unavailable" }); },
       deactivateTest: async () => { throw Object.assign(new Error("Testing access is unavailable."), { code: "service-unavailable" }); },
+      startTrial: async () => { throw Object.assign(new Error("Trial service is unavailable."), { code: "service-unavailable" }); },
+      consumeTrial: async () => { throw Object.assign(new Error("Trial service is unavailable."), { code: "service-unavailable" }); },
       track: async () => false,
     };
+SCPlayerToolsAccess.configureAuthority?.({
+  startTrial: () => playerToolsCommerce.startTrial(),
+  consumeTrial: (value) => playerToolsCommerce.consumeTrial(value),
+});
+playerToolsCommerce.getState({ revalidate: true }).catch(() => {});
 
 async function configureUninstallFeedback() {
   const url = new URL(UNINSTALL_FEEDBACK_URL);
@@ -198,9 +208,15 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === globalThis.SCPlayerToolsCommerce?.LICENSE_REVALIDATION_ALARM) {
+    playerToolsCommerce.getState({ revalidate: true }).catch(() => {});
+  }
   if (alarm.name === 'scdl-likes') likesJobs?.tick().catch(() => {});
   if (alarm.name === BulkJobManager.KEEPALIVE_ALARM) {
     BulkJobManager.ensureJobRunning().catch(() => {});
+  }
+  if (alarm.name.startsWith(BulkJobManager.RETRY_ALARM_PREFIX)) {
+    BulkJobManager.resumeJob(alarm.name.slice(BulkJobManager.RETRY_ALARM_PREFIX.length)).catch(() => {});
   }
 });
 
@@ -419,7 +435,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       request.collection,
       request.requestedLimit ?? null,
       request.formatPreference || "auto",
-      request.downloadDestination ?? null
+      request.downloadDestination ?? null,
+      request.selection || null
     )
       .then((job) => sendResponse({ success: true, job }))
       .catch((error) => sendResponse(errorResponse(error)));

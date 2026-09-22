@@ -11,6 +11,7 @@
     "LEMON_STORE_ID": "REPLACE_WITH_LEMON_STORE_ID",
     "LEMON_PRODUCT_ID": "REPLACE_WITH_LEMON_PRODUCT_ID",
     "LEMON_VARIANT_ID": "REPLACE_WITH_LEMON_VARIANT_ID"
+    ,"ENTITLEMENT_KEY_ID": "p256-2026-01"
   },
   "observability": { "enabled": true, "logs": { "head_sampling_rate": 1 } },
   "d1_databases": [{
@@ -28,6 +29,7 @@
         "LEMON_STORE_ID": "REPLACE_WITH_LIVE_LEMON_STORE_ID",
         "LEMON_PRODUCT_ID": "REPLACE_WITH_LIVE_LEMON_PRODUCT_ID",
         "LEMON_VARIANT_ID": "REPLACE_WITH_LIVE_LEMON_VARIANT_ID"
+        ,"ENTITLEMENT_KEY_ID": "p256-2026-01"
       },
       "d1_databases": [{
         "binding": "LICENSE_DB",

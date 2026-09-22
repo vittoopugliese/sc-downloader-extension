@@ -15,6 +15,26 @@ function fixture(used) {
   }
   let writes = 0;
   let fail = false;
+  let serverStartedAt = null;
+  let serverUsed = used || 0;
+  const consumptions = new Map();
+  const authority = {
+    async startTrial() {
+      if (serverStartedAt == null) serverStartedAt = clock;
+      return { startedAt: serverStartedAt, expiresAt: serverStartedAt + policy.TRIAL_DURATION_MS, used: serverUsed, limit: 20 };
+    },
+    async consumeTrial(value) {
+      if (consumptions.has(value.requestId)) return { ...consumptions.get(value.requestId), allowed: true };
+      const current = { startedAt: serverStartedAt, expiresAt: serverStartedAt + policy.TRIAL_DURATION_MS,
+        used: serverUsed, limit: 20 };
+      if (serverStartedAt == null || clock >= serverStartedAt + policy.TRIAL_DURATION_MS) return { ...current, allowed: false, reason: "trial-expired" };
+      if (serverUsed >= 20) return { ...current, allowed: false, reason: "trial-exhausted" };
+      serverUsed += 1;
+      const result = { startedAt: serverStartedAt, expiresAt: serverStartedAt + policy.TRIAL_DURATION_MS, used: serverUsed, limit: 20 };
+      consumptions.set(value.requestId, result);
+      return { ...result, allowed: true };
+    },
+  };
   const storage = {
     async get() { return structuredClone(data); },
     async set(value) {
@@ -22,8 +42,9 @@ function fixture(used) {
       writes += 1; data = structuredClone(value);
     },
   };
-  return { storage, restart: () => create({ storage, now: () => clock }), read: () => structuredClone(data[STORAGE_KEY]),
-    writes: () => writes, fail: (value) => { fail = value; }, advance: (ms) => { clock += ms; } };
+  return { storage, restart: () => create({ storage, now: () => clock, authority }), read: () => structuredClone(data[STORAGE_KEY]),
+    writes: () => writes, fail: (value) => { fail = value; }, advance: (ms) => { clock += ms; },
+    serverUse: (value) => { serverUsed = value; } };
 }
 
 (async () => {
@@ -80,6 +101,12 @@ function fixture(used) {
   await finalAccess.endTab(1);
   assert.equal((await finalAccess.getSnapshot(owner)).state, "free_locked");
 
+  const staleLocal = fixture(19); const staleLocalAccess = staleLocal.restart(); await staleLocalAccess.startTrial();
+  staleLocal.serverUse(20);
+  const rejectedByAuthority = await staleLocalAccess.authorize(owner, request("server-exhausted"));
+  assert.equal(rejectedByAuthority.code, "trial-exhausted");
+  assert.equal(staleLocal.read().trial.used, 20, "an authoritative rejection refreshes stale local trial state");
+
   const warning = fixture(18); const warningAccess = warning.restart(); await warningAccess.startTrial();
   assert.equal((await warningAccess.authorize(owner, request())).notice, "last-loop-remaining");
   assert.equal((await warning.restart().authorize(owner, request())).notice, null);
@@ -99,7 +126,8 @@ function fixture(used) {
   await assert.rejects(unavailable.getSnapshot(owner), { code: "storage-unavailable" });
 
   const paid = fixture(19);
-  const paidState = paid.read(); paidState.entitlement = { status: "active" };
+  const paidState = paid.read(); paidState.entitlement = { status: "active", licenseId: "license-1", checkedAt: 123,
+    expiresAt: 1_900_000_000_000 };
   await paid.storage.set({ [STORAGE_KEY]: paidState });
   const paidAccess = paid.restart();
   assert.equal((await paidAccess.authorize(owner, request())).allowed, true);
@@ -108,7 +136,7 @@ function fixture(used) {
   paidState.entitlement = { status: "free" }; await paid.storage.set({ [STORAGE_KEY]: paidState });
   assert.equal((await paidAccess.getSnapshot(owner)).used, 19);
   assert.equal((await paidAccess.authorize(owner, { operation: "export-loop" })).code, "pro-required");
-  await paidAccess.setEntitlement({ status: "active", licenseId: "license-1", checkedAt: 123 });
+  await paidAccess.setEntitlement({ status: "active", licenseId: "license-1", checkedAt: 123, expiresAt: 1_900_000_000_000 });
   assert.equal((await paidAccess.getSnapshot(owner)).plan, "pro", "validated commerce can grant the shared Pro entitlement");
   await paidAccess.setEntitlement({ status: "free" });
   assert.equal((await paidAccess.getSnapshot(owner)).plan, "free", "revocation preserves trial state while removing Pro");

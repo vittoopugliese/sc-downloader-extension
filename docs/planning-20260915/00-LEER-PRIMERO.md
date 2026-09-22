@@ -4,6 +4,21 @@
 
 **Leer esta sección primero. Sustituye el orden y las afirmaciones de cierre incompatibles que aparecen más abajo.** El usuario pidió dejar ejecutable toda la revisión de confiabilidad, FREE/PRO y Lemon Squeezy para continuar con otro agente. El objetivo de esta tanda es terminar y publicar la versión comercial con las funciones existentes, compra única, activación, restauración y reembolsos verificables. Los planes de funciones futuras siguen conservados como trabajo posterior.
 
+### Actualización técnica — 22/09/2026, posterior a `436f2d5`
+
+La enumeración y selección de colecciones ya usan jobs paginados durables en el
+service worker; el job no depende de mantener abierta la pestaña. FREE/trial/PRO
+ya usa trial autoritativo D1, dos perfiles atómicos y comprobantes ES256 de
+treinta días con alarma one-shot y rotación por `keyId`. Activación,
+conciliación, reembolso, actualización manual de
+licencia y liberación de un perfil tienen implementación local y regresiones
+dirigidas. El registro exacto está al final del plan 10 y en el handoff C1–C4.
+
+No interpretar esto como C4 cerrado: aún faltan cuenta aprobada, IDs/secretos,
+migraciones y deploy remotos, compra/reembolso Test Mode y luego Live Mode. El
+empaquetado comercial requiere generar el par ES256, instalar la clave privada
+en el Worker y pasar la pública como `ENTITLEMENT_PUBLIC_JWK`.
+
 ### Ruta de ejecución
 
 1. Leer completo [10 — Cierre ejecutable de release y FREE/PRO](10-CIERRE-RELEASE-Y-FREE-PRO-20260921.md). Contiene tareas, dependencias, evidencia inicial, decisiones pendientes y checklist de cierre.

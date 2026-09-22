@@ -158,7 +158,15 @@ function createHarness(options = {}) {
       toDurable: (track, album) => ({ ...track, album: track.album || album || null }),
       canDownload: (track) => Boolean(track?.streamUrl),
     },
-    SCDownloadSource: { resolve: async (trackData) => ({ trackData, streamUrl: trackData.streamUrl }) },
+    SCDownloadSource: {
+      resolve: async (trackData) => ({ trackData, streamUrl: trackData.streamUrl }),
+      collectionPage: async (_descriptor, cursor) => {
+        bulkPageCalls.push(cursor ?? null);
+        const page = options.bulkPages?.[cursor ?? "first"];
+        if (!page) throw Object.assign(new Error("Missing bulk fixture page."), { code: "stale_context" });
+        return clone(page);
+      },
+    },
     SCDownloadDestination: {
       create: () => ({
         resolve: async (value) => value,

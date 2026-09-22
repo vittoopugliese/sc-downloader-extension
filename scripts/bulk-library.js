@@ -31,6 +31,7 @@
       duplicate: Math.max(0, Number(value.duplicate) || 0),
       unavailable: Math.max(0, Number(value.unavailable) || 0),
       invalid: Math.max(0, Number(value.invalid) || 0),
+      unselected: Math.max(0, Number(value.unselected) || 0),
     };
   }
 
@@ -117,10 +118,14 @@
       sourceType: spec.sourceType || 'unknown',
       sourceUserId: spec.sourceUserId == null ? null : String(spec.sourceUserId),
       sourceUrl: spec.sourceUrl || null,
+      clientId: spec.clientId || null,
+      sourceAuthenticated: spec.sourceAuthenticated === true,
       sessionEpoch: spec.sessionEpoch == null ? null : String(spec.sessionEpoch),
       mode: spec.mode || 'all',
       requestedLimit: Number.isSafeInteger(spec.requestedLimit) && spec.requestedLimit >= 0
         ? spec.requestedLimit : null,
+      selectionMode: ["all", "all_except", "explicit"].includes(spec.selectionMode) ? spec.selectionMode : "all",
+      selectionIds: Array.isArray(spec.selectionIds) ? spec.selectionIds.map(String) : [],
       epoch: 0,
       revision: 0,
       enumerated: 0,
@@ -180,9 +185,14 @@
 
       let inserted = 0;
       let duplicate = pageSkipped.duplicate;
+      let unselected = pageSkipped.unselected;
+      const selectedIds = new Set(job.selectionIds || []);
       for (const item of page.items) {
         if (job.requestedLimit != null && job.eligible + inserted >= job.requestedLimit) break;
         const trackId = String(item.trackId);
+        const selected = job.selectionMode === 'explicit' ? selectedIds.has(trackId)
+          : job.selectionMode === 'all_except' ? !selectedIds.has(trackId) : true;
+        if (!selected) { unselected += 1; continue; }
         if (await request(seen.get([jobId, trackId]))) {
           duplicate += 1;
           continue;
@@ -213,6 +223,7 @@
         duplicate: job.skipped.duplicate + duplicate,
         unavailable: job.skipped.unavailable + pageSkipped.unavailable,
         invalid: job.skipped.invalid + pageSkipped.invalid,
+        unselected: (job.skipped.unselected || 0) + unselected,
       };
       job.revision += 1;
       job.updatedAt = Date.now();

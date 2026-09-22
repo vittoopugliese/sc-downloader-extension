@@ -32,8 +32,8 @@ El usuario pidió conservar y hacer ejecutable toda la revisión previa. No se c
 Fuente ejecutable: [RELIABILITY-CLOSURE-PLAN-20260921](../audits/RELIABILITY-CLOSURE-PLAN-20260921.md). Contexto de arreglos ya realizados: [FEEDBACK-FIX-PLAN-20260921](../audits/FEEDBACK-FIX-PLAN-20260921.md).
 
 - [ ] Diagnosticar y resolver offscreen en Chromium: preservar etapa/código/causa, identificar cada operación e intento, reconciliar respuestas perdidas y no duplicar build/save.
-- [ ] Unificar popup, inline y selección manual en paginación durable, con orden y límite exacto, incluido All.
-- [ ] Recuperar enumeración sin depender de la pestaña original; conservar cursor, formato e identidad de colección y ofrecer recuperación visible.
+- [x] Unificar popup, inline y selección manual en paginación durable, con orden y límite exacto, incluido All.
+- [x] Recuperar enumeración sin depender de la pestaña original; conservar cursor, formato e identidad de colección y ofrecer recuperación visible.
 - [ ] Congelar formato del job y contabilizar todas las pistas omitidas con causa; respetar `Retry-After` y evitar duplicaciones por timeout de UI.
 - [ ] Completar fixtures HLS, audio y memoria definidos en el plan de cierre; registrar medición de ChromeOS o la limitación concreta aún no verificada.
 - [ ] Completar diagnóstico y documentación de comportamiento real; mantener gratuitos los caminos de descarga normal.
@@ -54,13 +54,13 @@ Archivos principales: `scripts/player-tools-policy.js`, `player-tools-access.js`
 | PRO lifetime | Capacidades PRO implementadas y verificadas, sin vencimiento comercial; restauración y política de instalaciones explícitas. |
 
 - [ ] Conservar onboarding de instalación a `https://soundcloud.com/you/likes` y comienzo único de prueba; actualizaciones no abren esa pestaña ni reinician/extienden el trial. Probar instalación con/sin sesión de SoundCloud y migración de perfiles existentes.
-- [ ] Separar capacidad `likesExplorer` del contador de loops. Hoy usa `pro || trialAvailable`, donde `trialAvailable` exige `used < 20`. Este cambio cumple los siete días prometidos por el onboarding del 00 y la recomendación aceptada como trabajo a ejecutar.
+- [x] Separar capacidad `likesExplorer` del contador de loops. Hoy usa `pro || trialAvailable`, donde `trialAvailable` exige `used < 20`. Este cambio cumple los siete días prometidos por el onboarding del 00 y la recomendación aceptada como trabajo a ejecutar.
 - [ ] Mantener gracia del loop 20, permisos exclusivos de export, enforcement en handlers además de UI, cuota durable y preferencias al vencer/revocar.
 - [ ] Verificar estado no iniciado, vigente, agotado por loops, vencido por tiempo, PRO, compra pendiente, error recuperable y revocado. Probar dos pestañas, reinicio de worker, actualización y storage inválido.
 - [ ] Unificar copy y precio: USD 3,69, compra única; USD 6,79 sólo como referencia futura, nunca precio histórico ficticio. No experimentar con precio durante este cierre.
-- [ ] Implementar y probar el límite ya confirmado de dos perfiles activados por licencia, con liberación por soporte. La decisión de producto está cerrada; faltan reserva atómica, conciliación con Lemon y administración.
-- [ ] Implementar el comprobante firmado y la revalidación ya confirmada cada treinta días. La decisión de producto está cerrada; faltan firma/verificación, alarma one-shot, guard PRO y pruebas de vencimiento/offline/revocación.
-- [ ] Verificar que activar/restaurar falla de forma recuperable ante respuestas incompletas del servicio; nunca conceder PRO por una respuesta vacía o por la URL de éxito.
+- [x] Implementar y probar el límite ya confirmado de dos perfiles activados por licencia, con liberación por soporte. La decisión de producto está cerrada; faltan reserva atómica, conciliación con Lemon y administración.
+- [x] Implementar el comprobante firmado y la revalidación ya confirmada cada treinta días. La decisión de producto está cerrada; faltan firma/verificación, alarma one-shot, guard PRO y pruebas de vencimiento/offline/revocación.
+- [x] Verificar que activar/restaurar falla de forma recuperable ante respuestas incompletas del servicio; nunca conceder PRO por una respuesta vacía o por la URL de éxito.
 
 Salida: matriz de capacidades implementada, copy consistente y pruebas de transiciones; las decisiones de dispositivos y offline quedan explícitas, no implícitas en constantes.
 
@@ -70,28 +70,28 @@ Archivos: `services/player-tools-license/src/index.mjs`, `src/validation.mjs`, m
 
 ### C3.1 Activación y restauración
 
-- [ ] Añadir regresión con respuesta fiel al proveedor que reproduzca el HTTP 500 descrito arriba.
-- [ ] Mapear por separado `license_key`, `instance` y `meta`; persistir instancia, pedido, cliente y hash de clave correctos. Verificar producto, variante, tienda, email y estado válido antes de conceder acceso.
-- [ ] Hacer idempotentes tanto activación como restauración para la misma instalación. Probar dos solicitudes concurrentes, timeout después de activar en Lemon y reintento posterior. Resolver instancias huérfanas y errores por límite sin consumir cupos repetidamente.
-- [ ] Resolver compra recibida antes o después de activar. El webhook hoy usa un identificador provisional `order:<id>` como `lemon_license_id`: revisar claves foráneas y actualizaciones para no romper activaciones al asociar la licencia definitiva.
-- [ ] Impedir que la restauración de una fila local obsoleta rehabilite una licencia revocada. Definir conciliación con el proveedor, también para cambios manuales y eventos perdidos.
+- [x] Añadir regresión con respuesta fiel al proveedor que reproduzca el HTTP 500 descrito arriba.
+- [x] Mapear por separado `license_key`, `instance` y `meta`; persistir instancia, pedido, cliente y hash de clave correctos. Verificar producto, variante, tienda, email y estado válido antes de conceder acceso.
+- [x] Hacer idempotentes tanto activación como restauración para la misma instalación. Probar dos solicitudes concurrentes, timeout después de activar en Lemon y reintento posterior. Resolver instancias huérfanas y errores por límite sin consumir cupos repetidamente.
+- [x] Resolver compra recibida antes o después de activar. El webhook hoy usa un identificador provisional `order:<id>` como `lemon_license_id`: revisar claves foráneas y actualizaciones para no romper activaciones al asociar la licencia definitiva.
+- [x] Impedir que la restauración de una fila local obsoleta rehabilite una licencia revocada. Definir conciliación con el proveedor, también para cambios manuales y eventos perdidos.
 - [ ] Cubrir reinstalación/equipo nuevo, licencia ajena, correo incorrecto y cupo agotado; dar recuperación concreta sin forzar otra compra.
 
 ### C3.2 Webhooks y conciliación
 
-- [ ] Conservar HMAC SHA-256 sobre cuerpo original, comparación de firma y límite de tamaño. Añadir tests positivos/negativos del handler completo.
+- [x] Conservar HMAC SHA-256 sobre cuerpo original, comparación de firma y límite de tamaño. Añadir tests positivos/negativos del handler completo.
 - [ ] Validar tienda, producto/variante, tipo de recurso, estado relevante y modo test/live antes de mutar licencias o registrar ventas. No aceptar como venta un evento de otro producto de la misma tienda.
-- [ ] Corregir deduplicación: recepción durable y efectos deben ser transaccionales o disponer de estado recuperable. Un fallo después de guardar el evento debe poder completarse al reintentar; confirmar 200 sólo tras procesamiento o aceptación durable recuperable.
+- [x] Corregir deduplicación: recepción durable y efectos deben ser transaccionales o disponer de estado recuperable. Un fallo después de guardar el evento debe poder completarse al reintentar; confirmar 200 sólo tras procesamiento o aceptación durable recuperable.
 - [ ] Distinguir repetición de entrega de repetición semántica del mismo pedido. Evitar duplicar licencia/venta aunque cambie la serialización del payload.
-- [ ] Probar eventos duplicados, tardíos y desordenados: compra→reembolso, reembolso→compra atrasada, webhook antes/después de activación. Un evento antiguo no puede reactivar una revocación.
-- [ ] Definir reembolso total/parcial y deshabilitación manual; implementar sincronización de `license_key_updated` cuando corresponda y/o conciliación por API. Registrar qué eventos se soportan antes de seleccionarlos en el dashboard.
-- [ ] Añadir reintento/reconciliación para eventos que agoten los reintentos del proveedor. El endpoint `/license/status` hoy sólo consulta D1: eso no demuestra estado actual en Lemon si se perdió un webhook.
+- [x] Probar eventos duplicados, tardíos y desordenados: compra→reembolso, reembolso→compra atrasada, webhook antes/después de activación. Un evento antiguo no puede reactivar una revocación.
+- [x] Definir reembolso total/parcial y deshabilitación manual; implementar sincronización de `license_key_updated` cuando corresponda y/o conciliación por API. Registrar qué eventos se soportan antes de seleccionarlos en el dashboard.
+- [x] Añadir reintento/reconciliación para eventos que agoten los reintentos del proveedor. El endpoint `/license/status` hoy sólo consulta D1: eso no demuestra estado actual en Lemon si se perdió un webhook.
 - [ ] Mantener `purchase_confirmed` una vez por pedido válido; no registrar ventas de prueba en métricas de producción.
 
 ### C3.3 Offline, servicio y límites de confianza
 
-- [ ] Implementar el comprobante de entitlement firmado pedido por el 00, con verificación de firma en el cliente y campos de instalación, licencia, capacidades, emisión y vigencia técnica. Clave privada sólo en servidor; la extensión puede incluir la pública. Documentar rotación/migración.
-- [ ] Persistir únicamente los datos necesarios para restaurar el estado local; no persistir clave de licencia ni email en la extensión. Un comprobante firmado no vuelve invulnerable el perfil local: evitar promesas de antifraude absoluto.
+- [x] Implementar el comprobante de entitlement firmado pedido por el 00, con verificación de firma en el cliente y campos de instalación, licencia, capacidades, emisión y vigencia técnica. Clave privada sólo en servidor; la extensión puede incluir la pública. Documentar rotación/migración.
+- [x] Persistir únicamente los datos necesarios para restaurar el estado local; no persistir clave de licencia ni email en la extensión. Un comprobante firmado no vuelve invulnerable el perfil local: evitar promesas de antifraude absoluto.
 - [ ] Aplicar política offline de C2; probar firma falsa, comprobante de otra instalación, vencimiento técnico, caída del servidor, revocación al reconectar y conservación de preferencias/trial.
 - [ ] Revisar timeout y tamaño de respuestas del proveedor en el Worker, errores tipados y logs sin secretos. Mantener CORS de producción limitado a orígenes necesarios; quitar localhost de la configuración live.
 - [ ] Separar secretos, D1, productos y endpoints/configuración de test/live. La comprobación `health: ready` sólo constata configuración, no reemplaza una compra.
@@ -173,3 +173,39 @@ Se documentó el orden aceptado y la revisión de `6d5163a`. No se corrigió có
 - Regresión local: aprobaron `npm test` (45 verificaciones), `npm run test:player-tools` (9 pruebas del Worker), tempo y EQ paramétrico en Chromium y las verificaciones específicas de descarga, política y máquina de estados. La suite se repitió antes de enmendar el commit.
 - Límites: no se desplegó D1 ni Worker, no hubo payload/compras reales de Test Mode, no se probó ChromeOS y no se generó candidato. Siguen abiertos activación concurrente/huérfana, dos seats atómicos, conciliación de estado, comprobante firmado de treinta días y la autoridad/identidad verificable del trial.
 - Siguiente acción concreta: cerrar activación concurrente y reconciliación de instancias con tests D1; después implementar dos seats y el comprobante firmado. C4 requiere credenciales/cuenta externas y no puede marcarse cerrado con mocks.
+
+### Registro de implementación — 22/09/2026, árbol posterior a `436f2d5`
+
+- C1: la enumeración paginada se movió al service worker usando un descriptor
+  durable de colección; cerrar o navegar la pestaña ya no elimina la fuente del
+  job. Popup, inline y selección manual terminan en `START_PAGED_BULK_JOB`. La
+  selección carga páginas bajo demanda y persiste semántica `all_except` o
+  `explicit`; formato, cursor y selección quedan congelados en IndexedDB.
+  `Retry-After` ya no se borra al reanudar antes de tiempo y usa una alarma
+  one-shot para continuar.
+- C2: el trial de siete días/veinte loops pasó a autoridad D1 con consumos
+  idempotentes y recibos ES256. La identidad se replica en `storage.sync` para
+  sobrevivir a pérdida del estado local. PRO sólo se concede con un recibo
+  ES256 ligado a instalación/licencia/instancia; vence técnicamente a treinta
+  días y después exige renovación online. Una alarma one-shot se restaura al
+  iniciar el service worker y el guard de capacidades conserva el vencimiento
+  como respaldo. Respuestas HTTP 200 vacías o sin firma fallan cerradas. El
+  empaquetador exige inyectar una JWK/JWKS pública y el verificador selecciona
+  por `keyId`, con procedimiento de rotación documentado.
+- C3: dos perfiles se reservan atómicamente antes de llamar al proveedor. Los
+  reintentos de persistencia concilian una instancia remota existente antes de
+  activar otra; errores 429/5xx no revocan; una instancia ausente desactiva sólo
+  ese perfil; reembolsos y `license_key_updated` eliminan reservas activas. El
+  comando administrativo de liberación primero desactiva en Lemon y luego
+  actualiza D1, con preview por defecto.
+- Evidencia dirigida: `npm run test:player-tools` aprobó verificadores de
+  policy/access/client/commerce y 19 escenarios del Worker/D1. También
+  aprobaron `verify-bulk-job-state-machine`, `verify-download-intent` y
+  `verify-page-intake`. Tras cerrar alarma, rotación y rechazo autoritativo del
+  trial se repitieron sólo `verify-player-tools-access`,
+  `verify-player-tools-commerce` y los 19 escenarios del Worker/D1; aprobaron.
+  No se ejecutó la suite global ni navegador en esta tanda.
+- Límite externo: C4 sigue pendiente hasta disponer de IDs, secretos y cuenta
+  Test Mode. No hubo migración remota, deploy, checkout, webhook real, compra o
+  reembolso real. Antes de empaquetar hay que generar el par ES256, instalar la
+  privada como secreto y pasar la pública mediante `ENTITLEMENT_PUBLIC_JWK`.

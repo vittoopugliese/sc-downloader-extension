@@ -182,7 +182,83 @@ const SCDownloadSource = (() => {
       return { user, oauthToken };
     }
 
-    return { resolve, resolveStream, resolveOriginal, refresh, resolveLoggedInUser };
+    function checkedApiCursor(value, path) {
+      const url = new URL(value);
+      if (url.protocol !== "https:" || url.hostname !== "api-v2.soundcloud.com" ||
+          url.pathname !== path || url.username || url.password) {
+        throw createError("SoundCloud returned an invalid collection cursor.", "invalid_cursor");
+      }
+      return url;
+    }
+
+    async function collectionPage(descriptor, cursor = null, pageSize = 200, formatPreference = "auto") {
+      const kind = descriptor?.sourceType;
+      const clientId = String(descriptor?.clientId || "");
+      const size = Math.min(200, Math.max(1, Number(pageSize) || 200));
+      if (!clientId || !["playlist", "likes", "user_tracks"].includes(kind)) {
+        throw createError("Collection source descriptor is incomplete.", "invalid_collection_source");
+      }
+      let values;
+      let next = null;
+      let collectionOauthToken = null;
+      if (kind === "playlist") {
+        const sourceUrl = descriptor.sourceUrl;
+        const pageUrl = new URL(sourceUrl);
+        if (pageUrl.origin !== "https://soundcloud.com" || pageUrl.username || pageUrl.password) {
+          throw createError("Playlist source URL is invalid.", "invalid_collection_source");
+        }
+        const resolveUrl = new URL("https://api-v2.soundcloud.com/resolve");
+        resolveUrl.searchParams.set("url", pageUrl.toString());
+        resolveUrl.searchParams.set("client_id", clientId);
+        const playlist = await http.json(resolveUrl);
+        const entries = Array.isArray(playlist?.tracks) ? playlist.tracks : [];
+        const offset = cursor == null ? 0 : Number(/^playlist:(\d+)$/.exec(cursor)?.[1]);
+        if (!Number.isSafeInteger(offset) || offset < 0) throw createError("Playlist cursor is invalid.", "invalid_cursor");
+        values = entries.slice(offset, offset + size);
+        const following = offset + values.length;
+        next = following < entries.length ? `playlist:${following}` : null;
+      } else {
+        const userId = String(descriptor.sourceUserId || "");
+        if (!/^\d+$/.test(userId)) throw createError("Collection user is invalid.", "invalid_collection_source");
+        const path = kind === "likes" ? `/users/${userId}/likes` : `/users/${userId}/tracks`;
+        const url = cursor == null ? new URL(`https://api-v2.soundcloud.com${path}`) : checkedApiCursor(cursor, path);
+        url.searchParams.set("client_id", clientId);
+        url.searchParams.set("limit", String(size));
+        url.searchParams.set("linked_partitioning", "1");
+        collectionOauthToken = descriptor.sourceAuthenticated ? await adapter.getOAuthToken() : null;
+        const page = await http.json(url, { oauthToken: collectionOauthToken });
+        values = (page?.collection || []).map((item) => kind === "likes" ? item?.track : item).filter(Boolean);
+        if (page?.next_href) {
+          const following = checkedApiCursor(page.next_href, path);
+          following.searchParams.set("client_id", clientId);
+          next = following.toString();
+        }
+      }
+
+      const partialIds = values.filter((value) => value?.id && !(value.media?.transcodings?.length || value.downloadable)).map((value) => value.id);
+      let hydrated = new Map();
+      for (let offset = 0; offset < partialIds.length; offset += 50) {
+        const url = new URL("https://api-v2.soundcloud.com/tracks");
+        url.searchParams.set("ids", partialIds.slice(offset, offset + 50).join(","));
+        url.searchParams.set("client_id", clientId);
+        const records = await http.json(url, { oauthToken: collectionOauthToken });
+        for (const record of records || []) hydrated.set(String(record.id), record);
+      }
+      const items = [];
+      let unavailable = 0;
+      for (const entry of values) {
+        const value = hydrated.get(String(entry?.id)) || entry;
+        if (!value?.id || !value.title || !(value.media?.transcodings?.length || value.downloadable)) { unavailable += 1; continue; }
+        const track = SCDownloadTrack.fromSoundCloud(value, {
+          clientId, pageUrl: value.permalink_url || descriptor.sourceUrl || null, formatPreference,
+        });
+        if (!SCDownloadTrack.canDownload(track)) { unavailable += 1; continue; }
+        items.push(track);
+      }
+      return { items, enumerated: values.length, skipped: { unavailable }, nextCursor: next, done: next == null };
+    }
+
+    return { resolve, resolveStream, resolveOriginal, refresh, resolveLoggedInUser, collectionPage };
   }
 
   function configure(adapter) {
@@ -203,5 +279,6 @@ const SCDownloadSource = (() => {
     resolveOriginal: (...args) => current().resolveOriginal(...args),
     refresh: (...args) => current().refresh(...args),
     resolveLoggedInUser: (...args) => current().resolveLoggedInUser(...args),
+    collectionPage: (...args) => current().collectionPage(...args),
   };
 })();

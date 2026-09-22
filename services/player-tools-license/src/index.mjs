@@ -1,4 +1,4 @@
-import { MAX_BODY_BYTES, MAX_WEBHOOK_BYTES, validateActivation, validateCheckout, validateEvent, validateStatus, validateTrialConsume, validateTrialStart } from "./validation.mjs";
+import { MAX_BODY_BYTES, MAX_WEBHOOK_BYTES, validateActivation, validateAdminRelease, validateCheckout, validateEvent, validateStatus, validateTrialConsume, validateTrialStart } from "./validation.mjs";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" };
 const LEMON_API = "https://api.lemonsqueezy.com/v1";
@@ -98,6 +98,10 @@ async function signReceipt(env, claims) {
   let jwk;
   try { jwk = JSON.parse(env.ENTITLEMENT_PRIVATE_JWK); }
   catch { throw new Error("Entitlement signing key is invalid."); }
+  if (jwk?.kty !== "EC" || jwk?.crv !== "P-256" || !jwk?.d ||
+      (jwk.kid && jwk.kid !== env.ENTITLEMENT_KEY_ID)) {
+    throw new Error("Entitlement signing key does not match ENTITLEMENT_KEY_ID.");
+  }
   const key = await crypto.subtle.importKey("jwk", jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
   const payload = base64Url(new TextEncoder().encode(JSON.stringify(claims)));
   const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(payload));
@@ -210,7 +214,7 @@ async function acquireActivationOperation(env, keyHash, installationId) {
     ON CONFLICT(license_key_hash, installation_id) DO NOTHING`)
     .bind(keyHash, installationId, token, timestamp + ACTIVATION_LEASE_MS, timestamp, timestamp,
       keyHash, MAX_ACTIVE_PROFILES).run();
-  if (Number(inserted.meta?.changes || 0) > 0) return { kind: 'owned', token };
+  if (Number(inserted.meta?.changes || 0) > 0) return { kind: 'owned', token, recover: false };
 
   const existing = await env.LICENSE_DB.prepare(`SELECT activation_operations.state, activation_operations.lease_expires_at,
       activation_operations.lemon_license_id, activation_operations.lemon_instance_id,
@@ -235,7 +239,7 @@ async function acquireActivationOperation(env, keyHash, installationId) {
     WHERE license_key_hash=? AND installation_id=? AND state='pending'
       AND (lease_expires_at IS NULL OR lease_expires_at <= ?)`)
     .bind(token, timestamp + ACTIVATION_LEASE_MS, timestamp, keyHash, installationId, timestamp).run();
-  return Number(reclaimed.meta?.changes || 0) > 0 ? { kind: 'owned', token } : { kind: 'in_progress' };
+  return Number(reclaimed.meta?.changes || 0) > 0 ? { kind: 'owned', token, recover: true } : { kind: 'in_progress' };
 }
 async function releasePendingActivation(env, keyHash, installationId, token) {
   await env.LICENSE_DB.prepare(`DELETE FROM activation_operations
@@ -263,7 +267,13 @@ async function recoverRemoteActivation(env, value, keyHash, operationToken) {
     activated: true, license_key: result.license_key,
     instance: { id: instanceId, name: value.installationId }, meta: result.meta,
   }, value.email, value.installationId, keyHash, operationToken);
-  return entitlement || { kind: 'in_progress' };
+  if (entitlement) return entitlement;
+  const local = await env.LICENSE_DB.prepare("SELECT status FROM licenses WHERE lemon_license_id=?").bind(licenseId).first();
+  if (local?.status === 'revoked') {
+    await releasePendingActivation(env, keyHash, value.installationId, operationToken);
+    return { kind: 'revoked' };
+  }
+  return { kind: 'in_progress' };
 }
 async function recordActivation(env, result, email, installationId, keyHash, operationToken) {
   const timestamp = now();
@@ -298,11 +308,16 @@ async function recordActivation(env, result, email, installationId, keyHash, ope
 }
 async function activate(env, value) {
   const keyHash = await sha256Hex(value.licenseKey);
+  const revoked = await env.LICENSE_DB.prepare("SELECT 1 AS revoked FROM licenses WHERE lemon_key_hash=? AND status='revoked'")
+    .bind(keyHash).first();
+  if (revoked) return { kind: 'revoked' };
   const operation = await acquireActivationOperation(env, keyHash, value.installationId);
   if (operation.kind === 'active') return operation;
   if (operation.kind !== 'owned') return operation;
-  const recovered = await recoverRemoteActivation(env, value, keyHash, operation.token);
-  if (recovered) return recovered;
+  if (operation.recover) {
+    const recovered = await recoverRemoteActivation(env, value, keyHash, operation.token);
+    if (recovered) return recovered;
+  }
   const action = await lemonLicenseAction("activate", { license_key: value.licenseKey, instance_name: value.installationId });
   if (!action.ok) {
     if (!action.retryable) await releasePendingActivation(env, keyHash, value.installationId, operation.token);
@@ -326,7 +341,11 @@ async function activate(env, value) {
   // same profile retries it after the lease; it cannot consume another seat.
   if (entitlement) return entitlement;
   const license = await env.LICENSE_DB.prepare("SELECT status FROM licenses WHERE lemon_license_id=?").bind(String(result.license_key.id)).first();
-  return license?.status === 'revoked' ? { kind: 'failed' } : { kind: 'in_progress' };
+  if (license?.status === 'revoked') {
+    await releasePendingActivation(env, keyHash, value.installationId, operation.token);
+    return { kind: 'revoked' };
+  }
+  return { kind: 'in_progress' };
 }
 async function restore(env, value) {
   const keyHash = await sha256Hex(value.licenseKey);
@@ -402,16 +421,95 @@ async function status(env, value) {
   if (!activation) return { active: false };
   if (activation.status !== "active") return { active: false, reason: "license_revoked" };
   return await reconcileActivation(env, activation)
-    ? { active: true, licenseId: activation.lemon_license_id }
+    ? { active: true, licenseId: activation.lemon_license_id, instanceId: activation.lemon_instance_id,
+        receipt: await proReceipt(env, { installationId: activation.installation_id,
+          licenseId: activation.lemon_license_id, instanceId: activation.lemon_instance_id }) }
     : { active: false, reason: 'license_revoked' };
+}
+
+async function startTrial(env, value) {
+  const timestamp = now();
+  await env.LICENSE_DB.prepare(`INSERT INTO trials
+    (installation_id, started_at, expires_at, used, created_at, updated_at)
+    VALUES (?, ?, ?, 0, ?, ?) ON CONFLICT(installation_id) DO NOTHING`)
+    .bind(value.installationId, timestamp, timestamp + TRIAL_LIFETIME_MS, timestamp, timestamp).run();
+  const trial = await env.LICENSE_DB.prepare("SELECT installation_id, started_at, expires_at, used FROM trials WHERE installation_id=?")
+    .bind(value.installationId).first();
+  return { trial: { startedAt: trial.started_at, expiresAt: trial.expires_at, used: trial.used, limit: TRIAL_LIMIT },
+    receipt: await trialReceipt(env, trial) };
+}
+
+async function consumeTrial(env, value) {
+  const timestamp = now();
+  const operationToken = crypto.randomUUID();
+  const trackHash = await sha256Hex(value.trackIdentity);
+  await env.LICENSE_DB.batch([
+    env.LICENSE_DB.prepare(`INSERT INTO trial_consumptions
+      (installation_id, request_id, track_identity_hash, operation_token, consumed_at)
+      SELECT installation_id, ?, ?, ?, ? FROM trials
+      WHERE installation_id=? AND expires_at>? AND used<?
+      ON CONFLICT(installation_id, request_id) DO NOTHING`)
+      .bind(value.requestId, trackHash, operationToken, timestamp, value.installationId, timestamp, TRIAL_LIMIT),
+    env.LICENSE_DB.prepare(`UPDATE trials SET used=used+1, updated_at=?
+      WHERE installation_id=? AND EXISTS (
+        SELECT 1 FROM trial_consumptions WHERE installation_id=? AND request_id=? AND operation_token=?
+      )`)
+      .bind(timestamp, value.installationId, value.installationId, value.requestId, operationToken),
+  ]);
+  const trial = await env.LICENSE_DB.prepare("SELECT installation_id, started_at, expires_at, used FROM trials WHERE installation_id=?")
+    .bind(value.installationId).first();
+  if (!trial) return { allowed: false, reason: 'trial_not_started' };
+  const consumption = await env.LICENSE_DB.prepare(`SELECT consumed_at, track_identity_hash FROM trial_consumptions
+    WHERE installation_id=? AND request_id=?`).bind(value.installationId, value.requestId).first();
+  const allowed = Boolean(consumption) && consumption.track_identity_hash === trackHash;
+  const reason = allowed ? null : consumption ? 'trial_request_conflict'
+    : timestamp >= trial.expires_at ? 'trial_expired' : 'trial_exhausted';
+  return { allowed, reason,
+    trial: { startedAt: trial.started_at, expiresAt: trial.expires_at, used: trial.used, limit: TRIAL_LIMIT },
+    receipt: await trialReceipt(env, trial) };
+}
+
+async function releaseSeat(env, value) {
+  const keyHash = await sha256Hex(value.licenseKey);
+  const activation = await env.LICENSE_DB.prepare(`SELECT activation_operations.lemon_instance_id,
+      activation_operations.lemon_license_id
+    FROM activation_operations WHERE license_key_hash=? AND installation_id=? AND state='active'`)
+    .bind(keyHash, value.installationId).first();
+  if (!activation) return { found: false, released: false, dryRun: value.dryRun };
+  if (value.dryRun) return { found: true, released: false, dryRun: true,
+    licenseId: activation.lemon_license_id, instanceId: activation.lemon_instance_id };
+  const remote = await lemonLicenseAction("deactivate", { license_key: value.licenseKey, instance_id: activation.lemon_instance_id });
+  if (!remote.ok) {
+    if (remote.retryable) throw new Error("Lemon seat release is temporarily unavailable.");
+    throw Object.assign(new Error("Lemon rejected the seat release."), { code: "release_rejected" });
+  }
+  if (remote.body?.deactivated !== true) throw Object.assign(new Error("Lemon did not confirm the seat release."), { code: "release_rejected" });
+  const timestamp = now();
+  await env.LICENSE_DB.batch([
+    env.LICENSE_DB.prepare("UPDATE activations SET deactivated_at=COALESCE(deactivated_at, ?) WHERE lemon_instance_id=?")
+      .bind(timestamp, activation.lemon_instance_id),
+    env.LICENSE_DB.prepare("DELETE FROM activation_operations WHERE license_key_hash=? AND installation_id=?")
+      .bind(keyHash, value.installationId),
+  ]);
+  return { found: true, released: true, dryRun: false,
+    licenseId: activation.lemon_license_id, instanceId: activation.lemon_instance_id };
 }
 async function recordWebhook(env, payload, raw) {
   const eventName = String(payload?.meta?.event_name || "");
   const hash = await sha256Hex(raw);
   const attributes = payload?.data?.attributes || {};
-  if (!new Set(["order_created", "order_refunded"]).has(eventName) ||
-      payload?.data?.type !== "orders" || !matchesWebhookOrder(attributes, env)) {
+  const orderEvent = new Set(["order_created", "order_refunded"]).has(eventName) &&
+    payload?.data?.type === "orders" && matchesWebhookOrder(attributes, env);
+  const licenseEvent = eventName === "license_key_updated" && payload?.data?.type === "license-keys" &&
+    String(attributes?.store_id) === String(env.LEMON_STORE_ID) &&
+    String(attributes?.product_id) === String(env.LEMON_PRODUCT_ID);
+  if (!orderEvent && !licenseEvent) {
     throw Object.assign(new Error("Rejected Lemon webhook outside the configured product or environment."), { code: "invalid_webhook" });
+  }
+  if (licenseEvent) {
+    const known = await env.LICENSE_DB.prepare("SELECT 1 AS known FROM licenses WHERE lemon_license_id=?")
+      .bind(String(payload?.data?.id || "")).first();
+    if (!known) throw Object.assign(new Error("Rejected unknown Lemon license update."), { code: "invalid_webhook" });
   }
   const timestamp = now();
   const processingToken = crypto.randomUUID();
@@ -468,6 +566,23 @@ async function recordWebhook(env, payload, raw) {
       env.LICENSE_DB.prepare(`UPDATE licenses SET status='revoked', revoked_at=COALESCE(revoked_at, ?),
         updated_at=MAX(updated_at, ?) WHERE lemon_order_id=?`)
         .bind(timestamp, eventAt, orderId),
+      env.LICENSE_DB.prepare(`UPDATE activations SET deactivated_at=COALESCE(deactivated_at, ?)
+        WHERE lemon_license_id IN (SELECT lemon_license_id FROM licenses WHERE lemon_order_id=?)`)
+        .bind(timestamp, orderId),
+      env.LICENSE_DB.prepare(`DELETE FROM activation_operations
+        WHERE lemon_license_id IN (SELECT lemon_license_id FROM licenses WHERE lemon_order_id=?)`)
+        .bind(orderId),
+    ]);
+  }
+  if (eventName === "license_key_updated" &&
+      (attributes?.status !== "active" || attributes?.disabled === true || Number(attributes?.disabled) === 1)) {
+    const licenseId = String(payload?.data?.id || "");
+    await env.LICENSE_DB.batch([
+      env.LICENSE_DB.prepare("UPDATE licenses SET status='revoked', revoked_at=COALESCE(revoked_at, ?), updated_at=MAX(updated_at, ?) WHERE lemon_license_id=?")
+        .bind(timestamp, eventAt, licenseId),
+      env.LICENSE_DB.prepare("UPDATE activations SET deactivated_at=COALESCE(deactivated_at, ?) WHERE lemon_license_id=?")
+        .bind(timestamp, licenseId),
+      env.LICENSE_DB.prepare("DELETE FROM activation_operations WHERE lemon_license_id=?").bind(licenseId),
     ]);
   }
     const completed = await env.LICENSE_DB.prepare(`UPDATE webhook_events SET processed_at=?, processing_error=NULL
@@ -498,7 +613,7 @@ export default {
   async fetch(request, env) {
     try {
       const url = new URL(request.url);
-      if (request.method === "GET" && url.pathname === "/api/player-tools/health") return json(200, { service: "sctd-player-tools-license", status: env.LICENSE_DB && env.LEMON_API_KEY && env.LEMON_WEBHOOK_SECRET && env.LEMON_STORE_ID && env.LEMON_PRODUCT_ID && env.LEMON_VARIANT_ID && ["test", "live"].includes(env.LEMON_MODE) && (env.ALLOWED_ORIGINS || env.ALLOWED_ORIGIN) ? "ready" : "not-configured" });
+      if (request.method === "GET" && url.pathname === "/api/player-tools/health") return json(200, { service: "sctd-player-tools-license", status: env.LICENSE_DB && env.LEMON_API_KEY && env.LEMON_WEBHOOK_SECRET && env.ADMIN_TOKEN && env.LEMON_STORE_ID && env.LEMON_PRODUCT_ID && env.LEMON_VARIANT_ID && env.ENTITLEMENT_PRIVATE_JWK && env.ENTITLEMENT_KEY_ID && ["test", "live"].includes(env.LEMON_MODE) && (env.ALLOWED_ORIGINS || env.ALLOWED_ORIGIN) ? "ready" : "not-configured" });
       if (request.method === "POST" && url.pathname === "/api/player-tools/webhooks/lemon") {
         const raw = await readBody(request, MAX_WEBHOOK_BYTES);
         const signature = request.headers.get("x-signature") || "";
@@ -516,6 +631,19 @@ export default {
         }
         return json(200, { received: true });
       }
+      if (request.method === "POST" && url.pathname === "/api/player-tools/admin/release-seat") {
+        const authorization = request.headers.get("authorization") || "";
+        const expected = env.ADMIN_TOKEN ? `Bearer ${env.ADMIN_TOKEN}` : "";
+        if (!expected || !equals(authorization, expected)) return json(403, { error: "admin_forbidden" });
+        const raw = await readBody(request, MAX_BODY_BYTES);
+        let body; try { body = raw ? JSON.parse(new TextDecoder().decode(raw)) : null; } catch { body = null; }
+        const parsed = validateAdminRelease(body); if (!parsed.ok) return json(400, { error: parsed.error });
+        try { return json(200, await releaseSeat(env, parsed.value)); }
+        catch (error) {
+          if (error?.code === "release_rejected") return json(409, { error: error.code });
+          throw error;
+        }
+      }
       const origin = allowedOrigin(request, env);
       if (!origin) return json(403, { error: "origin_not_allowed" });
       const corsHeaders = cors(origin);
@@ -529,7 +657,8 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/player-tools/license/activate") {
         const parsed = validateActivation(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
         const entitlement = await activate(env, parsed.value);
-        if (entitlement?.kind === 'active' || (entitlement?.licenseId && entitlement?.instanceId)) return json(200, { active: true, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId }, corsHeaders);
+        if (entitlement?.kind === 'active' || (entitlement?.licenseId && entitlement?.instanceId)) return json(200, { active: true, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId,
+          receipt: await proReceipt(env, { installationId: parsed.value.installationId, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId }) }, corsHeaders);
         if (entitlement?.kind === 'seat_limit') return json(409, { active: false, error: 'seat_limit' }, corsHeaders);
         if (entitlement?.kind === 'in_progress') return json(409, { active: false, error: 'activation_in_progress' }, corsHeaders);
         return json(403, { active: false, error: "activation_failed" }, corsHeaders);
@@ -537,7 +666,8 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/player-tools/license/restore") {
         const parsed = validateActivation(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
         const entitlement = await restore(env, parsed.value);
-        if (entitlement?.kind === 'active' || (entitlement?.licenseId && entitlement?.instanceId)) return json(200, { active: true, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId }, corsHeaders);
+        if (entitlement?.kind === 'active' || (entitlement?.licenseId && entitlement?.instanceId)) return json(200, { active: true, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId,
+          receipt: await proReceipt(env, { installationId: parsed.value.installationId, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId }) }, corsHeaders);
         if (entitlement?.kind === 'seat_limit') return json(409, { active: false, error: 'seat_limit' }, corsHeaders);
         if (entitlement?.kind === 'in_progress') return json(409, { active: false, error: 'activation_in_progress' }, corsHeaders);
         return json(403, { active: false, error: "activation_failed" }, corsHeaders);
@@ -547,6 +677,15 @@ export default {
         const result = await status(env, parsed.value);
         if (result.reason === "license_revoked") return json(403, { active: false, error: result.reason }, corsHeaders);
         return json(200, result, corsHeaders);
+      }
+      if (request.method === "POST" && url.pathname === "/api/player-tools/trial/start") {
+        const parsed = validateTrialStart(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
+        return json(200, await startTrial(env, parsed.value), corsHeaders);
+      }
+      if (request.method === "POST" && url.pathname === "/api/player-tools/trial/consume") {
+        const parsed = validateTrialConsume(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
+        const result = await consumeTrial(env, parsed.value);
+        return json(result.allowed ? 200 : 409, result.allowed ? result : { ...result, error: result.reason }, corsHeaders);
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/events") {
         const parsed = validateEvent(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);

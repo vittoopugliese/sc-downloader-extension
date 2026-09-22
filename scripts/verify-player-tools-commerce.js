@@ -1,14 +1,37 @@
 const assert = require("node:assert/strict");
-const { create, STORAGE_KEY, OFFER } = require("./player-tools-commerce.js");
+const { create, STORAGE_KEY, LICENSE_REVALIDATION_ALARM, OFFER } = require("./player-tools-commerce.js");
+const receipts = require("./player-tools-receipts.js");
+const TEST_PRIVATE_JWK = { key_ops: ["sign"], ext: true, kty: "EC", crv: "P-256", kid: "test",
+  x: "POjVy608n7L_eb54dyb3j3hdpyAxGRDKWrPxsOS9T5I", y: "LAmnDD5wB4BRrD_ef7rgC15WV4Fjbw9E89WiiOESZLE",
+  d: "q2EVMOSYa812n-xfGNUhe8F1RSm6_d4iUdk8jCAh7qs" };
+const TEST_PUBLIC_JWK = { key_ops: ["verify"], ext: true, kty: "EC", crv: "P-256", kid: "test",
+  x: TEST_PRIVATE_JWK.x, y: TEST_PRIVATE_JWK.y };
+
+function base64Url(bytes) {
+  return Buffer.from(bytes).toString("base64url");
+}
+
+async function receipt(claims) {
+  const payload = base64Url(new TextEncoder().encode(JSON.stringify(claims)));
+  const key = await crypto.subtle.importKey("jwk", TEST_PRIVATE_JWK, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(payload));
+  return { algorithm: "ES256", keyId: "test", payload, signature: base64Url(signature) };
+}
 
 function response(status, body) {
   return { ok: status >= 200 && status < 300, status, async json() { return body; } };
 }
 
 (async () => {
+  const wrongKeyId = await receipt({ version: 1, type: "pro", installationId: "installation-1234",
+    licenseId: "license", instanceId: "instance", issuedAt: 1, expiresAt: 2 });
+  wrongKeyId.keyId = "retired-key";
+  await assert.rejects(receipts.verify(wrongKeyId, { publicJwk: { keys: [TEST_PUBLIC_JWK] } }),
+    { code: "receipt-key-unknown" });
   let data = {};
   const calls = [];
   const entitlements = [];
+  const alarmOperations = [];
   let entitlementConfirmed = false;
   let clock = 1_800_000_000_000;
   let revoked = false;
@@ -25,15 +48,23 @@ function response(status, body) {
     const body = JSON.parse(options.body);
     calls.push({ url, body });
     if (url.endsWith("/checkout")) return response(200, { checkoutUrl: "https://store.example/checkout/1" });
-    if (url.endsWith("/license/restore")) return response(200, { active: true, licenseId: "license-1", instanceId: "instance-1" });
+    const pro = async () => ({ active: true, licenseId: "license-1", instanceId: "instance-1",
+      receipt: await receipt({ version: 1, type: "pro", installationId: data[STORAGE_KEY].installationId,
+        licenseId: "license-1", instanceId: "instance-1", capabilities: ["pro"], issuedAt: clock, expiresAt: clock + 30 * 86400000 }) });
+    if (url.endsWith("/license/restore")) return response(200, await pro());
     if (url.endsWith("/license/status")) return revoked
       ? response(403, { active: false, error: "license_revoked" })
-      : response(200, { active: true, licenseId: "license-1" });
+      : response(200, await pro());
     if (url.endsWith("/events")) return response(200, { accepted: true });
     return response(404, { error: "not_found" });
   };
   let id = 0;
   const commerce = create({ storage, sessionStorage, request, apiBaseUrl: "https://api.example", now: () => clock,
+    entitlementPublicJwk: { keys: [TEST_PUBLIC_JWK] },
+    alarms: {
+      async create(name, options) { alarmOperations.push({ type: "create", name, options }); },
+      async clear(name) { alarmOperations.push({ type: "clear", name }); },
+    },
     version: "1.2.3", randomUUID: () => `00000000-0000-4000-8000-${String(++id).padStart(12, "0")}`,
     access: { async setEntitlement(value) {
       entitlements.push(value);
@@ -54,6 +85,8 @@ function response(status, body) {
   assert.equal(data[STORAGE_KEY].activation.instanceId, "instance-1");
   assert.equal(data[STORAGE_KEY].licenseKey, undefined, "license keys are never persisted by the extension");
   assert.equal(entitlements.at(-1).status, "active");
+  assert.deepEqual(alarmOperations.at(-1), { type: "create", name: LICENSE_REVALIDATION_ALARM,
+    options: { when: clock + 30 * 86400000 } });
 
   const callsBeforeTestLogin = calls.length;
   const tested = await commerce.activateTest({ username: "1", password: "1" });
@@ -73,12 +106,14 @@ function response(status, body) {
 
   await commerce.activate({ email: "buyer@example.com", licenseKey: "license-key" });
 
-  clock += 1000;
+  clock += 31 * 24 * 60 * 60 * 1000;
   assert.equal((await commerce.getState({ revalidate: true })).status, "active");
   assert.equal(data[STORAGE_KEY].activation.lastCheckedAt, clock);
   revoked = true;
+  clock += 31 * 24 * 60 * 60 * 1000;
   assert.equal((await commerce.getState({ revalidate: true })).status, "revoked");
   assert.equal(entitlements.at(-1).status, "free", "refund/revocation removes Pro without deleting commerce identity");
+  assert.deepEqual(alarmOperations.at(-1), { type: "clear", name: LICENSE_REVALIDATION_ALARM });
   revoked = false;
   assert.equal(await commerce.track("player_tools_promo_seen", { surface: "popup", trackUrl: "must-not-leak" }, { once: true }), true);
   assert.equal(await commerce.track("player_tools_promo_seen", { surface: "popup" }, { once: true }), false);
@@ -132,6 +167,20 @@ function response(status, body) {
   });
   await assert.rejects(oversizedCommerce.startCheckout("en"), { code: "response-too-large" });
   assert.equal(responseCancelled, true);
+
+  let emptyData = {};
+  const emptyCommerce = create({
+    storage: {
+      async get() { return structuredClone(emptyData); },
+      async set(value) { emptyData = structuredClone(value); },
+    },
+    entitlementPublicJwk: TEST_PUBLIC_JWK,
+    randomUUID: () => "00000000-0000-4000-8000-000000000101",
+    access: { async setEntitlement() { assert.fail("an empty response must never grant Pro"); } },
+    request: async () => response(200, {}),
+  });
+  await assert.rejects(emptyCommerce.activate({ email: "buyer@example.com", licenseKey: "license-key" }),
+    { code: "invalid-entitlement" });
 
   const broken = create({ storage: { async get() { return { [STORAGE_KEY]: null }; } }, request, access: { setEntitlement() {} } });
   await assert.rejects(broken.getState(), { code: "commerce-state-invalid" });

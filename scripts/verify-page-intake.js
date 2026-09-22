@@ -121,6 +121,9 @@ function harness(pageUrl, hydration, api, runtimeReply, overrides = {}) {
     JSON.parse(JSON.stringify(selection.items.map((value) => value.id))),
     [1, 2]
   );
+  const selectionPage = await playlist.intake.selectionPage(null, 2);
+  assert.equal(selectionPage.items.length, 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(selectionPage.items.map((value) => value.id))), [1, 2]);
   assert.deepEqual(
     JSON.parse(JSON.stringify((await playlist.intake.tracksByIds([2, 1])).map((value) => value.id))),
     [2, 1]

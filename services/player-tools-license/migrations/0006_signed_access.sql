@@ -14,10 +14,10 @@ CREATE TABLE IF NOT EXISTS trial_consumptions (
   installation_id TEXT NOT NULL REFERENCES trials(installation_id),
   request_id TEXT NOT NULL,
   track_identity_hash TEXT NOT NULL,
+  operation_token TEXT NOT NULL UNIQUE,
   consumed_at INTEGER NOT NULL,
   PRIMARY KEY (installation_id, request_id)
 );
 
 CREATE INDEX IF NOT EXISTS trial_consumptions_installation
   ON trial_consumptions (installation_id, consumed_at);
-

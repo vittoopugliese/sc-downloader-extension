@@ -17,30 +17,42 @@ service; Lemon credentials never ship in the extension.
   leased reservation keyed by license hash and installation ID atomically limits
   a license to two profiles before contacting Lemon. Repeating an active profile
   returns its existing activation; an interrupted persistence can be recovered
-  by retrying that same reservation after its lease. Real-provider orphan
-  reconciliation remains a release blocker.
+  by validating the key and reconciling the existing remote instance before a
+  retry can create another one.
 - Status reconciliation against Lemon's license and instance records, plus
-  refund/revocation propagation. Signed 30-day entitlement receipts remain a
-  release blocker.
+  refund/revocation propagation. Temporary provider failures do not revoke a
+  purchase, and a missing instance deactivates only that profile.
+- ES256-signed Pro receipts scoped to installation/license/instance and valid
+  for thirty days. The extension verifies the signature and requires an online
+  renewal after expiry.
+- A D1-authoritative seven-day/twenty-loop trial with idempotent consumption.
+- An authenticated support command that previews or releases a profile in
+  Lemon first and updates D1 only after the provider confirms deactivation.
 - A strict event allow-list that rejects track titles, music URLs, emails and keys.
 - CORS restricted to the published extension origin.
 
 ## Production setup
 
-1. Copy `wrangler.example.jsonc` to `wrangler.jsonc` and replace every
+1. Run `npm run keys:generate -- p256-YYYY-MM`. Keep
+   `.dev.vars.entitlement` private. It contains the matching key ID and private
+   JWK. Supply the generated public JWKS as `ENTITLEMENT_PUBLIC_JWK` when
+   packaging the extension.
+2. Copy `wrangler.example.jsonc` to `wrangler.jsonc` and replace every
    `REPLACE_WITH_...` value. Keep the real config free of secrets. The default
    environment is Test Mode; `--env production` has its own D1 binding and
    requires separate live IDs and secrets.
-2. Install Wrangler 4, authenticate, create the D1 database, and set its ID in
+3. Install Wrangler 4, authenticate, create the D1 database, and set its ID in
    the config.
-3. Add secrets interactively; never put their values in the config:
+4. Add secrets interactively; never put their values in the config:
 
    ```text
    wrangler secret put LEMON_API_KEY
    wrangler secret put LEMON_WEBHOOK_SECRET
+   wrangler secret put ENTITLEMENT_PRIVATE_JWK
+   wrangler secret put ADMIN_TOKEN
    ```
 
-4. Apply migrations and validate a dry run before deployment:
+5. Apply migrations and validate a dry run before deployment:
 
    ```text
    wrangler d1 migrations apply sctd-player-tools --remote
@@ -48,9 +60,20 @@ service; Lemon credentials never ship in the extension.
    wrangler deploy
    ```
 
-5. Configure Lemon Squeezy to send **only** `order_created` and `order_refunded` to
+6. Configure Lemon Squeezy to send `order_created`, `order_refunded` and
+   `license_key_updated` to
    `https://sctd.vpugliese.online/api/player-tools/webhooks/lemon`.
-   Do not enable `license_key_updated` until its reconciliation handler exists.
+   Unknown license IDs and resources outside the configured store/product are
+   rejected before mutation.
+
+Support can inspect a release without mutation and then apply it:
+
+```text
+PLAYER_TOOLS_ADMIN_URL=https://sctd.vpugliese.online/api/player-tools \
+PLAYER_TOOLS_ADMIN_TOKEN=... npm run seat:release -- INSTALLATION_ID LICENSE_KEY preview
+PLAYER_TOOLS_ADMIN_URL=https://sctd.vpugliese.online/api/player-tools \
+PLAYER_TOOLS_ADMIN_TOKEN=... npm run seat:release -- INSTALLATION_ID LICENSE_KEY apply
+```
 
 ## Sandbox reconciliation gate
 
@@ -68,6 +91,23 @@ observed once and the D1 rows agree:
 6. A test refund produces `order_refunded`; the next revalidation removes Pro
    but keeps audio preferences and trial history.
 7. Invalid origin, signature, product/variant, email and key all fail closed.
+
+## Signing-key rotation
+
+Receipts select their verification key by `keyId`; the packaged public value
+may be a single JWK or a JWKS containing multiple public keys. Rotate in phases:
+
+1. Generate the next key with a new ID and add its public JWK to the existing
+   JWKS without removing the old one.
+2. Publish that overlapping JWKS in the extension and wait for the required
+   client adoption window.
+3. Install the new private JWK and matching `ENTITLEMENT_KEY_ID` in the Worker,
+   then deploy. Never switch the signer before supported clients trust it.
+4. Keep the old public key for at least the thirty-day maximum receipt lifetime
+   after the last old-key receipt was issued. Remove it only in a later package.
+
+An old extension that never received the new public key cannot renew a receipt
+signed by it, so forced rotations also require an extension-update policy.
 
 Run `npm test` in this directory for request-shape validation. The repository's
 `npm run test:player-tools` additionally verifies the extension commerce and

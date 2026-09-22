@@ -460,6 +460,7 @@ const SCPageIntake = (() => {
           bulk: { kind, orderedEntries: entries, clientId: id, pageUrl },
           data: {
             kind,
+            sourceUrl: pageUrl,
             title: playlist.title,
             trackCount: tracks.length,
             totalCount: playlist.track_count || entries.length,
@@ -493,6 +494,8 @@ const SCPageIntake = (() => {
           bulk: { kind, userId: userEntry.id, clientId: id, pageUrl },
           data: {
             kind,
+            sourceUserId: String(userEntry.id),
+            sourceUrl: pageUrl,
             title: `${username} - Tracks`,
             trackCount: tracks.length,
             totalCount: Math.max(Number(userEntry.track_count) || 0, tracks.length),
@@ -536,6 +539,7 @@ const SCPageIntake = (() => {
           kind: "likes",
           sourceUserId: String(profile.user.id),
           sourceUrl: profile.user.permalink_url || pageUrl,
+          sourceAuthenticated: profile.authenticated,
           title: `${username} - Likes`,
           trackCount: tracks.length,
           totalCount:
@@ -894,6 +898,11 @@ const SCPageIntake = (() => {
       }));
     }
 
+    async function selectionPage(cursor = null, pageSize = USER_TRACKS_PAGE_SIZE) {
+      const page = await bulkPage(cursor, pageSize, currentUrl());
+      return { ...page, items: selectionProjection(page.items) };
+    }
+
     async function selectionList(options = {}) {
       const tracks = await resolveBulk(null, options);
       selectionCache = { pageUrl: currentUrl(), tracks };
@@ -960,6 +969,7 @@ const SCPageIntake = (() => {
       resolveBulk,
       bulkPage,
       selectionList,
+      selectionPage,
       tracksByIds,
       resolveClientId: () => resolveClientId(doc.documentElement?.innerHTML || ""),
     };

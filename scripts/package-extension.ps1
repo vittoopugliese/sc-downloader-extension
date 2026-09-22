@@ -60,6 +60,7 @@ $packageItems = @(
     "scripts/offscreen.js",
     "scripts/page-intake.js",
     "scripts/player-tools-access.js",
+    "scripts/player-tools-receipts.js",
     "scripts/player-tools-client.js",
     "scripts/player-tools-commerce.js",
     "scripts/player-tools-policy.js",
@@ -102,6 +103,26 @@ $commerceSource = Get-Content -LiteralPath $commercePath -Raw
 $testLoginLine = 'const TEST_LOGIN = Object.freeze({ username: "1", password: "1" });'
 if (-not $commerceSource.Contains($testLoginLine)) { throw "Could not disable the test login in the production package." }
 Set-Content -LiteralPath $commercePath -Value $commerceSource.Replace($testLoginLine, "const TEST_LOGIN = null;") -NoNewline
+
+$receiptsPath = Join-Path $stagingRoot "scripts/player-tools-receipts.js"
+$receiptSource = Get-Content -LiteralPath $receiptsPath -Raw
+$publicKeyLine = 'const PACKAGED_ENTITLEMENT_PUBLIC_JWK = null;'
+if (-not $env:ENTITLEMENT_PUBLIC_JWK) { throw "Set ENTITLEMENT_PUBLIC_JWK before packaging." }
+try { $publicJwk = $env:ENTITLEMENT_PUBLIC_JWK | ConvertFrom-Json }
+catch { throw "ENTITLEMENT_PUBLIC_JWK must be valid JSON." }
+$publicKeys = if ($publicJwk.keys) { @($publicJwk.keys) } else { @($publicJwk) }
+$keyIds = @{}
+if ($publicKeys.Count -eq 0) { throw "ENTITLEMENT_PUBLIC_JWK must contain at least one public key." }
+foreach ($key in $publicKeys) {
+    if ($key.kty -ne "EC" -or $key.crv -ne "P-256" -or -not $key.x -or -not $key.y -or $key.d -or
+        -not ($key.kid -match '^[A-Za-z0-9._-]{1,128}$') -or $keyIds.ContainsKey($key.kid)) {
+        throw "ENTITLEMENT_PUBLIC_JWK must be a public P-256 JWK or JWKS with unique kid values and no private material."
+    }
+    $keyIds[$key.kid] = $true
+}
+if (-not $receiptSource.Contains($publicKeyLine)) { throw "Could not inject the entitlement verification key." }
+$publicJwkCompact = $publicJwk | ConvertTo-Json -Compress
+Set-Content -LiteralPath $receiptsPath -Value $receiptSource.Replace($publicKeyLine, "const PACKAGED_ENTITLEMENT_PUBLIC_JWK = Object.freeze($publicJwkCompact);") -NoNewline
 
 if (Test-Path -LiteralPath $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force

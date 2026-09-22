@@ -3,7 +3,7 @@
   "use strict";
   const TRIAL_LIMIT = 20;
   const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
-  const SCHEMA_VERSION = 2;
+  const SCHEMA_VERSION = 3;
   const PRO_OPERATIONS = new Set(["export-loop", "export-track-effects", "export-wav", "edit-loop-precise", "set-eq"]);
   const PLAYBACK_OPERATIONS = new Set(["set-effect", "set-rate", "set-preserve-pitch", "save-preset"]);
   const validId = (value) => typeof value === "string" && value.length > 0 && value.length <= 1024;
@@ -20,7 +20,7 @@
     // Version 1 had the lifetime loop allowance but no clock.  Preserve every
     // receipt and let the next eligible surface start this version's trial.
     const sourceVersion = raw?.schemaVersion;
-    if (!raw || ![1, SCHEMA_VERSION].includes(sourceVersion) || !raw.trial ||
+    if (!raw || ![1, 2, SCHEMA_VERSION].includes(sourceVersion) || !raw.trial ||
         !Number.isInteger(raw.trial.used) || raw.trial.used < 0 || raw.trial.used > TRIAL_LIMIT ||
         !Array.isArray(raw.trial.grants) || raw.trial.grants.length > TRIAL_LIMIT ||
         typeof raw.trial.warnedLastUse !== "boolean" ||
@@ -53,7 +53,9 @@
       revision: raw.revision ?? 0,
       entitlement: raw.entitlement?.status === "active"
         ? { status: "active", licenseId: typeof raw.entitlement.licenseId === "string" ? raw.entitlement.licenseId : "",
-          checkedAt: validGeneration(raw.entitlement.checkedAt) ? raw.entitlement.checkedAt : 0 }
+          checkedAt: validGeneration(raw.entitlement.checkedAt) ? raw.entitlement.checkedAt : 0,
+          expiresAt: validTimestamp(raw.entitlement.expiresAt) ? raw.entitlement.expiresAt :
+            (sourceVersion < 3 ? 0 : (() => { throw invalidState(); })()) }
         : { status: "free" },
       trial: { limit: TRIAL_LIMIT, used: raw.trial.used, warnedLastUse: raw.trial.warnedLastUse, startedAt, expiresAt, grants },
     };
@@ -72,7 +74,7 @@
     const state = normalize(raw);
     if (!validTimestamp(now)) throw invalidState();
     const grant = state.trial.grants.find((item) => item.active && item.ownerKey === ownerKey);
-    const pro = state.entitlement.status === "active";
+    const pro = state.entitlement.status === "active" && now < state.entitlement.expiresAt;
     const started = state.trial.startedAt !== null;
     const expired = started && now >= state.trial.expiresAt;
     const trialAvailable = started && !expired && state.trial.used < TRIAL_LIMIT;

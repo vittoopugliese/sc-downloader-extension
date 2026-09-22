@@ -10,7 +10,8 @@
     return `${sender.tab.id}:${sender.frameId}:${sender.documentId}`;
   }
 
-  function create({ storage, randomUUID = () => crypto.randomUUID(), now = () => Date.now() }) {
+  function create({ storage, randomUUID = () => crypto.randomUUID(), now = () => Date.now(), authority: initialAuthority = null }) {
+    let authority = initialAuthority;
     let queue = Promise.resolve();
     function runExclusive(task) {
       const next = queue.then(task);
@@ -36,11 +37,14 @@
     }
     function startTrial() {
       return runExclusive(async () => {
+        if (!authority?.startTrial) throw Object.assign(new Error("Trial service unavailable"), { code: "trial-unavailable" });
         const state = await read(); const timestamp = now();
-        const before = state.trial.startedAt;
-        const started = POLICY.startTrial(state, timestamp);
-        if (started.trial.startedAt !== before) await commit(started);
-        return POLICY.snapshot(started, null, timestamp);
+        const remote = await authority.startTrial();
+        state.trial.startedAt = remote.startedAt;
+        state.trial.expiresAt = remote.expiresAt;
+        state.trial.used = remote.used;
+        await commit(state);
+        return POLICY.snapshot(state, null, timestamp);
       });
     }
     function authorize(sender, request) {
@@ -74,7 +78,15 @@
         if (!decision.allowed) return reply(false, decision.reason);
         let notice = null;
         if (decision.consume) {
-          state.trial.used += 1;
+          if (!authority?.consumeTrial) return reply(false, "trial-unavailable");
+          const remote = await authority.consumeTrial({ requestId: request.requestId, trackIdentity: request.payload.trackIdentity });
+          state.trial.startedAt = remote.startedAt;
+          state.trial.expiresAt = remote.expiresAt;
+          state.trial.used = remote.used;
+          if (!remote.allowed) {
+            await commit(state);
+            return reply(false, remote.reason || "trial-unavailable");
+          }
           // Exhaustion grants grace only to the final loop's document, not all previous owners.
           if (state.trial.used === POLICY.TRIAL_LIMIT) state.trial.grants.forEach((g) => { g.active = false; });
           state.trial.grants.push({ sessionId: randomUUID(), ownerKey: owner, requestId: request.requestId,
@@ -111,7 +123,8 @@
         const state = await read();
         const next = entitlement?.status === "active"
           ? { status: "active", licenseId: String(entitlement.licenseId || "").slice(0, 256),
-            checkedAt: Number.isSafeInteger(entitlement.checkedAt) ? entitlement.checkedAt : 0 }
+            checkedAt: Number.isSafeInteger(entitlement.checkedAt) ? entitlement.checkedAt : 0,
+            expiresAt: Number.isSafeInteger(entitlement.expiresAt) ? entitlement.expiresAt : 0 }
           : { status: "free" };
         if (JSON.stringify(state.entitlement) !== JSON.stringify(next)) {
           state.entitlement = next;
@@ -120,7 +133,13 @@
         return POLICY.snapshot(state, null, now());
       });
     }
-    return { getSnapshot, startTrial, authorize, endSession, endTab, setEntitlement };
+    function configureAuthority(value) {
+      if (!value || typeof value.startTrial !== "function" || typeof value.consumeTrial !== "function") {
+        throw new Error("Player Tools authority is incomplete.");
+      }
+      authority = value;
+    }
+    return { getSnapshot, startTrial, authorize, endSession, endTab, setEntitlement, configureAuthority };
   }
   // No entitlement/reset writer is exposed in the production runtime.
   root.SCPlayerToolsAccess = { STORAGE_KEY, ownerKey, create,

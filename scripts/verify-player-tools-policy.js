@@ -37,7 +37,8 @@ assert.equal(expired.capabilities.likesExplorer, false);
 assert.equal(policy.canAuthorize(initial, "owner", "set-rate", null, initial.trial.expiresAt).reason, "trial-expired");
 assert.equal(policy.canAuthorize(initial, "owner", "explore-likes", null, initial.trial.expiresAt).reason, "trial-expired");
 assert.equal(policy.snapshot(last, "owner", initial.trial.expiresAt).state, "trial_last_session", "loop 20 grace survives clock expiry");
-const pro = { ...exhausted, entitlement: { status: "active" } };
+const pro = { ...exhausted, entitlement: { status: "active", licenseId: "license-1", checkedAt: NOW,
+  expiresAt: NOW + 30 * 24 * 60 * 60 * 1000 } };
 for (const operation of ["begin-loop", "export-loop", "export-track-effects", "export-wav", "edit-loop-precise", "set-eq"]) {
   assert.deepEqual(policy.canAuthorize(pro, "owner", operation, null, NOW), { allowed: true, consume: false, reason: null });
   if (operation !== "begin-loop") assert.equal(policy.canAuthorize(initial, "owner", operation, null, NOW).reason, "pro-required");
@@ -45,7 +46,7 @@ for (const operation of ["begin-loop", "export-loop", "export-track-effects", "e
 assert.equal(policy.snapshot(initial, "owner", NOW).capabilities.parametricEq, false);
 assert.equal(policy.snapshot(pro, "owner", NOW).capabilities.parametricEq, true);
 assert.equal(policy.canAuthorize(pro, "owner", "activate-pro", null, NOW).reason, "unknown-operation");
-for (const corrupt of [null, {}, { ...initial, schemaVersion: 3 },
+for (const corrupt of [null, {}, { ...initial, schemaVersion: 99 },
   { ...initial, trial: { ...initial.trial, used: -1 } },
   { ...initial, trial: { ...initial.trial, used: 21 } },
   { ...last, trial: { ...last.trial, grants: [...last.trial.grants, ...last.trial.grants] } }]) {

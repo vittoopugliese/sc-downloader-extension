@@ -273,6 +273,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.type === "GET_BULK_SELECTION_PAGE") {
+    intake.selectionPage(request.cursor ?? null, request.pageSize || 200)
+      .then((page) => sendResponse({ success: true, page }))
+      .catch((error) => sendResponse({ success: false, error: error.message, code: error.code }));
+    return true;
+  }
+
   if (request.type === "GET_BULK_TRACKS_BY_IDS") {
     intake
       .tracksByIds(request.ids || [], {

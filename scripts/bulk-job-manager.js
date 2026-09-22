@@ -1,5 +1,6 @@
 const SESSION_KEY = "scdl_active_job";
 const KEEPALIVE_ALARM = "scdl_bulk_keepalive";
+const RETRY_ALARM_PREFIX = "scdl_bulk_retry:";
 const RECOVER_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 // Keep audio assembly sequential. Two decoded/combined tracks can exhaust memory
 // on Chromebooks and other constrained devices even when network concurrency is safe.
@@ -842,27 +843,13 @@ function runJobLoop(jobId) {
 }
 
 function requestBulkPage(job) {
-  return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(job.enumerationTabId, {
-      type: "GET_BULK_PAGE",
-      cursor: job.nextCursor,
-      sourceUrl: job.sourceUrl,
-      pageSize: 200,
-    }, { frameId: 0 }, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(Object.assign(new Error(chrome.runtime.lastError.message), { code: "stale_context" }));
-        return;
-      }
-      if (!response?.success) {
-        reject(Object.assign(new Error(response?.error || "Could not enumerate the collection."), {
-          code: response?.code || "network_error",
-          retryAt: response?.retryAt,
-        }));
-        return;
-      }
-      resolve(response.page);
-    });
-  });
+  return SCDownloadSource.collectionPage({
+    sourceType: job.sourceType,
+    sourceUserId: job.sourceUserId,
+    sourceUrl: job.sourceUrl,
+    sourceAuthenticated: job.sourceAuthenticated,
+    clientId: job.clientId,
+  }, job.nextCursor, 200, job.formatPreference || "auto");
 }
 
 async function finishEnumeration(job) {
@@ -896,6 +883,9 @@ async function failEnumeration(job, error) {
     await persistJobSummary(paused);
     await updateBadge(paused);
     broadcastJobUpdate(paused);
+    if (Number.isFinite(paused.retryAt) && paused.retryAt > Date.now()) {
+      await chrome.alarms.create(`${RETRY_ALARM_PREFIX}${job.jobId}`, { when: paused.retryAt });
+    }
     return paused;
   }
   const status = job.eligible > 0 ? JOB_STATUS.PARTIAL : JOB_STATUS.FAILED;
@@ -979,6 +969,7 @@ function runEnumeration(jobId) {
 const BulkJobManager = {
   SESSION_KEY,
   KEEPALIVE_ALARM,
+  RETRY_ALARM_PREFIX,
 
   reportBuildProgress(buildId, statusText) {
     return trackDownloadExecution.reportProgress(buildId, statusText);
@@ -1130,6 +1121,9 @@ const BulkJobManager = {
     formatPreference = "auto",
     downloadDestination = null
   ) {
+    if (!Array.isArray(tracks) || tracks.length < 1 || tracks.length > 200) {
+      throw Object.assign(new Error("Legacy bulk jobs are limited to 200 tracks; use paged collection jobs."), { code: "invalid_request" });
+    }
     const resolvedDestination = await destinationHandler.resolve(
       downloadDestination
     );
@@ -1187,13 +1181,20 @@ const BulkJobManager = {
     collection,
     requestedLimit = null,
     formatPreference = "auto",
-    downloadDestination = null
+    downloadDestination = null,
+    selection = null
   ) {
     if (!Number.isInteger(tabId) || !collection?.title) {
       throw Object.assign(new Error("Bulk collection context is invalid."), { code: "invalid_request" });
     }
     if (requestedLimit != null && (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1)) {
       throw Object.assign(new Error("Bulk download limit is invalid."), { code: "invalid_request" });
+    }
+    const selectionMode = selection?.mode || "all";
+    const selectionIds = Array.isArray(selection?.ids) ? selection.ids.map(String) : [];
+    if (!["all", "all_except", "explicit"].includes(selectionMode) || selectionIds.length > 50_000 ||
+        selectionIds.some((value) => !/^[A-Za-z0-9:_-]{1,128}$/.test(value))) {
+      throw Object.assign(new Error("Bulk selection is invalid."), { code: "invalid_request" });
     }
     const resolvedDestination = await destinationHandler.resolve(downloadDestination);
     return withJobState(async () => {
@@ -1210,12 +1211,16 @@ const BulkJobManager = {
         sourceType: collection.kind || "collection",
         sourceUserId: collection.sourceUserId,
         sourceUrl: collection.pageUrl || collection.sourceUrl,
+        clientId: collection.clientId,
+        sourceAuthenticated: collection.sourceAuthenticated === true,
         mode: requestedLimit == null ? "all" : "limit",
         requestedLimit,
+        selectionMode,
+        selectionIds,
       });
       const job = await SCBulkLibrary.updateJob(jobId, [JOB_STATUS.ENUMERATING], {
         enumerating: true,
-        enumerationTabId: tabId,
+        enumerationTabId: null,
         playlistTitle: collection.title,
         folderName: sanitizeFolderName(collection.title),
         downloadDestination: resolvedDestination,
@@ -1270,9 +1275,14 @@ const BulkJobManager = {
     return { success: true, job: getPublicJobSnapshot(job) };
   },
 
-  async resumeJob() {
+  async resumeJob(expectedJobId = null) {
     const current = await loadJob();
+    if (expectedJobId && current?.jobId !== expectedJobId) return { success: false, error: "stale_retry_alarm" };
     if (current?.status === JOB_STATUS.PAUSED && current.enumerating) {
+      if (Number.isFinite(current.retryAt) && current.retryAt > Date.now()) {
+        return { success: false, error: "SoundCloud asked the extension to wait before retrying.",
+          retryAt: current.retryAt, job: getPublicJobSnapshot(current) };
+      }
       const job = await SCBulkLibrary.updateJob(current.jobId, [JOB_STATUS.PAUSED], {
         status: JOB_STATUS.ENUMERATING,
         pausedAt: null,
@@ -1281,6 +1291,7 @@ const BulkJobManager = {
         currentTrackStatus: `Found ${current.eligible} downloadable tracks...`,
       });
       jobControl = { jobId: job.jobId, state: JOB_STATUS.ENUMERATING };
+      await chrome.alarms.clear(`${RETRY_ALARM_PREFIX}${job.jobId}`);
       await startKeepalive();
       await persistJobSummary(job);
       runEnumeration(job.jobId);

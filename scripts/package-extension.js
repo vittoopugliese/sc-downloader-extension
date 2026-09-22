@@ -33,6 +33,25 @@ if (process.platform === 'win32') {
     const commerceSource = fs.readFileSync(commercePath,'utf8');
     if (!commerceSource.includes(testLoginLine)) throw new Error('Could not disable the test login in the production package.');
     fs.writeFileSync(commercePath,commerceSource.replace(testLoginLine,'const TEST_LOGIN = null;'));
+    const receiptsPath = path.join(stage,'scripts','player-tools-receipts.js');
+    const receiptSource = fs.readFileSync(receiptsPath,'utf8');
+    const publicKeyLine = 'const PACKAGED_ENTITLEMENT_PUBLIC_JWK = null;';
+    let publicJwk;
+    try { publicJwk = JSON.parse(process.env.ENTITLEMENT_PUBLIC_JWK || ''); }
+    catch { throw new Error('Set ENTITLEMENT_PUBLIC_JWK to the Worker signing public JWK before packaging.'); }
+    const publicKeys = Array.isArray(publicJwk?.keys) ? publicJwk.keys : [publicJwk];
+    const keyIds = new Set();
+    const invalidPublicKey = publicKeys.some(key => {
+      if (!key || key.kty !== 'EC' || key.crv !== 'P-256' || !key.x || !key.y || key.d ||
+          !/^[A-Za-z0-9._-]{1,128}$/.test(key.kid || '') || keyIds.has(key.kid)) return true;
+      keyIds.add(key.kid);
+      return false;
+    });
+    if (!publicKeys.length || invalidPublicKey) {
+      throw new Error('ENTITLEMENT_PUBLIC_JWK must be a public P-256 JWK or JWKS with unique kid values and no private material.');
+    }
+    if (!receiptSource.includes(publicKeyLine)) throw new Error('Could not inject the entitlement verification key.');
+    fs.writeFileSync(receiptsPath,receiptSource.replace(publicKeyLine,`const PACKAGED_ENTITLEMENT_PUBLIC_JWK = Object.freeze(${JSON.stringify(publicJwk)});`));
     const temporary = path.join(stage,'extension.zip');
     execFileSync('zip',['-q','-r',temporary,...fs.readdirSync(stage)],{cwd:stage});
     fs.copyFileSync(temporary,output);

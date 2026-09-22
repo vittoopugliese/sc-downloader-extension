@@ -49,6 +49,15 @@ export function validateTrialConsume(value) {
     : { ok: false, error: "invalid_request" };
 }
 
+export function validateAdminRelease(value) {
+  const installationId = text(value?.installationId, 128);
+  const licenseKey = text(value?.licenseKey, 256);
+  if (!installationId || !licenseKey || !/^[a-zA-Z0-9_-]{16,128}$/.test(installationId)) {
+    return { ok: false, error: "invalid_request" };
+  }
+  return { ok: true, value: { installationId, licenseKey, dryRun: value?.dryRun === true } };
+}
+
 const EVENT_NAMES = new Set([
   "player_tools_promo_seen", "player_tools_opened", "player_tools_value_reached",
   "pro_feature_attempted", "paywall_seen", "checkout_started", "license_activated",

@@ -101,6 +101,12 @@ let isSelectionMode = false;
 let isOpeningSelection = false;
 let selectionItems = [];
 let selectedIds = new Set();
+let selectionAll = false;
+let selectionExcludedIds = new Set();
+let selectionNextCursor = null;
+let selectionDone = true;
+let selectionLoadingPage = false;
+let selectionTotal = 0;
 let previousDownloadLimitValue = "50";
 let downloadLimitMode = "number";
 let suppressLimitFocus = false;
@@ -339,12 +345,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   selectAllBtn.addEventListener("click", () => {
-    selectedIds = new Set(selectionItems.map((item) => item.id));
+    selectionAll = true;
+    selectionExcludedIds.clear();
+    selectedIds.clear();
     updateSelectionCount();
     renderVisibleSelectionRows();
   });
 
   clearAllBtn.addEventListener("click", () => {
+    selectionAll = false;
+    selectionExcludedIds.clear();
     selectedIds.clear();
     updateSelectionCount();
     renderVisibleSelectionRows();
@@ -1126,12 +1136,15 @@ function attachSelectionRowsListener() {
     }
 
     const row = checkbox.closest(".selection-row");
-    const trackId = Number(row?.dataset?.id);
+    const trackId = String(row?.dataset?.id || "");
     if (!trackId) {
       return;
     }
 
-    if (checkbox.checked) {
+    if (selectionAll) {
+      if (checkbox.checked) selectionExcludedIds.delete(trackId);
+      else selectionExcludedIds.add(trackId);
+    } else if (checkbox.checked) {
       selectedIds.add(trackId);
     } else {
       selectedIds.delete(trackId);
@@ -1149,6 +1162,10 @@ function onSelectionScroll() {
   selectionScrollRaf = requestAnimationFrame(() => {
     selectionScrollRaf = null;
     renderVisibleSelectionRows();
+    if (!selectionDone && !selectionLoadingPage &&
+        selectionViewport.scrollTop + selectionViewport.clientHeight >= selectionViewport.scrollHeight - ROW_HEIGHT * 8) {
+      loadNextSelectionPage().catch((error) => console.error("Error loading selection page:", error));
+    }
   });
 }
 
@@ -1185,7 +1202,8 @@ function renderVisibleSelectionRows() {
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
-    checkbox.checked = selectedIds.has(item.id);
+    const trackId = String(item.id);
+    checkbox.checked = selectionAll ? !selectionExcludedIds.has(trackId) : selectedIds.has(trackId);
 
     const indexSpan = document.createElement("span");
     indexSpan.className = "selection-index";
@@ -1208,7 +1226,7 @@ function renderVisibleSelectionRows() {
 }
 
 function updateSelectionCount() {
-  const count = selectedIds.size;
+  const count = selectionAll ? Math.max(0, selectionTotal - selectionExcludedIds.size) : selectedIds.size;
   downloadStatus.textContent =
     count === 0
       ? t("select_tracks_to_download")
@@ -1232,12 +1250,15 @@ function restoreControlsToMainView() {
   updateFormatHint();
 }
 
-function enterSelectionMode(items, selectAllByDefault = false) {
+function enterSelectionMode(page, selectAllByDefault = false, total = null) {
   isSelectionMode = true;
-  selectionItems = items;
-  selectedIds = selectAllByDefault
-    ? new Set(items.map((item) => item.id))
-    : new Set();
+  selectionItems = page.items;
+  selectionNextCursor = page.nextCursor ?? null;
+  selectionDone = page.done === true || selectionNextCursor == null;
+  selectionTotal = Number.isSafeInteger(total) && total >= selectionItems.length ? total : selectionItems.length;
+  selectionAll = selectAllByDefault;
+  selectionExcludedIds = new Set();
+  selectedIds = new Set();
   closeDownloadLimitMenu();
   document.body.classList.add("selection-mode");
   selectionPanel.classList.remove("is-hidden");
@@ -1254,6 +1275,11 @@ function enterSelectionMode(items, selectAllByDefault = false) {
 function exitSelectionMode() {
   isSelectionMode = false;
   selectionItems = [];
+  selectionAll = false;
+  selectionExcludedIds.clear();
+  selectionNextCursor = null;
+  selectionDone = true;
+  selectionTotal = 0;
   selectedIds.clear();
   document.body.classList.remove("selection-mode");
   selectionPanel.classList.add("is-hidden");
@@ -1308,9 +1334,9 @@ async function openSelectionPanel(options = {}) {
   loadingText.textContent = t("loading_track_list");
 
   try {
-    const result = await requestBulkSelectionList(total);
+    const result = await requestBulkSelectionPage(null);
 
-    if (!result?.success || !result.items?.length) {
+    if (!result?.success || !result.page?.items?.length) {
       hideLoading();
       alert(result?.error || t("load_track_list_failed"));
       restoreCollectionAfterSelectionError();
@@ -1319,8 +1345,9 @@ async function openSelectionPanel(options = {}) {
 
     hideLoading();
     enterSelectionMode(
-      result.items,
-      options.selectAllByDefault === true
+      result.page,
+      options.selectAllByDefault === true,
+      total
     );
   } catch (error) {
     console.error("Error opening selection panel:", error);
@@ -1333,12 +1360,11 @@ async function openSelectionPanel(options = {}) {
 }
 
 async function startSelectedBulkDownload() {
-  if (!currentPlaylistData || selectedIds.size === 0) {
+  const selectedCount = selectionAll ? Math.max(0, selectionTotal - selectionExcludedIds.size) : selectedIds.size;
+  if (!currentPlaylistData || selectedCount === 0) {
     alert(t("select_at_least_one_track"));
     return;
   }
-
-  const selectedCount = selectedIds.size;
 
   if (selectedCount >= DOWNLOAD_WARN_THRESHOLD) {
     const proceed = confirm(
@@ -1350,28 +1376,19 @@ async function startSelectedBulkDownload() {
     }
   }
 
-  const orderedIds = selectionItems
-    .filter((item) => selectedIds.has(item.id))
-    .map((item) => item.id);
-
   setDownloadState(true, t("preparing_selected_tracks", selectedCount));
 
   try {
     await ensureDownloadDestinationPermission();
-    const bulkResult = await requestBulkTracksByIds(orderedIds);
-
-    if (!bulkResult?.success || !bulkResult.tracks?.length) {
-      setDownloadState(false, DOWNLOAD_ERROR_STATUS);
-      alert(bulkResult?.error || t("no_downloadable_tracks"));
-      return;
-    }
-
-    const startResult = await popupDownloadIntent.downloadCollection(
-      bulkResult.tracks,
+    const startResult = await popupDownloadIntent.downloadPagedCollection(
+      activeTabId,
       currentPlaylistData,
       {
         formatPreference: await getFormatPreference(),
         downloadDestination: currentDownloadDestination,
+        selection: selectionAll
+          ? { mode: "all_except", ids: selectionExcludedIds }
+          : { mode: "explicit", ids: selectedIds },
       }
     );
 
@@ -1567,12 +1584,24 @@ function requestBulkTracks(limit) {
   return requestFromActiveTab({ type: "GET_BULK_TRACKS", limit });
 }
 
-function requestBulkSelectionList(total) {
-  return requestFromActiveTab({ type: "GET_BULK_SELECTION_LIST", total });
+function requestBulkSelectionPage(cursor) {
+  return requestFromActiveTab({ type: "GET_BULK_SELECTION_PAGE", cursor, pageSize: 200 });
 }
 
-function requestBulkTracksByIds(ids) {
-  return requestFromActiveTab({ type: "GET_BULK_TRACKS_BY_IDS", ids });
+async function loadNextSelectionPage() {
+  if (selectionDone || selectionLoadingPage) return;
+  selectionLoadingPage = true;
+  try {
+    const result = await requestBulkSelectionPage(selectionNextCursor);
+    if (!result?.success || !result.page) throw new Error(result?.error || "Could not load the next page.");
+    const known = new Set(selectionItems.map((item) => String(item.id)));
+    for (const item of result.page.items || []) if (!known.has(String(item.id))) selectionItems.push(item);
+    selectionNextCursor = result.page.nextCursor ?? null;
+    selectionDone = result.page.done === true || selectionNextCursor == null;
+    renderVisibleSelectionRows();
+  } finally {
+    selectionLoadingPage = false;
+  }
 }
 
 async function syncPlayerToolsOffer() {

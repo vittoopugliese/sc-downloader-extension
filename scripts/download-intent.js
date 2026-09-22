@@ -61,6 +61,7 @@ const SCDownloadIntent = (() => {
           kind: collection.kind || "collection",
           title: collection.title,
           sourceUserId: collection.sourceUserId || null,
+          sourceAuthenticated: collection.sourceAuthenticated === true,
           sourceUrl: collection.sourceUrl || null,
           pageUrl: collection.pageUrl || null,
           clientId: collection.clientId || null,
@@ -72,6 +73,10 @@ const SCDownloadIntent = (() => {
         requestedLimit: options.limit ?? null,
         formatPreference: options.formatPreference || "auto",
         downloadDestination: options.downloadDestination ?? null,
+      };
+      if (options.selection) command.selection = {
+        mode: options.selection.mode,
+        ids: Array.from(options.selection.ids || [], (value) => String(value)),
       };
       // Content scripts do not know their tab ID. The background derives it
       // from the trusted sender, so inline and popup use the same durable path.
