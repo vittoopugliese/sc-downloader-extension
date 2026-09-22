@@ -164,6 +164,26 @@ effects.setBypassed(false);
 if (delayReturn.gain.value !== 0.264 || replacementReturns[1].gain.value !== 0.264) {
   throw new Error("Unbypass must restore effects on every player graph.");
 }
+const contextsBeforeReset = FakeAudioContext.instances.length;
+state = effects.reset();
+for (const [name, value] of Object.entries(context.SCTempoEffects.DEFAULTS)) {
+  if (state[name] !== value) throw new Error(`FX reset did not restore ${name}: ${JSON.stringify(state)}`);
+}
+if (state.bypassed || state.reverb !== 0 || state.delay !== 0) {
+  throw new Error("FX reset must produce a neutral, unbypassed snapshot.");
+}
+if ([reverbReturn, delayReturn, ...replacementReturns].some((node) => node.gain.value !== 0) ||
+    sourceNode.connections.includes(reverbPreDelay) || sourceNode.connections.includes(delayNode)) {
+  throw new Error("FX reset must silence and disconnect every existing effect tail.");
+}
+if (FakeAudioContext.instances.length !== contextsBeforeReset) {
+  throw new Error("FX reset must not create a new AudioContext.");
+}
+effects.setBypassed(true);
+effects.setBypassed(false);
+if ([reverbReturn, delayReturn, ...replacementReturns].some((node) => node.gain.value !== 0)) {
+  throw new Error("Bypass toggles after reset must not revive old wet values.");
+}
 
 const unsafeAudio = new FakeAudio({ crossOrigin: null });
 const unsafeEffects = context.SCTempoEffects.create({

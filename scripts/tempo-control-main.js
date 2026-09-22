@@ -85,6 +85,8 @@
   const DEFAULT_EFFECT_TOGGLE_WET = 20;
   let ui = null;
   let equalizerUi = null;
+  const collapsible = globalThis.SCPlayerToolsCollapsible;
+  const sectionControllers = {};
   const EQ_STORAGE = "scdl.parametric-eq.v1";
   let mountQueued = false;
   let playbackFailure = "";
@@ -142,6 +144,10 @@
   })();
   let effectsCollapsed = true;
   let samplerCollapsed = true;
+  let controlsHidden = false;
+  let resetInProgress = false;
+  let resetGeneration = 0;
+  let effectIntentVersion = 0;
   let expandedEffectSettings = null;
   let effectsFailure = "";
   let effectsBypassed = false;
@@ -302,8 +308,8 @@
 
   function setSamplerCollapsed(collapsed) {
     samplerCollapsed = Boolean(collapsed);
-    ui.drumSection.classList.toggle("is-collapsed", samplerCollapsed);
-    ui.samplerToggle.setAttribute("aria-expanded", String(!samplerCollapsed));
+    sectionControllers.sampler?.setCollapsed(samplerCollapsed, { notify: false });
+    renderControlsVisibility();
     if (!ui.panel.hidden) positionPanel();
   }
 
@@ -537,26 +543,45 @@
   }
 
   async function resetPlayerTools() {
+    if (resetInProgress) return;
+    resetInProgress = true;
+    const generation = ++resetGeneration;
     rateIntent = null;
-    const authorization = await authorizePlayerTools("set-rate", "tempo");
-    if (!authorization) return;
-    playbackFailure = "";
-    animateNextRateChange = true;
-    const state = controller.setRate(DEFAULTS.rate);
-    controller.setPreservePitch(DEFAULTS.preservePitch);
-    controller.setBypassed(false);
-    writeSetting(RATE_STORAGE, state.rate);
-    writeSetting(PITCH_STORAGE, DEFAULTS.preservePitch);
-    effectsController?.set("reverb", 0);
-    effectsController?.set("delay", 0);
-    if (globalThis.SCParametricEQ) {
-      effectsController?.setEqualizer(globalThis.SCParametricEQ.normalize(null));
-      writeSetting(EQ_STORAGE, JSON.stringify(globalThis.SCParametricEQ.normalize(null)));
+    accessActionPending = false;
+    effectIntentVersion += 1;
+    loopIntentVersion += 1;
+    waveformDrag = null;
+    waveformDrawPreview = null;
+    waveformZoom = null;
+    try {
+      playbackFailure = "";
+      effectsFailure = "";
+      animateNextRateChange = true;
+      const state = controller.setRate(DEFAULTS.rate);
+      controller.setPreservePitch(DEFAULTS.preservePitch);
+      controller.setBypassed(false);
+      writeSetting(RATE_STORAGE, state.rate);
+      writeSetting(PITCH_STORAGE, DEFAULTS.preservePitch);
+      effectsController?.reset();
+      effectWetMemory.reverb = DEFAULT_EFFECT_TOGGLE_WET;
+      effectWetMemory.delay = DEFAULT_EFFECT_TOGGLE_WET;
+      expandedEffectSettings = null;
+      if (globalThis.SCParametricEQ) {
+        const emptyEq = globalThis.SCParametricEQ.normalize(null);
+        writeSetting(EQ_STORAGE, JSON.stringify(emptyEq));
+        equalizerUi?.reset();
+      }
+      try { await clearLoop(); }
+      catch (error) { loopFailure = error?.message || "Could not clear the loop."; }
+      if (generation !== resetGeneration) return;
+      requestLoop("set-global-bypass", { bypassed: false });
+      readLoopState();
+    } catch (error) {
+      effectsFailure = error?.message || "Could not reset Player Tools. Please retry.";
+    } finally {
+      if (generation === resetGeneration) resetInProgress = false;
+      render();
     }
-    effectsController?.setBypassed(false);
-    await clearLoop();
-    requestLoop("set-global-bypass", { bypassed: false });
-    readLoopState();
   }
 
   async function applyPlayerPitch(enabled) {
@@ -618,8 +643,9 @@
   }
 
   async function applyEffect(change) {
+    const intentVersion = effectIntentVersion;
     const authorization = await authorizePlayerTools("set-effect", "tempo");
-    if (!authorization) return null;
+    if (!authorization || intentVersion !== effectIntentVersion) return null;
     const state = change();
     effectsFailure = state?.available && !state.initialized
       ? "Play a track to activate FX."
@@ -911,13 +937,7 @@
 
   function renderLoop() {
     if (!ui?.waveformStage) return;
-    ui.waveformShell.classList.toggle("is-collapsed", waveformCollapsed);
-    ui.waveformToggle.setAttribute("aria-expanded", String(!waveformCollapsed));
-    ui.waveformToggle.setAttribute(
-      "aria-label",
-      waveformCollapsed ? "Expand looper" : "Collapse looper"
-    );
-    ui.waveformToggle.title = ui.waveformToggle.getAttribute("aria-label");
+    sectionControllers.loop?.setCollapsed(waveformCollapsed, { notify: false });
     const duration = Number.isFinite(loopState.durationMs) ? loopState.durationMs : 0;
     const displayedRange = waveformDrawPreview || loopState;
     const start = Number.isFinite(displayedRange.startMs) ? displayedRange.startMs : 0;
@@ -982,9 +1002,59 @@
     }
 
     renderLoop();
+    renderControlsVisibility();
     if (!waveformCollapsed && !ui.panel.hidden) {
       loadPlayerWaveform();
       setTimeout(drawWaveform, 180);
+    }
+    if (!ui.panel.hidden) positionPanel();
+  }
+
+  function setEffectsCollapsed(collapsed) {
+    effectsCollapsed = Boolean(collapsed);
+    sectionControllers.effects?.setCollapsed(effectsCollapsed, { notify: false });
+    renderControlsVisibility();
+    if (!ui.panel.hidden) positionPanel();
+  }
+
+  function areAllControlsCollapsed() {
+    return samplerCollapsed && waveformCollapsed && effectsCollapsed && Boolean(equalizerUi?.isCollapsed());
+  }
+
+  function renderControlsVisibility() {
+    if (!ui?.visibilityButton) return;
+    const allCollapsed = areAllControlsCollapsed();
+    const action = controlsHidden
+      ? { label: "Show and expand all controls", symbol: "+", state: "hidden" }
+      : allCollapsed
+        ? { label: "Hide all controls", symbol: "−", state: "collapsed" }
+        : { label: "Collapse all controls", symbol: "_", state: "normal" };
+    ui.panel.classList.toggle("controls-hidden", controlsHidden);
+    ui.controlsHiddenMessage.hidden = !controlsHidden;
+    ui.visibilityButton.dataset.state = action.state;
+    ui.visibilityButton.setAttribute("aria-label", action.label);
+    ui.visibilityButton.title = action.label;
+    ui.visibilitySymbol.textContent = action.symbol;
+    equalizerUi?.setVisible(!ui.panel.hidden && !controlsHidden);
+  }
+
+  function setAllControlsCollapsed(collapsed) {
+    setSamplerCollapsed(collapsed);
+    setWaveformCollapsed(collapsed);
+    setEffectsCollapsed(collapsed);
+    equalizerUi?.setCollapsed(collapsed, { notify: false });
+    renderControlsVisibility();
+  }
+
+  function cycleControlsVisibility() {
+    if (controlsHidden) {
+      controlsHidden = false;
+      setAllControlsCollapsed(false);
+    } else if (areAllControlsCollapsed()) {
+      controlsHidden = true;
+      renderControlsVisibility();
+    } else {
+      setAllControlsCollapsed(true);
     }
     if (!ui.panel.hidden) positionPanel();
   }
@@ -1701,7 +1771,7 @@
         .sampler-toggle:hover { color: #ff7b38; background: #232323; }
         .sampler-toggle:focus-visible { outline: 2px solid #ff5500; outline-offset: -2px; }
         .sampler-toggle svg { position: absolute; right: 9px; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 160ms ease; }
-        .drum-section.is-collapsed .sampler-toggle svg { transform: rotate(180deg); }
+        .drum-section.is-collapsed .sampler-toggle svg { transform: translateY(-50%) rotate(180deg); }
         .sampler-body { padding: 6px 7px; }
         .drum-section.is-collapsed .sampler-body { display: none; }
         .drum-pads { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
@@ -1772,7 +1842,7 @@
         .section-header:hover > .waveform-toggle, .section-header:hover > .effects-toggle { color: #ff7b38; background: #232323; }
         .waveform-toggle:focus-visible, .effects-toggle:focus-visible { outline: 2px solid #ff5500; outline-offset: -2px; }
         .waveform-toggle > svg, .effects-chevron { position: absolute; right: 9px; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 160ms ease; }
-        .waveform-shell.is-collapsed .waveform-toggle > svg { transform: rotate(180deg); }
+        .waveform-shell.is-collapsed .waveform-toggle > svg { transform: translateY(-50%) rotate(180deg); }
         .waveform-shell.is-collapsed .waveform-stage { display: none; }
         .waveform-shell.is-collapsed .waveform-times { display: none; }
         .player-tools-upgrade { display: none; position: absolute; z-index: 12; inset: 3px; border: 1px solid #ff6a1a; border-radius: 7px; color: #fff; background: #3d2115; font-size: 10px; font-weight: 700; line-height: 1; cursor: pointer; }
@@ -1838,6 +1908,20 @@
         .clear-loop, .download-loop { height: 22px; padding: 0 6px; border-radius: 6px; opacity: .82; }
         .save-loop-pad { width: 22px; height: 22px; }
         .loop-edit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+        ${collapsible.styles}
+        .drum-section, .waveform-shell, .effects-shell { transition:height 160ms ease; }
+        .drum-section > .tool-section-header .tool-section-heading,
+        .waveform-shell > .tool-section-header .tool-section-heading,
+        .effects-shell > .tool-section-header .tool-section-heading { padding-right:64px; }
+        .sampler-icon { width:14px; height:14px; filter:brightness(0) invert(1); }
+        .waveform-body { display:contents; }
+        .controls-hidden > .drum-section,
+        .controls-hidden > .waveform-shell,
+        .controls-hidden > .effects-shell,
+        .controls-hidden > .peq { display:none !important; }
+        .controls-hidden-message { margin:5px 2px 1px; color:#aeb4b9; font-size:10px; line-height:1.45; text-align:center; }
+        .visibility-symbol { display:block; width:12px; height:12px; font:800 15px/9px system-ui,sans-serif; }
+        .visibility-button[data-state="normal"] .visibility-symbol { transform:translateY(3px); }
 
         @media (forced-colors: active) {
           .trigger, .panel { border-color: CanvasText; }
@@ -1883,6 +1967,10 @@
           <button class="panel-tool detach-button" type="button" aria-label="Keep panel open when clicking outside" aria-pressed="false" title="Keep panel open when clicking outside">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M12 8v8"/><path d="M5 5h14v14H5z"/></svg>
           </button>
+          <button class="panel-tool reset-tools-button" type="button" aria-label="Reset playback, Loop, FX and EQ. Samples are kept." title="Reset playback, Loop, FX and EQ. Samples are kept.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>
+          </button>
+          <button class="panel-tool visibility-button" type="button" aria-controls="scdl-sampler scdl-loop-region scdl-audio-effects scdl-parametric-eq" aria-label="Collapse all controls" title="Collapse all controls"><span class="visibility-symbol" aria-hidden="true">_</span></button>
           <button class="panel-tool close-button" type="button" aria-label="Close panel" title="Close panel">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
           </button>
@@ -1911,8 +1999,8 @@
           <button class="bypass" type="button" aria-label="Bypass loop and playback effects" aria-pressed="false" title="Bypass loop and playback effects">${BYPASS_ICON}</button>
         </div>
         </div>
-        <section class="drum-section is-collapsed" aria-label="Sampler">
-          <button class="sampler-toggle" type="button" aria-controls="scdl-sampler-pads" aria-expanded="false"><img class="sampler-icon" alt="" aria-hidden="true" /><span>Sampler</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
+        <section class="drum-section is-collapsed" id="scdl-sampler" aria-label="Sampler">
+          ${collapsible.header({ title: "Sampler", bodyId: "scdl-sampler-pads", expanded: false, toggleClass: "sampler-toggle", icon: '<img class="tool-section-icon sampler-icon" alt="" aria-hidden="true" />' })}
           <div class="sampler-body" id="scdl-sampler-pads">
             <div class="drum-pads">
               ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
@@ -1920,11 +2008,9 @@
           </div>
           <p class="drum-message" role="status" aria-live="polite" hidden></p>
         </section>
-        <div class="waveform-shell" role="group" aria-label="Loop waveform">
-          <div class="section-header waveform-header">
-          <button class="waveform-toggle" type="button" aria-label="Collapse looper" aria-expanded="true" title="Collapse looper"><span class="waveform-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>Loop Region</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
-          <div class="waveform-actions"><div class="waveform-header-setters"><button class="setter header-set-a" type="button" aria-label="Set loop start">Set A</button><button class="setter header-set-b" type="button" aria-label="Set loop end">Set B</button></div><button class="clear-loop" type="button" aria-label="Clear loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button><button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button></div>
-          </div>
+        <section class="waveform-shell" id="scdl-loop-region" role="group" aria-label="Loop Region">
+          ${collapsible.header({ title: "Loop Region", bodyId: "scdl-loop-region-body", toggleClass: "waveform-toggle", headerClass: "waveform-header", actionsClass: "waveform-actions", icon: '<svg class="tool-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>', actions: '<div class="waveform-header-setters"><button class="setter header-set-a" type="button" aria-label="Set loop start">Set A</button><button class="setter header-set-b" type="button" aria-label="Set loop end">Set B</button></div><button class="clear-loop" type="button" aria-label="Clear loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button><button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>' })}
+          <div class="waveform-body" id="scdl-loop-region-body">
           <div class="waveform-stage">
             <canvas class="waveform-canvas" aria-hidden="true"></canvas>
             <div class="waveform-selection" hidden></div>
@@ -1933,18 +2019,15 @@
           </div>
           <div class="waveform-times"><span class="waveform-start-label">00:00.000</span><div class="waveform-setters"><button class="setter set-a" type="button">Set A</button></div><span class="waveform-middle-label">00:00.000</span><div class="waveform-setters"><button class="setter set-b" type="button">Set B</button></div><span class="waveform-end-label">00:00.000</span></div>
           <button class="player-tools-upgrade" type="button">Get Player Tools Pro</button>
-        </div>
+          </div>
+        </section>
         <div class="loop-edit">
           <input class="loop-time loop-start-time" inputmode="decimal" placeholder="A 00:00.000" aria-label="Loop start time" />
           <input class="loop-time loop-end-time" inputmode="decimal" placeholder="B 00:00.000" aria-label="Loop end time" />
         </div>
-        <section class="effects-shell is-collapsed" aria-label="Audio effects">
-          <div class="section-header effects-header"><button class="effects-toggle" type="button" aria-expanded="false">
-            <svg class="effects-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h2l2-7 4 14 3-11 2 7h2l1-3h2"/></svg>
-            <span class="effects-title">FX</span>
-            <svg class="effects-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
-          </button><div class="effect-bypasses"><button class="effect-bypass" type="button" data-effect-bypass="reverb" aria-label="Enable reverb" aria-pressed="false">R</button><button class="effect-bypass" type="button" data-effect-bypass="delay" aria-label="Enable delay" aria-pressed="false">D</button></div></div>
-          <div class="effects-body">
+        <section class="effects-shell is-collapsed" id="scdl-audio-effects" aria-label="FX">
+          ${collapsible.header({ title: "FX", bodyId: "scdl-audio-effects-body", expanded: false, toggleClass: "effects-toggle", headerClass: "effects-header", actionsClass: "effect-bypasses", icon: '<svg class="tool-section-icon effects-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h2l2-7 4 14 3-11 2 7h2l1-3h2"/></svg>', actions: '<button class="effect-bypass" type="button" data-effect-bypass="reverb" aria-label="Enable reverb" aria-pressed="false">R</button><button class="effect-bypass" type="button" data-effect-bypass="delay" aria-label="Enable delay" aria-pressed="false">D</button>' })}
+          <div class="effects-body" id="scdl-audio-effects-body">
             <div class="effects-presets" role="group" aria-label="FX presets"><button class="effects-preset" data-fx-preset="subtle" type="button">Subtle</button><button class="effects-preset" data-fx-preset="studio" type="button">Studio</button><button class="effects-preset" data-fx-preset="wide" type="button">Wide</button><button class="effects-preset" data-fx-preset="dub" type="button">Dub</button></div>
             <div class="effect-row"><label class="effect-label" for="scdl-effect-reverb">Reverb</label><input class="effect-slider" id="scdl-effect-reverb" type="range" min="0" max="100" step="1" value="0" aria-label="Reverb mix" title="Reverb mix; 0% turns it off" /><output class="effect-value" data-effect-value="reverb">0%</output><button class="effect-settings-toggle" type="button" data-effect-settings="reverb" aria-label="Reverb settings" aria-expanded="false">⚙</button></div>
             <div class="effect-settings" data-effect-settings-panel="reverb"><label class="effect-setting-label" for="scdl-effect-reverb-room">Room</label><select class="effect-room" id="scdl-effect-reverb-room" data-effect-character="reverbRoom"><option value="room">Room</option><option value="hall">Hall</option><option value="plate">Plate</option></select><span></span><label class="effect-setting-label" for="scdl-effect-reverb-size">Size</label><input class="effect-setting-slider" id="scdl-effect-reverb-size" type="range" min="0" max="100" value="55" data-effect-character="reverbSize" /><output class="effect-setting-value" data-effect-character-value="reverbSize">55%</output><label class="effect-setting-label" for="scdl-effect-reverb-decay">Decay</label><input class="effect-setting-slider" id="scdl-effect-reverb-decay" type="range" min="0.2" max="12" step="0.1" value="2.4" data-effect-character="reverbDecay" /><output class="effect-setting-value" data-effect-character-value="reverbDecay">2.4s</output><label class="effect-setting-label" for="scdl-effect-reverb-predelay">Pre-delay</label><input class="effect-setting-slider" id="scdl-effect-reverb-predelay" type="range" min="0" max="200" value="20" data-effect-character="reverbPreDelay" /><output class="effect-setting-value" data-effect-character-value="reverbPreDelay">20ms</output><label class="effect-setting-label" for="scdl-effect-reverb-tone">Tone</label><input class="effect-setting-slider" id="scdl-effect-reverb-tone" type="range" min="0" max="100" value="70" data-effect-character="reverbTone" /><output class="effect-setting-value" data-effect-character-value="reverbTone">70%</output></div>
@@ -1953,6 +2036,7 @@
             <p class="effects-note">Mix · open ⚙ for character</p>
           </div>
         </section>
+        <p class="controls-hidden-message" hidden>press maximize button again to appear all controls again</p>
         <p class="status" role="status" aria-live="polite" hidden></p>
       </section>
     `;
@@ -1981,9 +2065,10 @@
   function setPanelOpen(open) {
     if (!ui) return;
     ui.panel.hidden = !open;
-    equalizerUi?.setVisible(open);
+    equalizerUi?.setVisible(open && !controlsHidden);
     ui.trigger.setAttribute("aria-expanded", String(open));
     setVolumeLayerOpen(open);
+    renderControlsVisibility();
     if (open) positionPanel();
   }
 
@@ -2088,12 +2173,17 @@
       downloadTrackButton: root.querySelector(".download-track-button"),
       settingsButton: root.querySelector(".settings-button"),
       detachButton: root.querySelector(".detach-button"),
+      resetToolsButton: root.querySelector(".reset-tools-button"),
+      visibilityButton: root.querySelector(".visibility-button"),
+      visibilitySymbol: root.querySelector(".visibility-symbol"),
+      controlsHiddenMessage: root.querySelector(".controls-hidden-message"),
       setA: root.querySelector(".set-a"),
       setB: root.querySelector(".set-b"),
       headerSetA: root.querySelector(".header-set-a"),
       headerSetB: root.querySelector(".header-set-b"),
       waveformShell: root.querySelector(".waveform-shell"),
       waveformToggle: root.querySelector(".waveform-toggle"),
+      waveformBody: root.querySelector(".waveform-body"),
       waveformActions: root.querySelector(".waveform-actions"),
       waveformStage: root.querySelector(".waveform-stage"),
       waveformCanvas: root.querySelector(".waveform-canvas"),
@@ -2111,6 +2201,7 @@
       playerToolsUpgrade: root.querySelector(".player-tools-upgrade"),
       effectsShell: root.querySelector(".effects-shell"),
       effectsToggle: root.querySelector(".effects-toggle"),
+      effectsBody: root.querySelector(".effects-body"),
       effectBypasses: Object.fromEntries(
         ["reverb", "delay"].map((name) => [name, root.querySelector(`[data-effect-bypass="${name}"]`)])
       ),
@@ -2127,6 +2218,28 @@
         [...root.querySelectorAll("[data-effect-character-value]")].map((output) => [output.dataset.effectCharacterValue, output])
       ),
     };
+
+    sectionControllers.sampler = collapsible.mount({
+      section: ui.drumSection,
+      toggle: ui.samplerToggle,
+      body: root.querySelector(".sampler-body"),
+      collapsed: samplerCollapsed,
+      onChange(value) { samplerCollapsed = value; renderControlsVisibility(); if (!ui.panel.hidden) positionPanel(); },
+    });
+    sectionControllers.loop = collapsible.mount({
+      section: ui.waveformShell,
+      toggle: ui.waveformToggle,
+      body: ui.waveformBody,
+      collapsed: waveformCollapsed,
+      onChange: setWaveformCollapsed,
+    });
+    sectionControllers.effects = collapsible.mount({
+      section: ui.effectsShell,
+      toggle: ui.effectsToggle,
+      body: ui.effectsBody,
+      collapsed: effectsCollapsed,
+      onChange: setEffectsCollapsed,
+    });
 
     updateDrumLabels();
     ui.drumButtons.forEach((button, index) => {
@@ -2180,8 +2293,6 @@
       });
     });
     document.addEventListener("keydown", handleDrumKeydown, true);
-    ui.samplerToggle.addEventListener("click", () => setSamplerCollapsed(!samplerCollapsed));
-
     ui.trigger.addEventListener("pointerenter", (event) => {
       if (event.pointerType !== "mouse") return;
       if (hoverCloseTimer !== null) {
@@ -2217,6 +2328,8 @@
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
     });
     ui.downloadTrackButton.addEventListener("click", downloadCurrentTrack);
+    ui.resetToolsButton.addEventListener("click", resetPlayerTools);
+    ui.visibilityButton.addEventListener("click", cycleControlsVisibility);
     root.querySelector(".close-button").addEventListener("click", () => {
       closePanel();
       ui.trigger.focus({ preventScroll: true });
@@ -2235,17 +2348,6 @@
       // outside click is the explicit close action even if it began as hover.
       if (!panelDetached && !ui.panel.hidden) panelOpenMode = "click";
       render();
-    });
-    ui.waveformToggle.addEventListener("click", () => {
-      setWaveformCollapsed(!waveformCollapsed);
-      ui.waveformToggle.setAttribute("aria-label", waveformCollapsed ? "Expand looper" : "Collapse looper");
-      ui.waveformToggle.title = ui.waveformToggle.getAttribute("aria-label");
-    });
-    ui.effectsToggle.addEventListener("click", () => {
-      effectsCollapsed = !effectsCollapsed;
-      ui.effectsShell.classList.toggle("is-collapsed", effectsCollapsed);
-      ui.effectsToggle.setAttribute("aria-expanded", String(!effectsCollapsed));
-      if (!ui.panel.hidden) positionPanel();
     });
     for (const [name, slider] of Object.entries(ui.effectSliders)) {
       slider.addEventListener("change", async () => {
@@ -2394,8 +2496,13 @@
           writeSetting(EQ_STORAGE, JSON.stringify(settings));
           render();
         },
+        onCollapsedChange() {
+          renderControlsVisibility();
+          if (!ui.panel.hidden) positionPanel();
+        },
       });
     }
+    renderControlsVisibility();
     render();
     syncBrandLogo();
     hydrateDrumPads();
@@ -2451,7 +2558,8 @@
     ui.clearRate.hidden = state.rate === DEFAULTS.rate &&
       state.preservePitch === DEFAULTS.preservePitch && !state.bypassed &&
       !(effectsState?.reverb > 0 || effectsState?.delay > 0 || effectsState?.eq?.bands.length) && !loopState.active;
-    ui.clearRate.disabled = !playbackAllowed || accessActionPending;
+    ui.clearRate.disabled = resetInProgress;
+    ui.resetToolsButton.disabled = resetInProgress;
     // Disabling a native range during input cancels its ongoing mouse drag.
     ui.slider.disabled = !playbackAllowed;
     ui.pitchToggle.disabled = !playbackAllowed || !state.preservePitchSupported || accessActionPending;
@@ -2492,6 +2600,7 @@
     renderLoop();
     renderEffects();
     equalizerUi?.sync();
+    renderControlsVisibility();
   }
 
   function renderEffects() {

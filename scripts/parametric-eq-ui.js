@@ -2,25 +2,25 @@
 (() => {
   "use strict";
   const HEART_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17.2C22 19.85 19.85 22 17.2 22C15.78 22 14.51 21.38 13.63 20.4C12.87 19.55 12.4 18.43 12.4 17.2C12.4 14.55 14.55 12.4 17.2 12.4C18.57 12.4 19.81 12.98 20.69 13.91C20.68 13.91 20.68 13.91 20.69 13.92C21.5 14.78 22 15.93 22 17.2Z"/><path d="M18.48 18.54L15.95 16M18.45 16.03L15.92 18.57"/><path d="M22 8.69C22 10.66 21.49 12.4 20.69 13.91C19.81 12.98 18.57 12.4 17.2 12.4C14.55 12.4 12.4 14.55 12.4 17.2C12.4 18.43 12.87 19.55 13.63 20.4C13.26 20.57 12.92 20.71 12.62 20.81C12.28 20.93 11.72 20.93 11.38 20.81C8.48 19.82 2 15.69 2 8.69C2 5.6 4.49 3.09998 7.56 3.09998C9.37 3.09998 10.99 3.98002 12 5.33002C13.01 3.98002 14.63 3.09998 16.44 3.09998C19.51 3.09998 22 5.6 22 8.69Z"/></svg>`;
-  function mount({ container, effects, authorize, isAllowed, onChange }) {
+  function mount({ container, effects, authorize, isAllowed, onChange, onCollapsedChange }) {
     const api = globalThis.SCParametricEQ;
-    const section = document.createElement("details");
+    const collapsible = globalThis.SCPlayerToolsCollapsible;
+    const section = document.createElement("section");
     section.className = "peq";
+    section.id = "scdl-parametric-eq";
+    section.setAttribute("aria-label", "Parametric EQ");
+    const bodyId = "scdl-parametric-eq-body";
     section.innerHTML = `
       <style>
+        ${collapsible.styles}
         .peq { margin-top:7px; border:1px solid #343434; border-radius:11px; background:#151515; color:#eee; }
-        .peq summary { display:flex; align-items:center; gap:6px; min-height:30px; padding:0 9px; cursor:pointer; font-size:11px; font-weight:700; list-style:none; }
-        .peq summary::-webkit-details-marker { display:none; }
-        .peq summary:hover { color:#ff7b38; background:#232323; }
-        .peq-icon { width:15px; height:15px; object-fit:contain; filter:invert(1); border-radius: 100%; }
-        .peq-title { flex:1; }
+        .peq .tool-section-heading { padding-right:72px; }
+        .peq-icon { border-radius:100%; }
         .peq-pro { padding:2px 4px; border:1px solid #8b5cf6; border-radius:4px; color:#f5f3ff; background:#32105e; font-size:8px; line-height:1; }
-        .peq-chevron { width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; transition:transform 160ms ease; }
-        .peq:not([open]) .peq-chevron { transform:rotate(180deg); }
         .peq-body { padding:0 9px 8px; }
         .peq-toolbar { display:flex; align-items:center; gap:5px; margin-bottom:6px; }
-        .peq button { box-sizing:border-box; min-width:0; border:1px solid #474747; border-radius:5px; background:#262626; color:#eee; font:inherit; font-size:10px; }
-        .peq button { display:inline-grid; place-items:center; min-height:23px; padding:3px 7px; cursor:pointer; }
+        .peq button:not(.tool-section-toggle) { box-sizing:border-box; min-width:0; border:1px solid #474747; border-radius:5px; background:#262626; color:#eee; font:inherit; font-size:10px; }
+        .peq button:not(.tool-section-toggle) { display:inline-grid; place-items:center; min-height:23px; padding:3px 7px; cursor:pointer; }
         .peq-toolbar button:hover:not(:disabled) { border-color:#ff7b38; color:#fff; background:#3a251b; }
         .peq-toolbar button svg { display:block; width:15px; height:15px; }
         .peq-bypass { color:#fa5858 !important; }
@@ -38,8 +38,8 @@
         .peq .peq-point[aria-pressed="true"] { background:#ff9c5b; color:#111; box-shadow:0 0 0 3px #ff7b3838; }
         .peq-message { position:absolute; z-index:2; top:4px; left:28px; right:6px; margin:0; padding:2px 4px; border-radius:3px; color:#ffb68b; background:#17100be8; font-size:9px; line-height:1.4; pointer-events:none; }
       </style>
-      <summary title="Expand or collapse Parametric EQ"><img class="peq-icon" alt="" /><span class="peq-title">Parametric EQ</span><button type="button" class="peq-bypass peq-header-bypass" aria-pressed="false" aria-label="Bypass EQ" title="Bypass EQ only">${HEART_ICON}</button><span class="peq-pro">PRO</span><svg class="peq-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary>
-      <div class="peq-body">
+      ${collapsible.header({ title: "Parametric EQ", bodyId, expanded: true, toggleClass: "peq-toggle", icon: '<img class="tool-section-icon peq-icon" alt="" aria-hidden="true" />', actions: `<button type="button" class="peq-bypass peq-header-bypass" aria-pressed="false" aria-label="Bypass EQ" title="Bypass EQ only">${HEART_ICON}</button><span class="peq-pro">PRO</span>` })}
+      <div class="peq-body" id="${bodyId}">
         <div class="peq-toolbar"><button type="button" class="peq-add" aria-label="Add EQ point" title="Add a parametric EQ point">+ Point</button><button type="button" class="peq-clip" aria-pressed="false" aria-label="Enable hard clip" title="Enable hard clipping after EQ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 17h4V7h12v10h4"/></svg></button><button type="button" class="peq-reset" aria-label="Reset EQ" title="Reset all EQ points and clipping"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 19 19M19 5 5 19"/></svg></button></div>
         <div class="peq-stage"><canvas class="peq-canvas" aria-label="Equalizer response and live frequency spectrum. Double click near the left or right edge for a high-pass or low-pass cutoff. Drag to edit; scroll on a point to adjust Q; double click a point to delete it."></canvas><p class="peq-message" role="status" aria-live="polite" hidden></p></div>
       </div>`;
@@ -66,6 +66,8 @@
     let lastError = "";
     let previewGraph = null;
     let previewKey = "";
+    let operationVersion = 0;
+    let collapseController = null;
     const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
     const message = (text) => { find("message").textContent = text; find("message").hidden = !text; };
     const geometry = () => ({ width: stage.clientWidth, height: stage.clientHeight, left: 27, right: Math.max(28, stage.clientWidth - 12), top: 12, bottom: stage.clientHeight - 22 });
@@ -84,6 +86,7 @@
         type: x <= g.left + 18 ? "highpass" : x >= g.right - 18 ? "lowpass" : "peaking" };
     }
     async function commit() {
+      const version = operationVersion;
       dirty = true;
       render();
       if (pending) return;
@@ -92,6 +95,7 @@
         while (dirty) {
           dirty = false;
           const allowed = await authorize();
+          if (version !== operationVersion) break;
           if (!allowed || !isAllowed()) {
             dirty = false;
             settings = api.normalize(effects.snapshot().eq);
@@ -107,7 +111,11 @@
       } catch (error) {
         settings = api.normalize(effects.snapshot().eq);
         message(error?.message || "Could not apply EQ.");
-      } finally { pending = false; render(); }
+      } finally {
+        pending = false;
+        render();
+        if (dirty) commit();
+      }
     }
     function changeBand(update) {
       if (!isAllowed() || selected < 0 || !settings.bands[selected]) return;
@@ -205,7 +213,7 @@
       draw();
     }
     function draw() {
-      if (!section.open || !visible || !ctx || !stage.clientWidth) return;
+      if (collapseController?.isCollapsed() || !visible || !ctx || !stage.clientWidth) return;
       const g = geometry();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       if (canvas.width !== Math.round(g.width * dpr) || canvas.height !== Math.round(g.height * dpr)) {
@@ -265,16 +273,22 @@
     }
     function tick(time) {
       frame = null;
-      if (!visible || !section.open || document.hidden || !section.isConnected) return;
+      if (!visible || collapseController?.isCollapsed() || document.hidden || !section.isConnected) return;
       if (time - lastFrame >= 33) { lastFrame = time; draw(); }
       frame = requestAnimationFrame(tick);
     }
     function schedule() {
       if (frame !== null) cancelAnimationFrame(frame);
       frame = null;
-      if (visible && section.open && !document.hidden) { render(); frame = requestAnimationFrame(tick); }
+      if (visible && !collapseController?.isCollapsed() && !document.hidden) { render(); frame = requestAnimationFrame(tick); }
     }
-    section.addEventListener("toggle", schedule);
+    collapseController = collapsible.mount({
+      section,
+      toggle: find("toggle"),
+      body: find("body"),
+      collapsed: true,
+      onChange(value) { schedule(); onCollapsedChange?.(value); },
+    });
     document.addEventListener("visibilitychange", schedule);
     const observer = new ResizeObserver(() => render());
     observer.observe(stage);
@@ -291,9 +305,20 @@
     render();
     return {
       setVisible(value) { visible = value; schedule(); },
+      setCollapsed(value, options) { collapseController.setCollapsed(value, options); schedule(); },
+      isCollapsed() { return collapseController.isCollapsed(); },
       sync() {
         if (!pending && !dragging) settings = api.normalize(effects.snapshot().eq);
         if (!isAllowed()) message("Player Tools Pro is required to use EQ.");
+        render();
+      },
+      reset() {
+        operationVersion += 1;
+        dirty = false;
+        dragging = null;
+        settings = api.normalize(effects.snapshot().eq);
+        selected = -1;
+        message("");
         render();
       },
     };

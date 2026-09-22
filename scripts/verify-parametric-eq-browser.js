@@ -151,7 +151,7 @@ const { chromium } = require("playwright");
     page.on("pageerror", (error) => errors.push(error.message));
     await page.route("https://soundcloud.com/**", (route) => route.fulfill({ contentType: "text/html", body: '<div id="container" style="width:380px"></div>' }));
     await page.goto("https://soundcloud.com/");
-    for (const file of ["parametric-eq.js", "audio-effects-core.js", "parametric-eq-ui.js"]) await page.addScriptTag({ path: path.join(__dirname, file) });
+    for (const file of ["parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js"]) await page.addScriptTag({ path: path.join(__dirname, file) });
     await page.evaluate(() => {
       window.allowed = true;
       window.fx = SCTempoEffects.create();
@@ -161,7 +161,7 @@ const { chromium } = require("playwright");
         onChange: (value) => { window.saved = JSON.parse(JSON.stringify(value)); } });
       editor.setVisible(true);
     });
-    await page.locator("summary").click();
+    await page.locator(".peq-toggle").click();
     assert.equal(await page.locator(".peq-toolbar button").count(), 3, "Expanded EQ toolbar must have only Point, hard clip and Reset");
     assert.equal(await page.locator(".peq-bypass").count(), 1, "EQ bypass must appear only in the header");
     await page.locator(".peq-canvas").dblclick({ position: { x: 180, y: 70 } });
@@ -217,15 +217,15 @@ const { chromium } = require("playwright");
     assert.ok(bypassCurveVisible, "Bypass must keep the edited response curve visible");
     await page.locator(".peq-header-bypass").click();
     await page.waitForFunction(() => saved.enabled === true);
-    await page.locator(".peq summary").click();
-    assert.equal(await page.locator(".peq").evaluate((details) => details.open), false);
+    await page.locator(".peq-toggle").click();
+    assert.equal(await page.locator(".peq-toggle").getAttribute("aria-expanded"), "false");
     await page.locator(".peq-header-bypass").click();
     await page.waitForFunction(() => saved.enabled === false);
-    assert.equal(await page.locator(".peq").evaluate((details) => details.open), false,
+    assert.equal(await page.locator(".peq-toggle").getAttribute("aria-expanded"), "false",
       "Header bypass must not expand the EQ");
     await page.locator(".peq-header-bypass").click();
     await page.waitForFunction(() => saved.enabled === true);
-    await page.locator(".peq summary").click();
+    await page.locator(".peq-toggle").click();
     await page.locator(".peq-clip").click();
     await page.waitForFunction(() => saved.hardClip === true);
     assert.equal(await page.locator(".peq-clip").getAttribute("aria-pressed"), "true");

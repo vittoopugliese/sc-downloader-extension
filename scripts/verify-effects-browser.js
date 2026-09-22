@@ -20,7 +20,7 @@ const { chromium } = require("playwright");
         document.dispatchEvent(new CustomEvent("scdl:player-tools-response"));
       });
     });
-    for (const file of ["tempo-control-core.js", "parametric-eq.js", "audio-effects-core.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
+    for (const file of ["tempo-control-core.js", "parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
     await page.evaluate(async (shared) => {

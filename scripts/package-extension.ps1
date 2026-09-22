@@ -36,6 +36,7 @@ $packageItems = @(
     "scripts/likes-popup.js",
     "scripts/audio-effects-core.js",
     "scripts/parametric-eq.js",
+    "scripts/player-tools-collapsible.js",
     "scripts/parametric-eq-ui.js",
     "scripts/bulk-library.js",
     "scripts/bulk-job-manager.js",

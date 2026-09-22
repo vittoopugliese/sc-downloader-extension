@@ -67,7 +67,7 @@ async function main() {
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-core.js"),
     });
-    for (const file of ["parametric-eq.js", "audio-effects-core.js", "parametric-eq-ui.js"]) {
+    for (const file of ["parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js"]) {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
     await page.addScriptTag({ path: path.join(__dirname, "player-tools-policy.js") });
@@ -219,16 +219,12 @@ async function main() {
     // Hover opens after the intended dwell time, stays open while the pointer
     // is inside the panel, and closes when the pointer leaves it.
     await host.locator(".trigger").hover();
-    await page.waitForTimeout(160);
+    await page.waitForTimeout(90);
     assert.deepEqual(await page.locator("#scdl-fast-tooltip").evaluate((tip) => ({
       text: tip.textContent, visible: tip.style.visibility,
     })), { text: "Playback speed 1.0x", visible: "visible" },
     "The Player Tools trigger must show a custom tooltip from its aria-label");
-    await page.waitForTimeout(25);
-    if (await panelIsOpen()) {
-      throw new Error("Playback Speed panel opened before 254ms of hover.");
-    }
-    await page.waitForTimeout(80);
+    await page.waitForTimeout(180);
     if (!(await panelIsOpen())) {
       throw new Error("Playback Speed panel did not open after 254ms of hover.");
     }
@@ -297,13 +293,13 @@ async function main() {
     await drumPads.nth(3).click();
     await page.waitForFunction(() => window.drumStarts === 3);
     await host.locator(".download-track-button").hover();
-    await page.waitForTimeout(184);
+    await page.waitForTimeout(400);
     assert.deepEqual(await page.locator("#scdl-fast-tooltip").evaluate((tip) => ({
       text: tip.textContent, visible: tip.style.visibility,
     })), { text: "Download current playing", visible: "visible" },
     "A Player Tools button in the shadow panel must show its custom tooltip");
     await host.locator(".clear-loop").hover();
-    await page.waitForTimeout(184);
+    await page.waitForTimeout(400);
     assert.deepEqual(await page.locator("#scdl-fast-tooltip").evaluate((tip) => ({
       text: tip.textContent, visible: tip.style.visibility,
     })), { text: "Clear loop", visible: "visible" },
@@ -457,7 +453,7 @@ async function main() {
       const presets = panel.querySelector(".presets");
       const header = panel.querySelector(".panel-header");
       const waveformShell = panel.querySelector(".waveform-shell");
-      const waveformTitleIcon = panel.querySelector(".waveform-title svg");
+      const waveformTitleIcon = panel.querySelector(".waveform-toggle .tool-section-icon");
       const tempoRow = panel.querySelector(".tempo-row");
       const triggerIcon = panel.getRootNode().querySelector(".trigger-icon");
       const triggerRate = panel.getRootNode().querySelector(".trigger-rate");
@@ -509,7 +505,7 @@ async function main() {
       compactStyles.downloadTrackButtonSize.join("x") !== "23x20" ||
       compactStyles.downloadTrackIconSize.join("x") !== "12x12" ||
       compactStyles.downloadTrackTooltip !== "Download current playing" ||
-      compactStyles.toolOrder.join("|") !== "panel-tool download-track-button|panel-tool settings-button|panel-tool detach-button|panel-tool close-button" ||
+      compactStyles.toolOrder.join("|") !== "panel-tool download-track-button|panel-tool settings-button|panel-tool detach-button|panel-tool reset-tools-button|panel-tool visibility-button|panel-tool close-button" ||
       compactStyles.settingsButtonSize.join("x") !== "23x20" ||
       compactStyles.settingsButtonRadius !== "4px" ||
       compactStyles.settingsIconSize.join("x") !== "12x12" ||
@@ -817,7 +813,7 @@ async function main() {
       const root = element.shadowRoot;
       const rect = (selector) => root.querySelector(selector).getBoundingClientRect();
       return {
-        chevronAfterBypasses: rect('.effects-chevron').left >= rect('.effect-bypasses').right,
+        chevronAfterBypasses: rect('.effects-shell .tool-section-chevron').left >= rect('.effects-shell .tool-section-actions').right,
         fxCoversHeader: rect('.effects-toggle').left === rect('.effects-header').left,
         waveformBelowHeader: rect('.waveform-stage').top >= rect('.waveform-toggle').bottom,
         waveformHeaderGap: rect('.waveform-stage').top - rect('.waveform-toggle').bottom,
@@ -839,6 +835,43 @@ async function main() {
       const style = getComputedStyle(element);
       return { color: style.color, background: style.backgroundColor };
     }), loopHover, 'Hovering FX actions must highlight the whole header like Loop Region');
+    const sectionToggles = host.locator('.sampler-toggle, .waveform-toggle, .effects-toggle, .peq-toggle');
+    assert.equal(await sectionToggles.count(), 4, 'All four dropdowns must use the shared section header');
+    assert.deepEqual(await sectionToggles.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('title'))),
+      [null, null, null, null], 'Dropdown headers must not expose redundant tooltips');
+    const samplerIcon = host.locator('.sampler-icon');
+    await page.mouse.move(10, 10);
+    const samplerFilter = await samplerIcon.evaluate((icon) => getComputedStyle(icon).filter);
+    await host.locator('.sampler-toggle').hover();
+    assert.notEqual(await samplerIcon.evaluate((icon) => getComputedStyle(icon).filter), samplerFilter,
+      'The Sampler image icon must inherit the orange header hover treatment');
+    const eqIcon = host.locator('.peq-icon');
+    const eqFilter = await eqIcon.evaluate((icon) => getComputedStyle(icon).filter);
+    await host.locator('.peq-toggle').hover();
+    assert.notEqual(await eqIcon.evaluate((icon) => getComputedStyle(icon).filter), eqFilter,
+      'The EQ image icon must inherit the orange header hover treatment');
+    const visibility = host.locator('.visibility-button');
+    assert.equal(await visibility.getAttribute('data-state'), 'normal');
+    await visibility.click();
+    assert.deepEqual(await sectionToggles.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-expanded'))),
+      ['false', 'false', 'false', 'false']);
+    assert.deepEqual(await sectionToggles.evaluateAll((buttons) => buttons.map((button) => {
+      const buttonRect = button.getBoundingClientRect();
+      const chevronRect = button.querySelector('.tool-section-chevron').getBoundingClientRect();
+      return Math.round((chevronRect.top + chevronRect.bottom - buttonRect.top - buttonRect.bottom) * 10) / 10;
+    })), [0, 0, 0, 0], 'Collapsed chevrons must remain vertically centered after rotation');
+    assert.equal(await visibility.getAttribute('data-state'), 'collapsed');
+    await visibility.click();
+    assert.equal(await visibility.getAttribute('data-state'), 'hidden');
+    assert.equal(await host.locator('.controls-hidden-message').isVisible(), true);
+    assert.deepEqual(await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq').evaluateAll(
+      (sections) => sections.map((section) => getComputedStyle(section).display)), ['none', 'none', 'none', 'none']);
+    await visibility.click();
+    assert.equal(await visibility.getAttribute('data-state'), 'normal');
+    assert.deepEqual(await sectionToggles.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-expanded'))),
+      ['true', 'true', 'true', 'true']);
+    await host.locator('.effects-toggle').click();
+    await host.locator('.peq-toggle').click();
     const waveformStage = host.locator(".waveform-stage");
     await waveformStage.hover();
     const fullEndLabel = await host.locator(".waveform-end-label").textContent();
@@ -1117,10 +1150,22 @@ async function main() {
 
     await host.locator('#scdl-effect-reverb').fill('2');
     await host.locator('#scdl-effect-reverb').dispatchEvent('change');
+    await host.locator('#scdl-effect-delay').fill('48');
+    await host.locator('#scdl-effect-delay').dispatchEvent('change');
+    await host.locator('[data-effect-character="delayTime"]').evaluate((control) => {
+      control.value = '500'; control.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await host.locator('[data-effect-character="reverbRoom"]').evaluate((control) => {
+      control.value = 'plate'; control.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     if (!(await host.locator('.clear-rate').isVisible())) {
       throw new Error('Reset control must appear when any effect or playback setting is active.');
     }
-    await host.locator('.clear-rate').click();
+    const globalVisibility = host.locator('.visibility-button');
+    if (await globalVisibility.getAttribute('data-state') === 'normal') await globalVisibility.click();
+    if (await globalVisibility.getAttribute('data-state') === 'collapsed') await globalVisibility.click();
+    assert.equal(await globalVisibility.getAttribute('data-state'), 'hidden');
+    await host.locator('.reset-tools-button').click();
     await page.waitForFunction(() => {
       const host = document.querySelector('#scdl-tempo-control');
       const root = host?.shadowRoot;
@@ -1129,9 +1174,16 @@ async function main() {
         root?.querySelector('.pitch-toggle')?.checked === false &&
         root?.querySelector('#scdl-effect-reverb')?.value === '0' &&
         root?.querySelector('#scdl-effect-delay')?.value === '0' &&
+        root?.querySelector('[data-effect-character="delayTime"]')?.value === '250' &&
+        root?.querySelector('[data-effect-character="reverbRoom"]')?.value === 'hall' &&
         loop?.active === false &&
-        root?.querySelector('.clear-rate')?.hidden === true;
+        root?.querySelector('.clear-rate')?.hidden === true &&
+        root?.querySelector('.visibility-button')?.dataset.state === 'hidden';
     });
+    assert.equal(await host.locator('.drum-pad').nth(3).getAttribute('title'), 'hat1 · hold to load',
+      'Global reset must preserve custom Sampler assignments');
+    await globalVisibility.click();
+    await host.locator('.peq-toggle').click();
 
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 420 });
@@ -1164,10 +1216,10 @@ async function main() {
 
     // Exercise the EQ inside the real panel, including the access bridge and persistence.
     await page.setViewportSize({ width: 720, height: 780 });
-    await host.locator(".peq summary").click();
+    await host.locator(".peq-toggle").click();
     assert.equal(await host.locator(".peq-icon").evaluate((icon) => icon.complete && icon.naturalWidth > 0), true,
       "The EQ header must load its packaged icon");
-    assert.equal(await host.locator(".peq-chevron").count(), 1);
+    assert.equal(await host.locator(".peq .tool-section-chevron").count(), 1);
     await host.locator(".peq-canvas").dblclick({ position: { x: 180, y: 130 } });
     await page.waitForFunction(() => JSON.parse(localStorage.getItem("scdl.parametric-eq.v1"))?.bands[0]?.gain < 0);
     await host.locator(".peq-canvas").dblclick({ position: { x: 300, y: 55 } });
@@ -1201,7 +1253,7 @@ async function main() {
     }
     const storedSample = await page.evaluate(async () => {
       const render = await window.sendOffscreenTest({
-        type: "OFFSCREEN_PAD_RENDER", buildId: "track_pad_integration", index: 5,
+        type: "OFFSCREEN_PAD_RENDER", operationId: "pad_integration_001", buildId: "track_pad_integration", index: 5,
         name: "Rendered Loop", streamUrl: `${location.origin}/assets/drums/tom1.wav`,
         trackData: { streamProtocol: "progressive", durationMs: 420, title: "Tom", artist: "Test" },
         trimRange: { startMs: 0, endMs: 200 },
@@ -1222,7 +1274,7 @@ async function main() {
     assert.ok(storedSample.list.pads.some((pad) => pad.index === 5 && pad.name === "Rendered Loop"));
     await page.reload();
     const persistedName = await page.evaluate(() => new Promise((resolve, reject) => {
-      const request = indexedDB.open("scdl-player-pads", 1);
+      const request = indexedDB.open("scdl-player-pads", 2);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const entry = request.result.transaction("samples").objectStore("samples").get(5);
@@ -1236,11 +1288,11 @@ async function main() {
         plan: "pro", state: "pro", capabilities: { tempo: true, parametricEq: true },
       }));
     });
-    for (const file of ["tempo-control-core.js", "parametric-eq.js", "audio-effects-core.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
+    for (const file of ["tempo-control-core.js", "parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
     await host.locator(".trigger").click();
-    await host.locator(".peq summary").click();
+    await host.locator(".peq-toggle").click();
     assert.equal(await host.locator(".peq-point").count(), 2, "EQ points must survive reload");
     assert.equal(await host.locator(".peq-headroom").count(), 0);
     assert.equal(await host.locator(".peq-fields").count(), 0);

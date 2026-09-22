@@ -38,6 +38,7 @@ for (const item of [
   "scripts/tempo-control-core.js",
   "scripts/audio-effects-core.js",
   "scripts/parametric-eq.js",
+  "scripts/player-tools-collapsible.js",
   "scripts/parametric-eq-ui.js",
   "scripts/tempo-control-main.js",
   "THIRD_PARTY_LICENSES.md",

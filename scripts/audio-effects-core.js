@@ -517,6 +517,30 @@
       return snapshot();
     }
 
+    function reset() {
+      Object.assign(values, DEFAULTS);
+      bypassed = false;
+      eqSettings = globalThis.SCParametricEQ?.normalize(null);
+      eqRevision += 1;
+      if (resetTimer !== null) clearTimeout(resetTimer);
+      resetTimer = null;
+      for (const reference of graphReferences) {
+        const targetGraph = reference.deref();
+        if (!targetGraph) { graphReferences.delete(reference); continue; }
+        for (const name of ["reverb", "delay"]) {
+          if (targetGraph.resetTimers[name] !== undefined) clearTimeout(targetGraph.resetTimers[name]);
+          delete targetGraph.resetTimers[name];
+          setParam(targetGraph[`${name}Return`].gain, 0, targetGraph.context);
+          if (targetGraph.connected[name]) targetGraph.source.disconnect(targetGraph[EFFECT_NODES[name]]);
+          targetGraph.connected[name] = false;
+        }
+        updateCharacter(targetGraph);
+        updateEqualizer(targetGraph);
+        updateReturns(targetGraph);
+      }
+      return snapshot();
+    }
+
     function discover(candidate) {
       if (!candidate || typeof candidate.play !== "function") return;
       // Cache one graph per player element because SoundCloud can replace its
@@ -538,7 +562,7 @@
       return snapshot();
     }
 
-    return Object.freeze({ applyPreset, applyToActive, discover, set, setBypassed, setCharacter, snapshot,
+    return Object.freeze({ applyPreset, applyToActive, discover, reset, set, setBypassed, setCharacter, snapshot,
       setEqualizer, setEqualizerAllowed, analyseEqualizer });
   }
 
