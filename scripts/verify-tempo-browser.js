@@ -23,7 +23,7 @@ function listen(server) {
 
 async function main() {
   const server = http.createServer((request, response) => {
-    const sampleName = /^\/assets\/drums\/(kick1|kick2|clap1|hat1)\.wav$/.exec(request.url || "");
+    const sampleName = /^\/assets\/drums\/(kick1|kick2|clap1|hat1|snare1|tom1)\.wav$/.exec(request.url || "");
     if (sampleName) {
       response.setHeader("Content-Type", "audio/wav");
       fs.createReadStream(path.join(projectRoot, "assets", "drums", `${sampleName[1]}.wav`)).pipe(response);
@@ -115,6 +115,26 @@ async function main() {
       window.looperGuideRequests = 0;
       window.trackDownloadRequests = [];
       window.loopDownloadRequests = [];
+      window.padRenderRequests = [];
+      window.savedPadSamples = {};
+      window.addEventListener("message", (event) => {
+        const data = event.data;
+        if (event.source !== window || data?.source !== "scdl-pad-main") return;
+        let result = { success: true };
+        if (data.action === "list") {
+          result.pads = Object.entries(window.savedPadSamples).map(([index, pad]) => ({ index: Number(index), name: pad.name }));
+        } else if (data.action === "render") {
+          window.padRenderRequests.push(data);
+          window.savedPadSamples[data.index] = { name: data.name, dataUrl: `${location.origin}/assets/drums/tom1.wav` };
+          result.pad = { name: data.name };
+        } else if (data.action === "store") {
+          window.savedPadSamples[data.index] = { name: data.name, dataUrl: `${location.origin}/assets/drums/hat1.wav` };
+          result.pad = { name: data.name };
+        } else if (data.action === "get") {
+          result.pad = window.savedPadSamples[data.index] || null;
+        }
+        window.postMessage({ source: "scdl-pad-content", id: data.id, result }, location.origin);
+      });
       document.addEventListener("scdl:open-looper-guide", () => {
         window.looperGuideRequests += 1;
       });
@@ -148,6 +168,22 @@ async function main() {
     await page.addScriptTag({
       path: path.join(__dirname, "looper-core.js"),
     });
+    const effectSample = await page.evaluate(async () => {
+      const context = new AudioContext();
+      const input = context.createBuffer(1, 2205, 44100);
+      input.getChannelData(0)[0] = 1;
+      const output = await SCTempoEffects.renderSample(input, {
+        reverb: 40, delay: 35, reverbRoom: "room", reverbSize: 30,
+        reverbDecay: 0.2, reverbPreDelay: 8, reverbTone: 70,
+        delayTime: 60, delayFeedback: 20, delayTone: 70,
+      });
+      const channel = output.getChannelData(0);
+      const tail = channel.slice(2205).reduce((sum, value) => sum + Math.abs(value), 0);
+      await context.close();
+      return { duration: output.duration, tail };
+    });
+    assert.ok(effectSample.duration > 0.2 && effectSample.tail > 0.01,
+      "Rendered pad audio must include audible reverb and delay after the selected loop.");
     await page.addScriptTag({
       path: path.join(__dirname, "loop-session.js"),
     });
@@ -210,10 +246,10 @@ async function main() {
       throw new Error("Playback Speed panel did not open.");
     }
     const drumPads = host.locator(".drum-pad");
-    assert.equal(await drumPads.count(), 4, "The panel must show four drum pads.");
-    assert.deepEqual(await drumPads.allTextContents(), ["A", "S", "D", "F"]);
+    assert.equal(await drumPads.count(), 6, "The panel must show six drum pads.");
+    assert.deepEqual(await drumPads.allTextContents(), ["A", "S", "D", "F", "G", "H"]);
     assert.deepEqual(await drumPads.evaluateAll((pads) => pads.map((pad) => pad.title)),
-      ["Kick", "Clap", "Hat", "Kick 2"].map((name) => `${name} · hold to load`));
+      ["Kick", "Clap", "Hat", "Kick 2", "Snare", "Tom"].map((name) => `${name} · hold to load`));
     const drumPlacement = await host.evaluate((element) => {
       const root = element.shadowRoot;
       const header = root.querySelector(".panel-header").getBoundingClientRect();
@@ -581,6 +617,7 @@ async function main() {
     if (emptyLoopActions.hidden || !emptyLoopActions.clearDisabled || !emptyLoopActions.downloadDisabled) {
       throw new Error(`Expanded loop actions must be visible and disabled without a loop: ${JSON.stringify(emptyLoopActions)}`);
     }
+    assert.equal(await host.locator(".save-loop-pad").isDisabled(), true);
     await host.locator(".waveform-toggle").evaluate((button) => button.click());
     if (await host.locator(".waveform-actions").isHidden()) {
       throw new Error("Collapsed loop actions must remain visible without an active loop.");
@@ -662,6 +699,26 @@ async function main() {
     }
     await page.locator("audio").evaluate((audio) => { audio.currentTime = 12.345; });
     await setA.click();
+    assert.equal(await host.locator(".save-loop-pad").isDisabled(), false);
+    await host.locator("#scdl-effect-reverb").evaluate((slider) => { slider.value = "24"; slider.dispatchEvent(new Event("change", { bubbles: true })); });
+    await host.locator("#scdl-effect-delay").evaluate((slider) => { slider.value = "17"; slider.dispatchEvent(new Event("change", { bubbles: true })); });
+    await page.waitForFunction(() => document.querySelector("#scdl-tempo-control")?.shadowRoot
+      ?.querySelector('[data-effect-value="delay"]')?.textContent === "17%");
+    await host.locator(".save-loop-pad").click();
+    assert.equal(await host.locator(".drum-section").evaluate((node) => node.classList.contains("is-selecting")), true);
+    await drumPads.nth(5).click();
+    await host.locator('.drum-pad[title="Loop 12.3–20.7s · hold to load"]').waitFor();
+    const padRender = await page.evaluate(() => window.padRenderRequests.at(-1));
+    assert.equal(padRender.index, 5);
+    assert.deepEqual(padRender.trimRange, { startMs: 12345, endMs: 20678, durationMs: 120000 });
+    assert.equal(padRender.playbackTransform.rate, 1.25);
+    assert.equal(padRender.playbackTransform.preservePitch, true);
+    assert.equal(padRender.effects.reverb, 24);
+    assert.equal(padRender.effects.delay, 17);
+    await drumPads.nth(5).click();
+    await page.waitForFunction(() => window.drumStarts === 4);
+    await host.locator("#scdl-effect-reverb").evaluate((slider) => { slider.value = "0"; slider.dispatchEvent(new Event("change", { bubbles: true })); });
+    await host.locator("#scdl-effect-delay").evaluate((slider) => { slider.value = "0"; slider.dispatchEvent(new Event("change", { bubbles: true })); });
     await host.locator(".waveform-toggle").evaluate((button) => button.click());
     await host.locator(".download-loop").click();
     await host.locator(".waveform-toggle").evaluate((button) => button.click());
@@ -1090,6 +1147,59 @@ async function main() {
     fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
     await panel.evaluate((element) => { element.scrollTop = 0; });
     await page.screenshot({ path: screenshotPath });
+
+    await page.evaluate(() => {
+      const listeners = [];
+      window.chrome = {
+        runtime: {
+          id: "test-extension",
+          getURL: (file) => `chrome-extension://test-extension/${file}`,
+          onMessage: { addListener: (listener) => listeners.push(listener) },
+          sendMessage: async () => ({ success: true }),
+        },
+      };
+      window.sendOffscreenTest = (message) => new Promise((resolve) => {
+        listeners[0](message, {
+          id: "test-extension",
+          url: "chrome-extension://test-extension/scripts/background.js",
+        }, resolve);
+      });
+    });
+    for (const script of ["format-utils.js", "loop-audio-renderer.js", "download-core.js", "offscreen.js"]) {
+      await page.addScriptTag({ path: path.join(__dirname, script) });
+    }
+    const storedSample = await page.evaluate(async () => {
+      const render = await window.sendOffscreenTest({
+        type: "OFFSCREEN_PAD_RENDER", buildId: "track_pad_integration", index: 5,
+        name: "Rendered Loop", streamUrl: `${location.origin}/assets/drums/tom1.wav`,
+        trackData: { streamProtocol: "progressive", durationMs: 420, title: "Tom", artist: "Test" },
+        trimRange: { startMs: 0, endMs: 200 },
+        playbackTransform: { rate: 1.25, preservePitch: false },
+        effects: { reverb: 35, delay: 20, reverbRoom: "room", reverbSize: 30, reverbDecay: 0.2,
+          reverbPreDelay: 8, reverbTone: 70, delayTime: 60, delayFeedback: 20, delayTone: 70 },
+      });
+      if (!render.success) return render;
+      const list = await window.sendOffscreenTest({ type: "OFFSCREEN_PAD_LIST" });
+      const get = await window.sendOffscreenTest({ type: "OFFSCREEN_PAD_GET", index: 5 });
+      const bytes = await (await fetch(get.pad.dataUrl)).arrayBuffer();
+      return { render, list, name: get.pad.name, signature: String.fromCharCode(...new Uint8Array(bytes.slice(0, 4))), bytes: bytes.byteLength };
+    });
+    assert.equal(storedSample.render.success, true, storedSample.render.error);
+    assert.equal(storedSample.name, "Rendered Loop");
+    assert.equal(storedSample.signature, "RIFF");
+    assert.ok(storedSample.bytes > 1000);
+    assert.ok(storedSample.list.pads.some((pad) => pad.index === 5 && pad.name === "Rendered Loop"));
+    await page.reload();
+    const persistedName = await page.evaluate(() => new Promise((resolve, reject) => {
+      const request = indexedDB.open("scdl-player-pads", 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const entry = request.result.transaction("samples").objectStore("samples").get(5);
+        entry.onsuccess = () => resolve(entry.result?.name);
+        entry.onerror = () => reject(entry.error);
+      };
+    }));
+    assert.equal(persistedName, "Rendered Loop", "A saved pad must survive a page reload.");
     console.log(`Tempo browser verification passed: ${screenshotPath}`);
   } finally {
     await browser.close();

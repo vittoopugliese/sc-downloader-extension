@@ -76,6 +76,74 @@
     return buffer;
   }
 
+  async function renderSample(buffer, settings, signal) {
+    const reverbWet = settings?.bypassed ? 0 : clampPercent(settings?.reverb);
+    const delayWet = settings?.bypassed ? 0 : clampPercent(settings?.delay);
+    if (!reverbWet && !delayWet) return buffer;
+    if (signal?.aborted) throw new DOMException("Render aborted.", "AbortError");
+    const sampleRate = buffer.sampleRate;
+    const delaySeconds = clamp(settings?.delayTime, 60, 800, DEFAULTS.delayTime) / 1000;
+    const feedbackValue = clampPercent(settings?.delayFeedback) / 100 * 0.82;
+    const reverbSeconds = Math.max(0.2, Math.min(12, Number(settings?.reverbDecay) || DEFAULTS.reverbDecay));
+    const reverbPreDelaySeconds = clamp(settings?.reverbPreDelay, 0, 200, DEFAULTS.reverbPreDelay) / 1000;
+    const delayTail = delayWet ? delaySeconds * Math.ceil(Math.log(0.001) / Math.log(Math.max(0.05, feedbackValue))) : 0;
+    const tailSeconds = Math.min(12, Math.max(reverbWet ? reverbSeconds + reverbPreDelaySeconds : 0, delayTail));
+    const frameCount = buffer.length + Math.ceil(tailSeconds * sampleRate);
+    if (frameCount * Math.min(buffer.numberOfChannels, 2) * 4 > 64 * 1024 * 1024) {
+      throw new Error("This loop is too large to save as a pad sample.");
+    }
+    const context = new OfflineAudioContext(Math.min(buffer.numberOfChannels, 2), frameCount, sampleRate);
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    const master = context.createGain();
+    const limiter = context.createDynamicsCompressor();
+    limiter.threshold.value = -6;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 12;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.12;
+    source.connect(master);
+    if (reverbWet) {
+      const preDelay = context.createDelay(0.25);
+      preDelay.delayTime.value = reverbPreDelaySeconds;
+      const reverb = context.createConvolver();
+      reverb.buffer = createImpulse(context, settings?.reverbRoom, settings?.reverbSize ?? DEFAULTS.reverbSize, reverbSeconds);
+      const tone = context.createBiquadFilter();
+      tone.type = "lowpass";
+      tone.frequency.value = 600 + clampPercent(settings?.reverbTone ?? DEFAULTS.reverbTone) / 100 * 15400;
+      const wet = context.createGain();
+      wet.gain.value = reverbWet / 100 * MAX_SEND.reverb;
+      source.connect(preDelay);
+      preDelay.connect(reverb);
+      reverb.connect(tone);
+      tone.connect(wet);
+      wet.connect(master);
+    }
+    if (delayWet) {
+      const delay = context.createDelay(1);
+      delay.delayTime.value = delaySeconds;
+      const tone = context.createBiquadFilter();
+      tone.type = "lowpass";
+      tone.frequency.value = 500 + clampPercent(settings?.delayTone ?? DEFAULTS.delayTone) / 100 * 15500;
+      const feedback = context.createGain();
+      feedback.gain.value = feedbackValue;
+      const wet = context.createGain();
+      wet.gain.value = delayWet / 100 * MAX_SEND.delay;
+      source.connect(delay);
+      delay.connect(tone);
+      tone.connect(feedback);
+      feedback.connect(delay);
+      delay.connect(wet);
+      wet.connect(master);
+    }
+    master.connect(limiter);
+    limiter.connect(context.destination);
+    source.start();
+    const rendered = await context.startRendering();
+    if (signal?.aborted) throw new DOMException("Render aborted.", "AbortError");
+    return rendered;
+  }
+
   function clamp(value, min, max, fallback) {
     const number = Number(value);
     return Number.isFinite(number) ? Math.round(Math.max(min, Math.min(max, number))) : fallback;
@@ -380,5 +448,5 @@
     return Object.freeze({ applyPreset, applyToActive, discover, set, setBypassed, setCharacter, snapshot });
   }
 
-  globalThis.SCTempoEffects = Object.freeze({ create, clampPercent, DEFAULTS, PRESETS, REVERB_ROOMS });
+  globalThis.SCTempoEffects = Object.freeze({ create, renderSample, clampPercent, DEFAULTS, PRESETS, REVERB_ROOMS });
 })();

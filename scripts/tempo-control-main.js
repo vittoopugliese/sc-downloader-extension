@@ -55,6 +55,8 @@
     { name: "Clap", sample: "clap1.wav", key: "s" },
     { name: "Hat", sample: "hat1.wav", key: "d" },
     { name: "Kick 2", sample: "kick2.wav", key: "f" },
+    { name: "Snare", sample: "snare1.wav", key: "g" },
+    { name: "Tom", sample: "tom1.wav", key: "h" },
   ];
   const HOVER_OPEN_DELAY_MS = 254;
   // The panel sits eight pixels above its trigger. This brief grace period
@@ -92,6 +94,7 @@
   let loopIntentVersion = 0;
   let trackDownloadPending = false;
   let loopDownloadPending = false;
+  let padRenderPending = false;
   let loopState = { active: false, enabled: false, startMs: null, endMs: null, durationMs: null };
   let accessSnapshot = { state: "loading", plan: "free", capabilities: {} };
   let playerToolsSessionId = null;
@@ -113,10 +116,13 @@
   let hoverCloseTimer = null;
   let drumAudioContext = null;
   let hoveredDrum = null;
-  const drumPads = DRUM_DEFAULTS.map((defaultPad) => ({ ...defaultPad, buffer: null, loading: null, customName: "", version: 0 }));
+  let selectingLoopPad = null;
+  let padRequestNumber = 0;
+  const padRequests = new Map();
+  const drumPads = DRUM_DEFAULTS.map((defaultPad) => ({ ...defaultPad, buffer: null, loading: null, customName: "", saved: false, busy: false, version: 0 }));
   try {
     const savedKeys = JSON.parse(localStorage.getItem(DRUM_KEYS_STORAGE) || "null");
-    if (Array.isArray(savedKeys) && savedKeys.length === drumPads.length) {
+    if (Array.isArray(savedKeys)) {
       savedKeys.forEach((key, index) => {
         if (key === "" || (typeof key === "string" && /^[a-z0-9]$/i.test(key))) {
           drumPads[index].key = key.toLowerCase();
@@ -230,11 +236,49 @@
 
   document.addEventListener(EXTENSION_ASSETS_EVENT, syncBrandLogo);
 
+  window.addEventListener("message", (event) => {
+    if (event.source !== window || event.origin !== location.origin || event.data?.source !== "scdl-pad-content") return;
+    const request = padRequests.get(event.data.id);
+    if (!request) return;
+    padRequests.delete(event.data.id);
+    clearTimeout(request.timeout);
+    if (event.data.result?.success) request.resolve(event.data.result);
+    else request.reject(new Error(event.data.result?.error || "Could not prepare this pad."));
+  });
+
+  function requestPad(action, payload = {}) {
+    const id = `pad-${Date.now()}-${++padRequestNumber}`;
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        padRequests.delete(id);
+        reject(new Error("The pad request timed out."));
+      }, 120000);
+      padRequests.set(id, { resolve, reject, timeout });
+      window.postMessage({ source: "scdl-pad-main", id, action, ...payload }, location.origin);
+    });
+  }
+
+  async function hydrateDrumPads() {
+    try {
+      const result = await requestPad("list");
+      for (const record of result.pads || []) {
+        const pad = drumPads[record.index];
+        if (!pad || pad.busy || pad.version) continue;
+        pad.customName = record.name;
+        pad.saved = true;
+        pad.buffer = null;
+        pad.loading = null;
+      }
+      updateDrumLabels();
+    } catch (error) { console.warn("[SC Downloader Pads]", error); }
+  }
+
   function updateDrumLabels() {
     if (!ui) return;
     drumPads.forEach((pad, index) => {
       const button = ui.drumButtons[index];
       button.querySelector(".drum-key").textContent = pad.key ? pad.key.toUpperCase() : "·";
+      button.classList.toggle("is-saving", pad.busy);
       button.setAttribute("aria-label", `${pad.customName || pad.name} drum pad. Key ${pad.key ? pad.key.toUpperCase() : "unassigned"}. Hold to load an audio sample.`);
       button.title = `${Array.from(pad.customName || pad.name).slice(0, 20).join("")} · hold to load`;
     });
@@ -258,11 +302,14 @@
   async function loadDefaultDrum(pad) {
     if (pad.buffer) return pad.buffer;
     if (pad.loading) return pad.loading;
+    if (!pad.sample && !pad.saved) throw new Error("Hold this pad to load a sample, or assign a loop to it.");
     const base = document.documentElement.getAttribute(EXTENSION_DRUM_SAMPLES_ATTRIBUTE);
-    if (!base) throw new Error("The drum samples are not ready yet.");
+    if (!base && !pad.saved) throw new Error("The drum samples are not ready yet.");
     const version = pad.version;
     pad.loading = (async () => {
-      const response = await fetch(new URL(pad.sample, base).href);
+      const url = pad.saved ? (await requestPad("get", { index: drumPads.indexOf(pad) })).pad?.dataUrl : new URL(pad.sample, base).href;
+      if (!url) throw new Error("The saved sample is unavailable.");
+      const response = await fetch(url);
       if (!response.ok) throw new Error(`Could not load ${pad.name}.`);
       const buffer = await getDrumAudioContext().decodeAudioData(await response.arrayBuffer());
       if (pad.version === version) pad.buffer = buffer;
@@ -294,6 +341,7 @@
 
   async function loadCustomDrum(index, file) {
     if (!file) return;
+    if (drumPads[index]?.busy) return;
     if (!file.type.startsWith("audio/") && !/\.(wav|mp3|ogg|m4a|flac|aac)$/i.test(file.name)) {
       showDrumError("Choose an audio file for this pad.");
       return;
@@ -301,19 +349,37 @@
     const pad = drumPads[index];
     const version = ++pad.version;
     try {
-      const buffer = await getDrumAudioContext().decodeAudioData(await file.arrayBuffer());
+      if (file.size > 12 * 1024 * 1024) throw new Error("This sample is too large for a pad.");
+      const bytes = await file.arrayBuffer();
+      const buffer = await getDrumAudioContext().decodeAudioData(bytes.slice(0));
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",")[1]);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      const name = file.name.replace(/\.[^.]+$/, "") || pad.name;
+      await requestPad("store", { index, name, mimeType: file.type || "audio/wav", base64 });
       if (pad.version !== version) return;
       pad.buffer = buffer;
-      pad.customName = file.name.replace(/\.[^.]+$/, "") || pad.name;
+      pad.saved = true;
+      pad.customName = name;
       updateDrumLabels();
       showDrumError("");
-    } catch {
-      showDrumError("Could not read that audio sample.");
+    } catch (error) {
+      showDrumError(error?.message || "Could not read that audio sample.");
     }
   }
 
   function handleDrumKeydown(event) {
     if (!ui || ui.panel.hidden || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+    if (selectingLoopPad) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelLoopPadSelection();
+      }
+      return;
+    }
     const target = event.composedPath()[0];
     if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName || "")) return;
     if (!/^[a-z0-9]$/i.test(event.key)) return;
@@ -858,6 +924,7 @@
     const hasLoopMarker = Number.isFinite(loopState.startMs) || Number.isFinite(loopState.endMs);
     ui.clearLoop.disabled = !loopState.available || !hasLoopMarker || loopDownloadPending;
     ui.downloadLoop.disabled = !loopState.active || loopDownloadPending;
+    ui.saveLoopPad.disabled = !loopState.active || padRenderPending;
     for (const [input, value] of [[ui.loopStartTime, loopState.startMs], [ui.loopEndTime, loopState.endMs]]) {
       input.disabled = !loopState.available || duration <= 0;
       if (ui.root.activeElement !== input) input.value = Number.isFinite(value) ? formatLoopTime(value) : "";
@@ -1086,6 +1153,65 @@
     event.preventDefault();
     waveformZoom = globalThis.SCLooperCore?.zoomWindowAt?.(waveformZoom, loopState.durationMs, focusMs, event.deltaY) || null;
     renderLoop();
+  }
+
+  function cancelLoopPadSelection() {
+    if (!selectingLoopPad) return;
+    selectingLoopPad = null;
+    ui?.drumSection.classList.remove("is-selecting");
+    ui?.saveLoopPad.setAttribute("aria-pressed", "false");
+    showDrumError("");
+  }
+
+  function selectLoopPad() {
+    if (selectingLoopPad) { cancelLoopPadSelection(); return; }
+    if (!loopState.active || padRenderPending) return;
+    const state = controller.snapshot();
+    const duration = (loopState.endMs - loopState.startMs) / state.effectiveRate;
+    if (duration > 30000) {
+      showDrumError("Pad samples can be up to 30 seconds long. Shorten the loop or increase its speed.");
+      return;
+    }
+    selectingLoopPad = {
+      trackUrl: String(loopState.trackIdentity || "").replace(/^permalink:/, ""),
+      trimRange: { startMs: loopState.startMs, endMs: loopState.endMs, durationMs: loopState.durationMs },
+      playbackTransform: { rate: state.effectiveRate, preservePitch: state.preservePitch },
+      effects: effectsController?.snapshot() || {},
+      name: `Loop ${(loopState.startMs / 1000).toFixed(1)}–${(loopState.endMs / 1000).toFixed(1)}s`,
+    };
+    ui.drumSection.classList.add("is-selecting");
+    ui.saveLoopPad.setAttribute("aria-pressed", "true");
+    showDrumError("Choose one of the six pads. Press Escape to cancel.");
+  }
+
+  async function saveLoopToPad(index) {
+    if (!selectingLoopPad || padRenderPending) return;
+    const sample = selectingLoopPad;
+    selectingLoopPad = null;
+    ui.drumSection.classList.remove("is-selecting");
+    ui.saveLoopPad.setAttribute("aria-pressed", "false");
+    const pad = drumPads[index];
+    pad.busy = true;
+    padRenderPending = true;
+    updateDrumLabels();
+    renderLoop();
+    showDrumError(`Preparing loop for pad ${index + 1}…`);
+    try {
+      const result = await requestPad("render", { index, ...sample });
+      pad.version += 1;
+      pad.buffer = null;
+      pad.loading = null;
+      pad.saved = true;
+      pad.customName = result.pad?.name || sample.name;
+      showDrumError(`Loop saved to pad ${index + 1}.`);
+    } catch (error) {
+      showDrumError(error?.message || "Could not save this loop to a pad.");
+    } finally {
+      pad.busy = false;
+      padRenderPending = false;
+      updateDrumLabels();
+      renderLoop();
+    }
   }
 
   async function downloadLoopFromPlayer() {
@@ -1525,7 +1651,10 @@
         .clear-loop, .download-loop { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 26px; border-radius: 5px; cursor: pointer; font-size: 10px; font-weight: 600; line-height: 1; }
         .clear-loop { border: 1px solid #484848; color: #fff; background: #292929; }
         .download-loop { border: 1px solid #b84400; color: #fff; background: #ff5500; }
-        .clear-loop:disabled, .download-loop:disabled { cursor: not-allowed; opacity: .45; }
+        .save-loop-pad { display: grid; place-items: center; width: 24px; height: 26px; padding: 0; border: 1px solid #484848; border-radius: 5px; color: #d6d6d6; background: #292929; cursor: pointer; }
+        .save-loop-pad:hover, .save-loop-pad[aria-pressed="true"] { color: #fff; border-color: #ff7b38; }
+        .save-loop-pad svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+        .clear-loop:disabled, .download-loop:disabled, .save-loop-pad:disabled { cursor: not-allowed; opacity: .45; }
         .clear-loop svg, .download-loop svg { width: 12px; height: 12px; flex: 0 0 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .status { margin-top: 5px; }
 
@@ -1533,13 +1662,15 @@
         .panel { width: min(420px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
         .panel-header { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) 42px auto; grid-template-rows: 32px; align-items: center; column-gap: 5px; row-gap: 2px; padding-bottom: 6px; }
         .drum-section { margin: 0 0 6px; }
-        .drum-pads { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+        .drum-pads { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
         .drum-pad { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100%; height: 28px; padding: 3px 6px; border: 1px solid #4a4a4a; border-radius: 8px; color: #fff; background: #292929; font: inherit; cursor: pointer; user-select: none; touch-action: manipulation; transition: transform 90ms ease, background-color 90ms ease, border-color 90ms ease; }
         .drum-slot:nth-child(2) .drum-pad { background: #383838; }
         .drum-slot:nth-child(3) .drum-pad { background: #464646; }
         .drum-slot:nth-child(4) .drum-pad { background: #343434; }
         .drum-pad:hover, .drum-pad.is-holding { border-color: #ff7b38; }
         .drum-pad.is-active { transform: scale(.95); border-color: #ff5500; background: #713516 !important; }
+        .drum-section.is-selecting .drum-pad { border-color: #ff7b38; box-shadow: 0 0 0 1px rgba(255, 123, 56, .25); }
+        .drum-pad.is-saving { opacity: .55; cursor: progress; }
         .drum-pad:focus-visible { outline: 2px solid #ff5500; outline-offset: 2px; }
         .drum-key { flex: 0 0 auto; font-size: 14px; font-weight: 800; line-height: 1; }
         .drum-file { display: none; }
@@ -1662,6 +1793,7 @@
           .bypass, .bypass svg { width: 16px; height: 16px; }
         }
         .clear-loop, .download-loop { height: 22px; padding: 0 6px; border-radius: 6px; opacity: .82; }
+        .save-loop-pad { width: 22px; height: 22px; }
         .loop-edit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
         @media (forced-colors: active) {
@@ -1742,7 +1874,7 @@
         <div class="waveform-shell" role="group" aria-label="Loop waveform">
           <div class="section-header waveform-header">
           <button class="waveform-toggle" type="button" aria-label="Collapse looper" aria-expanded="true" title="Collapse looper"><span class="waveform-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>Loop Region</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
-          <div class="waveform-actions"><div class="waveform-header-setters"><button class="setter header-set-a" type="button" aria-label="Set loop start">Set A</button><button class="setter header-set-b" type="button" aria-label="Set loop end">Set B</button></div><button class="clear-loop" type="button" aria-label="Clear loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button></div>
+          <div class="waveform-actions"><div class="waveform-header-setters"><button class="setter header-set-a" type="button" aria-label="Set loop start">Set A</button><button class="setter header-set-b" type="button" aria-label="Set loop end">Set B</button></div><button class="clear-loop" type="button" aria-label="Clear loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button><button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button></div>
           </div>
           <div class="waveform-stage">
             <canvas class="waveform-canvas" aria-hidden="true"></canvas>
@@ -1831,6 +1963,7 @@
     clearHoverTimers();
     panelOpenMode = null;
     hoveredDrum = null;
+    cancelLoopPadSelection();
     setPanelOpen(false);
   }
 
@@ -1886,6 +2019,7 @@
       panel: root.querySelector(".panel"),
       drumButtons: [...root.querySelectorAll(".drum-pad")],
       drumFiles: [...root.querySelectorAll(".drum-file")],
+      drumSection: root.querySelector(".drum-section"),
       drumMessage: root.querySelector(".drum-message"),
       slider: root.querySelector(".slider"),
       pitchToggle: root.querySelector(".pitch-toggle"),
@@ -1919,6 +2053,7 @@
       loopEndTime: root.querySelector(".loop-end-time"),
       clearLoop: root.querySelector(".clear-loop"),
       downloadLoop: root.querySelector(".download-loop"),
+      saveLoopPad: root.querySelector(".save-loop-pad"),
       playerToolsUpgrade: root.querySelector(".player-tools-upgrade"),
       effectsShell: root.querySelector(".effects-shell"),
       effectsToggle: root.querySelector(".effects-toggle"),
@@ -1957,6 +2092,7 @@
         if (hoveredDrum === index) hoveredDrum = null;
       });
       button.addEventListener("pointerdown", (event) => {
+        if (selectingLoopPad || drumPads[index].busy) return;
         if (event.button !== 0) return;
         pressedAt = performance.now();
         holdTimer = setTimeout(() => button.classList.add("is-holding"), DRUM_LONG_PRESS_MS);
@@ -1974,12 +2110,14 @@
       button.addEventListener("contextmenu", (event) => event.preventDefault());
       button.addEventListener("keydown", (event) => {
         if (!event.shiftKey || !["Enter", " "].includes(event.key)) return;
+        if (drumPads[index].busy) return;
         event.preventDefault();
         event.stopPropagation();
         input.click();
       });
       button.addEventListener("click", (event) => {
         if (suppressClick) { event.preventDefault(); suppressClick = false; return; }
+        if (selectingLoopPad) { saveLoopToPad(index); return; }
         playDrum(index);
       });
       input.addEventListener("change", () => {
@@ -2182,12 +2320,14 @@
     }
     ui.clearLoop.addEventListener("click", clearLoop);
     ui.downloadLoop.addEventListener("click", downloadLoopFromPlayer);
+    ui.saveLoopPad.addEventListener("click", selectLoopPad);
     ui.playerToolsUpgrade.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
     });
 
     render();
     syncBrandLogo();
+    hydrateDrumPads();
     readLoopState();
     return host;
   }

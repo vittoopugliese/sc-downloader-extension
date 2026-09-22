@@ -528,7 +528,8 @@ const SCDownload = (() => {
     trimRange,
     playbackTransform,
     onProgress,
-    signal
+    signal,
+    sampleEffects = null
   ) {
     throwIfAborted(signal);
     const AudioContextConstructor =
@@ -570,12 +571,15 @@ const SCDownload = (() => {
         signal,
       });
       throwIfAborted(signal);
+      const finished = sampleEffects
+        ? await globalThis.SCTempoEffects.renderSample(rendered, sampleEffects, signal)
+        : rendered;
       onProgress?.("Encoding WAV...");
       const outputRange = {
         startMs: 0,
-        endMs: (rendered.length / rendered.sampleRate) * 1000,
+        endMs: (finished.length / finished.sampleRate) * 1000,
       };
-      const wavBytes = encodeWavSegment(rendered, outputRange, signal);
+      const wavBytes = encodeWavSegment(finished, outputRange, signal);
       const rateLabel = String(Number(Number(transform.rate).toFixed(3)));
       const transformLabel =
         transform.rate === 1
@@ -676,7 +680,8 @@ const SCDownload = (() => {
     onProgress,
     signal,
     trimRange = null,
-    playbackTransform = null
+    playbackTransform = null,
+    sampleEffects = null
   ) {
     const normalizedTrimRange = normalizeTrimRange(trimRange);
     if (normalizedTrimRange || hasPlaybackTransform(playbackTransform)) checkDecodeBudget(trackData);
@@ -706,7 +711,8 @@ const SCDownload = (() => {
           normalizedTrimRange,
           playbackTransform,
           onProgress,
-          signal
+          signal,
+          sampleEffects
         );
       }
       return finalizeTrackBlob(trackData, buffer, onProgress, signal);
@@ -757,7 +763,8 @@ const SCDownload = (() => {
           normalizedTrimRange,
           playbackTransform,
           onProgress,
-          signal
+          signal,
+          sampleEffects
         );
       }
       return finalizeTrackBlob(trackData, combined, onProgress, signal);
@@ -772,7 +779,8 @@ const SCDownload = (() => {
         normalizedTrimRange,
         playbackTransform,
         onProgress,
-        signal
+        signal,
+        sampleEffects
       );
     }
     return finalizeTrackBlob(trackData, buffer, onProgress, signal);

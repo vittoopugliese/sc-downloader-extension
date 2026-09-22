@@ -97,6 +97,38 @@ onDocumentEvent(LOOP_EXPORT_EVENT, () => {
   });
 });
 
+window.addEventListener?.("message", (event) => {
+  if (event.source !== window || event.data?.source !== "scdl-pad-main") return;
+  const { id, action, index } = event.data;
+  if (typeof id !== "string" || id.length > 100) return;
+  const types = {
+    list: "GET_LOOP_PAD_LIST",
+    get: "GET_LOOP_PAD_AUDIO",
+    store: "STORE_LOOP_PAD_AUDIO",
+    render: "RENDER_LOOP_PAD",
+  };
+  if (!types[action]) return;
+  const payload = { type: types[action] };
+  if (action !== "list") payload.index = index;
+  if (action === "store") {
+    payload.name = event.data.name;
+    payload.mimeType = event.data.mimeType;
+    payload.base64 = event.data.base64;
+  }
+  if (action === "render") {
+    payload.trackUrl = event.data.trackUrl;
+    payload.trimRange = event.data.trimRange;
+    payload.playbackTransform = event.data.playbackTransform;
+    payload.effects = event.data.effects;
+    payload.name = event.data.name;
+  }
+  chrome.runtime.sendMessage(payload).then((result) => {
+    window.postMessage({ source: "scdl-pad-content", id, result }, location.origin);
+  }).catch((error) => {
+    window.postMessage({ source: "scdl-pad-content", id, result: { success: false, error: error?.message || "Could not reach the extension." } }, location.origin);
+  });
+});
+
 exposeTempoControlAssets();
 
 const intake = SCPageIntake.create({
