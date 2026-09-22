@@ -24,6 +24,9 @@
   const EXTENSION_DRUM_SAMPLES_ATTRIBUTE = "data-scdl-extension-drum-samples-url";
   const EXTENSION_MEGAPHONE_ATTRIBUTE = "data-scdl-extension-megaphone-url";
   const EXTENSION_SOCIAL_BADGE_ATTRIBUTE = "data-scdl-extension-social-badge-url";
+  const EXTENSION_DETACH_ICON_ATTRIBUTE = "data-scdl-extension-detach-icon-url";
+  const EXTENSION_TRASH_ICON_ATTRIBUTE = "data-scdl-extension-trash-icon-url";
+  const EXTENSION_EXPAND_ICON_ATTRIBUTE = "data-scdl-extension-expand-icon-url";
   const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
   const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
   const OPEN_PLAYER_TOOLS_PANEL_EVENT = "scdl:open-player-tools-panel";
@@ -147,6 +150,7 @@
   let controlsHidden = false;
   let resetInProgress = false;
   let resetGeneration = 0;
+  let playbackIntentVersion = 0;
   let effectIntentVersion = 0;
   let expandedEffectSettings = null;
   let effectsFailure = "";
@@ -238,6 +242,9 @@
     const playerIconUrl = document.documentElement.getAttribute(EXTENSION_PLAYER_ICON_ATTRIBUTE);
     const megaphoneUrl = document.documentElement.getAttribute(EXTENSION_MEGAPHONE_ATTRIBUTE);
     const socialBadgeUrl = document.documentElement.getAttribute(EXTENSION_SOCIAL_BADGE_ATTRIBUTE);
+    const detachIconUrl = document.documentElement.getAttribute(EXTENSION_DETACH_ICON_ATTRIBUTE);
+    const trashIconUrl = document.documentElement.getAttribute(EXTENSION_TRASH_ICON_ATTRIBUTE);
+    const expandIconUrl = document.documentElement.getAttribute(EXTENSION_EXPAND_ICON_ATTRIBUTE);
     if (logoUrl) {
       ui.brandLogo.src = logoUrl;
       ui.brandLogo.hidden = false;
@@ -248,6 +255,9 @@
     }
     if (megaphoneUrl && ui.samplerIcon) ui.samplerIcon.src = megaphoneUrl;
     if (socialBadgeUrl && ui.planBadgeIcon) ui.planBadgeIcon.src = socialBadgeUrl;
+    if (detachIconUrl && ui.detachIcon) { ui.detachIcon.src = detachIconUrl; ui.detachIcon.hidden = false; }
+    if (trashIconUrl && ui.trashIcon) { ui.trashIcon.src = trashIconUrl; ui.trashIcon.hidden = false; }
+    if (expandIconUrl && ui.visibilityExpandIcon) ui.visibilityExpandIcon.src = expandIconUrl;
   }
 
   document.addEventListener(EXTENSION_ASSETS_EVENT, syncBrandLogo);
@@ -546,6 +556,7 @@
     if (resetInProgress) return;
     resetInProgress = true;
     const generation = ++resetGeneration;
+    playbackIntentVersion += 1;
     rateIntent = null;
     accessActionPending = false;
     effectIntentVersion += 1;
@@ -553,31 +564,42 @@
     waveformDrag = null;
     waveformDrawPreview = null;
     waveformZoom = null;
+    const resetErrors = [];
+    const attempt = (area, action) => {
+      try { return action(); }
+      catch (error) {
+        resetErrors.push(`${area}: ${error?.message || "reset failed"}`);
+        return null;
+      }
+    };
     try {
       playbackFailure = "";
       effectsFailure = "";
+      loopFailure = "";
       animateNextRateChange = true;
-      const state = controller.setRate(DEFAULTS.rate);
-      controller.setPreservePitch(DEFAULTS.preservePitch);
-      controller.setBypassed(false);
-      writeSetting(RATE_STORAGE, state.rate);
-      writeSetting(PITCH_STORAGE, DEFAULTS.preservePitch);
-      effectsController?.reset();
+      const state = attempt("Playback rate", () => controller.setRate(DEFAULTS.rate));
+      attempt("Pitch", () => controller.setPreservePitch(DEFAULTS.preservePitch));
+      attempt("Bypass", () => controller.setBypassed(false));
+      if (state) attempt("Stored rate", () => writeSetting(RATE_STORAGE, state.rate));
+      attempt("Stored pitch", () => writeSetting(PITCH_STORAGE, DEFAULTS.preservePitch));
+      const effectsReset = attempt("FX", () => effectsController?.reset());
       effectWetMemory.reverb = DEFAULT_EFFECT_TOGGLE_WET;
       effectWetMemory.delay = DEFAULT_EFFECT_TOGGLE_WET;
       expandedEffectSettings = null;
       if (globalThis.SCParametricEQ) {
         const emptyEq = globalThis.SCParametricEQ.normalize(null);
-        writeSetting(EQ_STORAGE, JSON.stringify(emptyEq));
-        equalizerUi?.reset();
+        if (effectsController && !effectsReset) {
+          attempt("EQ audio", () => effectsController.setEqualizer(emptyEq));
+        }
+        attempt("Stored EQ", () => writeSetting(EQ_STORAGE, JSON.stringify(emptyEq)));
+        attempt("EQ editor", () => equalizerUi?.reset());
       }
       try { await clearLoop(); }
-      catch (error) { loopFailure = error?.message || "Could not clear the loop."; }
+      catch (error) { resetErrors.push(`Loop: ${error?.message || "reset failed"}`); }
       if (generation !== resetGeneration) return;
-      requestLoop("set-global-bypass", { bypassed: false });
-      readLoopState();
-    } catch (error) {
-      effectsFailure = error?.message || "Could not reset Player Tools. Please retry.";
+      attempt("Loop bypass", () => requestLoop("set-global-bypass", { bypassed: false }));
+      attempt("Loop state", readLoopState);
+      if (resetErrors.length) effectsFailure = `Could not fully reset Player Tools. ${resetErrors.join("; ")}`;
     } finally {
       if (generation === resetGeneration) resetInProgress = false;
       render();
@@ -585,8 +607,9 @@
   }
 
   async function applyPlayerPitch(enabled) {
+    const intentVersion = playbackIntentVersion;
     const authorization = await authorizePlayerTools("set-preserve-pitch", "preservePitch");
-    if (!authorization) return;
+    if (!authorization || intentVersion !== playbackIntentVersion) return;
     playbackFailure = "";
     const state = controller.setPreservePitch(enabled);
     writeSetting(PITCH_STORAGE, state.preservePitch);
@@ -1025,7 +1048,7 @@
     if (!ui?.visibilityButton) return;
     const allCollapsed = areAllControlsCollapsed();
     const action = controlsHidden
-      ? { label: "Show and expand all controls", symbol: "+", state: "hidden" }
+      ? { label: "Show and expand all controls", symbol: "", state: "hidden" }
       : allCollapsed
         ? { label: "Hide all controls", symbol: "−", state: "collapsed" }
         : { label: "Collapse all controls", symbol: "_", state: "normal" };
@@ -1035,6 +1058,8 @@
     ui.visibilityButton.setAttribute("aria-label", action.label);
     ui.visibilityButton.title = action.label;
     ui.visibilitySymbol.textContent = action.symbol;
+    ui.visibilitySymbol.hidden = controlsHidden;
+    ui.visibilityExpandIcon.hidden = !controlsHidden;
     equalizerUi?.setVisible(!ui.panel.hidden && !controlsHidden);
   }
 
@@ -1766,14 +1791,7 @@
         .panel { width: min(420px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
         .panel-header { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-rows: 32px; align-items: center; column-gap: 5px; row-gap: 2px; padding-bottom: 6px; }
         .drum-section { margin: 0 0 6px; overflow: hidden; border: 1px solid #343434; border-radius: 11px; background: rgba(255,255,255,.025); }
-        .sampler-toggle { position: relative; display: flex; align-items: center; gap: 5px; width: 100%; height: 31px; padding: 0 9px; border: 0; color: #fff; background: #1b1b1b; font-size: 11px; font-weight: 700; line-height: 1; text-align: left; cursor: pointer; }
-        .sampler-icon { width: 14px; height: 14px; object-fit: contain; filter: invert(1) brightness(1.8); }
-        .sampler-toggle:hover { color: #ff7b38; background: #232323; }
-        .sampler-toggle:focus-visible { outline: 2px solid #ff5500; outline-offset: -2px; }
-        .sampler-toggle svg { position: absolute; right: 9px; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 160ms ease; }
-        .drum-section.is-collapsed .sampler-toggle svg { transform: translateY(-50%) rotate(180deg); }
         .sampler-body { padding: 6px 7px; }
-        .drum-section.is-collapsed .sampler-body { display: none; }
         .drum-pads { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
         .drum-pad { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100%; height: 28px; padding: 3px 6px; border: 1px solid #4a4a4a; border-radius: 8px; color: #fff; background: #292929; font: inherit; cursor: pointer; user-select: none; touch-action: manipulation; transition: transform 90ms ease, background-color 90ms ease, border-color 90ms ease; }
         .drum-slot:nth-child(2) .drum-pad { background: #383838; }
@@ -1825,45 +1843,28 @@
         .waveform-selection { position: absolute; inset: 0 auto 0; border: 0; border-inline: 1px solid #ff741f; background: linear-gradient(90deg, rgba(255, 145, 85, .28), rgba(255, 106, 26, .055) 50%, rgba(255, 145, 85, .28)); cursor: grab; }
         .waveform-marker { position: absolute; z-index: 7; top: -2px; width: 18px; height: 18px; margin-left: -9px; padding: 0; border: 0; border-radius: 5px 5px 3px 3px; color: #fff; background: #ff741f; font-size: 11px; font-weight: 800; line-height: 1; text-transform: lowercase; cursor: ew-resize; box-shadow: 0 2px 7px rgba(255, 116, 31, .28); }
         .waveform-marker::after { content: ""; position: absolute; top: 18px; left: 50%; width: 1px; height: 90px; background: #ff741f; transform: translateX(-50%); }
-        .waveform-title { display: inline-flex; align-items: center; gap: 5px; }
-        .waveform-title svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .waveform-times { position: absolute; inset: auto 9px 3px; display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; color: #7e8790; font-size: 10px; font-variant-numeric: tabular-nums; }
         .waveform-start-label { justify-self: start; }
         .waveform-middle-label { justify-self: center; }
         .waveform-end-label { justify-self: end; }
-        .waveform-actions { position: absolute; z-index: 5; top: 4px; right: 27px; display: flex; gap: 4px; }
         .waveform-header-setters { display: flex; gap: 4px; }
         .waveform-shell:not(.is-collapsed) .waveform-header-setters { display: none; }
         .waveform-header-setters .setter { min-width: 39px; height: 23px; padding: 0 6px; border-radius: 5px; font-size: 9px; }
         .waveform-setters { display: contents; }
         .waveform-times .setter { z-index: 5; width: 68px; height: 23px; padding: 0 6px; border-radius: 6px; font-size: 10px; transform: translateY(-2px); }
-        .section-header { position: relative; height: 31px; }
-        .waveform-toggle, .effects-toggle { position: absolute; z-index: 4; inset: 0 0 auto; display: flex; align-items: center; justify-content: flex-start; gap: 5px; width: 100%; height: 31px; padding: 0 9px; border: 0; color: #fff; background: #1b1b1b; font-size: 11px; font-weight: 700; line-height: 1; cursor: pointer; }
-        .section-header:hover > .waveform-toggle, .section-header:hover > .effects-toggle { color: #ff7b38; background: #232323; }
-        .waveform-toggle:focus-visible, .effects-toggle:focus-visible { outline: 2px solid #ff5500; outline-offset: -2px; }
-        .waveform-toggle > svg, .effects-chevron { position: absolute; right: 9px; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 160ms ease; }
-        .waveform-shell.is-collapsed .waveform-toggle > svg { transform: translateY(-50%) rotate(180deg); }
-        .waveform-shell.is-collapsed .waveform-stage { display: none; }
-        .waveform-shell.is-collapsed .waveform-times { display: none; }
         .player-tools-upgrade { display: none; position: absolute; z-index: 12; inset: 3px; border: 1px solid #ff6a1a; border-radius: 7px; color: #fff; background: #3d2115; font-size: 10px; font-weight: 700; line-height: 1; cursor: pointer; }
         .waveform-shell.is-locked { height: 34px; touch-action: auto; }
         .waveform-shell.is-locked .waveform-stage, .waveform-shell.is-locked .waveform-times, .waveform-shell.is-locked .waveform-actions, .waveform-shell.is-locked .waveform-toggle { display: none; }
-        .waveform-shell.is-locked .waveform-title { position: absolute; top: 9px; left: 9px; }
         .waveform-shell.is-locked .player-tools-upgrade { display: block; left: auto; right: 4px; width: 172px; }
 
         .effects-shell { margin-top: 7px; overflow: hidden; border: 1px solid #343434; border-radius: 11px; background: rgba(255,255,255,.025); }
-        .effects-icon { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-        .effects-title { font-size: 11px; font-weight: 700; line-height: 1; }
-        .effect-bypasses { position: absolute; z-index: 5; top: 4px; right: 27px; display: flex; gap: 4px; }
         .effect-bypass { width: 23px; height: 23px; padding: 0; border: 1px solid #4b5157; border-radius: 5px; color: #9ca3aa; background: #202428; font-size: 11px; font-weight: 800; line-height: 1; cursor: pointer; }
         .effect-bypass[aria-pressed="true"] { border-color: #c95819; color: #ff7b38; background: #3a251b; }
         .effect-bypass:hover:not(:disabled) { border-color: #ff7b38; color: #fff; }
         .effect-bypass:disabled { cursor: not-allowed; opacity: .45; }
         .effect-bypass:focus-visible { outline: 2px solid #ff5500; outline-offset: 1px; }
 
-        .effects-shell.is-collapsed .effects-chevron { transform: rotate(180deg); }
         .effects-body { padding: 0 9px 4px; }
-        .effects-shell.is-collapsed .effects-body { display: none; }
         .effects-presets { display: flex; gap: 4px; padding: 3px 0 5px; }
         .effects-preset { flex: 1; height: 22px; padding: 0 3px; border: 1px solid #3b4249; border-radius: 5px; color: #bfc4c8; background: #202428; font-size: 9px; font-weight: 600; line-height: 1; cursor: pointer; }
         .effects-preset:hover, .effects-preset[aria-pressed="true"] { border-color: #ff6a1a; color: #fff; background: #462619; }
@@ -1894,6 +1895,8 @@
         .panel-tool:disabled { opacity: .48; cursor: wait; }
         .panel-tool[aria-pressed="true"] { color: #ff6a1a; border-color: #ff6a1a; }
         .panel-tool svg { display: block; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .panel-tool-icon { display:block; width:13px; height:13px; object-fit:contain; filter:brightness(0) invert(1); }
+        .detach-button[aria-pressed="true"] .panel-tool-icon { filter:brightness(0) saturate(100%) invert(56%) sepia(93%) saturate(1985%) hue-rotate(336deg) brightness(104%) contrast(101%); }
         .settings-button svg { width: 12px; height: 12px; fill: currentColor; stroke: none; }
         @media (max-width: 360px) {
           .panel-header { grid-template-columns: 28px minmax(0, 1fr) auto; column-gap: 3px; }
@@ -1921,6 +1924,7 @@
         .controls-hidden > .peq { display:none !important; }
         .controls-hidden-message { margin:5px 2px 1px; color:#aeb4b9; font-size:10px; line-height:1.45; text-align:center; }
         .visibility-symbol { display:block; width:12px; height:12px; font:800 15px/9px system-ui,sans-serif; }
+        .visibility-expand-icon { width:13px; height:13px; }
         .visibility-button[data-state="normal"] .visibility-symbol { transform:translateY(3px); }
 
         @media (forced-colors: active) {
@@ -1965,12 +1969,12 @@
             ${HELP_ICON}
           </button>
           <button class="panel-tool detach-button" type="button" aria-label="Keep panel open when clicking outside" aria-pressed="false" title="Keep panel open when clicking outside">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M12 8v8"/><path d="M5 5h14v14H5z"/></svg>
+            <img class="panel-tool-icon detach-icon" alt="" aria-hidden="true" hidden />
           </button>
           <button class="panel-tool reset-tools-button" type="button" aria-label="Reset playback, Loop, FX and EQ. Samples are kept." title="Reset playback, Loop, FX and EQ. Samples are kept.">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>
+            <img class="panel-tool-icon trash-icon" alt="" aria-hidden="true" hidden />
           </button>
-          <button class="panel-tool visibility-button" type="button" aria-controls="scdl-sampler scdl-loop-region scdl-audio-effects scdl-parametric-eq" aria-label="Collapse all controls" title="Collapse all controls"><span class="visibility-symbol" aria-hidden="true">_</span></button>
+          <button class="panel-tool visibility-button" type="button" aria-controls="scdl-sampler scdl-loop-region scdl-audio-effects scdl-parametric-eq" aria-label="Collapse all controls" title="Collapse all controls"><span class="visibility-symbol" aria-hidden="true">_</span><img class="panel-tool-icon visibility-expand-icon" alt="" aria-hidden="true" hidden /></button>
           <button class="panel-tool close-button" type="button" aria-label="Close panel" title="Close panel">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
           </button>
@@ -2036,7 +2040,7 @@
             <p class="effects-note">Mix · open ⚙ for character</p>
           </div>
         </section>
-        <p class="controls-hidden-message" hidden>press maximize button again to appear all controls again</p>
+        <p class="controls-hidden-message" hidden>press maximize button again to show controls</p>
         <p class="status" role="status" aria-live="polite" hidden></p>
       </section>
     `;
@@ -2173,9 +2177,12 @@
       downloadTrackButton: root.querySelector(".download-track-button"),
       settingsButton: root.querySelector(".settings-button"),
       detachButton: root.querySelector(".detach-button"),
+      detachIcon: root.querySelector(".detach-icon"),
       resetToolsButton: root.querySelector(".reset-tools-button"),
+      trashIcon: root.querySelector(".trash-icon"),
       visibilityButton: root.querySelector(".visibility-button"),
       visibilitySymbol: root.querySelector(".visibility-symbol"),
+      visibilityExpandIcon: root.querySelector(".visibility-expand-icon"),
       controlsHiddenMessage: root.querySelector(".controls-hidden-message"),
       setA: root.querySelector(".set-a"),
       setB: root.querySelector(".set-b"),

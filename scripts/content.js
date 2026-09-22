@@ -10,6 +10,9 @@ const EXTENSION_EQ_ICON_ATTRIBUTE = "data-scdl-extension-eq-url";
 const EXTENSION_DRUM_SAMPLES_ATTRIBUTE = "data-scdl-extension-drum-samples-url";
 const EXTENSION_MEGAPHONE_ATTRIBUTE = "data-scdl-extension-megaphone-url";
 const EXTENSION_SOCIAL_BADGE_ATTRIBUTE = "data-scdl-extension-social-badge-url";
+const EXTENSION_DETACH_ICON_ATTRIBUTE = "data-scdl-extension-detach-icon-url";
+const EXTENSION_TRASH_ICON_ATTRIBUTE = "data-scdl-extension-trash-icon-url";
+const EXTENSION_EXPAND_ICON_ATTRIBUTE = "data-scdl-extension-expand-icon-url";
 const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
 const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
 const LOOP_EXPORT_EVENT = "scdl:download-loop";
@@ -38,6 +41,9 @@ function exposeTempoControlAssets() {
   );
   document.documentElement?.setAttribute?.(EXTENSION_MEGAPHONE_ATTRIBUTE, chrome.runtime.getURL("assets/icons/megaphone.svg"));
   document.documentElement?.setAttribute?.(EXTENSION_SOCIAL_BADGE_ATTRIBUTE, chrome.runtime.getURL("assets/icons/sound-cloud-social-badge.svg"));
+  document.documentElement?.setAttribute?.(EXTENSION_DETACH_ICON_ATTRIBUTE, chrome.runtime.getURL("assets/icons/detach.svg"));
+  document.documentElement?.setAttribute?.(EXTENSION_TRASH_ICON_ATTRIBUTE, chrome.runtime.getURL("assets/icons/trash.svg"));
+  document.documentElement?.setAttribute?.(EXTENSION_EXPAND_ICON_ATTRIBUTE, chrome.runtime.getURL("assets/icons/expand.svg"));
   if (typeof document.dispatchEvent === "function" && typeof CustomEvent === "function") {
     document.dispatchEvent(new CustomEvent(EXTENSION_ASSETS_EVENT));
   }

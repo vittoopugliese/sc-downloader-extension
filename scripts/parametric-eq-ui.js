@@ -34,7 +34,7 @@
         .peq :focus-visible { outline:2px solid #ff8b47; outline-offset:2px; }
         .peq-stage { position:relative; height:172px; border-radius:6px; background:#0c0c0c; touch-action:none; }
         .peq-canvas { display:block; width:100%; height:100%; touch-action:none; }
-        .peq .peq-point { position:absolute; width:18px; height:18px; padding:0; border:1px solid #ffd0ad; border-radius:50%; background:#d64c09; color:white; transform:translate(-50%,-50%); font-size:9px; touch-action:none; cursor:grab; }
+        .peq button.peq-point { position:absolute; width:18px; height:18px; min-height:18px; padding:0; border:1px solid #ffd0ad; border-radius:50%; background:#d64c09; color:white; transform:translate(-50%,-50%); font-size:8px; touch-action:none; cursor:grab; }
         .peq .peq-point[aria-pressed="true"] { background:#ff9c5b; color:#111; box-shadow:0 0 0 3px #ff7b3838; }
         .peq-message { position:absolute; z-index:2; top:4px; left:28px; right:6px; margin:0; padding:2px 4px; border-radius:3px; color:#ffb68b; background:#17100be8; font-size:9px; line-height:1.4; pointer-events:none; }
       </style>

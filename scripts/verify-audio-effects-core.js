@@ -165,6 +165,9 @@ if (delayReturn.gain.value !== 0.264 || replacementReturns[1].gain.value !== 0.2
   throw new Error("Unbypass must restore effects on every player graph.");
 }
 const contextsBeforeReset = FakeAudioContext.instances.length;
+const wetNodesBeforeReset = graphNodes.filter((node) =>
+  ["delay", "convolver", "biquad"].includes(node.kind) || node === feedbackNode
+);
 state = effects.reset();
 for (const [name, value] of Object.entries(context.SCTempoEffects.DEFAULTS)) {
   if (state[name] !== value) throw new Error(`FX reset did not restore ${name}: ${JSON.stringify(state)}`);
@@ -178,6 +181,12 @@ if ([reverbReturn, delayReturn, ...replacementReturns].some((node) => node.gain.
 }
 if (FakeAudioContext.instances.length !== contextsBeforeReset) {
   throw new Error("FX reset must not create a new AudioContext.");
+}
+if (wetNodesBeforeReset.some((node) => node.connections.length !== 0)) {
+  throw new Error("FX reset must detach the old wet graphs so buffered tails cannot return.");
+}
+if (graphNodes.length <= replacementNodeStart + replacementNodes.length) {
+  throw new Error("FX reset must replace wet nodes inside the existing AudioContext.");
 }
 effects.setBypassed(true);
 effects.setBypassed(false);

@@ -14,6 +14,10 @@ const logoDataUrl = `data:image/png;base64,${fs.readFileSync(
   path.join(projectRoot, "assets", "LooperPlayerToolkit.png")
 ).toString("base64")}`;
 const eqIconDataUrl = `data:image/svg+xml;base64,${fs.readFileSync(path.join(projectRoot, "assets", "icons", "eq.svg")).toString("base64")}`;
+const headerIconDataUrls = Object.fromEntries(["detach", "trash", "expand"].map((name) => [
+  name,
+  `data:image/svg+xml;base64,${fs.readFileSync(path.join(projectRoot, "assets", "icons", `${name}.svg`)).toString("base64")}`,
+]));
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -71,7 +75,7 @@ async function main() {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
     await page.addScriptTag({ path: path.join(__dirname, "player-tools-policy.js") });
-    await page.evaluate(([logoUrl, eqUrl]) => {
+    await page.evaluate(([logoUrl, eqUrl, headerIcons]) => {
       const playerToolsSnapshot = {
         revision: 1,
         plan: "pro",
@@ -106,6 +110,9 @@ async function main() {
         logoUrl
       );
       document.documentElement.setAttribute("data-scdl-extension-eq-url", eqUrl);
+      for (const [name, url] of Object.entries(headerIcons)) {
+        document.documentElement.setAttribute(`data-scdl-extension-${name}-icon-url`, url);
+      }
       document.documentElement.setAttribute(
         "data-scdl-extension-drum-samples-url",
         `${location.origin}/assets/drums/`
@@ -163,7 +170,23 @@ async function main() {
         readyState: { configurable: true, value: 4 },
         paused: { configurable: true, value: false },
       });
-    }, [logoDataUrl, eqIconDataUrl]);
+    }, [logoDataUrl, eqIconDataUrl, headerIconDataUrls]);
+    await page.evaluate(() => {
+      const effectsApi = globalThis.SCTempoEffects;
+      globalThis.SCTempoEffects = Object.freeze({
+        ...effectsApi,
+        create(options) {
+          const controller = effectsApi.create(options);
+          return Object.freeze({
+            ...controller,
+            reset() {
+              if (window.failEffectsReset) throw new Error("synthetic FX reset failure");
+              return controller.reset();
+            },
+          });
+        },
+      });
+    });
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-main.js"),
     });
@@ -446,7 +469,7 @@ async function main() {
       const settingsButton = panel.querySelector(".settings-button");
       const settingsIcon = settingsButton.querySelector("svg");
       const detachButton = panel.querySelector(".detach-button");
-      const detachIcon = detachButton.querySelector("svg");
+      const detachIcon = detachButton.querySelector(".detach-icon");
       const brandLogo = panel.querySelector(".brand-logo");
       const brandCopy = panel.querySelector(".brand-copy");
       const tools = panel.querySelector(".panel-tools");
@@ -511,7 +534,7 @@ async function main() {
       compactStyles.settingsIconSize.join("x") !== "12x12" ||
       compactStyles.detachButtonSize.join("x") !== "23x20" ||
       compactStyles.detachButtonRadius !== "4px" ||
-      compactStyles.detachIconSize.join("x") !== "12x12" ||
+      compactStyles.detachIconSize.join("x") !== "13x13" ||
       compactStyles.headerHeight > 38 ||
       compactStyles.headerOverflows ||
       !(compactStyles.headerRects[0][0] < compactStyles.headerRects[1][0] &&
@@ -851,6 +874,11 @@ async function main() {
     assert.notEqual(await eqIcon.evaluate((icon) => getComputedStyle(icon).filter), eqFilter,
       'The EQ image icon must inherit the orange header hover treatment');
     const visibility = host.locator('.visibility-button');
+    for (const [selector, name] of [['.detach-icon', 'detach'], ['.trash-icon', 'trash']]) {
+      const icon = host.locator(selector);
+      assert.equal(await icon.getAttribute('src'), headerIconDataUrls[name], `${name} must load from its asset file`);
+      assert.equal(await icon.isVisible(), true, `${name} icon must be visible`);
+    }
     assert.equal(await visibility.getAttribute('data-state'), 'normal');
     await visibility.click();
     assert.deepEqual(await sectionToggles.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-expanded'))),
@@ -863,6 +891,11 @@ async function main() {
     assert.equal(await visibility.getAttribute('data-state'), 'collapsed');
     await visibility.click();
     assert.equal(await visibility.getAttribute('data-state'), 'hidden');
+    assert.equal(await host.locator('.visibility-expand-icon').getAttribute('src'), headerIconDataUrls.expand,
+      'The maximize state must load the expand asset');
+    assert.equal(await host.locator('.visibility-expand-icon').isVisible(), true,
+      'The maximize state must show the expand asset instead of a plus character');
+    assert.equal(await host.locator('.visibility-symbol').textContent(), '');
     assert.equal(await host.locator('.controls-hidden-message').isVisible(), true);
     assert.deepEqual(await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq').evaluateAll(
       (sections) => sections.map((section) => getComputedStyle(section).display)), ['none', 'none', 'none', 'none']);
@@ -904,7 +937,7 @@ async function main() {
       return {
         collapsed: shell.classList.contains("is-collapsed"),
         height: shell.offsetHeight,
-        stageDisplay: getComputedStyle(root.querySelector(".waveform-stage")).display,
+        bodyHidden: root.querySelector(".waveform-body").hidden,
         header: root.querySelector(".waveform-toggle").textContent.trim(),
         settersVisible: [...root.querySelectorAll(".waveform-header-setters .setter")].every(
           (button) => button.offsetWidth > 0 && button.offsetHeight > 0
@@ -917,7 +950,7 @@ async function main() {
     if (
       !collapsedLooper.collapsed ||
       collapsedLooper.height !== 32 ||
-      collapsedLooper.stageDisplay !== "none" ||
+      !collapsedLooper.bodyHidden ||
       !collapsedLooper.settersVisible ||
       !collapsedLooper.header.includes("Loop Region") ||
       collapsedLooper.canvas.join("x") !== "1x1" ||
@@ -1165,6 +1198,28 @@ async function main() {
     if (await globalVisibility.getAttribute('data-state') === 'normal') await globalVisibility.click();
     if (await globalVisibility.getAttribute('data-state') === 'collapsed') await globalVisibility.click();
     assert.equal(await globalVisibility.getAttribute('data-state'), 'hidden');
+    await page.evaluate(() => {
+      window.accessResponseDelay = 120;
+      window.failEffectsReset = true;
+      const pitch = document.querySelector('#scdl-tempo-control').shadowRoot.querySelector('.pitch-toggle');
+      pitch.checked = true;
+      pitch.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await host.locator('.reset-tools-button').click();
+    await page.waitForFunction(() => {
+      const root = document.querySelector('#scdl-tempo-control')?.shadowRoot;
+      const loop = JSON.parse(document.documentElement.getAttribute('data-scdl-loop-session') || 'null');
+      return loop?.active === false && root?.querySelector('.reset-tools-button')?.disabled === false;
+    });
+    await page.waitForTimeout(80);
+    assert.equal(await host.locator('.pitch-toggle').isChecked(), false,
+      'A pitch authorization started before reset must not restore stale state');
+    assert.match(await host.locator('.status').textContent(), /synthetic FX reset failure/,
+      'A failed FX reset must be reported after the independent loop cleanup completes');
+    await page.evaluate(() => {
+      window.accessResponseDelay = 0;
+      window.failEffectsReset = false;
+    });
     await host.locator('.reset-tools-button').click();
     await page.waitForFunction(() => {
       const host = document.querySelector('#scdl-tempo-control');
@@ -1179,6 +1234,22 @@ async function main() {
         loop?.active === false &&
         root?.querySelector('.clear-rate')?.hidden === true &&
         root?.querySelector('.visibility-button')?.dataset.state === 'hidden';
+    }, null, { timeout: 4_000 }).catch(async () => {
+      const state = await host.evaluate((element) => {
+        const root = element.shadowRoot;
+        return {
+          rate: root.querySelector('.slider')?.value,
+          pitch: root.querySelector('.pitch-toggle')?.checked,
+          reverb: root.querySelector('#scdl-effect-reverb')?.value,
+          delay: root.querySelector('#scdl-effect-delay')?.value,
+          delayTime: root.querySelector('[data-effect-character="delayTime"]')?.value,
+          room: root.querySelector('[data-effect-character="reverbRoom"]')?.value,
+          clearHidden: root.querySelector('.clear-rate')?.hidden,
+          visibility: root.querySelector('.visibility-button')?.dataset.state,
+          status: root.querySelector('.status')?.textContent,
+        };
+      });
+      throw new Error(`Global reset did not settle: ${JSON.stringify(state)}`);
     });
     assert.equal(await host.locator('.drum-pad').nth(3).getAttribute('title'), 'hat1 · hold to load',
       'Global reset must preserve custom Sampler assignments');

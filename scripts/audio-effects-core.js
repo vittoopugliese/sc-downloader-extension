@@ -273,6 +273,44 @@
       setParam(targetGraph.feedback.gain, values.delayFeedback / 100 * 0.82);
     }
 
+    function rebuildWetBranches(targetGraph) {
+      const contextForGraph = targetGraph.context;
+      const oldNodes = [
+        targetGraph.reverbPreDelay, targetGraph.reverb, targetGraph.reverbTone,
+        targetGraph.delay, targetGraph.delayTone, targetGraph.feedback,
+      ];
+      for (const name of ["reverb", "delay"]) {
+        if (targetGraph.connected[name]) {
+          targetGraph.source.disconnect(targetGraph[EFFECT_NODES[name]]);
+        }
+        targetGraph.connected[name] = false;
+      }
+      for (const node of oldNodes) {
+        try { node.disconnect(); } catch {}
+      }
+
+      const reverbPreDelay = contextForGraph.createDelay(0.25);
+      const reverb = contextForGraph.createConvolver();
+      const reverbTone = contextForGraph.createBiquadFilter();
+      reverbTone.type = "lowpass";
+      reverbPreDelay.connect(reverb);
+      reverb.connect(reverbTone);
+      reverbTone.connect(targetGraph.reverbReturn);
+
+      const delay = contextForGraph.createDelay(1);
+      const delayTone = contextForGraph.createBiquadFilter();
+      delayTone.type = "lowpass";
+      const feedback = contextForGraph.createGain();
+      delay.connect(delayTone);
+      delayTone.connect(feedback);
+      feedback.connect(delay);
+      delay.connect(targetGraph.delayReturn);
+
+      Object.assign(targetGraph, {
+        reverbPreDelay, reverb, reverbTone, delay, delayTone, feedback,
+      });
+    }
+
     function setParam(param, value, contextForParam = context) {
       const now = contextForParam.currentTime;
       param.cancelScheduledValues(now);
@@ -531,9 +569,10 @@
           if (targetGraph.resetTimers[name] !== undefined) clearTimeout(targetGraph.resetTimers[name]);
           delete targetGraph.resetTimers[name];
           setParam(targetGraph[`${name}Return`].gain, 0, targetGraph.context);
-          if (targetGraph.connected[name]) targetGraph.source.disconnect(targetGraph[EFFECT_NODES[name]]);
-          targetGraph.connected[name] = false;
         }
+        // These nodes retain buffered audio after their input is disconnected.
+        // Replace only the wet branches so old tails cannot return on re-enable.
+        rebuildWetBranches(targetGraph);
         updateCharacter(targetGraph);
         updateEqualizer(targetGraph);
         updateReturns(targetGraph);

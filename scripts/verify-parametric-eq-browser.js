@@ -167,6 +167,11 @@ const { chromium } = require("playwright");
     await page.locator(".peq-canvas").dblclick({ position: { x: 180, y: 70 } });
     await page.waitForFunction(() => window.saved?.bands.length === 1);
     const point = page.locator(".peq-point");
+    assert.deepEqual(await point.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { radius: style.borderRadius, fontSize: style.fontSize, width: style.width, height: style.height };
+    }), { radius: "50%", fontSize: "8px", width: "18px", height: "18px" },
+    "EQ points must be circular with the compact number label");
     const beforeQ = await page.evaluate(() => saved.bands[0].q);
     await point.hover(); await page.mouse.wheel(0, -100);
     await page.waitForFunction((before) => saved.bands[0].q > before, beforeQ);
