@@ -33,7 +33,6 @@ const downloadToolbar = document.getElementById("downloadToolbar");
 const downloadFormat = document.getElementById("downloadFormat");
 const downloadLimitControl = document.getElementById("downloadLimitControl");
 const downloadLimit = document.getElementById("downloadLimit");
-const downloadLimitToggle = document.getElementById("downloadLimitToggle");
 const downloadLimitMenu = document.getElementById("downloadLimitMenu");
 const downloadLimitAll = document.getElementById("downloadLimitAll");
 const downloadLimitSelect = document.getElementById("downloadLimitSelect");
@@ -425,18 +424,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (event.key === "Enter") event.preventDefault();
     }
   });
-  downloadLimitToggle.addEventListener("click", () => {
-    downloadLimit.focus();
-    openDownloadLimitMenu();
-  });
   downloadLimitAll.addEventListener("click", () => {
     setDownloadLimit("all");
     closeDownloadLimitMenu();
-    downloadLimitToggle.focus();
+    downloadLimit.focus();
   });
   downloadLimitSelect.addEventListener("click", () => {
     closeDownloadLimitMenu();
-    downloadLimitToggle.focus();
+    downloadLimit.focus();
     openSelectionPanel();
   });
   downloadLimitMenu.addEventListener("keydown", (event) => {

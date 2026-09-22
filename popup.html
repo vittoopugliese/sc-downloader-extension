@@ -452,16 +452,6 @@
             user-select: text;
         }
 
-        #downloadLimitToggle {
-            flex: 0 0 25px;
-            height: 100%;
-            padding: 0;
-            border: 0;
-            background: transparent;
-            color: var(--accent-warm);
-            cursor: pointer;
-        }
-
         .download-limit-menu {
             position: absolute;
             z-index: 5;
@@ -492,7 +482,7 @@
         .download-limit-menu button:focus-visible { background: var(--control-hover); outline: 2px solid var(--accent); }
 
         #downloadFormat {
-            max-width: 150px;
+            max-width: 75px;
         }
 
         #downloadFormat.is-hidden {
@@ -1035,9 +1025,9 @@
         }
 
         #downloadFormat {
-            width: 150px;
-            max-width: 150px;
-            flex: 0 1 150px;
+            width: 75px;
+            max-width: 75px;
+            flex: 0 1 75px;
             min-width: 0;
         }
 
@@ -1046,8 +1036,8 @@
         }
 
         #downloadLimitControl {
-            width: 118px;
-            flex: 0 1 118px;
+            width: 59px;
+            flex: 0 1 59px;
             min-width: 0;
         }
 
@@ -1110,7 +1100,7 @@
 
         body.selection-mode .download-button-container { margin-top: auto; }
         body.selection-mode #downloadBtn { width: 50px; height: 38px; flex-basis: 50px; }
-        body.selection-mode .selection-header #downloadFormat { width: 80px; max-width: 80px; flex: 0 0 80px; }
+        body.selection-mode .selection-header #downloadFormat { width: 40px; max-width: 40px; flex: 0 0 40px; }
         body.selection-mode .selection-header #helpBtn { flex: 0 0 27px; }
 
         #downloadBtn {
@@ -1415,7 +1405,6 @@
                     </select>
                     <div id="downloadLimitControl" class="download-limit-control popup-control-btn is-hidden">
                         <input id="downloadLimit" type="text" class="popup-control-input" inputmode="numeric" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="downloadLimitMenu" aria-label="Download amount" title="Download amount" data-i18n-aria-label="download_amount" data-i18n-title="download_amount" value="50">
-                        <button id="downloadLimitToggle" type="button" aria-label="Download amount options" title="Download amount options" data-i18n-aria-label="download_amount_options" data-i18n-title="download_amount_options">⌄</button>
                         <div id="downloadLimitMenu" class="download-limit-menu" role="listbox" aria-label="Download amount options" data-i18n-aria-label="download_amount_options" hidden>
                             <button id="downloadLimitAll" type="button" role="option" aria-selected="false" title="Download all tracks">All</button>
                             <button id="downloadLimitSelect" type="button" role="option" aria-selected="false" title="Select individual tracks" data-i18n="select" data-i18n-title="select_tracks_to_download">Select</button>
