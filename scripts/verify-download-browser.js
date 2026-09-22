@@ -69,6 +69,11 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
       return /Track download started\.|Could not start track download\./.test(root?.querySelector(".status")?.textContent || "");
     }, null, { timeout: 25000 });
     assert.equal(await tempo.locator(".status").textContent(), "Track download started.");
+    await page.waitForFunction(() => {
+      const status = document.getElementById("scdl-tempo-control")?.shadowRoot?.querySelector(".status");
+      return status?.hidden && status.textContent === "";
+    }, null, { timeout: 35000 });
+    console.log("PASS: track download status clears after 30 seconds");
     const files = await fs.readdir(downloads);
     assert.equal(files.length, 1, "Player must create an actual file in Downloads");
     assert.ok((await fs.stat(path.join(downloads, files[0]))).size >= audio.length);

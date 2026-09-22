@@ -883,6 +883,8 @@ async function main() {
       assert.equal(await icon.isVisible(), true, `${name} icon must be visible`);
     }
     assert.equal(await visibility.getAttribute('data-state'), 'normal');
+    assert.equal(await host.locator('.visibility-down-icon').isVisible(), true,
+      'The normal state must use a downward chevron.');
     await visibility.click();
     assert.deepEqual(await sectionToggles.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-expanded'))),
       ['false', 'false', 'false', 'false']);
@@ -892,13 +894,15 @@ async function main() {
       return Math.round((chevronRect.top + chevronRect.bottom - buttonRect.top - buttonRect.bottom) * 10) / 10;
     })), [0, 0, 0, 0], 'Collapsed chevrons must remain vertically centered after rotation');
     assert.equal(await visibility.getAttribute('data-state'), 'collapsed');
+    assert.equal(await host.locator('.visibility-up-icon').isVisible(), true,
+      'The collapsed state must use an upward chevron.');
     await visibility.click();
     assert.equal(await visibility.getAttribute('data-state'), 'hidden');
     assert.equal(await host.locator('.visibility-expand-icon').getAttribute('src'), headerIconDataUrls.expand,
       'The maximize state must load the expand asset');
     assert.equal(await host.locator('.visibility-expand-icon').isVisible(), true,
       'The maximize state must show the expand asset instead of a plus character');
-    assert.equal(await host.locator('.visibility-symbol').textContent(), '');
+    assert.equal(await host.locator('.visibility-up-icon').textContent(), '');
     assert.equal(await host.locator('.controls-hidden-message').isVisible(), true);
     assert.deepEqual(await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq').evaluateAll(
       (sections) => sections.map((section) => getComputedStyle(section).display)), ['none', 'none', 'none', 'none']);

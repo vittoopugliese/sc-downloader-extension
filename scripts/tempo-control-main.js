@@ -85,6 +85,8 @@
   const { DEFAULTS, clampRate, create, formatRate } = globalThis.SCTempoControl;
   const effectsApi = globalThis.SCTempoEffects;
   const RATE_ANIMATION_DURATION_MS = 220;
+  const DOWNLOAD_STATUS_DURATION_MS = 30000;
+  const DOWNLOAD_REQUEST_TIMEOUT_MS = 120000;
   const DEFAULT_EFFECT_TOGGLE_WET = 20;
   let ui = null;
   let equalizerUi = null;
@@ -95,6 +97,7 @@
   let playbackFailure = "";
   let storageFailure = "";
   let loopFailure = "";
+  let downloadStatusTimer = null;
   let rateAnimationFrame = null;
   let rateAnimationTarget = null;
   let displayedRate = null;
@@ -1048,18 +1051,18 @@
     if (!ui?.visibilityButton) return;
     const allCollapsed = areAllControlsCollapsed();
     const action = controlsHidden
-      ? { label: "Show and expand all controls", symbol: "", state: "hidden" }
+      ? { label: "Show and expand all controls", icon: "expand", state: "hidden" }
       : allCollapsed
-        ? { label: "Hide all controls", symbol: "−", state: "collapsed" }
-        : { label: "Collapse all controls", symbol: "_", state: "normal" };
+        ? { label: "Hide all controls", icon: "up", state: "collapsed" }
+        : { label: "Collapse all controls", icon: "down", state: "normal" };
     ui.panel.classList.toggle("controls-hidden", controlsHidden);
     ui.controlsHiddenMessage.hidden = !controlsHidden;
     ui.visibilityButton.dataset.state = action.state;
     ui.visibilityButton.setAttribute("aria-label", action.label);
     ui.visibilityButton.title = action.label;
-    ui.visibilitySymbol.textContent = action.symbol;
-    ui.visibilitySymbol.hidden = controlsHidden;
-    ui.visibilityExpandIcon.hidden = !controlsHidden;
+    ui.visibilityUpIcon.toggleAttribute("hidden", action.icon !== "up");
+    ui.visibilityDownIcon.toggleAttribute("hidden", action.icon !== "down");
+    ui.visibilityExpandIcon.hidden = action.icon !== "expand";
     equalizerUi?.setVisible(!ui.panel.hidden && !controlsHidden);
   }
 
@@ -1343,25 +1346,58 @@
     }
   }
 
+  function showDownloadStatus(message, { dismissAfter = null } = {}) {
+    if (downloadStatusTimer !== null) {
+      clearTimeout(downloadStatusTimer);
+      downloadStatusTimer = null;
+    }
+    loopFailure = message;
+    render();
+    if (dismissAfter === null) return;
+    downloadStatusTimer = setTimeout(() => {
+      downloadStatusTimer = null;
+      // Do not erase a newer status, such as a subsequent download error.
+      if (loopFailure !== message) return;
+      loopFailure = "";
+      render();
+    }, dismissAfter);
+  }
+
+  function waitForDownloadResult(eventName, id, request) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        document.removeEventListener(eventName, listener);
+        resolve(result);
+      };
+      const timeout = setTimeout(
+        () => finish({ success: false, error: "Download request timed out." }),
+        DOWNLOAD_REQUEST_TIMEOUT_MS
+      );
+      const listener = (event) => {
+        if (event.detail?.id === id) finish(event.detail);
+      };
+      document.addEventListener(eventName, listener);
+      try {
+        request();
+      } catch (error) {
+        finish({ success: false, error: error?.message || "Could not start download request." });
+      }
+    });
+  }
+
   async function downloadLoopFromPlayer() {
     if (!loopState.active || !Number.isFinite(loopState.startMs) || !Number.isFinite(loopState.endMs)) {
-      loopFailure = "Set both loop markers before downloading.";
-      render();
+      showDownloadStatus("Set both loop markers before downloading.");
       return;
     }
     const id = `loop-export-${Date.now()}`;
     loopDownloadPending = true;
-    loopFailure = "Preparing loop download…";
-    render();
-    const result = await new Promise((resolve) => {
-      const timeout = setTimeout(() => resolve({ success: false, error: "Download request timed out." }), 120000);
-      const listener = (event) => {
-        if (event.detail?.id !== id) return;
-        clearTimeout(timeout);
-        document.removeEventListener(LOOP_EXPORT_RESULT_EVENT, listener);
-        resolve(event.detail);
-      };
-      document.addEventListener(LOOP_EXPORT_RESULT_EVENT, listener);
+    showDownloadStatus("Preparing loop download…");
+    const result = await waitForDownloadResult(LOOP_EXPORT_RESULT_EVENT, id, () => {
       document.documentElement.setAttribute(LOOP_EXPORT_ATTRIBUTE, JSON.stringify({
         id,
         trackIdentity: loopState.trackIdentity,
@@ -1374,25 +1410,15 @@
     });
     document.documentElement.removeAttribute(LOOP_EXPORT_ATTRIBUTE);
     loopDownloadPending = false;
-    loopFailure = result?.success ? "Loop download started." : (result?.error || "Could not start loop download.");
-    render();
+    showDownloadStatus(result?.success ? "Loop download started." : (result?.error || "Could not start loop download."));
   }
 
   async function downloadCurrentTrack() {
     if (trackDownloadPending) return;
     const id = `track-export-${Date.now()}`;
     trackDownloadPending = true;
-    loopFailure = "Preparing track download…";
-    render();
-    const result = await new Promise((resolve) => {
-      const timeout = setTimeout(() => resolve({ success: false, error: "Download request timed out." }), 120000);
-      const listener = (event) => {
-        if (event.detail?.id !== id) return;
-        clearTimeout(timeout);
-        document.removeEventListener(TRACK_EXPORT_RESULT_EVENT, listener);
-        resolve(event.detail);
-      };
-      document.addEventListener(TRACK_EXPORT_RESULT_EVENT, listener);
+    showDownloadStatus("Preparing track download…");
+    const result = await waitForDownloadResult(TRACK_EXPORT_RESULT_EVENT, id, () => {
       const state = controller.snapshot();
       document.documentElement.setAttribute(TRACK_EXPORT_ATTRIBUTE, JSON.stringify({
         id,
@@ -1403,8 +1429,10 @@
     });
     document.documentElement.removeAttribute(TRACK_EXPORT_ATTRIBUTE);
     trackDownloadPending = false;
-    loopFailure = result?.success ? "Track download started." : (result?.error || "Could not start track download.");
-    render();
+    showDownloadStatus(
+      result?.success ? "Track download started." : (result?.error || "Could not start track download."),
+      { dismissAfter: result?.success ? DOWNLOAD_STATUS_DURATION_MS : null }
+    );
   }
 
   function syncRange(input) {
@@ -1925,9 +1953,8 @@
         .controls-hidden > .effects-shell,
         .controls-hidden > .peq { display:none !important; }
         .controls-hidden-message { margin:5px 2px 1px; color:#aeb4b9; font-size:10px; line-height:1.45; text-align:center; }
-        .visibility-symbol { display:block; width:12px; height:12px; font:800 15px/9px system-ui,sans-serif; }
+        .visibility-symbol { display:block; width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
         .visibility-expand-icon { width:13px; height:13px; }
-        .visibility-button[data-state="normal"] .visibility-symbol { transform:translateY(3px); }
 
         @media (forced-colors: active) {
           .trigger, .panel { border-color: CanvasText; }
@@ -1976,7 +2003,7 @@
           <button class="panel-tool reset-tools-button" type="button" aria-label="Reset playback, Loop, FX and EQ. Samples are kept." title="Reset playback, Loop, FX and EQ. Samples are kept.">
             <img class="panel-tool-icon trash-icon" alt="" aria-hidden="true" hidden />
           </button>
-          <button class="panel-tool visibility-button" type="button" aria-controls="scdl-sampler scdl-loop-region scdl-audio-effects scdl-parametric-eq" aria-label="Collapse all controls" title="Collapse all controls"><span class="visibility-symbol" aria-hidden="true">_</span><img class="panel-tool-icon visibility-expand-icon" alt="" aria-hidden="true" hidden /></button>
+          <button class="panel-tool visibility-button" type="button" aria-controls="scdl-sampler scdl-loop-region scdl-audio-effects scdl-parametric-eq" aria-label="Collapse all controls" title="Collapse all controls"><svg class="visibility-symbol visibility-up-icon" viewBox="0 0 16 16" aria-hidden="true" hidden><path d="m3.5 9.5 4.5-4 4.5 4" /></svg><svg class="visibility-symbol visibility-down-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 6.5 4.5 4 4.5-4" /></svg><img class="panel-tool-icon visibility-expand-icon" alt="" aria-hidden="true" hidden /></button>
           <button class="panel-tool close-button" type="button" aria-label="Close panel" title="Close panel">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
           </button>
@@ -2183,7 +2210,8 @@
       resetToolsButton: root.querySelector(".reset-tools-button"),
       trashIcon: root.querySelector(".trash-icon"),
       visibilityButton: root.querySelector(".visibility-button"),
-      visibilitySymbol: root.querySelector(".visibility-symbol"),
+      visibilityUpIcon: root.querySelector(".visibility-up-icon"),
+      visibilityDownIcon: root.querySelector(".visibility-down-icon"),
       visibilityExpandIcon: root.querySelector(".visibility-expand-icon"),
       controlsHiddenMessage: root.querySelector(".controls-hidden-message"),
       setA: root.querySelector(".set-a"),
