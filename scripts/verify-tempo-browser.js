@@ -248,19 +248,25 @@ async function main() {
       throw new Error("Playback Speed panel did not open.");
     }
     const drumPads = host.locator(".drum-pad");
-    assert.equal(await drumPads.count(), 6, "The panel must show six drum pads.");
+    const samplerToggle = host.locator(".sampler-toggle");
+    assert.equal(await drumPads.count(), 6, "The sampler must contain six drum pads.");
+    assert.equal(await samplerToggle.getAttribute("aria-expanded"), "false");
+    assert.equal(await drumPads.nth(0).isHidden(), true, "The sampler starts collapsed.");
+    await samplerToggle.click();
+    assert.equal(await samplerToggle.getAttribute("aria-expanded"), "true");
     assert.deepEqual(await drumPads.allTextContents(), ["A", "S", "D", "F", "G", "H"]);
     assert.deepEqual(await drumPads.evaluateAll((pads) => pads.map((pad) => pad.title)),
       ["Kick", "Clap", "Hat", "Kick 2", "Snare", "Tom"].map((name) => `${name} · hold to load`));
     const drumPlacement = await host.evaluate((element) => {
       const root = element.shadowRoot;
       const header = root.querySelector(".panel-header").getBoundingClientRect();
-      const drums = root.querySelector(".drum-section").getBoundingClientRect();
       const tempo = root.querySelector(".tempo-row").getBoundingClientRect();
-      return header.bottom <= drums.top && drums.bottom <= tempo.top &&
+      const drums = root.querySelector(".drum-section").getBoundingClientRect();
+      const loop = root.querySelector(".waveform-shell").getBoundingClientRect();
+      return header.bottom <= tempo.top && tempo.bottom <= drums.top && drums.bottom <= loop.top &&
         root.querySelector(".drum-pads").scrollWidth <= root.querySelector(".drum-pads").clientWidth;
     });
-    assert.equal(drumPlacement, true, "The drum row must fit between the header and tempo controls.");
+    assert.equal(drumPlacement, true, "The sampler must fit between the tempo and loop controls.");
     await page.evaluate(() => {
       window.drumStarts = 0;
       const originalStart = AudioBufferSourceNode.prototype.start;
@@ -591,7 +597,7 @@ async function main() {
       panelFeatures.hasRatingLink ||
       panelFeatures.labels.join("|") !== "Tone & Velocity" ||
       panelFeatures.order.slice(0, 3).join("|") !==
-        "panel-header|drum-section|tempo-row"
+        "panel-header|tempo-row|drum-section"
     ) {
       throw new Error("The combined panel layout or links are incomplete.");
     }
@@ -706,7 +712,12 @@ async function main() {
     await host.locator("#scdl-effect-delay").evaluate((slider) => { slider.value = "17"; slider.dispatchEvent(new Event("change", { bubbles: true })); });
     await page.waitForFunction(() => document.querySelector("#scdl-tempo-control")?.shadowRoot
       ?.querySelector('[data-effect-value="delay"]')?.textContent === "17%");
+    await samplerToggle.click();
+    assert.equal(await drumPads.nth(5).isHidden(), true);
     await host.locator(".save-loop-pad").click();
+    assert.equal(await samplerToggle.getAttribute("aria-expanded"), "true",
+      "Choosing a loop pad must expand the sampler.");
+    assert.equal(await drumPads.nth(5).isVisible(), true);
     assert.equal(await host.locator(".drum-section").evaluate((node) => node.classList.contains("is-selecting")), true);
     await drumPads.nth(5).click();
     await host.locator('.drum-pad[title="Loop 12.3–20.7s · hold to load"]').waitFor();

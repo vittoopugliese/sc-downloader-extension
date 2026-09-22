@@ -139,6 +139,7 @@
     try { return localStorage.getItem(WAVEFORM_COLLAPSED_STORAGE) === "true"; } catch { return false; }
   })();
   let effectsCollapsed = true;
+  let samplerCollapsed = true;
   let expandedEffectSettings = null;
   let effectsFailure = "";
   let effectsBypassed = false;
@@ -290,6 +291,13 @@
     if (!ui) return;
     ui.drumMessage.textContent = message;
     ui.drumMessage.hidden = !message;
+  }
+
+  function setSamplerCollapsed(collapsed) {
+    samplerCollapsed = Boolean(collapsed);
+    ui.drumSection.classList.toggle("is-collapsed", samplerCollapsed);
+    ui.samplerToggle.setAttribute("aria-expanded", String(!samplerCollapsed));
+    if (!ui.panel.hidden) positionPanel();
   }
 
   function getDrumAudioContext() {
@@ -1192,6 +1200,7 @@
       effects: effectsController?.snapshot() || {},
       name: `Loop ${(loopState.startMs / 1000).toFixed(1)}–${(loopState.endMs / 1000).toFixed(1)}s`,
     };
+    setSamplerCollapsed(false);
     ui.drumSection.classList.add("is-selecting");
     ui.saveLoopPad.setAttribute("aria-pressed", "true");
     showDrumError("Choose one of the six pads. Press Escape to cancel.");
@@ -1674,7 +1683,14 @@
         /* Expanded player editor, compact enough to stay clear of the player. */
         .panel { width: min(420px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
         .panel-header { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-rows: 32px; align-items: center; column-gap: 5px; row-gap: 2px; padding-bottom: 6px; }
-        .drum-section { margin: 0 0 6px; }
+        .drum-section { margin: 0 0 6px; overflow: hidden; border: 1px solid #343434; border-radius: 11px; background: rgba(255,255,255,.025); }
+        .sampler-toggle { position: relative; display: flex; align-items: center; width: 100%; height: 31px; padding: 0 9px; border: 0; color: #fff; background: #1b1b1b; font-size: 11px; font-weight: 700; line-height: 1; text-align: left; cursor: pointer; }
+        .sampler-toggle:hover { color: #ff7b38; background: #232323; }
+        .sampler-toggle:focus-visible { outline: 2px solid #ff5500; outline-offset: -2px; }
+        .sampler-toggle svg { position: absolute; right: 9px; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 160ms ease; }
+        .drum-section.is-collapsed .sampler-toggle svg { transform: rotate(180deg); }
+        .sampler-body { padding: 6px 7px; }
+        .drum-section.is-collapsed .sampler-body { display: none; }
         .drum-pads { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
         .drum-pad { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100%; height: 28px; padding: 3px 6px; border: 1px solid #4a4a4a; border-radius: 8px; color: #fff; background: #292929; font: inherit; cursor: pointer; user-select: none; touch-action: manipulation; transition: transform 90ms ease, background-color 90ms ease, border-color 90ms ease; }
         .drum-slot:nth-child(2) .drum-pad { background: #383838; }
@@ -1687,7 +1703,7 @@
         .drum-pad:focus-visible { outline: 2px solid #ff5500; outline-offset: 2px; }
         .drum-key { flex: 0 0 auto; font-size: 14px; font-weight: 800; line-height: 1; }
         .drum-file { display: none; }
-        .drum-message { margin: 4px 1px 0; color: #ffb199; font-size: 10px; line-height: 1.2; }
+        .drum-message { margin: 0; padding: 4px 7px 6px; color: #ffb199; font-size: 10px; line-height: 1.2; }
         .brand { display: contents; }
         .brand-logo { width: 32px; height: 32px; flex-basis: 32px; border-radius: 8px; object-fit: cover; }
         .panel-header .brand-logo { grid-column: 1; grid-row: 1; }
@@ -1856,12 +1872,6 @@
           </button>
         </div>
         </div>
-        <div class="drum-section" role="group" aria-label="Drum pads">
-          <div class="drum-pads">
-            ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
-          </div>
-          <p class="drum-message" role="status" aria-live="polite" hidden></p>
-        </div>
         <div class="tempo-row">
           <div class="slider-wrap">
             <div class="limits" aria-hidden="true"><span>0.1x</span><span>3x</span></div>
@@ -1885,6 +1895,15 @@
           <button class="bypass" type="button" aria-label="Bypass loop and playback effects" aria-pressed="false" title="Bypass loop and playback effects">${BYPASS_ICON}</button>
         </div>
         </div>
+        <section class="drum-section is-collapsed" aria-label="Sampler">
+          <button class="sampler-toggle" type="button" aria-controls="scdl-sampler-pads" aria-expanded="false">Sampler<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
+          <div class="sampler-body" id="scdl-sampler-pads">
+            <div class="drum-pads">
+              ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
+            </div>
+          </div>
+          <p class="drum-message" role="status" aria-live="polite" hidden></p>
+        </section>
         <div class="waveform-shell" role="group" aria-label="Loop waveform">
           <div class="section-header waveform-header">
           <button class="waveform-toggle" type="button" aria-label="Collapse looper" aria-expanded="true" title="Collapse looper"><span class="waveform-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>Loop Region</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
@@ -2035,6 +2054,7 @@
       drumButtons: [...root.querySelectorAll(".drum-pad")],
       drumFiles: [...root.querySelectorAll(".drum-file")],
       drumSection: root.querySelector(".drum-section"),
+      samplerToggle: root.querySelector(".sampler-toggle"),
       drumMessage: root.querySelector(".drum-message"),
       slider: root.querySelector(".slider"),
       pitchToggle: root.querySelector(".pitch-toggle"),
@@ -2141,6 +2161,7 @@
       });
     });
     document.addEventListener("keydown", handleDrumKeydown, true);
+    ui.samplerToggle.addEventListener("click", () => setSamplerCollapsed(!samplerCollapsed));
 
     ui.trigger.addEventListener("pointerenter", (event) => {
       if (event.pointerType !== "mouse") return;
