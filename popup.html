@@ -941,7 +941,6 @@
         .player-tools-offer-detail { margin: 0; color: #bdbdbd; font-size: 9px; line-height: 1.25; }
         #playerToolsTrialStatus { margin-top: 2px; color: #d8d8d8; font-size: 9px; }
         .player-tools-offer-price { margin: 3px 0 0; color: #ff985d; white-space: nowrap; font-size: 10px; font-weight: 700; line-height: 1.15; }
-        .player-tools-offer-price del { color: #aaa; font-weight: 500; }
         .player-tools-offer-actions { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; flex: 0 0 auto; }
         .player-tools-offer-actions img { flex: 0 0 38px; width: 38px; height: 38px; border-radius: 8px; }
         #playerToolsProBtn { padding: 5px 6px; border: 1px solid #ff6a1a; border-radius: 6px; color: #fff; background: #c94600; font-size: 9px; font-weight: 700; line-height: 1; cursor: pointer; }
@@ -1468,7 +1467,7 @@
                     <p class="player-tools-offer-title">Player Tools</p>
                     <p class="player-tools-offer-detail">Tempo, loops &amp; FX</p>
                     <p id="playerToolsTrialStatus" class="player-tools-offer-detail" aria-live="polite"></p>
-                    <p class="player-tools-offer-price"><del id="playerToolsReferencePrice">$6.79</del> <span id="playerToolsPrice">$3.69</span> <span data-i18n="player_tools_lifetime">lifetime</span></p>
+                    <p class="player-tools-offer-price"><span id="playerToolsPrice">$3.69</span> <span data-i18n="player_tools_lifetime">lifetime</span></p>
                 </div>
                 <div class="player-tools-offer-actions">
                     <img src="./assets/icons/player-toolkit.png" alt="" width="38" height="38" draggable="false">
@@ -1495,7 +1494,7 @@
                 <div class="commerce-scroll">
                 <h2 id="commerceTitle" data-i18n="player_tools_pro_title">Player Tools Pro</h2>
                 <p data-i18n="player_tools_pro_copy">One payment unlocks tempo, Keep Tone, loops, effects and Pro exports for this installation.</p>
-                <p><del id="commerceReferencePrice">$6.79</del> <strong id="commercePrice">$3.69 USD</strong> · <span data-i18n="player_tools_lifetime">lifetime</span></p>
+                <p><strong id="commercePrice">$3.69 USD</strong> · <span data-i18n="player_tools_lifetime">lifetime</span></p>
                 <div class="commerce-actions"><button id="commerceBuyBtn" class="is-primary" type="button" data-i18n="player_tools_buy" data-i18n-title="player_tools_buy" title="Buy securely">Buy securely</button></div>
                 <p data-i18n="player_tools_restore_help">Already purchased? Enter the email and license key from your receipt.</p>
                 <label><span data-i18n="email">Email</span><input id="commerceEmail" type="email" autocomplete="email" maxlength="320"></label>

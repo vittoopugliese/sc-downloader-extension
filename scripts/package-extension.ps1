@@ -101,8 +101,28 @@ Get-ChildItem -LiteralPath $stagingRoot -Recurse -Force -File |
 $commercePath = Join-Path $stagingRoot "scripts/player-tools-commerce.js"
 $commerceSource = Get-Content -LiteralPath $commercePath -Raw
 $testLoginLine = 'const TEST_LOGIN = Object.freeze({ username: "1", password: "1" });'
+$apiBaseLine = 'const API_BASE_URL = "https://sctd.vpugliese.online/api/player-tools";'
 if (-not $commerceSource.Contains($testLoginLine)) { throw "Could not disable the test login in the production package." }
-Set-Content -LiteralPath $commercePath -Value $commerceSource.Replace($testLoginLine, "const TEST_LOGIN = null;") -NoNewline
+if (-not $commerceSource.Contains($apiBaseLine)) { throw "Could not inject the Player Tools API endpoint." }
+if (-not $env:PLAYER_TOOLS_API_BASE_URL) { throw "Set PLAYER_TOOLS_API_BASE_URL to the HTTPS test or production licensing endpoint before packaging." }
+try { $apiBaseUri = [System.Uri]$env:PLAYER_TOOLS_API_BASE_URL }
+catch { throw "PLAYER_TOOLS_API_BASE_URL must be a valid HTTPS URL." }
+if ($apiBaseUri.Scheme -ne "https" -or -not $apiBaseUri.IsAbsoluteUri -or $apiBaseUri.UserInfo -or
+    $apiBaseUri.Query -or $apiBaseUri.Fragment -or $apiBaseUri.AbsolutePath.TrimEnd('/') -ne "/api/player-tools") {
+    throw "PLAYER_TOOLS_API_BASE_URL must be an HTTPS origin ending in /api/player-tools, without credentials, query or fragment."
+}
+$normalizedApiBaseUrl = $apiBaseUri.GetLeftPart([System.UriPartial]::Authority) + "/api/player-tools"
+$apiBaseLiteral = $normalizedApiBaseUrl | ConvertTo-Json -Compress
+$commerceSource = $commerceSource.Replace($testLoginLine, "const TEST_LOGIN = null;").Replace($apiBaseLine, "const API_BASE_URL = $apiBaseLiteral;")
+Set-Content -LiteralPath $commercePath -Value $commerceSource -NoNewline
+
+$packagedManifestPath = Join-Path $stagingRoot "manifest.json"
+$packagedManifest = Get-Content -LiteralPath $packagedManifestPath -Raw | ConvertFrom-Json
+$apiPermission = $apiBaseUri.GetLeftPart([System.UriPartial]::Authority) + "/*"
+if ($packagedManifest.host_permissions -notcontains $apiPermission) {
+    $packagedManifest.host_permissions = @($packagedManifest.host_permissions) + $apiPermission
+}
+$packagedManifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $packagedManifestPath -Encoding utf8
 
 $receiptsPath = Join-Path $stagingRoot "scripts/player-tools-receipts.js"
 $receiptSource = Get-Content -LiteralPath $receiptsPath -Raw

@@ -5,6 +5,12 @@
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "keys:generate": "node scripts/generate-entitlement-keys.mjs",
-    "seat:release": "node scripts/release-seat.mjs"
+    "seat:release": "node scripts/release-seat.mjs",
+    "preflight": "node scripts/preflight-config.mjs",
+    "deploy:dry:test": "npm run preflight && wrangler deploy --dry-run",
+    "deploy:dry:production": "npm run preflight -- --env production && wrangler deploy --dry-run --env production"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
   }
 }

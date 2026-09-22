@@ -15,7 +15,6 @@
   const OFFER = Object.freeze({
     currency: "USD",
     priceCents: 369,
-    referencePriceCents: 679,
     kind: "lifetime",
     version: "founder-2026-09",
   });

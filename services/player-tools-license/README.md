@@ -33,38 +33,82 @@ service; Lemon credentials never ship in the extension.
 
 ## Production setup
 
-1. Run `npm run keys:generate -- p256-YYYY-MM`. Keep
-   `.dev.vars.entitlement` private. It contains the matching key ID and private
-   JWK. Supply the generated public JWKS as `ENTITLEMENT_PUBLIC_JWK` when
-   packaging the extension.
+1. Generate independent test and production signing keys. Keep the
+   `.dev.vars.entitlement.*` files private; each contains its matching key ID
+   and private JWK. Supply only the matching public JWKS as
+   `ENTITLEMENT_PUBLIC_JWK` when packaging that environment:
+
+   ```text
+   npm run keys:generate -- p256-test-YYYY-MM test
+   npm run keys:generate -- p256-live-YYYY-MM production
+   ```
 2. Copy `wrangler.example.jsonc` to `wrangler.jsonc` and replace every
    `REPLACE_WITH_...` value. Keep the real config free of secrets. The default
-   environment is Test Mode; `--env production` has its own D1 binding and
-   requires separate live IDs and secrets.
-3. Install Wrangler 4, authenticate, create the D1 database, and set its ID in
-   the config.
+   Worker is `sctd-player-tools-license-test` on the test-only route; the
+   `production` environment uses a different Worker name, route, D1 binding,
+   Lemon IDs and Chrome extension origin. Wrangler does not inherit `vars`,
+   secrets declarations or resource bindings into named environments, so keep
+   both blocks complete.
+3. Run `npm install` in this directory to install Wrangler 4, authenticate, and
+   create both D1 databases. Copy only the returned non-secret database IDs to
+   the corresponding config blocks:
+
+   ```text
+   npx wrangler login
+   npx wrangler d1 create sctd-player-tools-test
+   npx wrangler d1 create sctd-player-tools-production
+   npm run preflight
+   npm run preflight -- --env production
+   ```
 4. Add secrets interactively; never put their values in the config:
 
    ```text
-   wrangler secret put LEMON_API_KEY
-   wrangler secret put LEMON_WEBHOOK_SECRET
-   wrangler secret put ENTITLEMENT_PRIVATE_JWK
-   wrangler secret put ADMIN_TOKEN
+   npx wrangler secret put LEMON_API_KEY
+   npx wrangler secret put LEMON_WEBHOOK_SECRET
+   npx wrangler secret put ENTITLEMENT_PRIVATE_JWK
+   npx wrangler secret put ADMIN_TOKEN
+
+   npx wrangler secret put LEMON_API_KEY --env production
+   npx wrangler secret put LEMON_WEBHOOK_SECRET --env production
+   npx wrangler secret put ENTITLEMENT_PRIVATE_JWK --env production
+   npx wrangler secret put ADMIN_TOKEN --env production
    ```
 
 5. Apply migrations and validate a dry run before deployment:
 
    ```text
-   wrangler d1 migrations apply sctd-player-tools --remote
-   wrangler deploy --dry-run
-   wrangler deploy
+   npx wrangler d1 migrations apply sctd-player-tools-test --remote
+   npm run deploy:dry:test
+   npx wrangler deploy
+
+   npx wrangler d1 migrations apply sctd-player-tools-production --remote --env production
+   npm run deploy:dry:production
+   npx wrangler deploy --env production
    ```
 
-6. Configure Lemon Squeezy to send `order_created`, `order_refunded` and
-   `license_key_updated` to
+6. Configure separate Lemon Squeezy Test Mode and Live Mode webhooks. Both send
+   `order_created`, `order_refunded` and `license_key_updated`. Test sends to
+   `https://sctd-test.vpugliese.online/api/player-tools/webhooks/lemon`; live sends to
    `https://sctd.vpugliese.online/api/player-tools/webhooks/lemon`.
    Unknown license IDs and resources outside the configured store/product are
-   rejected before mutation.
+   rejected before mutation. Each webhook uses the secret installed only in its
+   matching Worker environment.
+
+`GET /api/player-tools/health` returns `ready` only when required configuration
+is present and all eight expected D1 tables exist. It intentionally does not
+perform a paid-provider transaction; the sandbox gate below remains required.
+
+When packaging an extension for either environment, explicitly inject both the
+matching endpoint and public JWKS. The packager disables the local `1`/`1` test
+login and adds the selected API origin to the staged manifest:
+
+```text
+PLAYER_TOOLS_API_BASE_URL=https://sctd-test.vpugliese.online/api/player-tools \
+ENTITLEMENT_PUBLIC_JWK="$(cat entitlement-public.test.jwk.json)" npm --prefix ../.. run package:extension
+```
+
+Use the production endpoint only for the release candidate. Never package a
+test endpoint or test public key into the Web Store artifact.
 
 Support can inspect a release without mutation and then apply it:
 

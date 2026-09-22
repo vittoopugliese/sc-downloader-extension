@@ -30,9 +30,26 @@ if (process.platform === 'win32') {
     removePlatformMetadata(stage);
     const commercePath = path.join(stage,'scripts','player-tools-commerce.js');
     const testLoginLine = 'const TEST_LOGIN = Object.freeze({ username: "1", password: "1" });';
+    const apiBaseLine = 'const API_BASE_URL = "https://sctd.vpugliese.online/api/player-tools";';
+    let apiBaseUrl;
+    try { apiBaseUrl = new URL(process.env.PLAYER_TOOLS_API_BASE_URL || ''); }
+    catch { throw new Error('Set PLAYER_TOOLS_API_BASE_URL to the HTTPS test or production licensing endpoint before packaging.'); }
+    if (apiBaseUrl.protocol !== 'https:' || apiBaseUrl.username || apiBaseUrl.password || apiBaseUrl.search || apiBaseUrl.hash ||
+        apiBaseUrl.pathname.replace(/\/$/, '') !== '/api/player-tools') {
+      throw new Error('PLAYER_TOOLS_API_BASE_URL must be an HTTPS origin ending in /api/player-tools, without credentials, query or fragment.');
+    }
+    const normalizedApiBaseUrl = apiBaseUrl.href.replace(/\/$/, '');
     const commerceSource = fs.readFileSync(commercePath,'utf8');
     if (!commerceSource.includes(testLoginLine)) throw new Error('Could not disable the test login in the production package.');
-    fs.writeFileSync(commercePath,commerceSource.replace(testLoginLine,'const TEST_LOGIN = null;'));
+    if (!commerceSource.includes(apiBaseLine)) throw new Error('Could not inject the Player Tools API endpoint.');
+    fs.writeFileSync(commercePath,commerceSource
+      .replace(testLoginLine,'const TEST_LOGIN = null;')
+      .replace(apiBaseLine,`const API_BASE_URL = ${JSON.stringify(normalizedApiBaseUrl)};`));
+    const packagedManifestPath = path.join(stage,'manifest.json');
+    const packagedManifest = JSON.parse(fs.readFileSync(packagedManifestPath,'utf8'));
+    const apiPermission = `${apiBaseUrl.origin}/*`;
+    if (!packagedManifest.host_permissions.includes(apiPermission)) packagedManifest.host_permissions.push(apiPermission);
+    fs.writeFileSync(packagedManifestPath,`${JSON.stringify(packagedManifest,null,2)}\n`);
     const receiptsPath = path.join(stage,'scripts','player-tools-receipts.js');
     const receiptSource = fs.readFileSync(receiptsPath,'utf8');
     const publicKeyLine = 'const PACKAGED_ENTITLEMENT_PUBLIC_JWK = null;';

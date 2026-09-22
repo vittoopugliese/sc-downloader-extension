@@ -71,14 +71,14 @@ Fuentes: [licencias](https://docs.lemonsqueezy.com/help/licensing/generating-lic
 Responsabilidad técnica del agente, una vez corregido C3:
 
 1. Revisar `services/player-tools-license/wrangler.example.jsonc`, migraciones y contrato del cliente. Preparar configuración específica de prueba y de producción, sin copiar credenciales al archivo.
-2. Crear/vincular D1 con binding `LICENSE_DB`; aplicar migraciones al entorno correspondiente. Mantener feedback/uninstall separado de licencias.
+2. Crear/vincular dos D1 distintas con binding `LICENSE_DB`; aplicar migraciones al entorno correspondiente. La plantilla usa `sctd-player-tools-test`/`sctd-player-tools-production` y rutas test/live distintas. Mantener feedback/uninstall separado de licencias.
 3. Obtener Store ID, Product ID y Variant ID del producto correcto. Son identificadores de configuración, no credenciales.
 4. En Settings de Lemon crear API key de prueba, con nombre reconocible; guardarla de inmediato, pues sólo se muestra una vez. Instalar como secreto `LEMON_API_KEY` del Worker de prueba.
 5. Generar secreto aleatorio de webhook y guardarlo como `LEMON_WEBHOOK_SECRET`. Ese mismo valor se configura en Lemon.
 6. Configurar la clave privada de firma de comprobantes introducida por C3 y publicar únicamente la clave pública correspondiente al cliente. No inventar un nombre de secreto antes de acordar el contrato implementado.
 7. Configurar orígenes permitidos; desarrollo puede requerir un ID de extensión distinto al publicado. Live debe excluir localhost y orígenes innecesarios.
-8. Validar configuración/migraciones y dry run antes de desplegar. Usar Context7 para comandos actuales de Cloudflare/Wrangler; el README del servicio contiene comandos de referencia, no prueba de que se hayan ejecutado.
-9. Comprobar `GET /api/player-tools/health`. `ready` sólo comprueba presencia de configuración: también hay que verificar acceso a D1 y comunicación real con Lemon mediante el flujo completo.
+8. Ejecutar el preflight local de ambos entornos y luego el dry run antes de desplegar. El empaquetado exige `PLAYER_TOOLS_API_BASE_URL` y `ENTITLEMENT_PUBLIC_JWK`, de modo que el ZIP de sandbox y el candidato live no compartan endpoint por accidente. Usar Context7 para comandos actuales de Cloudflare/Wrangler; el README del servicio contiene comandos de referencia, no prueba de que se hayan ejecutado.
+9. Comprobar `GET /api/player-tools/health`. `ready` comprueba configuración y las ocho tablas esperadas de D1; no prueba comunicación real con Lemon, que requiere el flujo completo.
 
 Preparar material revisable antes de pedir cualquier permiso externo que falte. No pegar secretos en comandos registrados, conversación o documentos; usar entrada interactiva/gestión de secretos del proveedor.
 
@@ -93,7 +93,7 @@ Fuente: [API keys](https://docs.lemonsqueezy.com/guides/developer-guide/getting-
    https://sctd.vpugliese.online/api/player-tools/webhooks/lemon
    ```
 
-   No asumir que esa ruta ya existe o que sirve como sandbox. Definir endpoint/entorno de prueba separado antes de usarlo.
+   El sandbox preparado por la plantilla usa `https://sctd-test.vpugliese.online/api/player-tools/webhooks/lemon`; confirmar DNS/ruta realmente desplegada antes de registrarlo. No usar la ruta live como sandbox.
 3. Seleccionar `order_created` y `order_refunded`. Agregar `license_key_updated` una vez implementado y probado su handler/conciliación en C3. No seleccionar eventos esperando efectos que el código ignora.
 4. Configurar el secreto de firma idéntico al instalado en ese Worker.
 5. Simular eventos para diagnóstico y después realizar una compra completa. Comprobar firma inválida rechazada, entrega válida procesada una sola vez y estado coherente en D1.

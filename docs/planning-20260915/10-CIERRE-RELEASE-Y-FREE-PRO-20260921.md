@@ -57,7 +57,7 @@ Archivos principales: `scripts/player-tools-policy.js`, `player-tools-access.js`
 - [x] Separar capacidad `likesExplorer` del contador de loops. Hoy usa `pro || trialAvailable`, donde `trialAvailable` exige `used < 20`. Este cambio cumple los siete días prometidos por el onboarding del 00 y la recomendación aceptada como trabajo a ejecutar.
 - [ ] Mantener gracia del loop 20, permisos exclusivos de export, enforcement en handlers además de UI, cuota durable y preferencias al vencer/revocar.
 - [ ] Verificar estado no iniciado, vigente, agotado por loops, vencido por tiempo, PRO, compra pendiente, error recuperable y revocado. Probar dos pestañas, reinicio de worker, actualización y storage inválido.
-- [ ] Unificar copy y precio: USD 3,69, compra única; USD 6,79 sólo como referencia futura, nunca precio histórico ficticio. No experimentar con precio durante este cierre.
+- [x] Unificar copy y precio: USD 3,69, compra única; USD 6,79 queda sólo como referencia futura documental, nunca precio histórico ficticio en la UI. No experimentar con precio durante este cierre.
 - [x] Implementar y probar el límite ya confirmado de dos perfiles activados por licencia, con liberación por soporte. La decisión de producto está cerrada; faltan reserva atómica, conciliación con Lemon y administración.
 - [x] Implementar el comprobante firmado y la revalidación ya confirmada cada treinta días. La decisión de producto está cerrada; faltan firma/verificación, alarma one-shot, guard PRO y pruebas de vencimiento/offline/revocación.
 - [x] Verificar que activar/restaurar falla de forma recuperable ante respuestas incompletas del servicio; nunca conceder PRO por una respuesta vacía o por la URL de éxito.
@@ -209,3 +209,27 @@ Se documentó el orden aceptado y la revisión de `6d5163a`. No se corrigió có
   Test Mode. No hubo migración remota, deploy, checkout, webhook real, compra o
   reembolso real. Antes de empaquetar hay que generar el par ES256, instalar la
   privada como secreto y pasar la pública mediante `ENTITLEMENT_PUBLIC_JWK`.
+
+### Preparación local de C4 — 22/09/2026, posterior a `b896288`
+
+- El ejemplo Wrangler separa Worker, ruta, D1, IDs de Lemon, origen de extensión
+  y secretos requeridos entre test y producción. Un preflight local rechaza
+  placeholders, IDs inválidos, localhost y recursos compartidos por accidente.
+  El generador produce pares ES256 test/live en archivos distintos para evitar
+  sobreescritura o reutilización involuntaria.
+- `health` devuelve `ready` sólo si la configuración requerida existe y D1
+  contiene las ocho tablas de las migraciones; todavía no demuestra acceso a
+  Lemon ni una compra.
+- El empaquetador exige `PLAYER_TOOLS_API_BASE_URL` además de la JWKS pública,
+  inyecta el endpoint elegido y agrega su origen al manifest empaquetado. El
+  login local `1`/`1` sigue eliminado en todo ZIP.
+- La UI dejó de mostrar USD 6,79 tachado; presenta únicamente USD 3,69 lifetime,
+  evitando sugerir un precio histórico inexistente.
+- Evidencia de esta tanda: revisión estática y `git diff --check`; por pedido del
+  usuario no se ejecutaron suites ni navegador. No se instalaron dependencias,
+  generaron claves, crearon D1, configuraron secretos, desplegaron Workers ni
+  realizaron operaciones de Lemon.
+- Siguiente acción externa concreta: crear/completar la tienda Test Mode y el
+  producto lifetime, obtener Store/Product/Variant IDs y el ID de la extensión
+  de prueba. Con esos datos no secretos se puede materializar `wrangler.jsonc`;
+  las claves se cargan de forma interactiva, nunca por chat o commit.

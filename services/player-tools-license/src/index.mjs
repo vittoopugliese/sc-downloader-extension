@@ -72,6 +72,24 @@ function cors(origin) {
   return { "access-control-allow-origin": origin, "access-control-allow-methods": "POST, OPTIONS",
     "access-control-allow-headers": "content-type", "access-control-max-age": "86400", vary: "Origin" };
 }
+async function health(env) {
+  const configured = env.LICENSE_DB && env.LEMON_API_KEY && env.LEMON_WEBHOOK_SECRET && env.ADMIN_TOKEN &&
+    env.LEMON_STORE_ID && env.LEMON_PRODUCT_ID && env.LEMON_VARIANT_ID && env.ENTITLEMENT_PRIVATE_JWK &&
+    env.ENTITLEMENT_KEY_ID && ["test", "live"].includes(env.LEMON_MODE) && (env.ALLOWED_ORIGINS || env.ALLOWED_ORIGIN);
+  if (!configured) return json(503, { service: "sctd-player-tools-license", status: "not-configured" });
+  try {
+    const schema = await env.LICENSE_DB.prepare(`SELECT COUNT(*) AS count FROM sqlite_master
+      WHERE type='table' AND name IN ('licenses', 'activations', 'webhook_events', 'analytics_events',
+        'order_revocations', 'activation_operations', 'trials', 'trial_consumptions')`).first();
+    if (Number(schema?.count || 0) !== 8) {
+      return json(503, { service: "sctd-player-tools-license", status: "not-migrated", mode: env.LEMON_MODE });
+    }
+    return json(200, { service: "sctd-player-tools-license", status: "ready", mode: env.LEMON_MODE });
+  } catch (error) {
+    console.error(JSON.stringify({ message: "player-tools health check failed", error: error instanceof Error ? error.message : String(error) }));
+    return json(503, { service: "sctd-player-tools-license", status: "database-unavailable", mode: env.LEMON_MODE });
+  }
+}
 function equals(left, right) {
   if (typeof left !== "string" || typeof right !== "string" || left.length !== right.length) return false;
   let mismatch = 0; for (let index = 0; index < left.length; index += 1) mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
@@ -613,7 +631,7 @@ export default {
   async fetch(request, env) {
     try {
       const url = new URL(request.url);
-      if (request.method === "GET" && url.pathname === "/api/player-tools/health") return json(200, { service: "sctd-player-tools-license", status: env.LICENSE_DB && env.LEMON_API_KEY && env.LEMON_WEBHOOK_SECRET && env.ADMIN_TOKEN && env.LEMON_STORE_ID && env.LEMON_PRODUCT_ID && env.LEMON_VARIANT_ID && env.ENTITLEMENT_PRIVATE_JWK && env.ENTITLEMENT_KEY_ID && ["test", "live"].includes(env.LEMON_MODE) && (env.ALLOWED_ORIGINS || env.ALLOWED_ORIGIN) ? "ready" : "not-configured" });
+      if (request.method === "GET" && url.pathname === "/api/player-tools/health") return health(env);
       if (request.method === "POST" && url.pathname === "/api/player-tools/webhooks/lemon") {
         const raw = await readBody(request, MAX_WEBHOOK_BYTES);
         const signature = request.headers.get("x-signature") || "";

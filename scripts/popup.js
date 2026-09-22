@@ -75,9 +75,7 @@ const commerceCloseBtn = document.getElementById("commerceCloseBtn");
 const commerceEmail = document.getElementById("commerceEmail");
 const commerceLicenseKey = document.getElementById("commerceLicenseKey");
 const commerceStatus = document.getElementById("commerceStatus");
-const playerToolsReferencePrice = document.getElementById("playerToolsReferencePrice");
 const playerToolsPrice = document.getElementById("playerToolsPrice");
-const commerceReferencePrice = document.getElementById("commerceReferencePrice");
 const commercePrice = document.getElementById("commercePrice");
 
 function setArtistArtwork(image, imageUrl) {
@@ -1617,9 +1615,7 @@ async function syncPlayerToolsOffer() {
       const format = (cents) => new Intl.NumberFormat(chrome.i18n.getUILanguage(), {
         style: "currency", currency: offer.currency,
       }).format(cents / 100);
-      playerToolsReferencePrice.textContent = format(offer.referencePriceCents);
       playerToolsPrice.textContent = format(offer.priceCents);
-      commerceReferencePrice.textContent = format(offer.referencePriceCents);
       commercePrice.textContent = `${format(offer.priceCents)} ${offer.currency}`;
     }
     const active = snapshot?.plan === "pro" || commerce?.status === "active";

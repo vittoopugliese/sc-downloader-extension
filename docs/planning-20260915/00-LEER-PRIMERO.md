@@ -16,8 +16,12 @@ dirigidas. El registro exacto está al final del plan 10 y en el handoff C1–C4
 
 No interpretar esto como C4 cerrado: aún faltan cuenta aprobada, IDs/secretos,
 migraciones y deploy remotos, compra/reembolso Test Mode y luego Live Mode. El
-empaquetado comercial requiere generar el par ES256, instalar la clave privada
-en el Worker y pasar la pública como `ENTITLEMENT_PUBLIC_JWK`.
+trabajo posterior a `b896288` deja separados en la plantilla los nombres,
+rutas, IDs, secretos declarados y D1 de test/live; agrega preflight, health
+contra el esquema migrado e inyección explícita del endpoint al empaquetar. El
+empaquetado comercial aún requiere generar el par ES256, instalar la clave
+privada en el Worker y pasar la pública como `ENTITLEMENT_PUBLIC_JWK`. La
+preparación local no reemplaza crear recursos ni probarlos en las cuentas reales.
 
 ### Ruta de ejecución
 

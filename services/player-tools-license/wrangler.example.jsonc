@@ -1,35 +1,43 @@
 {
-  "name": "sctd-player-tools-license",
+  "name": "sctd-player-tools-license-test",
   "main": "src/index.mjs",
   "compatibility_date": "2026-09-12",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
-  "routes": [{ "pattern": "sctd.vpugliese.online/api/player-tools/*", "zone_name": "vpugliese.online" }],
+  "routes": [{ "pattern": "sctd-test.vpugliese.online/api/player-tools/*", "zone_name": "vpugliese.online" }],
   "vars": {
     "LEMON_MODE": "test",
     "ALLOWED_ORIGINS": "chrome-extension://REPLACE_WITH_TEST_EXTENSION_ID",
-    "LEMON_STORE_ID": "REPLACE_WITH_LEMON_STORE_ID",
-    "LEMON_PRODUCT_ID": "REPLACE_WITH_LEMON_PRODUCT_ID",
-    "LEMON_VARIANT_ID": "REPLACE_WITH_LEMON_VARIANT_ID"
-    ,"ENTITLEMENT_KEY_ID": "p256-2026-01"
+    "LEMON_STORE_ID": "REPLACE_WITH_TEST_LEMON_STORE_ID",
+    "LEMON_PRODUCT_ID": "REPLACE_WITH_TEST_LEMON_PRODUCT_ID",
+    "LEMON_VARIANT_ID": "REPLACE_WITH_TEST_LEMON_VARIANT_ID",
+    "ENTITLEMENT_KEY_ID": "p256-test-YYYY-MM"
+  },
+  "secrets": {
+    "required": ["LEMON_API_KEY", "LEMON_WEBHOOK_SECRET", "ENTITLEMENT_PRIVATE_JWK", "ADMIN_TOKEN"]
   },
   "observability": { "enabled": true, "logs": { "head_sampling_rate": 1 } },
   "d1_databases": [{
     "binding": "LICENSE_DB",
-    "database_name": "sctd-player-tools",
-    "database_id": "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID",
+    "database_name": "sctd-player-tools-test",
+    "database_id": "REPLACE_WITH_TEST_CLOUDFLARE_D1_DATABASE_ID",
     "migrations_dir": "migrations"
   }],
   "env": {
     "production": {
       "name": "sctd-player-tools-license",
+      "workers_dev": false,
+      "routes": [{ "pattern": "sctd.vpugliese.online/api/player-tools/*", "zone_name": "vpugliese.online" }],
       "vars": {
         "LEMON_MODE": "live",
         "ALLOWED_ORIGINS": "chrome-extension://REPLACE_WITH_PUBLISHED_EXTENSION_ID",
         "LEMON_STORE_ID": "REPLACE_WITH_LIVE_LEMON_STORE_ID",
         "LEMON_PRODUCT_ID": "REPLACE_WITH_LIVE_LEMON_PRODUCT_ID",
-        "LEMON_VARIANT_ID": "REPLACE_WITH_LIVE_LEMON_VARIANT_ID"
-        ,"ENTITLEMENT_KEY_ID": "p256-2026-01"
+        "LEMON_VARIANT_ID": "REPLACE_WITH_LIVE_LEMON_VARIANT_ID",
+        "ENTITLEMENT_KEY_ID": "p256-live-YYYY-MM"
+      },
+      "secrets": {
+        "required": ["LEMON_API_KEY", "LEMON_WEBHOOK_SECRET", "ENTITLEMENT_PRIVATE_JWK", "ADMIN_TOKEN"]
       },
       "d1_databases": [{
         "binding": "LICENSE_DB",
