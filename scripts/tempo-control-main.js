@@ -21,6 +21,7 @@
   const PITCH_ATTRIBUTE = "data-scdl-tempo-preserve-pitch";
   const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
   const EXTENSION_PLAYER_ICON_ATTRIBUTE = "data-scdl-extension-player-icon-url";
+  const EXTENSION_DRUM_SAMPLES_ATTRIBUTE = "data-scdl-extension-drum-samples-url";
   const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
   const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
   const OPEN_PLAYER_TOOLS_PANEL_EVENT = "scdl:open-player-tools-panel";
@@ -47,6 +48,14 @@
   const VOLUME_LAYER_ATTRIBUTE = "data-scdl-tempo-panel-open";
   const VOLUME_LAYER_STYLE_ID = "scdl-tempo-volume-layer";
   const LONG_PRESS_MS = 650;
+  const DRUM_LONG_PRESS_MS = 600;
+  const DRUM_KEYS_STORAGE = "scdl.drums.keys";
+  const DRUM_DEFAULTS = [
+    { name: "Kick", sample: "kick1.wav", key: "a" },
+    { name: "Clap", sample: "clap1.wav", key: "s" },
+    { name: "Hat", sample: "hat1.wav", key: "d" },
+    { name: "Kick 2", sample: "kick2.wav", key: "f" },
+  ];
   const HOVER_OPEN_DELAY_MS = 254;
   // The panel sits eight pixels above its trigger. This brief grace period
   // keeps a hover-opened panel available while the cursor crosses that gap.
@@ -102,6 +111,19 @@
   let panelOpenMode = null;
   let hoverOpenTimer = null;
   let hoverCloseTimer = null;
+  let drumAudioContext = null;
+  let hoveredDrum = null;
+  const drumPads = DRUM_DEFAULTS.map((defaultPad) => ({ ...defaultPad, buffer: null, loading: null, customName: "", version: 0 }));
+  try {
+    const savedKeys = JSON.parse(localStorage.getItem(DRUM_KEYS_STORAGE) || "null");
+    if (Array.isArray(savedKeys) && savedKeys.length === drumPads.length) {
+      savedKeys.forEach((key, index) => {
+        if (key === "" || (typeof key === "string" && /^[a-z0-9]$/i.test(key))) {
+          drumPads[index].key = key.toLowerCase();
+        }
+      });
+    }
+  } catch {}
   let panelDetached = (() => {
     try { return localStorage.getItem(DETACH_STORAGE) === "true"; } catch { return false; }
   })();
@@ -207,6 +229,111 @@
   }
 
   document.addEventListener(EXTENSION_ASSETS_EVENT, syncBrandLogo);
+
+  function updateDrumLabels() {
+    if (!ui) return;
+    drumPads.forEach((pad, index) => {
+      const button = ui.drumButtons[index];
+      button.querySelector(".drum-key").textContent = pad.key ? pad.key.toUpperCase() : "·";
+      button.querySelector(".drum-name").textContent = pad.customName || pad.name;
+      button.setAttribute("aria-label", `${pad.customName || pad.name} drum pad. Key ${pad.key ? pad.key.toUpperCase() : "unassigned"}. Hold to load an audio sample.`);
+      button.title = `${pad.customName || pad.name} · ${pad.key ? pad.key.toUpperCase() : "no key"} · hold to load a sample`;
+    });
+  }
+
+  function showDrumError(message) {
+    if (!ui) return;
+    ui.drumMessage.textContent = message;
+    ui.drumMessage.hidden = !message;
+  }
+
+  function getDrumAudioContext() {
+    if (!drumAudioContext) {
+      const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextConstructor) throw new Error("Audio playback is unavailable in this browser.");
+      drumAudioContext = new AudioContextConstructor();
+    }
+    return drumAudioContext;
+  }
+
+  async function loadDefaultDrum(pad) {
+    if (pad.buffer) return pad.buffer;
+    if (pad.loading) return pad.loading;
+    const base = document.documentElement.getAttribute(EXTENSION_DRUM_SAMPLES_ATTRIBUTE);
+    if (!base) throw new Error("The drum samples are not ready yet.");
+    const version = pad.version;
+    pad.loading = (async () => {
+      const response = await fetch(new URL(pad.sample, base).href);
+      if (!response.ok) throw new Error(`Could not load ${pad.name}.`);
+      const buffer = await getDrumAudioContext().decodeAudioData(await response.arrayBuffer());
+      if (pad.version === version) pad.buffer = buffer;
+      return buffer;
+    })();
+    try { return await pad.loading; }
+    finally { pad.loading = null; }
+  }
+
+  async function playDrum(index) {
+    const pad = drumPads[index];
+    if (!pad) return;
+    try {
+      const context = getDrumAudioContext();
+      const ready = context.resume();
+      const buffer = pad.buffer || await loadDefaultDrum(pad);
+      await ready;
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(context.destination);
+      source.start();
+      ui?.drumButtons[index].classList.add("is-active");
+      setTimeout(() => ui?.drumButtons[index].classList.remove("is-active"), 140);
+      showDrumError("");
+    } catch (error) {
+      showDrumError(error?.message || "Could not play this sample.");
+    }
+  }
+
+  async function loadCustomDrum(index, file) {
+    if (!file) return;
+    if (!file.type.startsWith("audio/") && !/\.(wav|mp3|ogg|m4a|flac|aac)$/i.test(file.name)) {
+      showDrumError("Choose an audio file for this pad.");
+      return;
+    }
+    const pad = drumPads[index];
+    const version = ++pad.version;
+    try {
+      const buffer = await getDrumAudioContext().decodeAudioData(await file.arrayBuffer());
+      if (pad.version !== version) return;
+      pad.buffer = buffer;
+      pad.customName = file.name.replace(/\.[^.]+$/, "").slice(0, 16) || pad.name;
+      updateDrumLabels();
+      showDrumError("");
+    } catch {
+      showDrumError("Could not read that audio sample.");
+    }
+  }
+
+  function handleDrumKeydown(event) {
+    if (!ui || ui.panel.hidden || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+    const target = event.composedPath()[0];
+    if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName || "")) return;
+    if (!/^[a-z0-9]$/i.test(event.key)) return;
+    const key = event.key.toLowerCase();
+    if (hoveredDrum !== null) {
+      drumPads.forEach((pad, index) => { if (index !== hoveredDrum && pad.key === key) pad.key = ""; });
+      drumPads[hoveredDrum].key = key;
+      try { localStorage.setItem(DRUM_KEYS_STORAGE, JSON.stringify(drumPads.map((pad) => pad.key))); } catch {}
+      updateDrumLabels();
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    const index = drumPads.findIndex((pad) => pad.key === key);
+    if (index < 0) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    playDrum(index);
+  }
 
   function readStoredRate() {
     try {
@@ -1405,35 +1532,48 @@
 
         /* Expanded player editor, compact enough to stay clear of the player. */
         .panel { width: min(420px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
-        .panel-header { position: relative; display: grid; grid-template-columns: 42px minmax(0, 1fr) 50px 78px; grid-template-rows: 20px 21px; align-items: center; column-gap: 5px; row-gap: 2px; padding-bottom: 6px; }
+        .panel-header { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) 42px auto; grid-template-rows: 32px; align-items: center; column-gap: 5px; row-gap: 2px; padding-bottom: 6px; }
+        .drum-section { margin: 0 0 6px; }
+        .drum-pads { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+        .drum-pad { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 36px; padding: 4px 7px; border: 1px solid #4a4a4a; border-radius: 8px; color: #fff; background: #292929; font: inherit; cursor: pointer; user-select: none; touch-action: manipulation; transition: transform 90ms ease, background-color 90ms ease, border-color 90ms ease; }
+        .drum-slot:nth-child(2) .drum-pad { background: #383838; }
+        .drum-slot:nth-child(3) .drum-pad { background: #464646; }
+        .drum-slot:nth-child(4) .drum-pad { background: #343434; }
+        .drum-pad:hover, .drum-pad.is-holding { border-color: #ff7b38; }
+        .drum-pad.is-active { transform: scale(.95); border-color: #ff5500; background: #713516 !important; }
+        .drum-pad:focus-visible { outline: 2px solid #ff5500; outline-offset: 2px; }
+        .drum-key { flex: 0 0 auto; font-size: 16px; font-weight: 800; line-height: 1; }
+        .drum-name { max-width: 100%; overflow: hidden; color: #d3d3d3; font-size: 10px; font-weight: 600; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+        .drum-file { display: none; }
+        .drum-message { margin: 4px 1px 0; color: #ffb199; font-size: 10px; line-height: 1.2; }
         .brand { display: contents; }
-        .brand-logo { width: 42px; height: 42px; flex-basis: 42px; border-radius: 11px; object-fit: cover; }
-        .panel-header .brand-logo { grid-column: 1; grid-row: 1 / 3; }
+        .brand-logo { width: 32px; height: 32px; flex-basis: 32px; border-radius: 8px; object-fit: cover; }
+        .panel-header .brand-logo { grid-column: 1; grid-row: 1; }
         .brand-copy { display: flex; grid-column: 2; grid-row: 1; align-items: center; min-width: 0; }
         .brand-title-line { display: flex; align-items: center; gap: 4px; min-width: 0; }
-        .brand-name { font-size: 18px; line-height: 1.1; text-align: left; white-space: nowrap; }
+        .brand-name { font-size: 16px; line-height: 1.1; text-align: left; white-space: nowrap; }
         .free-badge { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font-size: 9px; font-weight: 800; line-height: 1; letter-spacing: .04em; }
         .free-badge.is-pro { border-color: #8b5cf6; color: #f5f3ff; background: #32105e; box-shadow: 0 0 0 0 rgba(139, 92, 246, .32); animation: pro-badge-glow 2.8s ease-in-out infinite; }
         @keyframes pro-badge-glow { 50% { border-color: #a78bfa; box-shadow: 0 0 0 2px rgba(139, 92, 246, .14), 0 0 10px rgba(124, 58, 237, .22); } }
-        .presets { display: grid; grid-column: 3; grid-row: 1 / 3; grid-template-columns: 1fr; gap: 2px; width: 50px; justify-self: center; flex-basis: auto; }
-        .preset { width: 50px; height: 20px; border-radius: 5px; font-size: 10px; }
-        .custom-preset, .custom-preset[data-saved="true"] { width: 50px; padding: 0 2px; font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
+        .presets { display: grid; grid-column: 3; grid-row: 1; grid-template-columns: 1fr; gap: 2px; width: 42px; justify-self: center; flex-basis: auto; }
+        .preset { width: 42px; height: 15px; border-radius: 5px; font-size: 10px; }
+        .custom-preset, .custom-preset[data-saved="true"] { width: 42px; padding: 0 2px; font-size: 9px; font-weight: 500; font-variant-numeric: tabular-nums; }
         .setter { height: 28px; padding: 0 8px; border-radius: 7px; font-size: 11px; font-variant-numeric: tabular-nums; }
-        .tempo-row { display: grid; grid-template-columns: minmax(0, 1fr) 22px; align-items: center; gap: 5px; margin-bottom: 8px; }
-        .pitch-label { display: grid; place-items: center; width: 22px; height: 32px; margin: 0; padding: 0; cursor: help; }
+        .tempo-row { display: grid; grid-template-columns: minmax(0, 1fr) 22px auto; align-items: center; gap: 5px; margin-bottom: 6px; }
+        .pitch-label { display: grid; place-items: center; width: 22px; height: 26px; margin: 0; padding: 0; cursor: help; }
         .pitch-toggle { width: 16px; height: 16px; margin: 0; }
-        .speed-status { position: static; grid-column: 4; grid-row: 1 / 3; align-self: center; justify-self: end; min-width: 0; height: 28px; justify-content: center; gap: 1px; }
-        .current { width: auto; flex: 0 0 auto; font-size: 16px; }
+        .speed-status { position: static; align-self: center; justify-self: end; min-width: 0; height: 26px; justify-content: center; gap: 3px; }
+        .current { width: 6ch; flex: 0 0 auto; font-size: 13px; }
         .current.is-bypassed { color: #d6d6d6; }
         .bypass { width: 20px; height: 22px; }
         .bypass svg { width: 19px; height: 19px; }
-        .slider-wrap { height: 32px; margin: 0; border: 1px solid #30373e; border-radius: 9px; background: rgba(255,255,255,.025); padding: 2px 32px 2px; }
-        .slider { height: 24px; border-radius: 42%; background-size: 100% 8px; }
+        .slider-wrap { height: 26px; margin: 0; border: 1px solid #30373e; border-radius: 7px; background: rgba(255,255,255,.025); padding: 0; }
+        .slider { height: 24px; border-radius: 6px; background-size: 100% 100%; }
         .slider::-webkit-slider-runnable-track { height: 9px; border-radius: 999px; }
         .slider::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: -2.5px; box-shadow: 0 0 0 2px #fff; }
         .slider::-moz-range-thumb { width: 14px; height: 14px; }
-        .limits { padding: 0 7px; }
-        .range-label { top: 8px; padding: 0; border-radius: 0; background: transparent; transform: translateX(-50%); }
+        .limits { inset-inline: 0; padding: 0 6px; font-size: 8px; text-shadow: 0 1px 2px #000; }
+        .range-label { top: 50%; padding: 0; border-radius: 0; background: transparent; font-size: 8px; text-shadow: 0 1px 2px #000; transform: translate(-50%, -50%); }
         .waveform-shell { position: relative; overflow: hidden; height: 130px; border: 1px solid #343434; border-radius: 11px; background: rgba(255,255,255,.025); touch-action: none; transition: height 160ms ease; }
         .waveform-shell.is-collapsed { height: 32px; touch-action: auto; }
         .waveform-stage { position: absolute; inset: 34px 8px 27px; cursor: crosshair; }
@@ -1503,7 +1643,7 @@
         .effect-setting-value { align-self: center; color: #bfc4c8; font-size: 9px; font-weight: 500; line-height: 1; text-align: right; }
         .effect-room { height: 21px; border: 1px solid #3b4249; border-radius: 4px; color: #e8e8e8; background: #202428; font-size: 9px; font-weight: 500; }
         .effects-note { margin: 0 0 3px 69px; color: #858c92; font-size: 9px; line-height: 1.2; }
-        .panel-tools { display: flex; grid-column: 2; grid-row: 2; justify-self: start; align-self: center; gap: 3px; margin-left: 0; }
+        .panel-tools { display: flex; grid-column: 4; grid-row: 1; justify-self: end; align-self: center; gap: 3px; margin-left: 0; }
         .panel-tool { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 23px; height: 20px; margin: 0; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; color: #fff; background: rgba(255,255,255,.08); cursor: pointer; outline: none; transition: background-color 200ms, border-color 200ms; }
         .panel-tool:hover { color: #fff; border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.14); }
         .panel-tool:focus-visible { border-color: rgba(255,85,0,.65); }
@@ -1512,13 +1652,16 @@
         .panel-tool svg { display: block; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
         .settings-button svg { width: 12px; height: 12px; fill: currentColor; stroke: none; }
         @media (max-width: 360px) {
-          .panel-header { grid-template-columns: 32px minmax(0, 1fr) 40px 66px; column-gap: 3px; }
-          .brand-logo { width: 32px; height: 32px; border-radius: 8px; }
-          .brand-name { font-size: 12px; }
+          .panel-header { grid-template-columns: 28px minmax(0, 1fr) 36px auto; column-gap: 3px; }
+          .brand-logo { width: 28px; height: 28px; border-radius: 7px; }
+          .brand-name { font-size: 11px; }
           .free-badge { height: 14px; padding: 0 3px; font-size: 7px; }
-          .presets, .preset, .custom-preset, .custom-preset[data-saved="true"] { width: 40px; }
+          .presets, .preset, .custom-preset, .custom-preset[data-saved="true"] { width: 36px; }
           .custom-preset, .custom-preset[data-saved="true"] { font-size: 8px; }
-          .current { font-size: 14px; }
+          .current { font-size: 11px; }
+          .panel-tool { width: 20px; }
+          .drum-pad { gap: 4px; padding-inline: 4px; }
+          .drum-name { font-size: 9px; }
           .bypass, .bypass svg { width: 16px; height: 16px; }
         }
         .clear-loop, .download-loop { height: 22px; padding: 0 6px; border-radius: 6px; opacity: .82; }
@@ -1572,10 +1715,12 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M12 8v8"/><path d="M5 5h14v14H5z"/></svg>
           </button>
         </div>
-        <div class="speed-status">
-          <output class="current">1x</output>
-          <button class="bypass" type="button" aria-label="Bypass loop and playback effects" aria-pressed="false" title="Bypass loop and playback effects">${BYPASS_ICON}</button>
         </div>
+        <div class="drum-section" role="group" aria-label="Drum pads">
+          <div class="drum-pads">
+            ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span><span class="drum-name">${pad.name}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
+          </div>
+          <p class="drum-message" role="status" aria-live="polite" hidden></p>
         </div>
         <div class="tempo-row">
           <div class="slider-wrap">
@@ -1592,6 +1737,10 @@
             />
           </div>
           <label class="pitch-label" title="Keep tone"><input class="pitch-toggle" type="checkbox" aria-label="Keep tone" title="Keep tone" /></label>
+        <div class="speed-status">
+          <output class="current">1x</output>
+          <button class="bypass" type="button" aria-label="Bypass loop and playback effects" aria-pressed="false" title="Bypass loop and playback effects">${BYPASS_ICON}</button>
+        </div>
         </div>
         <div class="waveform-shell" role="group" aria-label="Loop waveform">
           <div class="section-header waveform-header">
@@ -1670,6 +1819,7 @@
     if (!ui) return;
     clearHoverTimers();
     panelOpenMode = mode;
+    if (ui.panel.hidden) ui.panel.scrollTop = 0;
     setPanelOpen(true);
     document.dispatchEvent(new CustomEvent(PLAYER_TOOLS_OPENED_EVENT));
     if (!waveformCollapsed) loadPlayerWaveform();
@@ -1683,6 +1833,7 @@
   function closePanel() {
     clearHoverTimers();
     panelOpenMode = null;
+    hoveredDrum = null;
     setPanelOpen(false);
   }
 
@@ -1736,6 +1887,9 @@
       trigger: root.querySelector(".trigger"),
       clearRate: root.querySelector(".clear-rate"),
       panel: root.querySelector(".panel"),
+      drumButtons: [...root.querySelectorAll(".drum-pad")],
+      drumFiles: [...root.querySelectorAll(".drum-file")],
+      drumMessage: root.querySelector(".drum-message"),
       slider: root.querySelector(".slider"),
       pitchToggle: root.querySelector(".pitch-toggle"),
       current: root.querySelector(".current"),
@@ -1787,6 +1941,56 @@
         [...root.querySelectorAll("[data-effect-character-value]")].map((output) => [output.dataset.effectCharacterValue, output])
       ),
     };
+
+    updateDrumLabels();
+    ui.drumButtons.forEach((button, index) => {
+      const input = ui.drumFiles[index];
+      let pressedAt = 0;
+      let holdTimer = null;
+      let suppressClick = false;
+      const clearHold = () => {
+        if (holdTimer !== null) clearTimeout(holdTimer);
+        holdTimer = null;
+        button.classList.remove("is-holding");
+      };
+      button.addEventListener("pointerenter", (event) => {
+        if (event.pointerType === "mouse") hoveredDrum = index;
+      });
+      button.addEventListener("pointerleave", () => {
+        if (hoveredDrum === index) hoveredDrum = null;
+      });
+      button.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        pressedAt = performance.now();
+        holdTimer = setTimeout(() => button.classList.add("is-holding"), DRUM_LONG_PRESS_MS);
+      });
+      button.addEventListener("pointerup", (event) => {
+        const held = pressedAt && performance.now() - pressedAt >= DRUM_LONG_PRESS_MS;
+        pressedAt = 0;
+        clearHold();
+        if (!held || event.button !== 0) return;
+        suppressClick = true;
+        input.click();
+        setTimeout(() => { suppressClick = false; }, 0);
+      });
+      button.addEventListener("pointercancel", () => { pressedAt = 0; clearHold(); });
+      button.addEventListener("contextmenu", (event) => event.preventDefault());
+      button.addEventListener("keydown", (event) => {
+        if (!event.shiftKey || !["Enter", " "].includes(event.key)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        input.click();
+      });
+      button.addEventListener("click", (event) => {
+        if (suppressClick) { event.preventDefault(); suppressClick = false; return; }
+        playDrum(index);
+      });
+      input.addEventListener("change", () => {
+        loadCustomDrum(index, input.files?.[0]);
+        input.value = "";
+      });
+    });
+    document.addEventListener("keydown", handleDrumKeydown, true);
 
     ui.trigger.addEventListener("pointerenter", (event) => {
       if (event.pointerType !== "mouse") return;

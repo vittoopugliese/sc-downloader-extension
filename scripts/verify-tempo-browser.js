@@ -22,7 +22,13 @@ function listen(server) {
 }
 
 async function main() {
-  const server = http.createServer((_request, response) => {
+  const server = http.createServer((request, response) => {
+    const sampleName = /^\/assets\/drums\/(kick1|kick2|clap1|hat1)\.wav$/.exec(request.url || "");
+    if (sampleName) {
+      response.setHeader("Content-Type", "audio/wav");
+      fs.createReadStream(path.join(projectRoot, "assets", "drums", `${sampleName[1]}.wav`)).pipe(response);
+      return;
+    }
     response.setHeader("Content-Type", "text/html; charset=utf-8");
     response.end(`<!doctype html>
       <style>
@@ -97,6 +103,10 @@ async function main() {
       document.documentElement.setAttribute(
         "data-scdl-extension-logo-url",
         logoUrl
+      );
+      document.documentElement.setAttribute(
+        "data-scdl-extension-drum-samples-url",
+        `${location.origin}/assets/drums/`
       );
       document.documentElement.setAttribute("data-scdl-player-waveform", JSON.stringify({
         trackUrl: "http://127.0.0.1/artist/track",
@@ -199,6 +209,48 @@ async function main() {
     if (!(await panel.isVisible())) {
       throw new Error("Playback Speed panel did not open.");
     }
+    const drumPads = host.locator(".drum-pad");
+    assert.equal(await drumPads.count(), 4, "The panel must show four drum pads.");
+    assert.deepEqual(await drumPads.locator(".drum-name").allTextContents(),
+      ["Kick", "Clap", "Hat", "Kick 2"]);
+    const drumPlacement = await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      const header = root.querySelector(".panel-header").getBoundingClientRect();
+      const drums = root.querySelector(".drum-section").getBoundingClientRect();
+      const tempo = root.querySelector(".tempo-row").getBoundingClientRect();
+      return header.bottom <= drums.top && drums.bottom <= tempo.top &&
+        root.querySelector(".drum-pads").scrollWidth <= root.querySelector(".drum-pads").clientWidth;
+    });
+    assert.equal(drumPlacement, true, "The drum row must fit between the header and tempo controls.");
+    await page.evaluate(() => {
+      window.drumStarts = 0;
+      const originalStart = AudioBufferSourceNode.prototype.start;
+      AudioBufferSourceNode.prototype.start = function (...args) {
+        window.drumStarts += 1;
+        return originalStart.apply(this, args);
+      };
+    });
+    await drumPads.nth(0).click();
+    await page.waitForFunction(() => window.drumStarts === 1);
+    await drumPads.nth(1).hover();
+    await page.keyboard.press("j");
+    assert.equal(await drumPads.nth(1).locator(".drum-key").textContent(), "J",
+      "Hovering and pressing a key must assign it to that pad.");
+    await host.locator(".brand-name").hover();
+    await page.keyboard.press("j");
+    await page.waitForFunction(() => window.drumStarts === 2);
+    const sampleChooser = page.waitForEvent("filechooser");
+    const uploadPad = await drumPads.nth(3).boundingBox();
+    await page.mouse.move(uploadPad.x + uploadPad.width / 2, uploadPad.y + uploadPad.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(650);
+    await page.mouse.up();
+    await (await sampleChooser).setFiles(path.join(projectRoot, "assets", "drums", "hat1.wav"));
+    await drumPads.nth(3).locator(".drum-name").getByText("hat1").waitFor();
+    assert.equal(await page.evaluate(() => window.drumStarts), 2,
+      "Holding a pad to upload must not also play it.");
+    await drumPads.nth(3).click();
+    await page.waitForFunction(() => window.drumStarts === 3);
     await host.locator(".download-track-button").hover();
     await page.waitForTimeout(130);
     assert.deepEqual(await page.locator("#scdl-fast-tooltip").evaluate((tip) => ({
@@ -330,10 +382,10 @@ async function main() {
     });
     if (
       branding.name !== "SCTD Player Tools" ||
-      branding.logoWidth !== 42 ||
-      branding.logoHeight !== 42 ||
+      branding.logoWidth !== 32 ||
+      branding.logoHeight !== 32 ||
       branding.logoHidden ||
-      branding.titleFontSize !== 18 ||
+      branding.titleFontSize !== 16 ||
       branding.badge.height !== "17px" ||
       branding.badge.fontSize !== "9px" ||
       branding.badge.text !== "PRO" ||
@@ -404,7 +456,7 @@ async function main() {
     if (
       compactStyles.panelSize[0] !== 420 ||
       compactStyles.padding.join(" ") !== "7px 7px 7px 7px" ||
-      compactStyles.presetSize.join("x") !== "50x20" ||
+      compactStyles.presetSize.join("x") !== "42x15" ||
       compactStyles.toggleSize.join("x") !== "16x16" ||
       compactStyles.pitchText !== "" ||
       compactStyles.pitchTooltip !== "Keep tone" ||
@@ -419,12 +471,12 @@ async function main() {
       compactStyles.detachButtonSize.join("x") !== "23x20" ||
       compactStyles.detachButtonRadius !== "4px" ||
       compactStyles.detachIconSize.join("x") !== "12x12" ||
-      compactStyles.headerHeight > 55 ||
+      compactStyles.headerHeight > 38 ||
       compactStyles.headerOverflows ||
       !(compactStyles.headerRects[0][0] < compactStyles.headerRects[1][0] &&
         compactStyles.headerRects[1][0] < compactStyles.headerRects[2][0] &&
-        compactStyles.headerRects[2][0] < compactStyles.headerRects[4][0] &&
-        compactStyles.headerRects[1][1] < compactStyles.headerRects[3][1] &&
+        compactStyles.headerRects[2][2] <= compactStyles.headerRects[3][0] &&
+        compactStyles.headerRects[4][1] > compactStyles.headerRects[0][3] &&
         compactStyles.headerRects[0][3] >= compactStyles.headerRects[3][3]) ||
       compactStyles.waveformHeight !== 130 ||
       compactStyles.waveformTitleIconSize.join("x") !== "16x16" ||
@@ -433,7 +485,7 @@ async function main() {
       compactStyles.triggerRateFontSize !== "9px" ||
       compactStyles.triggerRatePosition !== "absolute" ||
       compactStyles.clearRateColor !== "rgb(255, 255, 255)" ||
-      compactStyles.tempoOrder.join(" ") !== "slider-wrap pitch-label" ||
+      compactStyles.tempoOrder.join(" ") !== "slider-wrap pitch-label speed-status" ||
       compactStyles.statusOrder.join(" ") !== "current bypass"
     ) {
       throw new Error(`Playback Speed panel compact styling is incomplete: ${JSON.stringify(compactStyles)}`);
@@ -500,7 +552,7 @@ async function main() {
       panelFeatures.hasRatingLink ||
       panelFeatures.labels.join("|") !== "Tone & Velocity" ||
       panelFeatures.order.slice(0, 3).join("|") !==
-        "panel-header|tempo-row|waveform-shell"
+        "panel-header|drum-section|tempo-row"
     ) {
       throw new Error("The combined panel layout or links are incomplete.");
     }
@@ -1018,17 +1070,24 @@ async function main() {
         const title = rect(".brand-title-line");
         const tools = rect(".panel-tools");
         const presets = rect(".presets");
-        const status = rect(".speed-status");
         const bounds = header.getBoundingClientRect();
-        return title.right <= presets.left && tools.right <= presets.left &&
-          logo.right <= title.left && presets.right <= status.left &&
-          status.right <= bounds.right && header.scrollWidth <= header.clientWidth;
+        const root = header.getRootNode();
+        const tempo = root.querySelector(".tempo-row");
+        const slider = root.querySelector(".slider").getBoundingClientRect();
+        const limits = root.querySelector(".limits").getBoundingClientRect();
+        const pads = [...root.querySelectorAll(".drum-pad")];
+        return title.right <= presets.left && presets.right <= tools.left &&
+          logo.right <= title.left && tools.right <= bounds.right &&
+          header.scrollWidth <= header.clientWidth && tempo.scrollWidth <= tempo.clientWidth &&
+          limits.left >= slider.left && limits.right <= slider.right &&
+          pads.every((pad) => pad.offsetHeight === 36 && pad.getBoundingClientRect().right <= bounds.right);
       });
-      if (!headerFits) throw new Error(`Player Tools header overflows at ${width}px.`);
+      if (!headerFits) throw new Error(`Player Tools compact controls do not fit at ${width}px.`);
     }
     await page.setViewportSize({ width: 720, height: 420 });
 
     fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
+    await panel.evaluate((element) => { element.scrollTop = 0; });
     await page.screenshot({ path: screenshotPath });
     console.log(`Tempo browser verification passed: ${screenshotPath}`);
   } finally {

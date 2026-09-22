@@ -40,6 +40,7 @@ for (const item of [
   "scripts/tempo-control-main.js",
   "THIRD_PARTY_LICENSES.md",
   panelLogo,
+  "assets/drums",
 ]) {
   if (!packageScript.includes(`\"${item}\"`)) {
     throw new Error(`Extension package is missing ${item}.`);
@@ -54,6 +55,12 @@ if (
   )
 ) {
   throw new Error("The tempo panel logo is not exposed to SoundCloud.");
+}
+if (
+  !contentCode.includes("assets/drums/") ||
+  !manifest.web_accessible_resources?.some((entry) => entry.resources?.includes("assets/drums/*.wav"))
+) {
+  throw new Error("The default drum samples are not exposed to SoundCloud.");
 }
 
 class MockMediaElement {
