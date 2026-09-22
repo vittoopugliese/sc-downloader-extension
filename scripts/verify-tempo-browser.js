@@ -13,6 +13,7 @@ const screenshotPath = path.join(
 const logoDataUrl = `data:image/png;base64,${fs.readFileSync(
   path.join(projectRoot, "assets", "LooperPlayerToolkit.png")
 ).toString("base64")}`;
+const eqIconDataUrl = `data:image/svg+xml;base64,${fs.readFileSync(path.join(projectRoot, "assets", "icons", "eq.svg")).toString("base64")}`;
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -70,7 +71,7 @@ async function main() {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
     await page.addScriptTag({ path: path.join(__dirname, "player-tools-policy.js") });
-    await page.evaluate((logoUrl) => {
+    await page.evaluate(([logoUrl, eqUrl]) => {
       const playerToolsSnapshot = {
         revision: 1,
         plan: "pro",
@@ -104,6 +105,7 @@ async function main() {
         "data-scdl-extension-logo-url",
         logoUrl
       );
+      document.documentElement.setAttribute("data-scdl-extension-eq-url", eqUrl);
       document.documentElement.setAttribute(
         "data-scdl-extension-drum-samples-url",
         `${location.origin}/assets/drums/`
@@ -161,7 +163,7 @@ async function main() {
         readyState: { configurable: true, value: 4 },
         paused: { configurable: true, value: false },
       });
-    }, logoDataUrl);
+    }, [logoDataUrl, eqIconDataUrl]);
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-main.js"),
     });
@@ -1152,14 +1154,19 @@ async function main() {
     // Exercise the EQ inside the real panel, including the access bridge and persistence.
     await page.setViewportSize({ width: 720, height: 780 });
     await host.locator(".peq summary").click();
+    assert.equal(await host.locator(".peq-icon").evaluate((icon) => icon.complete && icon.naturalWidth > 0), true,
+      "The EQ header must load its packaged icon");
+    assert.equal(await host.locator(".peq-chevron").count(), 1);
     await host.locator(".peq-canvas").dblclick({ position: { x: 180, y: 130 } });
     await page.waitForFunction(() => JSON.parse(localStorage.getItem("scdl.parametric-eq.v1"))?.bands[0]?.gain < 0);
     await host.locator(".peq-canvas").dblclick({ position: { x: 300, y: 55 } });
     await page.waitForFunction(() => JSON.parse(localStorage.getItem("scdl.parametric-eq.v1"))?.bands[1]?.gain > 0);
     await panel.evaluate((element) => { element.scrollTop = element.scrollHeight; });
     await page.screenshot({ path: path.join(projectRoot, "test-results", "parametric-eq.png") });
-    await host.locator(".peq-bypass").click();
+    await host.locator(".peq-header-bypass").click();
     await page.waitForFunction(() => JSON.parse(localStorage.getItem("scdl.parametric-eq.v1"))?.enabled === false);
+    await host.locator(".peq-clip").click();
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem("scdl.parametric-eq.v1"))?.hardClip === true);
 
     await page.evaluate(() => {
       const listeners = [];
@@ -1227,7 +1234,9 @@ async function main() {
     assert.equal(await host.locator(".peq-headroom").count(), 0);
     assert.equal(await host.locator(".peq-fields").count(), 0);
     assert.equal(await host.locator(".peq-hint").count(), 0);
-    assert.equal(await host.locator(".peq-bypass").getAttribute("aria-pressed"), "true", "EQ bypass must survive reload");
+    assert.equal(await host.locator(".peq-header-bypass").getAttribute("aria-pressed"), "true", "EQ bypass must survive reload");
+    assert.equal(await host.locator(".peq-header-bypass").getAttribute("aria-pressed"), "true", "EQ header bypass must match");
+    assert.equal(await host.locator(".peq-clip").getAttribute("aria-pressed"), "true", "Hard clip must survive reload");
     console.log(`Tempo browser verification passed: ${screenshotPath}`);
   } finally {
     await browser.close();

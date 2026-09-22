@@ -48,6 +48,11 @@ for (const item of [
     throw new Error(`Extension package is missing ${item}.`);
   }
 }
+if (!fs.existsSync(path.join(projectRoot, "assets/icons/eq.svg")) ||
+    !manifest.web_accessible_resources?.some((entry) => entry.resources?.includes("assets/icons/eq.svg")) ||
+    !packageScript.includes('"assets/icons"')) {
+  throw new Error("The EQ icon must be packaged and exposed to SoundCloud.");
+}
 
 const contentCode = fs.readFileSync(contentPath, "utf8");
 if (

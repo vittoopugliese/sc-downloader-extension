@@ -11,7 +11,12 @@ Implementación local: `parametric-eq.js`, `parametric-eq-ui.js`, integración e
 `audio-effects-core.js` y `tempo-control-main.js`. Doble clic agrega un punto;
 arrastrar cambia frecuencia/ganancia; rueda sobre el punto cambia Q; doble clic
 en un punto lo elimina. Incluye teclado, bypass, reset y persistencia local.
-Rango 20 Hz–20 kHz, ±18 dB, Q 0,1–18.
+Rango 20 Hz–20 kHz, ±36 dB, Q 0,1–18. Doble clic junto al borde izquierdo
+crea high-pass; junto al derecho crea low-pass. En estos filtros, arrastrar
+horizontalmente ajusta frecuencia, verticalmente Q y la rueda también ajusta Q.
+El botón de hard clip conmuta un WaveShaper después del EQ; por defecto queda
+apagado, sin limitador propio del EQ. El corazón de bypass figura en la barra y
+en el encabezado plegado, sincronizado. El encabezado usa `assets/icons/eq.svg`.
 La curva muestra la respuesta de los filtros incluso en bypass. El usuario quitó
 la compensación automática de ganancia; los boosts cambian el nivel real. El
 espectro representa la salida del EQ.

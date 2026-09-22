@@ -6,6 +6,7 @@ let urlChangeTimeout = null;
 let lastBulkProgressAt = 0;
 const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
 const EXTENSION_PLAYER_ICON_ATTRIBUTE = "data-scdl-extension-player-icon-url";
+const EXTENSION_EQ_ICON_ATTRIBUTE = "data-scdl-extension-eq-url";
 const EXTENSION_DRUM_SAMPLES_ATTRIBUTE = "data-scdl-extension-drum-samples-url";
 const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
 const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
@@ -24,6 +25,10 @@ function exposeTempoControlAssets() {
   document.documentElement?.setAttribute?.(
     EXTENSION_PLAYER_ICON_ATTRIBUTE,
     chrome.runtime.getURL("assets/icons/player-toolkit.png")
+  );
+  document.documentElement?.setAttribute?.(
+    EXTENSION_EQ_ICON_ATTRIBUTE,
+    chrome.runtime.getURL("assets/icons/eq.svg")
   );
   document.documentElement?.setAttribute?.(
     EXTENSION_DRUM_SAMPLES_ATTRIBUTE,
