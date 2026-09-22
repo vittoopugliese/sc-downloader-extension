@@ -40,6 +40,7 @@ $packageItems = @(
     "scripts/bulk-library.js",
     "scripts/bulk-job-manager.js",
     "scripts/content.js",
+    "scripts/contact-content.js",
     "scripts/directory-storage.js",
     "scripts/download-core.js",
     "scripts/download-destination.js",

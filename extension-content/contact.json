@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "revision": "2026-09-22-1",
+  "enabled": true,
+  "title": "Novedades de SCTD",
+  "description": "Conocé las últimas novedades del proyecto.",
+  "link": {
+    "label": "Ver SCTD Web",
+    "url": "https://sctd.vpugliese.online/"
+  },
+  "image": {
+    "url": "https://sctd.vpugliese.online/extension-content/images/promo-v1.png",
+    "alt": "Presentación de SoundCloud Track Downloader"
+  }
+}

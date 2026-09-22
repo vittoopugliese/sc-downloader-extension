@@ -1,0 +1,25 @@
+name: Validate Contact content
+on:
+  pull_request:
+    paths:
+      - extension-content/**
+      - scripts/contact-content.js
+      - scripts/verify-contact-content.js
+      - scripts/verify-contact-content-runtime.js
+      - .github/workflows/validate-contact-content.yml
+  push:
+    paths:
+      - extension-content/**
+      - scripts/contact-content.js
+      - scripts/verify-contact-content.js
+      - scripts/verify-contact-content-runtime.js
+      - .github/workflows/validate-contact-content.yml
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run test:contact-content

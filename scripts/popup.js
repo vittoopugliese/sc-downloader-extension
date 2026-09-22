@@ -183,6 +183,7 @@ function selectHelpTab(selected) {
     document.getElementById(tab.dataset.helpTab).hidden = !active;
   });
   helpPanel.querySelector(".help-content").scrollTop = 0;
+  if (selected?.id === "supportTab") SCContactContent.load();
 }
 
 async function openRequestedPopupView() {
