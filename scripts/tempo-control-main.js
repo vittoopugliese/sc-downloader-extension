@@ -22,6 +22,8 @@
   const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
   const EXTENSION_PLAYER_ICON_ATTRIBUTE = "data-scdl-extension-player-icon-url";
   const EXTENSION_DRUM_SAMPLES_ATTRIBUTE = "data-scdl-extension-drum-samples-url";
+  const EXTENSION_MEGAPHONE_ATTRIBUTE = "data-scdl-extension-megaphone-url";
+  const EXTENSION_SOCIAL_BADGE_ATTRIBUTE = "data-scdl-extension-social-badge-url";
   const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
   const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
   const OPEN_PLAYER_TOOLS_PANEL_EVENT = "scdl:open-player-tools-panel";
@@ -228,13 +230,18 @@
     if (!ui) return;
     const logoUrl = document.documentElement.getAttribute(EXTENSION_LOGO_ATTRIBUTE);
     const playerIconUrl = document.documentElement.getAttribute(EXTENSION_PLAYER_ICON_ATTRIBUTE);
+    const megaphoneUrl = document.documentElement.getAttribute(EXTENSION_MEGAPHONE_ATTRIBUTE);
+    const socialBadgeUrl = document.documentElement.getAttribute(EXTENSION_SOCIAL_BADGE_ATTRIBUTE);
     if (logoUrl) {
       ui.brandLogo.src = logoUrl;
       ui.brandLogo.hidden = false;
     }
-    if (!playerIconUrl) return;
-    ui.triggerLogo.src = playerIconUrl;
-    ui.triggerLogo.hidden = false;
+    if (playerIconUrl) {
+      ui.triggerLogo.src = playerIconUrl;
+      ui.triggerLogo.hidden = false;
+    }
+    if (megaphoneUrl && ui.samplerIcon) ui.samplerIcon.src = megaphoneUrl;
+    if (socialBadgeUrl && ui.planBadgeIcon) ui.planBadgeIcon.src = socialBadgeUrl;
   }
 
   document.addEventListener(EXTENSION_ASSETS_EVENT, syncBrandLogo);
@@ -250,7 +257,7 @@
   });
 
   function requestPad(action, payload = {}) {
-    const id = `pad-${Date.now()}-${++padRequestNumber}`;
+    const id = `pad_${Date.now()}_${++padRequestNumber}`;
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         padRequests.delete(id);
@@ -362,6 +369,10 @@
       if (file.size > 12 * 1024 * 1024) throw new Error("This sample is too large for a pad.");
       const bytes = await file.arrayBuffer();
       const buffer = await getDrumAudioContext().decodeAudioData(bytes.slice(0));
+      const pcmBytes = buffer.length * buffer.numberOfChannels * 4;
+      if (buffer.duration > 30 || pcmBytes > 16 * 1024 * 1024) {
+        throw new Error("Samples must be 30 seconds or shorter and fit the pad memory limit.");
+      }
       const base64 = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result).split(",")[1]);
@@ -369,7 +380,7 @@
         reader.readAsDataURL(file);
       });
       const name = file.name.replace(/\.[^.]+$/, "") || pad.name;
-      await requestPad("store", { index, name, mimeType: file.type || "audio/wav", base64 });
+      await requestPad("store", { index, name, mimeType: file.type || "audio/wav", base64, operationId: `pad_${Date.now()}_${++padRequestNumber}` });
       if (pad.version !== version) return;
       pad.buffer = buffer;
       pad.saved = true;
@@ -1219,7 +1230,8 @@
     renderLoop();
     showDrumError(`Preparing loop for pad ${index + 1}…`);
     try {
-      const result = await requestPad("render", { index, ...sample });
+      const operationId = `pad_${Date.now()}_${++padRequestNumber}`;
+      const result = await requestPad("render", { index, operationId, ...sample });
       pad.version += 1;
       pad.buffer = null;
       pad.loading = null;
@@ -1684,7 +1696,8 @@
         .panel { width: min(420px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
         .panel-header { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-rows: 32px; align-items: center; column-gap: 5px; row-gap: 2px; padding-bottom: 6px; }
         .drum-section { margin: 0 0 6px; overflow: hidden; border: 1px solid #343434; border-radius: 11px; background: rgba(255,255,255,.025); }
-        .sampler-toggle { position: relative; display: flex; align-items: center; width: 100%; height: 31px; padding: 0 9px; border: 0; color: #fff; background: #1b1b1b; font-size: 11px; font-weight: 700; line-height: 1; text-align: left; cursor: pointer; }
+        .sampler-toggle { position: relative; display: flex; align-items: center; gap: 5px; width: 100%; height: 31px; padding: 0 9px; border: 0; color: #fff; background: #1b1b1b; font-size: 11px; font-weight: 700; line-height: 1; text-align: left; cursor: pointer; }
+        .sampler-icon { width: 14px; height: 14px; object-fit: contain; filter: invert(1) brightness(1.8); }
         .sampler-toggle:hover { color: #ff7b38; background: #232323; }
         .sampler-toggle:focus-visible { outline: 2px solid #ff5500; outline-offset: -2px; }
         .sampler-toggle svg { position: absolute; right: 9px; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 160ms ease; }
@@ -1710,9 +1723,12 @@
         .brand-copy { display: flex; grid-column: 2; grid-row: 1; align-items: center; min-width: 0; }
         .brand-title-line { display: flex; align-items: center; gap: 4px; min-width: 0; }
         .brand-name { font-size: 16px; line-height: 1.1; text-align: left; white-space: nowrap; }
-        .free-badge { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font-size: 9px; font-weight: 800; line-height: 1; letter-spacing: .04em; }
+        .free-badge { display: inline-flex; align-items: center; gap: 3px; height: 17px; padding: 0 5px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font-size: 9px; font-weight: 800; line-height: 1; letter-spacing: .04em; }
+        .plan-badge-icon { display: none; width: 11px; height: 11px; object-fit: contain; filter: invert(1) brightness(2); }
         .free-badge.is-pro { border-color: #8b5cf6; color: #f5f3ff; background: #32105e; box-shadow: 0 0 0 0 rgba(139, 92, 246, .32); animation: pro-badge-glow 2.8s ease-in-out infinite; }
+        .free-badge.is-pro .plan-badge-icon { display: block; animation: pro-badge-icon-float 2.8s ease-in-out infinite; }
         @keyframes pro-badge-glow { 50% { border-color: #a78bfa; box-shadow: 0 0 0 2px rgba(139, 92, 246, .14), 0 0 10px rgba(124, 58, 237, .22); } }
+        @keyframes pro-badge-icon-float { 50% { transform: translateY(-.5px); opacity: .86; } }
         .presets { display: grid; order: 0; grid-template-columns: 1fr; gap: 2px; width: 32px; margin: 0; justify-self: center; flex-basis: auto; }
         .preset { width: 32px; height: 12px; border-radius: 3px; font-size: 8px; }
         .custom-preset, .custom-preset[data-saved="true"] { width: 32px; padding: 0 1px; font-size: 7px; font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -1854,7 +1870,7 @@
         <div class="brand">
           <img class="brand-logo" width="42" height="42" alt="" draggable="false" hidden />
           <div class="brand-copy">
-            <div class="brand-title-line"><button class="brand-name" type="button" aria-label="Open the Looper guide">SCTD Player Tools</button><span class="free-badge" aria-label="Player Tools Free plan">FREE</span></div>
+            <div class="brand-title-line"><button class="brand-name" type="button" aria-label="Open the Looper guide">SCTD Player Tools</button><span class="free-badge" aria-label="Player Tools Free plan"><img class="plan-badge-icon" alt="" aria-hidden="true" /><span class="plan-badge-label">FREE</span></span></div>
           </div>
         </div>
         <div class="panel-tools" role="group" aria-label="Panel options">
@@ -1896,7 +1912,7 @@
         </div>
         </div>
         <section class="drum-section is-collapsed" aria-label="Sampler">
-          <button class="sampler-toggle" type="button" aria-controls="scdl-sampler-pads" aria-expanded="false">Sampler<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
+          <button class="sampler-toggle" type="button" aria-controls="scdl-sampler-pads" aria-expanded="false"><img class="sampler-icon" alt="" aria-hidden="true" /><span>Sampler</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
           <div class="sampler-body" id="scdl-sampler-pads">
             <div class="drum-pads">
               ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
@@ -2055,6 +2071,7 @@
       drumFiles: [...root.querySelectorAll(".drum-file")],
       drumSection: root.querySelector(".drum-section"),
       samplerToggle: root.querySelector(".sampler-toggle"),
+      samplerIcon: root.querySelector(".sampler-icon"),
       drumMessage: root.querySelector(".drum-message"),
       slider: root.querySelector(".slider"),
       pitchToggle: root.querySelector(".pitch-toggle"),
@@ -2066,6 +2083,8 @@
       brandLogo: root.querySelector(".brand-logo"),
       brandName: root.querySelector(".brand-name"),
       planBadge: root.querySelector(".free-badge"),
+      planBadgeIcon: root.querySelector(".plan-badge-icon"),
+      planBadgeLabel: root.querySelector(".plan-badge-label"),
       downloadTrackButton: root.querySelector(".download-track-button"),
       settingsButton: root.querySelector(".settings-button"),
       detachButton: root.querySelector(".detach-button"),
@@ -2389,7 +2408,7 @@
     const playbackAllowed = capability("tempo");
     const isPro = accessSnapshot?.plan === "pro";
     effectsController?.setEqualizerAllowed(capability("parametricEq"));
-    ui.planBadge.textContent = isPro ? "PRO" : "FREE";
+    ui.planBadgeLabel.textContent = isPro ? "PRO" : "FREE";
     ui.planBadge.classList.toggle("is-pro", isPro);
     ui.planBadge.setAttribute("aria-label", isPro ? "Player Tools Pro active" : "Player Tools Free plan");
     if (!playbackAllowed && !accessLocked) {

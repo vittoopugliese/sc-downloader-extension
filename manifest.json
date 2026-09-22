@@ -80,7 +80,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["assets/icon48.png", "assets/icon128.png", "assets/LooperPlayerToolkit.png", "assets/icons/player-toolkit.png", "assets/icons/eq.svg", "assets/icons/download.svg", "assets/icons/teleport-to-selected-track.svg", "assets/icons/refresh.svg", "assets/icons/storage.svg", "assets/drums/*.wav"],
+      "resources": ["assets/icon48.png", "assets/icon128.png", "assets/LooperPlayerToolkit.png", "assets/icons/player-toolkit.png", "assets/icons/eq.svg", "assets/icons/download.svg", "assets/icons/teleport-to-selected-track.svg", "assets/icons/refresh.svg", "assets/icons/storage.svg", "assets/icons/megaphone.svg", "assets/icons/sound-cloud-social-badge.svg", "assets/drums/*.wav"],
       "matches": ["https://soundcloud.com/*"]
     }
   ]

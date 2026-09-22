@@ -52,6 +52,10 @@
     for (const filter of filters) { output.connect(filter); output = filter; }
     const clean = context.createGain();
     const clipped = context.createGain();
+    // A unity-level shaper only changes samples already above full scale. Give
+    // the fixed clip control a -8 dB threshold and compensate its input drive.
+    const clipDrive = context.createGain();
+    clipDrive.gain.value = 2.5;
     const hardClipper = context.createWaveShaper();
     const curve = new Float32Array(2049);
     for (let i = 0; i < curve.length; i++) curve[i] = i / (curve.length - 1) * 2 - 1;
@@ -60,7 +64,8 @@
     clean.gain.value = 1;
     clipped.gain.value = 0;
     output.connect(clean);
-    output.connect(hardClipper);
+    output.connect(clipDrive);
+    clipDrive.connect(hardClipper);
     hardClipper.connect(clipped);
     const routedOutput = context.createGain();
     clean.connect(routedOutput);
@@ -87,7 +92,7 @@
       };
       set(input.gain, 1);
       set(clean.gain, clipActive ? 0 : 1);
-      set(clipped.gain, clipActive ? 1 : 0);
+      set(clipped.gain, clipActive ? 0.4 : 0);
       filters.forEach((filter, index) => {
         const band = settings.bands[index];
         filter.type = band?.type || "peaking";

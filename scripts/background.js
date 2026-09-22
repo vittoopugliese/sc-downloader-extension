@@ -496,7 +496,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return resolveLoopTrack(request, sender);
         })
         .then((trackData) => BulkJobManager.renderLoopPad(trackData, index, request.trimRange,
-          request.playbackTransform, request.effects || {}, request.name || `${trackData.title || "Track"} loop`))
+          request.playbackTransform, request.effects || {}, request.name || `${trackData.title || "Track"} loop`, request.operationId))
         .then(sendResponse)
         .catch((error) => sendResponse(errorResponse(error)));
       return true;
@@ -505,7 +505,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       ? { type: "OFFSCREEN_PAD_LIST" }
       : request.type === "GET_LOOP_PAD_AUDIO"
         ? { type: "OFFSCREEN_PAD_GET", index }
-        : { type: "OFFSCREEN_PAD_STORE", index, name: request.name, mimeType: request.mimeType, base64: request.base64 };
+        : { type: "OFFSCREEN_PAD_STORE", index, name: request.name, mimeType: request.mimeType, base64: request.base64, operationId: request.operationId };
+    if (request.type === "RENDER_LOOP_PAD") offscreenRequest.operationId = request.operationId;
     BulkJobManager.padMessage(offscreenRequest).then(sendResponse).catch((error) => sendResponse(errorResponse(error)));
     return true;
   }

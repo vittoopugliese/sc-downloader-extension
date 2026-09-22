@@ -8,6 +8,8 @@ const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
 const EXTENSION_PLAYER_ICON_ATTRIBUTE = "data-scdl-extension-player-icon-url";
 const EXTENSION_EQ_ICON_ATTRIBUTE = "data-scdl-extension-eq-url";
 const EXTENSION_DRUM_SAMPLES_ATTRIBUTE = "data-scdl-extension-drum-samples-url";
+const EXTENSION_MEGAPHONE_ATTRIBUTE = "data-scdl-extension-megaphone-url";
+const EXTENSION_SOCIAL_BADGE_ATTRIBUTE = "data-scdl-extension-social-badge-url";
 const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
 const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
 const LOOP_EXPORT_EVENT = "scdl:download-loop";
@@ -34,6 +36,8 @@ function exposeTempoControlAssets() {
     EXTENSION_DRUM_SAMPLES_ATTRIBUTE,
     chrome.runtime.getURL("assets/drums/")
   );
+  document.documentElement?.setAttribute?.(EXTENSION_MEGAPHONE_ATTRIBUTE, chrome.runtime.getURL("assets/icons/megaphone.svg"));
+  document.documentElement?.setAttribute?.(EXTENSION_SOCIAL_BADGE_ATTRIBUTE, chrome.runtime.getURL("assets/icons/sound-cloud-social-badge.svg"));
   if (typeof document.dispatchEvent === "function" && typeof CustomEvent === "function") {
     document.dispatchEvent(new CustomEvent(EXTENSION_ASSETS_EVENT));
   }
@@ -116,11 +120,13 @@ window.addEventListener?.("message", (event) => {
   const payload = { type: types[action] };
   if (action !== "list") payload.index = index;
   if (action === "store") {
+    payload.operationId = event.data.operationId;
     payload.name = event.data.name;
     payload.mimeType = event.data.mimeType;
     payload.base64 = event.data.base64;
   }
   if (action === "render") {
+    payload.operationId = event.data.operationId;
     payload.trackUrl = event.data.trackUrl;
     payload.trimRange = event.data.trimRange;
     payload.playbackTransform = event.data.playbackTransform;

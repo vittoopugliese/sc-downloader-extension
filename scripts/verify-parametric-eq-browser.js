@@ -121,6 +121,31 @@ const { chromium } = require("playwright");
       await page.close();
     }
 
+    const clipPage = await browser.newPage();
+    await clipPage.goto("about:blank");
+    await clipPage.addScriptTag({ path: path.join(__dirname, "parametric-eq.js") });
+    const clipPeaks = await clipPage.evaluate(async () => {
+      async function render(hardClip) {
+        const context = new OfflineAudioContext(1, 4800, 48000);
+        const graph = SCParametricEQ.createGraph(context);
+        graph.apply({ enabled: true, hardClip, bands: [] }, false, true);
+        const oscillator = context.createOscillator();
+        const level = context.createGain();
+        oscillator.frequency.value = 1000;
+        level.gain.value = 0.8;
+        oscillator.connect(level);
+        level.connect(graph.input);
+        graph.output.connect(context.destination);
+        oscillator.start();
+        const audio = await context.startRendering();
+        return Math.max(...audio.getChannelData(0).map(Math.abs));
+      }
+      return { clean: await render(false), clipped: await render(true) };
+    });
+    assert.ok(clipPeaks.clean > 0.75 && clipPeaks.clipped < 0.45,
+      `Hard clip must affect a normal loud signal without EQ boost: ${JSON.stringify(clipPeaks)}`);
+    await clipPage.close();
+
     const page = await browser.newPage({ viewport: { width: 420, height: 550 } });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));

@@ -1028,7 +1028,7 @@ const BulkJobManager = {
     }
   },
 
-  async renderLoopPad(trackData, index, trimRange, playbackTransform, effects, name) {
+  async renderLoopPad(trackData, index, trimRange, playbackTransform, effects, name, operationId = `pad_${Date.now()}_${index}`) {
     singleDownloadsInFlight += 1;
     try {
       await startKeepalive();
@@ -1042,7 +1042,8 @@ const BulkJobManager = {
           });
           result = await sendOffscreenMessage({
             type: "OFFSCREEN_PAD_RENDER",
-            buildId: `track_pad_${Date.now()}_${index}`,
+            buildId: `track_pad_${operationId.replace(/^pad_/, "")}_${index}`,
+            operationId,
             index,
             name,
             streamUrl: resolved.streamUrl,
