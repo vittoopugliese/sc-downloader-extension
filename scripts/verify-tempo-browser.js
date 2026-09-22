@@ -219,16 +219,16 @@ async function main() {
     // Hover opens after the intended dwell time, stays open while the pointer
     // is inside the panel, and closes when the pointer leaves it.
     await host.locator(".trigger").hover();
-    await page.waitForTimeout(130);
+    await page.waitForTimeout(160);
     assert.deepEqual(await page.locator("#scdl-fast-tooltip").evaluate((tip) => ({
       text: tip.textContent, visible: tip.style.visibility,
     })), { text: "Playback speed 1.0x", visible: "visible" },
     "The Player Tools trigger must show a custom tooltip from its aria-label");
-    await page.waitForTimeout(80);
+    await page.waitForTimeout(25);
     if (await panelIsOpen()) {
       throw new Error("Playback Speed panel opened before 254ms of hover.");
     }
-    await page.waitForTimeout(55);
+    await page.waitForTimeout(80);
     if (!(await panelIsOpen())) {
       throw new Error("Playback Speed panel did not open after 254ms of hover.");
     }
@@ -297,13 +297,13 @@ async function main() {
     await drumPads.nth(3).click();
     await page.waitForFunction(() => window.drumStarts === 3);
     await host.locator(".download-track-button").hover();
-    await page.waitForTimeout(130);
+    await page.waitForTimeout(184);
     assert.deepEqual(await page.locator("#scdl-fast-tooltip").evaluate((tip) => ({
       text: tip.textContent, visible: tip.style.visibility,
     })), { text: "Download current playing", visible: "visible" },
     "A Player Tools button in the shadow panel must show its custom tooltip");
     await host.locator(".clear-loop").hover();
-    await page.waitForTimeout(130);
+    await page.waitForTimeout(184);
     assert.deepEqual(await page.locator("#scdl-fast-tooltip").evaluate((tip) => ({
       text: tip.textContent, visible: tip.style.visibility,
     })), { text: "Clear loop", visible: "visible" },

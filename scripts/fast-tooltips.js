@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const SHOW_DELAY_MS = 100;
+  const SHOW_DELAY_MS = 372;
   const tooltip = document.createElement("div");
   tooltip.id = "scdl-fast-tooltip";
   tooltip.setAttribute("role", "tooltip");

@@ -129,7 +129,7 @@ const { chromium } = require('playwright');
     assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['Abrir ↗',''],detailOrder:['cover','detail-copy','status','detail-actions'],oneLine:true,locateTitle:'Teleport to selected track',locateIcon:true,openSingleLine:true});
     const teleportButton=page.locator('#scdl-likes-explorer .locate-action');
     await page.mouse.move(0,0);
-    await teleportButton.hover(); await page.waitForTimeout(130);
+    await teleportButton.hover(); await page.waitForTimeout(184);
     const teleportTooltip=await teleportButton.evaluate(button=>{
       const tooltip=document.querySelector('#scdl-fast-tooltip');
       return {text:tooltip.textContent,visible:tooltip.style.visibility,titleRemoved:!button.hasAttribute('title')};

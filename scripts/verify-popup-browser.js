@@ -54,7 +54,7 @@ const iconDataUrls = Object.fromEntries(
     if (deviceScaleFactor === 1) {
       const helpButton = page.locator("#helpBtn");
       await helpButton.hover();
-      await page.waitForTimeout(130);
+      await page.waitForTimeout(184);
       const helpTooltip = await helpButton.evaluate((button) => {
         const tip = document.querySelector("#scdl-fast-tooltip");
         const rect = tip.getBoundingClientRect();
@@ -71,11 +71,11 @@ const iconDataUrls = Object.fromEntries(
       await page.mouse.move(425, 240);
       assert.equal(await helpButton.getAttribute("title"), "Help and settings");
       await helpButton.focus();
-      await page.waitForTimeout(130);
+      await page.waitForTimeout(184);
       assert.equal(await page.locator("#scdl-fast-tooltip").textContent(), "Help and settings");
       assert.equal(await page.locator("#scdl-fast-tooltip").evaluate((tip) => tip.style.visibility), "visible");
       await page.locator("#downloadBtn").hover();
-      await page.waitForTimeout(130);
+      await page.waitForTimeout(184);
       assert.equal(await page.locator("#scdl-fast-tooltip").textContent(), "Download");
       for (const [selector, label] of [
         ["#downloadFormat", "Download format"],
@@ -83,7 +83,7 @@ const iconDataUrls = Object.fromEntries(
       ]) {
         const select = page.locator(selector);
         await select.hover();
-        await page.waitForTimeout(130);
+        await page.waitForTimeout(184);
         assert.equal(await page.locator("#scdl-fast-tooltip").textContent(), label);
         assert.equal(await page.locator("#scdl-fast-tooltip").evaluate((tip) => tip.style.visibility), "visible");
         assert.equal(await select.getAttribute("title"), null);
