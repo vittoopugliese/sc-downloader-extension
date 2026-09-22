@@ -56,6 +56,9 @@ async function waitForFile(directory, timeoutMs = 30000) {
     const worker =
       context.serviceWorkers()[0] || (await context.waitForEvent("serviceworker"));
     const page = await context.newPage();
+    const browserLogs = [];
+    page.on("console", (message) => browserLogs.push(`page:${message.type()}:${message.text()}`));
+    worker.on("console", (message) => browserLogs.push(`worker:${message.type()}:${message.text()}`));
     await page.addInitScript(() => {
       localStorage.setItem("scdl.tempo.rate", "0.5");
       localStorage.setItem("scdl.tempo.preservePitch", "true");
@@ -67,7 +70,11 @@ async function waitForFile(directory, timeoutMs = 30000) {
     });
 
     const wav = createMonoWav(20);
-    const audioUrl = `data:audio/wav;base64,${wav.toString("base64")}`;
+    const audioUrl = "https://cdn.test/loop-regression.wav";
+    await context.route(audioUrl, (route) => route.fulfill({
+      contentType: "audio/wav",
+      body: wav,
+    }));
     const trackUrl = "https://soundcloud.com/artist/loop-regression";
     const track = {
       id: 4242,
@@ -597,6 +604,7 @@ async function waitForFile(directory, timeoutMs = 30000) {
     await worker.evaluate(() => globalThis.SCPlayerToolsAccess.setEntitlement({
       status: "active", licenseId: "e2e-license", checkedAt: Date.now(),
     }));
+    assert.equal((await worker.evaluate(() => globalThis.SCPlayerToolsAccess.getSnapshot({}))).plan, "pro");
     await downloadButton.click();
     try {
       await page.waitForFunction(
@@ -617,11 +625,21 @@ async function waitForFile(directory, timeoutMs = 30000) {
         cause: error,
       });
     }
-    assert.equal(
-      await downloadButton.getAttribute("data-scdl-loop-download-state"),
-      "success",
-      (await downloadButton.getAttribute("title")) || "Loop download failed"
-    );
+    const loopDownloadState = await downloadButton.getAttribute("data-scdl-loop-download-state");
+    let directDiagnostic = null;
+    if (loopDownloadState !== "success") {
+      directDiagnostic = await worker.evaluate(async ({ track, trimRange }) => {
+        try {
+          const trackData = SCDownloadTrack.fromSoundCloud(track, { clientId: "fixture-client", formatPreference: "auto" });
+          return await BulkJobManager.downloadLoop(trackData, "auto", trimRange,
+            { rate: 0.5, preservePitch: true });
+        } catch (error) {
+          return { success: false, error: error?.message, code: error?.code, status: error?.status };
+        }
+      }, { track, trimRange: { startMs: 1000, endMs: 2000, durationMs: 20000 } });
+    }
+    assert.equal(loopDownloadState, "success",
+      `${(await downloadButton.getAttribute("title")) || "Loop download failed"}\n${browserLogs.join("\n")}\nDirect: ${JSON.stringify(directDiagnostic)}`);
 
     const downloadedFile = await waitForFile(downloads);
     assert.equal(path.extname(downloadedFile), ".wav");

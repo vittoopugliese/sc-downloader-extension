@@ -4,7 +4,7 @@
   const TRIAL_LIMIT = 20;
   const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
   const SCHEMA_VERSION = 2;
-  const PRO_OPERATIONS = new Set(["export-loop", "export-track-effects", "edit-loop-precise", "set-eq"]);
+  const PRO_OPERATIONS = new Set(["export-loop", "export-track-effects", "export-wav", "edit-loop-precise", "set-eq"]);
   const PLAYBACK_OPERATIONS = new Set(["set-effect", "set-rate", "set-preserve-pitch", "save-preset"]);
   const validId = (value) => typeof value === "string" && value.length > 0 && value.length <= 1024;
   const validGeneration = (value) => Number.isSafeInteger(value) && value >= 0;

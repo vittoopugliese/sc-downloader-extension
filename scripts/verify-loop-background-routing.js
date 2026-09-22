@@ -123,6 +123,10 @@ function dispatch(request, sender) {
     playbackTransform }, {});
   assert.equal(deniedTrack.code, "pro-required");
   assert.equal(downloads.length, 1);
+  const deniedEqTrack = await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack,
+    playbackTransform: { rate: 1 }, effects: { eq: { enabled: true, bands: [{ frequency: 1000, gain: 6, q: 1 }] } } }, {});
+  assert.equal(deniedEqTrack.code, "pro-required", "EQ-only export must be authorized as Pro");
+  assert.equal(downloads.length, 1);
   const original = await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack }, {});
   assert.equal(original.success, true);
   const neutral = await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack,
@@ -132,7 +136,9 @@ function dispatch(request, sender) {
   assert.equal(bulk.success, true);
   assert.equal(downloads.at(-1).includes(playbackTransform), false, "bulk never inherits effects");
   accessState.entitlement = { status: "active" };
-  assert.equal((await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack, playbackTransform }, {})).success, true);
+  const effects = { eq: { enabled: true, bands: [{ frequency: 1000, gain: 6, q: 1 }] } };
+  assert.equal((await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack, playbackTransform, effects }, {})).success, true);
+  assert.deepEqual(downloads.at(-1)[4], effects, "Authorized EQ settings must reach the audio build path");
 
   console.log("Loop background routing verification passed.");
 })().catch((error) => {

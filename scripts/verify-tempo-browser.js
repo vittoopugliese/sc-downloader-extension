@@ -679,6 +679,7 @@ async function main() {
       activeLoopBeforeMasterDownload ||
       masterDownload?.playbackTransform?.rate !== 1.25 ||
       masterDownload?.playbackTransform?.preservePitch !== true ||
+      !masterDownload?.effects?.eq ||
       Object.hasOwn(masterDownload || {}, "trimRange")
     ) {
       throw new Error(`Master download must export the full current track at the active speed and pitch: ${JSON.stringify(masterDownload)}`);
@@ -759,7 +760,8 @@ async function main() {
       loopDownload?.trimRange?.startMs !== 12345 ||
       loopDownload?.trimRange?.endMs !== 20678 ||
       loopDownload?.playbackTransform?.rate !== 1.25 ||
-      loopDownload?.playbackTransform?.preservePitch !== true
+      loopDownload?.playbackTransform?.preservePitch !== true ||
+      !loopDownload?.effects?.eq
     ) {
       throw new Error(`Loop WAV download must keep exporting only A/B at the active speed and pitch: ${JSON.stringify(loopDownload)}`);
     }
@@ -769,7 +771,8 @@ async function main() {
       await page.evaluate(() => window.trackDownloadRequests.length) !== 2 ||
       Object.hasOwn(masterDownloadWithLoop || {}, "trimRange") ||
       masterDownloadWithLoop?.playbackTransform?.rate !== 1.25 ||
-      masterDownloadWithLoop?.playbackTransform?.preservePitch !== true
+      masterDownloadWithLoop?.playbackTransform?.preservePitch !== true ||
+      !masterDownloadWithLoop?.effects?.eq
     ) {
       throw new Error(`Master download must ignore an existing loop selection: ${JSON.stringify(masterDownloadWithLoop)}`);
     }

@@ -146,6 +146,28 @@ const { chromium } = require("playwright");
       `Hard clip must affect a normal loud signal without EQ boost: ${JSON.stringify(clipPeaks)}`);
     await clipPage.close();
 
+    const exportPage = await browser.newPage();
+    await exportPage.goto("about:blank");
+    for (const file of ["parametric-eq.js", "audio-effects-core.js"]) {
+      await exportPage.addScriptTag({ path: path.join(__dirname, file) });
+    }
+    const exportLevels = await exportPage.evaluate(async () => {
+      const source = new OfflineAudioContext(1, 48000, 48000).createBuffer(1, 48000, 48000);
+      const samples = source.getChannelData(0);
+      for (let index = 0; index < samples.length; index += 1) samples[index] = Math.sin(index * Math.PI * 2 * 1000 / 48000) * 0.05;
+      const rms = (buffer) => Math.sqrt(buffer.getChannelData(0).reduce((sum, value) => sum + value * value, 0) / buffer.length);
+      const settings = { eq: { enabled: true, bands: [{ type: "peaking", frequency: 1000, gain: 12, q: 2 }] } };
+      const processed = await SCTempoEffects.renderSample(source, settings);
+      const bypassed = await SCTempoEffects.renderSample(source, { ...settings, bypassed: true });
+      return { original: rms(source), processed: rms(processed), bypassed: rms(bypassed) };
+    });
+    const exportedGainDb = 20 * Math.log10(exportLevels.processed / exportLevels.original);
+    assert.ok(exportedGainDb > 10 && exportedGainDb < 16,
+      `Export renderer must apply the active EQ: ${JSON.stringify({ ...exportLevels, exportedGainDb })}`);
+    assert.ok(Math.abs(exportLevels.bypassed / exportLevels.original - 1) < 0.001,
+      "Bypassed EQ must leave exported audio unchanged");
+    await exportPage.close();
+
     const page = await browser.newPage({ viewport: { width: 420, height: 550 } });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));

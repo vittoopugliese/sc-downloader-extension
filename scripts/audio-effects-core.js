@@ -130,7 +130,9 @@
   async function renderSample(buffer, settings, signal) {
     const reverbWet = settings?.bypassed ? 0 : clampPercent(settings?.reverb);
     const delayWet = settings?.bypassed ? 0 : clampPercent(settings?.delay);
-    if (!reverbWet && !delayWet) return buffer;
+    const eqSettings = globalThis.SCParametricEQ?.validate(settings?.eq);
+    const eqActive = settings?.bypassed !== true && globalThis.SCParametricEQ?.isActive(eqSettings);
+    if (!reverbWet && !delayWet && !eqActive) return buffer;
     if (signal?.aborted) throw new DOMException("Render aborted.", "AbortError");
     const sampleRate = buffer.sampleRate;
     const delaySeconds = clamp(settings?.delayTime, 60, 800, DEFAULTS.delayTime) / 1000;
@@ -153,7 +155,14 @@
     limiter.ratio.value = 12;
     limiter.attack.value = 0.003;
     limiter.release.value = 0.12;
-    source.connect(master);
+    let effectSource = source;
+    if (eqActive) {
+      const equalizer = globalThis.SCParametricEQ.createGraph(context);
+      equalizer.apply(eqSettings, false, true);
+      source.connect(equalizer.input);
+      effectSource = equalizer.output;
+    }
+    effectSource.connect(master);
     if (reverbWet) {
       const preDelay = context.createDelay(0.25);
       preDelay.delayTime.value = reverbPreDelaySeconds;
@@ -164,7 +173,7 @@
       tone.frequency.value = 600 + clampPercent(settings?.reverbTone ?? DEFAULTS.reverbTone) / 100 * 15400;
       const wet = context.createGain();
       wet.gain.value = reverbWet / 100 * MAX_SEND.reverb;
-      source.connect(preDelay);
+      effectSource.connect(preDelay);
       preDelay.connect(reverb);
       reverb.connect(tone);
       tone.connect(wet);
@@ -180,7 +189,7 @@
       feedback.gain.value = feedbackValue;
       const wet = context.createGain();
       wet.gain.value = delayWet / 100 * MAX_SEND.delay;
-      source.connect(delay);
+      effectSource.connect(delay);
       delay.connect(tone);
       tone.connect(feedback);
       feedback.connect(delay);

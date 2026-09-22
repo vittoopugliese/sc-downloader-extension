@@ -18,6 +18,10 @@ function createHarness(options = {}) {
   let automatic = options.automatic !== false;
   let failIds = new Set(options.failIds || []);
   let offscreenExists = options.offscreenInitiallyMissing !== true;
+  let getContextsCalls = 0;
+  let releasePausedGetContexts = null;
+  let markPausedGetContexts;
+  const pausedGetContexts = new Promise((resolve) => { markPausedGetContexts = resolve; });
   const releases = [];
   const starts = [];
   const effects = { create: 0, close: 0, notifications: 0, abort: 0 };
@@ -168,7 +172,14 @@ function createHarness(options = {}) {
       runtime: {
         lastError: null,
         getURL: (value) => `chrome-extension://test/${value}`,
-        getContexts: async () => offscreenExists ? [{ contextType: "OFFSCREEN_DOCUMENT" }] : [],
+        getContexts: async () => {
+          getContextsCalls += 1;
+          if (getContextsCalls === options.pauseGetContextsCall) {
+            markPausedGetContexts();
+            await new Promise((resolve) => { releasePausedGetContexts = resolve; });
+          }
+          return offscreenExists ? [{ contextType: "OFFSCREEN_DOCUMENT" }] : [];
+        },
         sendMessage: async () => ({ success: true }),
       },
       tabs: {
@@ -245,6 +256,8 @@ function createHarness(options = {}) {
       downloadStates.set(id, state);
       for (const listener of downloadListeners) listener({ id, state: { current: state } });
     },
+    waitForPausedGetContexts() { return pausedGetContexts; },
+    releaseGetContexts() { releasePausedGetContexts?.(); },
   };
 }
 
@@ -457,6 +470,21 @@ async function waitFor(predicate, label, timeout = 3000) {
   assert.equal(simultaneousSingles.length, 2);
   assert.equal(offscreenRace.effects.create, 1, "Concurrent downloads created two offscreen documents");
   assert.equal(offscreenRace.maxActive, 1, "Concurrent single downloads were not serialized");
+
+  const closeRace = createHarness({ automatic: false, pauseGetContextsCall: 2 });
+  const firstClosingDownload = closeRace.manager.downloadSingleTrack(tracks(1)[0]);
+  await waitFor(() => closeRace.starts.length === 1, "first download before close race");
+  closeRace.releaseAll();
+  await closeRace.waitForPausedGetContexts();
+  const leaseDuringClose = closeRace.manager.downloadSingleTrack(tracks(1)[0]);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  closeRace.releaseGetContexts();
+  await firstClosingDownload;
+  await waitFor(() => closeRace.starts.length === 2, "second download during close race");
+  assert.equal(closeRace.effects.close, 0, "Offscreen document closed after a new lease was acquired");
+  closeRace.releaseAll();
+  await leaseDuringClose;
+  assert.equal(closeRace.effects.close, 1, "Last lease did not perform the deferred offscreen close");
 
   const paged = createHarness({ bulkPages: {
     first: { items: tracks(2), enumerated: 2, nextCursor: "page-2", done: false },

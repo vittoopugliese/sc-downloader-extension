@@ -169,7 +169,7 @@ async function handlePadMessage(message) {
       const keepaliveId = setInterval(() => chrome.runtime.sendMessage({ type: "OFFSCREEN_KEEPALIVE", buildId: message.buildId }).catch(() => {}), SERVICE_WORKER_KEEPALIVE_MS);
       try {
         const { blob } = await SCDownload.buildTrackBlob(message.streamUrl, message.trackData, null, controller.signal,
-          message.trimRange, message.playbackTransform, message.effects);
+          message.trimRange, message.playbackTransform, message.effects, true);
         return await storePad(message.index, message.name, blob, operationId);
       } finally { clearInterval(keepaliveId); padRenders.delete(operationId); }
     }
@@ -333,7 +333,9 @@ async function handleBuild(message) {
       reportProgress,
       controller.signal,
       message.trimRange || null,
-      message.playbackTransform || null
+      message.playbackTransform || null,
+      message.effects || null,
+      message.allowWav === true
     );
     const blobUrl = URL.createObjectURL(blob);
     const record = buildRecords.get(message.buildId);

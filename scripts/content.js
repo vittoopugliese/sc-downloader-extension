@@ -105,6 +105,7 @@ onDocumentEvent(LOOP_EXPORT_EVENT, () => {
     trackUrl,
     trimRange: request.trimRange,
     playbackTransform: request.playbackTransform || null,
+    effects: request.effects || null,
   }).then((result) => {
     document.dispatchEvent(new CustomEvent(LOOP_EXPORT_RESULT_EVENT, { detail: { id: request.id, ...result } }));
   }).catch((error) => {

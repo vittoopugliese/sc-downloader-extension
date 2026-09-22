@@ -20,6 +20,14 @@ if (process.platform === 'win32') {
       fs.mkdirSync(path.dirname(destination),{recursive:true});
       fs.cpSync(path.join(root,item),destination,{recursive:true});
     }
+    const removePlatformMetadata = directory => {
+      for (const entry of fs.readdirSync(directory,{withFileTypes:true})) {
+        const target = path.join(directory,entry.name);
+        if (entry.name === '.DS_Store' || entry.name === 'Thumbs.db') fs.rmSync(target,{force:true});
+        else if (entry.isDirectory()) removePlatformMetadata(target);
+      }
+    };
+    removePlatformMetadata(stage);
     const commercePath = path.join(stage,'scripts','player-tools-commerce.js');
     const testLoginLine = 'const TEST_LOGIN = Object.freeze({ username: "1", password: "1" });';
     const commerceSource = fs.readFileSync(commercePath,'utf8');

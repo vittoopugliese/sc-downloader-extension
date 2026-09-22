@@ -106,6 +106,14 @@ function hasEffectivePlaybackTransform(transform) {
   return Number.isFinite(rate) && Math.abs(rate - 1) > 0.0001;
 }
 
+function hasEffectiveEffects(effects) {
+  if (!effects || typeof effects !== "object" || effects.bypassed === true) return false;
+  if (Number(effects.reverb) > 0 || Number(effects.delay) > 0) return true;
+  const eq = effects.eq;
+  return eq?.enabled === true && (eq.hardClip === true ||
+    (Array.isArray(eq.bands) && eq.bands.some((band) => band?.type !== "peaking" || Number(band?.gain) !== 0)));
+}
+
 function isSoundCloudTopFrameSender(sender) {
   if (sender?.id !== chrome.runtime.id || !sender.tab || sender.frameId !== 0) {
     return false;
@@ -419,7 +427,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === "DOWNLOAD_SINGLE_TRACK") {
-    const authorization = hasEffectivePlaybackTransform(request.playbackTransform)
+    const authorization = hasEffectivePlaybackTransform(request.playbackTransform) || hasEffectiveEffects(request.effects)
       ? SCPlayerToolsAccess.authorize(sender, { operation: "export-track-effects" })
       : Promise.resolve({ allowed: true });
     authorization
@@ -433,7 +441,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           request.trackData,
           request.formatPreference || "auto",
           request.downloadDestination ?? null,
-          request.playbackTransform || null
+          request.playbackTransform || null,
+          request.effects || null
         );
       })
       .then((result) => {
@@ -463,7 +472,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           request.formatPreference || trackData.formatPreference || "auto",
           request.trimRange,
           request.playbackTransform || null,
-          request.downloadDestination ?? null
+          request.downloadDestination ?? null,
+          request.effects || null
         )
       )
       .then((result) => {

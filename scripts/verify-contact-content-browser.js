@@ -5,7 +5,15 @@ const { chromium } = require("playwright");
 
 const root = path.resolve(__dirname, "..");
 const image = fs.readFileSync(path.join(root, "extension-content/images/promo-v1.png"));
-const content = JSON.parse(fs.readFileSync(path.join(root, "extension-content/contact.json"), "utf8"));
+const content = {
+  schemaVersion: 1,
+  revision: "browser-fixture",
+  enabled: true,
+  title: "Support",
+  description: "Fixture content",
+  link: { label: "Contact", url: "https://soundcloud.com/sc-downloader" },
+  image: { url: "https://sctd.vpugliese.online/extension-content/images/promo-v1.png", alt: "Promotion" },
+};
 
 (async () => {
   const browser = await chromium.launch({ headless: true });

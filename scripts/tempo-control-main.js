@@ -1368,6 +1368,7 @@
         generation: loopState.generation,
         trimRange: { startMs: loopState.startMs, endMs: loopState.endMs, durationMs: loopState.durationMs },
         playbackTransform: { rate: controller.snapshot().effectiveRate, preservePitch: controller.snapshot().preservePitch },
+        effects: effectsController?.snapshot() || {},
       }));
       document.dispatchEvent(new CustomEvent(LOOP_EXPORT_EVENT));
     });
@@ -1396,6 +1397,7 @@
       document.documentElement.setAttribute(TRACK_EXPORT_ATTRIBUTE, JSON.stringify({
         id,
         playbackTransform: { rate: state.effectiveRate, preservePitch: state.preservePitch },
+        effects: effectsController?.snapshot() || {},
       }));
       document.dispatchEvent(new CustomEvent(TRACK_EXPORT_EVENT));
     });

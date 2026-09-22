@@ -465,7 +465,7 @@ function ensurePlayerTrack() {
   }
 }
 
-async function downloadCurrentPlayerTrack(playbackTransform = readPlayerPlaybackTransform()) {
+async function downloadCurrentPlayerTrack(playbackTransform = readPlayerPlaybackTransform(), effects = null) {
   const requestedTrackUrl = getPlayerTrackUrl() || playerTrackUrl;
   if (!requestedTrackUrl) throw new Error(translate("inline_no_track"));
   const trackData = await withPlayerDownloadTimeout(
@@ -481,6 +481,7 @@ async function downloadCurrentPlayerTrack(playbackTransform = readPlayerPlayback
     inlineDownloadIntent.downloadTrack(trackData, {
       formatPreference: "auto",
       playbackTransform,
+      effects,
     }),
     translate("download_timeout")
   );
@@ -506,7 +507,7 @@ document.addEventListener?.(TRACK_EXPORT_EVENT, async () => {
 
   isPlayerDownloading = true;
   try {
-    const result = await downloadCurrentPlayerTrack(request.playbackTransform || null);
+    const result = await downloadCurrentPlayerTrack(request.playbackTransform || null, request.effects || null);
     document.dispatchEvent(new CustomEvent(TRACK_EXPORT_RESULT_EVENT, { detail: { id: request.id, ...result } }));
   } catch (error) {
     console.error("SC Track Downloader player download error:", error);

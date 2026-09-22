@@ -255,8 +255,13 @@ const SCDownload = (() => {
     }
   }
 
-  async function finalizeTrackBlob(trackData, buffer, onProgress, signal) {
+  async function finalizeTrackBlob(trackData, buffer, onProgress, signal, allowWav = false) {
     const { fileName, extension, bytes } = resolveFilename(trackData, buffer);
+    if (extension === "wav" && !allowWav) {
+      const error = new Error("Player Tools Pro is required to download WAV audio.");
+      error.code = "wav_requires_pro";
+      throw error;
+    }
     let finalBytes = bytes;
 
     const shouldTag =
@@ -529,8 +534,14 @@ const SCDownload = (() => {
     playbackTransform,
     onProgress,
     signal,
-    sampleEffects = null
+    sampleEffects = null,
+    allowWav = false
   ) {
+    if (!allowWav) {
+      const error = new Error("Player Tools Pro is required to export WAV audio.");
+      error.code = "wav_requires_pro";
+      throw error;
+    }
     throwIfAborted(signal);
     const AudioContextConstructor =
       globalThis.AudioContext || globalThis.webkitAudioContext;
@@ -609,13 +620,26 @@ const SCDownload = (() => {
     return Number.isFinite(rate) && Math.abs(rate - 1) > 0.0001;
   }
 
+  function hasSampleEffects(sampleEffects) {
+    if (!sampleEffects || sampleEffects.bypassed === true) return false;
+    if (Number(sampleEffects.reverb) > 0 || Number(sampleEffects.delay) > 0) return true;
+    return Boolean(globalThis.SCParametricEQ?.isActive?.(sampleEffects.eq));
+  }
+
   async function finalizeTransformedBlob(
     trackData,
     buffer,
     playbackTransform,
     onProgress,
-    signal
+    signal,
+    sampleEffects = null,
+    allowWav = false
   ) {
+    if (!allowWav) {
+      const error = new Error("Player Tools Pro is required to export WAV audio.");
+      error.code = "wav_requires_pro";
+      throw error;
+    }
     throwIfAborted(signal);
     const AudioContextConstructor =
       globalThis.AudioContext || globalThis.webkitAudioContext;
@@ -650,10 +674,13 @@ const SCDownload = (() => {
         { onProgress, signal }
       );
       throwIfAborted(signal);
+      const finished = hasSampleEffects(sampleEffects)
+        ? await globalThis.SCTempoEffects.renderSample(rendered, sampleEffects, signal)
+        : rendered;
       onProgress?.("Encoding WAV...");
-      const wavBytes = encodeWavSegment(rendered, {
+      const wavBytes = encodeWavSegment(finished, {
         startMs: 0,
-        endMs: (rendered.length / rendered.sampleRate) * 1000,
+        endMs: (finished.length / finished.sampleRate) * 1000,
       }, signal);
       const rateLabel = String(Number(Number(transform.rate).toFixed(3)));
       const pitchLabel = transform.preservePitch ? "preserve pitch" : "natural pitch";
@@ -681,10 +708,11 @@ const SCDownload = (() => {
     signal,
     trimRange = null,
     playbackTransform = null,
-    sampleEffects = null
+    sampleEffects = null,
+    allowWav = false
   ) {
     const normalizedTrimRange = normalizeTrimRange(trimRange);
-    if (normalizedTrimRange || hasPlaybackTransform(playbackTransform)) checkDecodeBudget(trackData);
+    if (normalizedTrimRange || hasPlaybackTransform(playbackTransform) || hasSampleEffects(sampleEffects)) checkDecodeBudget(trackData);
     const isHlsStream =
       trackData.streamProtocol === "hls" || streamUrl.includes(".m3u8");
     const isDirectDownload =
@@ -695,13 +723,15 @@ const SCDownload = (() => {
     if (isDirectDownload) {
       onProgress?.("Downloading file...");
       const buffer = await fetchBufferOrThrow(streamUrl, "File download", signal);
-      if (hasPlaybackTransform(playbackTransform) && !normalizedTrimRange) {
+      if ((hasPlaybackTransform(playbackTransform) || hasSampleEffects(sampleEffects)) && !normalizedTrimRange) {
         return finalizeTransformedBlob(
           trackData,
           buffer,
           playbackTransform,
           onProgress,
-          signal
+          signal,
+          sampleEffects,
+          allowWav
         );
       }
       if (normalizedTrimRange) {
@@ -712,10 +742,11 @@ const SCDownload = (() => {
           playbackTransform,
           onProgress,
           signal,
-          sampleEffects
+          sampleEffects,
+          allowWav
         );
       }
-      return finalizeTrackBlob(trackData, buffer, onProgress, signal);
+      return finalizeTrackBlob(trackData, buffer, onProgress, signal, allowWav);
     }
 
     if (isHlsStream) {
@@ -747,13 +778,15 @@ const SCDownload = (() => {
 
       onProgress?.("Preparing file...");
       const combined = combineChunks(chunks);
-      if (hasPlaybackTransform(playbackTransform) && !normalizedTrimRange) {
+      if ((hasPlaybackTransform(playbackTransform) || hasSampleEffects(sampleEffects)) && !normalizedTrimRange) {
         return finalizeTransformedBlob(
           trackData,
           combined,
           playbackTransform,
           onProgress,
-          signal
+          signal,
+          sampleEffects,
+          allowWav
         );
       }
       if (normalizedTrimRange) {
@@ -764,10 +797,11 @@ const SCDownload = (() => {
           playbackTransform,
           onProgress,
           signal,
-          sampleEffects
+          sampleEffects,
+          allowWav
         );
       }
-      return finalizeTrackBlob(trackData, combined, onProgress, signal);
+      return finalizeTrackBlob(trackData, combined, onProgress, signal, allowWav);
     }
 
     onProgress?.("Downloading file...");
@@ -780,10 +814,11 @@ const SCDownload = (() => {
         playbackTransform,
         onProgress,
         signal,
-        sampleEffects
+        sampleEffects,
+        allowWav
       );
     }
-    return finalizeTrackBlob(trackData, buffer, onProgress, signal);
+    return finalizeTrackBlob(trackData, buffer, onProgress, signal, allowWav);
   }
 
   function triggerBlobDownload(blob, fileName) {

@@ -59,7 +59,10 @@ function parseCopiedReviewSource(source) {
 }
 
 const reviews = parseInlineReviews(html);
-assert.strictEqual(reviews.length, 39, 'Landing must contain all 39 written reviews');
+const declaredReviewCount = Number(html.match(/id="review-count">(\d+)</)?.[1]);
+assert(Number.isSafeInteger(declaredReviewCount), 'Landing review count is missing');
+assert.strictEqual(reviews.length, declaredReviewCount, 'Landing review count must match its review data');
+assert(reviews.length >= 39, 'Landing lost previously verified written reviews');
 
 const identities = new Set();
 for (const [index, review] of reviews.entries()) {
@@ -115,7 +118,7 @@ assert(i18nSource.includes('write_review') && i18nSource.includes('reviews_show_
 assert(!/(href|action)=["'][^"']*(checkout|stripe|paddle|lemonsqueezy)/i.test(html), 'Checkout must not be active yet');
 for (const requiredPlanCopy of [
   'Downloads are free. Go Pro for the tools.',
-  '20 new A–B loops in total, shared across tracks and tabs.',
+  'up to 20 new A–B loops total, shared across tracks and tabs',
   'Open the extension to buy or restore Player Tools Pro securely.'
 ]) {
   assert(html.includes(requiredPlanCopy), `Missing required Player Tools plan copy: ${requiredPlanCopy}`);

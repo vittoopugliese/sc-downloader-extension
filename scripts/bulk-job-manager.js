@@ -54,6 +54,7 @@ let activeLoopJobId = null;
 let stateQueue = Promise.resolve();
 let singleDownloadQueue = Promise.resolve();
 let creatingOffscreenDocument = null;
+let offscreenLifecycleQueue = Promise.resolve();
 let singleDownloadsInFlight = 0;
 let offscreenOperationsInFlight = 0;
 let offscreenClosePending = false;
@@ -73,6 +74,15 @@ function withJobState(fn) {
 function queueSingleDownload(fn) {
   const run = singleDownloadQueue.then(fn);
   singleDownloadQueue = run.then(
+    () => {},
+    () => {}
+  );
+  return run;
+}
+
+function withOffscreenLifecycle(fn) {
+  const run = offscreenLifecycleQueue.then(fn);
+  offscreenLifecycleQueue = run.then(
     () => {},
     () => {}
   );
@@ -372,7 +382,7 @@ async function stopKeepalive() {
   await chrome.alarms.clear(KEEPALIVE_ALARM);
 }
 
-async function ensureOffscreenDocument() {
+async function ensureOffscreenDocumentUnlocked() {
   if (creatingOffscreenDocument) {
     await creatingOffscreenDocument;
     return;
@@ -399,7 +409,12 @@ async function ensureOffscreenDocument() {
   }
 }
 
-async function closeOffscreenDocument() {
+function ensureOffscreenDocument() {
+  return withOffscreenLifecycle(ensureOffscreenDocumentUnlocked);
+}
+
+function closeOffscreenDocument() {
+  return withOffscreenLifecycle(async () => {
   // A terminal bulk job can finish while a pad render or a single export still
   // owns the shared offscreen document. Closing it here used to abort that
   // unrelated operation. The last lease holder performs the deferred close.
@@ -410,9 +425,16 @@ async function closeOffscreenDocument() {
   const existingContexts = await chrome.runtime.getContexts({
     contextTypes: ["OFFSCREEN_DOCUMENT"],
   });
+  // Acquiring a lease is synchronous, but it can happen while getContexts()
+  // yields. Recheck immediately before the destructive close.
+  if (offscreenOperationsInFlight > 0 || singleDownloadsInFlight > 0) {
+    offscreenClosePending = true;
+    return false;
+  }
   if (existingContexts.length > 0) await chrome.offscreen.closeDocument();
   offscreenClosePending = false;
   return true;
+  });
 }
 
 async function finishJobResources(job) {
@@ -496,15 +518,20 @@ const trackDownloadExecution = SCTrackDownloadExecution.create({
     streamUrl,
     trimRange,
     playbackTransform,
-  }) =>
-    sendOffscreenMessage({
+    effects,
+  }) => (async () => {
+    const access = await globalThis.SCPlayerToolsAccess?.getSnapshot?.({}).catch?.(() => null);
+    return sendOffscreenMessage({
       type: "OFFSCREEN_BUILD",
       buildId,
       trackData,
       streamUrl,
       trimRange: trimRange || null,
       playbackTransform: playbackTransform || null,
-    }),
+      effects: effects || null,
+      allowWav: access?.plan === "pro",
+    });
+  })(),
   saveOutput: (output) => destinationHandler.save(output),
   revokeBlob: (blobUrl) =>
     sendOffscreenMessage({ type: "OFFSCREEN_REVOKE", blobUrl }),
@@ -961,7 +988,8 @@ const BulkJobManager = {
     trackData,
     formatPreference = "auto",
     downloadDestination = null,
-    playbackTransform = null
+    playbackTransform = null,
+    effects = null
   ) {
     await withJobState(async () => {
       const activeJobBeforeDownload = await loadJob();
@@ -987,6 +1015,7 @@ const BulkJobManager = {
           formatPreference: formatPreference || "auto",
           destination: resolvedDestination,
           playbackTransform,
+          effects,
         })
       );
     } finally {
@@ -1006,7 +1035,8 @@ const BulkJobManager = {
     formatPreference = "auto",
     trimRange,
     playbackTransform = null,
-    downloadDestination = null
+    downloadDestination = null,
+    effects = null
   ) {
     await withJobState(async () => {
       const activeJobBeforeDownload = await loadJob();
@@ -1033,6 +1063,7 @@ const BulkJobManager = {
           destination: resolvedDestination,
           trimRange,
           playbackTransform,
+          effects,
         })
       );
     } finally {

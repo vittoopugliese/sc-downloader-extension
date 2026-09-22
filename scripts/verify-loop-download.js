@@ -84,7 +84,10 @@ const download = vm.runInContext("SCDownload", context);
     },
     (value) => progress.push(value),
     undefined,
-    { startMs: 500, endMs: 1500 }
+    { startMs: 500, endMs: 1500 },
+    null,
+    null,
+    true
   );
 
   assert.equal(result.fileName, "Artist - Track (loop).wav");
@@ -118,7 +121,9 @@ const download = vm.runInContext("SCDownload", context);
     (value) => transformedProgress.push(value),
     undefined,
     { startMs: 500, endMs: 1500 },
-    { rate: 0.5, preservePitch: false }
+    { rate: 0.5, preservePitch: false },
+    null,
+    true
   );
   assert.equal(
     transformed.fileName,
@@ -139,7 +144,9 @@ const download = vm.runInContext("SCDownload", context);
     (value) => fullTrackProgress.push(value),
     undefined,
     null,
-    { rate: 0.5, preservePitch: false }
+    { rate: 0.5, preservePitch: false },
+    null,
+    true
   );
   assert.equal(
     fullTrack.fileName,
@@ -148,13 +155,36 @@ const download = vm.runInContext("SCDownload", context);
   assert.equal((await fullTrack.blob.arrayBuffer()).byteLength, 76);
   assert.match(fullTrackProgress.join("\n"), /Rendering loop at 0.5x/);
 
+  const regularFetch = context.fetch;
+  const wavFixture = Uint8Array.from([
+    0x52, 0x49, 0x46, 0x46, 0x04, 0, 0, 0, 0x57, 0x41, 0x56, 0x45,
+    0x66, 0x6d, 0x74, 0x20,
+  ]);
+  context.fetch = async () => ({
+    ok: true,
+    headers: { get: () => String(wavFixture.byteLength) },
+    body: { getReader() { let sent = false; return {
+      async read() { if (sent) return { done: true }; sent = true; return { done: false, value: wavFixture }; },
+      releaseLock() {}, async cancel() {},
+    }; } },
+  });
+  const originalWav = { artist: "Artist", title: "Original", isOriginalDownload: true };
+  await assert.rejects(
+    download.buildTrackBlob("https://example.com/original.wav", originalWav),
+    (error) => error.code === "wav_requires_pro"
+  );
+  assert.equal((await download.buildTrackBlob(
+    "https://example.com/original.wav", originalWav, undefined, undefined, null, null, null, true
+  )).fileName, "Artist - Original.wav");
+  context.fetch = regularFetch;
+
   await assert.rejects(
     download.buildTrackBlob(
       "https://example.com/audio.mp3",
       { streamProtocol: "progressive" },
       undefined,
       undefined,
-      { startMs: 2000, endMs: 1000 }
+      { startMs: 2000, endMs: 1000 }, null, null, true
     ),
     /selected loop range is invalid/
   );
@@ -166,7 +196,7 @@ const download = vm.runInContext("SCDownload", context);
     { durationMs: 10 * 60 * 1000, streamProtocol: "progressive" },
     undefined,
     undefined,
-    { startMs: 1000, endMs: 2000 }
+    { startMs: 1000, endMs: 2000 }, null, null, true
   ), (error) => error.code === "memory_budget_exceeded");
   decodeSampleRate = 48000;
 
@@ -175,7 +205,7 @@ const download = vm.runInContext("SCDownload", context);
   await assert.rejects(download.buildTrackBlob(
     "https://example.com/audio.mp3",
     { streamProtocol: "progressive" }, undefined, undefined, null,
-    { rate: 0.5, preservePitch: false }
+    { rate: 0.5, preservePitch: false }, null, true
   ), (error) => error.code === "memory_budget_exceeded");
 
   const looperSource = fs.readFileSync(

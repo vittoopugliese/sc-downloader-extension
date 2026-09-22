@@ -92,6 +92,11 @@ foreach ($item in $packageItems) {
     Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Recurse
 }
 
+# Directory allow-list entries must not carry OS metadata into the Web Store ZIP.
+Get-ChildItem -LiteralPath $stagingRoot -Recurse -Force -File |
+    Where-Object { $_.Name -in @(".DS_Store", "Thumbs.db") } |
+    Remove-Item -Force
+
 $commercePath = Join-Path $stagingRoot "scripts/player-tools-commerce.js"
 $commerceSource = Get-Content -LiteralPath $commercePath -Raw
 $testLoginLine = 'const TEST_LOGIN = Object.freeze({ username: "1", password: "1" });'

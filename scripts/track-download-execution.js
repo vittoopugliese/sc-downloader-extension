@@ -30,11 +30,12 @@ const SCTrackDownloadExecution = (() => {
       try {
         await onStage("resolving");
         let buildResult;
+        let effectiveFormatPreference = command.formatPreference || "auto";
         for (let sourceAttempt = 0; sourceAttempt < 2; sourceAttempt += 1) {
           if (await isCancelled()) return { success: false, cancelled: true };
           const resolved = await resolveSource(
             command.trackData,
-            command.formatPreference || "auto",
+            effectiveFormatPreference,
             { forceRefresh: sourceAttempt > 0, reason: sourceAttempt > 0 ? "expired_media" : "initial", attempt: sourceAttempt }
           );
 
@@ -56,17 +57,29 @@ const SCTrackDownloadExecution = (() => {
             streamUrl: resolved.streamUrl,
             trimRange: command.trimRange || null,
             playbackTransform: command.playbackTransform || null,
+            effects: command.effects || null,
           });
           activeBuildIds.delete(buildId);
           progressByBuildId.delete(buildId);
           activeBuildId = null;
           if (buildResult?.success && buildResult.blobUrl) break;
+          if (sourceAttempt === 0 && buildResult?.code === "wav_requires_pro" &&
+              effectiveFormatPreference === "auto") {
+            effectiveFormatPreference = "mp3";
+            continue;
+          }
           if (sourceAttempt === 0 && [401, 403, 404].includes(buildResult?.status)) continue;
           break;
         }
         if (!buildResult?.success || !buildResult.blobUrl) {
+          console.warn("SC Downloader offscreen build did not produce an audio blob", {
+            code: buildResult?.code || "invalid_build_response",
+            status: buildResult?.status,
+            error: buildResult?.error || null,
+            success: buildResult?.success === true,
+          });
           const error = new Error(buildResult?.error || "Failed to build audio file.");
-          error.code = buildResult?.code;
+          error.code = buildResult?.code || "invalid_build_response";
           error.status = buildResult?.status;
           throw error;
         }

@@ -167,6 +167,34 @@ function createHarness(overrides = {}) {
   assert.deepEqual(refreshed.calls.filter(([name]) => name === "resolve").map(([, , , forceRefresh]) => forceRefresh), [false, true]);
   assert.deepEqual(refreshStages, ["resolving", "building", "refreshing", "saving"]);
 
+  let wavBuildAttempts = 0;
+  const autoWavFallback = createHarness({
+    async buildTrack() {
+      wavBuildAttempts += 1;
+      return wavBuildAttempts === 1
+        ? { success: false, error: "WAV requires Pro", code: "wav_requires_pro" }
+        : { success: true, blobUrl: "blob:mp3-fallback", fileName: "Artist - Track.mp3" };
+    },
+  });
+  assert.equal((await autoWavFallback.execution.execute({
+    trackData: { id: 42 }, formatPreference: "auto",
+  })).fileName, "Artist - Track.mp3");
+  assert.deepEqual(
+    autoWavFallback.calls.filter(([name]) => name === "resolve").map(([, , preference]) => preference),
+    ["auto", "mp3"],
+    "FREE Auto must retry an original WAV using an explicit non-WAV format"
+  );
+
+  const explicitWav = createHarness({
+    async buildTrack() { return { success: false, error: "WAV requires Pro", code: "wav_requires_pro" }; },
+  });
+  await assert.rejects(
+    explicitWav.execution.execute({ trackData: { id: 43 }, formatPreference: "original" }),
+    (error) => error.code === "wav_requires_pro"
+  );
+  assert.equal(explicitWav.calls.filter(([name]) => name === "resolve").length, 1,
+    "An explicit unavailable format must not be substituted silently");
+
   let releaseBuild;
   let activeBuildId = null;
   const progressValues = [];
