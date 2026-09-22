@@ -9,5 +9,4 @@ dist/
 playwright-report/
 test-results/
 .playwright-profile/
-repos
 *.csv

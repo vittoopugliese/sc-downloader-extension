@@ -1,0 +1,346 @@
+@import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@300&family=Rubik:ital,wght@1,300&display=swap");
+* {
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  outline: none;
+  font-family: "Fredoka", sans-serif;
+  font-weight: 500;
+}
+html {
+  scroll-behavior: smooth;
+  scroll-margin-top: 74px;
+  user-select: none;
+  overflow: hidden;
+}
+#body {
+  overflow: hidden;
+}
+a {
+  text-decoration: none !important;
+}
+*,
+*:before,
+*:after {
+  box-sizing: inherit;
+}
+:root {
+  --main: rgb(44, 44, 44);
+  --secondary: rgb(92, 92, 92);
+}
+#container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: row;
+  margin: 0px auto;
+  height: 100vh;
+  width: 100vw;
+  gap: 50px;
+}
+.letter {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 40px;
+  font-family: Rubik;
+  font-weight: 900;
+  color: white;
+  margin: 0px auto;
+  position: relative;
+  top: 50px;
+}
+#kick {
+  width: 150px;
+  height: 150px;
+  background-color: rgb(40, 40, 40);
+  border-radius: 45px;
+  transition: all 0.1s;
+  cursor: pointer;
+  box-shadow: 0px 2px 10px 2px rgba(20, 20, 20, 0.2);
+}
+#clap {
+  width: 150px;
+  height: 150px;
+  background-color: rgb(78, 78, 78);
+  border-radius: 45px;
+  transition: all 0.1s;
+  cursor: pointer;
+  box-shadow: 0px 2px 10px 2px rgba(20, 20, 20, 0.2);
+}
+#hat {
+  width: 150px;
+  height: 150px;
+  background-color: rgb(144, 144, 144);
+  border-radius: 45px;
+  transition: all 0.1s;
+  cursor: pointer;
+  box-shadow: 0px 2px 10px 2px rgba(20, 20, 20, 0.2);
+}
+h6 {
+  position: absolute;
+  bottom: 10px;
+  font-size: 16px;
+  font-weight: 100;
+  cursor: pointer;
+  color: rgb(176, 176, 176);
+  transition: color 0.2s, font-size 0.2s;
+}
+h6:hover {
+  font-weight: 900;
+  color: rgb(140, 140, 140);
+  text-decoration: underline;
+  font-size: 18px;
+}
+
+#ddAct {
+  width: 30px;
+  height: 30px;
+  background-color: grey;
+  border-radius: 100px;
+  top: 94%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+.dropdown-content {
+  display: none;
+  position: absolute;
+  top: 400%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgb(40, 40, 40);
+  border-radius: 25px;
+  min-width: 100px;
+  box-shadow: 2px 10px 16px 0px rgba(0, 0, 0, 0.3);
+  z-index: 1;
+}
+.dropdown-content p {
+  color: white;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+  font-size: 20px;
+  text-align: center;
+}
+.dropdown-content p:hover {
+  background-color: rgb(64, 64, 64);
+  border-radius: 25px;
+}
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+.file {
+  color: white;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+  font-size: 20px;
+  text-align: center;
+  cursor: pointer;
+}
+#uploadKick,
+#uploadClap,
+#uploadHat {
+  opacity: 0;
+  width: 100%;
+  position: absolute;
+  height: 54px;
+  bottom: 0px;
+  cursor: pointer;
+}
+
+/* modal */
+.modal {
+  display: none;
+  opacity: 0;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  width: 64vw;
+  height: 74vh;
+  max-width: 740px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0px auto;
+  padding: 30px;
+  background-color: white;
+  border: 2px solid grey;
+  border-radius: 30px;
+  transition: 0.154s cubic-bezier(0.23, 1, 0.32, 1);
+  text-align: center;
+  gap: 15px;
+}
+.modalBg {
+  display: none;
+  opacity: 0;
+  justify-content: center;
+  align-items: center;
+  position: absolute;
+  background-color: rgba(0, 0, 0, 0.4);
+  top: 0px;
+  left: 0px;
+  width: 100vw;
+  height: 100vh;
+  transition: 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.modal h1 {
+  font-weight: 900;
+  font-size: 40px;
+}
+.modal h2 {
+  font-weight: 900;
+  font-size: 30px;
+}
+.modal h3 {
+  font-size: 22px;
+}
+.x {
+  cursor: pointer;
+  position: absolute;
+  top: 5px;
+  right: 20px;
+}
+.otherStuff {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+}
+.stuffContainer {
+  font-size: 26px;
+  margin-top: 5px;
+  gap: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: row;
+  color: black;
+  font-weight: 900;
+}
+.stuffContainer img {
+  width: 44px;
+  filter: brightness(1.1) contrast(1.1);
+}
+.sc:hover {
+  color: #ff8c00;
+}
+.tw:hover {
+  color: #36c9ff;
+}
+.nft:hover {
+  color: #ffce7a;
+}
+.nft {
+  filter: brightness(0.95) contrast(0.95);
+}
+
+/* mediaQueris ! */
+@media (max-width: 780px) {
+  #container {
+    gap: 20px;
+  }
+  .letter {
+    font-size: 30px;
+    top: 42px;
+  }
+  #kick {
+    width: 120px;
+    height: 120px;
+    background-color: rgb(40, 40, 40);
+  }
+  #clap {
+    width: 120px;
+    height: 120px;
+    background-color: rgb(78, 78, 78);
+  }
+  #hat {
+    width: 120px;
+    height: 120px;
+    background-color: rgb(144, 144, 144);
+  }
+  .modal {
+    padding: 15px;
+  }
+  .modal h1 {
+    font-size: 32px;
+  }
+  .modal h2 {
+    font-size: 24px;
+  }
+  .modal h3 {
+    font-size: 18px;
+  }
+  .stuffContainer {
+    font-size: 24px;
+  }
+}
+@media (max-width: 540px) {
+  #container {
+    gap: 10px;
+  }
+  .letter {
+    font-size: 24px;
+    top: 32px;
+  }
+  #kick {
+    width: 90px;
+    height: 90px;
+    background-color: rgb(40, 40, 40);
+  }
+  #clap {
+    width: 90px;
+    height: 90px;
+    background-color: rgb(78, 78, 78);
+  }
+  #hat {
+    width: 90px;
+    height: 90px;
+    background-color: rgb(144, 144, 144);
+  }
+  .modal {
+    height: 80vh;
+    width: 84vw;
+    padding: 10px;
+  }
+  .modal h1 {
+    font-size: 27px;
+  }
+  .modal h2 {
+    font-size: 20px;
+  }
+  .modal h3 {
+    font-size: 16px;
+  }
+  .stuffContainer {
+    font-size: 20px;
+  }
+  .stuffContainer img {
+    width: 40px;
+  }
+}
+@media (max-width: 320px) {
+  .modal {
+    height: 85vh;
+    width: 90vw;
+    padding: 5px;
+  }
+  .modal h1 {
+    font-size: 25px;
+  }
+  .modal h2 {
+    font-size: 18px;
+  }
+  .modal h3 {
+    font-size: 15px;
+  }
+  .stuffContainer {
+    font-size: 18px;
+  }
+}

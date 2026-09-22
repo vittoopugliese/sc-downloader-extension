@@ -354,9 +354,11 @@ async function main() {
       const settingsIcon = settingsButton.querySelector("svg");
       const detachButton = panel.querySelector(".detach-button");
       const detachIcon = detachButton.querySelector("svg");
-      const brand = panel.querySelector(".brand");
+      const brandLogo = panel.querySelector(".brand-logo");
+      const brandCopy = panel.querySelector(".brand-copy");
       const tools = panel.querySelector(".panel-tools");
       const presets = panel.querySelector(".presets");
+      const header = panel.querySelector(".panel-header");
       const waveformShell = panel.querySelector(".waveform-shell");
       const waveformTitleIcon = panel.querySelector(".waveform-title svg");
       const tempoRow = panel.querySelector(".tempo-row");
@@ -382,7 +384,12 @@ async function main() {
         detachButtonSize: [detachButton.offsetWidth, detachButton.offsetHeight],
         detachButtonRadius: getComputedStyle(detachButton).borderRadius,
         detachIconSize: [detachIcon.clientWidth, detachIcon.clientHeight],
-        headerRects: [brand, presets, tools, speedStatus].map((element) => [element.className, Math.round(element.getBoundingClientRect().left), Math.round(element.getBoundingClientRect().top), Math.round(element.getBoundingClientRect().width)]),
+        headerHeight: header.offsetHeight,
+        headerOverflows: header.scrollWidth > header.clientWidth,
+        headerRects: [brandLogo, brandCopy, presets, tools, speedStatus].map((element) => {
+          const rect = element.getBoundingClientRect();
+          return [Math.round(rect.left), Math.round(rect.top), Math.round(rect.right), Math.round(rect.bottom)];
+        }),
         waveformHeight: waveformShell.offsetHeight,
         waveformTitleIconSize: [waveformTitleIcon?.clientWidth, waveformTitleIcon?.clientHeight],
         triggerIconSize: [parseFloat(getComputedStyle(triggerIcon).width), parseFloat(getComputedStyle(triggerIcon).height)],
@@ -397,24 +404,28 @@ async function main() {
     if (
       compactStyles.panelSize[0] !== 420 ||
       compactStyles.padding.join(" ") !== "7px 7px 7px 7px" ||
-      compactStyles.presetSize.join("x") !== "62x28" ||
+      compactStyles.presetSize.join("x") !== "50x20" ||
       compactStyles.toggleSize.join("x") !== "16x16" ||
       compactStyles.pitchText !== "" ||
       compactStyles.pitchTooltip !== "Keep tone" ||
       compactStyles.pitchContainerWidth !== 22 ||
-      compactStyles.downloadTrackButtonSize.join("x") !== "27x24" ||
-      compactStyles.downloadTrackIconSize.join("x") !== "13x13" ||
+      compactStyles.downloadTrackButtonSize.join("x") !== "23x20" ||
+      compactStyles.downloadTrackIconSize.join("x") !== "12x12" ||
       compactStyles.downloadTrackTooltip !== "Download current playing" ||
       compactStyles.toolOrder.join("|") !== "panel-tool download-track-button|panel-tool settings-button|panel-tool detach-button" ||
-      compactStyles.settingsButtonSize.join("x") !== "27x24" ||
+      compactStyles.settingsButtonSize.join("x") !== "23x20" ||
       compactStyles.settingsButtonRadius !== "4px" ||
-      compactStyles.settingsIconSize.join("x") !== "13x13" ||
-      compactStyles.detachButtonSize.join("x") !== "27x24" ||
+      compactStyles.settingsIconSize.join("x") !== "12x12" ||
+      compactStyles.detachButtonSize.join("x") !== "23x20" ||
       compactStyles.detachButtonRadius !== "4px" ||
-      compactStyles.detachIconSize.join("x") !== "13x13" ||
-      !(compactStyles.headerRects[0][2] < compactStyles.headerRects[1][2] &&
-        compactStyles.headerRects[1][1] < compactStyles.headerRects[2][1] &&
-        compactStyles.headerRects[2][1] < compactStyles.headerRects[3][1]) ||
+      compactStyles.detachIconSize.join("x") !== "12x12" ||
+      compactStyles.headerHeight > 55 ||
+      compactStyles.headerOverflows ||
+      !(compactStyles.headerRects[0][0] < compactStyles.headerRects[1][0] &&
+        compactStyles.headerRects[1][0] < compactStyles.headerRects[2][0] &&
+        compactStyles.headerRects[2][0] < compactStyles.headerRects[4][0] &&
+        compactStyles.headerRects[1][1] < compactStyles.headerRects[3][1] &&
+        compactStyles.headerRects[0][3] >= compactStyles.headerRects[3][3]) ||
       compactStyles.waveformHeight !== 130 ||
       compactStyles.waveformTitleIconSize.join("x") !== "16x16" ||
       compactStyles.triggerIconSize.join("x") !== "20x20" ||
@@ -998,6 +1009,24 @@ async function main() {
         loop?.active === false &&
         root?.querySelector('.clear-rate')?.hidden === true;
     });
+
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 420 });
+      const headerFits = await host.locator(".panel-header").evaluate((header) => {
+        const rect = (selector) => header.querySelector(selector).getBoundingClientRect();
+        const logo = rect(".brand-logo");
+        const title = rect(".brand-title-line");
+        const tools = rect(".panel-tools");
+        const presets = rect(".presets");
+        const status = rect(".speed-status");
+        const bounds = header.getBoundingClientRect();
+        return title.right <= presets.left && tools.right <= presets.left &&
+          logo.right <= title.left && presets.right <= status.left &&
+          status.right <= bounds.right && header.scrollWidth <= header.clientWidth;
+      });
+      if (!headerFits) throw new Error(`Player Tools header overflows at ${width}px.`);
+    }
+    await page.setViewportSize({ width: 720, height: 420 });
 
     fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
     await page.screenshot({ path: screenshotPath });

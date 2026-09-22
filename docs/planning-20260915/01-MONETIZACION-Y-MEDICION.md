@@ -1,5 +1,7 @@
 # 01 — Trial, compra y medición
 
+> Actualización del 21/09/2026: **1C está reabierta**. Se reprodujo un fallo de activación al usar la estructura oficial de respuesta de Lemon Squeezy. También faltan cierre de conciliación/webhooks, comprobante offline firmado y pruebas integradas del servicio. La declaración del 15/09 de abajo es histórica. Para ejecutar, seguir [00](00-LEER-PRIMERO.md) y [10](10-CIERRE-RELEASE-Y-FREE-PRO-20260921.md). Conservar la base implementada de 1A/1B/1D y probar regresiones; no repetirla desde cero.
+
 Objetivo: convertir una experiencia musical útil en compras verificadas. Depende del acceso existente, no del EQ. Prioridad comercial máxima.
 
 ## Estado de implementación al 15/09/2026

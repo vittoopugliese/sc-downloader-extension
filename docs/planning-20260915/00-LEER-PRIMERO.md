@@ -1,5 +1,36 @@
 # Plan destilado: crecimiento e ingresos
 
+## Entrada vigente para sesión en frío — cierre comercial, 21/09/2026
+
+**Leer esta sección primero. Sustituye el orden y las afirmaciones de cierre incompatibles que aparecen más abajo.** El usuario pidió dejar ejecutable toda la revisión de confiabilidad, FREE/PRO y Lemon Squeezy para continuar con otro agente. El objetivo de esta tanda es terminar y publicar la versión comercial con las funciones existentes, compra única, activación, restauración y reembolsos verificables. Los planes de funciones futuras siguen conservados como trabajo posterior.
+
+### Ruta de ejecución
+
+1. Leer completo [10 — Cierre ejecutable de release y FREE/PRO](10-CIERRE-RELEASE-Y-FREE-PRO-20260921.md). Contiene tareas, dependencias, evidencia inicial, decisiones pendientes y checklist de cierre.
+2. Ejecutar el [plan de cierre de confiabilidad del 21/09](../audits/RELIABILITY-CLOSURE-PLAN-20260921.md), preservando los arreglos ya registrados en [feedback actualizado](../audits/FEEDBACK-FIX-PLAN-20260921.md). No repetir toda la mitigación del 20/09 ni presentar la auditoría de `404fbd9` como estado actual.
+3. Cerrar el contrato FREE/prueba/PRO y corregir el Worker de licencias según C2/C3 del plan 10. **1C se reabre: falta código y pruebas, además de infraestructura.**
+4. Seguir [11 — Tutorial y operación de Lemon Squeezy](11-LEMON-SQUEEZY-TUTORIAL-20260921.md) para alta, retiros, producto lifetime, Cloudflare, webhook, prueba y producción. El alta/aprobación del proveedor puede adelantarse mientras se corrige código.
+5. Reconciliar compra, activación, restauración y reembolso en Test Mode; luego verificar Live Mode, construir y probar el ZIP exacto y publicar con evidencia.
+6. Reutilizar Store/localización/capturas existentes y observar el embudo. EQ, presets avanzados, SEO avanzado y evolución profunda de Looper/Explorer quedan después de este cierre.
+
+### Corrección del estado declarado
+
+Base revisada en la conversación: `6d5163a`, versión `2026.10.5`. `npm run test:player-tools` pasó: cuatro verificadores de cliente/acceso y dos tests de validación del servicio. Esto no demuestra compra real ni comportamiento del Worker con el proveedor.
+
+- Se reprodujo localmente HTTP 500 en `/license/restore` al simular una respuesta válida de Lemon: el Worker busca `instance` dentro de `license_key`, pero el proveedor devuelve `instance` y `meta` por separado. Pedido/cliente también se leen del objeto incorrecto.
+- La inspección encontró deduplicación del webhook anterior a sus efectos, ausencia de filtro de producto/variante/modo en ese handler y riesgos con eventos atrasados y activaciones repetidas/concurrentes. El plan 10 pide reproducirlos y corregirlos.
+- El comprobante offline firmado está solicitado en este documento, pero el recorrido actual conserva estado local sin implementar esa firma.
+- Explorer usa hoy la disponibilidad del trial de loops y puede perder acceso al llegar a veinte. Para cumplir el onboarding de siete días, el plan 10 separa esa capacidad del contador de loops.
+- La etapa 02 permanece cerrada según la decisión registrada. Likes Explorer existente se incluye en el candidato y su optimización futura no bloquea por sí sola la release.
+
+No tratar las frases históricas «00 y 01 cerradas», «sólo falta deploy», «avanzar a EQ» ni el orden antiguo como instrucciones actuales. El estado válido de 1A/1B/1D es **base implementada que debe conservarse y verificar regresiones**; el de 1C es **reabierta para cierre técnico y operativo**.
+
+### Instrucción lista para otra sesión
+
+> Continuá el cierre comercial del proyecto leyendo primero `docs/planning-20260915/00-LEER-PRIMERO.md`, después los planes 10 y 11 enlazados. Contrastá HEAD y cambios locales antes de actuar. Ejecutá en orden el primer bloque pendiente, conservá fixes previos y registrá pruebas y pendientes. No empieces EQ ni reescribas trial/Explorer ya existentes. Completá el trabajo local autorizado y prepará infraestructura/publicación de forma revisable; solicitá sólo datos o permisos externos realmente necesarios. No marques terminado un gate externo sin evidencia. Al cerrar la sesión dejá bloque completado, archivos, verificaciones, limitaciones y siguiente acción concreta en el plan 10.
+
+## Contexto anterior — conservar como antecedente
+
 Fecha: 2026-09-15. Fuente completa: `C:\Users\torib\Desktop\plan_final_destilar_por_etapas.txt`.
 Entrega: planes separados, decisiones, materiales de Store y guiones. No es una implementación ni una publicación.
 
