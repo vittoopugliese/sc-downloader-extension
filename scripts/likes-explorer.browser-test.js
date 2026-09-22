@@ -74,6 +74,82 @@ const { chromium } = require('playwright');
       await cancelled;await new Promise(resolve=>setTimeout(resolve,800));scroll.scrollTo=original;
       return{found,cancelledCalls:calls-count};
     });assert.equal(locator.found,true);assert.equal(locator.cancelledCalls,0);
+    const gridLocator=await page.evaluate(async()=>{
+      const main=document.querySelector('.l-main');
+      main.innerHTML='<div class="collectionSection__action"><div class="listDisplayToggle"><button class="listDisplayToggle__badgeToggle sc-button-selected" title="Iconos"></button></div></div><div class="grid-fixture" style="position:relative;height:12000px"></div>';
+      const grid=main.querySelector('.grid-fixture');
+      let scrollCalls=0;
+      const render=()=>{
+        const firstRow=Math.max(0,Math.floor(window.scrollY/180)-1);
+        grid.replaceChildren(...Array.from({length:36},(_,i)=>{
+          const index=firstRow*6+i,link=document.createElement('a');
+          link.className='soundTitle__title';
+          link.href=`https://soundcloud.com/a/grid-${index}`;
+          link.textContent=`Grid ${index}`;
+          link.style.cssText=`position:absolute;top:${Math.floor(index/6)*180}px;left:${index%6*120}px`;
+          return link;
+        }));
+      };
+      window.addEventListener('scroll',render);
+      const originalScrollTo=document.scrollingElement.scrollTo.bind(document.scrollingElement);
+      document.scrollingElement.scrollTo=options=>{scrollCalls++;originalScrollTo(options);};
+      render();
+      try {
+        const found=await SCLikesLocator.locate('https://soundcloud.com/a/grid-144',()=>{});
+        return {found,scrollTop:window.scrollY,scrollCalls};
+      } finally {
+        document.scrollingElement.scrollTo=originalScrollTo;
+        window.removeEventListener('scroll',render);
+        main.textContent='Your likes';
+        window.scrollTo(0,0);
+      }
+    });
+    assert.equal(gridLocator.found,true);
+    assert.ok(gridLocator.scrollTop<6000,'Grid search should reach the target without jumping to the end');
+    assert.ok(gridLocator.scrollCalls<=5,`Grid search made ${gridLocator.scrollCalls} jumps instead of using the rendered range`);
+    for (const scenario of ['tile-links','retained-rows','delayed-render']) {
+      const result=await page.evaluate(async scenario=>{
+        const main=document.querySelector('.l-main'),scroll=document.scrollingElement;
+        const original=scroll.scrollTo;
+        main.innerHTML='<div class="collectionSection__action"><button class="listDisplayToggle__badgeToggle sc-button-selected"></button></div><div class="grid-fixture" style="position:relative;height:18000px"></div>';
+        const grid=main.querySelector('.grid-fixture');
+        window.scrollTo(0,0);
+        let renderTimer,watchdog,calls=0,pending=false,skippedWhilePending=false;
+        const render=()=>{
+          pending=false;
+          const firstRow=scenario==='retained-rows'?0:Math.max(0,Math.floor(scroll.scrollTop/180)-1);
+          const lastRow=Math.max(5,Math.floor(scroll.scrollTop/180)+4);
+          grid.replaceChildren(...Array.from({length:(lastRow-firstRow+1)*6},(_,i)=>{
+            const index=firstRow*6+i,card=document.createElement('div'),link=document.createElement('a');
+            card.className='playableTile';
+            card.style.cssText=`position:absolute;top:${Math.floor(index/6)*180}px;left:${index%6*120}px;width:110px;height:170px`;
+            link.className=scenario==='tile-links'?'playableTile__mainHeading':'soundTitle__title';
+            link.href=`https://soundcloud.com/a/regression-${index}`;link.textContent=`Track ${index}`;
+            card.append(link);return card;
+          }));
+        };
+        const onScroll=()=>{
+          if(pending)return;
+          pending=true;
+          renderTimer=setTimeout(render,scenario==='delayed-render'?950:10);
+        };
+        render();
+        window.addEventListener('scroll',onScroll);
+        scroll.scrollTo=function(options){calls++;if(pending)skippedWhilePending=true;original.call(this,options);};
+        try {
+          watchdog=setTimeout(()=>SCLikesLocator.cancel(),10000);
+          const found=await SCLikesLocator.locate(`https://soundcloud.com/a/regression-${scenario==='tile-links'?12:120}`,()=>{});
+          return {found,calls,skippedWhilePending};
+        } finally {
+          clearTimeout(watchdog);clearTimeout(renderTimer);
+          window.removeEventListener('scroll',onScroll);scroll.scrollTo=original;
+          main.textContent='Your likes';window.scrollTo(0,0);
+        }
+      },scenario);
+      assert.equal(result.found,true,`${scenario}: skipped the target track`);
+      assert.equal(result.skippedWhilePending,false,`${scenario}: advanced again before rendering finished`);
+      assert.ok(result.calls<=6,`${scenario}: unnecessary scrolls (${result.calls})`);
+    }
     await page.locator('#scdl-likes-explorer .launch').click();
     const buildButton=page.locator('#scdl-likes-explorer .canvas .empty .accent');
     await buildButton.waitFor();
@@ -129,7 +205,7 @@ const { chromium } = require('playwright');
     assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['Abrir ↗',''],detailOrder:['cover','detail-copy','status','detail-actions'],oneLine:true,locateTitle:'Teleport to selected track',locateIcon:true,openSingleLine:true});
     const teleportButton=page.locator('#scdl-likes-explorer .locate-action');
     await page.mouse.move(0,0);
-    await teleportButton.hover(); await page.waitForTimeout(184);
+    await teleportButton.hover(); await page.waitForTimeout(400);
     const teleportTooltip=await teleportButton.evaluate(button=>{
       const tooltip=document.querySelector('#scdl-fast-tooltip');
       return {text:tooltip.textContent,visible:tooltip.style.visibility,titleRemoved:!button.hasAttribute('title')};
