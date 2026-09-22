@@ -319,15 +319,9 @@ async function handleInlineCollectionDownloadClick() {
   setInlineButtonState("loading");
 
   try {
-    const tracks = await window.SCDL.resolveBulkTracks(null);
-
-    if (!tracks?.length) {
-      throw new Error(translate("no_downloadable_tracks"));
-    }
-
     const formatPreference = await SCStreamSelector.getStoredFormatPreference();
 
-    await inlineDownloadIntent.downloadCollection(tracks, playlistData, {
+    await inlineDownloadIntent.downloadPagedCollection(null, playlistData, {
       formatPreference,
     });
 

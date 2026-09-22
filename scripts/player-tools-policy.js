@@ -76,6 +76,9 @@
     const started = state.trial.startedAt !== null;
     const expired = started && now >= state.trial.expiresAt;
     const trialAvailable = started && !expired && state.trial.used < TRIAL_LIMIT;
+    // Likes Explorer is a seven-day onboarding capability.  It deliberately
+    // does not consume, nor is it shortened by, the separate 20-loop trial.
+    const likesExplorerTrialAvailable = started && !expired;
     // Only the owner of the twentieth granted loop keeps the existing grace.
     const finalLoopGrace = !pro && state.trial.used === TRIAL_LIMIT && Boolean(grant);
     const playback = pro || trialAvailable || finalLoopGrace;
@@ -94,7 +97,7 @@
         openPanel: true, beginLoop: pro || (trialAvailable && !grant), editLoop: playback,
         tempo: playback, preservePitch: playback, savePreset: playback,
         maximizeLooper: playback, editLoopPrecise: pro, exportLoop: pro, exportTrackEffects: pro,
-        likesExplorer: pro || trialAvailable, parametricEq: pro,
+        likesExplorer: pro || likesExplorerTrialAvailable, parametricEq: pro,
       },
     };
   }

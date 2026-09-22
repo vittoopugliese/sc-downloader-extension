@@ -6,7 +6,8 @@
   "workers_dev": false,
   "routes": [{ "pattern": "sctd.vpugliese.online/api/player-tools/*", "zone_name": "vpugliese.online" }],
   "vars": {
-    "ALLOWED_ORIGINS": "chrome-extension://ekmbbjdpakacalghjkikfppebgdpoebb,http://localhost:3000",
+    "LEMON_MODE": "test",
+    "ALLOWED_ORIGINS": "chrome-extension://REPLACE_WITH_TEST_EXTENSION_ID",
     "LEMON_STORE_ID": "REPLACE_WITH_LEMON_STORE_ID",
     "LEMON_PRODUCT_ID": "REPLACE_WITH_LEMON_PRODUCT_ID",
     "LEMON_VARIANT_ID": "REPLACE_WITH_LEMON_VARIANT_ID"
@@ -17,5 +18,23 @@
     "database_name": "sctd-player-tools",
     "database_id": "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID",
     "migrations_dir": "migrations"
-  }]
+  }],
+  "env": {
+    "production": {
+      "name": "sctd-player-tools-license",
+      "vars": {
+        "LEMON_MODE": "live",
+        "ALLOWED_ORIGINS": "chrome-extension://REPLACE_WITH_PUBLISHED_EXTENSION_ID",
+        "LEMON_STORE_ID": "REPLACE_WITH_LIVE_LEMON_STORE_ID",
+        "LEMON_PRODUCT_ID": "REPLACE_WITH_LIVE_LEMON_PRODUCT_ID",
+        "LEMON_VARIANT_ID": "REPLACE_WITH_LIVE_LEMON_VARIANT_ID"
+      },
+      "d1_databases": [{
+        "binding": "LICENSE_DB",
+        "database_name": "sctd-player-tools-production",
+        "database_id": "REPLACE_WITH_PRODUCTION_CLOUDFLARE_D1_DATABASE_ID",
+        "migrations_dir": "migrations"
+      }]
+    }
+  }
 }

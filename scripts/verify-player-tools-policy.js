@@ -18,6 +18,9 @@ for (const operation of ["set-rate", "set-preserve-pitch", "save-preset", "set-e
 for (const capability of ["tempo", "preservePitch", "savePreset", "beginLoop", "editLoop", "maximizeLooper"]) {
   assert.equal(policy.snapshot(exhausted, "owner", NOW).capabilities[capability], false);
 }
+assert.equal(policy.snapshot(exhausted, "owner", NOW).capabilities.likesExplorer, true,
+  "exhausting loops must not shorten the seven-day Likes Explorer trial");
+assert.equal(policy.canAuthorize(exhausted, "owner", "explore-likes", null, NOW).allowed, true);
 const last = structuredClone(exhausted);
 last.trial.grants = [{ ownerKey: "owner", sessionId: "last", trackIdentity: "track", generation: 1 }];
 assert.equal(policy.snapshot(last, "owner", NOW).state, "trial_last_session");

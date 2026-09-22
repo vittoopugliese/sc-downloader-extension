@@ -54,10 +54,31 @@ function matchesProduct(meta, env) {
     && String(meta?.product_id) === String(env.LEMON_PRODUCT_ID)
     && String(meta?.variant_id) === String(env.LEMON_VARIANT_ID);
 }
+function matchesWebhookOrder(attributes, env) {
+  const expectedTestMode = String(env.LEMON_MODE || "") === "test";
+  return String(attributes?.store_id) === String(env.LEMON_STORE_ID)
+    && String(attributes?.product_id) === String(env.LEMON_PRODUCT_ID)
+    && String(attributes?.variant_id) === String(env.LEMON_VARIANT_ID)
+    && typeof attributes?.test_mode === "boolean"
+    && attributes.test_mode === expectedTestMode;
+}
+function providerTimestamp(attributes) {
+  const parsed = Date.parse(String(attributes?.updated_at || attributes?.created_at || ""));
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : now();
+}
 async function lemonLicenseAction(path, fields) {
-  const response = await fetch(`${LEMON_API}/licenses/${path}`, { method: "POST", headers: { Accept: "application/json" }, body: new URLSearchParams(fields) });
-  if (!response.ok) return null;
-  return response.json();
+  // A provider stall must fail as an activation error, never leave the Worker
+  // waiting indefinitely or make the extension infer that Pro was granted.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const response = await fetch(`${LEMON_API}/licenses/${path}`, {
+      method: "POST", headers: { Accept: "application/json" }, body: new URLSearchParams(fields), signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    return response.json();
+  } catch { return null; }
+  finally { clearTimeout(timeout); }
 }
 async function createCheckout(env, value) {
   const payload = { data: { type: "checkouts", attributes: { checkout_data: { custom: { installation_id: value.installationId } }, product_options: { redirect_url: "https://sctd.vpugliese.online/?view=player-tools" }, checkout_options: { button_color: "#ff5500", dark: true, embed: false, media: false, logo: true } }, relationships: { store: { data: { type: "stores", id: String(env.LEMON_STORE_ID) } }, variant: { data: { type: "variants", id: String(env.LEMON_VARIANT_ID) } } } } };
@@ -66,10 +87,22 @@ async function createCheckout(env, value) {
   const body = await response.json();
   return body?.data?.attributes?.url || null;
 }
-async function recordActivation(env, license, email, installationId) {
+function validLicenseActivation(result, email, env) {
+  const license = result?.license_key;
+  const instance = result?.instance;
+  const meta = result?.meta;
+  const expiresAt = license?.expires_at ? Date.parse(license.expires_at) : null;
+  return Boolean(result?.activated && license?.id && license?.key && instance?.id &&
+    license?.status === "active" && (!expiresAt || expiresAt > now()) && matchesProduct(meta, env) &&
+    String(meta?.customer_email || "").toLowerCase() === email);
+}
+async function recordActivation(env, result, email, installationId) {
   const timestamp = now();
+  const license = result?.license_key;
+  const instance = result?.instance;
+  const meta = result?.meta;
   const licenseId = String(license?.id || "");
-  const instanceId = String(license?.instance?.id || "");
+  const instanceId = String(instance?.id || "");
   const keyHash = await sha256Hex(String(license?.key || ""));
   if (!licenseId || !instanceId) throw new Error("Lemon returned an incomplete license activation.");
   await env.LICENSE_DB.batch([
@@ -77,7 +110,7 @@ async function recordActivation(env, license, email, installationId) {
       VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
       ON CONFLICT(lemon_order_id) DO UPDATE SET lemon_license_id=excluded.lemon_license_id, customer_email=excluded.customer_email,
         lemon_key_hash=excluded.lemon_key_hash, status='active', revoked_at=NULL, updated_at=excluded.updated_at`)
-      .bind(licenseId, String(license?.order_id || "") || null, String(license?.customer_id || "") || null, keyHash, email, timestamp, timestamp),
+      .bind(licenseId, String(meta?.order_id || "") || null, String(meta?.customer_id || "") || null, keyHash, email, timestamp, timestamp),
     env.LICENSE_DB.prepare(`INSERT INTO activations (lemon_instance_id, lemon_license_id, installation_id, activated_at, last_validated_at)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(lemon_instance_id) DO UPDATE SET installation_id=excluded.installation_id, last_validated_at=excluded.last_validated_at, deactivated_at=NULL`)
@@ -87,10 +120,10 @@ async function recordActivation(env, license, email, installationId) {
 }
 async function activate(env, value) {
   const result = await lemonLicenseAction("activate", { license_key: value.licenseKey, instance_name: value.installationId });
-  if (!result?.activated || !matchesProduct(result.meta, env) || String(result.meta?.customer_email || "").toLowerCase() !== value.email) {
+  if (!validLicenseActivation(result, value.email, env)) {
     return null;
   }
-  return recordActivation(env, result.license_key, value.email, value.installationId);
+  return recordActivation(env, result, value.email, value.installationId);
 }
 async function restore(env, value) {
   const keyHash = await sha256Hex(value.licenseKey);
@@ -113,20 +146,37 @@ async function status(env, value) {
 async function recordWebhook(env, payload, raw) {
   const eventName = String(payload?.meta?.event_name || "");
   const hash = await sha256Hex(raw);
-  const inserted = await env.LICENSE_DB.prepare("INSERT INTO webhook_events (event_hash, event_name, received_at, payload) VALUES (?, ?, ?, ?) ON CONFLICT(event_hash) DO NOTHING")
-    .bind(hash, eventName, now(), new TextDecoder().decode(raw)).run();
-  if (Number(inserted.meta?.changes || 0) === 0) return;
   const attributes = payload?.data?.attributes || {};
+  if (!new Set(["order_created", "order_refunded"]).has(eventName) ||
+      payload?.data?.type !== "orders" || !matchesWebhookOrder(attributes, env)) {
+    throw Object.assign(new Error("Rejected Lemon webhook outside the configured product or environment."), { code: "invalid_webhook" });
+  }
+  const timestamp = now();
+  await env.LICENSE_DB.prepare(`INSERT INTO webhook_events
+    (event_hash, event_name, received_at, payload, processing_started_at)
+    VALUES (?, ?, ?, ?, NULL) ON CONFLICT(event_hash) DO NOTHING`)
+    .bind(hash, eventName, timestamp, new TextDecoder().decode(raw)).run();
+  // Claiming the event makes delivery deduplication safe even when two retries
+  // overlap. A failed handler explicitly releases its claim below.
+  const claimed = await env.LICENSE_DB.prepare(`UPDATE webhook_events SET processing_started_at=?, processing_error=NULL
+    WHERE event_hash=? AND processed_at IS NULL AND (processing_started_at IS NULL OR processing_started_at < ?)`)
+    .bind(timestamp, hash, timestamp - 30_000).run();
+  if (Number(claimed.meta?.changes || 0) === 0) return;
+  try {
+    const eventAt = providerTimestamp(attributes);
   if (eventName === "order_created") {
     const installationId = String(payload?.meta?.custom_data?.installation_id || "");
     await env.LICENSE_DB.prepare(`INSERT INTO licenses (lemon_license_id, lemon_order_id, lemon_customer_id, customer_email, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, 'active', ?, ?) ON CONFLICT(lemon_order_id) DO UPDATE SET customer_email=excluded.customer_email, status='active', updated_at=excluded.updated_at`)
-      .bind(`order:${payload?.data?.id}`, String(payload?.data?.id || ""), String(attributes.customer_id || "") || null, String(attributes.user_email || attributes.customer_email || "").toLowerCase(), now(), now()).run();
+      VALUES (?, ?, ?, ?, 'active', ?, ?) ON CONFLICT(lemon_order_id) DO UPDATE SET
+        customer_email=excluded.customer_email,
+        status=CASE WHEN licenses.status='revoked' THEN licenses.status ELSE 'active' END,
+        updated_at=excluded.updated_at`)
+      .bind(`order:${payload?.data?.id}`, String(payload?.data?.id || ""), String(attributes.customer_id || "") || null, String(attributes.user_email || attributes.customer_email || "").toLowerCase(), timestamp, eventAt).run();
     if (/^[a-zA-Z0-9_-]{16,128}$/.test(installationId)) {
       await env.LICENSE_DB.prepare(`INSERT INTO analytics_events
         (event_id, installation_id, event_name, occurred_at, received_at, extension_version, offer_version, properties)
         VALUES (?, ?, 'purchase_confirmed', ?, ?, 'server', 'provider', ?) ON CONFLICT(event_id) DO NOTHING`)
-        .bind(`purchase:${payload?.data?.id}`, installationId, now(), now(), JSON.stringify({
+        .bind(`purchase:${payload?.data?.id}`, installationId, timestamp, timestamp, JSON.stringify({
           currency: String(attributes.currency || "").slice(0, 16),
           total: Number(attributes.total || 0),
         })).run();
@@ -134,7 +184,14 @@ async function recordWebhook(env, payload, raw) {
   }
   if (eventName === "order_refunded") {
     await env.LICENSE_DB.prepare("UPDATE licenses SET status='revoked', revoked_at=?, updated_at=? WHERE lemon_order_id=?")
-      .bind(now(), now(), String(payload?.data?.id || "")).run();
+      .bind(timestamp, eventAt, String(payload?.data?.id || "")).run();
+  }
+    await env.LICENSE_DB.prepare("UPDATE webhook_events SET processed_at=?, processing_error=NULL WHERE event_hash=?")
+      .bind(now(), hash).run();
+  } catch (error) {
+    await env.LICENSE_DB.prepare("UPDATE webhook_events SET processing_started_at=NULL, processing_error=? WHERE event_hash=?")
+      .bind(String(error instanceof Error ? error.message : error).slice(0, 512), hash).run();
+    throw error;
   }
 }
 
@@ -151,13 +208,17 @@ export default {
   async fetch(request, env) {
     try {
       const url = new URL(request.url);
-      if (request.method === "GET" && url.pathname === "/api/player-tools/health") return json(200, { service: "sctd-player-tools-license", status: env.LICENSE_DB && env.LEMON_API_KEY && env.LEMON_WEBHOOK_SECRET && env.LEMON_STORE_ID && env.LEMON_PRODUCT_ID && env.LEMON_VARIANT_ID && (env.ALLOWED_ORIGINS || env.ALLOWED_ORIGIN) ? "ready" : "not-configured" });
+      if (request.method === "GET" && url.pathname === "/api/player-tools/health") return json(200, { service: "sctd-player-tools-license", status: env.LICENSE_DB && env.LEMON_API_KEY && env.LEMON_WEBHOOK_SECRET && env.LEMON_STORE_ID && env.LEMON_PRODUCT_ID && env.LEMON_VARIANT_ID && ["test", "live"].includes(env.LEMON_MODE) && (env.ALLOWED_ORIGINS || env.ALLOWED_ORIGIN) ? "ready" : "not-configured" });
       if (request.method === "POST" && url.pathname === "/api/player-tools/webhooks/lemon") {
         const raw = await readBody(request, MAX_WEBHOOK_BYTES);
         const signature = request.headers.get("x-signature") || "";
         if (!raw || !env.LEMON_WEBHOOK_SECRET || !equals(signature, await hmacHex(env.LEMON_WEBHOOK_SECRET, raw))) return json(403, { error: "invalid_signature" });
         let payload; try { payload = JSON.parse(new TextDecoder().decode(raw)); } catch { return json(400, { error: "invalid_payload" }); }
-        await recordWebhook(env, payload, raw);
+        try { await recordWebhook(env, payload, raw); }
+        catch (error) {
+          if (error?.code === "invalid_webhook") return json(400, { error: "invalid_webhook" });
+          throw error;
+        }
         return json(200, { received: true });
       }
       const origin = allowedOrigin(request, env);

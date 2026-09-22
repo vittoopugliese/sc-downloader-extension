@@ -7,7 +7,8 @@ service; Lemon credentials never ship in the extension.
 ## What is implemented
 
 - Checkout creation tied to a pseudonymous installation ID.
-- Signed, size-limited and deduplicated Lemon webhook ingestion.
+- Signed, size-limited and claim-deduplicated Lemon webhook ingestion, limited to
+  the configured store/product/variant and test or live environment.
 - Idempotent activation/recovery without storing the license key in the extension.
 - Status revalidation and refund/revocation propagation to the shared entitlement.
 - A strict event allow-list that rejects track titles, music URLs, emails and keys.
@@ -16,7 +17,9 @@ service; Lemon credentials never ship in the extension.
 ## Production setup
 
 1. Copy `wrangler.example.jsonc` to `wrangler.jsonc` and replace every
-   `REPLACE_WITH_...` value. Keep the real config free of secrets.
+   `REPLACE_WITH_...` value. Keep the real config free of secrets. The default
+   environment is Test Mode; `--env production` has its own D1 binding and
+   requires separate live IDs and secrets.
 2. Install Wrangler 4, authenticate, create the D1 database, and set its ID in
    the config.
 3. Add secrets interactively; never put their values in the config:
@@ -34,8 +37,9 @@ service; Lemon credentials never ship in the extension.
    wrangler deploy
    ```
 
-5. Configure Lemon Squeezy to send `order_created` and `order_refunded` to
+5. Configure Lemon Squeezy to send **only** `order_created` and `order_refunded` to
    `https://sctd.vpugliese.online/api/player-tools/webhooks/lemon`.
+   Do not enable `license_key_updated` until its reconciliation handler exists.
 
 ## Sandbox reconciliation gate
 

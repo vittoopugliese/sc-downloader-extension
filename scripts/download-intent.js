@@ -48,12 +48,14 @@ const SCDownloadIntent = (() => {
     }
 
     async function downloadPagedCollection(tabId, collection, options = {}) {
-      if (!Number.isInteger(tabId) || !collection?.title) {
+      if (tabId != null && !Number.isInteger(tabId)) {
+        throw new Error("Collection tab context is unavailable.");
+      }
+      if (!collection?.title) {
         throw new Error("Collection information is unavailable.");
       }
-      return send({
+      const command = {
         type: "START_PAGED_BULK_JOB",
-        tabId,
         collection: {
           kind: collection.kind || "collection",
           title: collection.title,
@@ -69,7 +71,11 @@ const SCDownloadIntent = (() => {
         requestedLimit: options.limit ?? null,
         formatPreference: options.formatPreference || "auto",
         downloadDestination: options.downloadDestination ?? null,
-      });
+      };
+      // Content scripts do not know their tab ID. The background derives it
+      // from the trusted sender, so inline and popup use the same durable path.
+      if (Number.isInteger(tabId)) command.tabId = tabId;
+      return send(command);
     }
 
     return { downloadTrack, downloadCollection, downloadPagedCollection };

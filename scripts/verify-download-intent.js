@@ -43,6 +43,9 @@ const intent = create({
   assert.equal(messages[2].type, "START_PAGED_BULK_JOB");
   assert.equal(messages[2].tabId, 17);
   assert.equal(messages[2].requestedLimit, 50);
+  await intent.downloadPagedCollection(null, { kind: "playlist", title: "Inline set", pageUrl: "https://soundcloud.com/a/sets/b" });
+  assert.equal(messages[3].type, "START_PAGED_BULK_JOB");
+  assert.equal(Object.hasOwn(messages[3], "tabId"), false, "content-side paged downloads defer tab identity to the background sender");
   await assert.rejects(intent.downloadTrack({ id: 3 }), /No downloadable stream/);
   console.log("Download intent verification passed.");
 })().catch((error) => {

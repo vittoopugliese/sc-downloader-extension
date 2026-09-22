@@ -405,8 +405,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === "START_PAGED_BULK_JOB") {
+    const tabId = Number.isInteger(request.tabId) ? request.tabId : sender?.tab?.id;
     BulkJobManager.createPagedJob(
-      request.tabId,
+      tabId,
       request.collection,
       request.requestedLimit ?? null,
       request.formatPreference || "auto",

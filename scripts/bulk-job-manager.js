@@ -55,6 +55,8 @@ let stateQueue = Promise.resolve();
 let singleDownloadQueue = Promise.resolve();
 let creatingOffscreenDocument = null;
 let singleDownloadsInFlight = 0;
+let offscreenOperationsInFlight = 0;
+let offscreenClosePending = false;
 let legacyMigrationPromise = null;
 let activeEnumerationPromise = null;
 let activeEnumerationJobId = null;
@@ -398,10 +400,19 @@ async function ensureOffscreenDocument() {
 }
 
 async function closeOffscreenDocument() {
+  // A terminal bulk job can finish while a pad render or a single export still
+  // owns the shared offscreen document. Closing it here used to abort that
+  // unrelated operation. The last lease holder performs the deferred close.
+  if (offscreenOperationsInFlight > 0 || singleDownloadsInFlight > 0) {
+    offscreenClosePending = true;
+    return false;
+  }
   const existingContexts = await chrome.runtime.getContexts({
     contextTypes: ["OFFSCREEN_DOCUMENT"],
   });
   if (existingContexts.length > 0) await chrome.offscreen.closeDocument();
+  offscreenClosePending = false;
+  return true;
 }
 
 async function finishJobResources(job) {
@@ -412,45 +423,53 @@ async function finishJobResources(job) {
 }
 
 async function sendOffscreenMessage(message, retries = 12) {
-  await ensureOffscreenDocument();
-  await sleep(250);
+  offscreenOperationsInFlight += 1;
+  try {
+    await ensureOffscreenDocument();
+    await sleep(250);
 
-  const hasSideEffect = message.type === "OFFSCREEN_SAVE_TO_DIRECTORY";
-  for (let attempt = 0; attempt < (hasSideEffect ? 1 : retries); attempt += 1) {
-    try {
-      const response = await new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage(message, (result) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
+    const hasSideEffect = message.type === "OFFSCREEN_SAVE_TO_DIRECTORY";
+    for (let attempt = 0; attempt < (hasSideEffect ? 1 : retries); attempt += 1) {
+      try {
+        const response = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage(message, (result) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
 
-          resolve(result);
+            resolve(result);
+          });
         });
-      });
 
-      if (response !== undefined) {
-        return response;
+        if (response !== undefined) {
+          return response;
+        }
+      } catch (error) {
+        if (hasSideEffect) {
+          const ambiguous = new Error("Folder save may have completed. Check the folder before retrying.");
+          ambiguous.code = "ambiguous_save";
+          throw ambiguous;
+        }
+        // Offscreen may still be loading its scripts.
       }
-    } catch (error) {
+
       if (hasSideEffect) {
         const ambiguous = new Error("Folder save may have completed. Check the folder before retrying.");
         ambiguous.code = "ambiguous_save";
         throw ambiguous;
       }
-      // Offscreen may still be loading its scripts.
+
+      await sleep(200);
     }
 
-    if (hasSideEffect) {
-      const ambiguous = new Error("Folder save may have completed. Check the folder before retrying.");
-      ambiguous.code = "ambiguous_save";
-      throw ambiguous;
+    throw new Error("Could not reach the offscreen audio worker.");
+  } finally {
+    offscreenOperationsInFlight = Math.max(0, offscreenOperationsInFlight - 1);
+    if (offscreenOperationsInFlight === 0 && offscreenClosePending && singleDownloadsInFlight === 0) {
+      await closeOffscreenDocument().catch(() => {});
     }
-
-    await sleep(200);
   }
-
-  throw new Error("Could not reach the offscreen audio worker.");
 }
 
 async function waitWhilePaused(jobId) {
