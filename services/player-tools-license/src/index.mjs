@@ -122,6 +122,19 @@ async function lemonLicenseAction(path, fields) {
   } catch { return null; }
   finally { clearTimeout(timeout); }
 }
+async function lemonApiGet(env, path) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${LEMON_API}${path}`, { headers: lemonHeaders(env), signal: controller.signal });
+    if (!response.ok) return { ok: false, status: response.status };
+    return { ok: true, body: await readJsonResponse(response) };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 async function createCheckout(env, value) {
   const payload = { data: { type: "checkouts", attributes: { checkout_data: { custom: { installation_id: value.installationId } }, product_options: { redirect_url: "https://sctd.vpugliese.online/?view=player-tools" }, checkout_options: { button_color: "#ff5500", dark: true, embed: false, media: false, logo: true } }, relationships: { store: { data: { type: "stores", id: String(env.LEMON_STORE_ID) } }, variant: { data: { type: "variants", id: String(env.LEMON_VARIANT_ID) } } } } };
   const controller = new AbortController();
@@ -241,13 +254,56 @@ async function restore(env, value) {
   if (existing) return { kind: 'active', licenseId: existing.lemon_license_id, instanceId: existing.lemon_instance_id };
   return activate(env, value);
 }
+function activeProviderLicense(resource, activation, env) {
+  const attributes = resource?.data?.attributes;
+  const expiresAt = attributes?.expires_at ? Date.parse(attributes.expires_at) : null;
+  return resource?.data?.type === 'license-keys' && String(resource.data.id) === String(activation.lemon_license_id)
+    && String(attributes?.store_id) === String(env.LEMON_STORE_ID)
+    && String(attributes?.product_id) === String(env.LEMON_PRODUCT_ID)
+    && String(attributes?.user_email || '').toLowerCase() === String(activation.customer_email || '').toLowerCase()
+    && attributes?.status === 'active' && (attributes?.disabled === false || Number(attributes?.disabled) === 0)
+    && (!expiresAt || expiresAt > now());
+}
+async function reconcileActivation(env, activation) {
+  const license = await lemonApiGet(env, `/license-keys/${encodeURIComponent(activation.lemon_license_id)}`);
+  if (!license) throw new Error('Lemon license reconciliation is unavailable.');
+  let active = license.ok && activeProviderLicense(license.body, activation, env);
+  if (active) {
+    const instances = await lemonApiGet(env, `/license-key-instances?filter%5Blicense_key_id%5D=${encodeURIComponent(activation.lemon_license_id)}`);
+    if (!instances) throw new Error('Lemon instance reconciliation is unavailable.');
+    active = instances.ok && Array.isArray(instances.body?.data) && instances.body.data.some((item) =>
+      item?.type === 'license-key-instances'
+      && String(item?.attributes?.identifier || '') === String(activation.lemon_instance_id)
+      && String(item?.attributes?.name || '') === String(activation.installation_id));
+  }
+  const timestamp = now();
+  if (!active) {
+    await env.LICENSE_DB.batch([
+      env.LICENSE_DB.prepare("UPDATE licenses SET status='revoked', revoked_at=COALESCE(revoked_at, ?), updated_at=? WHERE lemon_license_id=?")
+        .bind(timestamp, timestamp, activation.lemon_license_id),
+      env.LICENSE_DB.prepare("UPDATE activations SET deactivated_at=COALESCE(deactivated_at, ?) WHERE lemon_instance_id=?")
+        .bind(timestamp, activation.lemon_instance_id),
+      env.LICENSE_DB.prepare("DELETE FROM activation_operations WHERE lemon_license_id=?")
+        .bind(activation.lemon_license_id),
+    ]);
+    return false;
+  }
+  await env.LICENSE_DB.batch([
+    env.LICENSE_DB.prepare("UPDATE licenses SET updated_at=? WHERE lemon_license_id=? AND status='active'").bind(timestamp, activation.lemon_license_id),
+    env.LICENSE_DB.prepare("UPDATE activations SET last_validated_at=? WHERE lemon_instance_id=? AND deactivated_at IS NULL")
+      .bind(timestamp, activation.lemon_instance_id),
+  ]);
+  return true;
+}
 async function status(env, value) {
-  const activation = await env.LICENSE_DB.prepare(`SELECT licenses.lemon_license_id, licenses.status FROM activations JOIN licenses USING(lemon_license_id)
+  const activation = await env.LICENSE_DB.prepare(`SELECT licenses.lemon_license_id, licenses.status, licenses.customer_email,
+    activations.lemon_instance_id, activations.installation_id FROM activations JOIN licenses USING(lemon_license_id)
     WHERE activations.lemon_instance_id = ? AND activations.installation_id = ? AND activations.deactivated_at IS NULL`).bind(value.instanceId, value.installationId).first();
   if (!activation) return { active: false };
   if (activation.status !== "active") return { active: false, reason: "license_revoked" };
-  await env.LICENSE_DB.prepare("UPDATE activations SET last_validated_at = ? WHERE lemon_instance_id = ?").bind(now(), value.instanceId).run();
-  return { active: true, licenseId: activation.lemon_license_id };
+  return await reconcileActivation(env, activation)
+    ? { active: true, licenseId: activation.lemon_license_id }
+    : { active: false, reason: 'license_revoked' };
 }
 async function recordWebhook(env, payload, raw) {
   const eventName = String(payload?.meta?.event_name || "");

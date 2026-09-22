@@ -19,8 +19,9 @@ service; Lemon credentials never ship in the extension.
   returns its existing activation; an interrupted persistence can be recovered
   by retrying that same reservation after its lease. Real-provider orphan
   reconciliation remains a release blocker.
-- Local status lookup and refund/revocation propagation. Provider reconciliation
-  and signed 30-day entitlement receipts are still release blockers.
+- Status reconciliation against Lemon's license and instance records, plus
+  refund/revocation propagation. Signed 30-day entitlement receipts remain a
+  release blocker.
 - A strict event allow-list that rejects track titles, music URLs, emails and keys.
 - CORS restricted to the published extension origin.
 
