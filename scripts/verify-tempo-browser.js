@@ -528,7 +528,7 @@ async function main() {
       compactStyles.downloadTrackButtonSize.join("x") !== "23x20" ||
       compactStyles.downloadTrackIconSize.join("x") !== "12x12" ||
       compactStyles.downloadTrackTooltip !== "Download current playing" ||
-      compactStyles.toolOrder.join("|") !== "panel-tool download-track-button|panel-tool settings-button|panel-tool detach-button|panel-tool reset-tools-button|panel-tool visibility-button|panel-tool close-button" ||
+      compactStyles.toolOrder.join("|") !== "panel-tool download-track-button|panel-tool reset-tools-button|panel-tool settings-button|panel-tool detach-button|panel-tool visibility-button|panel-tool close-button" ||
       compactStyles.settingsButtonSize.join("x") !== "23x20" ||
       compactStyles.settingsButtonRadius !== "4px" ||
       compactStyles.settingsIconSize.join("x") !== "12x12" ||
@@ -895,7 +895,7 @@ async function main() {
     })), [0, 0, 0, 0], 'Collapsed chevrons must remain vertically centered after rotation');
     assert.equal(await visibility.getAttribute('data-state'), 'collapsed');
     assert.equal(await host.locator('.visibility-up-icon').isVisible(), true,
-      'The collapsed state must use an upward chevron.');
+      'The collapsed state must use the medium dash.');
     await visibility.click();
     assert.equal(await visibility.getAttribute('data-state'), 'hidden');
     assert.equal(await host.locator('.visibility-expand-icon').getAttribute('src'), headerIconDataUrls.expand,
