@@ -211,8 +211,9 @@ async function main() {
     }
     const drumPads = host.locator(".drum-pad");
     assert.equal(await drumPads.count(), 4, "The panel must show four drum pads.");
-    assert.deepEqual(await drumPads.locator(".drum-name").allTextContents(),
-      ["Kick", "Clap", "Hat", "Kick 2"]);
+    assert.deepEqual(await drumPads.allTextContents(), ["A", "S", "D", "F"]);
+    assert.deepEqual(await drumPads.evaluateAll((pads) => pads.map((pad) => pad.title)),
+      ["Kick", "Clap", "Hat", "Kick 2"].map((name) => `${name} · hold to load`));
     const drumPlacement = await host.evaluate((element) => {
       const root = element.shadowRoot;
       const header = root.querySelector(".panel-header").getBoundingClientRect();
@@ -246,7 +247,7 @@ async function main() {
     await page.waitForTimeout(650);
     await page.mouse.up();
     await (await sampleChooser).setFiles(path.join(projectRoot, "assets", "drums", "hat1.wav"));
-    await drumPads.nth(3).locator(".drum-name").getByText("hat1").waitFor();
+    await host.locator('.drum-pad[title="hat1 · hold to load"]').waitFor();
     assert.equal(await page.evaluate(() => window.drumStarts), 2,
       "Holding a pad to upload must not also play it.");
     await drumPads.nth(3).click();
@@ -1080,7 +1081,7 @@ async function main() {
           logo.right <= title.left && tools.right <= bounds.right &&
           header.scrollWidth <= header.clientWidth && tempo.scrollWidth <= tempo.clientWidth &&
           limits.left >= slider.left && limits.right <= slider.right &&
-          pads.every((pad) => pad.offsetHeight === 36 && pad.getBoundingClientRect().right <= bounds.right);
+          pads.every((pad) => pad.offsetHeight === 28 && pad.getBoundingClientRect().right <= bounds.right);
       });
       if (!headerFits) throw new Error(`Player Tools compact controls do not fit at ${width}px.`);
     }

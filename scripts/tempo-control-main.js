@@ -235,9 +235,8 @@
     drumPads.forEach((pad, index) => {
       const button = ui.drumButtons[index];
       button.querySelector(".drum-key").textContent = pad.key ? pad.key.toUpperCase() : "·";
-      button.querySelector(".drum-name").textContent = pad.customName || pad.name;
       button.setAttribute("aria-label", `${pad.customName || pad.name} drum pad. Key ${pad.key ? pad.key.toUpperCase() : "unassigned"}. Hold to load an audio sample.`);
-      button.title = `${pad.customName || pad.name} · ${pad.key ? pad.key.toUpperCase() : "no key"} · hold to load a sample`;
+      button.title = `${Array.from(pad.customName || pad.name).slice(0, 20).join("")} · hold to load`;
     });
   }
 
@@ -305,7 +304,7 @@
       const buffer = await getDrumAudioContext().decodeAudioData(await file.arrayBuffer());
       if (pad.version !== version) return;
       pad.buffer = buffer;
-      pad.customName = file.name.replace(/\.[^.]+$/, "").slice(0, 16) || pad.name;
+      pad.customName = file.name.replace(/\.[^.]+$/, "") || pad.name;
       updateDrumLabels();
       showDrumError("");
     } catch {
@@ -1535,15 +1534,14 @@
         .panel-header { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) 42px auto; grid-template-rows: 32px; align-items: center; column-gap: 5px; row-gap: 2px; padding-bottom: 6px; }
         .drum-section { margin: 0 0 6px; }
         .drum-pads { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-        .drum-pad { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 36px; padding: 4px 7px; border: 1px solid #4a4a4a; border-radius: 8px; color: #fff; background: #292929; font: inherit; cursor: pointer; user-select: none; touch-action: manipulation; transition: transform 90ms ease, background-color 90ms ease, border-color 90ms ease; }
+        .drum-pad { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100%; height: 28px; padding: 3px 6px; border: 1px solid #4a4a4a; border-radius: 8px; color: #fff; background: #292929; font: inherit; cursor: pointer; user-select: none; touch-action: manipulation; transition: transform 90ms ease, background-color 90ms ease, border-color 90ms ease; }
         .drum-slot:nth-child(2) .drum-pad { background: #383838; }
         .drum-slot:nth-child(3) .drum-pad { background: #464646; }
         .drum-slot:nth-child(4) .drum-pad { background: #343434; }
         .drum-pad:hover, .drum-pad.is-holding { border-color: #ff7b38; }
         .drum-pad.is-active { transform: scale(.95); border-color: #ff5500; background: #713516 !important; }
         .drum-pad:focus-visible { outline: 2px solid #ff5500; outline-offset: 2px; }
-        .drum-key { flex: 0 0 auto; font-size: 16px; font-weight: 800; line-height: 1; }
-        .drum-name { max-width: 100%; overflow: hidden; color: #d3d3d3; font-size: 10px; font-weight: 600; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+        .drum-key { flex: 0 0 auto; font-size: 14px; font-weight: 800; line-height: 1; }
         .drum-file { display: none; }
         .drum-message { margin: 4px 1px 0; color: #ffb199; font-size: 10px; line-height: 1.2; }
         .brand { display: contents; }
@@ -1660,8 +1658,7 @@
           .custom-preset, .custom-preset[data-saved="true"] { font-size: 8px; }
           .current { font-size: 11px; }
           .panel-tool { width: 20px; }
-          .drum-pad { gap: 4px; padding-inline: 4px; }
-          .drum-name { font-size: 9px; }
+          .drum-pad { padding-inline: 4px; }
           .bypass, .bypass svg { width: 16px; height: 16px; }
         }
         .clear-loop, .download-loop { height: 22px; padding: 0 6px; border-radius: 6px; opacity: .82; }
@@ -1718,7 +1715,7 @@
         </div>
         <div class="drum-section" role="group" aria-label="Drum pads">
           <div class="drum-pads">
-            ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span><span class="drum-name">${pad.name}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
+            ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
           </div>
           <p class="drum-message" role="status" aria-live="polite" hidden></p>
         </div>
