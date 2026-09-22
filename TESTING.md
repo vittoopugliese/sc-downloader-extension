@@ -26,12 +26,19 @@ npm run test:e2e
 npm run test:e2e:download
 npm run test:e2e:popup
 npm run test:e2e:tempo
+npm run test:e2e:eq
 npm run test:feedback
 ```
 
 `test:e2e:popup` checks that the popup background covers the bottom and right
 edges when the viewport is slightly larger than the content, at display scales
 of 100%, 125%, 150%, and 200%.
+
+`test:e2e:eq` measures the live parametric EQ with a generated tone in the
+owned and shared player graphs, and checks the spectrum, editor controls,
+bypass, Pro revocation and player replacement. `test:e2e:tempo` also checks
+that EQ points and bypass survive a page reload. These fixtures do not replace
+a manual check with a real SoundCloud session.
 
 `test:feedback` covers the local validation, Turnstile gate, duplicate handling,
 rate limit and retention cleanup for the optional uninstall-feedback Worker. It

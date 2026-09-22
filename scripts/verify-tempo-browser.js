@@ -1152,16 +1152,10 @@ async function main() {
     // Exercise the EQ inside the real panel, including the access bridge and persistence.
     await page.setViewportSize({ width: 720, height: 780 });
     await host.locator(".peq summary").click();
-    await host.locator(".peq-add").click();
-    await host.locator(".peq-frequency").fill("1000");
-    await host.locator(".peq-gain").fill("-9");
-    await host.locator(".peq-gain").press("Tab");
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem("scdl.parametric-eq.v1"))?.bands[0]?.gain === -9);
-    await host.locator(".peq-add").click();
-    await host.locator(".peq-frequency").fill("4500");
-    await host.locator(".peq-gain").fill("4");
-    await host.locator(".peq-gain").press("Tab");
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem("scdl.parametric-eq.v1"))?.bands[1]?.gain === 4);
+    await host.locator(".peq-canvas").dblclick({ position: { x: 180, y: 130 } });
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem("scdl.parametric-eq.v1"))?.bands[0]?.gain < 0);
+    await host.locator(".peq-canvas").dblclick({ position: { x: 300, y: 55 } });
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem("scdl.parametric-eq.v1"))?.bands[1]?.gain > 0);
     await panel.evaluate((element) => { element.scrollTop = element.scrollHeight; });
     await page.screenshot({ path: path.join(projectRoot, "test-results", "parametric-eq.png") });
     await host.locator(".peq-bypass").click();
@@ -1230,7 +1224,9 @@ async function main() {
     await host.locator(".trigger").click();
     await host.locator(".peq summary").click();
     assert.equal(await host.locator(".peq-point").count(), 2, "EQ points must survive reload");
-    assert.equal(await host.locator(".peq-gain").inputValue(), "-9");
+    assert.equal(await host.locator(".peq-headroom").count(), 0);
+    assert.equal(await host.locator(".peq-fields").count(), 0);
+    assert.equal(await host.locator(".peq-hint").count(), 0);
     assert.equal(await host.locator(".peq-bypass").getAttribute("aria-pressed"), "true", "EQ bypass must survive reload");
     console.log(`Tempo browser verification passed: ${screenshotPath}`);
   } finally {

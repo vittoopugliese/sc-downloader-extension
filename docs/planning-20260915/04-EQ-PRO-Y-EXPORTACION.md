@@ -9,11 +9,12 @@ las secciones E3 y los criterios históricos de exportación no bloquean esta V1
 
 Implementación local: `parametric-eq.js`, `parametric-eq-ui.js`, integración en
 `audio-effects-core.js` y `tempo-control-main.js`. Doble clic agrega un punto;
-arrastrar cambia frecuencia/ganancia; rueda sobre el punto cambia Q; Suprimir lo
-elimina; doble clic en un punto vuelve a 0 dB. Incluye controles numéricos,
-teclado, bypass, reset y persistencia local. Rango 20 Hz–20 kHz, ±18 dB, Q 0,1–18.
-La curva muestra la respuesta de los filtros; la compensación conservadora de
-ganancia se indica como Auto headroom. El espectro representa la salida del EQ.
+arrastrar cambia frecuencia/ganancia; rueda sobre el punto cambia Q; doble clic
+en un punto lo elimina. Incluye teclado, bypass, reset y persistencia local.
+Rango 20 Hz–20 kHz, ±18 dB, Q 0,1–18.
+La curva muestra la respuesta de los filtros incluso en bypass. El usuario quitó
+la compensación automática de ganancia; los boosts cambian el nivel real. El
+espectro representa la salida del EQ.
 
 Se conserva EQ exclusivamente Pro (`set-eq` / `parametricEq`). Al perder acceso o
 activar bypass global, la cadena vuelve a respuesta neutra sin borrar los puntos.

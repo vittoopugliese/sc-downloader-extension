@@ -34,13 +34,6 @@
     return settings.enabled && settings.bands.some((band) => band.gain !== 0);
   }
 
-  // Each peaking filter's maximum boost is bounded by its positive gain.
-  // Their sum is a conservative headroom bound, including overlapping bands.
-  function headroom(value) {
-    const settings = normalize(value);
-    return settings.enabled ? settings.bands.reduce((sum, band) => sum + Math.max(0, band.gain), 0) : 0;
-  }
-
   function createGraph(context, { analyse = false } = {}) {
     const input = context.createGain();
     const filters = Array.from({ length: MAX_BANDS }, () => {
@@ -51,10 +44,13 @@
     });
     let output = input;
     for (const filter of filters) { output.connect(filter); output = filter; }
+    const routedOutput = context.createGain();
+    output.connect(routedOutput);
     const analyser = analyse ? context.createAnalyser() : null;
     if (analyser) {
-      analyser.fftSize = 4096;
-      analyser.smoothingTimeConstant = 0.8;
+      analyser.fftSize = 16384;
+      analyser.smoothingTimeConstant = 0.55;
+      // Keep the meter attached if the site disconnects and reconnects its source.
       output.connect(analyser);
     }
     const spectrum = analyser ? new Float32Array(analyser.frequencyBinCount) : null;
@@ -63,10 +59,10 @@
       const active = settings.enabled && !bypassed;
       const set = (param, number) => {
         param.cancelScheduledValues(context.currentTime);
-        if (immediate) param.setValueAtTime(number, context.currentTime);
+        if (immediate) param.value = number;
         else param.setTargetAtTime(number, context.currentTime, 0.012);
       };
-      set(input.gain, active ? Math.pow(10, -headroom(settings) / 20) : 1);
+      set(input.gain, 1);
       filters.forEach((filter, index) => {
         const band = settings.bands[index];
         set(filter.frequency, Math.min(band?.frequency || 1000, context.sampleRate * 0.49));
@@ -89,8 +85,8 @@
       }
       return result;
     }
-    return { input, output, apply, readSpectrum, response };
+    return { input, output: routedOutput, apply, readSpectrum, response };
   }
 
-  globalThis.SCParametricEQ = Object.freeze({ MAX_BANDS, normalize, validate, isActive, headroom, createGraph });
+  globalThis.SCParametricEQ = Object.freeze({ MAX_BANDS, normalize, validate, isActive, createGraph });
 })();
