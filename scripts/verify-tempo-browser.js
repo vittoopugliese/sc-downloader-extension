@@ -493,7 +493,7 @@ async function main() {
     if (
       compactStyles.panelSize[0] !== 420 ||
       compactStyles.padding.join(" ") !== "7px 7px 7px 7px" ||
-      compactStyles.presetSize.join("x") !== "42x15" ||
+      compactStyles.presetSize.join("x") !== "32x12" ||
       compactStyles.toggleSize.join("x") !== "16x16" ||
       compactStyles.pitchText !== "" ||
       compactStyles.pitchTooltip !== "Keep tone" ||
@@ -501,7 +501,7 @@ async function main() {
       compactStyles.downloadTrackButtonSize.join("x") !== "23x20" ||
       compactStyles.downloadTrackIconSize.join("x") !== "12x12" ||
       compactStyles.downloadTrackTooltip !== "Download current playing" ||
-      compactStyles.toolOrder.join("|") !== "panel-tool download-track-button|panel-tool settings-button|panel-tool detach-button" ||
+      compactStyles.toolOrder.join("|") !== "panel-tool download-track-button|panel-tool settings-button|panel-tool detach-button|panel-tool close-button" ||
       compactStyles.settingsButtonSize.join("x") !== "23x20" ||
       compactStyles.settingsButtonRadius !== "4px" ||
       compactStyles.settingsIconSize.join("x") !== "12x12" ||
@@ -511,8 +511,8 @@ async function main() {
       compactStyles.headerHeight > 38 ||
       compactStyles.headerOverflows ||
       !(compactStyles.headerRects[0][0] < compactStyles.headerRects[1][0] &&
-        compactStyles.headerRects[1][0] < compactStyles.headerRects[2][0] &&
-        compactStyles.headerRects[2][2] <= compactStyles.headerRects[3][0] &&
+        compactStyles.headerRects[1][2] <= compactStyles.headerRects[3][0] &&
+        compactStyles.headerRects[2][1] > compactStyles.headerRects[0][3] &&
         compactStyles.headerRects[4][1] > compactStyles.headerRects[0][3] &&
         compactStyles.headerRects[0][3] >= compactStyles.headerRects[3][3]) ||
       compactStyles.waveformHeight !== 130 ||
@@ -522,7 +522,7 @@ async function main() {
       compactStyles.triggerRateFontSize !== "9px" ||
       compactStyles.triggerRatePosition !== "absolute" ||
       compactStyles.clearRateColor !== "rgb(255, 255, 255)" ||
-      compactStyles.tempoOrder.join(" ") !== "slider-wrap pitch-label speed-status" ||
+      compactStyles.tempoOrder.join(" ") !== "slider-wrap presets pitch-label speed-status" ||
       compactStyles.statusOrder.join(" ") !== "current bypass"
     ) {
       throw new Error(`Playback Speed panel compact styling is incomplete: ${JSON.stringify(compactStyles)}`);
@@ -1127,14 +1127,15 @@ async function main() {
         const logo = rect(".brand-logo");
         const title = rect(".brand-title-line");
         const tools = rect(".panel-tools");
-        const presets = rect(".presets");
+        const presets = header.getRootNode().querySelector(".presets").getBoundingClientRect();
         const bounds = header.getBoundingClientRect();
         const root = header.getRootNode();
         const tempo = root.querySelector(".tempo-row");
         const slider = root.querySelector(".slider").getBoundingClientRect();
         const limits = root.querySelector(".limits").getBoundingClientRect();
         const pads = [...root.querySelectorAll(".drum-pad")];
-        return title.right <= presets.left && presets.right <= tools.left &&
+        return title.right <= tools.left && slider.right <= presets.left &&
+          presets.height <= slider.height + 2 &&
           logo.right <= title.left && tools.right <= bounds.right &&
           header.scrollWidth <= header.clientWidth && tempo.scrollWidth <= tempo.clientWidth &&
           limits.left >= slider.left && limits.right <= slider.right &&

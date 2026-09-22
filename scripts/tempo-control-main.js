@@ -1660,7 +1660,7 @@
 
         /* Expanded player editor, compact enough to stay clear of the player. */
         .panel { width: min(420px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
-        .panel-header { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) 42px auto; grid-template-rows: 32px; align-items: center; column-gap: 5px; row-gap: 2px; padding-bottom: 6px; }
+        .panel-header { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-rows: 32px; align-items: center; column-gap: 5px; row-gap: 2px; padding-bottom: 6px; }
         .drum-section { margin: 0 0 6px; }
         .drum-pads { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
         .drum-pad { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100%; height: 28px; padding: 3px 6px; border: 1px solid #4a4a4a; border-radius: 8px; color: #fff; background: #292929; font: inherit; cursor: pointer; user-select: none; touch-action: manipulation; transition: transform 90ms ease, background-color 90ms ease, border-color 90ms ease; }
@@ -1684,11 +1684,11 @@
         .free-badge { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border: 1px solid #22c55e; border-radius: 4px; color: #86efac; background: rgba(34, 197, 94, .14); font-size: 9px; font-weight: 800; line-height: 1; letter-spacing: .04em; }
         .free-badge.is-pro { border-color: #8b5cf6; color: #f5f3ff; background: #32105e; box-shadow: 0 0 0 0 rgba(139, 92, 246, .32); animation: pro-badge-glow 2.8s ease-in-out infinite; }
         @keyframes pro-badge-glow { 50% { border-color: #a78bfa; box-shadow: 0 0 0 2px rgba(139, 92, 246, .14), 0 0 10px rgba(124, 58, 237, .22); } }
-        .presets { display: grid; grid-column: 3; grid-row: 1; grid-template-columns: 1fr; gap: 2px; width: 42px; justify-self: center; flex-basis: auto; }
-        .preset { width: 42px; height: 15px; border-radius: 5px; font-size: 10px; }
-        .custom-preset, .custom-preset[data-saved="true"] { width: 42px; padding: 0 2px; font-size: 9px; font-weight: 500; font-variant-numeric: tabular-nums; }
+        .presets { display: grid; order: 0; grid-template-columns: 1fr; gap: 2px; width: 32px; margin: 0; justify-self: center; flex-basis: auto; }
+        .preset { width: 32px; height: 12px; border-radius: 3px; font-size: 8px; }
+        .custom-preset, .custom-preset[data-saved="true"] { width: 32px; padding: 0 1px; font-size: 7px; font-weight: 500; font-variant-numeric: tabular-nums; }
         .setter { height: 28px; padding: 0 8px; border-radius: 7px; font-size: 11px; font-variant-numeric: tabular-nums; }
-        .tempo-row { display: grid; grid-template-columns: minmax(0, 1fr) 22px auto; align-items: center; gap: 5px; margin-bottom: 6px; }
+        .tempo-row { display: grid; grid-template-columns: minmax(0, 1fr) 32px 22px auto; align-items: center; gap: 5px; margin-bottom: 6px; }
         .pitch-label { display: grid; place-items: center; width: 22px; height: 26px; margin: 0; padding: 0; cursor: help; }
         .pitch-toggle { width: 16px; height: 16px; margin: 0; }
         .speed-status { position: static; align-self: center; justify-self: end; min-width: 0; height: 26px; justify-content: center; gap: 3px; }
@@ -1772,7 +1772,7 @@
         .effect-setting-value { align-self: center; color: #bfc4c8; font-size: 9px; font-weight: 500; line-height: 1; text-align: right; }
         .effect-room { height: 21px; border: 1px solid #3b4249; border-radius: 4px; color: #e8e8e8; background: #202428; font-size: 9px; font-weight: 500; }
         .effects-note { margin: 0 0 3px 69px; color: #858c92; font-size: 9px; line-height: 1.2; }
-        .panel-tools { display: flex; grid-column: 4; grid-row: 1; justify-self: end; align-self: center; gap: 3px; margin-left: 0; }
+        .panel-tools { display: flex; grid-column: 3; grid-row: 1; justify-self: end; align-self: center; gap: 3px; margin-left: 0; }
         .panel-tool { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 23px; height: 20px; margin: 0; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; color: #fff; background: rgba(255,255,255,.08); cursor: pointer; outline: none; transition: background-color 200ms, border-color 200ms; }
         .panel-tool:hover { color: #fff; border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.14); }
         .panel-tool:focus-visible { border-color: rgba(255,85,0,.65); }
@@ -1781,12 +1781,10 @@
         .panel-tool svg { display: block; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
         .settings-button svg { width: 12px; height: 12px; fill: currentColor; stroke: none; }
         @media (max-width: 360px) {
-          .panel-header { grid-template-columns: 28px minmax(0, 1fr) 36px auto; column-gap: 3px; }
+          .panel-header { grid-template-columns: 28px minmax(0, 1fr) auto; column-gap: 3px; }
           .brand-logo { width: 28px; height: 28px; border-radius: 7px; }
           .brand-name { font-size: 11px; }
           .free-badge { height: 14px; padding: 0 3px; font-size: 7px; }
-          .presets, .preset, .custom-preset, .custom-preset[data-saved="true"] { width: 36px; }
-          .custom-preset, .custom-preset[data-saved="true"] { font-size: 8px; }
           .current { font-size: 11px; }
           .panel-tool { width: 20px; }
           .drum-pad { padding-inline: 4px; }
@@ -1824,9 +1822,6 @@
         hidden
       >
         <div class="panel-header">
-        <div class="presets" role="group" aria-label="Quick playback speeds">
-          ${customRates.map((rate, index) => `<button class="preset custom-preset" type="button" data-custom-index="${index}" data-saved="true" aria-pressed="false" title="Saved speed ${formatRate(rate)}. Hold to replace">${formatRate(rate)}</button>`).join("")}
-        </div>
         <div class="brand">
           <img class="brand-logo" width="42" height="42" alt="" draggable="false" hidden />
           <div class="brand-copy">
@@ -1842,6 +1837,9 @@
           </button>
           <button class="panel-tool detach-button" type="button" aria-label="Keep panel open when clicking outside" aria-pressed="false" title="Keep panel open when clicking outside">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M12 8v8"/><path d="M5 5h14v14H5z"/></svg>
+          </button>
+          <button class="panel-tool close-button" type="button" aria-label="Close panel" title="Close panel">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
           </button>
         </div>
         </div>
@@ -1864,6 +1862,9 @@
             value="1"
             aria-label="Playback speed"
             />
+          </div>
+          <div class="presets" role="group" aria-label="Quick playback speeds">
+            ${customRates.map((rate, index) => `<button class="preset custom-preset" type="button" data-custom-index="${index}" data-saved="true" aria-pressed="false" title="Saved speed ${formatRate(rate)}. Hold to replace">${formatRate(rate)}</button>`).join("")}
           </div>
           <label class="pitch-label" title="Keep tone"><input class="pitch-toggle" type="checkbox" aria-label="Keep tone" title="Keep tone" /></label>
         <div class="speed-status">
@@ -2162,6 +2163,10 @@
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
     });
     ui.downloadTrackButton.addEventListener("click", downloadCurrentTrack);
+    root.querySelector(".close-button").addEventListener("click", () => {
+      closePanel();
+      ui.trigger.focus({ preventScroll: true });
+    });
     ui.settingsButton.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
     });
