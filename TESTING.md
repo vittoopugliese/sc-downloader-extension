@@ -96,3 +96,10 @@ omitted, or development-only paths enter the ZIP:
 PLAYER_TOOLS_API_BASE_URL=https://sctd-test.example.com/api/player-tools \
 ENTITLEMENT_PUBLIC_JWK='{"keys":[...]}' npm run package:extension
 ```
+
+Then smoke-test that exact ZIP as an extracted MV3 extension, rather than the
+source tree:
+
+```sh
+npm run test:package -- dist/soundcloud-track-downloader-<version>.zip
+```

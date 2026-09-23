@@ -16,6 +16,7 @@
     "test:e2e:tempo": "node scripts/verify-tempo-browser.js",
     "test:e2e:effects": "node scripts/verify-effects-browser.js && node scripts/verify-effects-browser.js --shared && node scripts/verify-effects-browser.js --shared --constructor",
     "test:e2e:eq": "node scripts/verify-parametric-eq-browser.js",
+    "test:package": "node scripts/verify-package-browser.js",
     "test:live": "node scripts/verify-live-looper.js",
     "test:live:folder": "node scripts/verify-live-looper.js --folder",
     "browser:live": "node scripts/open-live-browser.js",
