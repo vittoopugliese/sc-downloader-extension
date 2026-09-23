@@ -4,6 +4,8 @@
 
 Plan del Looper del 20/09/2026: [LOOPER-PRODUCT-IMPLEMENTATION-PLAN-20260920.md](LOOPER-PRODUCT-IMPLEMENTATION-PLAN-20260920.md). Incluye biblioteca local, múltiples regiones, gestos e historial, BPM/compases, práctica progresiva, exportación por lotes, precisión de audio, rendimiento, Free/Pro, métricas y sincronización posterior. Estado: pendiente de implementación; distingue la política vigente de las propuestas comerciales y define etapas, dependencias, pruebas y rollback.
 
+Plan de Player Tools como instrumento del 23/09/2026: [PLAYER-TOOLS-INSTRUMENT-FX-SAMPLER-PLAN-20260923.md](PLAYER-TOOLS-INSTRUMENT-FX-SAMPLER-PLAN-20260923.md). Cubre flanger, phaser, echo freeze, bitcrusher, saturación, teclado sampler y Slice to pads 4/8/16. Estado: borrador ejecutable pendiente de confirmar las decisiones de producto de su sección 3; no implica implementación ni publicación.
+
 Actualización del 20/09/2026: el trabajo de Likes Explorer fue reabierto por pedido del usuario. El plan vigente para optimización, almacenamiento y colecciones de terceros es [LIKES-EXPLORER-OPTIMIZATION-PLAN-20260920.md](LIKES-EXPLORER-OPTIMIZATION-PLAN-20260920.md), pendiente de implementación. Las exclusiones del 15/09 mencionadas abajo son históricas para este alcance.
 
 Para la destilación de crecimiento, monetización y próximas implementaciones del 15/09/2026, empezar por [planning-20260915/00-LEER-PRIMERO.md](planning-20260915/00-LEER-PRIMERO.md). Incluye planes separados, EQ Pro, cinco descripciones de Store y guiones vinculados a testing. Likes Explorer queda fuera del trabajo pendiente por indicación actual del usuario. La entrada histórica de abajo conserva su fecha y contexto.

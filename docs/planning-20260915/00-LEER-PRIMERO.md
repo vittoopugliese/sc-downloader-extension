@@ -1,5 +1,15 @@
 # Plan destilado: crecimiento e ingresos
 
+## Ruta inmediata de mitigación — 23/09/2026
+
+**Antes de continuar con C4 externo, ejecutar el [plan integral de mitigación C1–C4 del 23/09](../audits/C1-C4-MITIGATION-PLAN-20260923.md).** Ese documento consolida trece defectos técnicos reproducidos o confirmados —identidad y expiración de trial, seats por perfil, restore/email, reconciliación con Lemon, reactivación, renovación PRO, reloj, gracia del último loop, ZIP obsoleto, suite rota, clasificación de errores, analítica y recovery— y cinco gates transversales de abuso, pruebas, privacidad, copy y salida C4–C7.
+
+Este bloque tiene precedencia sobre cualquier instrucción inferior de avanzar directamente a Lemon Test Mode. El orden vigente es:
+
+**mitigación M01–M17 → suite y ZIP trazable → C4 Test Mode → C5 Live/comercial → C6 Store → C7 operación.**
+
+No considerar evidencia suficiente los 22 tests de Player Tools/licencias ni el smoke del ZIP existente: la suite global falla en HEAD y el smoke actual puede aprobar un ZIP anterior que comparte versión pero no contenido con el código auditado.
+
 ## Entrada vigente para sesión en frío — cierre comercial, 21/09/2026
 
 **Leer esta sección primero. Sustituye el orden y las afirmaciones de cierre incompatibles que aparecen más abajo.** El usuario pidió dejar ejecutable toda la revisión de confiabilidad, FREE/PRO y Lemon Squeezy para continuar con otro agente. El objetivo de esta tanda es terminar y publicar la versión comercial con las funciones existentes, compra única, activación, restauración y reembolsos verificables. Los planes de funciones futuras siguen conservados como trabajo posterior.
