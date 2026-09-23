@@ -177,10 +177,17 @@
       state.status = status;
       await write(state);
       await scheduleRevalidation(state);
-      await access.setEntitlement(active ? {
-        status: "active", licenseId: state.activation?.licenseId || "", checkedAt: state.activation?.lastCheckedAt || 0,
-        expiresAt: state.activation?.receiptExpiresAt || 0, receipt: state.activation?.receipt || null,
-      } : { status: "free" });
+    }
+    function exclusiveWithAccess(task) {
+      // Release the commerce queue before waiting for access: an access guard
+      // may itself be waiting for ensureEntitlement on the commerce queue.
+      return exclusive(task).then(async (state) => {
+        await access.setEntitlement(state.status === "active" ? {
+          status: "active", licenseId: state.activation?.licenseId || "", checkedAt: state.activation?.lastCheckedAt || 0,
+          expiresAt: state.activation?.receiptExpiresAt || 0, receipt: state.activation?.receipt || null,
+        } : { status: "free" });
+        return publicState(state);
+      });
     }
     async function verifiedReceipt(result, state, expectedType = "pro") {
       if (!RECEIPTS?.verify || result?.active !== true || !result?.receipt) {
@@ -251,7 +258,7 @@
       });
     }
     function getState({ revalidate = false } = {}) {
-      return exclusive(async () => {
+      return exclusiveWithAccess(async () => {
         const state = await read();
         if (state.activation?.licenseId === "test-pro") {
           if (!TEST_LOGIN) {
@@ -282,7 +289,7 @@
           }
           } else await applyEntitlement(state, false, "error");
         }
-        return publicState(state);
+        return state;
       });
     }
     function startCheckout(locale) {
@@ -297,16 +304,16 @@
       });
     }
     function activate({ licenseKey, email }) {
-      return exclusive(async () => {
+      return exclusiveWithAccess(async () => {
         const state = await read();
         const result = await post("/license/restore", { installationId: state.installationId,
           licenseKey: String(licenseKey || "").trim(), email: String(email || "").trim() });
         await applyProResult(state, result);
-        return publicState(state);
+        return state;
       });
     }
     function activateTest({ username, password }) {
-      return exclusive(async () => {
+      return exclusiveWithAccess(async () => {
         const state = await read();
         if (!TEST_LOGIN || String(username || "").trim() !== TEST_LOGIN.username || String(password || "") !== TEST_LOGIN.password) {
           throw Object.assign(new Error("Those testing credentials could not activate Pro."), { code: "test_login_failed" });
@@ -315,17 +322,17 @@
           receipt: null, receiptExpiresAt: Number.MAX_SAFE_INTEGER };
         state.pendingCheckoutAt = null;
         await applyEntitlement(state, true);
-        return publicState(state);
+        return state;
       });
     }
     function deactivateTest() {
-      return exclusive(async () => {
+      return exclusiveWithAccess(async () => {
         const state = await read();
-        if (!TEST_LOGIN || state.activation?.licenseId !== "test-pro") return publicState(state);
+        if (!TEST_LOGIN || state.activation?.licenseId !== "test-pro") return state;
         state.activation = null;
         state.pendingCheckoutAt = null;
         await applyEntitlement(state, false);
-        return publicState(state);
+        return state;
       });
     }
     async function verifiedTrial(result, state) {

@@ -90,6 +90,9 @@
       return runExclusive(async () => {
         if (!authority?.startTrial) throw Object.assign(new Error("Trial service unavailable"), { code: "trial-unavailable" });
         const state = await read(); const timestamp = now();
+        await verifyEntitlement(state);
+        const current = POLICY.snapshot(state, null, now());
+        if (current.plan === "pro") return current;
         const remote = await authority.startTrial();
         state.trial.startedAt = remote.startedAt;
         state.trial.expiresAt = remote.expiresAt;
