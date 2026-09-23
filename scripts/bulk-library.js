@@ -565,7 +565,7 @@
       // A repeated click can create a new request ID before the UI observes
       // the first response.  Coalesce only active work with the same immutable
       // command; completed exports remain intentionally downloadable again.
-      const states = ['resolving', 'building', 'saving'];
+      const states = ['resolving', 'building', 'built', 'save_requested', 'download_started', 'saving'];
       const active = (await Promise.all(states.map(state => request(operations.index('state').getAll(state)))))
         .flat().find(operation => operation.signature === signature);
       if (active) return { ...active, isNew: false };

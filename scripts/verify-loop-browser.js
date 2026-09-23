@@ -55,6 +55,7 @@ async function waitForFile(directory, timeoutMs = 30000) {
   try {
     const worker =
       context.serviceWorkers()[0] || (await context.waitForEvent("serviceworker"));
+    const extensionId = new URL(worker.url()).host;
     const page = await context.newPage();
     const browserLogs = [];
     page.on("console", (message) => browserLogs.push(`page:${message.type()}:${message.text()}`));
@@ -172,9 +173,16 @@ async function waitForFile(directory, timeoutMs = 30000) {
           : originalFetch(input, options);
     }, audioUrl);
 
-    // This suite exercises an active trial. Production starts it only from the
-    // popup or the explicit Player Tools entry point, never from a loop click.
-    await worker.evaluate(() => globalThis.SCPlayerToolsAccess.startTrial());
+    // WAV export is Pro under the final contract. The unpacked development
+    // build exposes an explicit local test entitlement; release packaging
+    // removes these credentials.
+    const entitlementPage = await context.newPage();
+    await entitlementPage.goto(`chrome-extension://${extensionId}/popup.html`);
+    const testAccess = await entitlementPage.evaluate(() => chrome.runtime.sendMessage({
+      type: "TEST_PLAYER_TOOLS_PRO", username: "1", password: "1",
+    }));
+    assert.equal(testAccess.success, true);
+    await entitlementPage.close();
 
     await page.goto(trackUrl);
     await page.waitForFunction(() => Number.isFinite(document.querySelector("audio")?.duration));

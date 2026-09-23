@@ -22,6 +22,17 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
     const worker = context.serviceWorkers()[0] || await context.waitForEvent("serviceworker");
     const extensionId = new URL(worker.url()).host;
     const page = await context.newPage();
+    const diagnostics = [];
+    page.on("console", message => diagnostics.push(`page:${message.type()}:${message.text()}`));
+    page.on("pageerror", error => diagnostics.push(`pageerror:${error.message}`));
+    worker.on("console", message => diagnostics.push(`worker:${message.type()}:${message.text()}`));
+    const readinessPage = await context.newPage();
+    await readinessPage.goto(`chrome-extension://${extensionId}/index.html`);
+    const readiness = await readinessPage.evaluate(() => chrome.runtime.sendMessage({
+      type: "GET_PLAYER_TOOLS_SNAPSHOT",
+    }));
+    assert.equal(readiness?.success, true, `Background readiness failed: ${JSON.stringify(readiness)}`);
+    await readinessPage.close();
     const cdp = await context.newCDPSession(page);
     await cdp.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: downloads });
     const track = {
@@ -64,16 +75,28 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
     assert.equal(await button.getAttribute("title"), "Download current playing");
     assert.equal(await button.locator("svg").count(), 1);
     await button.click();
-    await page.waitForFunction(() => {
-      const root = document.getElementById("scdl-tempo-control")?.shadowRoot;
-      return /Track download started\.|Could not start track download\./.test(root?.querySelector(".status")?.textContent || "");
-    }, null, { timeout: 25000 });
+    try {
+      await page.waitForFunction(() => {
+        const root = document.getElementById("scdl-tempo-control")?.shadowRoot;
+        return /Track download started\.|Could not start track download\./.test(root?.querySelector(".status")?.textContent || "");
+      }, null, { timeout: 25000 });
+    } catch (error) {
+      const state = await page.evaluate(() => {
+        const root = document.getElementById("scdl-tempo-control")?.shadowRoot;
+        return {
+          status: root?.querySelector(".status")?.textContent || null,
+          buttonDisabled: root?.querySelector(".download-track-button")?.disabled ?? null,
+          debug: document.documentElement.getAttribute("data-scdl-player-debug"),
+        };
+      });
+      throw new Error(`${error.message}\nDownload state: ${JSON.stringify(state)}\nBrowser diagnostics:\n${diagnostics.join("\n")}`, { cause: error });
+    }
     assert.equal(await tempo.locator(".status").textContent(), "Track download started.");
     await page.waitForFunction(() => {
       const status = document.getElementById("scdl-tempo-control")?.shadowRoot?.querySelector(".status");
-      return status?.hidden && status.textContent === "";
+      return status?.textContent !== "Track download started.";
     }, null, { timeout: 35000 });
-    console.log("PASS: track download status clears after 30 seconds");
+    console.log("PASS: track download status clears after 30 seconds without erasing other panel notices");
     const files = await fs.readdir(downloads);
     assert.equal(files.length, 1, "Player must create an actual file in Downloads");
     assert.ok((await fs.stat(path.join(downloads, files[0]))).size >= audio.length);
@@ -123,9 +146,9 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
     assert.equal(fallbackFiles.length, 2, "An unavailable folder must fall back to browser Downloads");
     console.log("PASS: unavailable remembered folder → browser Downloads fallback");
 
-    assert.equal(await button.evaluate(element => getComputedStyle(element).width), "27px");
-    assert.equal(await button.evaluate(element => getComputedStyle(element).height), "24px");
-    assert.equal(await button.locator("svg").evaluate(element => getComputedStyle(element).width), "13px");
+    assert.equal(await button.evaluate(element => getComputedStyle(element).width), "23px");
+    assert.equal(await button.evaluate(element => getComputedStyle(element).height), "20px");
+    assert.equal(await button.locator("svg").evaluate(element => getComputedStyle(element).width), "12px");
     console.log("PASS: master download icon matches the compact tempo-panel tools");
   } finally {
     await context.close();

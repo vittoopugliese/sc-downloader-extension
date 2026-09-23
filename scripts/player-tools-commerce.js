@@ -24,7 +24,10 @@
     "download_job_completed",
   ]);
 
-  function create({ storage, identityStorage = null, sessionStorage = null, alarms = null, request = fetch, randomUUID = () => crypto.randomUUID(),
+  const CLOCK_ROLLBACK_TOLERANCE_MS = 5 * 60 * 1000;
+  const MAX_RECEIPT_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
+
+  function create({ storage, identityStorage = null, legacyIdentityStorage = null, sessionStorage = null, alarms = null, request = fetch, randomUUID = () => crypto.randomUUID(),
     access, apiBaseUrl = API_BASE_URL, now = () => Date.now(), version = "unknown",
     requestTimeoutMs = REQUEST_TIMEOUT_MS, maxResponseBytes = MAX_RESPONSE_BYTES, entitlementPublicJwk = null }) {
     let queue = Promise.resolve();
@@ -49,9 +52,14 @@
     async function installationId(existing = null) {
       if (!identityStorage) return existing || randomUUID().replaceAll("-", "");
       try {
+        await identityStorage.setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" });
         const stored = (await identityStorage.get(IDENTITY_KEY))[IDENTITY_KEY];
         if (/^[a-zA-Z0-9_-]{16,128}$/.test(stored || "")) return stored;
-        const value = existing || randomUUID().replaceAll("-", "");
+        let legacy = null;
+        if (legacyIdentityStorage && legacyIdentityStorage !== identityStorage) {
+          try { legacy = (await legacyIdentityStorage.get(IDENTITY_KEY))[IDENTITY_KEY]; } catch { legacy = null; }
+        }
+        const value = existing || (/^[a-zA-Z0-9_-]{16,128}$/.test(legacy || "") ? legacy : null) || randomUUID().replaceAll("-", "");
         await identityStorage.set({ [IDENTITY_KEY]: value });
         return value;
       } catch {
@@ -62,7 +70,8 @@
       const raw = (await storage.get(STORAGE_KEY))[STORAGE_KEY];
       if (raw === undefined) {
         const initial = { schemaVersion: 1, installationId: await installationId(),
-          status: "free", activation: null, pendingCheckoutAt: null, measured: {} };
+          status: "free", activation: null, pendingCheckoutAt: null, measured: {},
+          clock: { serverTimeAtValidation: null, clientTimeAtValidation: null, maxObservedClientTime: now() } };
         await storage.set({ [STORAGE_KEY]: initial });
         return initial;
       }
@@ -76,6 +85,13 @@
         raw.installationId = stableId;
         raw.activation = null;
         raw.status = "free";
+        await storage.set({ [STORAGE_KEY]: raw });
+      }
+      if (!raw.clock || typeof raw.clock !== "object") {
+        raw.clock = { serverTimeAtValidation: null, clientTimeAtValidation: null, maxObservedClientTime: now() };
+        await storage.set({ [STORAGE_KEY]: raw });
+      } else if (!Number.isSafeInteger(raw.clock.maxObservedClientTime) || now() > raw.clock.maxObservedClientTime) {
+        raw.clock.maxObservedClientTime = now();
         await storage.set({ [STORAGE_KEY]: raw });
       }
       return structuredClone(raw);
@@ -171,7 +187,10 @@
         throw Object.assign(new Error("Licensing did not return a valid entitlement."), { code: "invalid-entitlement" });
       }
       const claims = await RECEIPTS.verify(result.receipt, { publicJwk: entitlementPublicJwk, installationId: state.installationId });
-      if (claims.type !== expectedType || claims.expiresAt <= now()) {
+      if (claims.type !== expectedType || claims.expiresAt <= now() || claims.issuedAt > claims.expiresAt ||
+          claims.expiresAt - claims.issuedAt > MAX_RECEIPT_LIFETIME_MS ||
+          (expectedType === "pro" && !Array.isArray(claims.capabilities)) ||
+          (expectedType === "pro" && !claims.capabilities.includes("pro"))) {
         throw Object.assign(new Error("The entitlement receipt is expired or has the wrong type."), { code: "invalid-entitlement" });
       }
       if (expectedType === "pro" && (claims.licenseId !== result.licenseId || claims.instanceId !== result.instanceId)) {
@@ -183,6 +202,8 @@
       const claims = await verifiedReceipt(result, state);
       state.activation = { instanceId: result.instanceId, licenseId: result.licenseId,
         lastCheckedAt: now(), receipt: result.receipt, receiptExpiresAt: claims.expiresAt };
+      state.clock = { serverTimeAtValidation: Number.isSafeInteger(result.serverTime) ? result.serverTime : claims.issuedAt,
+        clientTimeAtValidation: now(), maxObservedClientTime: Math.max(now(), state.clock?.maxObservedClientTime || 0) };
       state.pendingCheckoutAt = null;
       await applyEntitlement(state, true);
     }
@@ -195,9 +216,39 @@
         const claims = await RECEIPTS.verify(entitlement.receipt, {
           publicJwk: entitlementPublicJwk, installationId: state.installationId,
         });
-        return claims.type === "pro" && claims.licenseId === state.activation.licenseId &&
-          claims.instanceId === state.activation.instanceId && claims.expiresAt > now();
+        const rollback = Number.isSafeInteger(state.clock?.maxObservedClientTime) &&
+          now() + CLOCK_ROLLBACK_TOLERANCE_MS < state.clock.maxObservedClientTime;
+        return !rollback && Number.isSafeInteger(state.clock?.serverTimeAtValidation) &&
+          claims.type === "pro" && Array.isArray(claims.capabilities) && claims.capabilities.includes("pro") &&
+          claims.licenseId === state.activation.licenseId && claims.instanceId === state.activation.instanceId &&
+          claims.expiresAt > now() && claims.issuedAt <= claims.expiresAt &&
+          claims.expiresAt - claims.issuedAt <= MAX_RECEIPT_LIFETIME_MS;
       } catch { return false; }
+    }
+    function ensureEntitlement(entitlement) {
+      return exclusive(async () => {
+        if (await validateEntitlement(entitlement)) return { status: "active", entitlement };
+        const state = await read();
+        if (!state.activation?.instanceId || state.activation.licenseId === "test-pro") return { status: "invalid", code: "pro-required" };
+        const cached = { status: "active", licenseId: state.activation.licenseId,
+          checkedAt: state.activation.lastCheckedAt, expiresAt: state.activation.receiptExpiresAt, receipt: state.activation.receipt };
+        if (await validateEntitlement(cached)) return { status: "active", entitlement: cached };
+        try {
+          const result = await post("/license/status", { installationId: state.installationId, instanceId: state.activation.instanceId });
+          const claims = await verifiedReceipt(result, state);
+          state.activation = { instanceId: result.instanceId, licenseId: result.licenseId,
+            lastCheckedAt: now(), receipt: result.receipt, receiptExpiresAt: claims.expiresAt };
+          state.status = "active";
+          state.clock = { serverTimeAtValidation: Number.isSafeInteger(result.serverTime) ? result.serverTime : claims.issuedAt,
+            clientTimeAtValidation: now(), maxObservedClientTime: Math.max(now(), state.clock?.maxObservedClientTime || 0) };
+          await write(state); await scheduleRevalidation(state);
+          return { status: "active", entitlement: { status: "active", licenseId: state.activation.licenseId,
+            checkedAt: state.activation.lastCheckedAt, expiresAt: state.activation.receiptExpiresAt, receipt: state.activation.receipt } };
+        } catch (error) {
+          if (error.code === "license_revoked") { state.status = "revoked"; await write(state); await scheduleRevalidation(state); return { status: "revoked", code: error.code }; }
+          return { status: "unavailable", code: "license-check-required" };
+        }
+      });
     }
     function getState({ revalidate = false } = {}) {
       return exclusive(async () => {
@@ -308,17 +359,26 @@
     }
     async function validateTrial(value) {
       const state = await read();
-      if (!value?.receipt) return false;
+      if (!value?.receipt) return { status: "invalid" };
       try {
         const claims = await RECEIPTS.verify(value.receipt, {
           publicJwk: entitlementPublicJwk, installationId: state.installationId,
         });
-        return claims.type === "trial" && claims.startedAt === value.startedAt &&
+        const matches = claims.type === "trial" && claims.startedAt === value.startedAt &&
           claims.expiresAt === value.expiresAt && claims.used === value.used &&
-          claims.limit === value.limit && claims.expiresAt > now();
-      } catch { return false; }
+          claims.limit === value.limit;
+        if (!matches) return { status: "invalid" };
+        let grantValid = false;
+        if (value.grant && typeof claims.grantTrackIdentityHash === "string") {
+          const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value.grant.trackIdentity));
+          const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+          grantValid = claims.grantRequestId === value.grant.requestId && claims.grantTrackIdentityHash === hash &&
+            Number.isSafeInteger(claims.graceExpiresAt) && claims.graceExpiresAt > now();
+        }
+        return { status: claims.expiresAt > now() ? "valid" : "expired", claims, grantValid };
+      } catch { return { status: "invalid" }; }
     }
-    async function track(name, properties = {}, { once = false, scope = "lifetime" } = {}) {
+    async function track(name, properties = {}, { once = false, scope = "lifetime", eventId = null } = {}) {
       if (!ANALYTICS_EVENTS.has(name)) return false;
       return exclusive(async () => {
         const state = await read();
@@ -335,7 +395,8 @@
           else if (key === "count" && Number.isSafeInteger(value) && value >= 0 && value <= 10000) clean[key] = value;
         }
         try {
-          await post("/events", { eventId: randomUUID(), installationId: state.installationId,
+          const stableEventId = typeof eventId === "string" && /^[A-Za-z0-9:_-]{8,128}$/.test(eventId) ? eventId : randomUUID();
+          await post("/events", { eventId: stableEventId, installationId: state.installationId,
             name, occurredAt: now(), version, offer: OFFER.version, properties: clean });
           if (once && scope === "session" && sessionStorage) {
             sessionMeasured[onceKey] = now();
@@ -345,10 +406,11 @@
         } catch { return false; }
       });
     }
-    return { getState, startCheckout, activate, activateTest, deactivateTest, startTrial, consumeTrial, track, validateEntitlement, validateTrial };
+    return { getState, startCheckout, activate, activateTest, deactivateTest, startTrial, consumeTrial, track,
+      validateEntitlement, ensureEntitlement, validateTrial };
   }
 
   root.SCPlayerToolsCommerce = { STORAGE_KEY, IDENTITY_KEY, SESSION_MEASURED_KEY, LICENSE_REVALIDATION_ALARM,
-    API_BASE_URL, OFFER, ANALYTICS_EVENTS, create };
+    API_BASE_URL, OFFER, ANALYTICS_EVENTS, CLOCK_ROLLBACK_TOLERANCE_MS, MAX_RECEIPT_LIFETIME_MS, create };
   if (typeof module !== "undefined") module.exports = root.SCPlayerToolsCommerce;
 })(globalThis);

@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, "..");
 const downloadCalls = [];
 const offscreenMessages = [];
 let storedDestination = { id: "stored-id", name: "Stored Music" };
+const operations = new Map();
 
 const context = vm.createContext({
   console,
@@ -18,6 +19,27 @@ const context = vm.createContext({
   },
   SCBulkLibrary: {
     getActiveJob: async () => null,
+    async beginOperation(operationId, signature) {
+      const id = operationId || `track_test_${operations.size + 1}`;
+      const existing = operations.get(id);
+      if (existing) {
+        if (existing.signature !== signature) throw Object.assign(new Error("operation conflict"), { code: "operation_conflict" });
+        return { ...existing, isNew: false };
+      }
+      const operation = { operationId: id, signature, state: "resolving", stage: "resolving", result: null };
+      operations.set(id, operation);
+      return { ...operation, isNew: true };
+    },
+    async updateOperation(operationId, update) {
+      const next = { ...operations.get(operationId), ...update };
+      operations.set(operationId, next);
+      return { ...next };
+    },
+    async getOperation(operationId) { return operations.get(operationId) || null; },
+    async getOperationsByState(states) {
+      const wanted = new Set(states);
+      return [...operations.values()].filter((operation) => wanted.has(operation.state));
+    },
   },
   SCStreamSelector: {
     extractStreamInfo: () => null,
@@ -145,6 +167,9 @@ function assertEqual(actual, expected, label) {
   assertEqual(downloadCalls[0].filename, "Исполнитель - Песня.mp3", "Default filename");
   assertEqual(downloadCalls[0].saveAs, false, "Default download must not prompt per file");
   assertEqual(downloadCalls[0].conflictAction, "uniquify", "Duplicates must be preserved");
+  const browserOperation = [...operations.values()].find((operation) => operation.downloadId === 1);
+  assertEqual(browserOperation.state, "completed", "Browser save reaches a durable terminal state");
+  assertEqual(browserOperation.result.success, true, "Successful browser save is persisted");
 
   offscreenMessages.length = 0;
   await evaluate(`BulkJobManager.downloadLoop(
@@ -157,6 +182,15 @@ function assertEqual(actual, expected, label) {
   );
   assertEqual(loopBuild.trimRange.startMs, 1500, "Loop start forwarded to builder");
   assertEqual(loopBuild.trimRange.endMs, 7250, "Loop end forwarded to builder");
+
+  operations.set("track_recover_resolving", { operationId: "track_recover_resolving", signature: "a", state: "resolving" });
+  operations.set("track_recover_download", { operationId: "track_recover_download", signature: "b", state: "download_started", downloadId: 77 });
+  operations.set("track_recover_folder", { operationId: "track_recover_folder", signature: "c", state: "save_requested", saveKind: "directory" });
+  await evaluate("BulkJobManager.recoverDirectOperations()");
+  assertEqual(operations.get("track_recover_resolving").state, "failed", "Pre-save restart is safely retryable");
+  assertEqual(operations.get("track_recover_resolving").result.code, "interrupted_before_save", "Pre-save restart is not ambiguous");
+  assertEqual(operations.get("track_recover_download").state, "completed", "Known Chrome download is reconciled");
+  assertEqual(operations.get("track_recover_folder").state, "ambiguous_save", "Folder save request remains ambiguous");
 
   console.log("Download routing verification passed.");
 })().catch((error) => {

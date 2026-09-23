@@ -59,8 +59,7 @@ function onDocumentEvent(type, listener) {
 }
 
 onDocumentEvent(OPEN_LOOPER_GUIDE_EVENT, () => {
-  chrome.storage.local
-    .set({ [POPUP_START_VIEW_KEY]: "looper" })
+  chrome.runtime.sendMessage({ type: "SET_POPUP_START_VIEW", view: "looper" })
     .then(() => chrome.runtime.sendMessage({ type: "OPEN_EXTENSION_POPUP" }))
     .then((result) => {
       if (!result?.success) {
@@ -68,17 +67,16 @@ onDocumentEvent(OPEN_LOOPER_GUIDE_EVENT, () => {
       }
     })
     .catch(async (error) => {
-      await chrome.storage.local.remove(POPUP_START_VIEW_KEY).catch(() => {});
+      await chrome.runtime.sendMessage({ type: "SET_POPUP_START_VIEW", view: null }).catch(() => {});
       console.warn("[SC Downloader] Could not open the Looper guide.", error);
     });
 });
 
 onDocumentEvent(OPEN_PLAYER_TOOLS_PRO_EVENT, () => {
-  chrome.storage.local
-    .set({ [POPUP_START_VIEW_KEY]: "pro" })
+  chrome.runtime.sendMessage({ type: "SET_POPUP_START_VIEW", view: "pro" })
     .then(() => chrome.runtime.sendMessage({ type: "OPEN_EXTENSION_POPUP" }))
     .catch(async (error) => {
-      await chrome.storage.local.remove(POPUP_START_VIEW_KEY).catch(() => {});
+      await chrome.runtime.sendMessage({ type: "SET_POPUP_START_VIEW", view: null }).catch(() => {});
       console.warn("[SC Downloader] Could not open Player Tools Pro.", error);
     });
 });

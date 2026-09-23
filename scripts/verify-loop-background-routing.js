@@ -33,6 +33,18 @@ const context = vm.createContext({
     migrate: (track) => track,
   },
   SCPlayerToolsAccess: access,
+  SCPlayerToolsCommerce: {
+    LICENSE_REVALIDATION_ALARM: "license-revalidation",
+    create: () => ({
+      async getState() { return { status: "active" }; },
+      async startTrial() { return {}; },
+      async consumeTrial() { return {}; },
+      async validateEntitlement() { return true; },
+      async ensureEntitlement(entitlement) { return { status: "active", entitlement }; },
+      async validateTrial() { return { status: "valid" }; },
+      async track() { return true; },
+    }),
+  },
   BulkJobManager: {
     KEEPALIVE_ALARM: "keepalive",
     recoverRunningJob: async () => {},
@@ -52,8 +64,14 @@ const context = vm.createContext({
     },
   },
   chrome: {
+    storage: {
+      local: { async get() { return {}; }, async set() {}, async setAccessLevel() {} },
+      sync: { async get() { return {}; } },
+      session: { async get() { return {}; }, async set() {} },
+    },
     runtime: {
       lastError: null,
+      getManifest: () => ({ version: "test" }),
       onInstalled: { addListener() {} },
       onStartup: { addListener() {} },
       onMessage: {
@@ -62,7 +80,7 @@ const context = vm.createContext({
         },
       },
     },
-    alarms: { onAlarm: { addListener() {} } },
+    alarms: { async create() {}, async clear() {}, onAlarm: { addListener() {} } },
     cookies: { get() {} },
     tabs: {
       onRemoved: { addListener() {} },
@@ -102,7 +120,7 @@ function dispatch(request, sender) {
     { tab: { id: 42 } }
   );
 
-  assert.equal(response.success, true);
+  assert.equal(response.success, true, JSON.stringify(response));
   assert.equal(tabMessages.length, 1);
   assert.equal(tabMessages[0].tabId, 42);
   assert.equal(tabMessages[0].options.frameId, 0);

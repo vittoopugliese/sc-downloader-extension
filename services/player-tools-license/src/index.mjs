@@ -9,6 +9,7 @@ const MAX_ACTIVE_PROFILES = 2;
 const RECEIPT_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 const TRIAL_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 const TRIAL_LIMIT = 20;
+const TRIAL_GRANT_GRACE_MS = 6 * 60 * 60 * 1000;
 
 function json(status, value, extra = {}) { return new Response(JSON.stringify(value), { status, headers: { ...JSON_HEADERS, ...extra } }); }
 function now() { return Date.now(); }
@@ -72,10 +73,23 @@ function cors(origin) {
   return { "access-control-allow-origin": origin, "access-control-allow-methods": "POST, OPTIONS",
     "access-control-allow-headers": "content-type", "access-control-max-age": "86400", vary: "Origin" };
 }
+async function enforceRateLimit(env, bindingName, route, request, _subject = "anonymous") {
+  const limiter = env[bindingName];
+  if (!limiter?.limit) return true;
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  // Installation IDs are client-selected today, so they cannot be the only
+  // anti-bypass key. Hash the route/IP pair; verified account subjects can be
+  // added as a second limiter when M01 authentication is available.
+  const subjectHash = await sha256Hex(`${route}:${ip}`);
+  const result = await limiter.limit({ key: subjectHash });
+  return result?.success === true;
+}
 async function health(env) {
   const configured = env.LICENSE_DB && env.LEMON_API_KEY && env.LEMON_WEBHOOK_SECRET && env.ADMIN_TOKEN &&
     env.LEMON_STORE_ID && env.LEMON_PRODUCT_ID && env.LEMON_VARIANT_ID && env.ENTITLEMENT_PRIVATE_JWK &&
-    env.ENTITLEMENT_KEY_ID && ["test", "live"].includes(env.LEMON_MODE) && (env.ALLOWED_ORIGINS || env.ALLOWED_ORIGIN);
+    env.ENTITLEMENT_KEY_ID && ["test", "live"].includes(env.LEMON_MODE) && (env.ALLOWED_ORIGINS || env.ALLOWED_ORIGIN) &&
+    env.TRIAL_RATE_LIMITER?.limit && env.LICENSE_RATE_LIMITER?.limit &&
+    env.CHECKOUT_RATE_LIMITER?.limit && env.EVENT_RATE_LIMITER?.limit;
   if (!configured) return json(503, { service: "sctd-player-tools-license", status: "not-configured" });
   try {
     const schema = await env.LICENSE_DB.prepare(`SELECT COUNT(*) AS count FROM sqlite_master
@@ -133,11 +147,13 @@ async function proReceipt(env, activation) {
     capabilities: ["pro"], issuedAt, expiresAt: issuedAt + RECEIPT_LIFETIME_MS,
   });
 }
-async function trialReceipt(env, trial) {
+async function trialReceipt(env, trial, grant = null) {
   return signReceipt(env, {
     version: 1, type: "trial", installationId: trial.installation_id,
     startedAt: trial.started_at, expiresAt: trial.expires_at,
     used: trial.used, limit: TRIAL_LIMIT, issuedAt: now(),
+    ...(grant ? { grantRequestId: grant.request_id, grantTrackIdentityHash: grant.track_identity_hash,
+      graceExpiresAt: grant.consumed_at + TRIAL_GRANT_GRACE_MS } : {}),
   });
 }
 function lemonHeaders(env) { return { Accept: "application/vnd.api+json", "Content-Type": "application/vnd.api+json", Authorization: `Bearer ${env.LEMON_API_KEY}` }; }
@@ -186,7 +202,8 @@ async function lemonApiGet(env, path) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
   try {
-    const response = await fetch(`${LEMON_API}${path}`, { headers: lemonHeaders(env), signal: controller.signal });
+    const target = /^https:\/\//.test(path) ? path : `${LEMON_API}${path}`;
+    const response = await fetch(target, { headers: lemonHeaders(env), signal: controller.signal });
     if (!response.ok) return { ok: false, status: response.status };
     return { ok: true, body: await readJsonResponse(response) };
   } catch {
@@ -194,6 +211,20 @@ async function lemonApiGet(env, path) {
   } finally {
     clearTimeout(timeout);
   }
+}
+async function lemonLicenseInstances(env, licenseId) {
+  let path = `/license-key-instances?filter%5Blicense_key_id%5D=${encodeURIComponent(licenseId)}&page%5Bsize%5D=100`;
+  const data = [];
+  for (let page = 0; page < 20 && path; page += 1) {
+    const response = await lemonApiGet(env, path);
+    if (!response?.ok) return response || { ok: false, status: 0 };
+    if (!Array.isArray(response.body?.data)) return { ok: false, status: 502 };
+    data.push(...response.body.data);
+    const next = response.body?.links?.next;
+    path = typeof next === "string" && next ? next : null;
+  }
+  if (path) return { ok: false, status: 508 };
+  return { ok: true, body: { data } };
 }
 async function createCheckout(env, value) {
   const payload = { data: { type: "checkouts", attributes: { checkout_data: { custom: { installation_id: value.installationId } }, product_options: { redirect_url: "https://sctd.vpugliese.online/?view=player-tools" }, checkout_options: { button_color: "#ff5500", dark: true, embed: false, media: false, logo: true } }, relationships: { store: { data: { type: "stores", id: String(env.LEMON_STORE_ID) } }, variant: { data: { type: "variants", id: String(env.LEMON_VARIANT_ID) } } } } };
@@ -219,7 +250,7 @@ function validLicenseActivation(result, email, env) {
     license?.status === "active" && (!expiresAt || expiresAt > now()) && matchesProduct(meta, env) &&
     String(meta?.customer_email || "").toLowerCase() === email);
 }
-async function acquireActivationOperation(env, keyHash, installationId) {
+async function acquireActivationOperation(env, keyHash, installationId, email) {
   const timestamp = now();
   const token = crypto.randomUUID();
   // INSERT ... SELECT is deliberately one statement: D1 serializes writes,
@@ -236,7 +267,7 @@ async function acquireActivationOperation(env, keyHash, installationId) {
 
   const existing = await env.LICENSE_DB.prepare(`SELECT activation_operations.state, activation_operations.lease_expires_at,
       activation_operations.lemon_license_id, activation_operations.lemon_instance_id,
-      licenses.status AS license_status, activations.deactivated_at
+      licenses.status AS license_status, licenses.customer_email, activations.deactivated_at
     FROM activation_operations
     LEFT JOIN licenses ON licenses.lemon_license_id=activation_operations.lemon_license_id
     LEFT JOIN activations ON activations.lemon_instance_id=activation_operations.lemon_instance_id
@@ -245,11 +276,14 @@ async function acquireActivationOperation(env, keyHash, installationId) {
   if (!existing) return { kind: 'seat_limit' };
   if (existing.state === 'active' && existing.lemon_license_id && existing.lemon_instance_id) {
     if (existing.license_status === 'active' && existing.deactivated_at == null) {
+      if (String(existing.customer_email || '').toLowerCase() !== String(email || '').toLowerCase()) {
+        return { kind: 'credential_mismatch' };
+      }
       return { kind: 'active', licenseId: existing.lemon_license_id, instanceId: existing.lemon_instance_id };
     }
     await env.LICENSE_DB.prepare("DELETE FROM activation_operations WHERE license_key_hash=? AND installation_id=?")
       .bind(keyHash, installationId).run();
-    return existing.license_status === 'revoked' ? { kind: 'revoked' } : acquireActivationOperation(env, keyHash, installationId);
+    return existing.license_status === 'revoked' ? { kind: 'revoked' } : acquireActivationOperation(env, keyHash, installationId, email);
   }
   if (Number(existing.lease_expires_at || 0) > timestamp) return { kind: 'in_progress' };
   const reclaimed = await env.LICENSE_DB.prepare(`UPDATE activation_operations
@@ -273,8 +307,8 @@ async function recoverRemoteActivation(env, value, keyHash, operationToken) {
   if (!result?.valid || !licenseId || !matchesProduct(result.meta, env) ||
       String(result.meta?.customer_email || "").toLowerCase() !== value.email ||
       keyHash !== await sha256Hex(String(result.license_key?.key || ""))) return null;
-  const instances = await lemonApiGet(env, `/license-key-instances?filter%5Blicense_key_id%5D=${encodeURIComponent(licenseId)}`);
-  if (!instances || (!instances.ok && (instances.status === 429 || instances.status >= 500))) return { kind: 'in_progress' };
+  const instances = await lemonLicenseInstances(env, licenseId);
+  if (!instances.ok) return { kind: 'in_progress' };
   const instance = instances.ok && Array.isArray(instances.body?.data)
     ? instances.body.data.find((item) => item?.type === 'license-key-instances' &&
         String(item?.attributes?.name || '') === value.installationId)
@@ -319,6 +353,7 @@ async function recordActivation(env, result, email, installationId, keyHash, ope
     env.LICENSE_DB.prepare(`INSERT INTO activations (lemon_instance_id, lemon_license_id, installation_id, activated_at, last_validated_at)
       SELECT ?, ?, ?, ?, ? FROM licenses WHERE lemon_license_id=? AND status='active'
       ON CONFLICT(lemon_license_id, installation_id) DO UPDATE SET
+        lemon_instance_id=excluded.lemon_instance_id, activated_at=excluded.activated_at,
         last_validated_at=excluded.last_validated_at, deactivated_at=NULL`)
       .bind(instanceId, licenseId, installationId, timestamp, timestamp, licenseId),
     env.LICENSE_DB.prepare(`UPDATE activation_operations SET state='active', lemon_license_id=?, lemon_instance_id=?,
@@ -334,7 +369,7 @@ async function activate(env, value) {
   const revoked = await env.LICENSE_DB.prepare("SELECT 1 AS revoked FROM licenses WHERE lemon_key_hash=? AND status='revoked'")
     .bind(keyHash).first();
   if (revoked) return { kind: 'revoked' };
-  const operation = await acquireActivationOperation(env, keyHash, value.installationId);
+  const operation = await acquireActivationOperation(env, keyHash, value.installationId, value.email);
   if (operation.kind === 'active') return operation;
   if (operation.kind !== 'owned') return operation;
   if (operation.recover) {
@@ -400,17 +435,11 @@ function activeProviderLicense(resource, activation, env) {
 }
 async function reconcileActivation(env, activation) {
   const license = await lemonApiGet(env, `/license-keys/${encodeURIComponent(activation.lemon_license_id)}`);
-  if (!license) throw new Error('Lemon license reconciliation is unavailable.');
-  if (!license.ok && (license.status === 429 || license.status >= 500)) {
-    throw new Error('Lemon license reconciliation is temporarily unavailable.');
-  }
+  if (!license?.ok) throw new Error('Lemon license reconciliation is temporarily unavailable.');
   const licenseActive = license.ok && activeProviderLicense(license.body, activation, env);
   if (licenseActive) {
-    const instances = await lemonApiGet(env, `/license-key-instances?filter%5Blicense_key_id%5D=${encodeURIComponent(activation.lemon_license_id)}`);
-    if (!instances) throw new Error('Lemon instance reconciliation is unavailable.');
-    if (!instances.ok && (instances.status === 429 || instances.status >= 500)) {
-      throw new Error('Lemon instance reconciliation is temporarily unavailable.');
-    }
+    const instances = await lemonLicenseInstances(env, activation.lemon_license_id);
+    if (!instances.ok) throw new Error('Lemon instance reconciliation is temporarily unavailable.');
     const instanceActive = instances.ok && Array.isArray(instances.body?.data) && instances.body.data.some((item) =>
       item?.type === 'license-key-instances'
       && String(item?.attributes?.identifier || '') === String(activation.lemon_instance_id)
@@ -452,7 +481,7 @@ async function status(env, value) {
   if (!activation) return { active: false };
   if (activation.status !== "active") return { active: false, reason: "license_revoked" };
   return await reconcileActivation(env, activation)
-    ? { active: true, licenseId: activation.lemon_license_id, instanceId: activation.lemon_instance_id,
+    ? { active: true, serverTime: now(), licenseId: activation.lemon_license_id, instanceId: activation.lemon_instance_id,
         receipt: await proReceipt(env, { installationId: activation.installation_id,
           licenseId: activation.lemon_license_id, instanceId: activation.lemon_instance_id }) }
     : { active: false, reason: 'license_revoked' };
@@ -466,8 +495,12 @@ async function startTrial(env, value) {
     .bind(value.installationId, timestamp, timestamp + TRIAL_LIFETIME_MS, timestamp, timestamp).run();
   const trial = await env.LICENSE_DB.prepare("SELECT installation_id, started_at, expires_at, used FROM trials WHERE installation_id=?")
     .bind(value.installationId).first();
+  const grant = trial.used === TRIAL_LIMIT
+    ? await env.LICENSE_DB.prepare(`SELECT request_id, consumed_at, track_identity_hash FROM trial_consumptions
+        WHERE installation_id=? ORDER BY consumed_at DESC, request_id DESC LIMIT 1`).bind(value.installationId).first()
+    : null;
   return { trial: { startedAt: trial.started_at, expiresAt: trial.expires_at, used: trial.used, limit: TRIAL_LIMIT },
-    receipt: await trialReceipt(env, trial) };
+    receipt: await trialReceipt(env, trial, grant) };
 }
 
 async function consumeTrial(env, value) {
@@ -490,14 +523,18 @@ async function consumeTrial(env, value) {
   const trial = await env.LICENSE_DB.prepare("SELECT installation_id, started_at, expires_at, used FROM trials WHERE installation_id=?")
     .bind(value.installationId).first();
   if (!trial) return { allowed: false, reason: 'trial_not_started' };
-  const consumption = await env.LICENSE_DB.prepare(`SELECT consumed_at, track_identity_hash FROM trial_consumptions
+  const consumption = await env.LICENSE_DB.prepare(`SELECT request_id, consumed_at, track_identity_hash FROM trial_consumptions
     WHERE installation_id=? AND request_id=?`).bind(value.installationId, value.requestId).first();
   const allowed = Boolean(consumption) && consumption.track_identity_hash === trackHash;
+  const finalGrant = trial.used === TRIAL_LIMIT
+    ? await env.LICENSE_DB.prepare(`SELECT request_id, consumed_at, track_identity_hash FROM trial_consumptions
+        WHERE installation_id=? ORDER BY consumed_at DESC, request_id DESC LIMIT 1`).bind(value.installationId).first()
+    : null;
   const reason = allowed ? null : consumption ? 'trial_request_conflict'
     : timestamp >= trial.expires_at ? 'trial_expired' : 'trial_exhausted';
   return { allowed, reason,
     trial: { startedAt: trial.started_at, expiresAt: trial.expires_at, used: trial.used, limit: TRIAL_LIMIT },
-    receipt: await trialReceipt(env, trial) };
+    receipt: await trialReceipt(env, trial, finalGrant) };
 }
 
 async function releaseSeat(env, value) {
@@ -718,45 +755,61 @@ export default {
       let body; try { body = raw ? JSON.parse(new TextDecoder().decode(raw)) : null; } catch { body = null; }
       if (request.method === "POST" && url.pathname === "/api/player-tools/checkout") {
         const parsed = validateCheckout(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
+        if (!(await enforceRateLimit(env, "CHECKOUT_RATE_LIMITER", "checkout", request, parsed.value.installationId)))
+          return json(429, { error: "rate_limited" }, { ...corsHeaders, "retry-after": "60" });
         const checkoutUrl = await createCheckout(env, parsed.value); return json(200, { checkoutUrl }, corsHeaders);
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/license/activate") {
         const parsed = validateActivation(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
+        if (!(await enforceRateLimit(env, "LICENSE_RATE_LIMITER", "activate", request, parsed.value.installationId)))
+          return json(429, { error: "rate_limited" }, { ...corsHeaders, "retry-after": "60" });
         const entitlement = await activate(env, parsed.value);
-        if (entitlement?.kind === 'active' || (entitlement?.licenseId && entitlement?.instanceId)) return json(200, { active: true, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId,
+        if (entitlement?.kind === 'active' || (entitlement?.licenseId && entitlement?.instanceId)) return json(200, { active: true, serverTime: now(), licenseId: entitlement.licenseId, instanceId: entitlement.instanceId,
           receipt: await proReceipt(env, { installationId: parsed.value.installationId, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId }) }, corsHeaders);
         if (entitlement?.kind === 'seat_limit') return json(409, { active: false, error: 'seat_limit' }, corsHeaders);
         if (entitlement?.kind === 'in_progress') return json(409, { active: false, error: 'activation_in_progress' }, corsHeaders);
         if (entitlement?.kind === 'revoked') return json(403, { active: false, error: 'license_revoked' }, corsHeaders);
+        if (entitlement?.kind === 'credential_mismatch') return json(403, { active: false, error: 'activation_failed' }, corsHeaders);
         return json(403, { active: false, error: "activation_failed" }, corsHeaders);
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/license/restore") {
         const parsed = validateActivation(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
+        if (!(await enforceRateLimit(env, "LICENSE_RATE_LIMITER", "restore", request, parsed.value.installationId)))
+          return json(429, { error: "rate_limited" }, { ...corsHeaders, "retry-after": "60" });
         const entitlement = await restore(env, parsed.value);
-        if (entitlement?.kind === 'active' || (entitlement?.licenseId && entitlement?.instanceId)) return json(200, { active: true, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId,
+        if (entitlement?.kind === 'active' || (entitlement?.licenseId && entitlement?.instanceId)) return json(200, { active: true, serverTime: now(), licenseId: entitlement.licenseId, instanceId: entitlement.instanceId,
           receipt: await proReceipt(env, { installationId: parsed.value.installationId, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId }) }, corsHeaders);
         if (entitlement?.kind === 'seat_limit') return json(409, { active: false, error: 'seat_limit' }, corsHeaders);
         if (entitlement?.kind === 'in_progress') return json(409, { active: false, error: 'activation_in_progress' }, corsHeaders);
         if (entitlement?.kind === 'revoked') return json(403, { active: false, error: 'license_revoked' }, corsHeaders);
+        if (entitlement?.kind === 'credential_mismatch') return json(403, { active: false, error: 'activation_failed' }, corsHeaders);
         return json(403, { active: false, error: "activation_failed" }, corsHeaders);
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/license/status") {
         const parsed = validateStatus(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
+        if (!(await enforceRateLimit(env, "LICENSE_RATE_LIMITER", "status", request, parsed.value.installationId)))
+          return json(429, { error: "rate_limited" }, { ...corsHeaders, "retry-after": "60" });
         const result = await status(env, parsed.value);
         if (result.reason === "license_revoked") return json(403, { active: false, error: result.reason }, corsHeaders);
         return json(200, result, corsHeaders);
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/trial/start") {
         const parsed = validateTrialStart(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
+        if (!(await enforceRateLimit(env, "TRIAL_RATE_LIMITER", "trial-start", request, parsed.value.installationId)))
+          return json(429, { error: "rate_limited" }, { ...corsHeaders, "retry-after": "60" });
         return json(200, await startTrial(env, parsed.value), corsHeaders);
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/trial/consume") {
         const parsed = validateTrialConsume(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
+        if (!(await enforceRateLimit(env, "TRIAL_RATE_LIMITER", "trial-consume", request, parsed.value.installationId)))
+          return json(429, { error: "rate_limited" }, { ...corsHeaders, "retry-after": "60" });
         const result = await consumeTrial(env, parsed.value);
         return json(result.allowed ? 200 : 409, result.allowed ? result : { ...result, error: result.reason }, corsHeaders);
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/events") {
         const parsed = validateEvent(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
+        if (!(await enforceRateLimit(env, "EVENT_RATE_LIMITER", "events", request, parsed.value.installationId)))
+          return json(429, { error: "rate_limited" }, { ...corsHeaders, "retry-after": "60" });
         return json(200, { accepted: true, duplicate: !(await recordEvent(env, parsed.value)) }, corsHeaders);
       }
       return json(404, { error: "not_found" }, corsHeaders);

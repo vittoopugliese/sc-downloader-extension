@@ -44,6 +44,7 @@ $packageItems = @(
     "scripts/contact-content.js",
     "scripts/directory-storage.js",
     "scripts/download-core.js",
+    "scripts/download-analytics.js",
     "scripts/download-destination.js",
     "scripts/download-intent.js",
     "scripts/download-source.js",
@@ -145,10 +146,15 @@ if (-not $receiptSource.Contains($publicKeyLine)) { throw "Could not inject the 
 $publicJwkCompact = $publicJwk | ConvertTo-Json -Compress
 Set-Content -LiteralPath $receiptsPath -Value $receiptSource.Replace($publicKeyLine, "const PACKAGED_ENTITLEMENT_PUBLIC_JWK = Object.freeze($publicJwkCompact);") -NoNewline
 
+& node (Join-Path $PSScriptRoot "write-package-provenance.js") stage $stagingRoot $normalizedApiBaseUrl
+if ($LASTEXITCODE -ne 0) { throw "Could not write package provenance." }
+
 if (Test-Path -LiteralPath $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
 }
 Compress-Archive -LiteralPath (Get-ChildItem -LiteralPath $stagingRoot -Force | Select-Object -ExpandProperty FullName) -DestinationPath $zipPath -CompressionLevel Optimal
+& node (Join-Path $PSScriptRoot "write-package-provenance.js") sidecar $zipPath $stagingRoot
+if ($LASTEXITCODE -ne 0) { throw "Could not write package provenance sidecar." }
 Remove-Item -LiteralPath $stagingRoot -Recurse -Force
 
 Write-Output "Created $zipPath"

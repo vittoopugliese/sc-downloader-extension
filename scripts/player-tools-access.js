@@ -34,6 +34,22 @@
     }
     async function verifyEntitlement(state) {
       if (state.entitlement.status !== "active") return true;
+      if (typeof authority?.ensureEntitlement === "function") {
+        let result;
+        try { result = await authority.ensureEntitlement(state.entitlement); }
+        catch { result = { status: "unavailable", code: "license-check-required" }; }
+        if (result?.status === "active") {
+          if (result.entitlement && JSON.stringify(result.entitlement) !== JSON.stringify(state.entitlement)) {
+            state.entitlement = result.entitlement; await commit(state);
+          }
+          return true;
+        }
+        state.entitlement = result?.status === "unavailable"
+          ? { ...state.entitlement, expiresAt: 0 }
+          : { status: "free" };
+        await commit(state);
+        return result?.code || "license-check-required";
+      }
       if (typeof authority?.validateEntitlement !== "function") return true;
       let valid = false;
       try { valid = await authority.validateEntitlement(state.entitlement); } catch { valid = false; }
@@ -41,19 +57,34 @@
       // A locally altered, expired or unknown-key receipt can never keep PRO.
       state.entitlement = { status: "free" };
       await commit(state);
-      return false;
+      return "pro-required";
     }
-    async function verifyTrial(state) {
-      if (state.trial.startedAt === null || typeof authority?.validateTrial !== "function") return true;
+    async function verifyTrial(state, grant = null) {
+      if (state.trial.startedAt === null || typeof authority?.validateTrial !== "function") return { status: "valid" };
       try {
-        return await authority.validateTrial({
+        const result = await authority.validateTrial({
           receipt: state.trial.receipt, startedAt: state.trial.startedAt,
           expiresAt: state.trial.expiresAt, used: state.trial.used, limit: state.trial.limit,
+          grant: grant ? { requestId: grant.requestId, trackIdentity: grant.trackIdentity } : null,
         });
-      } catch { return false; }
+        if (typeof result === "boolean") return { status: result ? "valid" : "unavailable" };
+        return result;
+      } catch { return { status: "unavailable" }; }
     }
     function getSnapshot(sender) {
-      return runExclusive(async () => { const state = await read(); await verifyEntitlement(state); return POLICY.snapshot(state, ownerKey(sender), now()); });
+      return runExclusive(async () => {
+        const state = await read(); await verifyEntitlement(state);
+        const owner = ownerKey(sender); const timestamp = now();
+        let current = POLICY.snapshot(state, owner, timestamp);
+        if (current.state === "trial_last_session") {
+          const grant = state.trial.grants.find((item) => item.active && item.ownerKey === owner);
+          const validation = await verifyTrial(state, grant);
+          if (validation?.status !== "valid" && !(validation?.status === "expired" && validation.grantValid)) {
+            grant.active = false; await commit(state); current = POLICY.snapshot(state, owner, timestamp);
+          }
+        }
+        return current;
+      });
     }
     function startTrial() {
       return runExclusive(async () => {
@@ -72,12 +103,9 @@
       return runExclusive(async () => {
         const owner = ownerKey(sender);
         const state = await read(); const timestamp = now();
-        await verifyEntitlement(state);
+        const entitlementError = await verifyEntitlement(state);
         const reply = (allowed, code = null, extra = {}) => ({ allowed, code, snapshot: POLICY.snapshot(state, owner, timestamp), ...extra });
         const operation = request?.operation;
-        if (state.entitlement.status !== "active" && state.trial.startedAt !== null && !(await verifyTrial(state))) {
-          return reply(false, "trial-unavailable");
-        }
         const isLoop = operation === "begin-loop" || operation === "edit-loop";
         if (isLoop) {
           if (!owner) return reply(false, "owner-gone");
@@ -98,6 +126,19 @@
           if (active && (!matches(active) || (request.sessionId && active.sessionId !== request.sessionId))) {
             return reply(false, "stale-generation");
           }
+        }
+        if (state.entitlement.status !== "active" && state.trial.startedAt !== null) {
+          const activeGrant = isLoop && operation === "edit-loop" ? state.trial.grants.find((g) =>
+            g.active && g.ownerKey === owner && g.sessionId === request.sessionId) : null;
+          const trialValidation = await verifyTrial(state, activeGrant);
+          if (trialValidation?.status !== "valid" && !(trialValidation?.status === "expired" && activeGrant && trialValidation.grantValid)) {
+            const code = trialValidation?.status === "expired" ? "trial-expired" :
+              trialValidation?.status === "invalid" ? "trial-invalid" : "trial-unavailable";
+            return reply(false, code);
+          }
+        }
+        if (entitlementError !== true && POLICY.canAuthorize(state, owner, operation, request?.sessionId, timestamp).reason === "pro-required") {
+          return reply(false, entitlementError);
         }
         const decision = POLICY.canAuthorize(state, owner, operation, request?.sessionId, timestamp);
         if (!decision.allowed) return reply(false, decision.reason);

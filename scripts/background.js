@@ -5,6 +5,7 @@ importScripts(
   "player-tools-access.js",
   "player-tools-receipts.js",
   "player-tools-commerce.js",
+  "download-analytics.js",
   "directory-storage.js",
   "soundcloud-http.js",
   "stream-selector.js",
@@ -21,6 +22,11 @@ importScripts(
 
 const t = globalThis.SCDLI18n?.t || ((key) => key);
 
+function trackDirectDownloadResult(type, result) {
+  const event = globalThis.SCDirectDownloadAnalytics?.terminalEvent(type, result);
+  if (event) playerToolsCommerce.track("download_job_completed", event.properties, event.options).catch(() => {});
+}
+
 const playerToolsAccess = globalThis.SCPlayerToolsAccess || {
   configureAuthority() {},
   async startTrial() { throw Object.assign(new Error("Player Tools licensing is unavailable."), { code: "service-unavailable" }); },
@@ -35,7 +41,8 @@ const INSTALL_LIKES_URL = "https://soundcloud.com/you/likes";
 const playerToolsCommerce = globalThis.SCPlayerToolsCommerce?.create
   ? globalThis.SCPlayerToolsCommerce.create({
       storage: chrome.storage.local,
-      identityStorage: chrome.storage.sync,
+      identityStorage: chrome.storage.local,
+      legacyIdentityStorage: chrome.storage.sync,
       sessionStorage: chrome.storage.session,
       alarms: chrome.alarms,
       access: playerToolsAccess,
@@ -56,6 +63,7 @@ playerToolsAccess.configureAuthority?.({
   startTrial: () => playerToolsCommerce.startTrial(),
   consumeTrial: (value) => playerToolsCommerce.consumeTrial(value),
   validateEntitlement: (value) => playerToolsCommerce.validateEntitlement(value),
+  ensureEntitlement: (value) => playerToolsCommerce.ensureEntitlement(value),
   validateTrial: (value) => playerToolsCommerce.validateTrial(value),
 });
 playerToolsCommerce.getState({ revalidate: true }).catch(() => {});
@@ -238,6 +246,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
        sender?.url !== chrome.runtime.getURL("offscreen.html"))) {
     sendResponse({ success: false, code: "invalid_sender" });
     return false;
+  }
+  if (request.type === "GET_FORMAT_PREFERENCE") {
+    return respond(chrome.storage.local.get(SCStreamSelector.STORAGE_KEY), sendResponse,
+      (value) => ({ preference: value[SCStreamSelector.STORAGE_KEY] || "auto" }));
+  }
+  if (request.type === "SET_FORMAT_PREFERENCE") {
+    const preference = SCStreamSelector.normalizePreference(request.preference);
+    return respond(chrome.storage.local.set({ [SCStreamSelector.STORAGE_KEY]: preference }), sendResponse);
+  }
+  if (request.type === "SET_POPUP_START_VIEW") {
+    const key = "scdl.popup.startView";
+    if (request.view !== null && !["looper", "pro"].includes(request.view)) {
+      sendResponse({ success: false, code: "invalid_view" }); return false;
+    }
+    const action = request.view === null ? chrome.storage.local.remove(key) : chrome.storage.local.set({ [key]: request.view });
+    return respond(action, sendResponse);
   }
   if (['GET_LIKES_LIBRARY_STATUS','START_LIKES_INDEX','REFRESH_LIKES_LIBRARY','CANCEL_LIKES_INDEX','QUERY_LIKES','SAVE_LIKES_VIEW','OPEN_LIKED_TRACK','LOCATE_LIKED_TRACK','START_LIKES_ARTWORK','PAUSE_LIKES_ARTWORK','GET_LIKES_ARTWORK','DELETE_LIKES_ARTWORK','DELETE_LIKES_LIBRARY','GET_LIKES_DOWNLOAD_SELECTION'].includes(request.type)) {
     return respond(likesJobs.handle(request, sender), sendResponse);
@@ -476,7 +500,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         );
       })
       .then((result) => {
-        playerToolsCommerce.track("download_job_completed", { type: "single", count: 1, result: "saved" }).catch(() => {});
+        trackDirectDownloadResult("single", result);
         sendResponse(result);
       })
       .catch((error) => sendResponse(errorResponse(error)));
@@ -508,7 +532,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         )
       )
       .then((result) => {
-        playerToolsCommerce.track("download_job_completed", { type: "loop", count: 1, result: "saved" }).catch(() => {});
+        trackDirectDownloadResult("loop", result);
         sendResponse(result);
       })
       .catch((error) => sendResponse(errorResponse(error)));

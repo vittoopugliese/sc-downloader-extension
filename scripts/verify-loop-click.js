@@ -29,6 +29,7 @@ windowStub.top = windowStub;
 
 const context = vm.createContext({
   console: { ...console, error: noOp },
+  crypto: { randomUUID: () => "00000000-0000-4000-8000-000000000001" },
   URL,
   document: documentStub,
   window: windowStub,

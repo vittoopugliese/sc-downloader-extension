@@ -25,11 +25,14 @@ service; Lemon credentials never ship in the extension.
 - ES256-signed Pro receipts scoped to installation/license/instance and valid
   for thirty days. The extension verifies the signature and requires an online
   renewal after expiry.
-- A D1-authoritative seven-day/twenty-loop trial with idempotent consumption.
+- A D1-authoritative seven-day/twenty-loop trial with idempotent consumption and a signed, six-hour maximum grant for finishing the last active loop.
+- Separate Cloudflare rate-limit bindings for trial, license, checkout and event routes. Keys hash route and IP so rotating a client-selected installation ID does not bypass the limit; test/live use distinct namespaces. CORS remains an origin restriction, not authentication.
 - An authenticated support command that previews or releases a profile in
   Lemon first and updates D1 only after the provider confirms deactivation.
 - A strict event allow-list that rejects track titles, music URLs, emails and keys.
 - CORS restricted to the published extension origin.
+
+The current trial subject is still the local installation ID. That prevents ordinary message/storage replay in the official package, but it cannot enforce one trial across reinstallations. Do not describe the trial as reinstall-proof until a server-verifiable account subject is integrated; IP address, a client-declared SoundCloud ID and browser fingerprinting are intentionally not treated as identity.
 
 ## Production setup
 

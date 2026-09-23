@@ -162,8 +162,15 @@ function fixture(used) {
   assert.equal((await expiredAccess.authorize(owner, request("expired"))).code, "trial-expired");
   const lastGrace = fixture(19); const lastGraceAccess = lastGrace.restart(); await lastGraceAccess.startTrial();
   const lastGrant = await lastGraceAccess.authorize(owner, request("last"));
+  lastGraceAccess.configureAuthority({ ...lastGrace.authority,
+    validateTrial: async (value) => ({ status: "expired", grantValid:
+      value.grant?.requestId === "last" && value.grant?.trackIdentity === "track-a" }) });
   lastGrace.advance(policy.TRIAL_DURATION_MS);
   assert.equal((await lastGraceAccess.getSnapshot(owner)).state, "trial_last_session");
   assert.equal((await lastGraceAccess.authorize(owner, request("edit-last", { operation: "edit-loop", sessionId: lastGrant.grant.sessionId }))).allowed, true);
+  lastGraceAccess.configureAuthority({ ...lastGrace.authority,
+    validateTrial: async () => ({ status: "expired", grantValid: false }) });
+  assert.equal((await lastGraceAccess.authorize(owner, request("edit-last-invalid", { operation: "edit-loop", sessionId: lastGrant.grant.sessionId }))).code,
+    "trial-expired", "expired grace requires a signed grant that matches the active loop");
   console.log("Player Tools access lifecycle verification passed.");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

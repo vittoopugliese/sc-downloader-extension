@@ -557,8 +557,9 @@ async function executeDirectOperation({ operationId, trackData, formatPreference
   const signature = directOperationSignature(trackData, formatPreference, trimRange, playbackTransform, effects, destination);
   const existing = await SCBulkLibrary.beginOperation(id, signature);
   id = existing.operationId;
+  if (existing.isNew) await SCBulkLibrary.updateOperation(id, { saveKind: destination ? "directory" : "downloads" });
   if (existing.state === "completed") return existing.result;
-  if (!existing.isNew && ["resolving", "building", "saving"].includes(existing.state)) {
+  if (!existing.isNew && ["resolving", "building", "built", "save_requested", "download_started", "saving"].includes(existing.state)) {
     return { success: false, operationId: id, code: "operation_in_progress", error: "This download is still processing." };
   }
   if (["ambiguous_save", "failed", "cancelled"].includes(existing.state)) return existing.result || {
@@ -568,10 +569,10 @@ async function executeDirectOperation({ operationId, trackData, formatPreference
     const result = await trackDownloadExecution.execute({
       operationId: id, trackData, formatPreference, destination, trimRange, playbackTransform, effects,
       onStage: async (stage) => {
-        const state = stage === "saving" ? "saving" : "building";
+        const state = stage === "saving" ? "save_requested" : stage === "resolving" ? "resolving" : "building";
         await SCBulkLibrary.updateOperation(id, { state, stage });
       },
-      onDownloadStarted: async (downloadId) => SCBulkLibrary.updateOperation(id, { state: "saving", stage: "saving", downloadId }),
+      onDownloadStarted: async (downloadId) => SCBulkLibrary.updateOperation(id, { state: "download_started", stage: "download_started", downloadId }),
     });
     const finalState = result.cancelled ? "cancelled" : "completed";
     const saved = { ...result, operationId: id };
@@ -1026,18 +1027,35 @@ const BulkJobManager = {
   },
 
   async recoverDirectOperations() {
-    const active = await SCBulkLibrary.getOperationsByState(["resolving", "building", "saving"]);
+    const active = await SCBulkLibrary.getOperationsByState(["resolving", "building", "built", "save_requested", "download_started", "saving"]);
     for (const operation of active) {
-      // Blob URLs and a directory handle are scoped to the terminated context.
-      // Without a durable Chrome download checkpoint the only safe recovery is
-      // to retain an explicit ambiguous result instead of rebuilding/saving.
+      if (["resolving", "building", "built"].includes(operation.state)) {
+        const result = { success: false, operationId: operation.operationId, code: "interrupted_before_save",
+          error: "The export stopped before saving. It is safe to retry." };
+        await SCBulkLibrary.updateOperation(operation.operationId, { state: "failed", stage: "failed", result, error: result.error });
+        continue;
+      }
+      if (operation.state === "download_started" && Number.isInteger(operation.downloadId)) {
+        const items = await new Promise((resolve) => chrome.downloads.search({ id: operation.downloadId },
+          (values) => resolve(chrome.runtime.lastError ? [] : values || [])));
+        const item = items[0];
+        if (item?.state === "complete") {
+          const result = { success: true, operationId: operation.operationId, recovered: true,
+            fileName: item.filename ? String(item.filename).split(/[\\/]/).pop() : null, destinationName: "Downloads" };
+          await SCBulkLibrary.updateOperation(operation.operationId, { state: "completed", stage: "completed", result, error: null });
+          continue;
+        }
+        if (item?.state === "interrupted") {
+          const result = { success: false, operationId: operation.operationId, code: "download_interrupted",
+            error: item.error || "The browser download was interrupted. It is safe to retry." };
+          await SCBulkLibrary.updateOperation(operation.operationId, { state: "failed", stage: "failed", result, error: result.error });
+          continue;
+        }
+      }
+      const result = { success: false, operationId: operation.operationId, code: "ambiguous_save",
+        error: "Saving may have started. Check the destination before retrying." };
       await SCBulkLibrary.updateOperation(operation.operationId, {
-        state: "ambiguous_save", stage: "ambiguous_save",
-        result: { success: false, operationId: operation.operationId, code: "ambiguous_save",
-          error: operation.downloadId
-            ? "The browser download was interrupted; check Downloads before retrying."
-            : "The export was interrupted; check the destination before retrying." },
-        error: "Operation interrupted by extension restart.",
+        state: "ambiguous_save", stage: "ambiguous_save", result, error: result.error,
       });
     }
     return active.length;

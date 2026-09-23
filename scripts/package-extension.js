@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { execFileSync } = require('node:child_process');
+const provenance = require('./package-provenance.js');
 const root = path.resolve(__dirname,'..');
 
 function zipEntries(zipPath) {
@@ -17,7 +18,7 @@ function zipText(zipPath, entry) {
 function smokePackage(zipPath, apiPermission) {
   const entries = new Set(zipEntries(zipPath));
   const files = [...entries].filter(entry => !entry.endsWith('/'));
-  const forbidden = /(^|\/)(?:\.git|\.agents|\.codex|docs|services|node_modules|dist|test|tests)(?:\/|$)|(^|\/)verify-[^/]+\.js$|(^|\/)(?:\.DS_Store|Thumbs\.db|\.dev\.vars[^/]*)$/;
+  const forbidden = /(^|\/)(?:\.git|\.agents|\.codex|docs|services|repos|node_modules|dist|test|tests)(?:\/|$)|(^|\/)verify-[^/]+\.js$|uninstall-feedback-emails|(^|\/)(?:\.DS_Store|Thumbs\.db|\.dev\.vars[^/]*)$/;
   const prohibited = files.filter(entry => forbidden.test(entry));
   if (prohibited.length) throw new Error(`Package contains development-only files: ${prohibited.join(', ')}`);
   for (const required of ['manifest.json', 'popup.html', 'offscreen.html', 'scripts/background.js', 'THIRD_PARTY_LICENSES.md']) {
@@ -112,9 +113,32 @@ if (process.platform === 'win32') {
     }
     if (!receiptSource.includes(publicKeyLine)) throw new Error('Could not inject the entitlement verification key.');
     fs.writeFileSync(receiptsPath,receiptSource.replace(publicKeyLine,`const PACKAGED_ENTITLEMENT_PUBLIC_JWK = Object.freeze(${JSON.stringify(publicJwk)});`));
+    const source = provenance.sourceState(root, items);
+    if (process.env.PACKAGE_RELEASE === '1') {
+      if (!process.env.EXPECTED_COMMIT || process.env.EXPECTED_COMMIT !== source.commit) {
+        throw new Error('Release packaging requires EXPECTED_COMMIT to equal the full current commit.');
+      }
+      if (source.dirty) throw new Error(`Release packaging refuses changed included files: ${source.changed.join(', ')}`);
+    }
+    const stagedHashes = provenance.fileHashes(stage, fs.readdirSync(stage));
+    const build = {
+      schemaVersion: 1,
+      sourceCommit: source.commit,
+      sourceDirty: source.dirty,
+      sourceChanged: source.changed,
+      sourceFingerprint: source.fingerprint,
+      apiOrigin: apiBaseUrl.origin,
+      apiMode: /(?:^|[-.])test(?:[-.]|$)/i.test(apiBaseUrl.hostname) ? 'test' : 'production',
+      entitlementKeyIds: [...keyIds].sort(),
+      files: stagedHashes,
+      stagedFingerprint: provenance.fingerprint(stagedHashes),
+    };
+    fs.writeFileSync(path.join(stage, 'release-build.json'), `${JSON.stringify(build, null, 2)}\n`);
     const temporary = path.join(stage,'extension.zip');
-    execFileSync('zip',['-q','-r',temporary,...fs.readdirSync(stage)],{cwd:stage});
+    execFileSync('zip',['-q','-r',temporary,...fs.readdirSync(stage).filter(name => name !== 'extension.zip')],{cwd:stage});
     fs.copyFileSync(temporary,output);
+    const sidecar = { ...build, zipFile: path.basename(output), zipSha256: provenance.sha256(fs.readFileSync(output)) };
+    fs.writeFileSync(`${output}.provenance.json`, `${JSON.stringify(sidecar, null, 2)}\n`);
     smokePackage(output, apiPermission);
     console.log(`Created ${output}`);
   } finally { fs.rmSync(stage,{recursive:true,force:true}); }

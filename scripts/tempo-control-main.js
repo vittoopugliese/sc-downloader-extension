@@ -2636,7 +2636,11 @@
     renderRate(state.effectiveRate, animateRate);
     ui.host.setAttribute(RATE_ATTRIBUTE, String(state.effectiveRate));
     ui.host.setAttribute(PITCH_ATTRIBUTE, String(state.preservePitch));
-    const message = playbackFailure || (!playbackAllowed ? accessMessage(accessSnapshot?.code || "trial-exhausted") : "") || storageFailure || loopFailure || effectsFailure;
+    // A user-triggered export result must not be hidden by the standing access
+    // notice for the optional Player Tools controls.
+    const accessNotice = !playbackAllowed && accessSnapshot?.state !== "trial_not_started" && accessSnapshot?.state !== "loading"
+      ? accessMessage(accessSnapshot?.code || "trial-exhausted") : "";
+    const message = loopFailure || playbackFailure || accessNotice || storageFailure || effectsFailure;
     ui.status.textContent = message;
     ui.status.hidden = !message;
     renderLoop();

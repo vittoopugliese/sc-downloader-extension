@@ -136,7 +136,7 @@ Double-click the slider to return to `1x`. The selected speed and pitch mode are
 6. Press **Download loop** to render the selected A-B range as a WAV file with those settings
 7. Press the cross or `Escape` to remove the temporary loop
 
-Looper is included for free. It uses SoundCloud's current player and lives only in memory: navigating or changing tracks removes it. The WAV reflects the available source. At speeds other than `1x`, export changes both duration and pitch when **Preserve Pitch** is off; when it is on, the bundled Signalsmith engine keeps the original musical pitch while changing duration.
+Player Tools starts a one-time 7-day trial on first eligible use, with up to 20 new A–B loops. Likes Explorer remains available for the full seven days; the last granted loop can finish its current session, but starting another requires Pro. WAV, processed track/loop exports, precise loop editing, parametric EQ and Likes Explorer after the trial are Pro. Normal track and collection downloads remain free even when licensing is offline. Pro is a lifetime purchase for two activated Chrome profiles and uses a signed 30-day offline receipt before it must revalidate online.
 
 ### Download a playlist, likes, or user uploads
 1. Go to a **playlist/set**, **likes**, or `soundcloud.com/{user}/tracks` page
@@ -173,7 +173,7 @@ Dark blurred artwork background, SoundCloud-orange accents, spinner states, and 
 - HLS segments fetched and assembled client-side; output as `.m4a` / `.mp3` depending on source
 - Bulk downloads use `chrome.downloads` for the default Downloads location or the File System Access API for a user-selected folder, plus an offscreen document ~ at most two tracks at a time, minimal RAM
 - Bulk jobs survive popup/tab close; per-track state ensures recovery after service worker restarts
-- Job state stored in `chrome.storage.session` (cleared when Chrome exits)
+- Job, track and direct-download operation state is stored durably in IndexedDB and reconciled after service-worker/browser restarts
 - Pause stops new tracks; in-flight downloads still finish and save
 - Large collections: pagination handled automatically; stream URLs refreshed per track if they expire
 - The A-B looper keeps its timing rules in a DOM-free module so a future precise audio/download adapter can reuse the same range

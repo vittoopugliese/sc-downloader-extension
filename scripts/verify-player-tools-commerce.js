@@ -182,6 +182,53 @@ function response(status, body) {
   await assert.rejects(emptyCommerce.activate({ email: "buyer@example.com", licenseKey: "license-key" }),
     { code: "invalid-entitlement" });
 
+  let localIdentity = {}; let syncedIdentity = { [require("./player-tools-commerce.js").IDENTITY_KEY]: "legacy_profile_123456" };
+  const identityAccessLevels = [];
+  const migratedCommerce = create({
+    storage: { async get() { return {}; }, async set() {} },
+    identityStorage: {
+      async get() { return structuredClone(localIdentity); },
+      async set(value) { localIdentity = { ...localIdentity, ...structuredClone(value) }; },
+      async setAccessLevel(value) { identityAccessLevels.push(value); },
+    },
+    legacyIdentityStorage: { async get() { return structuredClone(syncedIdentity); } },
+    access: { async setEntitlement() {} },
+  });
+  await migratedCommerce.getState();
+  assert.equal(localIdentity[require("./player-tools-commerce.js").IDENTITY_KEY], "legacy_profile_123456");
+  assert.deepEqual(identityAccessLevels.at(-1), { accessLevel: "TRUSTED_CONTEXTS" });
+
+  let guardedData = {}; let statusCalls = 0; let guardedClock = 2_000_000_000_000;
+  const guardedCommerce = create({
+    storage: { async get() { return structuredClone(guardedData); }, async set(value) { guardedData = structuredClone(value); } },
+    identityStorage: { async get() { return {}; }, async set() {} },
+    now: () => guardedClock,
+    entitlementPublicJwk: { keys: [TEST_PUBLIC_JWK] },
+    randomUUID: () => "guardedprofile1234567890",
+    access: { async setEntitlement() {} },
+    request: async (url) => {
+      const result = { active: true, serverTime: guardedClock, licenseId: "guarded-license", instanceId: "guarded-instance",
+        receipt: await receipt({ version: 1, type: "pro", installationId: "guardedprofile1234567890",
+          licenseId: "guarded-license", instanceId: "guarded-instance", capabilities: ["pro"],
+          issuedAt: guardedClock, expiresAt: guardedClock + 30 * 86400000 }) };
+      if (url.endsWith("/license/restore")) return response(200, result);
+      statusCalls += 1; return response(200, result);
+    },
+  });
+  await guardedCommerce.activate({ email: "buyer@example.com", licenseKey: "license-key" });
+  const oldEntitlement = { status: "active", licenseId: "guarded-license", checkedAt: guardedClock,
+    expiresAt: guardedData[STORAGE_KEY].activation.receiptExpiresAt, receipt: guardedData[STORAGE_KEY].activation.receipt };
+  guardedClock += 31 * 86400000;
+  const renewed = await Promise.all(Array.from({ length: 10 }, () => guardedCommerce.ensureEntitlement(oldEntitlement)));
+  assert.equal(renewed.every((item) => item.status === "active"), true);
+  assert.equal(statusCalls, 1, "concurrent expired guards share one effective renewal");
+  const renewedEntitlement = renewed.at(-1).entitlement;
+  guardedClock += 10 * 60000;
+  assert.equal(await guardedCommerce.validateEntitlement(renewedEntitlement), true);
+  guardedClock -= 20 * 60000;
+  assert.equal(await guardedCommerce.validateEntitlement(renewedEntitlement), false,
+    "a clock rollback beyond tolerance never restores offline Pro");
+
   const broken = create({ storage: { async get() { return { [STORAGE_KEY]: null }; } }, request, access: { setEntitlement() {} } });
   await assert.rejects(broken.getState(), { code: "commerce-state-invalid" });
   console.log("Player Tools commerce lifecycle verification passed.");

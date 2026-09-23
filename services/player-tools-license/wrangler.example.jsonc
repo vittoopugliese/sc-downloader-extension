@@ -17,6 +17,12 @@
     "required": ["LEMON_API_KEY", "LEMON_WEBHOOK_SECRET", "ENTITLEMENT_PRIVATE_JWK", "ADMIN_TOKEN"]
   },
   "observability": { "enabled": true, "logs": { "head_sampling_rate": 1 } },
+  "ratelimits": [
+    { "name": "TRIAL_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
+    { "name": "LICENSE_RATE_LIMITER", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } },
+    { "name": "CHECKOUT_RATE_LIMITER", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } },
+    { "name": "EVENT_RATE_LIMITER", "namespace_id": "1004", "simple": { "limit": 120, "period": 60 } }
+  ],
   "d1_databases": [{
     "binding": "LICENSE_DB",
     "database_name": "sctd-player-tools-test",
@@ -39,6 +45,12 @@
       "secrets": {
         "required": ["LEMON_API_KEY", "LEMON_WEBHOOK_SECRET", "ENTITLEMENT_PRIVATE_JWK", "ADMIN_TOKEN"]
       },
+      "ratelimits": [
+        { "name": "TRIAL_RATE_LIMITER", "namespace_id": "2001", "simple": { "limit": 30, "period": 60 } },
+        { "name": "LICENSE_RATE_LIMITER", "namespace_id": "2002", "simple": { "limit": 20, "period": 60 } },
+        { "name": "CHECKOUT_RATE_LIMITER", "namespace_id": "2003", "simple": { "limit": 10, "period": 60 } },
+        { "name": "EVENT_RATE_LIMITER", "namespace_id": "2004", "simple": { "limit": 120, "period": 60 } }
+      ],
       "d1_databases": [{
         "binding": "LICENSE_DB",
         "database_name": "sctd-player-tools-production",

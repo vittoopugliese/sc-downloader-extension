@@ -160,14 +160,22 @@ const SCStreamSelector = (() => {
   }
 
   async function getStoredFormatPreference() {
-    const result = await chrome.storage.local.get(STORAGE_KEY);
-    return normalizePreference(result[STORAGE_KEY]);
+    try {
+      const result = await chrome.storage.local.get(STORAGE_KEY);
+      return normalizePreference(result[STORAGE_KEY]);
+    } catch {
+      const result = await chrome.runtime.sendMessage({ type: "GET_FORMAT_PREFERENCE" });
+      return normalizePreference(result?.preference);
+    }
   }
 
   async function setStoredFormatPreference(preference) {
-    await chrome.storage.local.set({
-      [STORAGE_KEY]: normalizePreference(preference),
-    });
+    const normalized = normalizePreference(preference);
+    try { await chrome.storage.local.set({ [STORAGE_KEY]: normalized }); }
+    catch {
+      const result = await chrome.runtime.sendMessage({ type: "SET_FORMAT_PREFERENCE", preference: normalized });
+      if (!result?.success) throw new Error("Could not save the format preference.");
+    }
   }
 
   return {
