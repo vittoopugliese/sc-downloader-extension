@@ -42,7 +42,7 @@ function fixture(used) {
       writes += 1; data = structuredClone(value);
     },
   };
-  return { storage, restart: () => create({ storage, now: () => clock, authority }), read: () => structuredClone(data[STORAGE_KEY]),
+  return { storage, authority, restart: () => create({ storage, now: () => clock, authority }), read: () => structuredClone(data[STORAGE_KEY]),
     writes: () => writes, fail: (value) => { fail = value; }, advance: (ms) => { clock += ms; },
     serverUse: (value) => { serverUsed = value; } };
 }
@@ -140,6 +140,14 @@ function fixture(used) {
   assert.equal((await paidAccess.getSnapshot(owner)).plan, "pro", "validated commerce can grant the shared Pro entitlement");
   await paidAccess.setEntitlement({ status: "free" });
   assert.equal((await paidAccess.getSnapshot(owner)).plan, "free", "revocation preserves trial state while removing Pro");
+  paidAccess.configureAuthority({ ...paid.authority, validateEntitlement: async (entitlement) => entitlement?.receipt?.signature === "trusted" });
+  await paidAccess.setEntitlement({ status: "active", licenseId: "license-1", checkedAt: 123, expiresAt: 1_900_000_000_000,
+    receipt: { algorithm: "ES256", keyId: "test", payload: "payload", signature: "forged" } });
+  assert.equal((await paidAccess.authorize(owner, { operation: "export-loop" })).code, "pro-required",
+    "a locally forged entitlement is removed before a PRO operation runs");
+  await paidAccess.setEntitlement({ status: "active", licenseId: "license-1", checkedAt: 123, expiresAt: 1_900_000_000_000,
+    receipt: { algorithm: "ES256", keyId: "test", payload: "payload", signature: "trusted" } });
+  assert.equal((await paidAccess.authorize(owner, { operation: "export-loop" })).allowed, true);
   const all = fixture(0); const allAccess = all.restart(); await allAccess.startTrial();
   for (let i = 0; i < 20; i += 1) {
     const result = await allAccess.authorize(owner, request(`loop-${i}`));

@@ -55,6 +55,8 @@ const playerToolsCommerce = globalThis.SCPlayerToolsCommerce?.create
 playerToolsAccess.configureAuthority?.({
   startTrial: () => playerToolsCommerce.startTrial(),
   consumeTrial: (value) => playerToolsCommerce.consumeTrial(value),
+  validateEntitlement: (value) => playerToolsCommerce.validateEntitlement(value),
+  validateTrial: (value) => playerToolsCommerce.validateTrial(value),
 });
 playerToolsCommerce.getState({ revalidate: true }).catch(() => {});
 

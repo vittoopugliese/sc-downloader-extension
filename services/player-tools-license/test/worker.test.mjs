@@ -350,7 +350,7 @@ test("a full refund received before its order remains authoritative through dela
     installationId, email: "buyer@example.com", licenseKey: "license-key",
   }), { ...env, LICENSE_DB });
   assert.equal(response.status, 403);
-  assert.deepEqual(await response.json(), { active: false, error: "activation_failed" });
+  assert.deepEqual(await response.json(), { active: false, error: "license_revoked" });
 
   const license = LICENSE_DB.database.prepare("SELECT lemon_license_id, status, revoked_at FROM licenses WHERE lemon_order_id='4'").get();
   assert.equal(license.lemon_license_id, "license-1");
@@ -369,6 +369,41 @@ test("a partial refund is recorded but does not automatically revoke Pro", async
   assert.equal((await sendWebhook(LICENSE_DB, partialRefund)).status, 200);
   assert.equal(LICENSE_DB.database.prepare("SELECT status FROM licenses WHERE lemon_order_id='4'").get().status, "active");
   assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM order_revocations").get().count, 0);
+});
+
+test("a refund tombstone blocks activation even when the order-created webhook never arrived", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  const LICENSE_DB = sqliteD1();
+  assert.equal((await sendWebhook(LICENSE_DB, orderWebhook("order_refunded", {
+    refunded: true, refunded_amount: 369, updated_at: "2026-09-21T10:00:00.000Z",
+  }))).status, 200);
+  globalThis.fetch = async () => new Response(JSON.stringify(activationResponse()), { status: 200 });
+  const response = await worker.fetch(request("/api/player-tools/license/activate", {
+    installationId, email: "buyer@example.com", licenseKey: "license-key",
+  }), { ...env, LICENSE_DB });
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).error, "license_revoked");
+  const license = LICENSE_DB.database.prepare("SELECT status, revoked_at FROM licenses WHERE lemon_order_id='4'").get();
+  assert.equal(license.status, "revoked");
+  assert.ok(license.revoked_at > 0);
+});
+
+test("restore reconciles an existing local activation before issuing another receipt", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  const LICENSE_DB = sqliteD1();
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith("/licenses/activate")) return new Response(JSON.stringify(activationResponse()), { status: 200 });
+    if (String(url).endsWith("/license-keys/license-1")) return new Response(JSON.stringify(managementLicense({ status: "inactive" })), { status: 200 });
+    throw new Error(`unexpected Lemon URL ${url}`);
+  };
+  const body = { installationId, email: "buyer@example.com", licenseKey: "license-key" };
+  assert.equal((await worker.fetch(request("/api/player-tools/license/activate", body), { ...env, LICENSE_DB })).status, 200);
+  const restored = await worker.fetch(request("/api/player-tools/license/restore", body), { ...env, LICENSE_DB });
+  assert.equal(restored.status, 403);
+  assert.equal((await restored.json()).error, "license_revoked");
+  assert.equal(LICENSE_DB.database.prepare("SELECT status FROM licenses WHERE lemon_license_id='license-1'").get().status, "revoked");
 });
 
 test("processed webhook delivery is idempotent and an overlapping delivery is retried", async () => {

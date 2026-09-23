@@ -302,15 +302,20 @@ async function recordActivation(env, result, email, installationId, keyHash, ope
   const instanceId = String(instance?.id || "");
   const providerKeyHash = await sha256Hex(String(license?.key || ""));
   if (!licenseId || !instanceId) throw new Error("Lemon returned an incomplete license activation.");
+  // A refund webhook may arrive before either the order-created webhook or an
+  // activation attempt.  The order tombstone is therefore an authority here
+  // too; otherwise an activation response could recreate Pro after refund.
+  const orderId = String(meta?.order_id || "");
   const results = await env.LICENSE_DB.batch([
-    env.LICENSE_DB.prepare(`INSERT INTO licenses (lemon_license_id, lemon_order_id, lemon_customer_id, lemon_key_hash, customer_email, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+    env.LICENSE_DB.prepare(`INSERT INTO licenses (lemon_license_id, lemon_order_id, lemon_customer_id, lemon_key_hash, customer_email, status, created_at, updated_at, revoked_at)
+      VALUES (?, ?, ?, ?, ?, CASE WHEN EXISTS (SELECT 1 FROM order_revocations WHERE lemon_order_id=?) THEN 'revoked' ELSE 'active' END, ?, ?,
+        (SELECT revoked_at FROM order_revocations WHERE lemon_order_id=?))
       ON CONFLICT(lemon_order_id) DO UPDATE SET lemon_license_id=excluded.lemon_license_id, customer_email=excluded.customer_email,
         lemon_customer_id=excluded.lemon_customer_id, lemon_key_hash=excluded.lemon_key_hash,
-        status=CASE WHEN licenses.status='revoked' THEN 'revoked' ELSE 'active' END,
-        revoked_at=CASE WHEN licenses.status='revoked' THEN licenses.revoked_at ELSE NULL END,
+        status=CASE WHEN licenses.status='revoked' OR EXISTS (SELECT 1 FROM order_revocations WHERE lemon_order_id=excluded.lemon_order_id) THEN 'revoked' ELSE 'active' END,
+        revoked_at=COALESCE(licenses.revoked_at, (SELECT revoked_at FROM order_revocations WHERE lemon_order_id=excluded.lemon_order_id)),
         updated_at=MAX(licenses.updated_at, excluded.updated_at)`)
-      .bind(licenseId, String(meta?.order_id || "") || null, String(meta?.customer_id || "") || null, providerKeyHash, email, timestamp, timestamp),
+      .bind(licenseId, orderId || null, String(meta?.customer_id || "") || null, providerKeyHash, email, orderId, timestamp, timestamp, orderId),
     env.LICENSE_DB.prepare(`INSERT INTO activations (lemon_instance_id, lemon_license_id, installation_id, activated_at, last_validated_at)
       SELECT ?, ?, ?, ?, ? FROM licenses WHERE lemon_license_id=? AND status='active'
       ON CONFLICT(lemon_license_id, installation_id) DO UPDATE SET
@@ -367,12 +372,20 @@ async function activate(env, value) {
 }
 async function restore(env, value) {
   const keyHash = await sha256Hex(value.licenseKey);
-  const existing = await env.LICENSE_DB.prepare(`SELECT activations.lemon_instance_id, licenses.lemon_license_id
+  const existing = await env.LICENSE_DB.prepare(`SELECT activations.lemon_instance_id, activations.installation_id,
+      licenses.lemon_license_id, licenses.status, licenses.customer_email
     FROM licenses JOIN activations USING(lemon_license_id)
     WHERE licenses.lemon_key_hash=? AND licenses.customer_email=? AND licenses.status='active'
       AND activations.installation_id=? AND activations.deactivated_at IS NULL`)
     .bind(keyHash, value.email, value.installationId).first();
-  if (existing) return { kind: 'active', licenseId: existing.lemon_license_id, instanceId: existing.lemon_instance_id };
+  // Never extend an offline receipt solely from D1.  A missed or delayed
+  // webhook must not make restore an alternate revocation bypass.
+  if (existing) {
+    const active = await reconcileActivation(env, existing);
+    return active
+      ? { kind: 'active', licenseId: existing.lemon_license_id, instanceId: existing.lemon_instance_id }
+      : { kind: 'revoked' };
+  }
   return activate(env, value);
 }
 function activeProviderLicense(resource, activation, env) {
@@ -679,6 +692,7 @@ export default {
           receipt: await proReceipt(env, { installationId: parsed.value.installationId, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId }) }, corsHeaders);
         if (entitlement?.kind === 'seat_limit') return json(409, { active: false, error: 'seat_limit' }, corsHeaders);
         if (entitlement?.kind === 'in_progress') return json(409, { active: false, error: 'activation_in_progress' }, corsHeaders);
+        if (entitlement?.kind === 'revoked') return json(403, { active: false, error: 'license_revoked' }, corsHeaders);
         return json(403, { active: false, error: "activation_failed" }, corsHeaders);
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/license/restore") {
@@ -688,6 +702,7 @@ export default {
           receipt: await proReceipt(env, { installationId: parsed.value.installationId, licenseId: entitlement.licenseId, instanceId: entitlement.instanceId }) }, corsHeaders);
         if (entitlement?.kind === 'seat_limit') return json(409, { active: false, error: 'seat_limit' }, corsHeaders);
         if (entitlement?.kind === 'in_progress') return json(409, { active: false, error: 'activation_in_progress' }, corsHeaders);
+        if (entitlement?.kind === 'revoked') return json(403, { active: false, error: 'license_revoked' }, corsHeaders);
         return json(403, { active: false, error: "activation_failed" }, corsHeaders);
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/license/status") {

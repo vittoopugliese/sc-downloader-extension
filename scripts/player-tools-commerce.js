@@ -163,7 +163,7 @@
       await scheduleRevalidation(state);
       await access.setEntitlement(active ? {
         status: "active", licenseId: state.activation?.licenseId || "", checkedAt: state.activation?.lastCheckedAt || 0,
-        expiresAt: state.activation?.receiptExpiresAt || 0,
+        expiresAt: state.activation?.receiptExpiresAt || 0, receipt: state.activation?.receipt || null,
       } : { status: "free" });
     }
     async function verifiedReceipt(result, state, expectedType = "pro") {
@@ -185,6 +185,19 @@
         lastCheckedAt: now(), receipt: result.receipt, receiptExpiresAt: claims.expiresAt };
       state.pendingCheckoutAt = null;
       await applyEntitlement(state, true);
+    }
+    async function validateEntitlement(entitlement) {
+      if (entitlement?.licenseId === "test-pro") return Boolean(TEST_LOGIN);
+      const state = await read();
+      if (!entitlement?.receipt || !state.activation?.instanceId ||
+          state.activation.licenseId !== entitlement.licenseId) return false;
+      try {
+        const claims = await RECEIPTS.verify(entitlement.receipt, {
+          publicJwk: entitlementPublicJwk, installationId: state.installationId,
+        });
+        return claims.type === "pro" && claims.licenseId === state.activation.licenseId &&
+          claims.instanceId === state.activation.instanceId && claims.expiresAt > now();
+      } catch { return false; }
     }
     function getState({ revalidate = false } = {}) {
       return exclusive(async () => {
@@ -271,7 +284,8 @@
           claims.used !== result.trial.used || claims.limit !== result.trial.limit) {
         throw Object.assign(new Error("Trial receipt does not match its state."), { code: "invalid-trial" });
       }
-      return { ...result.trial, ...(Object.hasOwn(result, "allowed") ? { allowed: result.allowed, reason: result.reason || null } : {}) };
+      return { ...result.trial, receipt: result.receipt,
+        ...(Object.hasOwn(result, "allowed") ? { allowed: result.allowed, reason: result.reason || null } : {}) };
     }
     function startTrial() {
       return exclusive(async () => {
@@ -291,6 +305,18 @@
           return { allowed: false, reason: error.code };
         }
       });
+    }
+    async function validateTrial(value) {
+      const state = await read();
+      if (!value?.receipt) return false;
+      try {
+        const claims = await RECEIPTS.verify(value.receipt, {
+          publicJwk: entitlementPublicJwk, installationId: state.installationId,
+        });
+        return claims.type === "trial" && claims.startedAt === value.startedAt &&
+          claims.expiresAt === value.expiresAt && claims.used === value.used &&
+          claims.limit === value.limit && claims.expiresAt > now();
+      } catch { return false; }
     }
     async function track(name, properties = {}, { once = false, scope = "lifetime" } = {}) {
       if (!ANALYTICS_EVENTS.has(name)) return false;
@@ -319,7 +345,7 @@
         } catch { return false; }
       });
     }
-    return { getState, startCheckout, activate, activateTest, deactivateTest, startTrial, consumeTrial, track };
+    return { getState, startCheckout, activate, activateTest, deactivateTest, startTrial, consumeTrial, track, validateEntitlement, validateTrial };
   }
 
   root.SCPlayerToolsCommerce = { STORAGE_KEY, IDENTITY_KEY, SESSION_MEASURED_KEY, LICENSE_REVALIDATION_ALARM,

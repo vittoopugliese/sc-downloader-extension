@@ -55,9 +55,19 @@
         ? { status: "active", licenseId: typeof raw.entitlement.licenseId === "string" ? raw.entitlement.licenseId : "",
           checkedAt: validGeneration(raw.entitlement.checkedAt) ? raw.entitlement.checkedAt : 0,
           expiresAt: validTimestamp(raw.entitlement.expiresAt) ? raw.entitlement.expiresAt :
-            (sourceVersion < 3 ? 0 : (() => { throw invalidState(); })()) }
+            (sourceVersion < 3 ? 0 : (() => { throw invalidState(); })()),
+          // The access record is a cache.  The service-worker verifier checks
+          // this receipt before granting any PRO operation.
+          receipt: raw.entitlement.receipt && typeof raw.entitlement.receipt === "object"
+            ? { algorithm: raw.entitlement.receipt.algorithm, keyId: raw.entitlement.receipt.keyId,
+              payload: raw.entitlement.receipt.payload, signature: raw.entitlement.receipt.signature }
+            : null }
         : { status: "free" },
-      trial: { limit: TRIAL_LIMIT, used: raw.trial.used, warnedLastUse: raw.trial.warnedLastUse, startedAt, expiresAt, grants },
+      trial: { limit: TRIAL_LIMIT, used: raw.trial.used, warnedLastUse: raw.trial.warnedLastUse, startedAt, expiresAt, grants,
+        receipt: raw.trial.receipt && typeof raw.trial.receipt === "object"
+          ? { algorithm: raw.trial.receipt.algorithm, keyId: raw.trial.receipt.keyId,
+            payload: raw.trial.receipt.payload, signature: raw.trial.receipt.signature }
+          : null },
     };
   }
 

@@ -32,8 +32,28 @@
       state.revision += 1;
       await storageCall("set", { [STORAGE_KEY]: POLICY.normalize(state) });
     }
+    async function verifyEntitlement(state) {
+      if (state.entitlement.status !== "active") return true;
+      if (typeof authority?.validateEntitlement !== "function") return true;
+      let valid = false;
+      try { valid = await authority.validateEntitlement(state.entitlement); } catch { valid = false; }
+      if (valid) return true;
+      // A locally altered, expired or unknown-key receipt can never keep PRO.
+      state.entitlement = { status: "free" };
+      await commit(state);
+      return false;
+    }
+    async function verifyTrial(state) {
+      if (state.trial.startedAt === null || typeof authority?.validateTrial !== "function") return true;
+      try {
+        return await authority.validateTrial({
+          receipt: state.trial.receipt, startedAt: state.trial.startedAt,
+          expiresAt: state.trial.expiresAt, used: state.trial.used, limit: state.trial.limit,
+        });
+      } catch { return false; }
+    }
     function getSnapshot(sender) {
-      return runExclusive(async () => { const timestamp = now(); return POLICY.snapshot(await read(), ownerKey(sender), timestamp); });
+      return runExclusive(async () => { const state = await read(); await verifyEntitlement(state); return POLICY.snapshot(state, ownerKey(sender), now()); });
     }
     function startTrial() {
       return runExclusive(async () => {
@@ -43,6 +63,7 @@
         state.trial.startedAt = remote.startedAt;
         state.trial.expiresAt = remote.expiresAt;
         state.trial.used = remote.used;
+        state.trial.receipt = remote.receipt || null;
         await commit(state);
         return POLICY.snapshot(state, null, timestamp);
       });
@@ -51,8 +72,12 @@
       return runExclusive(async () => {
         const owner = ownerKey(sender);
         const state = await read(); const timestamp = now();
+        await verifyEntitlement(state);
         const reply = (allowed, code = null, extra = {}) => ({ allowed, code, snapshot: POLICY.snapshot(state, owner, timestamp), ...extra });
         const operation = request?.operation;
+        if (state.entitlement.status !== "active" && state.trial.startedAt !== null && !(await verifyTrial(state))) {
+          return reply(false, "trial-unavailable");
+        }
         const isLoop = operation === "begin-loop" || operation === "edit-loop";
         if (isLoop) {
           if (!owner) return reply(false, "owner-gone");
@@ -83,6 +108,7 @@
           state.trial.startedAt = remote.startedAt;
           state.trial.expiresAt = remote.expiresAt;
           state.trial.used = remote.used;
+          state.trial.receipt = remote.receipt || state.trial.receipt || null;
           if (!remote.allowed) {
             await commit(state);
             return reply(false, remote.reason || "trial-unavailable");
@@ -124,7 +150,11 @@
         const next = entitlement?.status === "active"
           ? { status: "active", licenseId: String(entitlement.licenseId || "").slice(0, 256),
             checkedAt: Number.isSafeInteger(entitlement.checkedAt) ? entitlement.checkedAt : 0,
-            expiresAt: Number.isSafeInteger(entitlement.expiresAt) ? entitlement.expiresAt : 0 }
+            expiresAt: Number.isSafeInteger(entitlement.expiresAt) ? entitlement.expiresAt : 0,
+            receipt: entitlement.receipt && typeof entitlement.receipt === "object" ? {
+              algorithm: entitlement.receipt.algorithm, keyId: entitlement.receipt.keyId,
+              payload: entitlement.receipt.payload, signature: entitlement.receipt.signature,
+            } : null }
           : { status: "free" };
         if (JSON.stringify(state.entitlement) !== JSON.stringify(next)) {
           state.entitlement = next;
