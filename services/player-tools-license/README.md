@@ -119,6 +119,18 @@ PLAYER_TOOLS_ADMIN_URL=https://sctd.vpugliese.online/api/player-tools \
 PLAYER_TOOLS_ADMIN_TOKEN=... npm run seat:release -- INSTALLATION_ID LICENSE_KEY apply
 ```
 
+Inspection returns only identifiers and activation timestamps; it never returns
+the submitted license key. Reconciliation asks Lemon whether one local seat is
+still active before changing D1, so it is the safe first action when support
+reports a stale profile:
+
+```text
+PLAYER_TOOLS_ADMIN_URL=https://sctd.vpugliese.online/api/player-tools \
+PLAYER_TOOLS_ADMIN_TOKEN=... npm run license:admin -- inspect LICENSE_KEY
+PLAYER_TOOLS_ADMIN_URL=https://sctd.vpugliese.online/api/player-tools \
+PLAYER_TOOLS_ADMIN_TOKEN=... npm run license:admin -- reconcile LICENSE_KEY INSTALLATION_ID
+```
+
 ## Sandbox reconciliation gate
 
 Use provider test mode. A release candidate passes only when all of these are

@@ -1,4 +1,4 @@
-import { MAX_BODY_BYTES, MAX_WEBHOOK_BYTES, validateActivation, validateAdminRelease, validateCheckout, validateEvent, validateStatus, validateTrialConsume, validateTrialStart } from "./validation.mjs";
+import { MAX_BODY_BYTES, MAX_WEBHOOK_BYTES, validateActivation, validateAdminLicense, validateAdminRelease, validateCheckout, validateEvent, validateStatus, validateTrialConsume, validateTrialStart } from "./validation.mjs";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" };
 const LEMON_API = "https://api.lemonsqueezy.com/v1";
@@ -525,6 +525,30 @@ async function releaseSeat(env, value) {
   return { found: true, released: true, dryRun: false,
     licenseId: activation.lemon_license_id, instanceId: activation.lemon_instance_id };
 }
+
+async function inspectLicense(env, licenseKey) {
+  const keyHash = await sha256Hex(licenseKey);
+  const license = await env.LICENSE_DB.prepare(`SELECT lemon_license_id, lemon_order_id, status, created_at, updated_at, revoked_at
+    FROM licenses WHERE lemon_key_hash=?`).bind(keyHash).first();
+  if (!license) return { found: false };
+  const activations = await env.LICENSE_DB.prepare(`SELECT installation_id, lemon_instance_id, activated_at, last_validated_at, deactivated_at
+    FROM activations WHERE lemon_license_id=? ORDER BY activated_at ASC`).bind(license.lemon_license_id).all();
+  return { found: true, license: {
+    licenseId: license.lemon_license_id, orderId: license.lemon_order_id, status: license.status,
+    createdAt: license.created_at, updatedAt: license.updated_at, revokedAt: license.revoked_at,
+  }, activations: activations.results || [] };
+}
+
+async function reconcileSeat(env, value) {
+  const keyHash = await sha256Hex(value.licenseKey);
+  const activation = await env.LICENSE_DB.prepare(`SELECT licenses.lemon_license_id, licenses.status, licenses.customer_email,
+    activations.lemon_instance_id, activations.installation_id FROM licenses JOIN activations USING(lemon_license_id)
+    WHERE licenses.lemon_key_hash=? AND activations.installation_id=? AND activations.deactivated_at IS NULL`)
+    .bind(keyHash, value.installationId).first();
+  if (!activation) return { found: false, active: false };
+  const active = activation.status === "active" && await reconcileActivation(env, activation);
+  return { found: true, active, licenseId: activation.lemon_license_id, instanceId: activation.lemon_instance_id };
+}
 async function recordWebhook(env, payload, raw) {
   const eventName = String(payload?.meta?.event_name || "");
   const hash = await sha256Hex(raw);
@@ -674,6 +698,17 @@ export default {
           if (error?.code === "release_rejected") return json(409, { error: error.code });
           throw error;
         }
+      }
+      if (request.method === "POST" && ["/api/player-tools/admin/inspect-license", "/api/player-tools/admin/reconcile-seat"].includes(url.pathname)) {
+        const authorization = request.headers.get("authorization") || "";
+        const expected = env.ADMIN_TOKEN ? `Bearer ${env.ADMIN_TOKEN}` : "";
+        if (!expected || !equals(authorization, expected)) return json(403, { error: "admin_forbidden" });
+        const raw = await readBody(request, MAX_BODY_BYTES);
+        let body; try { body = raw ? JSON.parse(new TextDecoder().decode(raw)) : null; } catch { body = null; }
+        const parsed = validateAdminLicense(body, { installation: url.pathname.endsWith("reconcile-seat") });
+        if (!parsed.ok) return json(400, { error: parsed.error });
+        if (url.pathname.endsWith("inspect-license")) return json(200, await inspectLicense(env, parsed.value.licenseKey));
+        return json(200, await reconcileSeat(env, parsed.value));
       }
       const origin = allowedOrigin(request, env);
       if (!origin) return json(403, { error: "origin_not_allowed" });

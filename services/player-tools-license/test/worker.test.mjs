@@ -61,6 +61,7 @@ function sqliteD1() {
         return { meta: { changes: Number(result.changes) } };
       },
       async first() { return database.prepare(sql).get(...values) || null; },
+      async all() { return { results: database.prepare(sql).all(...values) }; },
     };
   }
   return {
@@ -512,6 +513,27 @@ test("support seat release requires admin auth and updates D1 only after Lemon c
   assert.equal((await applied.json()).released, true);
   assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM activation_operations").get().count, 0);
   assert.ok(LICENSE_DB.database.prepare("SELECT deactivated_at FROM activations WHERE lemon_instance_id='instance-1'").get().deactivated_at > 0);
+});
+
+test("admin inspection exposes activation state without returning the license key", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  const LICENSE_DB = sqliteD1();
+  globalThis.fetch = async () => new Response(JSON.stringify(activationResponse()), { status: 200 });
+  await worker.fetch(request("/api/player-tools/license/activate", {
+    installationId, email: "buyer@example.com", licenseKey: "license-key",
+  }), { ...env, LICENSE_DB });
+  const admin = new Request("https://worker.example/api/player-tools/admin/inspect-license", {
+    method: "POST", headers: { authorization: `Bearer ${env.ADMIN_TOKEN}`, "content-type": "application/json" },
+    body: JSON.stringify({ licenseKey: "license-key" }),
+  });
+  const response = await worker.fetch(admin, { ...env, LICENSE_DB });
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.found, true);
+  assert.equal(result.license.licenseId, "license-1");
+  assert.equal(result.activations.length, 1);
+  assert.doesNotMatch(JSON.stringify(result), /license-key/);
 });
 
 test("a known disabled license update revokes every local activation", async (t) => {
