@@ -16,10 +16,13 @@ for (const obsolete of [
   /Looper é grátis em faixas/i,
   /Looper бесплатен для/i,
   /Job state stored in `chrome\.storage\.session`/i,
+  /(?:46%\s*OFF|Future price|Precio futuro|Preço futuro|Künftiger Preis|Будущая цена)/i,
+  /(?:trial starts once|empieza una sola vez|começa uma única vez|startet nur einmal|запускается один раз)/i,
 ]) assert.doesNotMatch(runtimeCopy, obsolete);
 
 for (const required of [/7-day Player Tools trial/i, /20 new A–B loops/i, /WAV.*Pro/i,
   /two activated Chrome profiles/i, /signed 30-day offline receipt/i,
   /Full-track downloads stay free/i]) assert.match(runtimeCopy, required);
+assert.match(runtimeCopy, /trial for the current Chrome profile/i);
 
 console.log("Commercial FREE/trial/PRO copy verification passed across README, landing and five locales.");

@@ -1,6 +1,7 @@
--- Server-authoritative trial state. A reinstall that presents the same
--- installation ID receives the existing window and usage count; it cannot
--- create a fresh trial.
+-- Server-authoritative trial state for one locally generated Chrome-profile
+-- installation ID. Replays with that ID receive the existing window and usage
+-- count. A reinstall can generate a new ID because the product deliberately
+-- has no account requirement or browser fingerprinting.
 CREATE TABLE IF NOT EXISTS trials (
   installation_id TEXT PRIMARY KEY,
   started_at INTEGER NOT NULL,

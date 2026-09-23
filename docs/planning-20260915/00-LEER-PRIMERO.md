@@ -488,3 +488,9 @@ No cambiar precio, cuota, oferta de FX y screenshots simultáneamente si se quie
 | Evitar móvil, Firefox ahora, muchos FX, red social, IA, suscripción, backend enorme y extensiones duplicadas | 08 |
 
 Los planes antiguos siguen como antecedentes. Este índice es el punto de entrada para la destilación del 15/09; no certifica que una feature ya esté publicada.
+
+## Estado consolidado posterior a `33ce31f7d4243bdd3d1119d5c59e14ad360c95c6`
+
+El código local de C1–C3 y la preparación de C4 quedaron cerrados hasta donde es posible sin acceso externo. La suite local incluye el test login integrado y el empaquetador elimina ese acceso del ZIP. El trial se comunica ahora honestamente como concesión del perfil local actual: no requiere cuenta ni fingerprinting y, por tanto, no se promete resistencia a reinstalación. Se retiraron del landing el descuento `46% OFF` y el precio futuro USD 6.79.
+
+No marcar C4/C5/C6/C7 como terminados: todavía requieren IDs, secretos, migraciones y deploy de Cloudflare/D1, checkout/webhook/activación/reembolso auténticos de Lemon Test Mode, y luego los gates Live/Store/operación. La siguiente acción externa es completar esos recursos y ejecutar el recorrido correlacionado; la siguiente acción local es correr el gate de release con claves públicas de entorno y Chromium.

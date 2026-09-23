@@ -399,3 +399,18 @@ Este plan termina únicamente cuando:
 - C4 puede comenzar sin arrastrar un gate local conocido.
 
 Hasta entonces, el veredicto sigue siendo: base técnica avanzada, pero no robusta todavía para cobrar ni publicar.
+
+## Addendum de cierre local — base `33ce31f7d4243bdd3d1119d5c59e14ad360c95c6`
+
+Se cerró todo lo implementable sin cuentas, secretos o transacciones externas:
+
+- M02 quedó en `chrome.storage.local`, con migración desde el identificador legado de `sync` y acceso restringido a contextos confiables.
+- M03–M08 y M11 tienen implementación y regresiones en el cliente y en las migraciones/D1 reales: email idempotente, errores del proveedor no revocatorios, reactivación con instancia nueva, guard PRO con single-flight, anclas de reloj, gracia firmada del loop final y clasificación de expiración.
+- M09–M13 quedaron cubiertos por procedencia/fingerprint del ZIP, harness durable, recovery por etapa, analítica terminal idempotente y pruebas de los recorridos afectados.
+- M14 tiene límites por ruta/IP hasheada, namespaces separados Test/Live y regresión de respuesta uniforme; CORS sigue documentado sólo como restricción de origen, no autenticación.
+- M15 quedó integrado en `npm test`, `npm run test:player-tools` y el gate `test:release-local`; el login local de desarrollo tiene regresión de concurrencia/reinicio y el empaquetador lo elimina.
+- M16 quedó fuera del índice y del paquete; M17 ya no muestra descuento/precio futuro no sustentado y el copy declara honestamente que el trial es por perfil local, sin cuenta ni fingerprinting.
+
+M01 no se “simula” como cerrado: el contrato vigente es explícitamente un trial por perfil/installation ID, protegido contra replay normal mientras ese ID exista, pero no resistente a reinstalación. Hacerlo resistente requeriría una identidad de cuenta verificable y un cambio de producto/privacidad. M18 sigue abierto: faltan configuración real, migración remota, deploy, claves/secretos, Test Mode y evidencia Lemon/Cloudflare. También quedan fuera los gates físicos/dispositivo como ChromeOS y cualquier compra o reembolso real.
+
+Evidencia local nueva: `npm test` (48 verificaciones), `npm run test:player-tools` (incluye login integrado y suite D1/Worker), y `git diff --check`. El gate de navegador/ZIP debe ejecutarse con claves públicas de entorno y Chromium disponible; no se declara C4 externo por mocks.

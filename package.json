@@ -22,7 +22,7 @@
     "test:live:folder": "node scripts/verify-live-looper.js --folder",
     "browser:live": "node scripts/open-live-browser.js",
     "test:feedback": "node --test services/uninstall-feedback/test/validation.test.mjs",
-    "test:player-tools": "node scripts/verify-player-tools-policy.js && node scripts/verify-player-tools-access.js && node scripts/verify-player-tools-client.js && node scripts/verify-player-tools-commerce.js && npm --prefix services/player-tools-license test",
+    "test:player-tools": "node scripts/verify-player-tools-policy.js && node scripts/verify-player-tools-access.js && node scripts/verify-player-tools-client.js && node scripts/verify-player-tools-commerce.js && node scripts/verify-player-tools-login.js && npm --prefix services/player-tools-license test",
     "package:extension": "node scripts/package-extension.js"
   },
   "devDependencies": {

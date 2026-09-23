@@ -136,7 +136,7 @@ Double-click the slider to return to `1x`. The selected speed and pitch mode are
 6. Press **Download loop** to render the selected A-B range as a WAV file with those settings
 7. Press the cross or `Escape` to remove the temporary loop
 
-Player Tools starts a one-time 7-day trial on first eligible use, with up to 20 new A–B loops. Likes Explorer remains available for the full seven days; the last granted loop can finish its current session, but starting another requires Pro. WAV, processed track/loop exports, precise loop editing, parametric EQ and Likes Explorer after the trial are Pro. Normal track and collection downloads remain free even when licensing is offline. Pro is a lifetime purchase for two activated Chrome profiles and uses a signed 30-day offline receipt before it must revalidate online.
+Player Tools starts a 7-day trial for the current Chrome profile on first eligible use, with up to 20 new A–B loops. The server preserves that profile's window and usage, but the trial is not advertised as reinstall-proof because the extension deliberately requires no account and uses no browser fingerprinting. Likes Explorer remains available for the full seven days; the last granted loop can finish its current session, but starting another requires Pro. WAV, processed track/loop exports, precise loop editing, parametric EQ and Likes Explorer after the trial are Pro. Normal track and collection downloads remain free even when licensing is offline. Pro is a lifetime purchase for two activated Chrome profiles and uses a signed 30-day offline receipt before it must revalidate online.
 
 ### Download a playlist, likes, or user uploads
 1. Go to a **playlist/set**, **likes**, or `soundcloud.com/{user}/tracks` page
