@@ -115,6 +115,7 @@
   let accessLocked = false;
   let accessActionPending = false;
   let rateIntent = null;
+  let rateAuthorization = null;
   let loopPollInterval = null;
   let waveformSamples = [];
   let waveformTrackUrl = null;
@@ -545,7 +546,15 @@
   async function applyPlayerRate(rate, { animate = false } = {}) {
     const intent = { rate };
     rateIntent = intent;
-    const authorization = await authorizePlayerTools("set-rate", "tempo");
+    // Share the in-flight check so continuous input cannot starve playback:
+    // each response applies the latest value, even while the thumb is moving.
+    // Rate checks must not disable or blink the other playback controls.
+    if (!rateAuthorization) {
+      rateAuthorization = authorizePlayerTools("set-rate", "tempo", {}, { showPendingUi: false })
+        .finally(() => { rateAuthorization = null; });
+    }
+    render();
+    const authorization = await rateAuthorization;
     if (rateIntent !== intent) return;
     rateIntent = null;
     if (!authorization || !capability("tempo")) {

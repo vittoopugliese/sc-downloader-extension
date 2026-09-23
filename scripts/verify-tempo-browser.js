@@ -555,6 +555,32 @@ async function main() {
       throw new Error(`Playback Speed panel compact styling is incomplete: ${JSON.stringify(compactStyles)}`);
     }
 
+    // Continuous input must update audio before the gesture stops, without
+    // disabling neighboring controls while the access bridge responds.
+    const continuousRate = await host.evaluate(async (element) => {
+      window.accessResponseDelay = 80;
+      const root = element.shadowRoot;
+      const slider = root.querySelector('.slider');
+      const audio = document.querySelector('audio');
+      const rates = new Set();
+      let controlsDisabled = false;
+      for (let index = 0; index < 25; index += 1) {
+        slider.value = String(1 + index * .025);
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+        controlsDisabled ||= [...root.querySelectorAll('.pitch-toggle, .preset, .effect-bypass')]
+          .some((control) => control.disabled);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        rates.add(audio.playbackRate);
+      }
+      return { updates: rates.size, controlsDisabled };
+    });
+    assert.ok(continuousRate.updates >= 3,
+      'Audio speed must keep updating during continuous input, before the slider stops');
+    assert.equal(continuousRate.controlsDisabled, false,
+      'Speed input must not blink neighboring controls by disabling them');
+    await page.waitForTimeout(120);
+    assert.equal(await page.locator('audio').evaluate((audio) => audio.playbackRate), 1.6);
+
     // Exercise a native drag while the extension's access bridge is asynchronous.
     await page.evaluate(() => { window.accessResponseDelay = 80; });
     const speedSlider = host.locator(".slider");
