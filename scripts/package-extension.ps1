@@ -48,6 +48,7 @@ $packageItems = @(
     "scripts/download-intent.js",
     "scripts/download-source.js",
     "scripts/download-track.js",
+    "scripts/fast-tooltips.js",
     "scripts/format-utils.js",
     "scripts/i18n.js",
     "scripts/inline-button.js",

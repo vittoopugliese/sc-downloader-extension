@@ -87,8 +87,12 @@ npm run browser:live -- "https://soundcloud.com/artist/track"
 The terminal prints a CDP command that can inspect the live page. The profile is
 stored in `.playwright-profile/`, so a SoundCloud login survives browser restarts.
 
-Create the Store-ready extension ZIP after the automated checks pass:
+Create a test or release-candidate ZIP after the automated checks pass. Supply
+the matching HTTPS Worker endpoint and public entitlement JWK/JWKS; packaging
+fails if either is missing, the local test login remains, a runtime script is
+omitted, or development-only paths enter the ZIP:
 
-```powershell
-npm run package:extension
+```sh
+PLAYER_TOOLS_API_BASE_URL=https://sctd-test.example.com/api/player-tools \
+ENTITLEMENT_PUBLIC_JWK='{"keys":[...]}' npm run package:extension
 ```

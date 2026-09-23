@@ -4,8 +4,51 @@ const path = require('node:path');
 const os = require('node:os');
 const { execFileSync } = require('node:child_process');
 const root = path.resolve(__dirname,'..');
+
+function zipEntries(zipPath) {
+  return execFileSync('unzip', ['-Z1', zipPath], { encoding: 'utf8' })
+    .split(/\r?\n/).filter(Boolean);
+}
+
+function zipText(zipPath, entry) {
+  return execFileSync('unzip', ['-p', zipPath, entry], { encoding: 'utf8' });
+}
+
+function smokePackage(zipPath, apiPermission) {
+  const entries = new Set(zipEntries(zipPath));
+  const files = [...entries].filter(entry => !entry.endsWith('/'));
+  const forbidden = /(^|\/)(?:\.git|\.agents|\.codex|docs|services|node_modules|dist|test|tests)(?:\/|$)|(^|\/)verify-[^/]+\.js$|(^|\/)(?:\.DS_Store|Thumbs\.db|\.dev\.vars[^/]*)$/;
+  const prohibited = files.filter(entry => forbidden.test(entry));
+  if (prohibited.length) throw new Error(`Package contains development-only files: ${prohibited.join(', ')}`);
+  for (const required of ['manifest.json', 'popup.html', 'offscreen.html', 'scripts/background.js', 'THIRD_PARTY_LICENSES.md']) {
+    if (!entries.has(required)) throw new Error(`Package smoke check: missing ${required}.`);
+  }
+  const manifest = JSON.parse(zipText(zipPath, 'manifest.json'));
+  if (!manifest.host_permissions?.includes(apiPermission)) throw new Error(`Package smoke check: missing API host permission ${apiPermission}.`);
+  const referencedScripts = [manifest.background?.service_worker,
+    ...(manifest.content_scripts || []).flatMap(item => item.js || []),
+    ...['popup.html', 'offscreen.html'].flatMap((html) => [...zipText(zipPath, html).matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map(match => match[1]))]
+    .filter(Boolean);
+  for (const script of referencedScripts) {
+    const entry = script.replace(/^\.\//, '');
+    if (!entries.has(entry)) throw new Error(`Package smoke check: runtime script ${script} is missing.`);
+  }
+  const commerce = zipText(zipPath, 'scripts/player-tools-commerce.js');
+  if (!commerce.includes('const TEST_LOGIN = null;') || commerce.includes('username: "1", password: "1"')) {
+    throw new Error('Package smoke check: test login was not removed.');
+  }
+  const receipts = zipText(zipPath, 'scripts/player-tools-receipts.js');
+  if (receipts.includes('PACKAGED_ENTITLEMENT_PUBLIC_JWK = null') || /PACKAGED_ENTITLEMENT_PUBLIC_JWK[^;]*"d"\s*:/.test(receipts)) {
+    throw new Error('Package smoke check: entitlement key is missing or contains private material.');
+  }
+  console.log(`Package smoke passed (${files.length} files; test login disabled; no development paths).`);
+}
+
 if (process.platform === 'win32') {
   execFileSync('powershell',['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(__dirname,'package-extension.ps1')],{stdio:'inherit'});
+  const apiBaseUrl = new URL(process.env.PLAYER_TOOLS_API_BASE_URL || '');
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+  smokePackage(path.join(root, 'dist', `soundcloud-track-downloader-${manifest.version}.zip`), `${apiBaseUrl.origin}/*`);
 } else {
   const script = fs.readFileSync(path.join(__dirname,'package-extension.ps1'),'utf8');
   const list = script.match(/\$packageItems = @\(([\s\S]*?)\n\s*\)/)[1];
@@ -72,6 +115,7 @@ if (process.platform === 'win32') {
     const temporary = path.join(stage,'extension.zip');
     execFileSync('zip',['-q','-r',temporary,...fs.readdirSync(stage)],{cwd:stage});
     fs.copyFileSync(temporary,output);
+    smokePackage(output, apiPermission);
     console.log(`Created ${output}`);
   } finally { fs.rmSync(stage,{recursive:true,force:true}); }
 }

@@ -21,6 +21,15 @@ importScripts(
 
 const t = globalThis.SCDLI18n?.t || ((key) => key);
 
+const playerToolsAccess = globalThis.SCPlayerToolsAccess || {
+  configureAuthority() {},
+  async startTrial() { throw Object.assign(new Error("Player Tools licensing is unavailable."), { code: "service-unavailable" }); },
+  async getSnapshot() { return { status: "free", plan: "free" }; },
+  async authorize() { throw Object.assign(new Error("Player Tools licensing is unavailable."), { code: "service-unavailable" }); },
+  async endSession() {},
+  async endTab() {},
+};
+
 const UNINSTALL_FEEDBACK_URL = "https://sctd.vpugliese.online/";
 const INSTALL_LIKES_URL = "https://soundcloud.com/you/likes";
 const playerToolsCommerce = globalThis.SCPlayerToolsCommerce?.create
@@ -29,7 +38,7 @@ const playerToolsCommerce = globalThis.SCPlayerToolsCommerce?.create
       identityStorage: chrome.storage.sync,
       sessionStorage: chrome.storage.session,
       alarms: chrome.alarms,
-      access: SCPlayerToolsAccess,
+      access: playerToolsAccess,
       version: chrome.runtime.getManifest().version,
     })
   // Narrow fallback for legacy verification harnesses that stub importScripts.
@@ -43,7 +52,7 @@ const playerToolsCommerce = globalThis.SCPlayerToolsCommerce?.create
       consumeTrial: async () => { throw Object.assign(new Error("Trial service is unavailable."), { code: "service-unavailable" }); },
       track: async () => false,
     };
-SCPlayerToolsAccess.configureAuthority?.({
+playerToolsAccess.configureAuthority?.({
   startTrial: () => playerToolsCommerce.startTrial(),
   consumeTrial: (value) => playerToolsCommerce.consumeTrial(value),
 });
@@ -58,7 +67,7 @@ async function configureUninstallFeedback() {
 }
 
 async function openInstallLikes() {
-  await SCPlayerToolsAccess.startTrial();
+  await playerToolsAccess.startTrial();
   await chrome.tabs.create({ url: INSTALL_LIKES_URL });
 }
 
@@ -79,7 +88,7 @@ const downloadSource = SCDownloadSource.configure({
   getOAuthToken,
 });
 
-const likesJobs = globalThis.SCLikesJobs?.create({ getToken: getOAuthToken, resolveUser: clientId => downloadSource.resolveLoggedInUser(clientId), access: SCPlayerToolsAccess });
+const likesJobs = globalThis.SCLikesJobs?.create({ getToken: getOAuthToken, resolveUser: clientId => downloadSource.resolveLoggedInUser(clientId), access: playerToolsAccess });
 chrome.cookies.onChanged?.addListener(change => {
   if (change.cookie.name !== 'oauth_token' || !/(^|\.)soundcloud\.com$/.test(change.cookie.domain.replace(/^\./, ''))) return;
   likesJobs?.invalidate();
@@ -172,7 +181,7 @@ async function resolveLoopTrack(request, sender) {
 }
 
 async function openPlayerToolsPanel() {
-  await SCPlayerToolsAccess.startTrial();
+  await playerToolsAccess.startTrial();
   const tabs = await chrome.tabs.query({ url: "https://soundcloud.com/*" });
   const existing = tabs.find((tab) => tab.active) || tabs[0];
   const tab = existing || await chrome.tabs.create({ url: "https://soundcloud.com/" });
@@ -204,7 +213,7 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  SCPlayerToolsAccess.endTab(tabId).catch((error) => console.warn("Player Tools session cleanup failed", error.code));
+  playerToolsAccess.endTab(tabId).catch((error) => console.warn("Player Tools session cleanup failed", error.code));
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -239,11 +248,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === "GET_PLAYER_TOOLS_SNAPSHOT") {
-    return respond(SCPlayerToolsAccess.getSnapshot(sender), sendResponse, (snapshot) => ({ snapshot }));
+    return respond(playerToolsAccess.getSnapshot(sender), sendResponse, (snapshot) => ({ snapshot }));
   }
 
   if (request.type === "START_PLAYER_TOOLS_TRIAL") {
-    return respond(SCPlayerToolsAccess.startTrial(), sendResponse, (snapshot) => ({ snapshot }));
+    return respond(playerToolsAccess.startTrial(), sendResponse, (snapshot) => ({ snapshot }));
   }
 
   if (request.type === "GET_PLAYER_TOOLS_COMMERCE") {
@@ -286,7 +295,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === "AUTHORIZE_PLAYER_TOOLS") {
-    const authorization = SCPlayerToolsAccess.authorize(sender, request);
+    const authorization = playerToolsAccess.authorize(sender, request);
     authorization.then((result) => {
       if (!result.allowed && ["pro-required", "trial-expired", "trial-exhausted"].includes(result.code)) {
         playerToolsCommerce.track("paywall_seen", { cause: result.code }, { once: true, scope: "session" }).catch(() => {});
@@ -304,7 +313,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.type === "END_PLAYER_TOOLS_SESSION") {
     return respond(
-      SCPlayerToolsAccess.endSession(sender, request),
+      playerToolsAccess.endSession(sender, request),
       sendResponse,
       (result) => result
     );
@@ -445,7 +454,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.type === "DOWNLOAD_SINGLE_TRACK") {
     const authorization = hasEffectivePlaybackTransform(request.playbackTransform) || hasEffectiveEffects(request.effects)
-      ? SCPlayerToolsAccess.authorize(sender, { operation: "export-track-effects" })
+      ? playerToolsAccess.authorize(sender, { operation: "export-track-effects" })
       : Promise.resolve({ allowed: true });
     authorization
       .then((access) => {
@@ -475,7 +484,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === "DOWNLOAD_LOOP") {
-    SCPlayerToolsAccess.authorize(sender, { operation: "export-loop" })
+    playerToolsAccess.authorize(sender, { operation: "export-loop" })
       .then((access) => {
         if (access.allowed) return access;
         const error = new Error("Player Tools Pro is required to export A–B loops.");
@@ -518,7 +527,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: false, error: "Pad samples can be up to 30 seconds long." });
         return false;
       }
-      SCPlayerToolsAccess.authorize(sender, { operation: "export-loop" })
+      playerToolsAccess.authorize(sender, { operation: "export-loop" })
         .then((access) => {
           if (!access.allowed) throw new Error("Player Tools Pro is required to save a loop to a pad.");
           return resolveLoopTrack(request, sender);

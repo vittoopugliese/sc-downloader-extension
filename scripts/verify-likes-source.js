@@ -23,7 +23,7 @@ assert.throws(()=>source.cursor('https://api-v2.soundcloud.com/users/43/likes','
 assert.equal(policy.canAuthorize(undefined,null,'explore-likes').reason,'pro-required');
 const trial=policy.startTrial(policy.normalize(), Date.now());
 assert.equal(policy.canAuthorize(trial,null,'explore-likes').allowed,true);
-const pro=policy.normalize(undefined); pro.entitlement={status:'active'};
+const pro=policy.normalize(undefined); pro.entitlement={status:'active',licenseId:'license-1',checkedAt:Date.now(),expiresAt:Date.now()+60_000};
 assert.equal(policy.canAuthorize(pro,null,'explore-likes').allowed,true);
 assert.equal(policy.canAuthorize(pro,null,'explore-likes').consume,false);
 assert.equal(policy.snapshot(pro,null).capabilities.likesExplorer,true);

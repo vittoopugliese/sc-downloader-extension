@@ -5,7 +5,7 @@ const vm = require("node:vm");
 const policy = require("./player-tools-policy.js");
 const { create, STORAGE_KEY } = require("./player-tools-access.js");
 let accessState = policy.normalize();
-accessState.entitlement = { status: "active" };
+accessState.entitlement = { status: "active", licenseId: "license-1", checkedAt: Date.now(), expiresAt: Date.now() + 60_000 };
 const access = create({ storage: {
   async get() { return { [STORAGE_KEY]: structuredClone(accessState) }; },
   async set(value) { accessState = structuredClone(value[STORAGE_KEY]); },
@@ -135,7 +135,7 @@ function dispatch(request, sender) {
   const bulk = await dispatch({ type: "START_BULK_JOB", tracks: [resolvedTrack], playbackTransform }, {});
   assert.equal(bulk.success, true);
   assert.equal(downloads.at(-1).includes(playbackTransform), false, "bulk never inherits effects");
-  accessState.entitlement = { status: "active" };
+  accessState.entitlement = { status: "active", licenseId: "license-1", checkedAt: Date.now(), expiresAt: Date.now() + 60_000 };
   const effects = { eq: { enabled: true, bands: [{ frequency: 1000, gain: 6, q: 1 }] } };
   assert.equal((await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack, playbackTransform, effects }, {})).success, true);
   assert.deepEqual(downloads.at(-1)[4], effects, "Authorized EQ settings must reach the audio build path");
