@@ -2,7 +2,7 @@
   'use strict';
 
   const DB_NAME = 'scdl_bulk_jobs';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
   const FIRST_CURSOR = '__first__';
   const ACTIVE_STATUSES = new Set(['enumerating', 'paused', 'ready', 'downloading', 'running']);
   const TERMINAL_STATUSES = new Set(['completed', 'completed_with_errors', 'failed', 'cancelled', 'partial']);
@@ -57,6 +57,11 @@
         }
         if (!db.objectStoreNames.contains('cursors')) {
           db.createObjectStore('cursors', { keyPath: ['jobId', 'cursor'] });
+        }
+        if (!db.objectStoreNames.contains('operations')) {
+          const operations = db.createObjectStore('operations', { keyPath: 'operationId' });
+          operations.createIndex('state', 'state');
+          operations.createIndex('updatedAt', 'updatedAt');
         }
       };
       opened.onblocked = () => {
@@ -542,6 +547,62 @@
     });
   }
 
+  function validOperationId(value) {
+    return typeof value === 'string' && /^track_[A-Za-z0-9_]{8,100}$/.test(value);
+  }
+
+  async function beginOperation(operationId, signature) {
+    if (!validOperationId(operationId) || typeof signature !== 'string' || signature.length > 2048) {
+      throw fail('invalid_operation');
+    }
+    return transaction(['operations'], 'readwrite', async store => {
+      const operations = store('operations');
+      const existing = await request(operations.get(operationId));
+      if (existing) {
+        if (existing.signature !== signature) throw fail('operation_conflict');
+        return { ...existing, isNew: false };
+      }
+      // A repeated click can create a new request ID before the UI observes
+      // the first response.  Coalesce only active work with the same immutable
+      // command; completed exports remain intentionally downloadable again.
+      const states = ['resolving', 'building', 'saving'];
+      const active = (await Promise.all(states.map(state => request(operations.index('state').getAll(state)))))
+        .flat().find(operation => operation.signature === signature);
+      if (active) return { ...active, isNew: false };
+      const timestamp = Date.now();
+      const operation = { operationId, signature, state: 'resolving', stage: 'resolving',
+        downloadId: null, result: null, error: null, createdAt: timestamp, updatedAt: timestamp };
+      operations.put(operation);
+      return { ...operation, isNew: true };
+    });
+  }
+
+  async function updateOperation(operationId, update) {
+    if (!validOperationId(operationId) || !update || typeof update !== 'object') throw fail('invalid_operation');
+    return transaction(['operations'], 'readwrite', async store => {
+      const operations = store('operations');
+      const operation = await request(operations.get(operationId));
+      if (!operation) throw fail('operation_missing');
+      const next = { ...operation, ...update, operationId, updatedAt: Date.now() };
+      operations.put(next);
+      return next;
+    });
+  }
+
+  async function getOperation(operationId) {
+    if (!validOperationId(operationId)) throw fail('invalid_operation');
+    return transaction(['operations'], 'readonly', store => request(store('operations').get(operationId)));
+  }
+
+  async function getOperationsByState(states) {
+    const values = Array.isArray(states) ? states : [states];
+    return transaction(['operations'], 'readonly', async store => {
+      const index = store('operations').index('state');
+      const groups = await Promise.all(values.map(state => request(index.getAll(state))));
+      return groups.flat();
+    });
+  }
+
   root.SCBulkLibrary = Object.freeze({
     DB_NAME,
     open,
@@ -561,5 +622,9 @@
     cancel,
     deleteJob,
     cleanupTerminalJobs,
+    beginOperation,
+    updateOperation,
+    getOperation,
+    getOperationsByState,
   });
 })(globalThis);

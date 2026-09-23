@@ -1,5 +1,9 @@
 const SCDownloadIntent = (() => {
   function create(runtime = chrome.runtime) {
+    function operationId() {
+      const value = globalThis.crypto?.randomUUID?.().replaceAll("-", "") || `${Date.now()}${Math.random().toString(36).slice(2)}`;
+      return `track_${value}`;
+    }
     async function send(command) {
       const result = await runtime.sendMessage(command);
       if (!result?.success) {
@@ -23,6 +27,7 @@ const SCDownloadIntent = (() => {
         playbackTransform: options.playbackTransform || null,
         effects: options.effects || null,
         downloadDestination: options.downloadDestination ?? null,
+        operationId: options.operationId || operationId(),
       });
     }
 

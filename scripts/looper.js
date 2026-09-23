@@ -1618,6 +1618,7 @@ const SCLooper = (() => {
       }
       const result = await chrome.runtime.sendMessage({
         type: "DOWNLOAD_LOOP",
+        operationId: `track_${crypto.randomUUID().replaceAll("-", "")}`,
         trackData,
         trackUrl: identityUrl(trackIdentity),
         formatPreference: trackData?.formatPreference || "auto",

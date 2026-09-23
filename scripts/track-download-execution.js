@@ -102,6 +102,7 @@ const SCTrackDownloadExecution = (() => {
         return {
           success: true,
           cancelled: false,
+          operationId,
           fileName: saved.fileName,
           destinationName: saved.destinationName,
         };

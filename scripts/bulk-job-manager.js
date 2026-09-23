@@ -540,6 +540,52 @@ const trackDownloadExecution = SCTrackDownloadExecution.create({
     sendOffscreenMessage({ type: "OFFSCREEN_ABORT", buildId }),
 });
 
+function newDirectOperationId() {
+  const value = globalThis.crypto?.randomUUID?.().replaceAll("-", "") || `${Date.now()}${Math.random().toString(36).slice(2)}`;
+  return `track_${value}`;
+}
+
+function directOperationSignature(trackData, formatPreference, trimRange, playbackTransform, effects, destination) {
+  // Never persist signed stream URLs or authentication material merely to
+  // deduplicate a retry. Track identity plus immutable export options suffice.
+  return JSON.stringify([String(trackData?.trackId || trackData?.id || ""), formatPreference || "auto",
+    trimRange || null, playbackTransform || null, effects || null, destination?.id || null]);
+}
+
+async function executeDirectOperation({ operationId, trackData, formatPreference, destination, trimRange = null, playbackTransform = null, effects = null }) {
+  let id = operationId || newDirectOperationId();
+  const signature = directOperationSignature(trackData, formatPreference, trimRange, playbackTransform, effects, destination);
+  const existing = await SCBulkLibrary.beginOperation(id, signature);
+  id = existing.operationId;
+  if (existing.state === "completed") return existing.result;
+  if (!existing.isNew && ["resolving", "building", "saving"].includes(existing.state)) {
+    return { success: false, operationId: id, code: "operation_in_progress", error: "This download is still processing." };
+  }
+  if (["ambiguous_save", "failed", "cancelled"].includes(existing.state)) return existing.result || {
+    success: false, operationId: id, code: existing.state, error: existing.error || "Check the download before retrying.",
+  };
+  try {
+    const result = await trackDownloadExecution.execute({
+      operationId: id, trackData, formatPreference, destination, trimRange, playbackTransform, effects,
+      onStage: async (stage) => {
+        const state = stage === "saving" ? "saving" : "building";
+        await SCBulkLibrary.updateOperation(id, { state, stage });
+      },
+      onDownloadStarted: async (downloadId) => SCBulkLibrary.updateOperation(id, { state: "saving", stage: "saving", downloadId }),
+    });
+    const finalState = result.cancelled ? "cancelled" : "completed";
+    const saved = { ...result, operationId: id };
+    await SCBulkLibrary.updateOperation(id, { state: finalState, stage: finalState, result: saved, error: null });
+    return saved;
+  } catch (error) {
+    const state = error?.code === "ambiguous_save" ? "ambiguous_save" : "failed";
+    const result = { success: false, operationId: id, code: error?.code || state,
+      error: error?.message || "Download failed." };
+    await SCBulkLibrary.updateOperation(id, { state, stage: state, result, error: result.error });
+    return result;
+  }
+}
+
 async function updateTrackProgress(jobId, trackIndex, total, title, statusText) {
   return mutateJob(
     jobId,
@@ -975,12 +1021,35 @@ const BulkJobManager = {
     return trackDownloadExecution.reportProgress(buildId, statusText);
   },
 
+  async getDownloadOperation(operationId) {
+    return SCBulkLibrary.getOperation(operationId);
+  },
+
+  async recoverDirectOperations() {
+    const active = await SCBulkLibrary.getOperationsByState(["resolving", "building", "saving"]);
+    for (const operation of active) {
+      // Blob URLs and a directory handle are scoped to the terminated context.
+      // Without a durable Chrome download checkpoint the only safe recovery is
+      // to retain an explicit ambiguous result instead of rebuilding/saving.
+      await SCBulkLibrary.updateOperation(operation.operationId, {
+        state: "ambiguous_save", stage: "ambiguous_save",
+        result: { success: false, operationId: operation.operationId, code: "ambiguous_save",
+          error: operation.downloadId
+            ? "The browser download was interrupted; check Downloads before retrying."
+            : "The export was interrupted; check the destination before retrying." },
+        error: "Operation interrupted by extension restart.",
+      });
+    }
+    return active.length;
+  },
+
   async downloadSingleTrack(
     trackData,
     formatPreference = "auto",
     downloadDestination = null,
     playbackTransform = null,
-    effects = null
+    effects = null,
+    operationId = null
   ) {
     await withJobState(async () => {
       const activeJobBeforeDownload = await loadJob();
@@ -1001,13 +1070,8 @@ const BulkJobManager = {
       await startKeepalive();
       await ensureOffscreenDocument();
       return await queueSingleDownload(() =>
-        trackDownloadExecution.execute({
-          trackData,
-          formatPreference: formatPreference || "auto",
-          destination: resolvedDestination,
-          playbackTransform,
-          effects,
-        })
+        executeDirectOperation({ operationId, trackData, formatPreference: formatPreference || "auto",
+          destination: resolvedDestination, playbackTransform, effects })
       );
     } finally {
       singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);
@@ -1027,7 +1091,8 @@ const BulkJobManager = {
     trimRange,
     playbackTransform = null,
     downloadDestination = null,
-    effects = null
+    effects = null,
+    operationId = null
   ) {
     await withJobState(async () => {
       const activeJobBeforeDownload = await loadJob();
@@ -1048,14 +1113,8 @@ const BulkJobManager = {
       await startKeepalive();
       await ensureOffscreenDocument();
       return await queueSingleDownload(() =>
-        trackDownloadExecution.execute({
-          trackData,
-          formatPreference: formatPreference || "auto",
-          destination: resolvedDestination,
-          trimRange,
-          playbackTransform,
-          effects,
-        })
+        executeDirectOperation({ operationId, trackData, formatPreference: formatPreference || "auto",
+          destination: resolvedDestination, trimRange, playbackTransform, effects })
       );
     } finally {
       singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);

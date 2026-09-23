@@ -107,6 +107,7 @@ onDocumentEvent(LOOP_EXPORT_EVENT, () => {
   const trackUrl = String(request.trackIdentity || "").replace(/^permalink:/, "") || null;
   chrome.runtime.sendMessage({
     type: "DOWNLOAD_LOOP",
+    operationId: `track_${crypto.randomUUID().replaceAll("-", "")}`,
     trackUrl,
     trimRange: request.trimRange,
     playbackTransform: request.playbackTransform || null,

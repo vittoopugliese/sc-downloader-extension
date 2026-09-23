@@ -59,6 +59,7 @@ playerToolsAccess.configureAuthority?.({
   validateTrial: (value) => playerToolsCommerce.validateTrial(value),
 });
 playerToolsCommerce.getState({ revalidate: true }).catch(() => {});
+BulkJobManager.recoverDirectOperations?.().catch(() => {});
 
 async function configureUninstallFeedback() {
   const url = new URL(UNINSTALL_FEEDBACK_URL);
@@ -470,7 +471,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           request.formatPreference || "auto",
           request.downloadDestination ?? null,
           request.playbackTransform || null,
-          request.effects || null
+          request.effects || null,
+          request.operationId || null
         );
       })
       .then((result) => {
@@ -501,7 +503,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           request.trimRange,
           request.playbackTransform || null,
           request.downloadDestination ?? null,
-          request.effects || null
+          request.effects || null,
+          request.operationId || null
         )
       )
       .then((result) => {
@@ -552,6 +555,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.type === "GET_JOB_STATUS") {
     return respond(BulkJobManager.getStatus(), sendResponse);
+  }
+  if (request.type === "GET_DOWNLOAD_OPERATION") {
+    return respond(BulkJobManager.getDownloadOperation(request.operationId), sendResponse,
+      (operation) => ({ operation }));
   }
   if (request.type === "PAUSE_BULK_JOB") {
     return respond(BulkJobManager.pauseJob(), sendResponse);

@@ -13,6 +13,7 @@ function createHarness(options = {}) {
   let storedJob = clone(options.storedJob || null);
   const durableJobs = new Map();
   const durableTracks = new Map();
+  const durableOperations = new Map();
   let active = 0;
   let maxActive = 0;
   let automatic = options.automatic !== false;
@@ -62,6 +63,31 @@ function createHarness(options = {}) {
     async cleanupTerminalJobs() { return []; },
     async recountFailures(jobId) { return clone(durableJobs.get(jobId) || null); },
     async getTrack(jobId, index) { return clone(durableTracks.get(jobId)?.[index] || null); },
+    async beginOperation(operationId, signature) {
+      const existing = durableOperations.get(operationId);
+      if (existing) {
+        if (existing.signature !== signature) throw Object.assign(new Error("operation_conflict"), { code: "operation_conflict" });
+        return { ...clone(existing), isNew: false };
+      }
+      const active = [...durableOperations.values()].find(operation =>
+        operation.signature === signature && ["resolving", "building", "saving"].includes(operation.state));
+      if (active) return { ...clone(active), isNew: false };
+      const operation = { operationId, signature, state: "resolving", stage: "resolving", downloadId: null,
+        result: null, error: null, createdAt: Date.now(), updatedAt: Date.now() };
+      durableOperations.set(operationId, operation);
+      return { ...clone(operation), isNew: true };
+    },
+    async updateOperation(operationId, patch) {
+      const operation = durableOperations.get(operationId);
+      if (!operation) throw Object.assign(new Error("operation_missing"), { code: "operation_missing" });
+      Object.assign(operation, clone(patch), { updatedAt: Date.now() });
+      return clone(operation);
+    },
+    async getOperation(operationId) { return clone(durableOperations.get(operationId) || null); },
+    async getOperationsByState(states) {
+      const wanted = new Set(Array.isArray(states) ? states : [states]);
+      return clone([...durableOperations.values()].filter(operation => wanted.has(operation.state)));
+    },
     async getTracksByState(jobId, state, limit) {
       return clone((durableTracks.get(jobId) || []).filter(record => record.state === state).slice(0, limit));
     },
