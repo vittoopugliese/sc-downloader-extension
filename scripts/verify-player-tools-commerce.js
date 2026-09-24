@@ -52,6 +52,7 @@ function response(status, body) {
       receipt: await receipt({ version: 1, type: "pro", installationId: data[STORAGE_KEY].installationId,
         licenseId: "license-1", instanceId: "instance-1", capabilities: ["pro"], issuedAt: clock, expiresAt: clock + 30 * 86400000 }) });
     if (url.endsWith("/license/restore")) return response(200, await pro());
+    if (url.endsWith("/checkout/claim")) return response(200, { ...(await pro()), pending: false });
     if (url.endsWith("/license/status")) return revoked
       ? response(403, { active: false, error: "license_revoked" })
       : response(200, await pro());
@@ -79,6 +80,9 @@ function response(status, body) {
   assert.equal(checkout.status, "pending");
   assert.equal(checkout.checkoutUrl, "https://store.example/checkout/1");
   assert.equal(calls.at(-1).body.locale, "es-AR");
+  const claimed = await commerce.claimCheckout();
+  assert.equal(claimed.status, "active");
+  assert.equal(data[STORAGE_KEY].activation.instanceId, "instance-1");
 
   const active = await commerce.activate({ email: "Buyer@Example.com", licenseKey: " key-1 " });
   assert.equal(active.status, "active");
@@ -87,22 +91,6 @@ function response(status, body) {
   assert.equal(entitlements.at(-1).status, "active");
   assert.deepEqual(alarmOperations.at(-1), { type: "create", name: LICENSE_REVALIDATION_ALARM,
     options: { when: clock + 30 * 86400000 } });
-
-  const callsBeforeTestLogin = calls.length;
-  const tested = await commerce.activateTest({ username: "1", password: "1" });
-  assert.equal(tested.status, "active");
-  assert.equal(tested.licenseId, "test-pro");
-  assert.equal(data[STORAGE_KEY].activation.instanceId, "local-test");
-  assert.equal(calls.length, callsBeforeTestLogin, "test login stays local");
-  entitlementConfirmed = false; // Simulate access state lost or left stale across an extension reload.
-  assert.equal((await commerce.getState({ revalidate: true })).status, "active");
-  assert.equal(entitlementConfirmed, true, "test Pro state must re-confirm the shared Player Tools entitlement");
-  assert.equal(calls.length, callsBeforeTestLogin, "test Pro does not revalidate against the license service");
-  await assert.rejects(() => commerce.activateTest({ username: "x", password: "x" }), { code: "test_login_failed" });
-  const freeAgain = await commerce.deactivateTest();
-  assert.equal(freeAgain.status, "free");
-  assert.equal(data[STORAGE_KEY].activation, null);
-  assert.equal(entitlements.at(-1).status, "free");
 
   await commerce.activate({ email: "buyer@example.com", licenseKey: "license-key" });
 

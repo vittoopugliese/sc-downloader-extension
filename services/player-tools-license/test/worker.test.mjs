@@ -94,6 +94,21 @@ function managementLicense({ status = "active", disabled = 0 } = {}) {
     store_id: 1, product_id: 2, user_email: "buyer@example.com", status, disabled, expires_at: null,
   } } };
 }
+function managementLicenseList() {
+  return { data: [{ type: "license-keys", id: "license-1", attributes: {
+    store_id: 1, customer_id: 5, order_id: 4, product_id: 2,
+    user_email: "buyer@example.com", key: "license-key", status: "inactive", disabled: 0,
+  } }] };
+}
+function automaticActivationFetch(url) {
+  if (String(url).includes("/license-keys?filter%5Border_id%5D=4")) {
+    return new Response(JSON.stringify(managementLicenseList()), { status: 200 });
+  }
+  if (String(url).endsWith("/licenses/activate")) {
+    return new Response(JSON.stringify(activationResponse()), { status: 200 });
+  }
+  throw new Error(`unexpected Lemon URL ${url}`);
+}
 function managementInstances({ present = true } = {}) {
   return { data: present ? [{ type: "license-key-instances", id: "1", attributes: {
     identifier: "instance-1", name: installationId,
@@ -390,6 +405,40 @@ test("webhooks reject a validly signed order from another product before writing
   assert.equal(LICENSE_DB.statements.length, 0);
 });
 
+test("order_created activates the generated license and checkout claim returns a signed entitlement", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  globalThis.fetch = automaticActivationFetch;
+  const LICENSE_DB = sqliteD1();
+
+  const webhook = await sendWebhook(LICENSE_DB, orderWebhook("order_created"));
+  assert.equal(webhook.status, 200);
+  const activation = LICENSE_DB.database.prepare(`SELECT licenses.lemon_license_id, activations.lemon_instance_id,
+    activations.installation_id FROM licenses JOIN activations USING(lemon_license_id)`).get();
+  assert.equal(activation.lemon_license_id, "license-1");
+  assert.equal(activation.lemon_instance_id, "instance-1");
+  assert.equal(activation.installation_id, installationId);
+
+  const claimed = await worker.fetch(request("/api/player-tools/checkout/claim", { installationId }), { ...env, LICENSE_DB });
+  assert.equal(claimed.status, 200);
+  const body = await claimed.json();
+  assert.equal(body.active, true);
+  assert.equal(body.pending, false);
+  assert.equal(body.licenseId, "license-1");
+  assert.equal(body.instanceId, "instance-1");
+  assert.equal(body.receipt.algorithm, "ES256");
+});
+
+test("an order created outside the extension remains available for manual restore", async () => {
+  const LICENSE_DB = sqliteD1();
+  const payload = orderWebhook("order_created");
+  delete payload.meta.custom_data;
+  const webhook = await sendWebhook(LICENSE_DB, payload);
+  assert.equal(webhook.status, 200);
+  assert.equal(LICENSE_DB.database.prepare("SELECT status FROM licenses WHERE lemon_order_id='4'").get().status, "active");
+  assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM activations").get().count, 0);
+});
+
 test("a full refund received before its order remains authoritative through delayed order and activation", async (t) => {
   const previousFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = previousFetch; });
@@ -418,7 +467,10 @@ test("a full refund received before its order remains authoritative through dela
   assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM activations").get().count, 0);
 });
 
-test("a partial refund is recorded but does not automatically revoke Pro", async () => {
+test("a partial refund is recorded but does not automatically revoke Pro", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  globalThis.fetch = automaticActivationFetch;
   const LICENSE_DB = sqliteD1();
   assert.equal((await sendWebhook(LICENSE_DB, orderWebhook("order_created"))).status, 200);
   const partialRefund = orderWebhook("order_refunded", {
@@ -465,7 +517,10 @@ test("restore reconciles an existing local activation before issuing another rec
   assert.equal(LICENSE_DB.database.prepare("SELECT status FROM licenses WHERE lemon_license_id='license-1'").get().status, "revoked");
 });
 
-test("processed webhook delivery is idempotent and an overlapping delivery is retried", async () => {
+test("processed webhook delivery is idempotent and an overlapping delivery is retried", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  globalThis.fetch = automaticActivationFetch;
   const processedDb = sqliteD1();
   const payload = orderWebhook("order_created");
   assert.equal((await sendWebhook(processedDb, payload)).status, 200);

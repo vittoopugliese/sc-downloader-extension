@@ -23,6 +23,22 @@ const POPUP_START_VIEW_KEY = "scdl.popup.startView";
 const OPEN_PLAYER_TOOLS_PANEL_EVENT = "scdl:open-player-tools-panel";
 const OPEN_PLAYER_TOOLS_PRO_EVENT = "scdl:open-player-tools-pro";
 
+if (window.top === window) {
+  const checkoutReturn = new URL(location.href).searchParams.get("sctd_pro") === "complete";
+  if (checkoutReturn) {
+    const cleanUrl = new URL(location.href);
+    cleanUrl.searchParams.delete("sctd_pro");
+    history.replaceState(history.state, "", cleanUrl.toString());
+    chrome.runtime.sendMessage({ type: "CLAIM_PLAYER_TOOLS_CHECKOUT" })
+      .then((result) => {
+        if (result?.success && result.commerce?.status === "active") {
+          document.dispatchEvent(new CustomEvent(OPEN_PLAYER_TOOLS_PANEL_EVENT));
+        }
+      })
+      .catch(() => {});
+  }
+}
+
 function exposeTempoControlAssets() {
   document.documentElement?.setAttribute?.(
     EXTENSION_LOGO_ATTRIBUTE,

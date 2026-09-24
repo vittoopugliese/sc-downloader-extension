@@ -102,9 +102,7 @@ Get-ChildItem -LiteralPath $stagingRoot -Recurse -Force -File |
 
 $commercePath = Join-Path $stagingRoot "scripts/player-tools-commerce.js"
 $commerceSource = Get-Content -LiteralPath $commercePath -Raw
-$testLoginLine = 'const TEST_LOGIN = Object.freeze({ username: "1", password: "1" });'
-$apiBaseLine = 'const API_BASE_URL = "https://sctd.vpugliese.online/api/player-tools";'
-if (-not $commerceSource.Contains($testLoginLine)) { throw "Could not disable the test login in the production package." }
+$apiBaseLine = 'const API_BASE_URL = "https://sctd-test.vpugliese.online/api/player-tools";'
 if (-not $commerceSource.Contains($apiBaseLine)) { throw "Could not inject the Player Tools API endpoint." }
 if (-not $env:PLAYER_TOOLS_API_BASE_URL) { throw "Set PLAYER_TOOLS_API_BASE_URL to the HTTPS test or production licensing endpoint before packaging." }
 try { $apiBaseUri = [System.Uri]$env:PLAYER_TOOLS_API_BASE_URL }
@@ -115,12 +113,13 @@ if ($apiBaseUri.Scheme -ne "https" -or -not $apiBaseUri.IsAbsoluteUri -or $apiBa
 }
 $normalizedApiBaseUrl = $apiBaseUri.GetLeftPart([System.UriPartial]::Authority) + "/api/player-tools"
 $apiBaseLiteral = $normalizedApiBaseUrl | ConvertTo-Json -Compress
-$commerceSource = $commerceSource.Replace($testLoginLine, "const TEST_LOGIN = null;").Replace($apiBaseLine, "const API_BASE_URL = $apiBaseLiteral;")
+$commerceSource = $commerceSource.Replace($apiBaseLine, "const API_BASE_URL = $apiBaseLiteral;")
 Set-Content -LiteralPath $commercePath -Value $commerceSource -NoNewline
 
 $packagedManifestPath = Join-Path $stagingRoot "manifest.json"
 $packagedManifest = Get-Content -LiteralPath $packagedManifestPath -Raw | ConvertFrom-Json
 $apiPermission = $apiBaseUri.GetLeftPart([System.UriPartial]::Authority) + "/*"
+$packagedManifest.host_permissions = @($packagedManifest.host_permissions | Where-Object { $_ -ne "https://sctd-test.vpugliese.online/*" })
 if ($packagedManifest.host_permissions -notcontains $apiPermission) {
     $packagedManifest.host_permissions = @($packagedManifest.host_permissions) + $apiPermission
 }
@@ -128,7 +127,7 @@ $packagedManifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $package
 
 $receiptsPath = Join-Path $stagingRoot "scripts/player-tools-receipts.js"
 $receiptSource = Get-Content -LiteralPath $receiptsPath -Raw
-$publicKeyLine = 'const PACKAGED_ENTITLEMENT_PUBLIC_JWK = null;'
+$publicKeyLine = 'const PACKAGED_ENTITLEMENT_PUBLIC_JWK = Object.freeze({"keys":[{"kty":"EC","x":"5GzHukBSSLNF68uaBVAPv1j7cTortu1O78FnobWhDb4","y":"qRiRyTjbXx1gLiDSYEEsgDHY7FHw_eKLrefAA9kfxQ0","crv":"P-256","kid":"p256-test-2026-09"}]});'
 if (-not $env:ENTITLEMENT_PUBLIC_JWK) { throw "Set ENTITLEMENT_PUBLIC_JWK before packaging." }
 try { $publicJwk = $env:ENTITLEMENT_PUBLIC_JWK | ConvertFrom-Json }
 catch { throw "ENTITLEMENT_PUBLIC_JWK must be valid JSON." }

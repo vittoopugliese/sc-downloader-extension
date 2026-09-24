@@ -171,10 +171,8 @@ assert(
   "Every popup button should have a tooltip."
 );
 assert(
-  !/commerceTestAccess|commerceTestUsername|commerceTestPassword|commerceTestBtn/.test(popup + popupScript) &&
-    /const isTestLogin = email === "1" && licenseKey === "1"/.test(popupScript) &&
-    /type: "TEST_PLAYER_TOOLS_PRO"/.test(popupScript),
-  "The local test login must use 1/1 in the primary license fields without a second form."
+  !/commerceTestAccess|commerceTestUsername|commerceTestPassword|commerceTestBtn|TEST_LOGIN|TEST_PLAYER_TOOLS_PRO|isTestLogin/.test(popup + popupScript),
+  "The popup must not contain a local Pro bypass."
 );
 assert(
   /async function ensureDownloadDestinationPermission\(\)[\s\S]*SCDownloadDirectory\.ensurePermission\(currentDownloadDestination\.id\)/.test(

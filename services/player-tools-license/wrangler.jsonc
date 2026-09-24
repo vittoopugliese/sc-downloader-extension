@@ -9,9 +9,9 @@
   "vars": {
     "LEMON_MODE": "test",
     "ALLOWED_ORIGINS": "chrome-extension://hccfkgjcaigahlnmobpjdhcbhkejkack",
-    "LEMON_STORE_ID": "REPLACE_WITH_TEST_LEMON_STORE_ID",
-    "LEMON_PRODUCT_ID": "REPLACE_WITH_TEST_LEMON_PRODUCT_ID",
-    "LEMON_VARIANT_ID": "REPLACE_WITH_TEST_LEMON_VARIANT_ID",
+    "LEMON_STORE_ID": "480165",
+    "LEMON_PRODUCT_ID": "1383559",
+    "LEMON_VARIANT_ID": "2161516",
     "ENTITLEMENT_KEY_ID": "p256-test-2026-09"
   },
   "secrets": {

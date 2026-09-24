@@ -48,8 +48,7 @@ const provenance = require("./package-provenance.js");
     assert.ok(manifest.permissions.includes("alarms"));
     const commerce = await worker.evaluate(async () =>
       fetch(chrome.runtime.getURL("scripts/player-tools-commerce.js")).then(response => response.text()));
-    assert.match(commerce, /const TEST_LOGIN = null;/);
-    assert.doesNotMatch(commerce, /username:\s*"1",\s*password:\s*"1"/);
+    assert.doesNotMatch(commerce, /TEST_LOGIN|TEST_PLAYER_TOOLS_PRO|username:\s*"1",\s*password:\s*"1"/);
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${extensionId}/popup.html`);
     await popup.waitForFunction(() => document.readyState === "complete");

@@ -1,4 +1,4 @@
-import { MAX_BODY_BYTES, MAX_WEBHOOK_BYTES, validateActivation, validateAdminLicense, validateAdminRelease, validateCheckout, validateEvent, validateStatus, validateTrialConsume, validateTrialStart } from "./validation.mjs";
+import { MAX_BODY_BYTES, MAX_WEBHOOK_BYTES, validateActivation, validateAdminLicense, validateAdminRelease, validateCheckout, validateCheckoutClaim, validateEvent, validateStatus, validateTrialConsume, validateTrialStart } from "./validation.mjs";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" };
 const LEMON_API = "https://api.lemonsqueezy.com/v1";
@@ -227,7 +227,7 @@ async function lemonLicenseInstances(env, licenseId) {
   return { ok: true, body: { data } };
 }
 async function createCheckout(env, value) {
-  const payload = { data: { type: "checkouts", attributes: { checkout_data: { custom: { installation_id: value.installationId } }, product_options: { redirect_url: "https://sctd.vpugliese.online/?view=player-tools" }, checkout_options: { button_color: "#ff5500", dark: true, embed: false, media: false, logo: true } }, relationships: { store: { data: { type: "stores", id: String(env.LEMON_STORE_ID) } }, variant: { data: { type: "variants", id: String(env.LEMON_VARIANT_ID) } } } } };
+  const payload = { data: { type: "checkouts", attributes: { test_mode: String(env.LEMON_MODE || "") === "test", checkout_data: { custom: { installation_id: value.installationId } }, product_options: { redirect_url: "https://soundcloud.com/?sctd_pro=complete" }, checkout_options: { button_color: "#ff5500", dark: true, embed: false, media: false, logo: true } }, relationships: { store: { data: { type: "stores", id: String(env.LEMON_STORE_ID) } }, variant: { data: { type: "variants", id: String(env.LEMON_VARIANT_ID) } } } } };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
   try {
@@ -240,6 +240,28 @@ async function createCheckout(env, value) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function orderLicense(env, orderId, email) {
+  const response = await lemonApiGet(env, `/license-keys?filter%5Border_id%5D=${encodeURIComponent(orderId)}&page%5Bsize%5D=10`);
+  if (!response?.ok || !Array.isArray(response.body?.data)) {
+    throw Object.assign(new Error("Lemon license lookup is temporarily unavailable."), { code: "provider_pending" });
+  }
+  const matches = response.body.data.filter((item) => {
+    const attributes = item?.attributes;
+    return item?.type === "license-keys"
+      && String(attributes?.store_id) === String(env.LEMON_STORE_ID)
+      && String(attributes?.order_id) === String(orderId)
+      && String(attributes?.product_id) === String(env.LEMON_PRODUCT_ID)
+      && String(attributes?.user_email || "").toLowerCase() === email
+      && typeof attributes?.key === "string" && attributes.key.length > 0
+      && attributes?.disabled !== true && Number(attributes?.disabled || 0) === 0
+      && !["expired", "disabled"].includes(String(attributes?.status || ""));
+  });
+  if (matches.length !== 1) {
+    throw Object.assign(new Error("The generated Lemon license is not ready."), { code: "provider_pending" });
+  }
+  return matches[0].attributes.key;
 }
 function validLicenseActivation(result, email, env) {
   const license = result?.license_key;
@@ -487,6 +509,20 @@ async function status(env, value) {
     : { active: false, reason: 'license_revoked' };
 }
 
+async function claimCheckout(env, value) {
+  const activation = await env.LICENSE_DB.prepare(`SELECT licenses.lemon_license_id, licenses.status,
+    activations.lemon_instance_id, activations.installation_id
+    FROM activations JOIN licenses USING(lemon_license_id)
+    WHERE activations.installation_id=? AND activations.deactivated_at IS NULL
+      AND licenses.status='active'
+    ORDER BY activations.activated_at DESC LIMIT 1`).bind(value.installationId).first();
+  if (!activation) return { active: false, pending: true };
+  return { active: true, pending: false, serverTime: now(),
+    licenseId: activation.lemon_license_id, instanceId: activation.lemon_instance_id,
+    receipt: await proReceipt(env, { installationId: activation.installation_id,
+      licenseId: activation.lemon_license_id, instanceId: activation.lemon_instance_id }) };
+}
+
 async function startTrial(env, value) {
   const timestamp = now();
   await env.LICENSE_DB.prepare(`INSERT INTO trials
@@ -624,6 +660,11 @@ async function recordWebhook(env, payload, raw) {
     const eventAt = providerTimestamp(attributes);
   if (eventName === "order_created") {
     const installationId = String(payload?.meta?.custom_data?.installation_id || "");
+    const orderId = String(payload?.data?.id || "");
+    const email = String(attributes.user_email || attributes.customer_email || "").toLowerCase();
+    if (!orderId || !email) {
+      throw Object.assign(new Error("The Lemon order is missing required purchase data."), { code: "invalid_webhook" });
+    }
     await env.LICENSE_DB.prepare(`INSERT INTO licenses (lemon_license_id, lemon_order_id, lemon_customer_id, customer_email, status, created_at, updated_at, revoked_at)
       VALUES (?, ?, ?, ?,
         CASE WHEN EXISTS (SELECT 1 FROM order_revocations WHERE lemon_order_id=?) THEN 'revoked' ELSE 'active' END,
@@ -634,14 +675,23 @@ async function recordWebhook(env, payload, raw) {
         status=CASE WHEN licenses.status='revoked' OR excluded.status='revoked' THEN 'revoked' ELSE 'active' END,
         revoked_at=COALESCE(licenses.revoked_at, excluded.revoked_at),
         updated_at=MAX(licenses.updated_at, excluded.updated_at)`)
-      .bind(`order:${payload?.data?.id}`, String(payload?.data?.id || ""), String(attributes.customer_id || "") || null,
-        String(attributes.user_email || attributes.customer_email || "").toLowerCase(), String(payload?.data?.id || ""), timestamp, eventAt,
-        String(payload?.data?.id || "")).run();
-    if (/^[a-zA-Z0-9_-]{16,128}$/.test(installationId)) {
+      .bind(`order:${orderId}`, orderId, String(attributes.customer_id || "") || null,
+        email, orderId, timestamp, eventAt, orderId).run();
+    const revokedOrder = await env.LICENSE_DB.prepare("SELECT 1 AS revoked FROM order_revocations WHERE lemon_order_id=?")
+      .bind(orderId).first();
+    if (!revokedOrder && /^[a-zA-Z0-9_-]{16,128}$/.test(installationId)) {
+      const licenseKey = await orderLicense(env, orderId, email);
+      const entitlement = await activate(env, { installationId, email, licenseKey });
+      if (!(entitlement?.kind === "active" || (entitlement?.licenseId && entitlement?.instanceId))) {
+        if (["revoked", "credential_mismatch", "seat_limit", "failed"].includes(entitlement?.kind)) {
+          throw Object.assign(new Error(`Automatic activation was rejected: ${entitlement.kind}.`), { code: "invalid_webhook" });
+        }
+        throw Object.assign(new Error("Automatic activation is still pending."), { code: "provider_pending" });
+      }
       await env.LICENSE_DB.prepare(`INSERT INTO analytics_events
         (event_id, installation_id, event_name, occurred_at, received_at, extension_version, offer_version, properties)
         VALUES (?, ?, 'purchase_confirmed', ?, ?, 'server', 'provider', ?) ON CONFLICT(event_id) DO NOTHING`)
-        .bind(`purchase:${payload?.data?.id}`, installationId, timestamp, timestamp, JSON.stringify({
+        .bind(`purchase:${orderId}`, installationId, timestamp, timestamp, JSON.stringify({
           currency: String(attributes.currency || "").slice(0, 16),
           total: Number(attributes.total || 0),
         })).run();
@@ -716,7 +766,7 @@ export default {
         try { await recordWebhook(env, payload, raw); }
         catch (error) {
           if (error?.code === "invalid_webhook") return json(400, { error: "invalid_webhook" });
-          if (["webhook_in_progress", "webhook_claim_lost"].includes(error?.code)) {
+          if (["provider_pending", "webhook_in_progress", "webhook_claim_lost"].includes(error?.code)) {
             return json(503, { error: error.code }, { "retry-after": "5" });
           }
           throw error;
@@ -758,6 +808,12 @@ export default {
         if (!(await enforceRateLimit(env, "CHECKOUT_RATE_LIMITER", "checkout", request, parsed.value.installationId)))
           return json(429, { error: "rate_limited" }, { ...corsHeaders, "retry-after": "60" });
         const checkoutUrl = await createCheckout(env, parsed.value); return json(200, { checkoutUrl }, corsHeaders);
+      }
+      if (request.method === "POST" && url.pathname === "/api/player-tools/checkout/claim") {
+        const parsed = validateCheckoutClaim(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);
+        if (!(await enforceRateLimit(env, "LICENSE_RATE_LIMITER", "checkout-claim", request, parsed.value.installationId)))
+          return json(429, { error: "rate_limited" }, { ...corsHeaders, "retry-after": "60" });
+        return json(200, await claimCheckout(env, parsed.value), corsHeaders);
       }
       if (request.method === "POST" && url.pathname === "/api/player-tools/license/activate") {
         const parsed = validateActivation(body); if (!parsed.ok) return json(400, { error: parsed.error }, corsHeaders);

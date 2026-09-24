@@ -35,14 +35,14 @@ function smokePackage(zipPath, apiPermission) {
     if (!entries.has(entry)) throw new Error(`Package smoke check: runtime script ${script} is missing.`);
   }
   const commerce = zipText(zipPath, 'scripts/player-tools-commerce.js');
-  if (!commerce.includes('const TEST_LOGIN = null;') || commerce.includes('username: "1", password: "1"')) {
-    throw new Error('Package smoke check: test login was not removed.');
+  if (/TEST_LOGIN|TEST_PLAYER_TOOLS_PRO|username:\s*"1",\s*password:\s*"1"/.test(commerce)) {
+    throw new Error('Package smoke check: obsolete local Pro bypass is present.');
   }
   const receipts = zipText(zipPath, 'scripts/player-tools-receipts.js');
   if (receipts.includes('PACKAGED_ENTITLEMENT_PUBLIC_JWK = null') || /PACKAGED_ENTITLEMENT_PUBLIC_JWK[^;]*"d"\s*:/.test(receipts)) {
     throw new Error('Package smoke check: entitlement key is missing or contains private material.');
   }
-  console.log(`Package smoke passed (${files.length} files; test login disabled; no development paths).`);
+  console.log(`Package smoke passed (${files.length} files; no local Pro bypass; no development paths).`);
 }
 
 if (process.platform === 'win32') {
@@ -73,8 +73,7 @@ if (process.platform === 'win32') {
     };
     removePlatformMetadata(stage);
     const commercePath = path.join(stage,'scripts','player-tools-commerce.js');
-    const testLoginLine = 'const TEST_LOGIN = Object.freeze({ username: "1", password: "1" });';
-    const apiBaseLine = 'const API_BASE_URL = "https://sctd.vpugliese.online/api/player-tools";';
+    const apiBaseLine = 'const API_BASE_URL = "https://sctd-test.vpugliese.online/api/player-tools";';
     let apiBaseUrl;
     try { apiBaseUrl = new URL(process.env.PLAYER_TOOLS_API_BASE_URL || ''); }
     catch { throw new Error('Set PLAYER_TOOLS_API_BASE_URL to the HTTPS test or production licensing endpoint before packaging.'); }
@@ -84,19 +83,19 @@ if (process.platform === 'win32') {
     }
     const normalizedApiBaseUrl = apiBaseUrl.href.replace(/\/$/, '');
     const commerceSource = fs.readFileSync(commercePath,'utf8');
-    if (!commerceSource.includes(testLoginLine)) throw new Error('Could not disable the test login in the production package.');
     if (!commerceSource.includes(apiBaseLine)) throw new Error('Could not inject the Player Tools API endpoint.');
     fs.writeFileSync(commercePath,commerceSource
-      .replace(testLoginLine,'const TEST_LOGIN = null;')
       .replace(apiBaseLine,`const API_BASE_URL = ${JSON.stringify(normalizedApiBaseUrl)};`));
     const packagedManifestPath = path.join(stage,'manifest.json');
     const packagedManifest = JSON.parse(fs.readFileSync(packagedManifestPath,'utf8'));
     const apiPermission = `${apiBaseUrl.origin}/*`;
+    packagedManifest.host_permissions = packagedManifest.host_permissions
+      .filter(permission => permission !== 'https://sctd-test.vpugliese.online/*');
     if (!packagedManifest.host_permissions.includes(apiPermission)) packagedManifest.host_permissions.push(apiPermission);
     fs.writeFileSync(packagedManifestPath,`${JSON.stringify(packagedManifest,null,2)}\n`);
     const receiptsPath = path.join(stage,'scripts','player-tools-receipts.js');
     const receiptSource = fs.readFileSync(receiptsPath,'utf8');
-    const publicKeyLine = 'const PACKAGED_ENTITLEMENT_PUBLIC_JWK = null;';
+    const publicKeyLine = 'const PACKAGED_ENTITLEMENT_PUBLIC_JWK = Object.freeze({"keys":[{"kty":"EC","x":"5GzHukBSSLNF68uaBVAPv1j7cTortu1O78FnobWhDb4","y":"qRiRyTjbXx1gLiDSYEEsgDHY7FHw_eKLrefAA9kfxQ0","crv":"P-256","kid":"p256-test-2026-09"}]});';
     let publicJwk;
     try { publicJwk = JSON.parse(process.env.ENTITLEMENT_PUBLIC_JWK || ''); }
     catch { throw new Error('Set ENTITLEMENT_PUBLIC_JWK to the Worker signing public JWK before packaging.'); }

@@ -210,13 +210,21 @@ async function waitForFile(directory, timeoutMs = 30000) {
           : originalFetch(input, options);
     }, fixtureUrl);
 
-    // WAV export is Pro under the final contract. The unpacked development
-    // build exposes an explicit local test entitlement; release packaging
-    // removes these credentials.
-    const testAccess = await entitlementPage.evaluate(() => chrome.runtime.sendMessage({
-      type: "TEST_PLAYER_TOOLS_PRO", username: "1", password: "1",
-    }));
-    assert.equal(testAccess.success, true);
+    // This browser-only fixture supplies an authority inside the isolated test
+    // worker. No credential, message or bypass is shipped in the extension.
+    await worker.evaluate(async () => {
+      const access = globalThis.SCPlayerToolsAccess;
+      access.configureAuthority({
+        async startTrial() { throw new Error("unused"); },
+        async consumeTrial() { throw new Error("unused"); },
+        async validateTrial() { return { status: "valid" }; },
+        async ensureEntitlement(entitlement) { return { status: "active", entitlement }; },
+      });
+      await access.setEntitlement({
+        status: "active", licenseId: "browser-test-fixture", checkedAt: Date.now(),
+        expiresAt: Date.now() + 60_000, receipt: null,
+      });
+    });
 
     await page.goto(trackUrl);
     await page.waitForFunction(() => Number.isFinite(document.querySelector("audio")?.duration));

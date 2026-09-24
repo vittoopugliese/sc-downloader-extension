@@ -1,9 +1,9 @@
-/* Verification for server-issued ES256 access receipts. The production
- * packager replaces the null key with the public JWK paired with the Worker
- * secret. Private signing material never enters the extension. */
+/* Verification for server-issued ES256 access receipts. The source tree uses
+ * the Test Mode public key; the packager replaces it with the selected
+ * environment's public JWK. Private signing material never enters the extension. */
 (function (root) {
   "use strict";
-  const PACKAGED_ENTITLEMENT_PUBLIC_JWK = null;
+  const PACKAGED_ENTITLEMENT_PUBLIC_JWK = Object.freeze({"keys":[{"kty":"EC","x":"5GzHukBSSLNF68uaBVAPv1j7cTortu1O78FnobWhDb4","y":"qRiRyTjbXx1gLiDSYEEsgDHY7FHw_eKLrefAA9kfxQ0","crv":"P-256","kid":"p256-test-2026-09"}]});
 
   function bytes(value) {
     if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("Invalid receipt encoding.");

@@ -52,9 +52,8 @@ const playerToolsCommerce = globalThis.SCPlayerToolsCommerce?.create
   : {
       getState: async () => ({ status: "free", canCheckout: false }),
       startCheckout: async () => { throw Object.assign(new Error("Player Tools licensing is unavailable."), { code: "service-unavailable" }); },
+      claimCheckout: async () => { throw Object.assign(new Error("Player Tools licensing is unavailable."), { code: "service-unavailable" }); },
       activate: async () => { throw Object.assign(new Error("Player Tools licensing is unavailable."), { code: "service-unavailable" }); },
-      activateTest: async () => { throw Object.assign(new Error("Testing access is unavailable."), { code: "service-unavailable" }); },
-      deactivateTest: async () => { throw Object.assign(new Error("Testing access is unavailable."), { code: "service-unavailable" }); },
       startTrial: async () => { throw Object.assign(new Error("Trial service is unavailable."), { code: "service-unavailable" }); },
       consumeTrial: async () => { throw Object.assign(new Error("Trial service is unavailable."), { code: "service-unavailable" }); },
       track: async () => false,
@@ -307,10 +306,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  if (request.type === "TEST_PLAYER_TOOLS_PRO") {
-    const action = request.active === false ? playerToolsCommerce.deactivateTest() : playerToolsCommerce.activateTest(request);
-    action
-      .then((commerce) => sendResponse({ success: true, commerce }))
+  if (request.type === "CLAIM_PLAYER_TOOLS_CHECKOUT") {
+    playerToolsCommerce.claimCheckout()
+      .then((commerce) => {
+        if (commerce.status === "active") playerToolsCommerce.track("license_activated", { result: "active" }).catch(() => {});
+        sendResponse({ success: true, commerce });
+      })
       .catch((error) => sendResponse(errorResponse(error)));
     return true;
   }

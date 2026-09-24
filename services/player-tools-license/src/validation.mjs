@@ -13,6 +13,13 @@ export function validateCheckout(value) {
     : { ok: false, error: "invalid_request" };
 }
 
+export function validateCheckoutClaim(value) {
+  const installationId = text(value?.installationId, 128);
+  return installationId && /^[a-zA-Z0-9_-]{16,128}$/.test(installationId)
+    ? { ok: true, value: { installationId } }
+    : { ok: false, error: "invalid_request" };
+}
+
 export function validateActivation(value) {
   const licenseKey = text(value?.licenseKey, 256);
   const email = text(value?.email, 320)?.toLowerCase();

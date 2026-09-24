@@ -6,12 +6,10 @@
   const IDENTITY_KEY = "scdl.playerTools.installation.v1";
   const SESSION_MEASURED_KEY = "scdl.playerTools.measured.session.v1";
   const LICENSE_REVALIDATION_ALARM = "scdl.playerTools.license-revalidation";
-  const API_BASE_URL = "https://sctd.vpugliese.online/api/player-tools";
+  const API_BASE_URL = "https://sctd-test.vpugliese.online/api/player-tools";
   const REQUEST_TIMEOUT_MS = 15000;
   const MAX_RESPONSE_BYTES = 256 * 1024;
   const RECEIPTS = root.SCPlayerToolsReceipts || (typeof require === "function" && require("./player-tools-receipts.js"));
-  // The production packager replaces this line with `const TEST_LOGIN = null;`.
-  const TEST_LOGIN = Object.freeze({ username: "1", password: "1" });
   const OFFER = Object.freeze({
     currency: "USD",
     priceCents: 369,
@@ -171,7 +169,7 @@
     function publicState(state) {
       return { status: state.status, pendingCheckoutAt: state.pendingCheckoutAt,
         offer: OFFER, canCheckout: Boolean(apiBaseUrl), licenseId: state.activation?.licenseId || null,
-        lastCheckedAt: state.activation?.lastCheckedAt || null, testAccessAvailable: Boolean(TEST_LOGIN) };
+        lastCheckedAt: state.activation?.lastCheckedAt || null };
     }
     async function applyEntitlement(state, active, status = active ? "active" : "free") {
       state.status = status;
@@ -215,7 +213,6 @@
       await applyEntitlement(state, true);
     }
     async function validateEntitlement(entitlement) {
-      if (entitlement?.licenseId === "test-pro") return Boolean(TEST_LOGIN);
       const state = await read();
       if (!entitlement?.receipt || !state.activation?.instanceId ||
           state.activation.licenseId !== entitlement.licenseId) return false;
@@ -236,7 +233,7 @@
       return exclusive(async () => {
         if (await validateEntitlement(entitlement)) return { status: "active", entitlement };
         const state = await read();
-        if (!state.activation?.instanceId || state.activation.licenseId === "test-pro") return { status: "invalid", code: "pro-required" };
+        if (!state.activation?.instanceId) return { status: "invalid", code: "pro-required" };
         const cached = { status: "active", licenseId: state.activation.licenseId,
           checkedAt: state.activation.lastCheckedAt, expiresAt: state.activation.receiptExpiresAt, receipt: state.activation.receipt };
         if (await validateEntitlement(cached)) return { status: "active", entitlement: cached };
@@ -260,15 +257,16 @@
     function getState({ revalidate = false } = {}) {
       return exclusiveWithAccess(async () => {
         const state = await read();
-        if (state.activation?.licenseId === "test-pro") {
-          if (!TEST_LOGIN) {
-            state.activation = null;
-            await applyEntitlement(state, false);
-          } else {
-            state.activation.receiptExpiresAt = Number.MAX_SAFE_INTEGER;
-            await applyEntitlement(state, true);
+        if (state.status === "pending" && revalidate) {
+          try {
+            const result = await post("/checkout/claim", { installationId: state.installationId });
+            if (result.active === true) await applyProResult(state, result);
+          } catch {
+            // A pending purchase remains pending and can be claimed on the next
+            // SoundCloud return, popup open or service-worker startup.
           }
-        } else if (state.activation?.instanceId) {
+        }
+        if (state.activation?.instanceId) {
           let receiptValid = false;
           try {
             const claims = await RECEIPTS.verify(state.activation.receipt, { publicJwk: entitlementPublicJwk, installationId: state.installationId });
@@ -312,26 +310,12 @@
         return state;
       });
     }
-    function activateTest({ username, password }) {
+    function claimCheckout() {
       return exclusiveWithAccess(async () => {
         const state = await read();
-        if (!TEST_LOGIN || String(username || "").trim() !== TEST_LOGIN.username || String(password || "") !== TEST_LOGIN.password) {
-          throw Object.assign(new Error("Those testing credentials could not activate Pro."), { code: "test_login_failed" });
-        }
-        state.activation = { instanceId: "local-test", licenseId: "test-pro", lastCheckedAt: now(),
-          receipt: null, receiptExpiresAt: Number.MAX_SAFE_INTEGER };
-        state.pendingCheckoutAt = null;
-        await applyEntitlement(state, true);
-        return state;
-      });
-    }
-    function deactivateTest() {
-      return exclusiveWithAccess(async () => {
-        const state = await read();
-        if (!TEST_LOGIN || state.activation?.licenseId !== "test-pro") return state;
-        state.activation = null;
-        state.pendingCheckoutAt = null;
-        await applyEntitlement(state, false);
+        if (state.status !== "pending") return state;
+        const result = await post("/checkout/claim", { installationId: state.installationId });
+        if (result.active === true) await applyProResult(state, result);
         return state;
       });
     }
@@ -413,7 +397,7 @@
         } catch { return false; }
       });
     }
-    return { getState, startCheckout, activate, activateTest, deactivateTest, startTrial, consumeTrial, track,
+    return { getState, startCheckout, claimCheckout, activate, startTrial, consumeTrial, track,
       validateEntitlement, ensureEntitlement, validateTrial };
   }
 
