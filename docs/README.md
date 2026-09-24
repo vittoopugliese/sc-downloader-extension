@@ -8,6 +8,7 @@ Entrada vigente: [Estado actual, cierres e inventario completo — 24/09/2026](E
 - [10 — Checklist C1–C7 actualizado](planning-20260915/10-CIERRE-RELEASE-Y-FREE-PRO-20260921.md).
 - [11 — Runbook Lemon Squeezy](planning-20260915/11-LEMON-SQUEEZY-TUTORIAL-20260921.md).
 - [Confiabilidad: criterios R0–R7/G1–G8](audits/RELIABILITY-CLOSURE-PLAN-20260921.md).
+- [Selector de tracks paginado: implementación y mitigación](TRACK-SELECTOR-PAGINATION-PLAN-20260924.md).
 - [Documentos cerrados y archivados](archive/closed-20260924/README.md): etapa 02 por decisión registrada y header/reset con evidencia técnica.
 
 El inventario vigente clasifica cada plan, auditoría, investigación y referencia. Los planes mixtos permanecen activos; los antecedentes llevan fecha/aviso y no ordenan reimplementar funciones existentes. La selección manual actual carga la lista completa y virtualiza filas: el criterio de paginación a escala sigue abierto.

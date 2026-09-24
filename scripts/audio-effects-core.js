@@ -316,9 +316,16 @@
     if (bitcrusherWet) {
       crusherSource = context.createBufferSource();
       crusherSource.buffer = crushBuffer(buffer, settings?.bitDepth ?? DEFAULTS.bitDepth, settings?.sampleRateReduction ?? DEFAULTS.sampleRateReduction);
+      let crusherEffectSource = crusherSource;
+      if (eqActive) {
+        const crusherEqualizer = globalThis.SCParametricEQ.createGraph(context);
+        crusherEqualizer.apply(eqSettings, false, true);
+        crusherSource.connect(crusherEqualizer.input);
+        crusherEffectSource = crusherEqualizer.output;
+      }
       const wet = context.createGain();
       wet.gain.value = bitcrusherWet / 100 * MAX_SEND.bitcrusher;
-      crusherSource.connect(wet);
+      crusherEffectSource.connect(wet);
       wet.connect(master);
       crusherSource.start();
     }

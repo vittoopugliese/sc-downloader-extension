@@ -81,6 +81,7 @@ Este registro tiene precedencia sobre estados y órdenes históricos. [10 — ch
 | [Explorer — implementación](LIKES-EXPLORER-IMPLEMENTATION-PLAN-20260912.md) | V1 implementada; QA real y evolución abiertos. |
 | [Explorer — handoff](LIKES-EXPLORER-HANDOFF-20260916.md) | Histórico; corregidos trial y retirada de bookmarks. |
 | [Explorer — optimización](LIKES-EXPLORER-OPTIMIZATION-PLAN-20260920.md) | Abierto: medición, render/caché, paginación y colecciones. |
+| [Selector de tracks paginado](TRACK-SELECTOR-PAGINATION-PLAN-20260924.md) | Plan abierto para sustituir lista/cache/mensaje completos por sesiones paginadas, ventanas acotadas y selección semántica durable. |
 | [Arquitectura](architecture-improvement-plan-20260905.md) | Parcial; módulos existentes, no ejecutar metas antiguas de líneas. |
 | [Lanzamiento antiguo](product-launch-plan-20260905.md) | Superado como plan operativo; pendientes transferidos a 10. |
 | [Roadmap antiguo](product-roadmap-20260905.md) | Histórico/backlog, no precio ni contrato actuales. |

@@ -997,7 +997,7 @@ async function main() {
     });
     if (
       !collapsedFx.visible || !collapsedFx.collapsed ||
-      collapsedFx.values.join("|") !== "0%|0%" || !collapsedFx.loopImmediatelyBefore
+      collapsedFx.values.join("|") !== "0%|0%|0%|0%|0%|0%" || !collapsedFx.loopImmediatelyBefore
     ) {
       throw new Error(`FX section was not compactly placed below the looper: ${JSON.stringify(collapsedFx)}`);
     }
@@ -1011,7 +1011,7 @@ async function main() {
       slider.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await page.waitForFunction(() => [...document.querySelector("#scdl-tempo-control")?.shadowRoot?.querySelectorAll(".effect-value") || []]
-      .map((value) => value.textContent).join("|") === "35%|28%");
+      .map((value) => value.textContent).join("|") === "35%|28%|0%|0%|0%|0%");
     const activeFx = await host.evaluate((element) => {
       const root = element.shadowRoot;
       return {
@@ -1022,7 +1022,7 @@ async function main() {
       };
     });
     if (
-      activeFx.expanded !== "true" || activeFx.values.join("|") !== "35%|28%" ||
+      activeFx.expanded !== "true" || activeFx.values.join("|") !== "35%|28%|0%|0%|0%|0%" ||
       !activeFx.exportNoteAbsent || activeFx.status === "Play a track to activate FX."
     ) {
       throw new Error(`FX sliders or WAV notice failed: ${JSON.stringify(activeFx)}`);

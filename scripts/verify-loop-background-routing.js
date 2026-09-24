@@ -145,6 +145,10 @@ function dispatch(request, sender) {
     playbackTransform: { rate: 1 }, effects: { eq: { enabled: true, bands: [{ frequency: 1000, gain: 6, q: 1 }] } } }, {});
   assert.equal(deniedEqTrack.code, "pro-required", "EQ-only export must be authorized as Pro");
   assert.equal(downloads.length, 1);
+  const deniedColorTrack = await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack,
+    playbackTransform: { rate: 1 }, effects: { saturation: 25, saturationDrive: 40 } }, {});
+  assert.equal(deniedColorTrack.code, "pro-required", "New FX-only exports must be authorized as Pro");
+  assert.equal(downloads.length, 1);
   const original = await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack }, {});
   assert.equal(original.success, true);
   const neutral = await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack,

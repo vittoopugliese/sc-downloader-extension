@@ -6,13 +6,22 @@ const { chromium } = require("playwright");
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
-    await page.route("https://soundcloud.com/**", (route) => route.fulfill({
-      contentType: "text/html",
-      body: '<div class="playControls__elements"><div class="playControls__soundBadge"></div></div>',
-    }));
+    let workletRequests = 0;
+    const workletSource = require("node:fs").readFileSync(path.join(__dirname, "bitcrusher-processor.js"), "utf8");
+    await page.route("https://soundcloud.com/**", (route) => {
+      if (route.request().url().endsWith("/bitcrusher-processor.js")) {
+        workletRequests += 1;
+        return route.fulfill({ contentType: "application/javascript", body: workletSource });
+      }
+      return route.fulfill({
+        contentType: "text/html",
+        body: '<div class="playControls__elements"><div class="playControls__soundBadge"></div></div>',
+      });
+    });
     await page.goto("https://soundcloud.com/");
     await page.evaluate(() => {
       const snapshot = { plan: "pro", state: "pro", capabilities: { tempo: true, preservePitch: true, savePreset: true, parametricEq: true } };
+      document.documentElement.setAttribute("data-scdl-extension-bitcrusher-worklet-url", `${location.origin}/bitcrusher-processor.js`);
       document.documentElement.setAttribute("data-scdl-player-tools-access", JSON.stringify(snapshot));
       document.addEventListener("scdl:player-tools-request", () => {
         const request = JSON.parse(document.documentElement.getAttribute("data-scdl-player-tools-request"));
@@ -23,6 +32,26 @@ const { chromium } = require("playwright");
     for (const file of ["tempo-control-core.js", "parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
+    const offline = await page.evaluate(async () => {
+      const context = new AudioContext();
+      const input = context.createBuffer(1, 4096, 44100);
+      input.getChannelData(0)[0] = 0.75;
+      input.getChannelData(0)[128] = -0.5;
+      const output = await SCTempoEffects.renderSample(input, {
+        flanger: 35, flangerRate: 0.8, flangerDepth: 65, flangerFeedback: 20,
+        phaser: 30, phaserRate: 0.4, phaserDepth: 55, phaserFeedback: 15,
+        bitcrusher: 40, bitDepth: 6, sampleRateReduction: 55,
+        saturation: 32, saturationDrive: 45, saturationTone: 60,
+      });
+      const samples = output.getChannelData(0);
+      const finite = samples.every(Number.isFinite);
+      const energy = samples.reduce((sum, value) => sum + value * value, 0);
+      await context.close();
+      return { finite, energy, sameLength: output.length === input.length };
+    });
+    assert.deepEqual(offline.sameLength, true, "Motion and color FX must not add an export tail");
+    assert.equal(offline.finite, true, "Offline FX output must contain only finite samples");
+    assert.ok(offline.energy > 0, "Offline FX output must remain audible");
     await page.evaluate(async (shared) => {
       // A real detached player, like SoundCloud's new Audio() player.
       const bytes = new ArrayBuffer(44 + 16000);
@@ -117,6 +146,8 @@ const { chromium } = require("playwright");
     await host.locator('[data-effect-settings="bitcrusher"]').click();
     await host.locator('[data-effect-character="bitDepth"]').fill('7');
     assert.equal(await host.locator('[data-effect-character-value="bitDepth"]').textContent(), '7bit');
+    await page.waitForTimeout(50);
+    assert.ok(workletRequests >= 1, "The live bitcrusher must load its AudioWorklet module when enabled");
     await host.locator('[data-effect-settings="delay"]').click();
     await host.locator('[data-effect-freeze]').dispatchEvent('pointerdown', { button: 0, pointerId: 1 });
     assert.equal(await host.locator('[data-effect-freeze]').getAttribute('aria-pressed'), 'true');
