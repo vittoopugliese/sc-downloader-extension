@@ -98,16 +98,17 @@ assert(
   "The selection viewport should match the number of tracks and cap at 8 rows."
 );
 assert(
-  !/body\.selection-mode\s*\{[^}]*520px/s.test(popup),
-  "Selection mode should not force the popup to a 520px height."
+  /body\.selection-mode\s*\{\s*height:\s*auto;\s*\}/s.test(popup) &&
+    /body\.selection-mode \.container\s*\{[^}]*height:\s*auto;[^}]*justify-content:\s*flex-start;/s.test(popup),
+  "Selection mode should size the popup to its content instead of leaving empty space below the actions."
 );
 assert(
   /body\.selection-mode \.download-button-container\s*\{\s*margin-top:\s*8px;\s*\}/s.test(popup),
   "The selection download action should remain close to the end of the track list."
 );
 assert(
-  /body\.selection-mode \.selection-header #downloadFormat\s*\{[^}]*width:\s*45px;[^}]*max-width:\s*45px;[^}]*flex:\s*0 0 45px;/s.test(popup),
-  "The selection quality control should retain its readable 45px width."
+  /body\.selection-mode \.selection-header #downloadFormat\s*\{[^}]*width:\s*54px;[^}]*max-width:\s*54px;[^}]*flex:\s*0 0 54px;/s.test(popup),
+  "The selection quality control should retain its readable 54px width."
 );
 
 assert(
