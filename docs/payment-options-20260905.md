@@ -1,5 +1,9 @@
 # Opciones de cobro para Looper — antecedente 2026-09-05
 
+> **INVESTIGACIÓN HISTÓRICA — revisión 24/09/2026 (`29d7946`).** Lemon ya está integrado y probado en Test Mode; la elección de candidato y el precio USD 2,99 no describen HEAD. No usar comisiones/políticas de esta fecha como datos actuales sin revalidar. Live/payout siguen en C5/C7. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 Estado actualizado: 2026-09-07. Este documento conserva comparativas históricas. Para una sesión nueva, leer primero `payment-provider-research-20260907.md` y el registro E5 de `product-launch-plan-20260905.md`; ambos reemplazan las decisiones abiertas de este archivo.
 
 ## Decisión vigente que afecta el plan

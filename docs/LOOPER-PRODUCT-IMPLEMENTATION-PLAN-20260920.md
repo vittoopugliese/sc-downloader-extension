@@ -1,5 +1,7 @@
 # Plan integral del Looper: experiencia, rendimiento y monetización
 
+> **ABIERTO / evolución posterior — revisión 24/09/2026 (`29d7946`).** Loop A–B, edición precisa, sampler básico, EQ y export actuales son la base. Biblioteca con nombre, múltiples regiones, undo/redo, BPM/práctica y batch de regiones no están cerrados. E9 reutiliza el contrato comercial vigente, no redefine la oferta por inferencia. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
 Fecha: 20 de septiembre de 2026. Estado: planificación; las etapas de este documento están pendientes de implementación. Pedido: desarrollar todas las mejoras propuestas en la conversación y dejar una guía detallada para ejecutarlas en el repositorio.
 
 ## 1. Objetivo y límites

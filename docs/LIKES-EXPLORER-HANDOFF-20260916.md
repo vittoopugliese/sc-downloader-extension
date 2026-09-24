@@ -1,5 +1,9 @@
 # Likes Explorer — implementación local, 16 de septiembre de 2026
 
+> **HISTÓRICO de V1; QA real ABIERTO — revisión 24/09/2026 (`29d7946`).** Acceso actual: siete días de Explorer durante trial, luego PRO. Lugares guardados/bookmarks retirados en `1b16710`; el paso histórico que propone administrarlos ya no aplica. Portadas nuevas de 48 px; 48/160 describe aquel formato, no una garantía del encoder actual. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 Base: `1faa3637f222c065c326e170e0ab2f335f3cfa9d`. Cambios sin commit ni publicación.
 
 ## Resultado
@@ -56,4 +60,4 @@ Lupa, random manual/continuo, imágenes para compartir y perfiles ajenos siguen 
 2. Con SoundCloud conectado y Pro activo, abrir `/you/likes` y pulsar `♡ Likes`.
 3. Elegir Crear mi biblioteca; explorar mientras llegan las páginas. Usar posición o meses para saltar lejos sin mover la lista nativa.
 4. Seleccionar un track y Abrir para escuchar; al volver por popup/Toolkit se recupera el ancla.
-5. En el engranaje, guardar o borrar portadas y administrar lugares guardados.
+5. En el engranaje, guardar o borrar portadas. Lugares guardados fue retirado posteriormente (`1b16710`).

@@ -1,5 +1,9 @@
 # Auditoría de arquitectura y confiabilidad — 21/09/2026
 
+> **DIAGNÓSTICO HISTÓRICO — revisión 24/09/2026 (`29d7946`).** Base `404fbd9`: recovery sin sesión, contexto, retención, retry y anuncios recibieron fixes posteriores. No repetirlos a partir de este veredicto. Matriz integral y selección manual a escala siguen en el plan de cierre. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 Base: `404fbd9`. Rango: `HEAD~10..HEAD`. El árbol estaba limpio al comenzar.
 
 ## Resultado

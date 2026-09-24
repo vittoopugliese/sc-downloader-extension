@@ -1,5 +1,7 @@
 # Plan integral de mitigación antes de C4 externo
 
+> **PARCIAL; M02–M17 CERRADOS localmente — revisión 24/09/2026 (`29d7946`).** M01 por cuenta verificada sigue ABIERTO. M18 local tiene cierre histórico; compra, activación automática de PRO y salida del trial Test Mode están confirmadas el 24/09. Restore, perfiles adicionales y refund/revocación no fueron probados; Live/Store/operación siguen abiertos. Login `1/1` eliminado; el addendum inferior que lo conserva es histórico. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
 Fecha: 2026-09-23. Base observada: `aebd76b` (`fix: persist direct download operations`), árbol limpio al comenzar la auditoría documental. Este documento consolida los hallazgos descubiertos después del handoff C1–C4, los cinco problemas adicionales comunicados por el usuario y los gates transversales que todavía impiden considerar robustos FREE/PRO, el artefacto o la salida comercial.
 
 ## Autoridad y objetivo

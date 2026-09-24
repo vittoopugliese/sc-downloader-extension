@@ -1,5 +1,7 @@
 # 07 — Guiones de videos y capturas, ligados a testing
 
+> **MATERIAL PREPARADO; producción/publicación ABIERTAS — revisión 24/09/2026 (`29d7946`).** Guiones no equivalen a clips grabados ni screenshots del candidato. Actualizar demo a compra automática, EQ paramétrico/export y PRO sin promociones; no anunciar FX/instrumento futuros. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
 Objetivo: producir contenido que muestre problema, acción y resultado verificable. Hay **18 guiones**, cinco capturas y cinco tutoriales largos. No es necesario producirlos todos juntos.
 
 ## Preparación común

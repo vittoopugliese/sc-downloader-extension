@@ -1,5 +1,7 @@
 # 02 — Header de Player Tools y reseñas contextuales
 
+> **CERRADO por decisión de alcance; ARCHIVADO — revisión 24/09/2026 (`29d7946`).** La etapa 02 fue dada por cerrada por el usuario según el registro previo de 00/10. Header y composición existen. Esto NO certifica que el prompt de reseñas post-descarga propuesto abajo esté implementado: no se encontró ese flujo en background/popup. La propuesta se conserva como antecedente fuera del alcance cerrado, sin obligación activa. Soporte semanal sigue en C7. Estado y pendientes: [registro vigente](../../ESTADO-ACTUAL-20260924.md).
+
 Objetivo: reconocer el producto de pago y pedir una reseña en un momento donde el downloader ya entregó valor. Dos cambios pequeños que pueden publicarse sin esperar EQ.
 
 ## Header

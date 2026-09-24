@@ -1,10 +1,12 @@
 # 06 — Mejorar la landing existente para búsqueda
 
+> **PARCIAL — revisión 24/09/2026 (`29d7946`).** SEO-0 de archivos CERRADO en `6fe3dca`: canonical/OG/robots/sitemap alineados y anclas retiradas. Verificación del sitio/Search Console, páginas por intención e idiomas indexables y medición siguen abiertos. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
 Objetivo: captar búsquedas específicas con páginas que resuelvan una tarea y conduzcan a la extensión. La landing ya existe: mejorar `index.html`, no rehacer la marca o migrar de stack por defecto.
 
-## SEO-0 — Corregir coherencia del sitio
+## SEO-0 — CERRADO en archivos; comprobar despliegue
 
-Evidencia del checkout: `CNAME` contiene `sctd.vpugliese.online`; canonical de `index.html`, guía, robots y sitemap apuntan a `soundcloud-downloader.online`. Es una discrepancia de configuración, no prueba de que producción esté rota: comprobar DNS, redirects, URL que sirve 200 y Search Console.
+`6fe3dca` corrigió canonical, Open Graph, guía, robots y sitemap a `sctd.vpugliese.online`, coherente con CNAME, y retiró las anclas del sitemap. La comprobación HTTP del 23/09 está registrada; no se repitió en esta revisión. Search Console y la observación posterior al despliegue siguen pendientes. Los criterios siguientes sirven para mantener esa coherencia, no para repetir un cambio ya aplicado.
 
 Elegir como dominio canónico el efectivamente configurado y autorizado para el sitio. Alinear canonical, Open Graph, enlaces, sitemap, robots y propiedades verificadas. Redireccionar el alternativo si el hosting permite y corresponde; no cambiar DNS sólo porque un archivo difiere.
 

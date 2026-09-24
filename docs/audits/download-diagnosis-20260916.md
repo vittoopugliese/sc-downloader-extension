@@ -1,5 +1,9 @@
 # Diagnóstico de descargas y desinstalaciones — 2026-09-16
 
+> **DIAGNÓSTICO HISTÓRICO — revisión 24/09/2026 (`29d7946`).** Primera instalación, serialización y HLS recibieron mitigaciones posteriores. Reportes de usuarios y reproducciones son de su fecha; no atribuir impacto a la release actual sin versión/artefacto distribuido. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 Se encontraron dos fallos reproducidos en Chromium con SoundCloud real y una debilidad de recuperación reproducida mediante errores de red simulados. No hay evidencia de una caída general del descargador: las descargas normales MP3 y AAC/M4A funcionaron. Los reportes no permiten asignar cada desinstalación a uno de estos problemas.
 
 ## Datos recibidos

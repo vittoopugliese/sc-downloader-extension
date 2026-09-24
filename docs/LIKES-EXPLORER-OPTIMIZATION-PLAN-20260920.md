@@ -1,5 +1,7 @@
 # Likes Explorer: almacenamiento, virtualización y colecciones de terceros
 
+> **ABIERTO / implementación parcial de base — revisión 24/09/2026 (`29d7946`).** V1 y endurecimiento HTTP/storage existen; no equivalen a completar las siete etapas de optimización/colecciones de terceros. Mantener medición, caché local primero, consultas paginadas y migración como criterios por verificar. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
 Fecha: 2026-09-20. Estado: plan pendiente de implementación.
 
 Este documento responde al pedido de planificar todas las mejoras identificadas en la revisión del 20/09. Esa petición reabre el trabajo de Likes Explorer que documentos del 15/09 daban por cerrado. No implica que las etapas descritas ya estén implementadas.

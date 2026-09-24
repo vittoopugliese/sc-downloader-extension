@@ -1,5 +1,7 @@
 # Descripciones para EN, RU, DE, PT-BR y ES
 
+> **BORRADORES PREPARADOS; publicación ABIERTA — revisión 24/09/2026 (`29d7946`).** Los cinco textos y módulo de EQ paramétrico están preparados. Validar contra ZIP live y ficha visible antes de cerrar Store; test de compra no demuestra publicación. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
 Adaptaciones de `current_description.txt`, leído el 15/09/2026. Son borradores revisables, no textos subidos a Store. Conservo la promesa de descargas originales gratuitas y corrijo la confusión con exportaciones transformadas. No invento EQ publicado, transposición independiente ni compra ya disponible.
 
 Cada bloque base puede copiarse sin su encabezado Markdown. Para anunciar Pro/Explorer usar, cuando coincida con el release, el párrafo adicional correspondiente; no pegar un módulo de función futura como si estuviera lanzada. Los textos conservan el mismo alcance entre idiomas. Ver [tutorial y control de publicación](03-STORE-Y-LOCALIZACION.md).

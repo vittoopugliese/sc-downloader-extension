@@ -1,5 +1,7 @@
 # 05 — Guardar tu sonido y volver a él
 
+> **PARCIAL / ABIERTO — revisión 24/09/2026 (`29d7946`).** Velocidades guardadas, persistencia de ajustes y presets FX de fábrica existen. CRUD con nombre de sonido completo y loops por track siguen pendientes; reutilizar el EQ paramétrico, no el boceto de tres bandas. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
 Objetivo: pasar de mover controles a recuperar una experiencia personal en un clic. Prioridad posterior a EQ para evitar rehacer el esquema; se puede diseñar el almacenamiento antes.
 
 ## Qué ya existe y qué falta

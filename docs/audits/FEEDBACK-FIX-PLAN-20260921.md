@@ -1,5 +1,7 @@
 # Plan de fixes a partir de 114 respuestas de desinstalación
 
+> **PARCIAL; diagnóstico fechado — revisión 24/09/2026 (`29d7946`).** HTTP/recovery/offscreen y export EQ/FX tienen fixes posteriores; la afirmación de que reverb/delay no se exportan ya no describe HEAD. Selección manual completa vuelve a ser cierta en `29d7946`. Impacto del feedback, ChromeOS, audio real y publicación siguen sin cierre demostrado. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
 Fecha: 21/09/2026. Base revisada: `5ffbf01`, manifest/package `2026.10.5`.
 Alcance: diagnóstico y plan; no se implementaron fixes de producto ni se publicó una versión.
 

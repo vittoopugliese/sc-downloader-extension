@@ -1,5 +1,9 @@
 # Auditoría y plan técnico — Looping player panel
 
+> **HISTÓRICO; cierre integral no certificado — revisión 24/09/2026 (`29d7946`).** Hallazgos y líneas pertenecen a `6822c9`. Sesión, identidad, controles y export tienen código/regresiones posteriores; no declarar todos los F01–F12/M01–M06 abiertos o cerrados en HEAD sin reproducir su criterio. QA actual en C6. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 Fecha: 2026-09-09. Commit auditado: `6822c92093ab26fe09b46d9d5579c91d2aeb0a09`.
 Base: `1acb039fb9ab1280dd763eed642be8f389329841`, su padre inmediato.
 Comparación: `git diff 6822c9^ 6822c9`; HEAD coincide con el commit solicitado.

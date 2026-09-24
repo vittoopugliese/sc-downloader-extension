@@ -1,5 +1,9 @@
 # Player Tools: contrato del núcleo y continuación
 
+> **HISTÓRICO; fundamento implementado — revisión 24/09/2026 (`29d7946`).** Controlador, enforcement, UI y trial temporal recibieron implementación posterior. D1/recibos ES256 sustituyen autoridad sólo local; no restaurar el contador ni el acceso antiguos. M01 por cuenta y QA externo siguen abiertos. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 Fecha: 2026-09-13. Base implementada en el árbol de trabajo; producto todavía no listo para release.
 Decisiones de producto: [plan principal](PLAYER-TOOLS-PRODUCT-AND-TECHNICAL-PLAN-20260912.md).
 

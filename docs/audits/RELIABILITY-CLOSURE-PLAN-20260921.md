@@ -1,5 +1,7 @@
 # Plan maestro de confiabilidad y cierre de issues
 
+> **ABIERTO; base técnica parcialmente cerrada — revisión 24/09/2026 (`29d7946`).** Operaciones, recovery, fuente worker, límites y regresiones locales existen. R2a/G2 manual se REABRE explícitamente: `29d7946` usa `GET_BULK_SELECTION_LIST`, cache/lista completas y scroll virtualizado; no cumple «sin array completo». QA real, ChromeOS, lector y ZIP actual siguen pendientes. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
 Creado: 21/09/2026. Actualizado: 22/09/2026. Base actual verificada: `4a9ffba` (árbol limpio al iniciar la revisión). Base original: `98ee64b` (`fix wav downloads`).
 
 Este documento consolida [la auditoría de código](CODEBASE-AUDIT-20260921.md), [el análisis de feedback](FEEDBACK-FIX-PLAN-20260921.md) y el plan de cierre original. Es el plan vigente para los issues identificados en esas fuentes; no certifica ausencia de defectos desconocidos. Esta actualización modifica documentación, no implementa los pendientes. Los informes anteriores conservan su valor histórico, pero sus hallazgos deben interpretarse según la matriz actual de abajo.

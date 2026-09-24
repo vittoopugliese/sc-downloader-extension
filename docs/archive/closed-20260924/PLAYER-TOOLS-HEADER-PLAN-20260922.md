@@ -1,6 +1,10 @@
 # Plan técnico: minimizar controles y reset global
 
-Estado: listo para implementar. Este documento no implementa cambios de producto.
+> **CERRADO técnico; ARCHIVADO — revisión 24/09/2026 (`29d7946`).** Reset global y ciclo de visibilidad implementados en `tempo-control-main.js`, reset FX en `audio-effects-core.js` y API de EQ. `npm test` y `test:e2e:tempo` aprobados el 24/09 cubren defaults, colas, carreras, sampler conservado y layout. Los glifos/texto finales sustituyen el boceto original; QA de la release vive en C6. Estado y pendientes: [registro vigente](../../ESTADO-ACTUAL-20260924.md).
+
+## Boceto histórico implementado
+
+Las instrucciones de implementación siguientes describen la propuesta de origen; no son tareas abiertas. El estado final y la evidencia están arriba.
 
 ## 1. Objetivo y contrato de comportamiento
 

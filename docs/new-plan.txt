@@ -1,3 +1,5 @@
+ANTECEDENTE HISTÓRICO — revisión 24/09/2026. Texto de competidor y artículo aportados para ideación; no son specs, métricas verificadas ni instrucciones vigentes. Ver docs/ESTADO-ACTUAL-20260924.md. No se marca implementado ni se archiva como trabajo completado.
+
 1- My N1 competitor, i leave here the description of their extension. 
 Now I want to be able to download ALL files on MP3/original audio because in MAC they download as mp4 and in windows as m4a.
 Also, Analyze the git diff to compare this feature thats already implemented, but I think we can improve the code a lot.

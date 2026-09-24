@@ -2,25 +2,30 @@
 
 Fecha de consulta: 21/09/2026. Dependencias: [00](00-LEER-PRIMERO.md) y [10, especialmente C2–C5](10-CIERRE-RELEASE-Y-FREE-PRO-20260921.md). Fuentes: documentación oficial consultada mediante Context7 y web. Antes de ejecutar, verificar cambios de interfaz/API/comisiones en documentación actual.
 
-## Qué estamos construyendo
+## Estado de ejecución — 24/09/2026
 
-El comprador paga una vez en el checkout alojado de Lemon. Lemon genera una licencia sin vencimiento y notifica al Worker mediante webhook. El comprador introduce email y clave en Activar/Restaurar de la extensión; nuestro servidor valida la compra y habilita PRO en esa instalación. Reinstalar o cambiar de equipo debe ofrecer restauración conforme al límite acordado.
+**Test Mode: compra, activación automática de PRO y salida del trial de siete días CERRADAS por confirmación del usuario.** No se probaron restore con email/clave, segundo/tercer perfil ni refund/revocación. `670d4ee` registra configuración, deploy/health y checkout test. La integración automática está implementada. No recrear la tienda, D1 ni claves de test al seguir esta guía. [10](10-CIERRE-RELEASE-Y-FREE-PRO-20260921.md) enumera los casos externos restantes y Live/Store/operación, todavía abiertos.
+
+Los pasos de alta/configuración siguientes son un runbook de referencia; no todos son tareas pendientes. La configuración live aún contiene placeholders de IDs. Los detalles externos y fuentes fueron consultados en la fecha indicada: verificar su vigencia al ejecutar, sin presentar esta revisión de código como consulta nueva al proveedor.
+
+## Flujo implementado
+
+El comprador paga una vez en el checkout alojado de Lemon. Lemon genera una licencia sin vencimiento y notifica al Worker mediante webhook. Para una compra iniciada en la extensión, el Worker obtiene la licencia y activa la instalación correlacionada; la extensión reclama y verifica el recibo firmado al regresar a SoundCloud o revalidar la compra pendiente. Email y clave quedan como recuperación manual, incluidas compras iniciadas fuera de la extensión. Reinstalar o cambiar de equipo debe ofrecer restauración conforme al límite acordado.
 
 ```text
-Extensión: Comprar PRO → Worker: crear checkout → Checkout Lemon → Pago
-                                                                 ↓
-                                               Webhook firmado → Worker → D1
+Extensión → Worker: checkout con instalación → Lemon Test/Live → Pago
+                                                                  ↓
+Webhook firmado → pedido validado → licencia/activación → D1
+                                                          ↓
+Regreso a SoundCloud / revalidación pendiente → checkout/claim → recibo ES256
 
-Recibo con licencia → Extensión: Activar/Restaurar → Worker ↔ API de licencias
-                                                       ↓
-                                          Comprobante PRO → Extensión
-
-Reembolso/cambio de licencia → Worker + conciliación → Revocación al revalidar
+Email + clave → Restaurar → validación/reconciliación → recibo ES256
+Reembolso/cambio de licencia → revocación → revalidación del cliente
 ```
 
-Webhook significa aviso de servidor a servidor. No reemplaza la vinculación con la instalación. La URL de éxito sólo informa y orienta; no concede PRO. La activación automática sin introducir clave no está implementada ni forma parte del flujo comprometido para esta primera versión.
+Webhook significa aviso de servidor a servidor. No reemplaza la vinculación con la instalación. La URL de éxito sólo informa y orienta; no concede PRO. La activación automática está implementada desde `670d4ee`. El cliente verifica el recibo firmado antes de conceder PRO.
 
-El Worker existente tiene el fallo de activación y las brechas del plan 10: corregirlos antes de permitir cobro al público. La firma del webhook existente tampoco equivale a la firma del comprobante offline, pendiente en C3.
+El fallo histórico de activación y la firma offline están corregidos y tienen regresiones locales. La firma del webhook y la del comprobante offline cumplen funciones distintas. El cierre local de C3 no reemplaza C4/C5 externos.
 
 ## 1. Crear tienda y solicitar aprobación
 
@@ -58,9 +63,9 @@ Con Test Mode visible en el dashboard, crear/publicar producto de prueba:
 | Generate License Keys | Activado |
 | License length | Sin vencimiento/unlimited; verificar `expires_at: null` en la licencia emitida. |
 | Activation limit | Valor acordado en C2; no confundir duración ilimitada con instalaciones ilimitadas. |
-| Confirmación/recibo | Instrucciones para volver a la extensión y usar Activar/Restaurar con el email de compra y la clave. |
+| Confirmación/recibo | Volver a SoundCloud para activación automática; conservar email/clave para restaurar en otro perfil o recuperar una compra externa. |
 
-Lemon muestra la clave en el recibo y en My Orders. No incluirla en analytics, URLs de tracking o logs. El trial de siete días lo administra la extensión: no convertir este producto en suscripción con trial de cobro.
+Lemon muestra la clave en el recibo y en My Orders. No incluirla en analytics, URLs de tracking o logs. El trial de siete días lo administra el Worker/D1 por installation ID, con comprobación firmada en la extensión: no convertir este producto en suscripción con trial de cobro.
 
 Verificar que descripción y precio coinciden con `OFFER` en `scripts/player-tools-commerce.js`. La referencia USD 6,79 no debe presentarse como precio anterior efectivamente cobrado si no lo fue.
 
@@ -75,7 +80,7 @@ Responsabilidad técnica del agente, una vez corregido C3:
 3. Obtener Store ID, Product ID y Variant ID del producto correcto. Son identificadores de configuración, no credenciales.
 4. En Settings de Lemon crear API key de prueba, con nombre reconocible; guardarla de inmediato, pues sólo se muestra una vez. Instalar como secreto `LEMON_API_KEY` del Worker de prueba.
 5. Generar secreto aleatorio de webhook y guardarlo como `LEMON_WEBHOOK_SECRET`. Ese mismo valor se configura en Lemon.
-6. Configurar la clave privada de firma de comprobantes introducida por C3 y publicar únicamente la clave pública correspondiente al cliente. No inventar un nombre de secreto antes de acordar el contrato implementado.
+6. Configurar la clave privada de firma de comprobantes introducida por C3 y publicar únicamente la clave pública correspondiente al cliente. El secreto implementado es `ENTITLEMENT_PRIVATE_JWK`; `ENTITLEMENT_KEY_ID` identifica su pública. Conservar las claves existentes, no regenerarlas por repetir este runbook.
 7. Configurar orígenes permitidos; desarrollo puede requerir un ID de extensión distinto al publicado. Live debe excluir localhost y orígenes innecesarios.
 8. Ejecutar el preflight local de ambos entornos y luego el dry run antes de desplegar. El empaquetado exige `PLAYER_TOOLS_API_BASE_URL` y `ENTITLEMENT_PUBLIC_JWK`, de modo que el ZIP de sandbox y el candidato live no compartan endpoint por accidente. Usar Context7 para comandos actuales de Cloudflare/Wrangler; el README del servicio contiene comandos de referencia, no prueba de que se hayan ejecutado.
 9. Comprobar `GET /api/player-tools/health`. `ready` comprueba configuración y las ocho tablas esperadas de D1; no prueba comunicación real con Lemon, que requiere el flujo completo.
@@ -94,7 +99,7 @@ Fuente: [API keys](https://docs.lemonsqueezy.com/guides/developer-guide/getting-
    ```
 
    El sandbox preparado por la plantilla usa `https://sctd-test.vpugliese.online/api/player-tools/webhooks/lemon`; confirmar DNS/ruta realmente desplegada antes de registrarlo. No usar la ruta live como sandbox.
-3. Seleccionar `order_created` y `order_refunded`. Agregar `license_key_updated` una vez implementado y probado su handler/conciliación en C3. No seleccionar eventos esperando efectos que el código ignora.
+3. Seleccionar `order_created`, `order_refunded` y `license_key_updated`; los tres handlers/conciliación ya están implementados y tienen tests en C3. No seleccionar eventos esperando efectos que el código ignora.
 4. Configurar el secreto de firma idéntico al instalado en ese Worker.
 5. Simular eventos para diagnóstico y después realizar una compra completa. Comprobar firma inválida rechazada, entrega válida procesada una sola vez y estado coherente en D1.
 
@@ -107,7 +112,7 @@ Fuentes: [solicitudes webhook](https://docs.lemonsqueezy.com/help/webhooks/webho
 1. Confirmar Test Mode y producto publicado en ese modo. Abrir checkout desde el botón de la extensión, para probar también la correlación con instalación.
 2. Usar tarjeta de prueba de la documentación oficial, fecha futura y CVC de prueba; no usar tarjeta real en Test Mode.
 3. Confirmar pedido, webhook, licencia y registro de compra en D1. En test, los recibos llegan al propietario/equipo, aunque se haya escrito otro email de comprador: activar usando el email asociado al pedido, no inferirlo del destinatario del recibo.
-4. Activar con email + clave y comprobar PRO efectivo en controles y exports. Cerrar/abrir popup y reiniciar worker.
+4. Comprobar activación automática y PRO efectivo al volver a SoundCloud. Separadamente probar Restaurar con email + clave. Cerrar/abrir popup y reiniciar worker.
 5. Restaurar varias veces y desde solicitudes simultáneas: misma instalación/instancia, sin otra venta ni cupo adicional. Probar cambio de equipo según C2.
 6. Probar cancelación, rechazo, webhook duplicado/atrasado, error de red y respuesta perdida. La URL de éxito por sí sola nunca concede acceso.
 7. Reembolsar en sandbox y comprobar revocación al revalidar dentro del plazo definido; conservar preferencias y trial, y mantener descargas FREE.

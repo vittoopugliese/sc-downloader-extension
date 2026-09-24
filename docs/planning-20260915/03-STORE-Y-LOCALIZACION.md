@@ -1,5 +1,7 @@
 # 03 — Store y cinco idiomas
 
+> **PARCIAL — revisión 24/09/2026 (`29d7946`).** Textos EN/RU/DE/PT-BR/ES preparados; no se demuestra su publicación ni capturas finales. EQ/export implementados localmente; comunicar según el candidato efectivamente distribuido. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
 Objetivo: mejorar comprensión y conversión del tráfico de búsqueda existente. No requiere un cambio de nombre ni esperar una feature nueva.
 
 ## Entregables

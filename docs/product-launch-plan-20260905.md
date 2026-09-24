@@ -1,5 +1,9 @@
 # Plan de lanzamiento: ayuda, prueba de Looper, compra única y web
 
+> **SUPERADO como plan operativo — revisión 24/09/2026 (`29d7946`).** E1/E2 y bases técnicas posteriores existen; precios USD 2,99, tres dispositivos, un export gratis y «sin checkout» son decisiones históricas sustituidas. Operación pendiente transferida a C4–C7 del plan 10; no se archiva como lanzamiento completado. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 ## Addendum obligatorio: tempo/preserve y export transformado (2026-09-09)
 
 El commit `9dc9f1b1d07ec773207cff72dd362e60e035cbc5` adelanto una feature que este plan ubicaba en E8: control live de velocidad/preserve y descarga WAV del loop con esa transformacion. Por eso, las frases posteriores que dejan pitch/velocidad “para despues” son contexto historico, no estado del codigo.

@@ -1,5 +1,7 @@
 # Plan de mejora arquitectónica
 
+> **PARCIAL / referencia de arquitectura — revisión 24/09/2026 (`29d7946`).** Download Track, Page Intake, Source, Download Intent y bulk durable ya existen. No repetir extracciones por metas antiguas de líneas. Selección manual completa y QA a escala siguen abiertos; este plan no tiene cierre global demostrado. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
 Fecha: 2026-09-05
 Base: `e63fbba`
 

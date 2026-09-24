@@ -1,5 +1,7 @@
 # Plan técnico de mitigación de confiabilidad
 
+> **PARCIAL; diagnóstico inicial histórico — revisión 24/09/2026 (`29d7946`).** M1–M8 de este plan no son M01–M18 del 23/09. Gran parte de operaciones/HTTP/almacenamiento ya está implementada. No cerrar benchmark, ChromeOS, integración real ni escala manual por tests sintéticos. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
 Fecha: 2026-09-20. Repositorio: `sc-downloader-extension`.
 
 ## 1. Para quién es y qué evidencia existe

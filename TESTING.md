@@ -7,13 +7,15 @@ npm install
 npx playwright install chromium
 ```
 
-Run the fast, DOM-free verification suite:
+Run the local verification suite (includes a Chromium Contact layout check):
 
 ```powershell
 npm test
 ```
 
-This suite includes the loop renderer contract, an integrity check for the
+This suite discovers `verify-*.js` files except the explicit exclusions in
+`scripts/run-verifications.js`; do not freeze its count to an older report.
+It includes the loop renderer contract, an integrity check for the
 pinned Signalsmith factory, and a real WASM render that verifies a slowed test
 tone keeps its original pitch.
 
@@ -103,3 +105,22 @@ source tree:
 ```sh
 npm run test:package -- dist/soundcloud-track-downloader-<version>.zip
 ```
+
+## Evidence and release scope — 2026-09-24
+
+At `29d7946`, `npm test` passed 48 verifications, `test:player-tools` passed four
+client verifiers and 29 service tests, and `test:e2e:tempo` passed. Chromium for
+Contact needed execution outside the macOS sandbox. The landing verifier skipped
+comparison against the absent external `reviews.txt`; it does not freshly
+validate the authenticity of Store reviews.
+
+`verify-popup-selection.js` covers the current complete-list selector: confirmation,
+actual selectable count, continuous numbering, local virtual scrolling and failure
+recovery. This is not evidence of bounded-memory pagination for 50,000 selections.
+
+The service tests use a simulated provider and local SQLite. The user's successful
+Test Mode purchase, automatic Pro activation, and exit from the seven-day trial
+are separate external evidence confirmed by the project owner. Refund/restore/seat
+scenarios, Live, the current complete `test:release-local` gate and exact production
+ZIP remain in the [release checklist](docs/planning-20260915/10-CIERRE-RELEASE-Y-FREE-PRO-20260921.md).
+Do not promote the diagnostic ZIP from September 23 to a current release candidate.

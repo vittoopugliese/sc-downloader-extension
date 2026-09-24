@@ -1,5 +1,9 @@
 # Investigación: looping desde el panel del player
 
+> **HISTÓRICO — revisión 24/09/2026 (`29d7946`).** La sesión compartida y el panel ya existen; no implementar de nuevo sus fases iniciales. Persistencia avanzada/biblioteca y evolución siguen en el plan Looper del 20/09. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 Fecha: 2026-09-09
 
 Fuentes primarias revisadas:
@@ -7,6 +11,10 @@ Fuentes primarias revisadas:
 - código y verificadores del repositorio actual;
 - `docs/TEMPO-INTEGRATION-AUDIT.md` y `docs/COLD-AUDIT-HANDOFF-9dc9f1b.md`;
 - snapshot local `repos/soundcloud-looper-extension-main`.
+
+El snapshot citado ya no está presente en este checkout; las referencias de archivo
+inferiores identifican la evidencia histórica original, pero no son enlaces
+navegables ni una dependencia actual del producto.
 
 Este documento es una investigación y propuesta de arquitectura. No implementa la
 feature ni aprueba el estado actual para release.
@@ -166,18 +174,18 @@ crear la sesión.
 El repo confirma el comportamiento buscado sin depender de una waveform:
 
 - `inject.js` corre en MAIN a `document_start` y `content.js` en isolated world
-([`repos/soundcloud-looper-extension-main/manifest.json:20-32`](../repos/soundcloud-looper-extension-main/manifest.json));
+(`repos/soundcloud-looper-extension-main/manifest.json:20-32`);
 - intercepta `HTMLMediaElement.prototype.play` para capturar incluso el audio
-detached ([`repos/soundcloud-looper-extension-main/inject.js:18-30`](../repos/soundcloud-looper-extension-main/inject.js));
+detached (`repos/soundcloud-looper-extension-main/inject.js:18-30`);
 - cada 100 ms lee `currentTime` y, al alcanzar `end - 0.05`, asigna
 `currentTime = start`
-([`repos/soundcloud-looper-extension-main/inject.js:32-48`](../repos/soundcloud-looper-extension-main/inject.js));
+(`repos/soundcloud-looper-extension-main/inject.js:32-48`);
 - la UI captura A o B usando la posición que recibe del bridge y permite edición
-textual ([`repos/soundcloud-looper-extension-main/content.js:42-75`](../repos/soundcloud-looper-extension-main/content.js),
-[`repos/soundcloud-looper-extension-main/content.js:244-283`](../repos/soundcloud-looper-extension-main/content.js));
+textual (`repos/soundcloud-looper-extension-main/content.js:42-75`,
+`repos/soundcloud-looper-extension-main/content.js:244-283`);
 - opcionalmente guarda un loop por pathname en `chrome.storage.sync`
-([`repos/soundcloud-looper-extension-main/content.js:16-24`](../repos/soundcloud-looper-extension-main/content.js),
-[`repos/soundcloud-looper-extension-main/content.js:77-114`](../repos/soundcloud-looper-extension-main/content.js)).
+(`repos/soundcloud-looper-extension-main/content.js:16-24`,
+`repos/soundcloud-looper-extension-main/content.js:77-114`).
 
 La idea reutilizable es “capturar A/B en la posición viva del player y repetir
 sobre el media real”. No hace falta portar su panel flotante para obtenerla.
@@ -195,10 +203,10 @@ duración, source, estado ni identidad;
 - silencia errores de storage;
 - no contiene tests ni un archivo `LICENSE` en el snapshot local.
 
-Fuentes: [`repos/soundcloud-looper-extension-main/inject.js:14-62`](../repos/soundcloud-looper-extension-main/inject.js),
-[`repos/soundcloud-looper-extension-main/content.js:16-49`](../repos/soundcloud-looper-extension-main/content.js),
-[`repos/soundcloud-looper-extension-main/content.js:77-114`](../repos/soundcloud-looper-extension-main/content.js),
-[`repos/soundcloud-looper-extension-main/content.js:175-188`](../repos/soundcloud-looper-extension-main/content.js).
+Fuentes históricas: `repos/soundcloud-looper-extension-main/inject.js:14-62`,
+`repos/soundcloud-looper-extension-main/content.js:16-49`,
+`repos/soundcloud-looper-extension-main/content.js:77-114`,
+`repos/soundcloud-looper-extension-main/content.js:175-188`.
 
 No debería copiarse código literal sin aclarar su licencia. Sí puede usarse el
 comportamiento observado como referencia para una implementación propia.

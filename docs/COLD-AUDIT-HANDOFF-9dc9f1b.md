@@ -1,5 +1,9 @@
 # Handoff para auditoria en frio del commit `9dc9f1b`
 
+> **HISTÓRICO; no es un gate actual — revisión 24/09/2026 (`29d7946`).** Audita exclusivamente `9dc9f1b`. Notices/provenance y export del player ya tienen implementación y verificadores; quedan QA real/audio/memoria y candidato en C6. No ejecutar su prompt como continuidad actual. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 Fecha del relevamiento: 2026-09-09  
 Commit auditado: `9dc9f1b1d07ec773207cff72dd362e60e035cbc5`  
 Parent: `03cfba012159a6549acd80943578335b23d0ed4c`  

@@ -1,5 +1,7 @@
 # Player Tools como instrumento: plan de FX, teclado sampler y slices
 
+> **ABIERTO / borrador de producto — revisión 24/09/2026 (`29d7946`).** Cinco FX adicionales, teclado instrumental y slices 4/8/16 siguen propuestos. Los seis pads y reverb/delay/EQ existentes no cierran este plan; decisiones de sección 3 pendientes. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
 Fecha: 23 de septiembre de 2026. Estado: borrador ejecutable pendiente de confirmar las decisiones de la sección 3. Alcance autorizado: planificación; este documento no implementa funciones, no cambia la oferta comercial y no publica la extensión.
 
 ## 1. Objetivo y alcance

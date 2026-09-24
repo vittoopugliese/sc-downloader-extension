@@ -1,5 +1,9 @@
 # Roadmap de producto: descargas gratis + Looper de pago
 
+> **HISTÓRICO / backlog — revisión 24/09/2026 (`29d7946`).** No es fuente del precio, límites ni orden de implementación actuales. Feedback, landing localizada, trial, checkout, tempo y export ya existen; ventas live y distribución siguen pendientes. Evolución en los planes específicos. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 ## Overlay de feature `9dc9f1b` - 2026-09-09
 
 Pitch/velocidad ya no estan solamente en P10-P12: `9dc9f1b1d07ec773207cff72dd362e60e035cbc5` implemento velocidad live `0.5x`-`2x`, preserve pitch binario y export A-B transformado. “Pitch” no significa transposicion independiente. El resto de este roadmap conserva lenguaje historico que dice que estas capacidades no existen o no afectan el WAV.

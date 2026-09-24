@@ -1,5 +1,7 @@
 # Player Tools: plan de producto e implementación
 
+> **PARCIAL; decisiones antiguas superadas — revisión 24/09/2026 (`29d7946`).** Base de capacidades, panel, trial, comercio, export y cinco locales implementados. La herramienta de login local se retiró deliberadamente en `670d4ee`; no recrearla como pendiente E2. Contrato vigente en 01/10, QA real y evolución todavía abiertos. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
 Fecha: 2026-09-12. Estado: decisiones registradas; implementación parcial, no lista para release.
 Base inspeccionada al escribir: `7f3187e8c777cc42942e6b20f44ccecad4774725`.
 Este documento incorpora las respuestas explícitas del usuario del 12 de septiembre y reemplaza propuestas anteriores incompatibles sobre Free, precios, descargas y rediseño del panel.

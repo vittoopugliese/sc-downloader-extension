@@ -1,5 +1,9 @@
 # Reliability implementation progress
 
+> **REGISTRO HISTÓRICO; pendientes transferidos — revisión 24/09/2026 (`29d7946`).** Los pendientes locales de single/loop durable y worker paginado tienen implementación posterior. Manual Select vuelve a lista completa en HEAD. M18 externo avanzó hasta compra, activación automática de PRO y salida del trial test; restore, perfiles y refund no fueron probados. Live, QA real y Store siguen abiertos. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 Checked against `docs/audits/RELIABILITY-MITIGATION-PLAN-20260920.md` on the current checkout. This is an interim report, not a release approval.
 
 ## Implemented in this working tree

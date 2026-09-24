@@ -1,5 +1,9 @@
 # Plan de implementación: confiabilidad de SoundCloud Track Downloader
 
+> **HANDOFF HISTÓRICO; cierre global ABIERTO — revisión 24/09/2026 (`29d7946`).** Operaciones durables, límites HTTP/HLS, worker paginado, trial/licencias y package recibieron trabajo posterior. T01–T15 no son una lista de bugs actuales sin reproducción; conservar criterios y pendientes de escala/dispositivo/artefacto en el plan de cierre. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 Fecha: 2026-09-20. Zona: America/Argentina/Buenos_Aires.
 
 Este documento es un handoff para un agente que empieza sin contexto. Es un plan de cambios, no una certificación de seguridad ni el informe exhaustivo inicialmente solicitado. No se implementaron correcciones de producto durante la auditoría. El usuario pidió convertir la revisión en un plan detallado para que otro agente implemente.

@@ -1,5 +1,7 @@
 # Checklist manual — módulo de descargas gratuitas
 
+> **ABIERTO / checklist del candidato — revisión 24/09/2026 (`29d7946`).** No hay ejecución completa registrada para los bytes actuales. Compra PRO test no valida descargas FREE, carpetas, HLS, restart ni dispositivos. Completar por escenario/versión. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
 Usar una carpeta vacía de pruebas y contenido propio o para el que se tenga permiso. Registrar los fallos con URL, método de descarga, estado de sesión, destino elegido y mensaje de error exacto.
 
 ## Preparación

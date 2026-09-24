@@ -4,9 +4,26 @@ Cloudflare Worker + D1 facade for Lemon Squeezy checkout, activation/recovery,
 revocation and the minimal Player Tools funnel. The extension calls only this
 service; Lemon credentials never ship in the extension.
 
+## Status — 2026-09-24
+
+The project owner confirmed a successful Test Mode purchase, automatic Pro
+activation, and exit from the seven-day trial. Email/key restore, second and
+third profile behavior, and refund/revocation were not tested and remain open.
+Commit `670d4ee` records the Test Mode deployment/health and checkout setup.
+Remaining external refund/restore/seat scenarios and Live/Store/operations are
+tracked in the [release checklist](../../docs/planning-20260915/10-CIERRE-RELEASE-Y-FREE-PRO-20260921.md).
+The committed production configuration still has placeholder Lemon IDs. Do not
+repeat initial test database/key creation or overwrite `wrangler.jsonc` when
+continuing the existing deployment.
+
 ## What is implemented
 
-- Checkout creation tied to a pseudonymous installation ID.
+- Checkout creation tied to a pseudonymous installation ID, with explicit test
+  mode and return to SoundCloud. A validated order webhook retrieves the generated
+  license and activates the correlated installation. `/checkout/claim` returns an
+  ES256-signed receipt; the extension verifies it before enabling Pro. Return URL
+  parameters alone do not grant access. Manual email/key restore remains available
+  for external purchases and other installations.
 - Signed and size-limited Lemon webhook ingestion, limited to the configured
   store, first order item (product/variant), and test or live environment.
 - Owner-token webhook claims, retryable overlap handling, semantic order
@@ -34,7 +51,7 @@ service; Lemon credentials never ship in the extension.
 
 The current trial subject is still the local installation ID. That prevents ordinary message/storage replay in the official package, but it cannot enforce one trial across reinstallations. Do not describe the trial as reinstall-proof until a server-verifiable account subject is integrated; IP address, a client-declared SoundCloud ID and browser fingerprinting are intentionally not treated as identity.
 
-## Production setup
+## Environment provisioning reference (existing test setup is complete)
 
 1. Generate independent test and production signing keys. Keep the
    `.dev.vars.entitlement.*` files private; each contains its matching key ID
@@ -45,7 +62,7 @@ The current trial subject is still the local installation ID. That prevents ordi
    npm run keys:generate -- p256-test-YYYY-MM test
    npm run keys:generate -- p256-live-YYYY-MM production
    ```
-2. Copy `wrangler.example.jsonc` to `wrangler.jsonc` and replace every
+2. For a new deployment only, copy `wrangler.example.jsonc` to `wrangler.jsonc` and replace every
    `REPLACE_WITH_...` value. Keep the real config free of secrets. The default
    Worker is `sctd-player-tools-license-test` on the test-only route; the
    `production` environment uses a different Worker name, route, D1 binding,
@@ -102,8 +119,8 @@ is present and all eight expected D1 tables exist. It intentionally does not
 perform a paid-provider transaction; the sandbox gate below remains required.
 
 When packaging an extension for either environment, explicitly inject both the
-matching endpoint and public JWKS. The packager disables the local `1`/`1` test
-login and adds the selected API origin to the staged manifest:
+matching endpoint and public JWKS. The local `1`/`1` test login has been removed from the runtime. The packager
+injects the selected endpoint/public keys and adds its API origin to the staged manifest:
 
 ```text
 PLAYER_TOOLS_API_BASE_URL=https://sctd-test.vpugliese.online/api/player-tools \
@@ -143,7 +160,8 @@ observed once and the D1 rows agree:
 2. **Get Pro** opens one secure checkout; cancellation grants nothing.
 3. One successful test order creates one deduplicated `order_created` webhook
    and one `purchase_confirmed` event with the same installation ID.
-4. Email + license key activates Pro; repeating recovery returns the same
+4. A purchase from the extension activates automatically through the signed claim.
+   Email + license key remains the manual restore path; repeating recovery returns the same
    license/instance. Verify two profiles activate, a third is rejected, and a
    lost provider response can be retried without consuming another reservation.
 5. Restarting the service worker and reopening the popup keeps Pro active.

@@ -1,5 +1,7 @@
 # 08 — Ideas preservadas y alcance cerrado
 
+> **BACKLOG ABIERTO; cierre histórico acotado — revisión 24/09/2026 (`29d7946`).** La exclusión de Explorer del 15/09 no cancela el plan de optimización reabierto el 20/09. V1 y A/B ya existen; random/compartir y otras ideas no se declaran implementadas. El nombre del archivo conserva el antecedente, no un cierre global. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
 Este archivo evita perder partes de la conversación. **Todo lo de Likes Explorer queda mitigado/cerrado para esta entrega por instrucción actual del usuario.** Los apartados de random/share no son trabajo nuevo asignado, ni cuestionan qué ya implementó el usuario en otra rama.
 
 ## Likes Explorer: registro de lo mencionado

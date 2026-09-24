@@ -1,5 +1,9 @@
 # Diagnóstico de desinstalaciones — 2026-09-20
 
+> **DIAGNÓSTICO HISTÓRICO — revisión 24/09/2026 (`29d7946`).** Conservar denominadores y límites causales del formulario. Los fixes registrados no prueban que el caso de Chromebook se resolvió ni que llegaron a usuarios; memoria/dispositivo y feedback por versión siguen abiertos. Estado y pendientes: [registro vigente](../ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 ## Alcance de los datos
 
 Se revisaron 97 respuestas entre el 12/09/2026 20:22 UTC y el 20/09/2026 07:35 UTC. Se excluyeron los registros 2 y 20 porque el desarrollador confirmó que eran pruebas propias. Quedan 95 respuestas y 91 `ip_hash` distintos.

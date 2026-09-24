@@ -1,5 +1,9 @@
 # Mapa de features: Segment Looper + Playback Speed
 
+> **HISTÓRICO — revisión 24/09/2026 (`29d7946`).** Comparación de repos fuente, no inventario de HEAD. Tempo actual 0,1–3×, loops/player, EQ/export y panel existen; las propuestas avanzadas no se dan por implementadas. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 ## Actualizacion posterior al commit `9dc9f1b` (2026-09-09)
 
 Este mapa fue escrito **antes** de implementar la feature y debe conservarse como analisis de fuentes, no como estado actual. El commit `9dc9f1b1d07ec773207cff72dd362e60e035cbc5` adelanto parte de las fases que abajo figuran como futuras:

@@ -1,5 +1,9 @@
 # Cobro con tarjeta para Looper: investigación de E5A
 
+> **INVESTIGACIÓN HISTÓRICA — revisión 24/09/2026 (`29d7946`).** Lemon está integrado; compra, activación automática de PRO y salida del trial test están confirmadas. Restore, perfiles adicionales y refund/revocación no fueron probados. Ya no falta construir E5B desde cero. Aprobación live/payout no se infieren de test. Conservar fuentes fechadas, sin abrir una migración de proveedor. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 Consultado el 2026-09-07. Alcance: una persona física residente en Argentina, sin LLC, que quiere vender una licencia única de Looper por USD 2,99 con tarjeta y ya posee datos bancarios USD de Wise. Este documento es una investigación de producto/técnica, no asesoramiento legal, fiscal ni una aprobación de ningún procesador.
 
 ## Decisión recomendada
@@ -83,4 +87,3 @@ Lemon indica que las API keys no deben entrar en código de cliente ni en GitHub
 No reemplaza al procesador de pago. Sirve para alertas operativas del Worker (pago confirmado, webhook inválido, refund/revocación) hacia `it@vpugliese.online`. El servicio requiere DNS en Cloudflare y dar de alta el dominio emisor; el binding del Worker puede restringirse a un destinatario fijo. El envío saliente está actualmente en Workers Paid plan. [Cloudflare Email Service](https://developers.cloudflare.com/email-service/), [configurar dominio y envío](https://developers.cloudflare.com/email-service/get-started/send-emails/), [restringir bindings](https://developers.cloudflare.com/email-service/configuration/send-bindings/)
 
 No usar correo como fuente de verdad de licencia: D1 + webhook validado son la fuente de verdad; el email es sólo una notificación.
-

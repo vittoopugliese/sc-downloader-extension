@@ -1,5 +1,9 @@
 # Tempo integration audit
 
+> **HISTÓRICO — revisión 24/09/2026 (`29d7946`).** Rango 0,5–2×, falta de notices y dependencia obligatoria de repos ignorados describen aquella base. Hoy existen notices/provenance versionados y verificadores; export de player y EQ/FX están implementados. QA real sigue en C6. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
+## Contenido histórico de la base indicada
+
 ## Status correction - 2026-09-09
 
 This file is an implementation record written with the feature, not an independent cold audit or a release approval. The authoritative handoff for auditing commit `9dc9f1b1d07ec773207cff72dd362e60e035cbc5` is [`COLD-AUDIT-HANDOFF-9dc9f1b.md`](COLD-AUDIT-HANDOFF-9dc9f1b.md).

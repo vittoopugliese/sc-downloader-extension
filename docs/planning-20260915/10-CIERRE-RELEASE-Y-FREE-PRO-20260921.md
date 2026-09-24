@@ -1,243 +1,83 @@
-# 10 — Cierre ejecutable de release y FREE/PRO
+# 10 — Cierre de release y FREE/PRO
 
-Fecha: 21/09/2026. Entrada: [00](00-LEER-PRIMERO.md). Operación del proveedor: [11](11-LEMON-SQUEEZY-TUTORIAL-20260921.md).
+**PARCIAL — actualizado 24/09/2026, base `29d7946`.** Entrada: [00](00-LEER-PRIMERO.md). Evidencia e inventario: [estado actual](../ESTADO-ACTUAL-20260924.md). Operación: [11](11-LEMON-SQUEEZY-TUTORIAL-20260921.md).
 
-## Objetivo y alcance
+Un casillero marcado cierra sólo el criterio escrito. Código probado localmente, compra Test Mode confirmada, operación live y publicación son evidencias distintas. Las implementaciones anteriores no vuelven a cero por conservar pendientes de QA.
 
-Terminar la versión comercial existente: descargas gratuitas confiables, Likes Explorer incluido, prueba coherente, PRO de pago único sin vencimiento comercial, activación/restauración, funcionamiento offline definido, revocación y artefacto publicado verificable. «Terminar» exige evidencia de funcionamiento del cobro y de publicación; escribir estos planes no cierra ninguna implementación.
+## C1 — Confiabilidad: implementación avanzada, cierre integral ABIERTO
 
-El usuario pidió conservar y hacer ejecutable toda la revisión previa. No se considera obligación de esta release implementar todos los proyectos históricos. EQ, presets completos, optimización profunda de Explorer, biblioteca avanzada de loops, SEO multipágina, experimentos de precio, crypto y analytics sofisticado quedan después del primer cierre comercial. Un fallo concreto de una función incluida sí debe corregirse antes de publicar.
+- [x] Operaciones durables bulk/single/loop, checkpoints y reconciliación por etapa; guardado incierto visible sin retry automático que duplique archivos. `aebd76b`, `6153701` y verificadores de download/operaciones.
+- [x] Enumeración de jobs desde worker con descriptor persistido, cursor, formato y contexto; recuperación sin depender de mantener abierta la pestaña de origen.
+- [x] Límites de lectura, errores tipados, cancelación, `Retry-After`, contadores y recuperación cubiertos por las regresiones locales existentes.
+- [x] Selector manual actual: confirmación, carga completa, conteo real, numeración continua y scroll local virtualizado (`29d7946`, `verify-popup-selection.js`).
+- [ ] **R2a/G2 de selección manual a escala:** el popup volvió a `GET_BULK_SELECTION_LIST` → `selectionList()` → lista/cache completas. Ya no satisface el criterio de «sin array completo ni mensaje gigante». Medir bibliotecas grandes y decidir paginación o aceptar explícitamente un alcance acotado, conservando numeración/selección actuales. Los jobs bulk siguen paginados.
+- [ ] Completar la matriz [R0–R7/G1–G8](../audits/RELIABILITY-CLOSURE-PLAN-20260921.md) sobre el candidato: reinicio real, fuentes/HLS, resultados omitidos/fallback, cuota, memoria/ChromeOS, teclado/lector y diagnóstico. Los tests existentes no certifican cada criterio manual.
 
-## Arranque de una sesión en frío
+## C2 — Contrato FREE/prueba/PRO: CERRADO local para perfil; M01 ABIERTO
 
-1. Leer instrucciones aplicables, `git status --short` y HEAD; preservar cambios ajenos. La base de esta revisión es `6d5163a`, manifest/package `2026.10.5`; volver a inspeccionar si cambió.
-2. Leer este plan, el 11, `services/player-tools-license/README.md`, el plan de cierre de confiabilidad del 21/09 y sus referencias necesarias. Los documentos viejos orientan; no sustituyen código ni pruebas.
-3. Localizar evidencia del último bloque completado en el registro al final. Si falta, revisar implementación y ejecutar la prueba mínima que resuelva la incertidumbre antes de rehacerlo.
-4. Ejecutar el primer bloque pendiente. No volver a pedir elegir etapa: el orden está dado. Alta comercial y recopilación de datos del proveedor pueden adelantarse mientras se trabaja en confiabilidad.
-5. Si falta una credencial, dato de cuenta, decisión comercial o permiso externo, pedir sólo eso y continuar el trabajo independiente disponible. No guardar secretos en planes, logs, fixtures o chat.
-6. Consultar Context7 para API/CLI/configuración actual siguiendo las instrucciones del repo; las fuentes de este plan fueron consultadas el 21/09/2026.
+- [x] FREE independiente de licencia y caída del servicio; WAV/exports transformados y EQ exclusivos PRO.
+- [x] Trial D1 siete días/veinte loops; gracia final firmada y acotada, sin nuevo loop/export; Explorer conserva sus siete días al agotar loops.
+- [x] USD 3,69 lifetime, dos perfiles, comprobante ES256 de treinta días, guard de vencimiento/renovación y preservación de preferencias.
+- [x] Installation ID local, sin compartir seat por sync; respuestas vacías, falsificadas o de otra instalación no conceden PRO.
+- [x] Onboarding e inicio idempotente implementados; precio/copy corregidos, promociones ocultas con PRO (`b07f328`).
+- [ ] QA de instalación limpia/actualización, con/sin sesión SoundCloud, múltiples pestañas y perfiles existentes sobre el candidato.
+- [ ] **M01:** identidad de cuenta verificada por servidor para resistir reinstalación/múltiples perfiles, o decisión explícita del usuario de diferir/cambiar ese requisito. No cerrar por otro UUID local. Implica proveedor de identidad, consentimiento, migración y privacidad; no forma parte del cierre ya demostrado del trial por perfil.
 
-## Evidencia inicial y límites
+## C3 — Worker y cliente de licencias: CERRADO técnico local
 
-- `npm run test:player-tools` pasó en la revisión: verificadores policy, access, client y commerce; dos tests del servicio (`validates commerce requests`, `accepts only the documented anonymous funnel shape`).
-- Los tests del servicio existentes validan entradas. No cubren un flujo completo del Worker, D1 real ni transacciones de Lemon.
-- Reproducción local sin red: importar el Worker, simular `fetch` con una activación válida, simular búsqueda D1 sin activación existente y llamar a `/api/player-tools/license/restore`. Resultado: HTTP 500, `internal_error`; log: `Lemon returned an incomplete license activation.`
-- Estructura relevante de la respuesta oficial usada: `{ activated: true, license_key: { id, key, status, expires_at: null }, instance: { id, name }, meta: { store_id, product_id, variant_id, order_id, customer_id, customer_email } }`.
-- `activate()` pasa sólo `result.license_key` a `recordActivation()`, que intenta leer `license.instance.id`, `license.order_id` y `license.customer_id`. El fallo de instancia ocurre antes de escribir D1.
-- Hallazgos por inspección que aún requieren pruebas de comportamiento: evento marcado recibido antes de efectos, webhook sin filtro de producto/modo, eventos desordenados que pueden reactivar un reembolso, y concurrencia/repetición de activaciones.
-- No se inspeccionaron cuentas privadas ni se verificó despliegue, compra sandbox, compra real, payouts o publicación. No se ejecutaron E2E de navegador en esta revisión.
+- [x] Activación/restauración con `license_key`, `instance` y `meta` separados, email y producto/modo validados; reserva atómica de seats, concurrencia, retry e instancias huérfanas.
+- [x] Webhook HMAC sobre cuerpo original, límites, claims recuperables, deduplicación de entrega/pedido y filtros antes de mutación.
+- [x] Reembolso total con tombstone; parcial a revisión manual; eventos atrasados no rehabilitan PRO; `license_key_updated` y reconciliación por API.
+- [x] Errores temporales/credenciales del proveedor no revocan una compra válida; instancia ausente afecta sólo al perfil; soporte puede inspeccionar, conciliar y liberar.
+- [x] Recibos ES256, rotación por `keyId`, expiración/alarma/guard, sin guardar email/clave en la extensión.
+- [x] Límites HTTP/rate limit, secretos/D1/rutas test/live separados en la configuración. Los valores live pendientes no cuentan como servicio productivo desplegado.
+- [x] Checkout automático: pedido correlacionado → licencia generada → activación → `/checkout/claim` → recibo validado. Restauración manual conservada para compra externa/otra instalación.
+- [x] Login local `1/1` y mensajes asociados eliminados del runtime en `670d4ee`; los tests usan fixtures aislados.
 
-## C1 — Cerrar confiabilidad restante
+Evidencia del 24/09: cuatro verificadores de cliente y 29 tests del servicio aprobados, con SQLite real local y proveedor simulado. Esto cierra implementación/regresiones, no sustituye la matriz externa.
 
-Fuente ejecutable: [RELIABILITY-CLOSURE-PLAN-20260921](../audits/RELIABILITY-CLOSURE-PLAN-20260921.md). Contexto de arreglos ya realizados: [FEEDBACK-FIX-PLAN-20260921](../audits/FEEDBACK-FIX-PLAN-20260921.md).
+## C4 — Test Mode: compra, PRO y salida del trial CERRADOS; casos restantes ABIERTOS
 
-- [ ] Diagnosticar y resolver offscreen en Chromium: preservar etapa/código/causa, identificar cada operación e intento, reconciliar respuestas perdidas y no duplicar build/save.
-- [x] Unificar popup, inline y selección manual en paginación durable, con orden y límite exacto, incluido All.
-- [x] Recuperar enumeración sin depender de la pestaña original; conservar cursor, formato e identidad de colección y ofrecer recuperación visible.
-- [ ] Congelar formato del job y contabilizar todas las pistas omitidas con causa; respetar `Retry-After` y evitar duplicaciones por timeout de UI.
-- [ ] Completar fixtures HLS, audio y memoria definidos en el plan de cierre; registrar medición de ChromeOS o la limitación concreta aún no verificada.
-- [ ] Completar diagnóstico y documentación de comportamiento real; mantener gratuitos los caminos de descarga normal.
+- [x] Configuración test concreta, D1 y Worker de test operativos: deploy/health y checkout registrados en `670d4ee`; compra funcional confirmada por el usuario.
+- [x] Compra de prueba, activación automática de PRO y salida del trial de siete días: confirmación explícita del usuario el 24/09. No repetir como si nunca se hubiera probado.
+- [ ] Registrar correlación sanitizada pedido/licencia/instancia/D1 y comprobar una sola venta/evento por pedido. No se copian claves ni datos del comprador al repo.
+- [ ] Cancelar/rechazar checkout no concede acceso; compra pendiente se recupera con webhook tardío y tras cerrar popup/reiniciar worker.
+- [ ] Restaurar con email/clave, repetir/concurrencia sin cupos extra, dos perfiles activos, tercero rechazado y liberar/reactivar con soporte. El usuario confirmó que no probó estos escenarios.
+- [ ] Reembolso test y cambio manual de licencia revocan al revalidar; conservan preferencias/trial y descargas FREE.
+- [ ] Casos negativos de firma/origin/producto/variante/modo/email/clave y caída de red; confirmar el comportamiento externo correspondiente, sin confundirlo con mocks verdes.
 
-No reabrir sin evidencia los fixes ya conservados por el plan: WAV de diez minutos (`98ee64b`), serialización de build, guardado ambiguo, límites HTTP, recuperación desde IndexedDB, contexto inmutable, retención, retries durables y accesibilidad. Registrar reproducción, regresión y prueba de navegador por bloque. La auditoría basada en `404fbd9` es anterior a varios de esos fixes.
+La evidencia del usuario cierra exactamente comprar PRO, activarlo automáticamente y salir del trial de siete días. El usuario confirmó que no probó restore, segundo/tercer perfil ni refund/revocación. Los demás casos quedan sin evidencia individual; no implica que hayan fallado.
 
-Salida: checklist del plan de confiabilidad satisfecho con evidencia, sin fallos bloqueantes conocidos en funciones incluidas. No combinar estos arreglos con rediseños de UI o cambios de precio.
+## C5 — Live/comercial: ABIERTO
 
-## C2 — Cerrar un único contrato FREE / prueba / PRO
+- [ ] Registrar aprobación de tienda/producto, identidad/fiscal y método de retiro aceptado; la discusión histórica de Wise no demuestra un bloqueo actual ni su resolución.
+- [ ] Términos, privacidad, alcance de lifetime/actualizaciones, soporte y política de refunds coherentes y publicados.
+- [ ] Reemplazar `REPLACE_WITH_LIVE_LEMON_*` en `wrangler.jsonc` por IDs reales; verificar producto USD 3,69, licencia sin vencimiento y cupo.
+- [ ] Instalar/verificar secretos, webhook, CORS y Worker live con su D1/JWK independientes. La creación/migración previa de D1 no demuestra deploy live.
+- [ ] Compra/activación/restore/refund de producción controlados, con autorización aplicable para gasto real; procedimiento de recuperación probado.
 
-Archivos principales: `scripts/player-tools-policy.js`, `player-tools-access.js`, `player-tools-commerce.js`, `player-tools-client.js`, `background.js`, popup, player, Explorer y locales.
+## C6 — Candidato y Store: ABIERTO
 
-| Estado | Contrato objetivo |
-| --- | --- |
-| FREE | Descargas normales de tracks y colecciones independientes de licencias, trial y disponibilidad del Worker comercial. |
-| Prueba Player Tools | Siete días y hasta veinte loops globales; termina al primer límite con la gracia final existente. Exports exclusivos PRO bloqueados. |
-| Prueba Likes Explorer | Siete días desde el inicio único de prueba; consumir veinte loops no acorta ese acceso. |
-| PRO lifetime | Capacidades PRO implementadas y verificadas, sin vencimiento comercial; restauración y política de instalaciones explícitas. |
+- [x] `npm test`: 48 verificadores aprobados el 24/09. Contact requiere Chromium fuera del sandbox de macOS; comparación de fuente externa de reseñas omitida por archivo ausente.
+- [x] `npm run test:player-tools`: cuatro verificadores y 29 tests aprobados el 24/09.
+- [x] `npm run test:e2e:tempo`: aprobado el 24/09; header/visibilidad/reset, conservación del sampler, carreras y layout estrecho incluidos.
+- [x] Procedencia/fingerprint y smoke del paquete implementados; gate completo y ZIP **diagnóstico** registrados el 23/09. No certifican un ZIP actual.
+- [ ] Ejecutar gate completo del candidato actual con endpoint/JWK live; revisar equivalencia del empaquetador alternativo cuando se use.
+- [ ] QA real de FREE/HLS/carpeta/recovery y Explorer (login/logout, cambio de cuenta, grandes/vacías, fin de trial), EQ/export y matriz de dispositivos/accesibilidad.
+- [ ] Generar versión única, ZIP sin secretos/fixtures/docs/datos privados y sin bypass PRO; registrar commit, fecha, SHA-256 y smoke de esos mismos bytes.
+- [ ] Actualizar Store/capturas/locales desde [03](03-STORE-Y-LOCALIZACION.md), [07](07-GUIONES-Y-CAPTURAS.md), [09](09-DESCRIPCIONES-STORE-5-IDIOMAS.md), políticas y landing según capacidades verificadas.
+- [ ] Enviar/publicar con autorización aplicable y registrar por separado envío, revisión, aprobación y disponibilidad. No hay evidencia de publicación de este candidato.
 
-- [ ] Conservar onboarding de instalación a `https://soundcloud.com/you/likes` y comienzo único de prueba; actualizaciones no abren esa pestaña ni reinician/extienden el trial. Probar instalación con/sin sesión de SoundCloud y migración de perfiles existentes.
-- [x] Separar capacidad `likesExplorer` del contador de loops. Hoy usa `pro || trialAvailable`, donde `trialAvailable` exige `used < 20`. Este cambio cumple los siete días prometidos por el onboarding del 00 y la recomendación aceptada como trabajo a ejecutar.
-- [ ] Mantener gracia del loop 20, permisos exclusivos de export, enforcement en handlers además de UI, cuota durable y preferencias al vencer/revocar.
-- [ ] Verificar estado no iniciado, vigente, agotado por loops, vencido por tiempo, PRO, compra pendiente, error recuperable y revocado. Probar dos pestañas, reinicio de worker, actualización y storage inválido.
-- [x] Unificar copy y precio: USD 3,69, compra única; USD 6,79 queda sólo como referencia futura documental, nunca precio histórico ficticio en la UI. No experimentar con precio durante este cierre.
-- [x] Implementar y probar el límite ya confirmado de dos perfiles activados por licencia, con liberación por soporte. La decisión de producto está cerrada; faltan reserva atómica, conciliación con Lemon y administración.
-- [x] Implementar el comprobante firmado y la revalidación ya confirmada cada treinta días. La decisión de producto está cerrada; faltan firma/verificación, alarma one-shot, guard PRO y pruebas de vencimiento/offline/revocación.
-- [x] Verificar que activar/restaurar falla de forma recuperable ante respuestas incompletas del servicio; nunca conceder PRO por una respuesta vacía o por la URL de éxito.
+## C7 — Operación y medición: ABIERTO
 
-Salida: matriz de capacidades implementada, copy consistente y pruebas de transiciones; las decisiones de dispositivos y offline quedan explícitas, no implícitas en constantes.
+- [x] Documentación reconciliada con HEAD y compra test confirmada; inventario y cierres explícitos del 24/09.
+- [ ] Conciliar embudo mínimo real: compra deduplicada por servidor, activación, errores y refunds; excluir test de métricas productivas.
+- [ ] Baseline por versión/período con denominadores; feedback de una versión antigua no certifica impacto de fixes nuevos.
+- [ ] Registrar comisiones/neto efectivos y primer payout cuando haya saldo elegible; no afirmar que un retiro se recibió por haberlo configurado.
+- [ ] Soporte/reconciliación operativos. Experimentos 1E sólo después de datos, una variable comercial por vez.
 
-## C3 — Corregir y probar el Worker de licencias
+## Registro de continuidad
 
-Archivos: `services/player-tools-license/src/index.mjs`, `src/validation.mjs`, migraciones, tests y cliente commerce. Preservar compatibilidad de datos o documentar migración/rollback.
+Base limpia al iniciar: `29d7946`, versión `2026.10.5`. Revisión documental, código y últimos commits; sin deploy, pagos, acceso a cuentas privadas ni publicación en esta sesión. La confirmación externa es del usuario. Los registros extensos de los días 21–23 están en Git; [12](12-ESTADO-Y-SIGUIENTE-AGENTE-20260923.md) conserva la evidencia histórica útil.
 
-### C3.1 Activación y restauración
-
-- [x] Añadir regresión con respuesta fiel al proveedor que reproduzca el HTTP 500 descrito arriba.
-- [x] Mapear por separado `license_key`, `instance` y `meta`; persistir instancia, pedido, cliente y hash de clave correctos. Verificar producto, variante, tienda, email y estado válido antes de conceder acceso.
-- [x] Hacer idempotentes tanto activación como restauración para la misma instalación. Probar dos solicitudes concurrentes, timeout después de activar en Lemon y reintento posterior. Resolver instancias huérfanas y errores por límite sin consumir cupos repetidamente.
-- [x] Resolver compra recibida antes o después de activar. El webhook hoy usa un identificador provisional `order:<id>` como `lemon_license_id`: revisar claves foráneas y actualizaciones para no romper activaciones al asociar la licencia definitiva.
-- [x] Impedir que la restauración de una fila local obsoleta rehabilite una licencia revocada. Definir conciliación con el proveedor, también para cambios manuales y eventos perdidos.
-- [ ] Cubrir reinstalación/equipo nuevo, licencia ajena, correo incorrecto y cupo agotado; dar recuperación concreta sin forzar otra compra.
-
-### C3.2 Webhooks y conciliación
-
-- [x] Conservar HMAC SHA-256 sobre cuerpo original, comparación de firma y límite de tamaño. Añadir tests positivos/negativos del handler completo.
-- [ ] Validar tienda, producto/variante, tipo de recurso, estado relevante y modo test/live antes de mutar licencias o registrar ventas. No aceptar como venta un evento de otro producto de la misma tienda.
-- [x] Corregir deduplicación: recepción durable y efectos deben ser transaccionales o disponer de estado recuperable. Un fallo después de guardar el evento debe poder completarse al reintentar; confirmar 200 sólo tras procesamiento o aceptación durable recuperable.
-- [ ] Distinguir repetición de entrega de repetición semántica del mismo pedido. Evitar duplicar licencia/venta aunque cambie la serialización del payload.
-- [x] Probar eventos duplicados, tardíos y desordenados: compra→reembolso, reembolso→compra atrasada, webhook antes/después de activación. Un evento antiguo no puede reactivar una revocación.
-- [x] Definir reembolso total/parcial y deshabilitación manual; implementar sincronización de `license_key_updated` cuando corresponda y/o conciliación por API. Registrar qué eventos se soportan antes de seleccionarlos en el dashboard.
-- [x] Añadir reintento/reconciliación para eventos que agoten los reintentos del proveedor. El endpoint `/license/status` hoy sólo consulta D1: eso no demuestra estado actual en Lemon si se perdió un webhook.
-- [ ] Mantener `purchase_confirmed` una vez por pedido válido; no registrar ventas de prueba en métricas de producción.
-
-### C3.3 Offline, servicio y límites de confianza
-
-- [x] Implementar el comprobante de entitlement firmado pedido por el 00, con verificación de firma en el cliente y campos de instalación, licencia, capacidades, emisión y vigencia técnica. Clave privada sólo en servidor; la extensión puede incluir la pública. Documentar rotación/migración.
-- [x] Persistir únicamente los datos necesarios para restaurar el estado local; no persistir clave de licencia ni email en la extensión. Un comprobante firmado no vuelve invulnerable el perfil local: evitar promesas de antifraude absoluto.
-- [ ] Aplicar política offline de C2; probar firma falsa, comprobante de otra instalación, vencimiento técnico, caída del servidor, revocación al reconectar y conservación de preferencias/trial.
-- [ ] Revisar timeout y tamaño de respuestas del proveedor en el Worker, errores tipados y logs sin secretos. Mantener CORS de producción limitado a orígenes necesarios; quitar localhost de la configuración live.
-- [ ] Separar secretos, D1, productos y endpoints/configuración de test/live. La comprobación `health: ready` sólo constata configuración, no reemplaza una compra.
-
-Salida: pruebas del Worker con respuestas realistas y almacenamiento representativo, incluidas transacciones/constraints D1. Los mocks del cliente y los dos tests de validación actuales son insuficientes por sí solos. Actualizar README del servicio para describir lo probado y sus límites.
-
-## C4 — Cloudflare y Test Mode de extremo a extremo
-
-Seguir pasos operativos del [11](11-LEMON-SQUEEZY-TUTORIAL-20260921.md). Preparar configuración sin secretos, migraciones y dry run antes de deploy. Respetar permisos efectivos de la sesión; no asumir acceso a cuentas privadas.
-
-- [ ] Worker de prueba desplegado, D1 migrada, health configurado, API key y secreto de webhook instalados; CORS incluye la extensión de prueba.
-- [ ] Comprar desde el botón de la extensión: checkout con instalación correlacionada, precio y variante correctos; cancelar/rechazar no concede PRO.
-- [ ] Compra de prueba exitosa y un único registro de venta; correlación pedido/licencia/instancia en Lemon, D1 y extensión.
-- [ ] Email + clave activa; restaurar/repetir no crea compra ni instancia adicional. Reiniciar worker y popup conserva PRO.
-- [ ] Probar webhook atrasado/duplicado, respuesta perdida y recuperación; comprobar que una compra confirmada pendiente de activación tiene instrucciones y soporte.
-- [ ] Reembolso y cambio manual de licencia propagados según política; el entitlement se revoca sin borrar preferencias o trial.
-- [ ] Probar red caída y casos negativos de firma, origin, producto/variante, modo, email y clave. FREE sigue funcionando.
-
-Evidencia: fecha, commit, entorno, IDs de correlación mínimos no secretos, resultado visible, consultas D1 sanitizadas y resultados del proveedor. No pegar payloads completos con datos de compradores. Salida: checklist anterior completo; mock local no sustituye este gate.
-
-## C5 — Aprobación comercial y Live Mode
-
-- [ ] Presentar producto real a Lemon, obtener aprobación y completar identidad/formulario fiscal aplicable. Publicar términos, privacidad, reembolsos y soporte coherentes con la extensión.
-- [ ] Configurar y comprobar disponibilidad del método de retiro elegido. Argentina está admitida en la documentación consultada; Wise específico no está confirmado.
-- [ ] Copiar/crear producto live, verificar precio, moneda, licencia sin vencimiento, cupo y nuevos IDs. Configurar API key, secreto, webhook y D1 de producción independientes.
-- [ ] Repetir compra/activación/restauración/reembolso en producción con una operación controlada permitida por el proveedor y autorizada para el gasto. Preparar todo antes de solicitar el dato o permiso externo que falte; no usar tarjetas reales en Test Mode.
-- [ ] Documentar recuperación ante incidencia comercial: identificar pedido, reconciliar, reenviar recibo/restaurar o atender reembolso. Si se pausa checkout por una incidencia, conservar el acceso adquirido y las descargas FREE.
-
-Salida: tienda habilitada y flujo live demostrado; no declarar un retiro bancario recibido si sólo está configurado. Registrar por separado primer payout cuando se alcance el umbral.
-
-## C6 — Artefacto y publicación
-
-- [ ] Ejecutar verificaciones apropiadas y resolver fallos: `npm test`, `npm run test:player-tools`, E2E de download, popup, tempo, loops y Likes según contratos afectados. Añadir los tests integrados del Worker de C3 al circuito habitual.
-- [ ] Validar Explorer existente con login/logout, propias/públicas, vacías/grandes, selección, descarga, cambio de cuenta, fin de prueba y reinicio. No confundir mocks con prueba contra datos reales.
-- [ ] Revisar `scripts/package-extension.js` y equivalencia del empaquetador alternativo si se usa. El código de desarrollo incluye `TEST_LOGIN`: el artefacto debe neutralizarlo y bloquear credenciales/estado `test-pro` heredado.
-- [ ] Generar candidato con `npm run package:extension`; revisar secretos, fixtures, docs, tests y datos privados excluidos. Inspeccionar el ZIP extraído.
-- [ ] Registrar versión única y coherente, commit, fecha y SHA-256. Ejecutar smoke sobre ese mismo ZIP: FREE, HLS, carpeta, sesión SoundCloud, prueba, PRO, restauración, reembolso y recuperación.
-- [ ] Reutilizar [03](03-STORE-Y-LOCALIZACION.md), [07](07-GUIONES-Y-CAPTURAS.md) y [09](09-DESCRIPCIONES-STORE-5-IDIOMAS.md). Publicar sólo funciones verificadas; no prometer EQ ni export de FX que el motor no incluya.
-- [ ] Revisar coherencia básica de landing, políticas, permisos, precio y oferta con Store. SEO multipágina y completar todos los videos no bloquean el release.
-- [ ] Preparar entrega revisable y subir/publicar con autorización aplicable; registrar envío, revisión, aprobación y disponibilidad como estados distintos. Una espera de Chrome Web Store no equivale a publicación completada.
-
-Salida: ZIP publicado idéntico al probado, versión identificable y evidencia de acceso comercial. Si una cuenta o revisión externa bloquea, terminar lo independiente y dejar el bloqueo exacto registrado.
-
-## C7 — Medición y cierre del proyecto comercial inicial
-
-- [ ] Comprobar embudo mínimo existente: apertura/valor, paywall, checkout, compra confirmada por servidor y activación; deduplicación e identificación de entorno correctas.
-- [ ] Registrar baseline por versión y período: compras, activaciones exitosas, errores, devoluciones y señales de desinstalación. No usar respuestas de feedback como tasa de fallos de toda la base.
-- [ ] Documentar comisiones y neto estimado; observar primer payout y registrar conciliación cuando el saldo elegible lo permita. No supeditar arreglos de producto a esperar ventas suficientes.
-- [ ] No cambiar simultáneamente precio, cuota y oferta. Los experimentos 1E vienen después de datos de uso.
-- [ ] Actualizar 00, 01, README y TESTING con estado demostrado y limitaciones. Quitar afirmaciones de cierre que contradigan evidencia.
-
-Después: seleccionar por evidencia un siguiente proyecto entre EQ/export, presets, Looper, Explorer y SEO. La etapa 02 permanece cerrada; no rehacerla por aparecer en una tabla histórica.
-
-## Seguimiento obligatorio entre sesiones
-
-Los casilleros empiezan pendientes: este documento es un handoff, no una implementación. Marcar una tarea sólo después de verificar su criterio. Por cada bloque completar:
-
-| Campo | Qué registrar |
-| --- | --- |
-| Base y resultado | Fecha, HEAD inicial/final, estado del árbol y bloque C1–C7. |
-| Cambios | Archivos y comportamiento corregido; migraciones si existen. |
-| Evidencia | Reproducción anterior, comandos/resultados, entorno y artefacto probado. |
-| Límites | Mocks frente a proveedor real; pruebas de navegador/dispositivo pendientes. |
-| Dependencias | Dato, decisión, credencial o permiso externo faltante, sin secretos. |
-| Siguiente acción | Una tarea concreta del primer bloque pendiente. |
-
-### Revisión de estado — 23/09/2026, base `73fceb8`
-
-Ver [12 — Estado y siguiente agente](12-ESTADO-Y-SIGUIENTE-AGENTE-20260923.md) para el estado consolidado con precedencia sobre los registros históricos siguientes. Después de la revisión se corrigió M17: `npm test` pasa sus 48 verificadores (Contact requiere ejecutar Chromium fuera del sandbox de macOS) y `npm run test:player-tools` pasa, incluidos 27 tests del servicio. No se certificaron todavía SoundCloud real, ChromeOS, ZIP candidato ni transacciones externas.
-
-El usuario reporta bloqueo del payout Wise en Lemon y considera otros proveedores. No se da por decidida una migración: revisar aceptación de la extensión completa, payout y pricing antes de construir otro adaptador. La siguiente tarea local es completar QA y generar un ZIP trazable del candidato. C4–C7 siguen abiertos; presets completos y loops guardados son la mejora recomendada posterior.
-
-Actualización posterior: el gate local completo y Likes Explorer pasan; se generó y verificó un ZIP diagnóstico de Test Mode. Ver 12 para SHA, límites y fixtures. El usuario reabrió M01 para exigir trial por cuenta resistente a reinstalación/perfiles; hace falta OAuth verificado por el Worker. Lemon declara Argentina compatible con payout bancario/PayPal, mientras Stripe directo no lista Argentina; no abrir cuentas duplicadas ni declarar otro país sin resolver primero el campo bancario exacto y el onboarding legítimo.
-
-### Registro inicial — planificación del 21/09/2026
-
-Se documentó el orden aceptado y la revisión de `6d5163a`. No se corrigió código, desplegó infraestructura ni procesó pagos en esta tarea documental. Evidencia técnica disponible: tests de Player Tools aprobados y reproducción local del HTTP 500 de activación descritos al inicio. Primera acción de implementación: contrastar HEAD y ejecutar el primer pendiente de C1; en paralelo operativo, iniciar alta y retiro de Lemon siguiendo el 11.
-
-### Registro de implementación — 22/09/2026, árbol posterior a `b556464`
-
-- C1-P0: se serializó el lifecycle del documento offscreen y se revalida el lease después de `getContexts()`. Una regresión determinista adquiere un segundo lease durante el cierre, comprueba que no se cierre el documento y que el último lease ejecute el cierre diferido.
-- C2 audio: EQ/FX ahora viajan de la UI al worker y al renderer offscreen para loops y tracks completos. `offscreen.html` carga el motor paramétrico y el render offline aplica EQ antes del WAV. Un export con sólo EQ y velocidad 1× requiere PRO. Chromium demostró cambio de señal y bypass sin cambio. WAV se autoriza en el build: FREE rechaza un WAV detectado y Auto reintenta en MP3; un formato explícito no se sustituye silenciosamente.
-- C3-P0: `0004_order_revocations.sql` agrega tombstones de reembolso total y claims con token propietario. Reembolso→pedido atrasado→activación no resucita la licencia; reembolso parcial queda para revisión manual. El filtro usa `first_order_item`, conforme al payload oficial actual. Entregas simultáneas reciben 503 para reintento y las ya procesadas son idempotentes.
-- Evidencia local: migraciones 0001–0004 ejecutadas en SQLite real desde la suite del servicio; nueve tests del Worker aprobados. `verify-bulk-job-state-machine`, `verify-loop-background-routing`, `verify-tempo-browser` y `verify-parametric-eq-browser` aprobaron. La suite global encontró y se alineó con dos cambios previos de HEAD: Contact desactivado y 63 reseñas de landing.
-- Artefacto diagnóstico (no candidato): `npm run package:extension` generó la versión `2026.10.5`; la inspección detectó y corrigió `.DS_Store` dentro de `assets/icons`. El ZIP regenerado no contiene metadata de SO, `repos/`, docs ni tests, y lleva `TEST_LOGIN = null`. SHA-256 local final: `94c2c4bd14aaaa00411e9b3d66213460d98b3a795c278bd7e7c87431c7095d35`. No publicar: todavía faltan los gates C3/C4 indicados abajo.
-- E2E de navegador: `npm run test:e2e` aprobó el flujo de loops después de reemplazar un fixture `data:` sobredimensionado por una respuesta WAV interceptada sobre HTTPS. El fallo previo `invalid_build` pertenecía al fixture, no al renderer ni a la política FREE/PRO.
-- Regresión local: aprobaron `npm test` (45 verificaciones), `npm run test:player-tools` (9 pruebas del Worker), tempo y EQ paramétrico en Chromium y las verificaciones específicas de descarga, política y máquina de estados. La suite se repitió antes de enmendar el commit.
-- Límites: no se desplegó D1 ni Worker, no hubo payload/compras reales de Test Mode, no se probó ChromeOS y no se generó candidato. Siguen abiertos activación concurrente/huérfana, dos seats atómicos, conciliación de estado, comprobante firmado de treinta días y la autoridad/identidad verificable del trial.
-- Siguiente acción concreta: cerrar activación concurrente y reconciliación de instancias con tests D1; después implementar dos seats y el comprobante firmado. C4 requiere credenciales/cuenta externas y no puede marcarse cerrado con mocks.
-
-### Registro de implementación — 22/09/2026, árbol posterior a `436f2d5`
-
-- C1: la enumeración paginada se movió al service worker usando un descriptor
-  durable de colección; cerrar o navegar la pestaña ya no elimina la fuente del
-  job. Popup, inline y selección manual terminan en `START_PAGED_BULK_JOB`. La
-  selección carga páginas bajo demanda y persiste semántica `all_except` o
-  `explicit`; formato, cursor y selección quedan congelados en IndexedDB.
-  `Retry-After` ya no se borra al reanudar antes de tiempo y usa una alarma
-  one-shot para continuar.
-- C2: el trial de siete días/veinte loops pasó a autoridad D1 con consumos
-  idempotentes y recibos ES256. La identidad se replica en `storage.sync` para
-  sobrevivir a pérdida del estado local. PRO sólo se concede con un recibo
-  ES256 ligado a instalación/licencia/instancia; vence técnicamente a treinta
-  días y después exige renovación online. Una alarma one-shot se restaura al
-  iniciar el service worker y el guard de capacidades conserva el vencimiento
-  como respaldo. Respuestas HTTP 200 vacías o sin firma fallan cerradas. El
-  empaquetador exige inyectar una JWK/JWKS pública y el verificador selecciona
-  por `keyId`, con procedimiento de rotación documentado.
-- C3: dos perfiles se reservan atómicamente antes de llamar al proveedor. Los
-  reintentos de persistencia concilian una instancia remota existente antes de
-  activar otra; errores 429/5xx no revocan; una instancia ausente desactiva sólo
-  ese perfil; reembolsos y `license_key_updated` eliminan reservas activas. El
-  comando administrativo de liberación primero desactiva en Lemon y luego
-  actualiza D1, con preview por defecto.
-- Evidencia dirigida: `npm run test:player-tools` aprobó verificadores de
-  policy/access/client/commerce y 19 escenarios del Worker/D1. También
-  aprobaron `verify-bulk-job-state-machine`, `verify-download-intent` y
-  `verify-page-intake`. Tras cerrar alarma, rotación y rechazo autoritativo del
-  trial se repitieron sólo `verify-player-tools-access`,
-  `verify-player-tools-commerce` y los 19 escenarios del Worker/D1; aprobaron.
-  No se ejecutó la suite global ni navegador en esta tanda.
-- Límite externo: C4 sigue pendiente hasta disponer de IDs, secretos y cuenta
-  Test Mode. No hubo migración remota, deploy, checkout, webhook real, compra o
-  reembolso real. Antes de empaquetar hay que generar el par ES256, instalar la
-  privada como secreto y pasar la pública mediante `ENTITLEMENT_PUBLIC_JWK`.
-
-### Preparación local de C4 — 22/09/2026, posterior a `b896288`
-
-- El ejemplo Wrangler separa Worker, ruta, D1, IDs de Lemon, origen de extensión
-  y secretos requeridos entre test y producción. Un preflight local rechaza
-  placeholders, IDs inválidos, localhost y recursos compartidos por accidente.
-  El generador produce pares ES256 test/live en archivos distintos para evitar
-  sobreescritura o reutilización involuntaria.
-- `health` devuelve `ready` sólo si la configuración requerida existe y D1
-  contiene las ocho tablas de las migraciones; todavía no demuestra acceso a
-  Lemon ni una compra.
-- El empaquetador exige `PLAYER_TOOLS_API_BASE_URL` además de la JWKS pública,
-  inyecta el endpoint elegido y agrega su origen al manifest empaquetado. El
-  login local `1`/`1` sigue eliminado en todo ZIP.
-- La UI dejó de mostrar USD 6,79 tachado; presenta únicamente USD 3,69 lifetime,
-  evitando sugerir un precio histórico inexistente.
-- Evidencia de esta tanda: revisión estática y `git diff --check`; por pedido del
-  usuario no se ejecutaron suites ni navegador. No se instalaron dependencias,
-  generaron claves, crearon D1, configuraron secretos, desplegaron Workers ni
-  realizaron operaciones de Lemon.
-- Siguiente acción externa concreta: crear/completar la tienda Test Mode y el
-  producto lifetime, obtener Store/Product/Variant IDs y el ID de la extensión
-  de prueba. Con esos datos no secretos se puede materializar `wrangler.jsonc`;
-  las claves se cargan de forma interactiva, nunca por chat o commit.
+Siguiente acción: registrar los escenarios de C4 todavía no confirmados y resolverlos; en paralelo preparar C5 con sus valores reales. Para cada cierre guardar fecha, commit/entorno, escenario, resultado y límites. No reimplementar C3, EQ/export o header desde planes antiguos.

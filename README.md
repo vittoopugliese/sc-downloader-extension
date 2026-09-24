@@ -9,9 +9,9 @@
 
 ![SoundCloud Downloader popup with format and folder controls](./assets/images/readme_preview.png)
 
-## 🆕 Update ~ 2026.06.01
+## Current source checkout — 2026.10.5
 
-This release is a **big one**. What started as a single-track downloader is now a fully polished bulk-download tool ~ with a ton of bug fixes and UX improvements along the way.
+This README describes the source checkout, not proof that this build is available on Chrome Web Store. A Lemon Squeezy Test Mode purchase, automatic Pro activation, and exit from the seven-day trial were confirmed on September 24, 2026. Restore, additional profiles, refund/revocation, Live setup, and the production release remain open. See the [documentation status and remaining work](docs/ESTADO-ACTUAL-20260924.md).
 
 ![Inline download button in the SoundCloud action bar](./assets/images/readme_inline_download.jpeg)
 
@@ -25,13 +25,13 @@ This release is a **big one**. What started as a single-track downloader is now 
 - **Remembered download folder** ~ use the native folder picker once, then change the destination beside the quality and amount selectors whenever needed
 - **Likes** ~ your own (`/you/likes`) or any user's public likes page
 - **Background bulk downloads** ~ close the popup or switch tabs; downloads keep running
-- **Low memory usage** ~ at most two tracks in memory at a time (no giant ZIP in RAM)
+- **Sequential bulk audio processing** ~ one track build at a time, with bounded source/render budgets (no giant ZIP in RAM); device memory validation remains part of release QA
 - **Configurable batch size** ~ choose how many tracks to grab: `10`, `25`, `50`, `100`, `150`, `200`, `300`, or **All**
 - **No login required** for most public tracks (OAuth fallback when needed)
 - **Modern AAC HLS streaming** support ~ SoundCloud's current format, handled automatically
 - **SPA-friendly** ~ switch tracks, playlists, or pages without reloading SoundCloud
 - **Polished UI** ~ loading spinner, clear error states, download progress, pause/cancel, badge, and notifications
-- **Real Audio** ~ when an artist enables downloads on SoundCloud, the extension grabs the uploaded file (WAV/FLAC/MP3) instead of the streamed transcode
+- **Real Audio** ~ when an artist enables downloads on SoundCloud, the extension can use the uploaded file instead of the streamed transcode, subject to the selected format and access policy; WAV requires Pro
 
 If you used an older version and ran into bugs ~ stale track data, blank screens, login-only downloads ~ this update was built to fix exactly that. 🎉
 
@@ -75,17 +75,13 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 - Clear error screen when you're not on a supported page
 - Download progress: `Track 3/50 ~ Downloading 12/48 parts...`
 - SPA navigation detection ~ no more stale track data when browsing SoundCloud
-- Bulk jobs run in a background offscreen worker ~ safe for playlists with hundreds of tracks on modest hardware
+- Bulk jobs are coordinated by the service worker with an offscreen document for audio processing; memory on modest hardware still needs device-specific validation
 
 ### Screenshots
 
 #### Choose tracks from a playlist
 
 ![Playlist track selector](./assets/images/playlist-selector.png)
-
-#### Download from the persistent player's tempo panel
-
-![Tempo-panel download button](./assets/images/player-download-demo.png)
 
 #### Create an A-B loop and download the selected range
 
@@ -97,13 +93,9 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 
 ### Promotional images
 
-![Playlist and single-track download features](./assets/promos/one.png)
+These assets may show earlier UI; capture the final candidate before updating the Store listing.
 
-![WAV download and A-B looping add-on](./assets/promos/two.png)
-
-![Playlist selection and download options](./assets/promos/three.png)
-
-![A-B looper promotional image](./assets/promos/four.png)
+![Historical product promotional image](./assets/images/promo.png)
 
 ---
 
@@ -171,11 +163,11 @@ Dark blurred artwork background, SoundCloud-orange accents, spinner states, and 
 - **Manifest V3** Chrome extension
 - Streams resolved via SoundCloud's `api-v2` (public `client_id` + optional OAuth cookie)
 - HLS segments fetched and assembled client-side; output as `.m4a` / `.mp3` depending on source
-- Bulk downloads use `chrome.downloads` for the default Downloads location or the File System Access API for a user-selected folder, plus an offscreen document ~ at most two tracks at a time, minimal RAM
+- Bulk downloads use `chrome.downloads` for the default Downloads location or the File System Access API for a user-selected folder, plus an offscreen document; bulk audio processing is sequential (`MAX_IN_FLIGHT = 1`), with explicit byte/render budgets
 - Bulk jobs survive popup/tab close; per-track state ensures recovery after service worker restarts
 - Job, track and direct-download operation state is stored durably in IndexedDB and reconciled after service-worker/browser restarts
 - Pause stops new tracks; in-flight downloads still finish and save
-- Large collections: pagination handled automatically; stream URLs refreshed per track if they expire
+- Bulk jobs enumerate pages durably in the worker; stream URLs are refreshed per track if they expire. Manual **Select** currently loads the complete selectable list before showing virtualized rows; it is not a paginated data view
 - The A-B looper keeps its timing rules in a DOM-free module so a future precise audio/download adapter can reuse the same range
 - SoundCloud's detached `Audio` player is captured by a minimal MAIN-world bridge; the looper UI only exchanges player state and seek commands with it
 - Loop WAV processing runs in the extension's offscreen document. Signalsmith/WASM is loaded only for preserved-pitch exports, so it never takes ownership of SoundCloud's live audio graph
@@ -194,9 +186,9 @@ Dark blurred artwork background, SoundCloud-orange accents, spinner states, and 
 - Sign in to SoundCloud if the track is private or requires login
 
 **Audio quality**
-- SoundCloud does not offer a 320 kbps stream — the best transcode available is typically **AAC 160k**
-- When the artist has enabled downloads, the extension automatically uses the **original uploaded file** (often WAV, FLAC, or high-quality MP3)
-- Otherwise, files are saved from SoundCloud's streaming transcode (~50–80 MB/hour)
+- Available formats and quality depend on the source SoundCloud provides for that track and session; the extension does not guarantee a bitrate or lossless audio
+- When the artist has enabled downloads, the extension can use the **original uploaded file**, subject to format and access policy. WAV requires Pro; Auto can fall back to an available MP3 source
+- Otherwise, files are saved from an available streaming transcode; converting a stream to WAV does not recover original quality
 
 ---
 

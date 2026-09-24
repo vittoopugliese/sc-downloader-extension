@@ -1,5 +1,7 @@
 # Likes Explorer Pro: plan técnico por etapas y guía de implementación
 
+> **V1 IMPLEMENTADA; QA/evolución ABIERTOS — revisión 24/09/2026 (`29d7946`).** Biblioteca, búsqueda, mapa, portadas y navegación existen. Trial de siete días seguido de PRO; bookmarks/lugares guardados fueron retirados en `1b16710`. No prometer autoplay/shuffle, terceros ni cerrar benchmarks/QA real por fixtures. Estado y pendientes: [registro vigente](ESTADO-ACTUAL-20260924.md).
+
 > Implementación local iniciada y entregada el 2026-09-16 por pedido del usuario. Ver [handoff, pruebas y gates pendientes](LIKES-EXPLORER-HANDOFF-20260916.md). Las afirmaciones siguientes de «todavía no implementado» y «sólo plan» describen la edición histórica del 15 de septiembre; no son el estado actual. El gate autenticado sigue pendiente y la escucha usa Abrir para escuchar.
 
 Creado: 2026-09-12. Actualizado: 2026-09-15. Estado: plan detallado; **Likes Explorer todavía no está implementado**, confirmado por el usuario.
