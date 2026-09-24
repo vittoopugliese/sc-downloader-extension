@@ -670,6 +670,12 @@ async function main() {
       throw new Error(`Expanded loop actions must be visible and disabled without a loop: ${JSON.stringify(emptyLoopActions)}`);
     }
     assert.equal(await host.locator(".save-loop-pad").isDisabled(), true);
+    assert.equal(await host.locator(".sampler-actions > .save-loop-pad").count(), 1,
+      "Save loop must live in the Sampler header.");
+    assert.equal(await host.locator(".sampler-actions > .loop-instrument").count(), 1,
+      "Piano mode must live in the Sampler header.");
+    assert.equal(await host.locator(".waveform-actions > .save-loop-pad, .waveform-actions > .loop-instrument").count(), 0,
+      "Sampler actions must not consume space in the Loop Region header.");
     await host.locator(".waveform-toggle").evaluate((button) => button.click());
     if (await host.locator(".waveform-actions").isHidden()) {
       throw new Error("Collapsed loop actions must remain visible without an active loop.");
