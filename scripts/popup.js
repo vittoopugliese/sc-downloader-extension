@@ -99,9 +99,6 @@ let selectionItems = [];
 let selectedIds = new Set();
 let selectionAll = false;
 let selectionExcludedIds = new Set();
-let selectionNextCursor = null;
-let selectionDone = true;
-let selectionLoadingPage = false;
 let selectionTotal = 0;
 let previousDownloadLimitValue = "50";
 let downloadLimitMode = "number";
@@ -1157,10 +1154,6 @@ function onSelectionScroll() {
   selectionScrollRaf = requestAnimationFrame(() => {
     selectionScrollRaf = null;
     renderVisibleSelectionRows();
-    if (!selectionDone && !selectionLoadingPage &&
-        selectionViewport.scrollTop + selectionViewport.clientHeight >= selectionViewport.scrollHeight - ROW_HEIGHT * 8) {
-      loadNextSelectionPage().catch((error) => console.error("Error loading selection page:", error));
-    }
   });
 }
 
@@ -1202,7 +1195,7 @@ function renderVisibleSelectionRows() {
 
     const indexSpan = document.createElement("span");
     indexSpan.className = "selection-index";
-    indexSpan.textContent = item.indexLabel || String(item.index);
+    indexSpan.textContent = String(index + 1).padStart(String(total).length, "0");
 
     const titleSpan = document.createElement("span");
     titleSpan.className = "selection-title";
@@ -1245,12 +1238,10 @@ function restoreControlsToMainView() {
   updateFormatHint();
 }
 
-function enterSelectionMode(page, selectAllByDefault = false, total = null) {
+function enterSelectionMode(items, selectAllByDefault = false) {
   isSelectionMode = true;
-  selectionItems = page.items;
-  selectionNextCursor = page.nextCursor ?? null;
-  selectionDone = page.done === true || selectionNextCursor == null;
-  selectionTotal = Number.isSafeInteger(total) && total >= selectionItems.length ? total : selectionItems.length;
+  selectionItems = items;
+  selectionTotal = selectionItems.length;
   selectionAll = selectAllByDefault;
   selectionExcludedIds = new Set();
   selectedIds = new Set();
@@ -1272,8 +1263,6 @@ function exitSelectionMode() {
   selectionItems = [];
   selectionAll = false;
   selectionExcludedIds.clear();
-  selectionNextCursor = null;
-  selectionDone = true;
   selectionTotal = 0;
   selectedIds.clear();
   document.body.classList.remove("selection-mode");
@@ -1313,7 +1302,7 @@ async function openSelectionPanel(options = {}) {
     currentPlaylistData.tracks?.length ??
     0;
 
-  if (total > SELECT_WARN_THRESHOLD) {
+  if (currentPlaylistData.kind === "likes" || total > SELECT_WARN_THRESHOLD) {
     const proceed = confirm(
       t("load_collection_confirm", total)
     );
@@ -1329,9 +1318,9 @@ async function openSelectionPanel(options = {}) {
   loadingText.textContent = t("loading_track_list");
 
   try {
-    const result = await requestBulkSelectionPage(null);
+    const result = await requestFromActiveTab({ type: "GET_BULK_SELECTION_LIST", total });
 
-    if (!result?.success || !result.page?.items?.length) {
+    if (!result?.success || !result.items?.length) {
       hideLoading();
       alert(result?.error || t("load_track_list_failed"));
       restoreCollectionAfterSelectionError();
@@ -1340,9 +1329,8 @@ async function openSelectionPanel(options = {}) {
 
     hideLoading();
     enterSelectionMode(
-      result.page,
-      options.selectAllByDefault === true,
-      total
+      result.items,
+      options.selectAllByDefault === true
     );
   } catch (error) {
     console.error("Error opening selection panel:", error);
@@ -1577,26 +1565,6 @@ function requestFromActiveTab(message) {
 
 function requestBulkTracks(limit) {
   return requestFromActiveTab({ type: "GET_BULK_TRACKS", limit });
-}
-
-function requestBulkSelectionPage(cursor) {
-  return requestFromActiveTab({ type: "GET_BULK_SELECTION_PAGE", cursor, pageSize: 200 });
-}
-
-async function loadNextSelectionPage() {
-  if (selectionDone || selectionLoadingPage) return;
-  selectionLoadingPage = true;
-  try {
-    const result = await requestBulkSelectionPage(selectionNextCursor);
-    if (!result?.success || !result.page) throw new Error(result?.error || "Could not load the next page.");
-    const known = new Set(selectionItems.map((item) => String(item.id)));
-    for (const item of result.page.items || []) if (!known.has(String(item.id))) selectionItems.push(item);
-    selectionNextCursor = result.page.nextCursor ?? null;
-    selectionDone = result.page.done === true || selectionNextCursor == null;
-    renderVisibleSelectionRows();
-  } finally {
-    selectionLoadingPage = false;
-  }
 }
 
 async function syncPlayerToolsOffer() {
