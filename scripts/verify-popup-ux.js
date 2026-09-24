@@ -101,6 +101,14 @@ assert(
   !/body\.selection-mode\s*\{[^}]*520px/s.test(popup),
   "Selection mode should not force the popup to a 520px height."
 );
+assert(
+  /body\.selection-mode \.download-button-container\s*\{\s*margin-top:\s*8px;\s*\}/s.test(popup),
+  "The selection download action should remain close to the end of the track list."
+);
+assert(
+  /body\.selection-mode \.selection-header #downloadFormat\s*\{[^}]*width:\s*45px;[^}]*max-width:\s*45px;[^}]*flex:\s*0 0 45px;/s.test(popup),
+  "The selection quality control should retain its readable 45px width."
+);
 
 assert(
   !/id="downloadFolder"[^>]*type="text"/.test(popup),
