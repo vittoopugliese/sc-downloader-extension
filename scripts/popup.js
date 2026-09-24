@@ -12,8 +12,6 @@ const ROW_HEIGHT = 40;
 const MAX_SELECTION_HEIGHT = 8 * ROW_HEIGHT;
 const OVERSCAN = 6;
 const POPUP_START_VIEW_KEY = "scdl.popup.startView";
-// Keep true while reviewing the Pro layout; set false to hide product banners for active Pro users.
-const SHOW_PRODUCT_OFFERS_FOR_PRO = true;
 
 const loadingOverlay = document.getElementById("loadingOverlay");
 const loadingText = document.getElementById("loadingText");
@@ -1619,7 +1617,7 @@ async function syncPlayerToolsOffer() {
     }
     const active = snapshot?.plan === "pro" || commerce?.status === "active";
     commerceRestoreBtn.textContent = t("player_tools_restore");
-    productOffers.hidden = active && !SHOW_PRODUCT_OFFERS_FOR_PRO;
+    productOffers.hidden = active;
     playerToolsOffer.hidden = false;
     playerToolsProBtn.hidden = active;
     playerToolsProBtn.textContent = t("player_tools_get_pro");

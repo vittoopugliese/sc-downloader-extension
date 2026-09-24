@@ -175,6 +175,12 @@ assert(
   "The popup must not contain a local Pro bypass."
 );
 assert(
+  /productOffers\.hidden = active;/.test(popupScript) &&
+    !/SHOW_PRODUCT_OFFERS_FOR_PRO/.test(popupScript) &&
+    /body\s*\{[\s\S]*?width:\s*426px;[\s\S]*?height:\s*341px;/s.test(popup),
+  "Active Pro must hide the complete promotion row without changing the popup dimensions."
+);
+assert(
   /async function ensureDownloadDestinationPermission\(\)[\s\S]*SCDownloadDirectory\.ensurePermission\(currentDownloadDestination\.id\)/.test(
     popupScript
   ),
