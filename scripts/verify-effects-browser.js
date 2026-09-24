@@ -72,7 +72,7 @@ const { chromium } = require("playwright");
     assert.equal(await host.locator('[data-effect-value="reverb"]').textContent(), "20%",
       "The compact reverb toggle must restore its previous wet amount");
     await host.locator(".effects-toggle").click();
-    for (const [name, amount] of [["reverb", 35], ["delay", 28]]) {
+    for (const [name, amount] of [["reverb", 35], ["delay", 28], ["flanger", 24], ["phaser", 22], ["saturation", 18], ["bitcrusher", 16]]) {
       await host.locator(`#scdl-effect-${name}`).fill(String(amount));
       assert.equal(await host.locator(`[data-effect-value="${name}"]`).textContent(), `${amount}%`,
         "FX must apply to the current track without creating a loop or acquiring a session");
@@ -111,12 +111,23 @@ const { chromium } = require("playwright");
     assert.equal(await host.locator('[data-effect-character-value="reverbDecay"]').textContent(), '6.5s');
     await host.locator('#scdl-effect-reverb-predelay').fill('80');
     assert.equal(await host.locator('[data-effect-character-value="reverbPreDelay"]').textContent(), '80ms');
+    await host.locator('[data-effect-settings="flanger"]').click();
+    await host.locator('[data-effect-character="flangerRate"]').fill('1.25');
+    assert.equal(await host.locator('[data-effect-character-value="flangerRate"]').textContent(), '1.25Hz');
+    await host.locator('[data-effect-settings="bitcrusher"]').click();
+    await host.locator('[data-effect-character="bitDepth"]').fill('7');
+    assert.equal(await host.locator('[data-effect-character-value="bitDepth"]').textContent(), '7bit');
+    await host.locator('[data-effect-settings="delay"]').click();
+    await host.locator('[data-effect-freeze]').dispatchEvent('pointerdown', { button: 0, pointerId: 1 });
+    assert.equal(await host.locator('[data-effect-freeze]').getAttribute('aria-pressed'), 'true');
+    await host.locator('[data-effect-freeze]').dispatchEvent('pointerup', { button: 0, pointerId: 1 });
+    assert.equal(await host.locator('[data-effect-freeze]').getAttribute('aria-pressed'), 'false');
     await host.locator('[data-fx-preset="dub"]').click();
     assert.equal(await host.locator('#scdl-effect-delay-feedback').inputValue(), '60');
     assert.equal(await host.locator('[data-effect-value="reverb"]').textContent(), "12%");
     await host.locator(".effects-toggle").click();
     await host.locator(".effects-toggle").click();
-    for (const name of ["reverb", "delay"]) {
+    for (const name of ["reverb", "delay", "flanger", "phaser", "saturation", "bitcrusher"]) {
       await host.locator(`#scdl-effect-${name}`).fill("0");
       assert.equal(await host.locator(`[data-effect-value="${name}"]`).textContent(), "0%");
     }

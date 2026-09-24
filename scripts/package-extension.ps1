@@ -35,6 +35,7 @@ $packageItems = @(
     "scripts/soundcloud-likes-locator.js",
     "scripts/likes-popup.js",
     "scripts/audio-effects-core.js",
+    "scripts/bitcrusher-processor.js",
     "scripts/parametric-eq.js",
     "scripts/player-tools-collapsible.js",
     "scripts/parametric-eq-ui.js",

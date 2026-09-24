@@ -78,13 +78,13 @@
   // Inline copy of assets/icons/bypass.svg for the MAIN-world shadow UI.
   const BYPASS_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17.2C22 19.85 19.85 22 17.2 22C15.78 22 14.51 21.38 13.63 20.4C12.87 19.55 12.4 18.43 12.4 17.2C12.4 14.55 14.55 12.4 17.2 12.4C18.57 12.4 19.81 12.98 20.69 13.91C20.68 13.91 20.68 13.91 20.69 13.92C21.5 14.78 22 15.93 22 17.2Z"/><path d="M18.48 18.54L15.95 16M18.45 16.03L15.92 18.57"/><path d="M22 8.69C22 10.66 21.49 12.4 20.69 13.91C19.81 12.98 18.57 12.4 17.2 12.4C14.55 12.4 12.4 14.55 12.4 17.2C12.4 18.43 12.87 19.55 13.63 20.4C13.26 20.57 12.92 20.71 12.62 20.81C12.28 20.93 11.72 20.93 11.38 20.81C8.48 19.82 2 15.69 2 8.69C2 5.6 4.49 3.09998 7.56 3.09998C9.37 3.09998 10.99 3.98002 12 5.33002C13.01 3.98002 14.63 3.09998 16.44 3.09998C19.51 3.09998 22 5.6 22 8.69Z"/></svg>`;
   // Inline copy of assets/icons/settings.svg so the tempo panel matches popup.html.
-  const HELP_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zM7.92 9.234v.102a.5.5 0 0 0 .5.5h.997a.499.499 0 0 0 .499-.499c0-1.29.998-1.979 2.34-1.979 1.308 0 2.168.689 2.168 1.67 0 .928-.482 1.359-1.686 1.91l-.344.154C11.379 11.54 11 12.21 11 13.381v.119a.5.5 0 0 0 .5.5h.997a.499.499 0 0 0 .499-.499c0-.516.138-.723.55-.912l.345-.155c1.445-.654 2.529-1.514 2.529-3.39v-.103c0-1.978-1.72-3.441-4.164-3.441-2.478 0-4.336 1.428-4.336 3.734zm2.58 7.757c0 .867.659 1.509 1.491 1.509.85 0 1.509-.642 1.509-1.509 0-.867-.659-1.491-1.509-1.491-.832 0-1.491.624-1.491 1.491z" fill="currentColor"/></svg>`;
   const SETTINGS_ICON = `<svg viewBox="0 0 512 512" aria-hidden="true"><path d="M502.325 307.303 463.319 276.498a25.82 25.82 0 0 1-9.668-20.348v-.252a25.88 25.88 0 0 1 9.667-20.396l39.007-30.806a25.89 25.89 0 0 0 7.737-29.701l-17.134-41.366a25.89 25.89 0 0 0-26.472-15.532l-49.366 5.8a25.9 25.9 0 0 1-21.258-7.586l-.354-.356a25.88 25.88 0 0 1-7.552-21.225l5.799-49.363a25.89 25.89 0 0 0-15.531-26.472L337.004 1.939a25.89 25.89 0 0 0-29.701 7.736L276.498 48.68a25.82 25.82 0 0 1-20.349 9.668h-.252a25.88 25.88 0 0 1-20.395-9.667L204.697 9.675a25.89 25.89 0 0 0-29.702-7.736L133.63 19.072a25.89 25.89 0 0 0-15.532 26.473l5.799 49.366a25.9 25.9 0 0 1-7.585 21.257l-.356.356a25.88 25.88 0 0 1-21.226 7.552l-49.363-5.799a25.89 25.89 0 0 0-26.472 15.531L1.939 174.996a25.89 25.89 0 0 0 7.736 29.701l39.006 30.805a25.82 25.82 0 0 1 9.668 20.348v.251a25.88 25.88 0 0 1-9.667 20.395L9.675 307.303a25.89 25.89 0 0 0-7.736 29.701l17.134 41.365a25.89 25.89 0 0 0 26.472 15.532l49.366-5.799a25.9 25.9 0 0 1 21.258 7.586l.356.356a25.88 25.88 0 0 1 7.552 21.226l-5.799 49.364a25.89 25.89 0 0 0 15.532 26.472l41.366 17.134a25.89 25.89 0 0 0 29.701-7.736l30.804-39.005a25.82 25.82 0 0 1 20.348-9.669h.251a25.88 25.88 0 0 1 20.396 9.667l30.806 39.007a25.89 25.89 0 0 0 29.701 7.736l41.366-17.134a25.89 25.89 0 0 0 15.532-26.472l-5.8-49.366a25.9 25.9 0 0 1 7.586-21.257l.356-.356a25.88 25.88 0 0 1 21.225-7.552l49.364 5.799a25.89 25.89 0 0 0 26.472-15.531l17.134-41.365a25.89 25.89 0 0 0-7.737-29.701ZM281.292 329.698a77.75 77.75 0 1 1-59.52-143.695 77.75 77.75 0 0 1 59.52 143.695Z"/></svg>`;
   if (window[INSTALLED_FLAG] || !globalThis.SCTempoControl) return;
   Object.defineProperty(window, INSTALLED_FLAG, { value: true });
 
   const { DEFAULTS, clampRate, create, formatRate } = globalThis.SCTempoControl;
   const effectsApi = globalThis.SCTempoEffects;
+  const EFFECT_NAMES = effectsApi?.EFFECT_NAMES || ["reverb", "delay", "flanger", "phaser", "bitcrusher", "saturation"];
   const RATE_ANIMATION_DURATION_MS = 220;
   const DOWNLOAD_STATUS_DURATION_MS = 30000;
   const DOWNLOAD_REQUEST_TIMEOUT_MS = 120000;
@@ -160,7 +160,7 @@
   let expandedEffectSettings = null;
   let effectsFailure = "";
   let effectsBypassed = false;
-  const effectWetMemory = { reverb: DEFAULT_EFFECT_TOGGLE_WET, delay: DEFAULT_EFFECT_TOGGLE_WET };
+  const effectWetMemory = Object.fromEntries(EFFECT_NAMES.map((name) => [name, DEFAULT_EFFECT_TOGGLE_WET]));
   const customRates = CUSTOM_RATE_STORAGE.map((key, index) => {
     try {
       const stored = localStorage.getItem(key);
@@ -1939,7 +1939,6 @@
         .panel-tool .cross-icon { display:block; width:12px; height:12px; }
         .panel-tool-icon { display:block; width:13px; height:13px; object-fit:contain; filter:brightness(0) invert(1); }
         .detach-button[aria-pressed="true"] .panel-tool-icon { filter:brightness(0) saturate(100%) invert(56%) sepia(93%) saturate(1985%) hue-rotate(336deg) brightness(104%) contrast(101%); }
-        .settings-button svg { width: 12px; height: 12px; fill: currentColor; stroke: none; }
         @media (max-width: 360px) {
           .panel-header { grid-template-columns: 28px minmax(0, 1fr) auto; column-gap: 3px; }
           .brand-logo { width: 28px; height: 28px; border-radius: 7px; }
@@ -1957,7 +1956,11 @@
         .drum-section, .waveform-shell, .effects-shell { transition:height 160ms ease; }
         .drum-section > .tool-section-header .tool-section-heading,
         .waveform-shell > .tool-section-header .tool-section-heading,
-        .effects-shell > .tool-section-header .tool-section-heading { padding-right:64px; }
+        .effects-shell > .tool-section-header .tool-section-heading { padding-right:164px; }
+        .effect-group-title { margin: 5px 0 2px; color: #858c92; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+        .effect-freeze { grid-column: 1 / -1; height: 24px; border: 1px solid #4b5157; border-radius: 5px; color: #d5d8db; background: #202428; font-size: 10px; font-weight: 700; cursor: pointer; }
+        .effect-freeze:hover:not(:disabled), .effect-freeze[aria-pressed="true"] { border-color: #ff6a1a; color: #fff; background: #462619; }
+        .effect-freeze:disabled { cursor: not-allowed; opacity: .45; }
         .sampler-icon { width:14px; height:14px; filter:brightness(0) invert(1); }
         .waveform-body { display:contents; }
         .controls-hidden > .drum-section,
@@ -2009,9 +2012,6 @@
           </button>
           <button class="panel-tool reset-tools-button" type="button" aria-label="Reset playback, Loop, FX and EQ. Samples are kept." title="Reset playback, Loop, FX and EQ. Samples are kept.">
             <img class="panel-tool-icon trash-icon" alt="" aria-hidden="true" hidden />
-          </button>
-          <button class="panel-tool settings-button" type="button" aria-label="Open settings" title="Open settings">
-            ${HELP_ICON}
           </button>
           <button class="panel-tool detach-button" type="button" aria-label="Keep panel open when clicking outside" aria-pressed="false" title="Keep panel open when clicking outside">
             <img class="panel-tool-icon detach-icon" alt="" aria-hidden="true" hidden />
@@ -2072,13 +2072,24 @@
           <input class="loop-time loop-end-time" inputmode="decimal" placeholder="B 00:00.000" aria-label="Loop end time" />
         </div>
         <section class="effects-shell is-collapsed" id="scdl-audio-effects" aria-label="FX">
-          ${collapsible.header({ title: "FX", bodyId: "scdl-audio-effects-body", expanded: false, toggleClass: "effects-toggle", headerClass: "effects-header", actionsClass: "effect-bypasses", icon: '<svg class="tool-section-icon effects-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h2l2-7 4 14 3-11 2 7h2l1-3h2"/></svg>', actions: '<button class="effect-bypass" type="button" data-effect-bypass="reverb" aria-label="Enable reverb" aria-pressed="false">R</button><button class="effect-bypass" type="button" data-effect-bypass="delay" aria-label="Enable delay" aria-pressed="false">D</button>' })}
+          ${collapsible.header({ title: "FX", bodyId: "scdl-audio-effects-body", expanded: false, toggleClass: "effects-toggle", headerClass: "effects-header", actionsClass: "effect-bypasses", icon: '<svg class="tool-section-icon effects-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h2l2-7 4 14 3-11 2 7h2l1-3h2"/></svg>', actions: '<button class="effect-bypass" type="button" data-effect-bypass="reverb" aria-label="Enable reverb" aria-pressed="false">R</button><button class="effect-bypass" type="button" data-effect-bypass="delay" aria-label="Enable echo" aria-pressed="false">E</button><button class="effect-bypass" type="button" data-effect-bypass="flanger" aria-label="Enable flanger" aria-pressed="false">F</button><button class="effect-bypass" type="button" data-effect-bypass="phaser" aria-label="Enable phaser" aria-pressed="false">P</button><button class="effect-bypass" type="button" data-effect-bypass="bitcrusher" aria-label="Enable bitcrusher" aria-pressed="false">B</button><button class="effect-bypass" type="button" data-effect-bypass="saturation" aria-label="Enable saturation" aria-pressed="false">S</button>' })}
           <div class="effects-body" id="scdl-audio-effects-body">
             <div class="effects-presets" role="group" aria-label="FX presets"><button class="effects-preset" data-fx-preset="subtle" type="button">Subtle</button><button class="effects-preset" data-fx-preset="studio" type="button">Studio</button><button class="effects-preset" data-fx-preset="wide" type="button">Wide</button><button class="effects-preset" data-fx-preset="dub" type="button">Dub</button></div>
+            <p class="effect-group-title">Space</p>
             <div class="effect-row"><label class="effect-label" for="scdl-effect-reverb">Reverb</label><input class="effect-slider" id="scdl-effect-reverb" type="range" min="0" max="100" step="1" value="0" aria-label="Reverb mix" title="Reverb mix; 0% turns it off" /><output class="effect-value" data-effect-value="reverb">0%</output><button class="effect-settings-toggle" type="button" data-effect-settings="reverb" aria-label="Reverb settings" aria-expanded="false">⚙</button></div>
             <div class="effect-settings" data-effect-settings-panel="reverb"><label class="effect-setting-label" for="scdl-effect-reverb-room">Room</label><select class="effect-room" id="scdl-effect-reverb-room" data-effect-character="reverbRoom"><option value="room">Room</option><option value="hall">Hall</option><option value="plate">Plate</option></select><span></span><label class="effect-setting-label" for="scdl-effect-reverb-size">Size</label><input class="effect-setting-slider" id="scdl-effect-reverb-size" type="range" min="0" max="100" value="55" data-effect-character="reverbSize" /><output class="effect-setting-value" data-effect-character-value="reverbSize">55%</output><label class="effect-setting-label" for="scdl-effect-reverb-decay">Decay</label><input class="effect-setting-slider" id="scdl-effect-reverb-decay" type="range" min="0.2" max="12" step="0.1" value="2.4" data-effect-character="reverbDecay" /><output class="effect-setting-value" data-effect-character-value="reverbDecay">2.4s</output><label class="effect-setting-label" for="scdl-effect-reverb-predelay">Pre-delay</label><input class="effect-setting-slider" id="scdl-effect-reverb-predelay" type="range" min="0" max="200" value="20" data-effect-character="reverbPreDelay" /><output class="effect-setting-value" data-effect-character-value="reverbPreDelay">20ms</output><label class="effect-setting-label" for="scdl-effect-reverb-tone">Tone</label><input class="effect-setting-slider" id="scdl-effect-reverb-tone" type="range" min="0" max="100" value="70" data-effect-character="reverbTone" /><output class="effect-setting-value" data-effect-character-value="reverbTone">70%</output></div>
-            <div class="effect-row"><label class="effect-label" for="scdl-effect-delay">Delay</label><input class="effect-slider" id="scdl-effect-delay" type="range" min="0" max="100" step="1" value="0" aria-label="Delay mix" title="Delay mix; 0% turns it off" /><output class="effect-value" data-effect-value="delay">0%</output><button class="effect-settings-toggle" type="button" data-effect-settings="delay" aria-label="Delay settings" aria-expanded="false">⚙</button></div>
-            <div class="effect-settings" data-effect-settings-panel="delay"><label class="effect-setting-label" for="scdl-effect-delay-time">Time</label><input class="effect-setting-slider" id="scdl-effect-delay-time" type="range" min="60" max="800" value="250" data-effect-character="delayTime" /><output class="effect-setting-value" data-effect-character-value="delayTime">250ms</output><label class="effect-setting-label" for="scdl-effect-delay-feedback">Feedback</label><input class="effect-setting-slider" id="scdl-effect-delay-feedback" type="range" min="0" max="100" value="25" data-effect-character="delayFeedback" /><output class="effect-setting-value" data-effect-character-value="delayFeedback">25%</output><label class="effect-setting-label" for="scdl-effect-delay-tone">Tone</label><input class="effect-setting-slider" id="scdl-effect-delay-tone" type="range" min="0" max="100" value="70" data-effect-character="delayTone" /><output class="effect-setting-value" data-effect-character-value="delayTone">70%</output></div>
+            <div class="effect-row"><label class="effect-label" for="scdl-effect-delay">Echo</label><input class="effect-slider" id="scdl-effect-delay" type="range" min="0" max="100" step="1" value="0" aria-label="Echo mix" title="Echo mix; 0% turns it off" /><output class="effect-value" data-effect-value="delay">0%</output><button class="effect-settings-toggle" type="button" data-effect-settings="delay" aria-label="Echo settings" aria-expanded="false">⚙</button></div>
+            <div class="effect-settings" data-effect-settings-panel="delay"><label class="effect-setting-label" for="scdl-effect-delay-time">Time</label><input class="effect-setting-slider" id="scdl-effect-delay-time" type="range" min="60" max="800" value="250" data-effect-character="delayTime" /><output class="effect-setting-value" data-effect-character-value="delayTime">250ms</output><label class="effect-setting-label" for="scdl-effect-delay-feedback">Feedback</label><input class="effect-setting-slider" id="scdl-effect-delay-feedback" type="range" min="0" max="100" value="25" data-effect-character="delayFeedback" /><output class="effect-setting-value" data-effect-character-value="delayFeedback">25%</output><label class="effect-setting-label" for="scdl-effect-delay-tone">Tone</label><input class="effect-setting-slider" id="scdl-effect-delay-tone" type="range" min="0" max="100" value="70" data-effect-character="delayTone" /><output class="effect-setting-value" data-effect-character-value="delayTone">70%</output><button class="effect-freeze" type="button" data-effect-freeze aria-label="Hold to freeze echo" aria-pressed="false">Hold to Freeze</button></div>
+            <p class="effect-group-title">Motion</p>
+            <div class="effect-row"><label class="effect-label" for="scdl-effect-flanger">Flanger</label><input class="effect-slider" id="scdl-effect-flanger" type="range" min="0" max="100" step="1" value="0" aria-label="Flanger mix" /><output class="effect-value" data-effect-value="flanger">0%</output><button class="effect-settings-toggle" type="button" data-effect-settings="flanger" aria-label="Flanger settings" aria-expanded="false">⚙</button></div>
+            <div class="effect-settings" data-effect-settings-panel="flanger"><label class="effect-setting-label">Rate</label><input class="effect-setting-slider" type="range" min="0.05" max="5" step="0.05" data-effect-character="flangerRate" /><output class="effect-setting-value" data-effect-character-value="flangerRate"></output><label class="effect-setting-label">Depth</label><input class="effect-setting-slider" type="range" min="0" max="100" data-effect-character="flangerDepth" /><output class="effect-setting-value" data-effect-character-value="flangerDepth"></output><label class="effect-setting-label">Feedback</label><input class="effect-setting-slider" type="range" min="0" max="100" data-effect-character="flangerFeedback" /><output class="effect-setting-value" data-effect-character-value="flangerFeedback"></output></div>
+            <div class="effect-row"><label class="effect-label" for="scdl-effect-phaser">Phaser</label><input class="effect-slider" id="scdl-effect-phaser" type="range" min="0" max="100" step="1" value="0" aria-label="Phaser mix" /><output class="effect-value" data-effect-value="phaser">0%</output><button class="effect-settings-toggle" type="button" data-effect-settings="phaser" aria-label="Phaser settings" aria-expanded="false">⚙</button></div>
+            <div class="effect-settings" data-effect-settings-panel="phaser"><label class="effect-setting-label">Rate</label><input class="effect-setting-slider" type="range" min="0.05" max="5" step="0.05" data-effect-character="phaserRate" /><output class="effect-setting-value" data-effect-character-value="phaserRate"></output><label class="effect-setting-label">Depth</label><input class="effect-setting-slider" type="range" min="0" max="100" data-effect-character="phaserDepth" /><output class="effect-setting-value" data-effect-character-value="phaserDepth"></output><label class="effect-setting-label">Feedback</label><input class="effect-setting-slider" type="range" min="0" max="100" data-effect-character="phaserFeedback" /><output class="effect-setting-value" data-effect-character-value="phaserFeedback"></output></div>
+            <p class="effect-group-title">Color</p>
+            <div class="effect-row"><label class="effect-label" for="scdl-effect-saturation">Saturation</label><input class="effect-slider" id="scdl-effect-saturation" type="range" min="0" max="100" step="1" value="0" aria-label="Saturation mix" /><output class="effect-value" data-effect-value="saturation">0%</output><button class="effect-settings-toggle" type="button" data-effect-settings="saturation" aria-label="Saturation settings" aria-expanded="false">⚙</button></div>
+            <div class="effect-settings" data-effect-settings-panel="saturation"><label class="effect-setting-label">Drive</label><input class="effect-setting-slider" type="range" min="0" max="100" data-effect-character="saturationDrive" /><output class="effect-setting-value" data-effect-character-value="saturationDrive"></output><label class="effect-setting-label">Tone</label><input class="effect-setting-slider" type="range" min="0" max="100" data-effect-character="saturationTone" /><output class="effect-setting-value" data-effect-character-value="saturationTone"></output></div>
+            <div class="effect-row"><label class="effect-label" for="scdl-effect-bitcrusher">Bitcrusher</label><input class="effect-slider" id="scdl-effect-bitcrusher" type="range" min="0" max="100" step="1" value="0" aria-label="Bitcrusher mix" /><output class="effect-value" data-effect-value="bitcrusher">0%</output><button class="effect-settings-toggle" type="button" data-effect-settings="bitcrusher" aria-label="Bitcrusher settings" aria-expanded="false">⚙</button></div>
+            <div class="effect-settings" data-effect-settings-panel="bitcrusher"><label class="effect-setting-label">Bits</label><input class="effect-setting-slider" type="range" min="2" max="16" step="1" data-effect-character="bitDepth" /><output class="effect-setting-value" data-effect-character-value="bitDepth"></output><label class="effect-setting-label">Downsample</label><input class="effect-setting-slider" type="range" min="0" max="100" data-effect-character="sampleRateReduction" /><output class="effect-setting-value" data-effect-character-value="sampleRateReduction"></output></div>
             <p class="effects-note">Mix · open ⚙ for character</p>
           </div>
         </section>
@@ -2218,7 +2229,6 @@
       planBadgeIcon: root.querySelector(".plan-badge-icon"),
       planBadgeLabel: root.querySelector(".plan-badge-label"),
       downloadTrackButton: root.querySelector(".download-track-button"),
-      settingsButton: root.querySelector(".settings-button"),
       detachButton: root.querySelector(".detach-button"),
       detachIcon: root.querySelector(".detach-icon"),
       resetToolsButton: root.querySelector(".reset-tools-button"),
@@ -2254,14 +2264,15 @@
       effectsToggle: root.querySelector(".effects-toggle"),
       effectsBody: root.querySelector(".effects-body"),
       effectBypasses: Object.fromEntries(
-        ["reverb", "delay"].map((name) => [name, root.querySelector(`[data-effect-bypass="${name}"]`)])
+        EFFECT_NAMES.map((name) => [name, root.querySelector(`[data-effect-bypass="${name}"]`)])
       ),
       effectSliders: Object.fromEntries(
-        ["reverb", "delay"].map((name) => [name, root.querySelector(`#scdl-effect-${name}`)])
+        EFFECT_NAMES.map((name) => [name, root.querySelector(`#scdl-effect-${name}`)])
       ),
       effectValues: Object.fromEntries(
-        ["reverb", "delay"].map((name) => [name, root.querySelector(`[data-effect-value="${name}"]`)])
+        EFFECT_NAMES.map((name) => [name, root.querySelector(`[data-effect-value="${name}"]`)])
       ),
+      effectFreeze: root.querySelector("[data-effect-freeze]"),
       effectCharacters: Object.fromEntries(
         [...root.querySelectorAll("[data-effect-character]")].map((control) => [control.dataset.effectCharacter, control])
       ),
@@ -2385,9 +2396,6 @@
       closePanel();
       ui.trigger.focus({ preventScroll: true });
     });
-    ui.settingsButton.addEventListener("click", () => {
-      document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
-    });
     ui.playerToolsUpgrade.addEventListener("click", (event) => {
       event.stopPropagation();
       document.dispatchEvent(new CustomEvent(OPEN_PLAYER_TOOLS_PRO_EVENT));
@@ -2435,6 +2443,36 @@
         applyEffect(() => effectsController?.setCharacter(name, value));
       });
     }
+    const releaseEchoFreeze = () => {
+      if (!effectsController?.isDelayFrozen?.()) return;
+      effectsController.setDelayFreeze(false);
+      renderEffects();
+    };
+    ui.effectFreeze.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || ui.effectFreeze.disabled) return;
+      event.preventDefault();
+      ui.effectFreeze.setPointerCapture?.(event.pointerId);
+      effectsController?.setDelayFreeze(true);
+      renderEffects();
+    });
+    for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"]) {
+      ui.effectFreeze.addEventListener(eventName, releaseEchoFreeze);
+    }
+    ui.effectFreeze.addEventListener("keydown", (event) => {
+      if (![' ', 'Enter'].includes(event.key) || event.repeat || ui.effectFreeze.disabled) return;
+      event.preventDefault();
+      effectsController?.setDelayFreeze(true);
+      renderEffects();
+    });
+    ui.effectFreeze.addEventListener("keyup", (event) => {
+      if (![' ', 'Enter'].includes(event.key)) return;
+      event.preventDefault();
+      releaseEchoFreeze();
+    });
+    window.addEventListener("blur", releaseEchoFreeze);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) releaseEchoFreeze();
+    });
     root.querySelectorAll(".preset").forEach((button) => {
       if (button.classList.contains("custom-preset")) return;
       button.addEventListener("click", () => {
@@ -2608,7 +2646,7 @@
     const effectsState = effectsController?.snapshot();
     ui.clearRate.hidden = state.rate === DEFAULTS.rate &&
       state.preservePitch === DEFAULTS.preservePitch && !state.bypassed &&
-      !(effectsState?.reverb > 0 || effectsState?.delay > 0 || effectsState?.eq?.bands.length) && !loopState.active;
+      !(EFFECT_NAMES.some((name) => effectsState?.[name] > 0) || effectsState?.eq?.bands.length) && !loopState.active;
     ui.clearRate.disabled = resetInProgress;
     ui.resetToolsButton.disabled = resetInProgress;
     // Disabling a native range during input cancels its ongoing mouse drag.
@@ -2661,7 +2699,7 @@
   function renderEffects() {
     if (!ui || !effectsController) return;
     const state = effectsController.snapshot();
-    for (const name of ["reverb", "delay"]) {
+    for (const name of EFFECT_NAMES) {
       const slider = ui.effectSliders[name];
       slider.value = String(state[name]);
       slider.disabled = !state.available || !capability("tempo") || accessActionPending;
@@ -2684,7 +2722,9 @@
       const output = ui.effectCharacterValues[name];
       if (output) output.textContent = ["delayTime", "reverbPreDelay"].includes(name)
         ? `${state[name]}ms`
-        : name === "reverbDecay" ? `${state[name].toFixed(1)}s` : `${state[name]}%`;
+        : name === "reverbDecay" ? `${state[name].toFixed(1)}s`
+          : ["flangerRate", "phaserRate"].includes(name) ? `${Number(state[name]).toFixed(2)}Hz`
+            : name === "bitDepth" ? `${state[name]}bit` : `${state[name]}%`;
     }
     ui.root.querySelectorAll(".effects-preset").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.fxPreset === state.preset));
@@ -2697,6 +2737,10 @@
     ui.root.querySelectorAll(".effect-settings").forEach((panel) => {
       panel.classList.toggle("is-open", panel.dataset.effectSettingsPanel === expandedEffectSettings);
     });
+    const frozen = effectsController.isDelayFrozen?.() === true;
+    ui.effectFreeze.disabled = !state.available || !capability("tempo") || accessActionPending || state.delay === 0;
+    ui.effectFreeze.setAttribute("aria-pressed", String(frozen));
+    ui.effectFreeze.textContent = frozen ? "Frozen — release" : "Hold to Freeze";
     ui.effectsShell.classList.toggle("is-collapsed", effectsCollapsed);
     ui.effectsToggle.setAttribute("aria-expanded", String(!effectsCollapsed));
   }

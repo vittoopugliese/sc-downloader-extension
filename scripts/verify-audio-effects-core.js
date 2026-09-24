@@ -14,6 +14,8 @@ class AudioNode {
   disconnect(target) {
     this.connections = target ? this.connections.filter((node) => node !== target) : [];
   }
+  start() { this.started = true; }
+  stop() { this.stopped = true; }
 }
 
 class FakeAudioContext {
@@ -28,9 +30,11 @@ class FakeAudioContext {
   node(kind) { const node = new AudioNode(kind); this.nodes.push(node); return node; }
   createMediaElementSource(audio) { audio.sourceCount += 1; return this.node("media-source"); }
   createConvolver() { return this.node("convolver"); }
-  createBiquadFilter() { const node = this.node("biquad"); node.frequency = new AudioParam(); return node; }
+  createBiquadFilter() { const node = this.node("biquad"); node.frequency = new AudioParam(); node.Q = new AudioParam(); return node; }
   createGain() { const node = this.node("gain"); node.gain = new AudioParam(); return node; }
   createDelay() { const node = this.node("delay"); node.delayTime = new AudioParam(); return node; }
+  createOscillator() { const node = this.node("oscillator"); node.frequency = new AudioParam(); return node; }
+  createWaveShaper() { return this.node("waveshaper"); }
   createDynamicsCompressor() {
     const node = this.node("compressor");
     for (const name of ["threshold", "knee", "ratio", "attack", "release"]) node[name] = new AudioParam();
@@ -82,10 +86,12 @@ if (!state.initialized || state.reverb !== 40 || state.delay !== 0) {
   throw new Error(`Reverb did not initialize with its requested value: ${JSON.stringify(state)}`);
 }
 const graphNodes = FakeAudioContext.instances[0].nodes;
-const [reverbPreDelay, delayNode] = graphNodes.filter((node) => node.kind === "delay");
-const feedbackNode = graphNodes.filter((node) => node.kind === "gain")[1];
-const masterNode = graphNodes.filter((node) => node.kind === "gain")[3];
 const limiterNode = graphNodes.find((node) => node.kind === "compressor");
+const masterNode = graphNodes.find((node) => node.kind === "gain" && node.connections.includes(limiterNode));
+const delayNode = graphNodes.find((node) => node.kind === "delay" && node.delayTime.value === 0.25);
+const delayInput = graphNodes.find((node) => node.kind === "gain" && node.connections.includes(delayNode));
+const reverbPreDelay = graphNodes.find((node) => node.kind === "delay" && node !== delayNode && node.delayTime.value === 0.02);
+const feedbackNode = graphNodes.find((node) => node.kind === "gain" && Math.abs(node.gain.value - 0.205) < 1e-9);
 if (delayNode.delayTime.value !== 0.25 || feedbackNode.gain.value !== 0.205) {
   throw new Error("Delay time or feedback defaults changed unexpectedly.");
 }
@@ -101,14 +107,14 @@ const impulseEnergy = Array.from({ length: 2 }, (_, channel) => impulse.getChann
 if (!Number.isFinite(impulseEnergy) || Math.abs(impulseEnergy - 0.15) > 1e-5) {
   throw new Error("The reverb impulse response must have bounded energy.");
 }
-if (sourceNode.connections.includes(delayNode)) {
+if (sourceNode.connections.includes(delayInput)) {
   throw new Error("A zero-percent delay must not feed its effect branch.");
 }
 
 effects.set("delay", 150);
 state = effects.snapshot();
 if (state.delay !== 100) throw new Error("Effect slider values must clamp to 100%.");
-if (!sourceNode.connections.includes(delayNode)) throw new Error("The delay branch did not connect when enabled.");
+if (!sourceNode.connections.includes(delayInput)) throw new Error("The delay branch did not connect when enabled.");
 effects.setCharacter("delayTime", 500);
 effects.setCharacter("delayFeedback", 60);
 effects.setCharacter("reverbSize", 90);
@@ -117,6 +123,32 @@ effects.setCharacter("reverbDecay", 6.5);
 effects.setCharacter("reverbPreDelay", 80);
 if (delayNode.delayTime.value !== 0.5 || reverbPreDelay.delayTime.value !== 0.08 || Math.abs(feedbackNode.gain.value - 0.492) > 1e-9 || effects.snapshot().reverbRoom !== "plate" || effects.snapshot().reverbDecay !== 6.5) {
   throw new Error("Advanced FX settings did not update the live audio graph.");
+}
+for (const name of ["flanger", "phaser", "bitcrusher", "saturation"]) effects.set(name, 30);
+effects.setCharacter("flangerRate", 1.25);
+effects.setCharacter("flangerDepth", 70);
+effects.setCharacter("flangerFeedback", 35);
+effects.setCharacter("phaserRate", 0.75);
+effects.setCharacter("phaserDepth", 65);
+effects.setCharacter("phaserFeedback", 30);
+effects.setCharacter("bitDepth", 7);
+effects.setCharacter("sampleRateReduction", 60);
+effects.setCharacter("saturationDrive", 55);
+effects.setCharacter("saturationTone", 45);
+state = effects.snapshot();
+if (state.schemaVersion !== 2 || state.flanger !== 30 || state.phaser !== 30 || state.bitcrusher !== 30 || state.saturation !== 30 ||
+    state.flangerRate !== 1.25 || state.phaserRate !== 0.75 || state.bitDepth !== 7 || state.saturationDrive !== 55) {
+  throw new Error(`New FX settings did not update the normalized snapshot: ${JSON.stringify(state)}`);
+}
+if (sourceNode.connections.length < 7 || graphNodes.filter((node) => node.kind === "oscillator" && node.started).length !== 2 ||
+    graphNodes.filter((node) => node.kind === "waveshaper" && node.curve?.length > 1000).length !== 2) {
+  throw new Error("Motion and color effect branches were not connected to the existing graph.");
+}
+if (!effects.setDelayFreeze(true) || delayInput.gain.value !== 0 || feedbackNode.gain.value !== 0.985) {
+  throw new Error("Echo freeze must close the input and hold a bounded feedback loop.");
+}
+if (effects.setDelayFreeze(false) || delayInput.gain.value !== 1 || Math.abs(feedbackNode.gain.value - 0.492) > 1e-9) {
+  throw new Error("Releasing echo freeze must restore the configured input and feedback.");
 }
 effects.applyPreset("dub");
 if (effects.snapshot().preset !== "dub" || effects.snapshot().delayFeedback !== 60 || effects.snapshot().delay !== 48) {
@@ -127,8 +159,9 @@ if (effects.snapshot().reverb !== 0) throw new Error("0% must switch an effect o
 if (sourceNode.connections.includes(reverbPreDelay)) {
   throw new Error("The reverb input must disconnect while its tail is cleared.");
 }
-const reverbReturn = graphNodes.filter((node) => node.kind === "gain")[0];
-const delayReturn = graphNodes.filter((node) => node.kind === "gain")[2];
+const reverbTone = graphNodes.find((node) => node.kind === "biquad" && node.connections.some((target) => target.kind === "gain" && target.connections.includes(masterNode)));
+const reverbReturn = reverbTone.connections.find((node) => node.kind === "gain");
+const delayReturn = delayNode.connections.find((node) => node.kind === "gain" && node.connections.includes(masterNode));
 effects.setBypassed(true);
 if (!effects.snapshot().bypassed) throw new Error("Global bypass state was not applied.");
 if (reverbReturn.gain.value !== 0 || delayReturn.gain.value !== 0) {
@@ -152,7 +185,9 @@ effects.applyToActive();
 if (replacementAudio.sourceCount !== 1) throw new Error("A media element must only be connected once.");
 if (activeAudio.sourceCount !== 1) throw new Error("Initial player was not connected once.");
 const replacementNodes = graphNodes.slice(replacementNodeStart);
-const replacementReturns = [replacementNodes.filter((node) => node.kind === "gain")[0], replacementNodes.filter((node) => node.kind === "gain")[2]];
+const replacementLimiter = replacementNodes.find((node) => node.kind === "compressor");
+const replacementMaster = replacementNodes.find((node) => node.kind === "gain" && node.connections.includes(replacementLimiter));
+const replacementReturns = replacementNodes.filter((node) => node.kind === "gain" && node.connections.includes(replacementMaster)).slice(0, 2);
 if (replacementReturns[0].gain.value !== 0 || replacementReturns[1].gain.value !== 0.264) {
   throw new Error("The replacement player must receive the configured effect amounts.");
 }
@@ -176,7 +211,7 @@ if (state.bypassed || state.reverb !== 0 || state.delay !== 0) {
   throw new Error("FX reset must produce a neutral, unbypassed snapshot.");
 }
 if ([reverbReturn, delayReturn, ...replacementReturns].some((node) => node.gain.value !== 0) ||
-    sourceNode.connections.includes(reverbPreDelay) || sourceNode.connections.includes(delayNode)) {
+    sourceNode.connections.includes(reverbPreDelay) || sourceNode.connections.includes(delayInput)) {
   throw new Error("FX reset must silence and disconnect every existing effect tail.");
 }
 if (FakeAudioContext.instances.length !== contextsBeforeReset) {

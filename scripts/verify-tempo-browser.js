@@ -466,8 +466,6 @@ async function main() {
       const speedStatus = panel.querySelector(".speed-status");
       const downloadTrackButton = panel.querySelector(".download-track-button");
       const downloadTrackIcon = downloadTrackButton.querySelector("svg");
-      const settingsButton = panel.querySelector(".settings-button");
-      const settingsIcon = settingsButton.querySelector("svg");
       const detachButton = panel.querySelector(".detach-button");
       const detachIcon = detachButton.querySelector(".detach-icon");
       const brandLogo = panel.querySelector(".brand-logo");
@@ -494,9 +492,6 @@ async function main() {
         downloadTrackIconSize: [downloadTrackIcon.clientWidth, downloadTrackIcon.clientHeight],
         downloadTrackTooltip: downloadTrackButton.title,
         toolOrder: [...tools.children].map((element) => element.className),
-        settingsButtonSize: [settingsButton.offsetWidth, settingsButton.offsetHeight],
-        settingsButtonRadius: getComputedStyle(settingsButton).borderRadius,
-        settingsIconSize: [settingsIcon.clientWidth, settingsIcon.clientHeight],
         detachButtonSize: [detachButton.offsetWidth, detachButton.offsetHeight],
         detachButtonRadius: getComputedStyle(detachButton).borderRadius,
         detachIconSize: [detachIcon.clientWidth, detachIcon.clientHeight],
@@ -528,10 +523,7 @@ async function main() {
       compactStyles.downloadTrackButtonSize.join("x") !== "23x20" ||
       compactStyles.downloadTrackIconSize.join("x") !== "12x12" ||
       compactStyles.downloadTrackTooltip !== "Download current playing" ||
-      compactStyles.toolOrder.join("|") !== "panel-tool download-track-button|panel-tool reset-tools-button|panel-tool settings-button|panel-tool detach-button|panel-tool visibility-button|panel-tool close-button" ||
-      compactStyles.settingsButtonSize.join("x") !== "23x20" ||
-      compactStyles.settingsButtonRadius !== "4px" ||
-      compactStyles.settingsIconSize.join("x") !== "12x12" ||
+      compactStyles.toolOrder.join("|") !== "panel-tool download-track-button|panel-tool reset-tools-button|panel-tool detach-button|panel-tool visibility-button|panel-tool close-button" ||
       compactStyles.detachButtonSize.join("x") !== "23x20" ||
       compactStyles.detachButtonRadius !== "4px" ||
       compactStyles.detachIconSize.join("x") !== "13x13" ||

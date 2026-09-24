@@ -10,6 +10,7 @@
   // Observe the site's source early so EQ can preserve its downstream dry path.
   const mediaSources = new WeakMap();
   const sourceRoutes = new WeakMap();
+  const bitcrusherModuleLoads = new WeakMap();
   function rememberSource(target, source) {
     mediaSources.set(target, source);
     if (sourceRoutes.has(source)) return source;
@@ -80,26 +81,74 @@
   }
 
   const DEFAULTS = Object.freeze({
+    schemaVersion: 2,
     reverb: 0, delay: 0, reverbRoom: "hall", reverbSize: 55, reverbDecay: 2.4, reverbPreDelay: 20, reverbTone: 70,
-    delayTime: 250, delayFeedback: 25, delayTone: 70, preset: "custom",
+    delayTime: 250, delayFeedback: 25, delayTone: 70,
+    flanger: 0, flangerRate: 0.25, flangerDepth: 50, flangerFeedback: 15,
+    phaser: 0, phaserRate: 0.2, phaserDepth: 50, phaserFeedback: 10,
+    bitcrusher: 0, bitDepth: 12, sampleRateReduction: 25,
+    saturation: 0, saturationDrive: 25, saturationTone: 60,
+    preset: "custom",
   });
-  const MAX_SEND = Object.freeze({ reverb: 0.7, delay: 0.55 });
+  const EFFECT_NAMES = Object.freeze(["reverb", "delay", "flanger", "phaser", "bitcrusher", "saturation"]);
+  const MAX_SEND = Object.freeze({ reverb: 0.7, delay: 0.55, flanger: 0.55, phaser: 0.55, bitcrusher: 0.65, saturation: 0.65 });
   const REVERB_ROOMS = Object.freeze({ room: { seconds: 0.7, decay: 4.5 }, hall: { seconds: 2.4, decay: 2.7 }, plate: { seconds: 1.6, decay: 1.5 } });
   const PRESETS = Object.freeze({
-    subtle: { reverb: 18, delay: 0, reverbRoom: "room", reverbSize: 30, reverbDecay: 0.8, reverbPreDelay: 8, reverbTone: 70, delayTime: 180, delayFeedback: 15, delayTone: 70 },
-    studio: { reverb: 35, delay: 12, reverbRoom: "plate", reverbSize: 45, reverbDecay: 1.6, reverbPreDelay: 18, reverbTone: 72, delayTime: 220, delayFeedback: 22, delayTone: 68 },
-    wide: { reverb: 52, delay: 16, reverbRoom: "hall", reverbSize: 75, reverbDecay: 4.8, reverbPreDelay: 45, reverbTone: 78, delayTime: 310, delayFeedback: 28, delayTone: 72 },
-    dub: { reverb: 12, delay: 48, reverbRoom: "room", reverbSize: 40, reverbDecay: 1.2, reverbPreDelay: 12, reverbTone: 55, delayTime: 380, delayFeedback: 60, delayTone: 42 },
+    subtle: { reverb: 18, delay: 0, flanger: 0, phaser: 0, bitcrusher: 0, saturation: 0, reverbRoom: "room", reverbSize: 30, reverbDecay: 0.8, reverbPreDelay: 8, reverbTone: 70, delayTime: 180, delayFeedback: 15, delayTone: 70 },
+    studio: { reverb: 35, delay: 12, flanger: 0, phaser: 0, bitcrusher: 0, saturation: 8, reverbRoom: "plate", reverbSize: 45, reverbDecay: 1.6, reverbPreDelay: 18, reverbTone: 72, delayTime: 220, delayFeedback: 22, delayTone: 68, saturationDrive: 18, saturationTone: 68 },
+    wide: { reverb: 52, delay: 16, flanger: 14, phaser: 10, bitcrusher: 0, saturation: 0, reverbRoom: "hall", reverbSize: 75, reverbDecay: 4.8, reverbPreDelay: 45, reverbTone: 78, delayTime: 310, delayFeedback: 28, delayTone: 72 },
+    dub: { reverb: 12, delay: 48, flanger: 0, phaser: 0, bitcrusher: 0, saturation: 12, reverbRoom: "room", reverbSize: 40, reverbDecay: 1.2, reverbPreDelay: 12, reverbTone: 55, delayTime: 380, delayFeedback: 60, delayTone: 42, saturationDrive: 30, saturationTone: 48 },
   });
   const RAMP_SECONDS = 0.02;
   const TRACK_RESET_MS = 900;
   const REVERB_IMPULSE_ENERGY = 0.15;
-  const EFFECT_NODES = Object.freeze({ reverb: "reverbPreDelay", delay: "delay" });
+  const EFFECT_NODES = Object.freeze({ reverb: "reverbPreDelay", delay: "delayInput", flanger: "flangerInput", phaser: "phaserInput", bitcrusher: "bitcrusherInput", saturation: "saturationInput" });
 
   function clampPercent(value) {
     const number = Number(value);
     if (!Number.isFinite(number)) return 0;
     return Math.round(Math.max(0, Math.min(100, number)));
+  }
+
+  function createSaturationCurve(drive) {
+    const amount = 1 + clampPercent(drive) / 100 * 49;
+    const curve = new Float32Array(2049);
+    const denominator = Math.tanh(amount);
+    for (let index = 0; index < curve.length; index += 1) {
+      const input = index / (curve.length - 1) * 2 - 1;
+      curve[index] = Math.tanh(input * amount) / denominator;
+    }
+    return curve;
+  }
+
+  function createCrusherCurve(bitDepth) {
+    const steps = Math.pow(2, clamp(bitDepth, 2, 16, DEFAULTS.bitDepth) - 1);
+    const curve = new Float32Array(65537);
+    for (let index = 0; index < curve.length; index += 1) {
+      const input = index / (curve.length - 1) * 2 - 1;
+      curve[index] = Math.round(input * steps) / steps;
+    }
+    return curve;
+  }
+
+  function crushBuffer(buffer, bitDepth, reduction) {
+    const result = new AudioBuffer({
+      length: buffer.length,
+      numberOfChannels: buffer.numberOfChannels,
+      sampleRate: buffer.sampleRate,
+    });
+    const steps = Math.pow(2, clamp(bitDepth, 2, 16, DEFAULTS.bitDepth) - 1);
+    const hold = Math.max(1, Math.round(1 + clampPercent(reduction) / 100 * 63));
+    for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+      const input = buffer.getChannelData(channel);
+      const output = result.getChannelData(channel);
+      let sample = 0;
+      for (let index = 0; index < input.length; index += 1) {
+        if (index % hold === 0) sample = Math.round(input[index] * steps) / steps;
+        output[index] = sample;
+      }
+    }
+    return result;
   }
 
   function createImpulse(context, room, size, decaySeconds) {
@@ -130,9 +179,13 @@
   async function renderSample(buffer, settings, signal) {
     const reverbWet = settings?.bypassed ? 0 : clampPercent(settings?.reverb);
     const delayWet = settings?.bypassed ? 0 : clampPercent(settings?.delay);
+    const flangerWet = settings?.bypassed ? 0 : clampPercent(settings?.flanger);
+    const phaserWet = settings?.bypassed ? 0 : clampPercent(settings?.phaser);
+    const bitcrusherWet = settings?.bypassed ? 0 : clampPercent(settings?.bitcrusher);
+    const saturationWet = settings?.bypassed ? 0 : clampPercent(settings?.saturation);
     const eqSettings = globalThis.SCParametricEQ?.validate(settings?.eq);
     const eqActive = settings?.bypassed !== true && globalThis.SCParametricEQ?.isActive(eqSettings);
-    if (!reverbWet && !delayWet && !eqActive) return buffer;
+    if (!reverbWet && !delayWet && !flangerWet && !phaserWet && !bitcrusherWet && !saturationWet && !eqActive) return buffer;
     if (signal?.aborted) throw new DOMException("Render aborted.", "AbortError");
     const sampleRate = buffer.sampleRate;
     const delaySeconds = clamp(settings?.delayTime, 60, 800, DEFAULTS.delayTime) / 1000;
@@ -196,6 +249,79 @@
       delay.connect(wet);
       wet.connect(master);
     }
+    if (flangerWet) {
+      const delay = context.createDelay(0.03);
+      delay.delayTime.value = 0.0035;
+      const feedback = context.createGain();
+      feedback.gain.value = clampPercent(settings?.flangerFeedback ?? DEFAULTS.flangerFeedback) / 100 * 0.75;
+      const lfo = context.createOscillator();
+      lfo.frequency.value = clampFloat(settings?.flangerRate, 0.05, 5, DEFAULTS.flangerRate);
+      const modulation = context.createGain();
+      modulation.gain.value = clampPercent(settings?.flangerDepth ?? DEFAULTS.flangerDepth) / 100 * 0.008;
+      const wet = context.createGain();
+      wet.gain.value = flangerWet / 100 * MAX_SEND.flanger;
+      effectSource.connect(delay);
+      delay.connect(feedback);
+      feedback.connect(delay);
+      lfo.connect(modulation);
+      modulation.connect(delay.delayTime);
+      delay.connect(wet);
+      wet.connect(master);
+      lfo.start();
+    }
+    if (phaserWet) {
+      const stages = [350, 700, 1400, 2800].map((frequency) => {
+        const stage = context.createBiquadFilter();
+        stage.type = "allpass";
+        stage.frequency.value = frequency;
+        stage.Q.value = 0.7;
+        return stage;
+      });
+      const feedback = context.createGain();
+      feedback.gain.value = clampPercent(settings?.phaserFeedback ?? DEFAULTS.phaserFeedback) / 100 * 0.7;
+      const lfo = context.createOscillator();
+      lfo.frequency.value = clampFloat(settings?.phaserRate, 0.05, 5, DEFAULTS.phaserRate);
+      const depth = clampPercent(settings?.phaserDepth ?? DEFAULTS.phaserDepth) / 100;
+      effectSource.connect(stages[0]);
+      stages.forEach((stage, index) => {
+        if (stages[index + 1]) stage.connect(stages[index + 1]);
+        const modulation = context.createGain();
+        modulation.gain.value = [250, 500, 900, 1600][index] * depth;
+        lfo.connect(modulation);
+        modulation.connect(stage.frequency);
+      });
+      stages.at(-1).connect(feedback);
+      feedback.connect(stages[0]);
+      const wet = context.createGain();
+      wet.gain.value = phaserWet / 100 * MAX_SEND.phaser;
+      stages.at(-1).connect(wet);
+      wet.connect(master);
+      lfo.start();
+    }
+    if (saturationWet) {
+      const shaper = context.createWaveShaper();
+      shaper.curve = createSaturationCurve(settings?.saturationDrive ?? DEFAULTS.saturationDrive);
+      shaper.oversample = "4x";
+      const tone = context.createBiquadFilter();
+      tone.type = "lowpass";
+      tone.frequency.value = 900 + clampPercent(settings?.saturationTone ?? DEFAULTS.saturationTone) / 100 * 15100;
+      const wet = context.createGain();
+      wet.gain.value = saturationWet / 100 * MAX_SEND.saturation;
+      effectSource.connect(shaper);
+      shaper.connect(tone);
+      tone.connect(wet);
+      wet.connect(master);
+    }
+    let crusherSource = null;
+    if (bitcrusherWet) {
+      crusherSource = context.createBufferSource();
+      crusherSource.buffer = crushBuffer(buffer, settings?.bitDepth ?? DEFAULTS.bitDepth, settings?.sampleRateReduction ?? DEFAULTS.sampleRateReduction);
+      const wet = context.createGain();
+      wet.gain.value = bitcrusherWet / 100 * MAX_SEND.bitcrusher;
+      crusherSource.connect(wet);
+      wet.connect(master);
+      crusherSource.start();
+    }
     master.connect(limiter);
     limiter.connect(context.destination);
     source.start();
@@ -207,6 +333,94 @@
   function clamp(value, min, max, fallback) {
     const number = Number(value);
     return Number.isFinite(number) ? Math.round(Math.max(min, Math.min(max, number))) : fallback;
+  }
+
+  function clampFloat(value, min, max, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+  }
+
+  function createWetBranches(context, returns) {
+    const reverbPreDelay = context.createDelay(0.25);
+    const reverb = context.createConvolver();
+    const reverbTone = context.createBiquadFilter();
+    reverbTone.type = "lowpass";
+    reverbPreDelay.connect(reverb);
+    reverb.connect(reverbTone);
+    reverbTone.connect(returns.reverbReturn);
+
+    const delayInput = context.createGain();
+    const delay = context.createDelay(1);
+    const delayTone = context.createBiquadFilter();
+    delayTone.type = "lowpass";
+    const feedback = context.createGain();
+    delayInput.connect(delay);
+    delay.connect(delayTone);
+    delayTone.connect(feedback);
+    feedback.connect(delay);
+    delay.connect(returns.delayReturn);
+
+    const flangerInput = context.createGain();
+    const flangerDelay = context.createDelay(0.03);
+    const flangerFeedback = context.createGain();
+    const flangerLfo = context.createOscillator();
+    const flangerModulation = context.createGain();
+    flangerInput.connect(flangerDelay);
+    flangerDelay.connect(flangerFeedback);
+    flangerFeedback.connect(flangerDelay);
+    flangerLfo.connect(flangerModulation);
+    flangerModulation.connect(flangerDelay.delayTime);
+    flangerDelay.connect(returns.flangerReturn);
+    flangerLfo.start();
+
+    const phaserInput = context.createGain();
+    const phaserStages = [350, 700, 1400, 2800].map((frequency) => {
+      const stage = context.createBiquadFilter();
+      stage.type = "allpass";
+      stage.frequency.value = frequency;
+      stage.Q.value = 0.7;
+      return stage;
+    });
+    const phaserFeedback = context.createGain();
+    const phaserLfo = context.createOscillator();
+    const phaserModulations = phaserStages.map(() => context.createGain());
+    phaserInput.connect(phaserStages[0]);
+    phaserStages.forEach((stage, index) => {
+      if (phaserStages[index + 1]) stage.connect(phaserStages[index + 1]);
+      phaserLfo.connect(phaserModulations[index]);
+      phaserModulations[index].connect(stage.frequency);
+    });
+    phaserStages.at(-1).connect(phaserFeedback);
+    phaserFeedback.connect(phaserStages[0]);
+    phaserStages.at(-1).connect(returns.phaserReturn);
+    phaserLfo.start();
+
+    const bitcrusherInput = context.createGain();
+    const bitcrusherShaper = context.createWaveShaper();
+    const bitcrusherTone = context.createBiquadFilter();
+    bitcrusherTone.type = "lowpass";
+    bitcrusherInput.connect(bitcrusherShaper);
+    bitcrusherShaper.connect(bitcrusherTone);
+    bitcrusherTone.connect(returns.bitcrusherReturn);
+
+    const saturationInput = context.createGain();
+    const saturationShaper = context.createWaveShaper();
+    saturationShaper.oversample = "4x";
+    const saturationTone = context.createBiquadFilter();
+    saturationTone.type = "lowpass";
+    saturationInput.connect(saturationShaper);
+    saturationShaper.connect(saturationTone);
+    saturationTone.connect(returns.saturationReturn);
+
+    const wetNodes = [reverbPreDelay, reverb, reverbTone, delayInput, delay, delayTone, feedback,
+      flangerInput, flangerDelay, flangerFeedback, flangerLfo, flangerModulation,
+      phaserInput, ...phaserStages, phaserFeedback, phaserLfo, ...phaserModulations,
+      bitcrusherInput, bitcrusherShaper, bitcrusherTone, saturationInput, saturationShaper, saturationTone];
+    return { reverbPreDelay, reverb, reverbTone, delayInput, delay, delayTone, feedback,
+      flangerInput, flangerDelay, flangerFeedback, flangerLfo, flangerModulation,
+      phaserInput, phaserStages, phaserFeedback, phaserLfo, phaserModulations,
+      bitcrusherInput, bitcrusherShaper, bitcrusherTone,
+      saturationInput, saturationShaper, saturationTone, wetNodes };
   }
 
   function create(options = {}) {
@@ -229,6 +443,33 @@
     let eqAllowed = false;
     let eqRequested = false;
     let eqRevision = 0;
+    let delayFrozen = false;
+
+    function installBitcrusherWorklet(targetGraph = graph) {
+      const contextForGraph = targetGraph?.context;
+      const WorkletNode = options.AudioWorkletNode || globalThis.AudioWorkletNode;
+      const moduleUrl = globalThis.document?.documentElement?.getAttribute?.("data-scdl-extension-bitcrusher-worklet-url");
+      if (!contextForGraph?.audioWorklet?.addModule || typeof WorkletNode !== "function" || !moduleUrl || targetGraph.bitcrusherWorklet) return;
+      let load = bitcrusherModuleLoads.get(contextForGraph);
+      if (!load) {
+        load = contextForGraph.audioWorklet.addModule(moduleUrl);
+        bitcrusherModuleLoads.set(contextForGraph, load);
+      }
+      const expectedInput = targetGraph.bitcrusherInput;
+      load.then(() => {
+        if (targetGraph.bitcrusherInput !== expectedInput || targetGraph.bitcrusherWorklet) return;
+        const processor = new WorkletNode(contextForGraph, "scdl-bitcrusher", { numberOfInputs: 1, numberOfOutputs: 1 });
+        expectedInput.disconnect(targetGraph.bitcrusherShaper);
+        expectedInput.connect(processor);
+        processor.connect(targetGraph.bitcrusherReturn);
+        targetGraph.bitcrusherWorklet = processor;
+        targetGraph.wetNodes.push(processor);
+        setParam(processor.parameters.get("bitDepth"), values.bitDepth, contextForGraph);
+        setParam(processor.parameters.get("reduction"), values.sampleRateReduction, contextForGraph);
+      }).catch(() => {
+        bitcrusherModuleLoads.delete(contextForGraph);
+      });
+    }
 
     function snapshot() {
       return Object.freeze({ ...values, eq: globalThis.SCParametricEQ?.normalize(eqSettings), bypassed, available, reason, initialized: Boolean(graph) });
@@ -279,45 +520,42 @@
       setParam(targetGraph.reverbTone.frequency, 600 + values.reverbTone / 100 * 15400);
       setParam(targetGraph.delayTone.frequency, 500 + values.delayTone / 100 * 15500);
       setParam(targetGraph.delay.delayTime, values.delayTime / 1000);
-      setParam(targetGraph.feedback.gain, values.delayFeedback / 100 * 0.82);
+      setParam(targetGraph.feedback.gain, delayFrozen ? 0.985 : values.delayFeedback / 100 * 0.82, contextForGraph);
+      setParam(targetGraph.delayInput.gain, delayFrozen ? 0 : 1, contextForGraph);
+      setParam(targetGraph.flangerDelay.delayTime, 0.0035, contextForGraph);
+      setParam(targetGraph.flangerLfo.frequency, values.flangerRate, contextForGraph);
+      setParam(targetGraph.flangerModulation.gain, values.flangerDepth / 100 * 0.008, contextForGraph);
+      setParam(targetGraph.flangerFeedback.gain, values.flangerFeedback / 100 * 0.75, contextForGraph);
+      setParam(targetGraph.phaserLfo.frequency, values.phaserRate, contextForGraph);
+      targetGraph.phaserModulations.forEach((modulation, index) =>
+        setParam(modulation.gain, [250, 500, 900, 1600][index] * values.phaserDepth / 100, contextForGraph));
+      setParam(targetGraph.phaserFeedback.gain, values.phaserFeedback / 100 * 0.7, contextForGraph);
+      targetGraph.bitcrusherShaper.curve = createCrusherCurve(values.bitDepth);
+      targetGraph.bitcrusherTone.frequency.value = Math.max(800, contextForGraph.sampleRate / 2 * (1 - values.sampleRateReduction / 100 * 0.94));
+      if (targetGraph.bitcrusherWorklet) {
+        setParam(targetGraph.bitcrusherWorklet.parameters.get("bitDepth"), values.bitDepth, contextForGraph);
+        setParam(targetGraph.bitcrusherWorklet.parameters.get("reduction"), values.sampleRateReduction, contextForGraph);
+      }
+      targetGraph.saturationShaper.curve = createSaturationCurve(values.saturationDrive);
+      setParam(targetGraph.saturationTone.frequency, 900 + values.saturationTone / 100 * 15100, contextForGraph);
     }
 
     function rebuildWetBranches(targetGraph) {
       const contextForGraph = targetGraph.context;
-      const oldNodes = [
-        targetGraph.reverbPreDelay, targetGraph.reverb, targetGraph.reverbTone,
-        targetGraph.delay, targetGraph.delayTone, targetGraph.feedback,
-      ];
-      for (const name of ["reverb", "delay"]) {
+      const oldNodes = targetGraph.wetNodes;
+      for (const name of EFFECT_NAMES) {
         if (targetGraph.connected[name]) {
           targetGraph.source.disconnect(targetGraph[EFFECT_NODES[name]]);
         }
         targetGraph.connected[name] = false;
       }
       for (const node of oldNodes) {
+        try { node.stop?.(); } catch {}
         try { node.disconnect(); } catch {}
       }
-
-      const reverbPreDelay = contextForGraph.createDelay(0.25);
-      const reverb = contextForGraph.createConvolver();
-      const reverbTone = contextForGraph.createBiquadFilter();
-      reverbTone.type = "lowpass";
-      reverbPreDelay.connect(reverb);
-      reverb.connect(reverbTone);
-      reverbTone.connect(targetGraph.reverbReturn);
-
-      const delay = contextForGraph.createDelay(1);
-      const delayTone = contextForGraph.createBiquadFilter();
-      delayTone.type = "lowpass";
-      const feedback = contextForGraph.createGain();
-      delay.connect(delayTone);
-      delayTone.connect(feedback);
-      feedback.connect(delay);
-      delay.connect(targetGraph.delayReturn);
-
-      Object.assign(targetGraph, {
-        reverbPreDelay, reverb, reverbTone, delay, delayTone, feedback,
-      });
+      targetGraph.bitcrusherWorklet = null;
+      Object.assign(targetGraph, createWetBranches(contextForGraph, targetGraph));
+      if (values.bitcrusher > 0) installBitcrusherWorklet(targetGraph);
     }
 
     function setParam(param, value, contextForParam = context) {
@@ -331,10 +569,11 @@
       updateEqualizer(targetGraph);
       const contextForGraph = targetGraph.context;
       const active = !bypassed && available;
-      setParam(targetGraph.reverbReturn.gain, active ? values.reverb / 100 * MAX_SEND.reverb : 0, contextForGraph);
-      setParam(targetGraph.delayReturn.gain, active ? values.delay / 100 * MAX_SEND.delay : 0, contextForGraph);
+      for (const name of EFFECT_NAMES) {
+        setParam(targetGraph[`${name}Return`].gain, active ? values[name] / 100 * MAX_SEND[name] : 0, contextForGraph);
+      }
       if (!targetGraph.ownsSource) return;
-      const useLimiter = active && (values.reverb > 0 || values.delay > 0);
+      const useLimiter = active && EFFECT_NAMES.some((name) => values[name] > 0);
       if (useLimiter && !targetGraph.processedOutput) {
         targetGraph.source.disconnect(contextForGraph.destination);
         targetGraph.source.connect(targetGraph.master);
@@ -381,6 +620,7 @@
     function ensureEffectConnected(name) {
       if (!graph || !context || values[name] === 0 || graph.connected[name]) return;
       if (graph.resetTimers[name] !== undefined) return;
+      if (name === "bitcrusher") installBitcrusherWorklet(graph);
       graph.source.connect(graph[EFFECT_NODES[name]]);
       graph.connected[name] = true;
     }
@@ -391,8 +631,7 @@
         audio = target;
         graph = cached;
         context = cached.context;
-        ensureEffectConnected("reverb");
-        ensureEffectConnected("delay");
+        EFFECT_NAMES.forEach(ensureEffectConnected);
         updateReturns();
         return true;
       }
@@ -401,18 +640,7 @@
         if (existingSource) context = existingSource.context;
         const source = existingSource || context.createMediaElementSource(target);
         const ownsSource = !existingSource;
-        const reverbPreDelay = context.createDelay(0.25);
-        const reverb = context.createConvolver();
-        const reverbTone = context.createBiquadFilter();
-        reverbTone.type = "lowpass";
-        const reverbReturn = context.createGain();
-        const delay = context.createDelay(1);
-        delay.delayTime.value = values.delayTime / 1000;
-        const feedback = context.createGain();
-        feedback.gain.value = values.delayFeedback / 100 * 0.82;
-        const delayTone = context.createBiquadFilter();
-        delayTone.type = "lowpass";
-        const delayReturn = context.createGain();
+        const returns = Object.fromEntries(EFFECT_NAMES.map((name) => [`${name}Return`, context.createGain()]));
         const master = context.createGain();
         const limiter = context.createDynamicsCompressor();
         limiter.threshold.value = -6;
@@ -420,29 +648,22 @@
         limiter.ratio.value = 12;
         limiter.attack.value = 0.003;
         limiter.release.value = 0.12;
-        reverbReturn.gain.value = 0;
-        delayReturn.gain.value = 0;
+        for (const name of EFFECT_NAMES) returns[`${name}Return`].gain.value = 0;
 
         if (ownsSource) source.connect(context.destination);
-        reverbPreDelay.connect(reverb);
-        reverb.connect(reverbTone);
-        reverbTone.connect(reverbReturn);
-        reverbReturn.connect(master);
-        delay.connect(delayTone);
-        delayTone.connect(feedback);
-        feedback.connect(delay);
-        delay.connect(delayReturn);
-        delayReturn.connect(master);
+        for (const name of EFFECT_NAMES) returns[`${name}Return`].connect(master);
         master.connect(limiter);
         limiter.connect(context.destination);
 
         const targetGraph = {
-          source, reverbPreDelay, reverb, reverbTone, reverbReturn, delay, delayTone, feedback, delayReturn, master, limiter,
+          source, ...returns, master, limiter,
           context, ownsSource,
           resetTimers: {},
-          connected: { reverb: false, delay: false },
+          connected: Object.fromEntries(EFFECT_NAMES.map((name) => [name, false])),
           processedOutput: false,
         };
+        Object.assign(targetGraph, createWetBranches(context, returns));
+        if (values.bitcrusher > 0) installBitcrusherWorklet(targetGraph);
         graphs.set(target, targetGraph);
         graphReferences.add(new WeakRef(targetGraph));
         target.addEventListener("loadstart", resetTail);
@@ -451,8 +672,7 @@
         audio = target;
         graph = targetGraph;
         updateCharacter(targetGraph);
-        ensureEffectConnected("reverb");
-        ensureEffectConnected("delay");
+        EFFECT_NAMES.forEach(ensureEffectConnected);
         updateReturns();
         return true;
       } catch (error) {
@@ -509,8 +729,8 @@
     function resetTail() {
       if (!graph || !context) return;
       if (resetTimer !== null) clearTimeout(resetTimer);
-      setParam(graph.reverbReturn.gain, 0);
-      setParam(graph.delayReturn.gain, 0);
+      setDelayFreeze(false);
+      EFFECT_NAMES.forEach((name) => setParam(graph[`${name}Return`].gain, 0));
       resetTimer = setTimeout(() => {
         resetTimer = null;
         updateReturns();
@@ -522,7 +742,7 @@
     }
 
     function set(name, value) {
-      if (!(name in DEFAULTS)) throw new RangeError(`Unknown audio effect: ${name}`);
+      if (!EFFECT_NAMES.includes(name)) throw new RangeError(`Unknown audio effect: ${name}`);
       values[name] = clampPercent(value);
       values.preset = "custom";
       if (values[name] === 0) flushEffectTail(name);
@@ -537,9 +757,11 @@
     }
 
     function setCharacter(name, value) {
-      if (!(name in DEFAULTS) || name === "reverb" || name === "delay") throw new RangeError(`Unknown effect setting: ${name}`);
+      if (!(name in DEFAULTS) || EFFECT_NAMES.includes(name) || ["schemaVersion", "preset"].includes(name)) throw new RangeError(`Unknown effect setting: ${name}`);
       if (name === "reverbRoom") values[name] = REVERB_ROOMS[value] ? value : DEFAULTS.reverbRoom;
       else if (name === "reverbDecay") values[name] = Math.round(Math.max(0.2, Math.min(12, Number(value) || DEFAULTS[name])) * 10) / 10;
+      else if (["flangerRate", "phaserRate"].includes(name)) values[name] = Math.round(clampFloat(value, 0.05, 5, DEFAULTS[name]) * 100) / 100;
+      else if (name === "bitDepth") values[name] = clamp(value, 2, 16, DEFAULTS[name]);
       else values[name] = clamp(value, name === "delayTime" ? 60 : 0, name === "delayTime" ? 800 : name === "reverbPreDelay" ? 200 : 100, DEFAULTS[name]);
       values.preset = "custom";
       updateCharacter();
@@ -552,21 +774,38 @@
       Object.assign(values, preset, { preset: name });
       if (!graph && !initialize()) return snapshot();
       updateCharacter();
-      ensureEffectConnected("reverb");
-      ensureEffectConnected("delay");
+      for (const effectName of EFFECT_NAMES) {
+        if (values[effectName] > 0) ensureEffectConnected(effectName);
+        else flushEffectTail(effectName);
+      }
       updateReturns();
       return snapshot();
     }
 
     function setBypassed(value) {
       bypassed = Boolean(value);
+      if (bypassed) setDelayFreeze(false);
       updateAllReturns();
       return snapshot();
     }
 
+    function setDelayFreeze(value) {
+      delayFrozen = Boolean(value) && !bypassed && available && values.delay > 0;
+      for (const reference of graphReferences) {
+        const targetGraph = reference.deref();
+        if (!targetGraph) { graphReferences.delete(reference); continue; }
+        setParam(targetGraph.delayInput.gain, delayFrozen ? 0 : 1, targetGraph.context);
+        setParam(targetGraph.feedback.gain, delayFrozen ? 0.985 : values.delayFeedback / 100 * 0.82, targetGraph.context);
+      }
+      return delayFrozen;
+    }
+
+    function isDelayFrozen() { return delayFrozen; }
+
     function reset() {
       Object.assign(values, DEFAULTS);
       bypassed = false;
+      delayFrozen = false;
       eqSettings = globalThis.SCParametricEQ?.normalize(null);
       eqRevision += 1;
       if (resetTimer !== null) clearTimeout(resetTimer);
@@ -574,7 +813,7 @@
       for (const reference of graphReferences) {
         const targetGraph = reference.deref();
         if (!targetGraph) { graphReferences.delete(reference); continue; }
-        for (const name of ["reverb", "delay"]) {
+        for (const name of EFFECT_NAMES) {
           if (targetGraph.resetTimers[name] !== undefined) clearTimeout(targetGraph.resetTimers[name]);
           delete targetGraph.resetTimers[name];
           setParam(targetGraph[`${name}Return`].gain, 0, targetGraph.context);
@@ -596,23 +835,23 @@
       if (!graph) audio = candidate;
       else if (
         candidate !== audio && context &&
-        (values.reverb > 0 || values.delay > 0 || (eqRequested && eqAllowed))
+        (EFFECT_NAMES.some((name) => values[name] > 0) || (eqRequested && eqAllowed))
       ) connectAudio(candidate);
     }
 
     function applyToActive() {
       const candidate = getActiveAudio();
       if (candidate && candidate !== audio) {
-        if (graph && context && (values.reverb > 0 || values.delay > 0 || (eqRequested && eqAllowed))) connectAudio(candidate);
+        if (graph && context && (EFFECT_NAMES.some((name) => values[name] > 0) || (eqRequested && eqAllowed))) connectAudio(candidate);
         else audio = candidate;
       }
-      if (!graph && available && (values.reverb > 0 || values.delay > 0 || (eqRequested && eqAllowed))) initialize();
+      if (!graph && available && (EFFECT_NAMES.some((name) => values[name] > 0) || (eqRequested && eqAllowed))) initialize();
       return snapshot();
     }
 
-    return Object.freeze({ applyPreset, applyToActive, discover, reset, set, setBypassed, setCharacter, snapshot,
+    return Object.freeze({ applyPreset, applyToActive, discover, isDelayFrozen, reset, set, setBypassed, setCharacter, setDelayFreeze, snapshot,
       setEqualizer, setEqualizerAllowed, analyseEqualizer });
   }
 
-  globalThis.SCTempoEffects = Object.freeze({ create, renderSample, clampPercent, DEFAULTS, PRESETS, REVERB_ROOMS });
+  globalThis.SCTempoEffects = Object.freeze({ create, renderSample, clampPercent, DEFAULTS, EFFECT_NAMES, PRESETS, REVERB_ROOMS });
 })();

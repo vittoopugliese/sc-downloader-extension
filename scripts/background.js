@@ -137,7 +137,8 @@ function hasEffectivePlaybackTransform(transform) {
 
 function hasEffectiveEffects(effects) {
   if (!effects || typeof effects !== "object" || effects.bypassed === true) return false;
-  if (Number(effects.reverb) > 0 || Number(effects.delay) > 0) return true;
+  if (["reverb", "delay", "flanger", "phaser", "bitcrusher", "saturation"]
+    .some((name) => Number(effects[name]) > 0)) return true;
   const eq = effects.eq;
   return eq?.enabled === true && (eq.hardClip === true ||
     (Array.isArray(eq.bands) && eq.bands.some((band) => band?.type !== "peaking" || Number(band?.gain) !== 0)));

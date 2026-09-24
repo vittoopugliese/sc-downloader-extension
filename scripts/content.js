@@ -14,6 +14,7 @@ const EXTENSION_SOCIAL_BADGE_ATTRIBUTE = "data-scdl-extension-social-badge-url";
 const EXTENSION_DETACH_ICON_ATTRIBUTE = "data-scdl-extension-detach-icon-url";
 const EXTENSION_TRASH_ICON_ATTRIBUTE = "data-scdl-extension-trash-icon-url";
 const EXTENSION_EXPAND_ICON_ATTRIBUTE = "data-scdl-extension-expand-icon-url";
+const EXTENSION_BITCRUSHER_WORKLET_ATTRIBUTE = "data-scdl-extension-bitcrusher-worklet-url";
 const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
 const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
 const LOOP_EXPORT_EVENT = "scdl:download-loop";
@@ -65,6 +66,7 @@ function exposeTempoControlAssets() {
   document.documentElement?.setAttribute?.(EXTENSION_DETACH_ICON_ATTRIBUTE, chrome.runtime.getURL("assets/icons/detach.svg"));
   document.documentElement?.setAttribute?.(EXTENSION_TRASH_ICON_ATTRIBUTE, chrome.runtime.getURL("assets/icons/trash.svg"));
   document.documentElement?.setAttribute?.(EXTENSION_EXPAND_ICON_ATTRIBUTE, chrome.runtime.getURL("assets/icons/expand.svg"));
+  document.documentElement?.setAttribute?.(EXTENSION_BITCRUSHER_WORKLET_ATTRIBUTE, chrome.runtime.getURL("scripts/bitcrusher-processor.js"));
   if (typeof document.dispatchEvent === "function" && typeof CustomEvent === "function") {
     document.dispatchEvent(new CustomEvent(EXTENSION_ASSETS_EVENT));
   }

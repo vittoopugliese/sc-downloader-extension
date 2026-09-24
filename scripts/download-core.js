@@ -622,7 +622,8 @@ const SCDownload = (() => {
 
   function hasSampleEffects(sampleEffects) {
     if (!sampleEffects || sampleEffects.bypassed === true) return false;
-    if (Number(sampleEffects.reverb) > 0 || Number(sampleEffects.delay) > 0) return true;
+    if (["reverb", "delay", "flanger", "phaser", "bitcrusher", "saturation"]
+      .some((name) => Number(sampleEffects[name]) > 0)) return true;
     return Boolean(globalThis.SCParametricEQ?.isActive?.(sampleEffects.eq));
   }
 
