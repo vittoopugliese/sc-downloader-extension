@@ -17,7 +17,7 @@
     "test:e2e:effects": "node scripts/verify-effects-browser.js && node scripts/verify-effects-browser.js --shared && node scripts/verify-effects-browser.js --shared --constructor",
     "test:e2e:eq": "node scripts/verify-parametric-eq-browser.js",
     "test:package": "node scripts/verify-package-browser.js",
-    "test:release-local": "npm test && npm run test:player-tools && npm run test:e2e:bulk-store && npm run test:e2e:download && npm run test:e2e:popup && npm run test:e2e && npm run test:e2e:tempo && npm run test:e2e:effects && npm run test:e2e:eq && npm run package:extension && npm run test:package",
+    "test:release-local": "npm test && npm run test:player-tools && npm run test:e2e:bulk-store && npm run test:e2e:download && npm run test:e2e:popup && npm run test:e2e && npm run test:e2e:tempo && npm run test:e2e:effects && npm run test:e2e:eq && npm run test:e2e:likes && npm run package:extension && npm run test:package",
     "test:live": "node scripts/verify-live-looper.js",
     "test:live:folder": "node scripts/verify-live-looper.js --folder",
     "browser:live": "node scripts/open-live-browser.js",

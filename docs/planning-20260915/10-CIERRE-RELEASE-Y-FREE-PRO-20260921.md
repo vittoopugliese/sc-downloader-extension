@@ -158,6 +158,14 @@ Los casilleros empiezan pendientes: este documento es un handoff, no una impleme
 | Dependencias | Dato, decisión, credencial o permiso externo faltante, sin secretos. |
 | Siguiente acción | Una tarea concreta del primer bloque pendiente. |
 
+### Revisión de estado — 23/09/2026, base `73fceb8`
+
+Ver [12 — Estado y siguiente agente](12-ESTADO-Y-SIGUIENTE-AGENTE-20260923.md) para el estado consolidado con precedencia sobre los registros históricos siguientes. Después de la revisión se corrigió M17: `npm test` pasa sus 48 verificadores (Contact requiere ejecutar Chromium fuera del sandbox de macOS) y `npm run test:player-tools` pasa, incluidos 27 tests del servicio. No se certificaron todavía SoundCloud real, ChromeOS, ZIP candidato ni transacciones externas.
+
+El usuario reporta bloqueo del payout Wise en Lemon y considera otros proveedores. No se da por decidida una migración: revisar aceptación de la extensión completa, payout y pricing antes de construir otro adaptador. La siguiente tarea local es completar QA y generar un ZIP trazable del candidato. C4–C7 siguen abiertos; presets completos y loops guardados son la mejora recomendada posterior.
+
+Actualización posterior: el gate local completo y Likes Explorer pasan; se generó y verificó un ZIP diagnóstico de Test Mode. Ver 12 para SHA, límites y fixtures. El usuario reabrió M01 para exigir trial por cuenta resistente a reinstalación/perfiles; hace falta OAuth verificado por el Worker. Lemon declara Argentina compatible con payout bancario/PayPal, mientras Stripe directo no lista Argentina; no abrir cuentas duplicadas ni declarar otro país sin resolver primero el campo bancario exacto y el onboarding legítimo.
+
 ### Registro inicial — planificación del 21/09/2026
 
 Se documentó el orden aceptado y la revisión de `6d5163a`. No se corrigió código, desplegó infraestructura ni procesó pagos en esta tarea documental. Evidencia técnica disponible: tests de Player Tools aprobados y reproducción local del HTTP 500 de activación descritos al inicio. Primera acción de implementación: contrastar HEAD y ejecutar el primer pendiente de C1; en paralelo operativo, iniciar alta y retiro de Lemon siguiendo el 11.

@@ -1,14 +1,24 @@
 # Plan destilado: crecimiento e ingresos
 
-## Ruta inmediata de mitigación — 23/09/2026
+## Estado comprobado en HEAD — 23/09/2026, `73fceb8`
 
-**Antes de continuar con C4 externo, ejecutar el [plan integral de mitigación C1–C4 del 23/09](../audits/C1-C4-MITIGATION-PLAN-20260923.md).** Ese documento consolida trece defectos técnicos reproducidos o confirmados —identidad y expiración de trial, seats por perfil, restore/email, reconciliación con Lemon, reactivación, renovación PRO, reloj, gracia del último loop, ZIP obsoleto, suite rota, clasificación de errores, analítica y recovery— y cinco gates transversales de abuso, pruebas, privacidad, copy y salida C4–C7.
+**No está cerrado al 100%. Leer primero [12 — Estado y guía para el siguiente agente](12-ESTADO-Y-SIGUIENTE-AGENTE-20260923.md).** Consolida el inventario documental, trabajo existente, pruebas actuales, prioridades y evaluación Paddle/Wise. Tiene precedencia sobre las instrucciones y afirmaciones históricas incompatibles de este índice.
 
-Este bloque tiene precedencia sobre cualquier instrucción inferior de avanzar directamente a Lemon Test Mode. El orden vigente es:
+La regresión de descuento/precio futuro de M17 se corrigió en el árbol de trabajo el 23/09: `npm test` vuelve a pasar sus 48 verificadores y Player Tools pasa sus 27 tests del servicio. Esto recupera el gate local, pero no certifica el ZIP ni los recorridos externos. C4–C7 siguen pendientes de evidencia real. EQ/export y controles de header tienen implementación; no reiniciarlos desde los planes antiguos. El usuario considera Paddle por el bloqueo de Wise en Lemon, pero todavía hay que resolver la aceptación del producto: Paddle incluye streaming downloaders en su política de categorías prohibidas.
 
-**mitigación M01–M17 → suite y ZIP trazable → C4 Test Mode → C5 Live/comercial → C6 Store → C7 operación.**
+Orden recomendado: **contrato comercial y QA local → viabilidad del proveedor → sandbox auténtico → Live/ZIP/Store/operación → presets completos y loops guardados → evolución de Explorer/Looper/FX**. Detalles y límites en el plan 12.
 
-No considerar evidencia suficiente los 22 tests de Player Tools/licencias ni el smoke del ZIP existente: la suite global falla en HEAD y el smoke actual puede aprobar un ZIP anterior que comparte versión pero no contenido con el código auditado.
+## Estado de la mitigación C1–C4 — 23/09/2026
+
+Consultar el [plan integral de mitigación C1–C4 del 23/09](../audits/C1-C4-MITIGATION-PLAN-20260923.md) junto con su addendum de cierre local; el diagnóstico inicial por sí solo ya no representa HEAD. Los defectos técnicos de M02–M17 tienen implementación y regresiones locales. El usuario reabrió M01 con un requisito nuevo: prueba resistente a reinstalación y múltiples perfiles. Eso requiere identidad de cuenta verificada por el servidor; el trial actual sigue siendo por perfil local hasta elegir/configurar OAuth.
+
+M14–M17 tienen cierre local. El gate automatizado de navegador y un ZIP diagnóstico trazable también pasan; Likes Explorer quedó incorporado a futuras ejecuciones de `test:release-local`. M18 local está cerrado, pero C4–C7 permanecen abiertos porque requieren evidencia externa. El orden vigente es:
+
+Cloudflare ya no parte de cero: Wrangler está autenticado, las D1 separadas de test/producción existen y tienen las seis migraciones aplicadas, y los pares ES256/configuración local están preparados. Faltan IDs/secretos reales de Lemon para desplegar; los endpoints todavía no existen (`sctd-test` no resuelve y la ruta live devuelve 404 de GitHub Pages).
+
+**QA de navegador y ZIP trazable → decidir proveedor viable → C4 sandbox auténtico → C5 Live/comercial → C6 Store → C7 operación.**
+
+No considerar evidencia suficiente los tests locales de Player Tools/licencias ni un ZIP anterior: la suite global vuelve a pasar, pero todavía hay que construir y comprobar un ZIP ligado por procedencia a estos bytes y ejecutar los recorridos externos pendientes.
 
 ## Entrada vigente para sesión en frío — cierre comercial, 21/09/2026
 

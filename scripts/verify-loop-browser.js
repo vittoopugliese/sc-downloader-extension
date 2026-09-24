@@ -71,11 +71,40 @@ async function waitForFile(directory, timeoutMs = 30000) {
     });
 
     const wav = createMonoWav(20);
-    const audioUrl = "https://cdn.test/loop-regression.wav";
-    await context.route(audioUrl, (route) => route.fulfill({
-      contentType: "audio/wav",
-      body: wav,
-    }));
+    // Use a SoundCloud media host for the page fixture. The routed response
+    // supports byte ranges so currentTime remains seekable in Chromium.
+    const audioUrl = "https://cf-media.sndcdn.com/loop-regression.wav";
+    await context.route(audioUrl, (route) => {
+      const range = route.request().headers().range?.match(/^bytes=(\d+)-(\d*)$/);
+      if (!range) {
+        return route.fulfill({
+          contentType: "audio/wav",
+          headers: {
+            "accept-ranges": "bytes",
+            "access-control-allow-origin": "*",
+            "cache-control": "no-store",
+            "content-length": String(wav.length),
+          },
+          body: wav,
+        });
+      }
+      const start = Number(range[1]);
+      const requestedEnd = range[2] ? Number(range[2]) : wav.length - 1;
+      const end = Math.min(requestedEnd, wav.length - 1);
+      const body = wav.subarray(start, end + 1);
+      return route.fulfill({
+        status: 206,
+        contentType: "audio/wav",
+        headers: {
+          "accept-ranges": "bytes",
+          "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "content-range": `bytes ${start}-${end}/${wav.length}`,
+          "content-length": String(body.length),
+        },
+        body,
+      });
+    });
     const trackUrl = "https://soundcloud.com/artist/loop-regression";
     const track = {
       id: 4242,
@@ -165,24 +194,29 @@ async function waitForFile(directory, timeoutMs = 30000) {
     await context.route("https://api-v2.soundcloud.com/resolve**", (route) =>
       route.fulfill({ contentType: "application/json", body: JSON.stringify(track) })
     );
-    await worker.evaluate((url) => {
+    // Keep the Blob owner alive so the offscreen extension document can fetch
+    // it without touching the public network.
+    const entitlementPage = await context.newPage();
+    await entitlementPage.goto(`chrome-extension://${extensionId}/popup.html`);
+    const fixtureUrl = await entitlementPage.evaluate((wavBase64) => {
+      const bytes = Uint8Array.from(atob(wavBase64), (character) => character.charCodeAt(0));
+      return URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+    }, wav.toString("base64"));
+    await worker.evaluate((fixtureUrl) => {
       const originalFetch = fetch;
       globalThis.fetch = (input, options) =>
         String(input).includes("/media/loop-regression")
-          ? Promise.resolve(new Response(JSON.stringify({ url })))
+          ? Promise.resolve(new Response(JSON.stringify({ url: fixtureUrl })))
           : originalFetch(input, options);
-    }, audioUrl);
+    }, fixtureUrl);
 
     // WAV export is Pro under the final contract. The unpacked development
     // build exposes an explicit local test entitlement; release packaging
     // removes these credentials.
-    const entitlementPage = await context.newPage();
-    await entitlementPage.goto(`chrome-extension://${extensionId}/popup.html`);
     const testAccess = await entitlementPage.evaluate(() => chrome.runtime.sendMessage({
       type: "TEST_PLAYER_TOOLS_PRO", username: "1", password: "1",
     }));
     assert.equal(testAccess.success, true);
-    await entitlementPage.close();
 
     await page.goto(trackUrl);
     await page.waitForFunction(() => Number.isFinite(document.querySelector("audio")?.duration));
@@ -410,10 +444,35 @@ async function waitForFile(directory, timeoutMs = 30000) {
       "hidden",
       "A nested native playhead mounted during zoom must also be hidden"
     );
+    // Headless Chromium may reset a synthetic routed WAV to zero after the
+    // fixture mutates its native playhead. Pin the media clock immediately
+    // before checking the zoom projection; the assertion is about mapping a
+    // known in-range time, not autonomous media playback.
+    await page.locator("audio").evaluate((audio) => {
+      audio.pause();
+      audio.currentTime = 5;
+      audio.dispatchEvent(new Event("timeupdate"));
+    });
     const zoomPlayhead = page.locator(".scdl-loop-zoom-playhead");
     await page.waitForFunction(() => {
       const playhead = document.querySelector(".scdl-loop-zoom-playhead");
       return playhead && !playhead.hidden;
+    }, null, { timeout: 5000 }).catch(async (error) => {
+      const diagnostic = await page.evaluate(() => {
+        const audio = document.querySelector("audio");
+        const playhead = document.querySelector(".scdl-loop-zoom-playhead");
+        const zoom = document.querySelector(".scdl-loop-zoom-waveform");
+        return {
+          currentTime: audio?.currentTime,
+          duration: audio?.duration,
+          playheadHidden: playhead?.hidden,
+          playheadLeft: playhead?.style.left,
+          zoomHidden: zoom?.parentElement?.hidden,
+          zoomViewBox: zoom?.getAttribute("viewBox"),
+          debug: document.documentElement.getAttribute("data-scdl-looper-debug"),
+        };
+      });
+      throw new Error(`Zoom playhead did not become visible: ${JSON.stringify(diagnostic)}`, { cause: error });
     });
     assert.ok(
       Math.abs(await zoomPlayhead.evaluate((element) => parseFloat(element.style.left)) - 18.75) < 0.1,
@@ -608,10 +667,9 @@ async function waitForFile(directory, timeoutMs = 30000) {
 
     const downloadButton = page.locator("[data-scdl-loop-download]");
     // Export is a Pro capability; the access-routing suite separately asserts
-    // that Free is rejected before any expensive audio work begins.
-    await worker.evaluate(() => globalThis.SCPlayerToolsAccess.setEntitlement({
-      status: "active", licenseId: "e2e-license", checkedAt: Date.now(),
-    }));
+    // that Free is rejected before any expensive audio work begins. Reuse the
+    // explicit test entitlement installed above; writing an unsigned ad-hoc
+    // entitlement here would correctly expire during verification.
     assert.equal((await worker.evaluate(() => globalThis.SCPlayerToolsAccess.getSnapshot({}))).plan, "pro");
     await downloadButton.click();
     try {

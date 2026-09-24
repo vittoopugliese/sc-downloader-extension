@@ -1,0 +1,64 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "sctd-player-tools-license-test",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-09-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [{ "pattern": "sctd-test.vpugliese.online/api/player-tools/*", "zone_name": "vpugliese.online" }],
+  "vars": {
+    "LEMON_MODE": "test",
+    "ALLOWED_ORIGINS": "chrome-extension://hccfkgjcaigahlnmobpjdhcbhkejkack",
+    "LEMON_STORE_ID": "REPLACE_WITH_TEST_LEMON_STORE_ID",
+    "LEMON_PRODUCT_ID": "REPLACE_WITH_TEST_LEMON_PRODUCT_ID",
+    "LEMON_VARIANT_ID": "REPLACE_WITH_TEST_LEMON_VARIANT_ID",
+    "ENTITLEMENT_KEY_ID": "p256-test-2026-09"
+  },
+  "secrets": {
+    "required": ["LEMON_API_KEY", "LEMON_WEBHOOK_SECRET", "ENTITLEMENT_PRIVATE_JWK", "ADMIN_TOKEN"]
+  },
+  "observability": { "enabled": true, "logs": { "head_sampling_rate": 1 } },
+  "ratelimits": [
+    { "name": "TRIAL_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
+    { "name": "LICENSE_RATE_LIMITER", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } },
+    { "name": "CHECKOUT_RATE_LIMITER", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } },
+    { "name": "EVENT_RATE_LIMITER", "namespace_id": "1004", "simple": { "limit": 120, "period": 60 } }
+  ],
+  "d1_databases": [{
+    "binding": "LICENSE_DB",
+    "database_name": "sctd-player-tools-test",
+    "database_id": "3a4733a3-6cc0-4fc3-9ba8-0ae165e6824d",
+    "migrations_dir": "migrations"
+  }],
+  "env": {
+    "production": {
+      "name": "sctd-player-tools-license",
+      "workers_dev": false,
+      "routes": [{ "pattern": "sctd.vpugliese.online/api/player-tools/*", "zone_name": "vpugliese.online" }],
+      "vars": {
+        "LEMON_MODE": "live",
+        "ALLOWED_ORIGINS": "chrome-extension://ekmbbjdpakacalghjkikfppebgdpoebb",
+        "LEMON_STORE_ID": "REPLACE_WITH_LIVE_LEMON_STORE_ID",
+        "LEMON_PRODUCT_ID": "REPLACE_WITH_LIVE_LEMON_PRODUCT_ID",
+        "LEMON_VARIANT_ID": "REPLACE_WITH_LIVE_LEMON_VARIANT_ID",
+        "ENTITLEMENT_KEY_ID": "p256-live-2026-09"
+      },
+      "secrets": {
+        "required": ["LEMON_API_KEY", "LEMON_WEBHOOK_SECRET", "ENTITLEMENT_PRIVATE_JWK", "ADMIN_TOKEN"]
+      },
+      "observability": { "enabled": true, "logs": { "head_sampling_rate": 1 } },
+      "ratelimits": [
+        { "name": "TRIAL_RATE_LIMITER", "namespace_id": "2001", "simple": { "limit": 30, "period": 60 } },
+        { "name": "LICENSE_RATE_LIMITER", "namespace_id": "2002", "simple": { "limit": 20, "period": 60 } },
+        { "name": "CHECKOUT_RATE_LIMITER", "namespace_id": "2003", "simple": { "limit": 10, "period": 60 } },
+        { "name": "EVENT_RATE_LIMITER", "namespace_id": "2004", "simple": { "limit": 120, "period": 60 } }
+      ],
+      "d1_databases": [{
+        "binding": "LICENSE_DB",
+        "database_name": "sctd-player-tools-production",
+        "database_id": "e1ade631-ca28-4020-98b2-f30e198159a3",
+        "migrations_dir": "migrations"
+      }]
+    }
+  }
+}

@@ -31,9 +31,9 @@ Download only music you own or have permission to save. Respect artists’ right
 
 Player Tools Pro is a one-time lifetime purchase for the published Pro features, including loop WAV export and full-track export with supported playback transformations. Likes Explorer helps you rediscover older Likes in your library. Check the extension for the current offer and access details.
 
-### EN — Añadir únicamente después de completar EQ/export FX
+### EN — Añadir únicamente cuando el candidato con EQ/export FX esté verificado
 
-Shape your listening with Reverb, Delay and a three-band Pro EQ. Export an A–B loop or the full track as WAV with your applied sound settings.
+Shape your listening with Reverb, Delay and a parametric Pro EQ with up to eight points, high/low-pass filters and optional hard clipping. Export an A–B loop or the full track as WAV with your applied sound settings.
 
 ## RU — Русский: описание
 
@@ -62,9 +62,9 @@ Player Tools добавляет управление воспроизведен�
 
 Player Tools Pro — разовая покупка с бессрочным доступом к выпущенным функциям Pro, включая экспорт фрагментов в WAV и целых треков с поддерживаемыми изменениями воспроизведения. Likes Explorer помогает находить старые понравившиеся треки в вашей библиотеке. Актуальное предложение и условия доступа указаны в расширении.
 
-### RU — Только после выпуска EQ и экспорта эффектов
+### RU — Добавлять только после проверки сборки с EQ и экспортом эффектов
 
-Настраивайте звучание с помощью реверберации, задержки и трёхполосного эквалайзера Pro. Экспортируйте фрагмент A–B или целый трек в WAV с применёнными настройками звука.
+Настраивайте звучание с помощью реверберации, задержки и параметрического эквалайзера Pro с восемью точками, фильтрами высоких/низких частот и необязательным жёстким ограничением. Экспортируйте фрагмент A–B или целый трек в WAV с применёнными настройками звука.
 
 ## DE — Deutsch: Beschreibung
 
@@ -93,9 +93,9 @@ Lade nur Musik herunter, die dir gehört oder die du mit Erlaubnis speichern dar
 
 Player Tools Pro bietet die veröffentlichten Pro-Funktionen gegen eine einmalige Zahlung mit dauerhaftem Zugang, darunter WAV-Export von Loops und Export ganzer Tracks mit unterstützten Wiedergabeänderungen. Likes Explorer hilft dir, ältere Likes in deiner Bibliothek wiederzufinden. Das aktuelle Angebot und die Zugangsbedingungen stehen in der Erweiterung.
 
-### DE — Erst nach Veröffentlichung von EQ und FX-Export
+### DE — Nur nach Prüfung des Builds mit EQ und FX-Export hinzufügen
 
-Gestalte deinen Sound mit Reverb, Delay und einem Pro-EQ mit drei Bändern. Exportiere einen A–B-Loop oder den gesamten Track als WAV mit deinen angewendeten Klangeinstellungen.
+Gestalte deinen Sound mit Reverb, Delay und einem parametrischen Pro-EQ mit bis zu acht Punkten, Hoch-/Tiefpassfiltern und optionalem Hard Clipping. Exportiere einen A–B-Loop oder den gesamten Track als WAV mit deinen angewendeten Klangeinstellungen.
 
 ## PT-BR — Português do Brasil: descrição
 
@@ -124,9 +124,9 @@ Baixe apenas músicas que sejam suas ou que você tenha permissão para salvar. 
 
 O Player Tools Pro é uma compra única com acesso vitalício aos recursos Pro publicados, incluindo exportação de loops em WAV e de faixas inteiras com as transformações de reprodução compatíveis. O Likes Explorer ajuda você a reencontrar Likes antigos na sua biblioteca. Veja a oferta atual e os detalhes de acesso na extensão.
 
-### PT-BR — Só depois de publicar EQ e exportação de FX
+### PT-BR — Adicionar só depois de verificar o build com EQ e exportação de FX
 
-Personalize sua escuta com Reverb, Delay e um EQ Pro de três bandas. Exporte um trecho A–B ou a faixa inteira em WAV com os ajustes de som aplicados.
+Personalize sua escuta com Reverb, Delay e um EQ Pro paramétrico de até oito pontos, filtros passa-altas/passa-baixas e hard clipping opcional. Exporte um trecho A–B ou a faixa inteira em WAV com os ajustes de som aplicados.
 
 ## ES — Español: descripción
 
@@ -155,9 +155,9 @@ Descargá únicamente música propia o que tengas permiso para guardar. Respetá
 
 Player Tools Pro es una compra única con acceso lifetime a las funciones Pro publicadas, incluyendo exportación de loops WAV y de tracks completos con las transformaciones de reproducción compatibles. Likes Explorer te ayuda a reencontrar Likes antiguos en tu biblioteca. Consultá la oferta vigente y los detalles de acceso en la extensión.
 
-### ES — Sólo después de publicar EQ y exportación de FX
+### ES — Añadir sólo después de verificar el candidato con EQ y exportación de FX
 
-Personalizá tu escucha con Reverb, Delay y un EQ Pro de tres bandas. Exportá un fragmento A–B o el track completo en WAV con tus ajustes de sonido aplicados.
+Personalizá tu escucha con Reverb, Delay y un EQ Pro paramétrico de hasta ocho puntos, filtros pasa-altos/pasa-bajos y hard clipping opcional. Exportá un fragmento A–B o el track completo en WAV con tus ajustes de sonido aplicados.
 
 ## Control editorial común
 

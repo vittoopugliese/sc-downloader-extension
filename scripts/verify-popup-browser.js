@@ -228,6 +228,10 @@ const iconDataUrls = Object.fromEntries(
     const selectTab = source.slice(source.indexOf("function selectHelpTab("), source.indexOf("async function openRequestedPopupView"));
     await page.evaluate((selectTab) => {
       window.helpPanel = document.getElementById("helpPanel");
+      // This layout-only fixture strips runtime scripts and extension APIs.
+      // Keep the real tab handler intact while replacing Contact's networked
+      // loader with the smallest dependency the handler expects.
+      window.SCContactContent = { load() {} };
       document.body.classList.add("help-mode");
       helpPanel.classList.add("is-visible");
       window.eval(selectTab);
