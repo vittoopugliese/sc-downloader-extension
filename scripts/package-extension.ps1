@@ -71,6 +71,7 @@ $packageItems = @(
     "scripts/soundcloud-http.js",
     "scripts/stream-selector.js",
     "scripts/tempo-control-core.js",
+    "scripts/sampler-core.js",
     "scripts/tempo-control-main.js",
     "scripts/track-download-execution.js",
     "scripts/vendor/id3-writer.js",

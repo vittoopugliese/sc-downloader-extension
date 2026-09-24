@@ -71,6 +71,7 @@ async function main() {
     await page.addScriptTag({
       path: path.join(__dirname, "tempo-control-core.js"),
     });
+    await page.addScriptTag({ path: path.join(__dirname, "sampler-core.js") });
     for (const file of ["parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js"]) {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
@@ -125,6 +126,7 @@ async function main() {
       window.trackDownloadRequests = [];
       window.loopDownloadRequests = [];
       window.padRenderRequests = [];
+      window.instrumentRenderRequests = [];
       window.savedPadSamples = {};
       window.addEventListener("message", (event) => {
         const data = event.data;
@@ -136,6 +138,9 @@ async function main() {
           window.padRenderRequests.push(data);
           window.savedPadSamples[data.index] = { name: data.name, dataUrl: `${location.origin}/assets/drums/tom1.wav` };
           result.pad = { name: data.name };
+        } else if (data.action === "instrument") {
+          window.instrumentRenderRequests.push(data);
+          result.instrument = { name: data.name, dataUrl: `${location.origin}/assets/drums/tom1.wav` };
         } else if (data.action === "store") {
           window.savedPadSamples[data.index] = { name: data.name, dataUrl: `${location.origin}/assets/drums/hat1.wav` };
           result.pad = { name: data.name };
@@ -288,9 +293,11 @@ async function main() {
     assert.equal(drumPlacement, true, "The sampler must fit between the tempo and loop controls.");
     await page.evaluate(() => {
       window.drumStarts = 0;
+      window.sourcePlaybackRates = [];
       const originalStart = AudioBufferSourceNode.prototype.start;
       AudioBufferSourceNode.prototype.start = function (...args) {
         window.drumStarts += 1;
+        window.sourcePlaybackRates.push(this.playbackRate.value);
         return originalStart.apply(this, args);
       };
     });
@@ -768,6 +775,28 @@ async function main() {
     assert.equal(padRender.effects.delay, 17);
     await drumPads.nth(5).click();
     await page.waitForFunction(() => window.drumStarts === 4);
+    const instrumentToggle = host.locator(".loop-instrument");
+    assert.equal(await instrumentToggle.isDisabled(), false,
+      "Piano mode must be available while a loop selection is active.");
+    await instrumentToggle.click();
+    await page.waitForFunction(() => document.querySelector("#scdl-tempo-control")?.shadowRoot
+      ?.querySelector(".loop-instrument")?.getAttribute("aria-pressed") === "true");
+    const instrumentRender = await page.evaluate(() => window.instrumentRenderRequests.at(-1));
+    assert.deepEqual(instrumentRender.trimRange, { startMs: 12345, endMs: 20678, durationMs: 120000 });
+    assert.equal(instrumentRender.playbackTransform.rate, 1.25);
+    assert.equal(instrumentRender.effects.reverb, 24);
+    await host.locator(".brand-name").hover();
+    await page.keyboard.press("a");
+    await page.waitForFunction(() => window.drumStarts === 5);
+    await page.keyboard.press("q");
+    await page.waitForFunction(() => window.drumStarts === 6);
+    assert.deepEqual(await page.evaluate(() => window.sourcePlaybackRates.slice(-2)), [1, 2],
+      "A/Q must play the loop at C4/C5 without also triggering sampler pads.");
+    await page.keyboard.press("Escape");
+    assert.equal(await instrumentToggle.getAttribute("aria-pressed"), "false");
+    assert.equal(await panel.isVisible(), true, "Escape must leave piano mode without closing the panel.");
+    await page.keyboard.press("a");
+    await page.waitForFunction(() => window.drumStarts === 7);
     await host.locator("#scdl-effect-reverb").evaluate((slider) => { slider.value = "0"; slider.dispatchEvent(new Event("change", { bubbles: true })); });
     await host.locator("#scdl-effect-delay").evaluate((slider) => { slider.value = "0"; slider.dispatchEvent(new Event("change", { bubbles: true })); });
     await host.locator(".waveform-toggle").evaluate((button) => button.click());
@@ -1368,6 +1397,28 @@ async function main() {
     assert.equal(storedSample.signature, "RIFF");
     assert.ok(storedSample.bytes > 1000);
     assert.ok(storedSample.list.pads.some((pad) => pad.index === 5 && pad.name === "Rendered Loop"));
+    const renderedInstrument = await page.evaluate(async () => {
+      const result = await window.sendOffscreenTest({
+        type: "OFFSCREEN_INSTRUMENT_RENDER", operationId: "instrument_integration_001", buildId: "track_instrument_integration",
+        name: "Rendered Instrument", streamUrl: `${location.origin}/assets/drums/tom1.wav`,
+        trackData: { streamProtocol: "progressive", durationMs: 420, title: "Tom", artist: "Test" },
+        trimRange: { startMs: 0, endMs: 200 },
+        playbackTransform: { rate: 1, preservePitch: false },
+        effects: {},
+      });
+      if (!result.success) return result;
+      const bytes = await (await fetch(result.instrument.dataUrl)).arrayBuffer();
+      return {
+        success: true,
+        name: result.instrument.name,
+        signature: String.fromCharCode(...new Uint8Array(bytes.slice(0, 4))),
+        bytes: bytes.byteLength,
+      };
+    });
+    assert.equal(renderedInstrument.success, true, renderedInstrument.error);
+    assert.equal(renderedInstrument.name, "Rendered Instrument");
+    assert.equal(renderedInstrument.signature, "RIFF");
+    assert.ok(renderedInstrument.bytes > 1000);
     await page.reload();
     const persistedName = await page.evaluate(() => new Promise((resolve, reject) => {
       const request = indexedDB.open("scdl-player-pads", 2);
@@ -1384,7 +1435,7 @@ async function main() {
         plan: "pro", state: "pro", capabilities: { tempo: true, parametricEq: true },
       }));
     });
-    for (const file of ["tempo-control-core.js", "parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
+    for (const file of ["tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
     await host.locator(".trigger").click();

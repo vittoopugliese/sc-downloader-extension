@@ -21,6 +21,8 @@ if (!mainWorldEntry || mainWorldEntry.run_at !== "document_start") {
   throw new Error("Tempo control is not loaded at document_start in MAIN world.");
 }
 if (
+  mainWorldEntry.js.indexOf("scripts/sampler-core.js") < 0 ||
+  mainWorldEntry.js.indexOf("scripts/sampler-core.js") > mainWorldEntry.js.indexOf("scripts/tempo-control-main.js") ||
   mainWorldEntry.js.indexOf("scripts/audio-effects-core.js") < 0 ||
   mainWorldEntry.js.indexOf("scripts/audio-effects-core.js") > mainWorldEntry.js.indexOf("scripts/tempo-control-main.js")
 ) {
@@ -36,6 +38,7 @@ const packageScript = fs.readFileSync(
 );
 for (const item of [
   "scripts/tempo-control-core.js",
+  "scripts/sampler-core.js",
   "scripts/audio-effects-core.js",
   "scripts/parametric-eq.js",
   "scripts/player-tools-collapsible.js",

@@ -1187,6 +1187,44 @@ const BulkJobManager = {
     }
   },
 
+  async renderLoopInstrument(trackData, trimRange, playbackTransform, effects, name, operationId = `instrument_${Date.now()}`) {
+    singleDownloadsInFlight += 1;
+    try {
+      await startKeepalive();
+      return await queueSingleDownload(async () => {
+        let result;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const resolved = await SCDownloadSource.resolve(trackData, "auto", {
+            forceRefresh: attempt > 0,
+            reason: attempt > 0 ? "expired_media" : "initial",
+            attempt,
+          });
+          result = await sendOffscreenMessage({
+            type: "OFFSCREEN_INSTRUMENT_RENDER",
+            buildId: `track_${operationId}`,
+            operationId,
+            name,
+            streamUrl: resolved.streamUrl,
+            trackData: resolved.trackData,
+            trimRange,
+            playbackTransform,
+            effects,
+          });
+          if (result?.success || ![401, 403, 404].includes(result?.status)) break;
+        }
+        if (!result?.success) throw new Error(result?.error || "Could not prepare the loop instrument.");
+        return result;
+      });
+    } finally {
+      singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);
+      const activeJob = await loadJob().catch(() => null);
+      if ((!activeJob || !isActiveJobStatus(activeJob.status)) && singleDownloadsInFlight === 0) {
+        await stopKeepalive().catch(() => {});
+        await closeOffscreenDocument().catch(() => {});
+      }
+    }
+  },
+
   async padMessage(message) {
     return sendOffscreenMessage(message);
   },

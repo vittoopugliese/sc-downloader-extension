@@ -14,6 +14,7 @@ const access = create({ storage: {
 let messageListener = null;
 const tabMessages = [];
 const downloads = [];
+const instrumentRenders = [];
 const resolvedTrack = {
   id: 7,
   title: "Track",
@@ -62,6 +63,10 @@ const context = vm.createContext({
       downloads.push(args);
       return { success: true, fileName: "Artist - Track (loop).wav" };
     },
+    async renderLoopInstrument(...args) {
+      instrumentRenders.push(args);
+      return { success: true, instrument: { name: args[4], dataUrl: "data:audio/wav;base64,UklGRg==" } };
+    },
   },
   chrome: {
     storage: {
@@ -70,6 +75,7 @@ const context = vm.createContext({
       session: { async get() { return {}; }, async set() {} },
     },
     runtime: {
+      id: "test-extension",
       lastError: null,
       getManifest: () => ({ version: "test" }),
       onInstalled: { addListener() {} },
@@ -161,6 +167,24 @@ function dispatch(request, sender) {
   const effects = { eq: { enabled: true, bands: [{ frequency: 1000, gain: 6, q: 1 }] } };
   assert.equal((await dispatch({ type: "DOWNLOAD_SINGLE_TRACK", trackData: resolvedTrack, playbackTransform, effects }, {})).success, true);
   assert.deepEqual(downloads.at(-1)[4], effects, "Authorized EQ settings must reach the audio build path");
+
+  const instrument = await dispatch({
+    type: "RENDER_LOOP_INSTRUMENT",
+    operationId: "instrument_routing_001",
+    trackUrl: "https://soundcloud.com/artist/track",
+    trimRange,
+    playbackTransform,
+    effects,
+    name: "Loop Instrument",
+  }, { id: "test-extension", tab: { id: 42 }, url: "https://soundcloud.com/artist/track" });
+  assert.equal(instrument.success, true, JSON.stringify(instrument));
+  assert.equal(instrumentRenders.length, 1);
+  assert.equal(instrumentRenders[0][0], resolvedTrack);
+  assert.deepEqual(instrumentRenders[0][1], trimRange);
+  assert.deepEqual(instrumentRenders[0][2], playbackTransform);
+  assert.deepEqual(instrumentRenders[0][3], effects);
+  assert.equal(instrumentRenders[0][4], "Loop Instrument");
+  assert.equal(instrumentRenders[0][5], "instrument_routing_001");
 
   console.log("Loop background routing verification passed.");
 })().catch((error) => {

@@ -79,7 +79,7 @@
   const BYPASS_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17.2C22 19.85 19.85 22 17.2 22C15.78 22 14.51 21.38 13.63 20.4C12.87 19.55 12.4 18.43 12.4 17.2C12.4 14.55 14.55 12.4 17.2 12.4C18.57 12.4 19.81 12.98 20.69 13.91C20.68 13.91 20.68 13.91 20.69 13.92C21.5 14.78 22 15.93 22 17.2Z"/><path d="M18.48 18.54L15.95 16M18.45 16.03L15.92 18.57"/><path d="M22 8.69C22 10.66 21.49 12.4 20.69 13.91C19.81 12.98 18.57 12.4 17.2 12.4C14.55 12.4 12.4 14.55 12.4 17.2C12.4 18.43 12.87 19.55 13.63 20.4C13.26 20.57 12.92 20.71 12.62 20.81C12.28 20.93 11.72 20.93 11.38 20.81C8.48 19.82 2 15.69 2 8.69C2 5.6 4.49 3.09998 7.56 3.09998C9.37 3.09998 10.99 3.98002 12 5.33002C13.01 3.98002 14.63 3.09998 16.44 3.09998C19.51 3.09998 22 5.6 22 8.69Z"/></svg>`;
   // Inline copy of assets/icons/settings.svg so the tempo panel matches popup.html.
   const SETTINGS_ICON = `<svg viewBox="0 0 512 512" aria-hidden="true"><path d="M502.325 307.303 463.319 276.498a25.82 25.82 0 0 1-9.668-20.348v-.252a25.88 25.88 0 0 1 9.667-20.396l39.007-30.806a25.89 25.89 0 0 0 7.737-29.701l-17.134-41.366a25.89 25.89 0 0 0-26.472-15.532l-49.366 5.8a25.9 25.9 0 0 1-21.258-7.586l-.354-.356a25.88 25.88 0 0 1-7.552-21.225l5.799-49.363a25.89 25.89 0 0 0-15.531-26.472L337.004 1.939a25.89 25.89 0 0 0-29.701 7.736L276.498 48.68a25.82 25.82 0 0 1-20.349 9.668h-.252a25.88 25.88 0 0 1-20.395-9.667L204.697 9.675a25.89 25.89 0 0 0-29.702-7.736L133.63 19.072a25.89 25.89 0 0 0-15.532 26.473l5.799 49.366a25.9 25.9 0 0 1-7.585 21.257l-.356.356a25.88 25.88 0 0 1-21.226 7.552l-49.363-5.799a25.89 25.89 0 0 0-26.472 15.531L1.939 174.996a25.89 25.89 0 0 0 7.736 29.701l39.006 30.805a25.82 25.82 0 0 1 9.668 20.348v.251a25.88 25.88 0 0 1-9.667 20.395L9.675 307.303a25.89 25.89 0 0 0-7.736 29.701l17.134 41.365a25.89 25.89 0 0 0 26.472 15.532l49.366-5.799a25.9 25.9 0 0 1 21.258 7.586l.356.356a25.88 25.88 0 0 1 7.552 21.226l-5.799 49.364a25.89 25.89 0 0 0 15.532 26.472l41.366 17.134a25.89 25.89 0 0 0 29.701-7.736l30.804-39.005a25.82 25.82 0 0 1 20.348-9.669h.251a25.88 25.88 0 0 1 20.396 9.667l30.806 39.007a25.89 25.89 0 0 0 29.701 7.736l41.366-17.134a25.89 25.89 0 0 0 15.532-26.472l-5.8-49.366a25.9 25.9 0 0 1 7.586-21.257l.356-.356a25.88 25.88 0 0 1 21.225-7.552l49.364 5.799a25.89 25.89 0 0 0 26.472-15.531l17.134-41.365a25.89 25.89 0 0 0-7.737-29.701ZM281.292 329.698a77.75 77.75 0 1 1-59.52-143.695 77.75 77.75 0 0 1 59.52 143.695Z"/></svg>`;
-  if (window[INSTALLED_FLAG] || !globalThis.SCTempoControl) return;
+  if (window[INSTALLED_FLAG] || !globalThis.SCTempoControl || !globalThis.SCSamplerCore) return;
   Object.defineProperty(window, INSTALLED_FLAG, { value: true });
 
   const { DEFAULTS, clampRate, create, formatRate } = globalThis.SCTempoControl;
@@ -132,6 +132,12 @@
   let hoveredDrum = null;
   let selectingLoopPad = null;
   let padRequestNumber = 0;
+  let instrumentMode = false;
+  let instrumentPreparing = false;
+  let instrumentBuffer = null;
+  let instrumentVoice = null;
+  let instrumentIntentVersion = 0;
+  let instrumentSnapshot = null;
   const padRequests = new Map();
   const drumPads = DRUM_DEFAULTS.map((defaultPad) => ({ ...defaultPad, buffer: null, loading: null, customName: "", saved: false, busy: false, version: 0 }));
   try {
@@ -339,6 +345,129 @@
     return drumAudioContext;
   }
 
+  function stopInstrumentVoice(releaseMs = 8) {
+    const voice = instrumentVoice;
+    instrumentVoice = null;
+    if (!voice) return;
+    const now = voice.context.currentTime;
+    try {
+      voice.gain.gain.cancelScheduledValues(now);
+      voice.gain.gain.setValueAtTime(Math.max(0.0001, voice.gain.gain.value), now);
+      voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + releaseMs / 1000);
+      voice.source.stop(now + releaseMs / 1000 + 0.002);
+    } catch {}
+  }
+
+  function setInstrumentMode(enabled, { clearBuffer = false, message = "" } = {}) {
+    instrumentMode = Boolean(enabled);
+    if (!instrumentMode) stopInstrumentVoice();
+    if (clearBuffer) {
+      instrumentBuffer = null;
+      instrumentSnapshot = null;
+    }
+    if (ui?.instrumentToggle) {
+      ui.instrumentToggle.setAttribute("aria-pressed", String(instrumentMode));
+      ui.instrumentToggle.classList.toggle("is-preparing", instrumentPreparing);
+    }
+    if (message || !instrumentMode) showDrumError(message);
+    renderLoop();
+  }
+
+  function loopMatchesInstrumentSnapshot(snapshot = instrumentSnapshot) {
+    return Boolean(snapshot && loopState.active &&
+      snapshot.trackIdentity === loopState.trackIdentity &&
+      snapshot.generation === loopState.generation &&
+      snapshot.startMs === loopState.startMs &&
+      snapshot.endMs === loopState.endMs);
+  }
+
+  function disableInstrument(message = "") {
+    instrumentIntentVersion += 1;
+    instrumentPreparing = false;
+    setInstrumentMode(false, { clearBuffer: true, message });
+  }
+
+  async function toggleLoopInstrument() {
+    if (instrumentMode) {
+      setInstrumentMode(false, { message: "" });
+      return;
+    }
+    if (instrumentPreparing) {
+      disableInstrument("");
+      return;
+    }
+    if (!loopState.active || padRenderPending) return;
+    if (instrumentBuffer && loopMatchesInstrumentSnapshot()) {
+      setInstrumentMode(true, { message: "Piano mode: Z = C3, A = C4, Q = C5. Press Escape to exit." });
+      return;
+    }
+    const state = controller.snapshot();
+    const duration = (loopState.endMs - loopState.startMs) / state.effectiveRate;
+    if (duration > 30000) {
+      showDrumError("Instrument samples can be up to 30 seconds long. Shorten the loop or increase its speed.");
+      return;
+    }
+    cancelLoopPadSelection();
+    const intentVersion = ++instrumentIntentVersion;
+    const snapshot = {
+      trackIdentity: loopState.trackIdentity,
+      generation: loopState.generation,
+      startMs: loopState.startMs,
+      endMs: loopState.endMs,
+    };
+    instrumentPreparing = true;
+    instrumentSnapshot = snapshot;
+    setInstrumentMode(false, { message: "Preparing loop instrument…" });
+    try {
+      const operationId = `instrument_${Date.now()}_${++padRequestNumber}`;
+      const result = await requestPad("instrument", {
+        operationId,
+        trackUrl: String(loopState.trackIdentity || "").replace(/^permalink:/, ""),
+        trimRange: { startMs: loopState.startMs, endMs: loopState.endMs, durationMs: loopState.durationMs },
+        playbackTransform: { rate: state.effectiveRate, preservePitch: state.preservePitch },
+        effects: effectsController?.snapshot() || {},
+        name: `Instrument ${(loopState.startMs / 1000).toFixed(1)}–${(loopState.endMs / 1000).toFixed(1)}s`,
+      });
+      if (intentVersion !== instrumentIntentVersion || !loopMatchesInstrumentSnapshot(snapshot)) return;
+      const dataUrl = result.instrument?.dataUrl;
+      if (!dataUrl) throw new Error("The prepared instrument audio is unavailable.");
+      const response = await fetch(dataUrl);
+      const buffer = await getDrumAudioContext().decodeAudioData(await response.arrayBuffer());
+      if (intentVersion !== instrumentIntentVersion || !loopMatchesInstrumentSnapshot(snapshot)) return;
+      instrumentBuffer = buffer;
+      instrumentPreparing = false;
+      setInstrumentMode(true, { message: "Piano mode: Z = C3, A = C4, Q = C5. Press Escape to exit." });
+    } catch (error) {
+      if (intentVersion !== instrumentIntentVersion) return;
+      instrumentPreparing = false;
+      instrumentSnapshot = null;
+      setInstrumentMode(false, { clearBuffer: true, message: error?.message || "Could not prepare this loop instrument." });
+    }
+  }
+
+  async function playInstrumentNote(midiNote) {
+    if (!instrumentMode || !instrumentBuffer) return;
+    try {
+      const context = getDrumAudioContext();
+      await context.resume();
+      if (!instrumentMode || !instrumentBuffer) return;
+      stopInstrumentVoice();
+      const source = context.createBufferSource();
+      const gain = context.createGain();
+      source.buffer = instrumentBuffer;
+      source.playbackRate.value = globalThis.SCSamplerCore.playbackRateForMidi(midiNote);
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(1, context.currentTime + 0.004);
+      source.connect(gain).connect(context.destination);
+      const voice = { source, gain, context };
+      instrumentVoice = voice;
+      source.onended = () => { if (instrumentVoice === voice) instrumentVoice = null; };
+      source.start();
+    } catch (error) {
+      showDrumError(error?.message || "Could not play the loop instrument.");
+    }
+  }
+
   async function loadDefaultDrum(pad) {
     if (pad.buffer) return pad.buffer;
     if (pad.loading) return pad.loading;
@@ -416,7 +545,25 @@
   }
 
   function handleDrumKeydown(event) {
-    if (!ui || ui.panel.hidden || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+    if (!ui || ui.panel.hidden || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+    if (instrumentMode) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setInstrumentMode(false, { message: "" });
+        ui.instrumentToggle?.focus();
+        return;
+      }
+      const target = event.composedPath()[0];
+      if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName || "")) return;
+      const midiNote = globalThis.SCSamplerCore.midiForKey(event.key);
+      if (midiNote === null) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!event.repeat) playInstrumentNote(midiNote);
+      return;
+    }
+    if (event.repeat) return;
     if (selectingLoopPad) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -784,6 +931,15 @@
     const state = response?.state;
     if (!state) return;
     const nextLoop = state.loop || { active: false, enabled: false };
+    if (instrumentSnapshot && (
+      !nextLoop.active ||
+      nextLoop.trackIdentity !== instrumentSnapshot.trackIdentity ||
+      nextLoop.generation !== instrumentSnapshot.generation ||
+      nextLoop.startMs !== instrumentSnapshot.startMs ||
+      nextLoop.endMs !== instrumentSnapshot.endMs
+    )) {
+      disableInstrument("");
+    }
     if (nextLoop.trackIdentity !== loopState.trackIdentity || nextLoop.generation !== loopState.generation) {
       loopIntentVersion += 1;
       const grant = accessSnapshot?.grant;
@@ -1015,6 +1171,15 @@
     ui.clearLoop.disabled = !loopState.available || !hasLoopMarker || loopDownloadPending;
     ui.downloadLoop.disabled = !loopState.active || loopDownloadPending;
     ui.saveLoopPad.disabled = !loopState.active || padRenderPending;
+    ui.instrumentToggle.disabled = !loopState.active || padRenderPending;
+    ui.instrumentToggle.setAttribute("aria-pressed", String(instrumentMode));
+    ui.instrumentToggle.classList.toggle("is-preparing", instrumentPreparing);
+    ui.instrumentToggle.setAttribute("aria-label", instrumentPreparing
+      ? "Cancel loop instrument preparation"
+      : instrumentMode ? "Disable piano mode" : "Play selected loop in piano mode");
+    ui.instrumentToggle.title = instrumentPreparing
+      ? "Preparing loop instrument…"
+      : instrumentMode ? "Disable piano mode" : "Play selected loop in piano mode";
     for (const [input, value] of [[ui.loopStartTime, loopState.startMs], [ui.loopEndTime, loopState.endMs]]) {
       input.disabled = !loopState.available || duration <= 0;
       if (ui.root.activeElement !== input) input.value = Number.isFinite(value) ? formatLoopTime(value) : "";
@@ -1205,6 +1370,7 @@
 
   async function clearLoop() {
     loopIntentVersion += 1;
+    disableInstrument("");
     setLoopFailure(requestLoop("clear-loop"));
     await finishLoopSession();
     readLoopState();
@@ -1308,6 +1474,8 @@
   function selectLoopPad() {
     if (selectingLoopPad) { cancelLoopPadSelection(); return; }
     if (!loopState.active || padRenderPending) return;
+    if (instrumentPreparing) disableInstrument("");
+    else if (instrumentMode) setInstrumentMode(false, { message: "" });
     const state = controller.snapshot();
     const duration = (loopState.endMs - loopState.startMs) / state.effectiveRate;
     if (duration > 30000) {
@@ -1821,10 +1989,13 @@
         .clear-loop, .download-loop { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 26px; border-radius: 5px; cursor: pointer; font-size: 10px; font-weight: 600; line-height: 1; }
         .clear-loop { border: 1px solid #484848; color: #fff; background: #292929; }
         .download-loop { border: 1px solid #b84400; color: #fff; background: #ff5500; }
-        .save-loop-pad { display: grid; place-items: center; width: 24px; height: 26px; padding: 0; border: 1px solid #484848; border-radius: 5px; color: #d6d6d6; background: #292929; cursor: pointer; }
-        .save-loop-pad:hover, .save-loop-pad[aria-pressed="true"] { color: #fff; border-color: #ff7b38; }
-        .save-loop-pad svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-        .clear-loop:disabled, .download-loop:disabled, .save-loop-pad:disabled { cursor: not-allowed; opacity: .45; }
+        .save-loop-pad, .loop-instrument { display: grid; place-items: center; width: 24px; height: 26px; padding: 0; border: 1px solid #484848; border-radius: 5px; color: #d6d6d6; background: #292929; cursor: pointer; }
+        .save-loop-pad:hover, .save-loop-pad[aria-pressed="true"], .loop-instrument:hover, .loop-instrument[aria-pressed="true"] { color: #fff; border-color: #ff7b38; }
+        .loop-instrument[aria-pressed="true"] { color: #ff8a4c; background: #462619; }
+        .loop-instrument.is-preparing svg { animation: instrument-pulse .8s ease-in-out infinite alternate; }
+        @keyframes instrument-pulse { to { opacity: .35; transform: scale(.88); } }
+        .save-loop-pad svg, .loop-instrument svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+        .clear-loop:disabled, .download-loop:disabled, .save-loop-pad:disabled, .loop-instrument:disabled { cursor: not-allowed; opacity: .45; }
         .clear-loop svg, .clear-loop img, .download-loop svg { width: 12px; height: 12px; flex: 0 0 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .status { margin-top: 5px; }
 
@@ -1950,7 +2121,7 @@
           .bypass, .bypass svg { width: 16px; height: 16px; }
         }
         .clear-loop, .download-loop { height: 22px; padding: 0 6px; border-radius: 6px; opacity: .82; }
-        .save-loop-pad { width: 22px; height: 22px; }
+        .save-loop-pad, .loop-instrument { width: 22px; height: 22px; }
         .loop-edit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
         ${collapsible.styles}
         .drum-section, .waveform-shell, .effects-shell { transition:height 160ms ease; }
@@ -2055,7 +2226,7 @@
           <p class="drum-message" role="status" aria-live="polite" hidden></p>
         </section>
         <section class="waveform-shell" id="scdl-loop-region" role="group" aria-label="Loop Region">
-          ${collapsible.header({ title: "Loop Region", bodyId: "scdl-loop-region-body", toggleClass: "waveform-toggle", headerClass: "waveform-header", actionsClass: "waveform-actions", icon: '<svg class="tool-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>', actions: '<div class="waveform-header-setters"><button class="setter header-set-a" type="button" aria-label="Set loop start">Set A</button><button class="setter header-set-b" type="button" aria-label="Set loop end">Set B</button></div><button class="clear-loop" type="button" aria-label="Clear loop"><img class="cross-icon" alt="" aria-hidden="true" /><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button><button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>' })}
+          ${collapsible.header({ title: "Loop Region", bodyId: "scdl-loop-region-body", toggleClass: "waveform-toggle", headerClass: "waveform-header", actionsClass: "waveform-actions", icon: '<svg class="tool-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>', actions: '<div class="waveform-header-setters"><button class="setter header-set-a" type="button" aria-label="Set loop start">Set A</button><button class="setter header-set-b" type="button" aria-label="Set loop end">Set B</button></div><button class="clear-loop" type="button" aria-label="Clear loop"><img class="cross-icon" alt="" aria-hidden="true" /><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button><button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button><button class="loop-instrument" type="button" aria-label="Play selected loop in piano mode" aria-pressed="false" title="Play selected loop in piano mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM7 5v8M12 5v8M17 5v8M5 13h4M10 13h4M15 13h4"/></svg></button>' })}
           <div class="waveform-body" id="scdl-loop-region-body">
           <div class="waveform-stage">
             <canvas class="waveform-canvas" aria-hidden="true"></canvas>
@@ -2156,6 +2327,8 @@
     panelOpenMode = null;
     hoveredDrum = null;
     cancelLoopPadSelection();
+    if (instrumentPreparing) disableInstrument("");
+    else if (instrumentMode) setInstrumentMode(false, { message: "" });
     setPanelOpen(false);
   }
 
@@ -2259,6 +2432,7 @@
       clearLoop: root.querySelector(".clear-loop"),
       downloadLoop: root.querySelector(".download-loop"),
       saveLoopPad: root.querySelector(".save-loop-pad"),
+      instrumentToggle: root.querySelector(".loop-instrument"),
       playerToolsUpgrade: root.querySelector(".player-tools-upgrade"),
       effectsShell: root.querySelector(".effects-shell"),
       effectsToggle: root.querySelector(".effects-toggle"),
@@ -2571,6 +2745,7 @@
     ui.clearLoop.addEventListener("click", clearLoop);
     ui.downloadLoop.addEventListener("click", downloadLoopFromPlayer);
     ui.saveLoopPad.addEventListener("click", selectLoopPad);
+    ui.instrumentToggle.addEventListener("click", toggleLoopInstrument);
     ui.playerToolsUpgrade.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
     });
@@ -2823,6 +2998,13 @@
   document.addEventListener(
     "keydown",
     (event) => {
+      if (event.key === "Escape" && instrumentMode) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setInstrumentMode(false, { message: "" });
+        ui?.instrumentToggle?.focus();
+        return;
+      }
       if (event.key === "Escape" && ui && !ui.panel.hidden) {
         document.documentElement?.setAttribute("data-scdl-tempo-panel-escape", "true");
         setTimeout(() => document.documentElement?.removeAttribute("data-scdl-tempo-panel-escape"), 0);

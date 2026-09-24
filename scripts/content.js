@@ -144,6 +144,7 @@ window.addEventListener?.("message", (event) => {
     get: "GET_LOOP_PAD_AUDIO",
     store: "STORE_LOOP_PAD_AUDIO",
     render: "RENDER_LOOP_PAD",
+    instrument: "RENDER_LOOP_INSTRUMENT",
   };
   if (!types[action]) return;
   const payload = { type: types[action] };
@@ -154,7 +155,7 @@ window.addEventListener?.("message", (event) => {
     payload.mimeType = event.data.mimeType;
     payload.base64 = event.data.base64;
   }
-  if (action === "render") {
+  if (action === "render" || action === "instrument") {
     payload.operationId = event.data.operationId;
     payload.trackUrl = event.data.trackUrl;
     payload.trimRange = event.data.trimRange;

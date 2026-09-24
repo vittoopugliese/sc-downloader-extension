@@ -541,17 +541,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  if (["RENDER_LOOP_PAD", "GET_LOOP_PAD_LIST", "GET_LOOP_PAD_AUDIO", "STORE_LOOP_PAD_AUDIO"].includes(request.type)) {
+  if (["RENDER_LOOP_PAD", "RENDER_LOOP_INSTRUMENT", "GET_LOOP_PAD_LIST", "GET_LOOP_PAD_AUDIO", "STORE_LOOP_PAD_AUDIO"].includes(request.type)) {
     if (sender.id !== chrome.runtime.id || !sender.tab || !/^https:\/\/soundcloud\.com\//.test(sender.url || "")) {
       sendResponse({ success: false, error: "This action is only available on SoundCloud." });
       return false;
     }
     const index = request.index;
-    if (request.type !== "GET_LOOP_PAD_LIST" && (!Number.isInteger(index) || index < 0 || index >= 6)) {
+    if (!["GET_LOOP_PAD_LIST", "RENDER_LOOP_INSTRUMENT"].includes(request.type) && (!Number.isInteger(index) || index < 0 || index >= 6)) {
       sendResponse({ success: false, error: "Invalid pad." });
       return false;
     }
-    if (request.type === "RENDER_LOOP_PAD") {
+    if (request.type === "RENDER_LOOP_PAD" || request.type === "RENDER_LOOP_INSTRUMENT") {
       const duration = Number(request.trimRange?.endMs) - Number(request.trimRange?.startMs);
       const rate = Number(request.playbackTransform?.rate);
       if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(rate) || rate <= 0 || duration / rate > 30000) {
@@ -560,11 +560,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
       playerToolsAccess.authorize(sender, { operation: "export-loop" })
         .then((access) => {
-          if (!access.allowed) throw new Error("Player Tools Pro is required to save a loop to a pad.");
+          if (!access.allowed) throw new Error(request.type === "RENDER_LOOP_INSTRUMENT"
+            ? "Player Tools Pro is required to play a loop as an instrument."
+            : "Player Tools Pro is required to save a loop to a pad.");
           return resolveLoopTrack(request, sender);
         })
-        .then((trackData) => BulkJobManager.renderLoopPad(trackData, index, request.trimRange,
-          request.playbackTransform, request.effects || {}, request.name || `${trackData.title || "Track"} loop`, request.operationId))
+        .then((trackData) => request.type === "RENDER_LOOP_INSTRUMENT"
+          ? BulkJobManager.renderLoopInstrument(trackData, request.trimRange,
+            request.playbackTransform, request.effects || {}, request.name || `${trackData.title || "Track"} instrument`, request.operationId)
+          : BulkJobManager.renderLoopPad(trackData, index, request.trimRange,
+            request.playbackTransform, request.effects || {}, request.name || `${trackData.title || "Track"} loop`, request.operationId))
         .then(sendResponse)
         .catch((error) => sendResponse(errorResponse(error)));
       return true;
