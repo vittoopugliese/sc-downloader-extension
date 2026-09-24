@@ -1617,6 +1617,7 @@ async function syncPlayerToolsOffer() {
     }
     const active = snapshot?.plan === "pro" || commerce?.status === "active";
     commerceRestoreBtn.textContent = t("player_tools_restore");
+    document.body.classList.toggle("pro-active", active);
     productOffers.hidden = active;
     playerToolsOffer.hidden = false;
     playerToolsProBtn.hidden = active;

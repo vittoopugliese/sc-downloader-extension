@@ -176,9 +176,11 @@ assert(
 );
 assert(
   /productOffers\.hidden = active;/.test(popupScript) &&
+    /document\.body\.classList\.toggle\("pro-active", active\);/.test(popupScript) &&
     !/SHOW_PRODUCT_OFFERS_FOR_PRO/.test(popupScript) &&
-    /body\s*\{[\s\S]*?width:\s*426px;[\s\S]*?height:\s*341px;/s.test(popup),
-  "Active Pro must hide the complete promotion row without changing the popup dimensions."
+    /body\s*\{[\s\S]*?width:\s*426px;[\s\S]*?height:\s*341px;/s.test(popup) &&
+    /body\.pro-active:not\(\.selection-mode\) \.track-info\s*\{\s*margin-block:\s*auto;\s*\}/s.test(popup),
+  "Active Pro must hide the complete promotion row, center the track content, and preserve the popup dimensions."
 );
 assert(
   /async function ensureDownloadDestinationPermission\(\)[\s\S]*SCDownloadDirectory\.ensurePermission\(currentDownloadDestination\.id\)/.test(
