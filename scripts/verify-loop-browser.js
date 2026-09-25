@@ -675,9 +675,22 @@ async function waitForFile(directory, timeoutMs = 30000) {
 
     const downloadButton = page.locator("[data-scdl-loop-download]");
     // Export is a Pro capability; the access-routing suite separately asserts
-    // that Free is rejected before any expensive audio work begins. Reuse the
-    // explicit test entitlement installed above; writing an unsigned ad-hoc
-    // entitlement here would correctly expire during verification.
+    // that Free is rejected before any expensive audio work begins. A Manifest
+    // V3 worker may restart during this long interaction test, so reinstall the
+    // in-memory fixture authority immediately before checking the entitlement.
+    await worker.evaluate(async () => {
+      const access = globalThis.SCPlayerToolsAccess;
+      access.configureAuthority({
+        async startTrial() { throw new Error("unused"); },
+        async consumeTrial() { throw new Error("unused"); },
+        async validateTrial() { return { status: "valid" }; },
+        async ensureEntitlement(entitlement) { return { status: "active", entitlement }; },
+      });
+      await access.setEntitlement({
+        status: "active", licenseId: "browser-test-fixture", checkedAt: Date.now(),
+        expiresAt: Date.now() + 60_000, receipt: null,
+      });
+    });
     assert.equal((await worker.evaluate(() => globalThis.SCPlayerToolsAccess.getSnapshot({}))).plan, "pro");
     await downloadButton.click();
     try {
