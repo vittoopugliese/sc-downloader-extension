@@ -54,6 +54,14 @@ const source = fs.readFileSync(path.resolve(__dirname, "offscreen.js"), "utf8");
 vm.runInContext(source, context, { filename: "offscreen.js" });
 
 assert.equal(typeof messageListener, "function", "Offscreen message listener must register");
+let unrelatedResponse;
+assert.equal(messageListener(
+  { type: "RESTORE_PLAYER_TOOLS_LICENSE" },
+  { id: "test-extension", url: "chrome-extension://test-extension/popup.html" },
+  (value) => { unrelatedResponse = value; }
+), false, "Offscreen must ignore messages that belong to another extension context");
+assert.equal(unrelatedResponse, undefined,
+  "Offscreen must not race the service worker response for popup messages");
 messageListener(
   {
     type: "OFFSCREEN_BUILD",

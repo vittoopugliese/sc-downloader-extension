@@ -212,7 +212,9 @@ async function handlePadMessage(message) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender?.id !== chrome.runtime.id || sender?.tab ||
       sender?.url !== chrome.runtime.getURL("scripts/background.js")) {
-    sendResponse({ success: false, code: "invalid_sender" });
+    // runtime.sendMessage broadcasts to extension contexts.  Messages sent by
+    // the popup are handled by the service worker, so responding here would
+    // race the worker and could make the popup receive this unrelated response.
     return false;
   }
   if (!message || typeof message.type !== "string") return false;
