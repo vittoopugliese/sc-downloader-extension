@@ -15,20 +15,31 @@ const { chromium } = require("playwright");
       }
       return route.fulfill({
         contentType: "text/html",
-        body: '<div class="playControls__elements"><div class="playControls__soundBadge"></div></div>',
+        body: '<style>.playControls__elements { position:fixed; bottom:0; left:0; right:0; height:48px; display:flex; }</style><div class="playControls__elements"><div class="playControls__soundBadge"></div></div>',
       });
     });
     await page.goto("https://soundcloud.com/");
-    await page.evaluate(() => {
-      const snapshot = { plan: "pro", state: "pro", capabilities: { tempo: true, preservePitch: true, savePreset: true, parametricEq: true } };
-      document.documentElement.setAttribute("data-scdl-extension-bitcrusher-worklet-url", `${location.origin}/bitcrusher-processor.js`);
+    await page.evaluate(async (workletSource) => {
+      const snapshot = { plan: "pro", state: "pro", capabilities: { freeEffects: true, premiumEffects: true, tempo: true, preservePitch: true, savePreset: true, parametricEq: true } };
+      document.documentElement.setAttribute("data-scdl-extension-bitcrusher-worklet-url", URL.createObjectURL(new Blob([workletSource], { type: "application/javascript" })));
+      // Worklet fetches are not consistently intercepted by page.route.
+      const probe = new AudioContext();
+      const prototype = Object.getPrototypeOf(probe.audioWorklet);
+      const addModule = prototype.addModule;
+      window.workletLoads = 0;
+      prototype.addModule = async function (...args) {
+        const result = await addModule.apply(this, args);
+        window.workletLoads += 1;
+        return result;
+      };
+      await probe.close();
       document.documentElement.setAttribute("data-scdl-player-tools-access", JSON.stringify(snapshot));
       document.addEventListener("scdl:player-tools-request", () => {
         const request = JSON.parse(document.documentElement.getAttribute("data-scdl-player-tools-request"));
         document.documentElement.setAttribute("data-scdl-player-tools-response", JSON.stringify({ id: request.id, success: true, allowed: true, snapshot }));
         document.dispatchEvent(new CustomEvent("scdl:player-tools-response"));
       });
-    });
+    }, workletSource);
     for (const file of ["tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
@@ -146,8 +157,7 @@ const { chromium } = require("playwright");
     await host.locator('[data-effect-settings="bitcrusher"]').click();
     await host.locator('[data-effect-character="bitDepth"]').fill('7');
     assert.equal(await host.locator('[data-effect-character-value="bitDepth"]').textContent(), '7bit');
-    await page.waitForTimeout(50);
-    assert.ok(workletRequests >= 1, "The live bitcrusher must load its AudioWorklet module when enabled");
+    await page.waitForFunction(() => window.workletLoads >= 1);
     await host.locator('[data-effect-settings="delay"]').click();
     await host.locator('[data-effect-freeze]').dispatchEvent('pointerdown', { button: 0, pointerId: 1 });
     assert.equal(await host.locator('[data-effect-freeze]').getAttribute('aria-pressed'), 'true');

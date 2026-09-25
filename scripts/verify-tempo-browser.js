@@ -83,6 +83,7 @@ async function main() {
         state: "pro",
         grant: null,
         capabilities: {
+          freeEffects: true, premiumEffects: true, saveLoopPad: true, loopInstrument: true,
           openPanel: true, beginLoop: true, editLoop: true, tempo: true, parametricEq: true,
           preservePitch: true, savePreset: true, maximizeLooper: true,
           editLoopPrecise: true, exportLoop: true, exportTrackEffects: true,
@@ -1438,7 +1439,7 @@ async function main() {
     assert.equal(persistedName, "Rendered Loop", "A saved pad must survive a page reload.");
     await page.evaluate(() => {
       document.documentElement.setAttribute("data-scdl-player-tools-access", JSON.stringify({
-        plan: "pro", state: "pro", capabilities: { tempo: true, parametricEq: true },
+        plan: "pro", state: "pro", capabilities: { freeEffects: true, premiumEffects: true, saveLoopPad: true, loopInstrument: true, tempo: true, parametricEq: true },
       }));
     });
     for (const file of ["tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {

@@ -4,8 +4,9 @@
   const TRIAL_LIMIT = 20;
   const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
   const SCHEMA_VERSION = 3;
-  const PRO_OPERATIONS = new Set(["export-loop", "export-track-effects", "export-wav", "edit-loop-precise", "set-eq"]);
-  const PLAYBACK_OPERATIONS = new Set(["set-effect", "set-rate", "set-preserve-pitch", "save-preset"]);
+  const PRO_OPERATIONS = new Set(["export-loop", "export-track-effects", "export-wav", "edit-loop-precise"]);
+  const TRIAL_OPERATIONS = new Set(["set-effect", "set-eq", "save-loop-pad", "play-loop-instrument", "explore-likes"]);
+  const PLAYBACK_OPERATIONS = new Set(["set-rate", "set-preserve-pitch", "save-preset"]);
   const validId = (value) => typeof value === "string" && value.length > 0 && value.length <= 1024;
   const validGeneration = (value) => Number.isSafeInteger(value) && value >= 0;
   const validTimestamp = (value) => Number.isSafeInteger(value) && value >= 0;
@@ -109,18 +110,21 @@
         openPanel: true, beginLoop: pro || (trialAvailable && !grant), editLoop: playback,
         tempo: playback, preservePitch: playback, savePreset: playback,
         maximizeLooper: playback, editLoopPrecise: pro, exportLoop: pro, exportTrackEffects: pro,
-        likesExplorer: pro || likesExplorerTrialAvailable, parametricEq: pro,
+        likesExplorer: pro || likesExplorerTrialAvailable, parametricEq: pro || likesExplorerTrialAvailable,
+        freeEffects: true, premiumEffects: pro || likesExplorerTrialAvailable,
+        saveLoopPad: pro || likesExplorerTrialAvailable, loopInstrument: pro || likesExplorerTrialAvailable,
       },
     };
   }
 
   function canAuthorize(raw, ownerKey, operation, sessionId, now = Date.now()) {
     const result = (allowed, reason = null, consume = false) => ({ allowed, consume, reason });
-    if (!PRO_OPERATIONS.has(operation) && !PLAYBACK_OPERATIONS.has(operation) &&
+    if (operation === "set-free-effect") return result(true);
+    if (!PRO_OPERATIONS.has(operation) && !PLAYBACK_OPERATIONS.has(operation) && !TRIAL_OPERATIONS.has(operation) &&
         operation !== "begin-loop" && operation !== "edit-loop" && operation !== "explore-likes") return result(false, "unknown-operation");
     const current = snapshot(raw, ownerKey, now);
     if (current.plan === "pro") return result(true);
-    if (operation === "explore-likes") {
+    if (TRIAL_OPERATIONS.has(operation)) {
       return current.capabilities.likesExplorer
         ? result(true)
         : result(false, current.trial.expired ? "trial-expired" : "pro-required");

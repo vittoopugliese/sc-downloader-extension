@@ -397,6 +397,8 @@
       return;
     }
     if (!loopState.active || padRenderPending) return;
+    if (!await authorizePlayerTools("play-loop-instrument", "loopInstrument")) return;
+    if (!capability("loopInstrument") || !loopState.active || padRenderPending) return;
     if (instrumentBuffer && loopMatchesInstrumentSnapshot()) {
       setInstrumentMode(true, { message: "Piano mode: Z = C3, A = C4, Q = C5. Press Escape to exit." });
       return;
@@ -446,11 +448,11 @@
   }
 
   async function playInstrumentNote(midiNote) {
-    if (!instrumentMode || !instrumentBuffer) return;
+    if (!capability("loopInstrument") || !instrumentMode || !instrumentBuffer) return;
     try {
       const context = getDrumAudioContext();
       await context.resume();
-      if (!instrumentMode || !instrumentBuffer) return;
+      if (!capability("loopInstrument") || !instrumentMode || !instrumentBuffer) return;
       stopInstrumentVoice();
       const source = context.createBufferSource();
       const gain = context.createGain();
@@ -827,10 +829,19 @@
     } catch { /* Invalid stored EQ must never prevent playback. */ }
   }
 
-  async function applyEffect(change) {
+  function freeEffect(name) {
+    return /^(reverb|delay)/.test(name || "");
+  }
+
+  function effectAllowed(name) {
+    return capability(freeEffect(name) ? "freeEffects" : "premiumEffects");
+  }
+
+  async function applyEffect(change, name) {
     const intentVersion = effectIntentVersion;
-    const authorization = await authorizePlayerTools("set-effect", "tempo");
-    if (!authorization || intentVersion !== effectIntentVersion) return null;
+    const authorization = await authorizePlayerTools(freeEffect(name) ? "set-free-effect" : "set-effect",
+      freeEffect(name) ? "freeEffects" : "premiumEffects");
+    if (!authorization || !effectAllowed(name) || intentVersion !== effectIntentVersion) return null;
     const state = change();
     effectsFailure = state?.available && !state.initialized
       ? "Play a track to activate FX."
@@ -1170,8 +1181,9 @@
     const hasLoopMarker = Number.isFinite(loopState.startMs) || Number.isFinite(loopState.endMs);
     ui.clearLoop.disabled = !loopState.available || !hasLoopMarker || loopDownloadPending;
     ui.downloadLoop.disabled = !loopState.active || loopDownloadPending;
-    ui.saveLoopPad.disabled = !loopState.active || padRenderPending;
-    ui.instrumentToggle.disabled = !loopState.active || padRenderPending;
+    ui.saveLoopPad.disabled = !capability("saveLoopPad") || !loopState.active || padRenderPending;
+    ui.saveLoopPad.title = capability("saveLoopPad") ? "Save loop to a pad" : "Player Tools Pro required";
+    ui.instrumentToggle.disabled = !capability("loopInstrument") || !loopState.active || padRenderPending;
     ui.instrumentToggle.setAttribute("aria-pressed", String(instrumentMode));
     ui.instrumentToggle.classList.toggle("is-preparing", instrumentPreparing);
     ui.instrumentToggle.setAttribute("aria-label", instrumentPreparing
@@ -1180,6 +1192,7 @@
     ui.instrumentToggle.title = instrumentPreparing
       ? "Preparing loop instrument…"
       : instrumentMode ? "Disable piano mode" : "Play selected loop in piano mode";
+    if (!capability("loopInstrument")) ui.instrumentToggle.title = "Player Tools Pro required";
     for (const [input, value] of [[ui.loopStartTime, loopState.startMs], [ui.loopEndTime, loopState.endMs]]) {
       input.disabled = !loopState.available || duration <= 0;
       if (ui.root.activeElement !== input) input.value = Number.isFinite(value) ? formatLoopTime(value) : "";
@@ -1473,7 +1486,7 @@
 
   function selectLoopPad() {
     if (selectingLoopPad) { cancelLoopPadSelection(); return; }
-    if (!loopState.active || padRenderPending) return;
+    if (!capability("saveLoopPad") || !loopState.active || padRenderPending) return;
     if (instrumentPreparing) disableInstrument("");
     else if (instrumentMode) setInstrumentMode(false, { message: "" });
     const state = controller.snapshot();
@@ -1496,7 +1509,7 @@
   }
 
   async function saveLoopToPad(index) {
-    if (!selectingLoopPad || padRenderPending) return;
+    if (!capability("saveLoopPad") || !selectingLoopPad || padRenderPending) return;
     const sample = selectingLoopPad;
     selectingLoopPad = null;
     ui.drumSection.classList.remove("is-selecting");
@@ -2585,7 +2598,7 @@
     for (const [name, slider] of Object.entries(ui.effectSliders)) {
       slider.addEventListener("change", async () => {
         const value = slider.valueAsNumber;
-        const state = await applyEffect(() => effectsController?.set(name, value));
+        const state = await applyEffect(() => effectsController?.set(name, value), name);
         if (state?.[name] > 0) effectWetMemory[name] = state[name];
       });
     }
@@ -2594,7 +2607,7 @@
         const current = effectsController?.snapshot();
         if (!current?.available) return;
         const nextWet = current[name] > 0 ? 0 : effectWetMemory[name] || DEFAULT_EFFECT_TOGGLE_WET;
-        const state = await applyEffect(() => effectsController.set(name, nextWet));
+        const state = await applyEffect(() => effectsController.set(name, nextWet), name);
         if (state?.[name] > 0) effectWetMemory[name] = state[name];
       });
     }
@@ -2614,7 +2627,7 @@
     for (const [name, control] of Object.entries(ui.effectCharacters)) {
       control.addEventListener("change", () => {
         const value = control.value;
-        applyEffect(() => effectsController?.setCharacter(name, value));
+        applyEffect(() => effectsController?.setCharacter(name, value), name);
       });
     }
     const releaseEchoFreeze = () => {
@@ -2707,7 +2720,7 @@
       animateNextRateChange = true;
       const bypassed = !controller.snapshot().bypassed;
       controller.setBypassed(bypassed);
-      requestLoop("set-global-bypass", { bypassed });
+      requestLoop("set-global-bypass", { bypassed: bypassed || !capability("tempo") });
       readLoopState();
     });
     for (const button of [ui.setA, ui.headerSetA]) bindLoopSetter(button, "start");
@@ -2779,6 +2792,14 @@
     const playbackAllowed = capability("tempo");
     const isPro = accessSnapshot?.plan === "pro";
     effectsController?.setEqualizerAllowed(capability("parametricEq"));
+    if (!capability("premiumEffects")) {
+      const fx = effectsController?.snapshot();
+      for (const name of EFFECT_NAMES) {
+        if (!freeEffect(name) && fx?.[name] > 0) effectsController.set(name, 0);
+      }
+    }
+    if (!capability("loopInstrument") && (instrumentMode || instrumentPreparing || instrumentBuffer)) disableInstrument();
+    if (!capability("saveLoopPad") && selectingLoopPad) cancelLoopPadSelection();
     ui.planBadgeLabel.textContent = isPro ? "PRO" : "FREE";
     ui.planBadge.classList.toggle("is-pro", isPro);
     ui.planBadge.setAttribute("aria-label", isPro ? "Player Tools Pro active" : "Player Tools Free plan");
@@ -2827,7 +2848,7 @@
     // Disabling a native range during input cancels its ongoing mouse drag.
     ui.slider.disabled = !playbackAllowed;
     ui.pitchToggle.disabled = !playbackAllowed || !state.preservePitchSupported || accessActionPending;
-    ui.bypass.disabled = !playbackAllowed || accessActionPending;
+    ui.bypass.disabled = accessActionPending;
     ui.root.querySelectorAll(".preset").forEach((button) => { button.disabled = !playbackAllowed || accessActionPending; });
     ui.waveformShell.classList.toggle("is-locked", !playbackAllowed);
     ui.waveformToggle.disabled = !playbackAllowed || accessActionPending;
@@ -2850,7 +2871,7 @@
     });
     syncRange(ui.slider);
     ui.pitchToggle.checked = state.preservePitch;
-    const effectiveBypass = state.bypassed || !playbackAllowed;
+    const effectiveBypass = state.bypassed;
     if (effectsBypassed !== effectiveBypass) {
       effectsBypassed = effectiveBypass;
       effectsController?.setBypassed(effectsBypassed);
@@ -2877,13 +2898,13 @@
     for (const name of EFFECT_NAMES) {
       const slider = ui.effectSliders[name];
       slider.value = String(state[name]);
-      slider.disabled = !state.available || !capability("tempo") || accessActionPending;
+      slider.disabled = !state.available || !effectAllowed(name) || accessActionPending;
       slider.dataset.active = String(state[name] > 0);
       ui.effectValues[name].textContent = `${state[name]}%`;
       if (state[name] > 0) effectWetMemory[name] = state[name];
       const bypass = ui.effectBypasses[name];
       const enabled = state[name] > 0;
-      bypass.disabled = !state.available || !capability("tempo") || accessActionPending;
+      bypass.disabled = !state.available || !effectAllowed(name) || accessActionPending;
       bypass.setAttribute("aria-pressed", String(enabled));
       bypass.setAttribute("aria-label", `${enabled ? "Disable" : "Enable"} ${name}`);
       bypass.title = enabled
@@ -2893,7 +2914,7 @@
     }
     for (const [name, control] of Object.entries(ui.effectCharacters)) {
       control.value = String(state[name]);
-      control.disabled = !state.available || !capability("tempo") || accessActionPending;
+      control.disabled = !state.available || !effectAllowed(name) || accessActionPending;
       const output = ui.effectCharacterValues[name];
       if (output) output.textContent = ["delayTime", "reverbPreDelay"].includes(name)
         ? `${state[name]}ms`
@@ -2903,7 +2924,7 @@
     }
     ui.root.querySelectorAll(".effects-preset").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.fxPreset === state.preset));
-      button.disabled = !state.available || !capability("tempo") || accessActionPending;
+      button.disabled = !state.available || !capability("premiumEffects") || accessActionPending;
     });
     ui.root.querySelectorAll(".effect-settings-toggle").forEach((button) => {
       const expanded = button.dataset.effectSettings === expandedEffectSettings;
@@ -2913,7 +2934,7 @@
       panel.classList.toggle("is-open", panel.dataset.effectSettingsPanel === expandedEffectSettings);
     });
     const frozen = effectsController.isDelayFrozen?.() === true;
-    ui.effectFreeze.disabled = !state.available || !capability("tempo") || accessActionPending || state.delay === 0;
+    ui.effectFreeze.disabled = !state.available || !capability("freeEffects") || accessActionPending || state.delay === 0;
     ui.effectFreeze.setAttribute("aria-pressed", String(frozen));
     ui.effectFreeze.textContent = frozen ? "Frozen — release" : "Hold to Freeze";
     ui.effectsShell.classList.toggle("is-collapsed", effectsCollapsed);

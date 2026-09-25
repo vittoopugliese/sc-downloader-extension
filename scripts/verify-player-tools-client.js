@@ -10,6 +10,7 @@ const document = {
   addEventListener: (name, fn) => listeners.set(name, fn), dispatchEvent() {},
 };
 vm.runInNewContext(fs.readFileSync(require.resolve("./player-tools-client.js"), "utf8"), {
+  setTimeout, clearTimeout,
   document, CustomEvent: class { constructor(type) { this.type = type; } },
   chrome: { runtime: { async sendMessage(value) { sent = value; return response; },
     onMessage: { addListener(fn) { messageListener = fn; } } },

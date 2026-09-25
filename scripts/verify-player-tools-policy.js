@@ -11,7 +11,7 @@ assert.equal(policy.snapshot(initial, "owner", NOW).capabilities.likesExplorer, 
 assert.equal(policy.canAuthorize(initial, "owner", "explore-likes", null, NOW).allowed, true);
 assert.equal(policy.canAuthorize(initial, "owner", "begin-loop", null, NOW).consume, true);
 assert.equal(policy.canAuthorize(initial, "owner", "edit-loop", null, NOW).allowed, false);
-for (const operation of ["set-rate", "set-preserve-pitch", "save-preset", "set-effect"]) {
+for (const operation of ["set-rate", "set-preserve-pitch", "save-preset"]) {
   assert.equal(policy.canAuthorize(initial, "owner", operation, null, NOW).allowed, true);
   assert.equal(policy.canAuthorize(exhausted, "owner", operation, null, NOW).reason, "trial-exhausted");
 }
@@ -39,11 +39,19 @@ assert.equal(policy.canAuthorize(initial, "owner", "explore-likes", null, initia
 assert.equal(policy.snapshot(last, "owner", initial.trial.expiresAt).state, "trial_last_session", "loop 20 grace survives clock expiry");
 const pro = { ...exhausted, entitlement: { status: "active", licenseId: "license-1", checkedAt: NOW,
   expiresAt: NOW + 30 * 24 * 60 * 60 * 1000 } };
-for (const operation of ["begin-loop", "export-loop", "export-track-effects", "export-wav", "edit-loop-precise", "set-eq"]) {
+for (const operation of ["begin-loop", "export-loop", "export-track-effects", "export-wav", "edit-loop-precise"]) {
   assert.deepEqual(policy.canAuthorize(pro, "owner", operation, null, NOW), { allowed: true, consume: false, reason: null });
   if (operation !== "begin-loop") assert.equal(policy.canAuthorize(initial, "owner", operation, null, NOW).reason, "pro-required");
 }
-assert.equal(policy.snapshot(initial, "owner", NOW).capabilities.parametricEq, false);
+for (const operation of ["set-effect", "set-eq", "save-loop-pad", "play-loop-instrument", "explore-likes"]) {
+  assert.equal(policy.canAuthorize(initial, "owner", operation, null, NOW).allowed, true);
+  assert.equal(policy.canAuthorize(exhausted, "owner", operation, null, NOW).allowed, true);
+  assert.equal(policy.canAuthorize(initial, "owner", operation, null, initial.trial.expiresAt).allowed, false);
+  assert.equal(policy.canAuthorize(notStarted, "owner", operation, null, NOW).allowed, false);
+}
+assert.equal(policy.canAuthorize(initial, "owner", "set-free-effect", null, initial.trial.expiresAt).allowed, true);
+assert.equal(policy.canAuthorize(notStarted, "owner", "set-free-effect", null, NOW).allowed, true);
+assert.equal(policy.snapshot(initial, "owner", NOW).capabilities.parametricEq, true);
 assert.equal(policy.snapshot(pro, "owner", NOW).capabilities.parametricEq, true);
 assert.equal(policy.canAuthorize(pro, "owner", "activate-pro", null, NOW).reason, "unknown-operation");
 for (const corrupt of [null, {}, { ...initial, schemaVersion: 99 },

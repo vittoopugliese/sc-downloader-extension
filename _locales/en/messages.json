@@ -624,7 +624,7 @@
     "message": "How to use Looper"
   },
   "looper_intro": {
-    "message": "Try Player Tools for 7 days and up to 20 new A–B loops. WAV and processed exports require Pro."
+    "message": "Try Player Tools for 7 days with up to 20 new A–B loops, all FX, EQ, Likes Explorer and sampler loop/piano features. Reverb and Echo stay free. WAV and processed exports require Pro."
   },
   "looper_step_open_title": {
     "message": "Open an individual track"
@@ -668,7 +668,7 @@
   "player_tools_trial_last_day": {
     "message": "Last day of your Player Tools trial"
   },
-  "player_tools_trial_expired": { "message": "Your trial ended. Player Tools Pro unlocks the musical tools." },
+  "player_tools_trial_expired": { "message": "Your trial ended. Reverb and Echo remain free; premium effects, EQ, Likes Explorer and sampler loop/piano features require Pro." },
   "player_tools_get_pro": { "message": "Get Pro" },
   "player_tools_try": { "message": "Try tools" },
   "player_tools_pro_title": { "message": "Player Tools Pro" },

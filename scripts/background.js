@@ -558,7 +558,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: false, error: "Pad samples can be up to 30 seconds long." });
         return false;
       }
-      playerToolsAccess.authorize(sender, { operation: "export-loop" })
+      playerToolsAccess.authorize(sender, { operation: request.type === "RENDER_LOOP_INSTRUMENT" ? "play-loop-instrument" : "save-loop-pad" })
         .then((access) => {
           if (!access.allowed) throw new Error(request.type === "RENDER_LOOP_INSTRUMENT"
             ? "Player Tools Pro is required to play a loop as an instrument."

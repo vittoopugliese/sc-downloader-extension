@@ -76,6 +76,12 @@
         const state = await read(); await verifyEntitlement(state);
         const owner = ownerKey(sender); const timestamp = now();
         let current = POLICY.snapshot(state, owner, timestamp);
+        if (current.plan !== "pro" && state.trial.startedAt !== null) {
+          const validation = await verifyTrial(state);
+          if (!["valid", "expired"].includes(validation?.status)) {
+            throw Object.assign(new Error("Trial access could not be verified."), { code: "trial-invalid" });
+          }
+        }
         if (current.state === "trial_last_session") {
           const grant = state.trial.grants.find((item) => item.active && item.ownerKey === owner);
           const validation = await verifyTrial(state, grant);
@@ -109,6 +115,8 @@
         const entitlementError = await verifyEntitlement(state);
         const reply = (allowed, code = null, extra = {}) => ({ allowed, code, snapshot: POLICY.snapshot(state, owner, timestamp), ...extra });
         const operation = request?.operation;
+        // Reverb and echo remain available after trial expiry or a licensing outage.
+        if (operation === "set-free-effect") return reply(true);
         const isLoop = operation === "begin-loop" || operation === "edit-loop";
         if (isLoop) {
           if (!owner) return reply(false, "owner-gone");
@@ -122,6 +130,10 @@
               return reply(false, "stale-generation");
             }
             const current = POLICY.snapshot(state, owner, timestamp);
+            const validation = await verifyTrial(state, receipt);
+            if (current.plan !== "pro" && validation?.status !== "valid" && !(validation?.status === "expired" && validation.grantValid)) {
+              return reply(false, "trial-expired");
+            }
             if (!current.capabilities.editLoop) return reply(false, current.trial.expired ? "trial-expired" : "trial-exhausted");
             return reply(true, null, { grant: current.grant, replayed: true, notice: null });
           }

@@ -26,6 +26,7 @@
   }
   function showError(e) {
     if (e.code === 'cancelled') return;
+    if (['trial-expired', 'trial-exhausted', 'trial-invalid', 'license_revoked', 'license-check-required'].includes(e.code)) e = { ...e, code: 'pro-required' };
     if (e.code === 'stale-generation') { poll().catch(()=>{}); }
     if (['auth-required','owner-mismatch','pro-required'].includes(e.code)) { canvas?.replaceChildren(); detail?.replaceChildren(); images.clear(); total = count = 0; }
     if (status) status.textContent = text(e.code);
@@ -165,6 +166,8 @@
     }
   }
   function gate() {
+    requestEpoch++; imageEpoch++; generation = null; restored = false;
+    detail.hidden = true; selected = null; images.clear(); SCLikesLocator.cancel();
     viewport.hidden = toolbar.hidden = true;
     const empty = el('div','gate'); empty.append(el('span','eyebrow','LIFETIME PRO'),el('h2','',text('pro')),el('p','',text('proInfo')),button(text('getPro')+' ↗',()=>document.dispatchEvent(new CustomEvent('scdl:open-player-tools-pro')),'accent'));
     empty.append(button(text('removeLibrary'),async()=>{ if(confirm(text('confirmDelete'))) { await send('DELETE_LIKES_LIBRARY'); images.clear(); status.textContent = text('empty'); } },'danger'));
@@ -175,6 +178,7 @@
     if (!opened || statusBusy) return; statusBusy = true;
     try {
       const r = await send('GET_LIKES_LIBRARY_STATUS'); lastStatus = r; ownerId = r.ownerId; collectionId = r.collectionId; sourceUserId = r.sourceUserId;
+      if (settings.querySelector('.gate')) { settings.replaceChildren(); settings.hidden = true; viewport.hidden = toolbar.hidden = false; }
       const lib = r.library, job = r.job;
       status.textContent = job?.error ? text(job.error) : `${text(job?.phase === 'indexing' ? 'indexing' : job?.phase === 'paused' ? 'paused' : lib?.complete ? 'complete' : 'welcome')}${lib ? ' · '+(job?.count || lib.count).toLocaleString()+' '+text('tracks') : ''}`;
       updateSyncAction(job);

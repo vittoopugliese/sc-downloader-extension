@@ -35,6 +35,8 @@ function response(status, body) {
   let entitlementConfirmed = false;
   let clock = 1_800_000_000_000;
   let revoked = false;
+  let claimPending = true;
+  let providerOffline = false;
   const storage = {
     async get() { return structuredClone(data); },
     async set(value) { data = structuredClone(value); },
@@ -52,7 +54,8 @@ function response(status, body) {
       receipt: await receipt({ version: 1, type: "pro", installationId: data[STORAGE_KEY].installationId,
         licenseId: "license-1", instanceId: "instance-1", capabilities: ["pro"], issuedAt: clock, expiresAt: clock + 30 * 86400000 }) });
     if (url.endsWith("/license/restore")) return response(200, await pro());
-    if (url.endsWith("/checkout/claim")) return response(200, { ...(await pro()), pending: false });
+    if (url.endsWith("/checkout/claim")) return claimPending ? response(200, { active: false, pending: true }) : response(200, { ...(await pro()), pending: false });
+    if (url.endsWith("/license/status") && providerOffline) return response(503, { error: "provider_pending" });
     if (url.endsWith("/license/status")) return revoked
       ? response(403, { active: false, error: "license_revoked" })
       : response(200, await pro());
@@ -80,6 +83,9 @@ function response(status, body) {
   assert.equal(checkout.status, "pending");
   assert.equal(checkout.checkoutUrl, "https://store.example/checkout/1");
   assert.equal(calls.at(-1).body.locale, "es-AR");
+  assert.equal(alarmOperations.at(-1).options.when, clock + 30_000, "pending checkout has a durable retry");
+  assert.equal((await commerce.claimCheckout()).status, "pending", "return before webhook does not grant Pro");
+  claimPending = false;
   const claimed = await commerce.claimCheckout();
   assert.equal(claimed.status, "active");
   assert.equal(data[STORAGE_KEY].activation.instanceId, "instance-1");
@@ -90,18 +96,22 @@ function response(status, body) {
   assert.equal(data[STORAGE_KEY].licenseKey, undefined, "license keys are never persisted by the extension");
   assert.equal(entitlements.at(-1).status, "active");
   assert.deepEqual(alarmOperations.at(-1), { type: "create", name: LICENSE_REVALIDATION_ALARM,
-    options: { when: clock + 30 * 86400000 } });
+    options: { when: clock + 6 * 60 * 60 * 1000 } });
 
   await commerce.activate({ email: "buyer@example.com", licenseKey: "license-key" });
+  providerOffline = true;
+  assert.equal((await commerce.getState({ revalidate: true })).status, "active", "a provider outage preserves a valid signed receipt");
+  providerOffline = false;
 
   clock += 31 * 24 * 60 * 60 * 1000;
   assert.equal((await commerce.getState({ revalidate: true })).status, "active");
   assert.equal(data[STORAGE_KEY].activation.lastCheckedAt, clock);
   revoked = true;
-  clock += 31 * 24 * 60 * 60 * 1000;
+  clock += 1000;
   assert.equal((await commerce.getState({ revalidate: true })).status, "revoked");
   assert.equal(entitlements.at(-1).status, "free", "refund/revocation removes Pro without deleting commerce identity");
   assert.deepEqual(alarmOperations.at(-1), { type: "clear", name: LICENSE_REVALIDATION_ALARM });
+  assert.equal((await commerce.getState()).status, "revoked", "a still-valid cached receipt must never resurrect a known revocation");
   revoked = false;
   assert.equal(await commerce.track("player_tools_promo_seen", { surface: "popup", trackUrl: "must-not-leak" }, { once: true }), true);
   assert.equal(await commerce.track("player_tools_promo_seen", { surface: "popup" }, { once: true }), false);

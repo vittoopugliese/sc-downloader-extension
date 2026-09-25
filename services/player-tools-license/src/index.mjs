@@ -203,11 +203,16 @@ async function lemonApiGet(env, path) {
   const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
   try {
     const target = /^https:\/\//.test(path) ? path : `${LEMON_API}${path}`;
-    const response = await fetch(target, { headers: lemonHeaders(env), signal: controller.signal });
+    const parsed = new URL(target);
+    if (parsed.origin !== "https://api.lemonsqueezy.com" || !parsed.pathname.startsWith("/v1/") || parsed.username || parsed.password) {
+      return { ok: false, status: 502 };
+    }
+    const response = await fetch(target, { headers: lemonHeaders(env), signal: controller.signal, redirect: "manual" });
     if (!response.ok) return { ok: false, status: response.status };
     return { ok: true, body: await readJsonResponse(response) };
-  } catch {
-    return null;
+  } catch (error) {
+    return { ok: false, status: 0, reason: error instanceof SyntaxError ? "invalid_json" :
+      error?.name === "AbortError" ? "timeout" : "transport_error" };
   } finally {
     clearTimeout(timeout);
   }
@@ -269,7 +274,7 @@ function validLicenseActivation(result, email, env) {
   const meta = result?.meta;
   const expiresAt = license?.expires_at ? Date.parse(license.expires_at) : null;
   return Boolean(result?.activated && license?.id && license?.key && instance?.id &&
-    license?.status === "active" && (!expiresAt || expiresAt > now()) && matchesProduct(meta, env) &&
+    license?.status === "active" && (license?.expires_at == null || expiresAt > now()) && matchesProduct(meta, env) &&
     String(meta?.customer_email || "").toLowerCase() === email);
 }
 async function acquireActivationOperation(env, keyHash, installationId, email) {
@@ -398,6 +403,20 @@ async function activate(env, value) {
     const recovered = await recoverRemoteActivation(env, value, keyHash, operation.token);
     if (recovered) return recovered;
   }
+  // Verify ownership before creating a remote seat. A mistyped email must not
+  // consume an activation in Lemon that is then rejected locally.
+  const checked = await lemonLicenseAction("validate", { license_key: value.licenseKey });
+  const validation = checked.body;
+  if (!checked.ok && checked.retryable) return { kind: 'in_progress' };
+  const expiresAt = validation?.license_key?.expires_at;
+  if (!checked.ok || validation?.valid !== true || !matchesProduct(validation.meta, env) ||
+      !["active", "inactive"].includes(validation?.license_key?.status) ||
+      (expiresAt != null && !(Date.parse(expiresAt) > now())) ||
+      String(validation?.meta?.customer_email || "").toLowerCase() !== value.email ||
+      keyHash !== await sha256Hex(String(validation?.license_key?.key || ""))) {
+    await releasePendingActivation(env, keyHash, value.installationId, operation.token);
+    return { kind: 'failed' };
+  }
   const action = await lemonLicenseAction("activate", { license_key: value.licenseKey, instance_name: value.installationId });
   if (!action.ok) {
     if (!action.retryable) await releasePendingActivation(env, keyHash, value.installationId, operation.token);
@@ -452,16 +471,25 @@ function activeProviderLicense(resource, activation, env) {
     && String(attributes?.store_id) === String(env.LEMON_STORE_ID)
     && String(attributes?.product_id) === String(env.LEMON_PRODUCT_ID)
     && String(attributes?.user_email || '').toLowerCase() === String(activation.customer_email || '').toLowerCase()
-    && attributes?.status === 'active' && (attributes?.disabled === false || Number(attributes?.disabled) === 0)
-    && (!expiresAt || expiresAt > now());
+    && ['active', 'inactive'].includes(attributes?.status) && (attributes?.disabled === false || Number(attributes?.disabled) === 0)
+    && (attributes?.expires_at == null || expiresAt > now());
 }
 async function reconcileActivation(env, activation) {
   const license = await lemonApiGet(env, `/license-keys/${encodeURIComponent(activation.lemon_license_id)}`);
-  if (!license?.ok) throw new Error('Lemon license reconciliation is temporarily unavailable.');
+  if (!license?.ok) throw new Error(`Lemon license reconciliation is temporarily unavailable (HTTP ${license?.status || 0}; ${license?.reason || 'provider_response'}).`);
+  const attributes = license.body?.data?.attributes;
+  if (license.body?.data?.type !== 'license-keys' ||
+      String(license.body.data.id) !== String(activation.lemon_license_id) ||
+      !attributes || !['active', 'inactive', 'expired', 'disabled'].includes(attributes.status) ||
+      ![true, false, 0, 1].includes(attributes.disabled) ||
+      attributes.store_id == null || attributes.product_id == null || typeof attributes.user_email !== 'string' ||
+      (attributes.expires_at != null && !Number.isFinite(Date.parse(attributes.expires_at)))) {
+    throw new Error('Lemon returned an incomplete license status.');
+  }
   const licenseActive = license.ok && activeProviderLicense(license.body, activation, env);
   if (licenseActive) {
     const instances = await lemonLicenseInstances(env, activation.lemon_license_id);
-    if (!instances.ok) throw new Error('Lemon instance reconciliation is temporarily unavailable.');
+    if (!instances.ok) throw new Error(`Lemon instance reconciliation is temporarily unavailable (HTTP ${instances.status || 0}).`);
     const instanceActive = instances.ok && Array.isArray(instances.body?.data) && instances.body.data.some((item) =>
       item?.type === 'license-key-instances'
       && String(item?.attributes?.identifier || '') === String(activation.lemon_instance_id)
@@ -510,13 +538,14 @@ async function status(env, value) {
 }
 
 async function claimCheckout(env, value) {
-  const activation = await env.LICENSE_DB.prepare(`SELECT licenses.lemon_license_id, licenses.status,
+  const activation = await env.LICENSE_DB.prepare(`SELECT licenses.lemon_license_id, licenses.status, licenses.customer_email,
     activations.lemon_instance_id, activations.installation_id
     FROM activations JOIN licenses USING(lemon_license_id)
     WHERE activations.installation_id=? AND activations.deactivated_at IS NULL
       AND licenses.status='active'
     ORDER BY activations.activated_at DESC LIMIT 1`).bind(value.installationId).first();
   if (!activation) return { active: false, pending: true };
+  if (!await reconcileActivation(env, activation)) return { active: false, pending: false };
   return { active: true, pending: false, serverTime: now(),
     licenseId: activation.lemon_license_id, instanceId: activation.lemon_instance_id,
     receipt: await proReceipt(env, { installationId: activation.installation_id,
@@ -659,6 +688,9 @@ async function recordWebhook(env, payload, raw) {
   try {
     const eventAt = providerTimestamp(attributes);
   if (eventName === "order_created") {
+    if (attributes.status !== "paid" || isFullRefund(attributes)) {
+      throw Object.assign(new Error("Automatic activation requires a paid order."), { code: "invalid_webhook" });
+    }
     const installationId = String(payload?.meta?.custom_data?.installation_id || "");
     const orderId = String(payload?.data?.id || "");
     const email = String(attributes.user_email || attributes.customer_email || "").toLowerCase();
@@ -717,7 +749,8 @@ async function recordWebhook(env, payload, raw) {
     ]);
   }
   if (eventName === "license_key_updated" &&
-      (attributes?.status !== "active" || attributes?.disabled === true || Number(attributes?.disabled) === 1)) {
+      (["disabled", "expired"].includes(attributes?.status) || attributes?.disabled === true || Number(attributes?.disabled) === 1 ||
+        (attributes?.expires_at != null && Date.parse(attributes.expires_at) <= timestamp))) {
     const licenseId = String(payload?.data?.id || "");
     await env.LICENSE_DB.batch([
       env.LICENSE_DB.prepare("UPDATE licenses SET status='revoked', revoked_at=COALESCE(revoked_at, ?), updated_at=MAX(updated_at, ?) WHERE lemon_license_id=?")

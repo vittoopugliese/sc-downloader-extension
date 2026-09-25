@@ -11,11 +11,18 @@
   const OPENED_EVENT = "scdl:player-tools-opened";
   let latestRevision = -1;
   let latestSnapshot = null;
+  let expiryTimer = null;
+  let lastCommerceRefresh = 0;
 
   function publish(snapshot) {
     if (!Number.isSafeInteger(snapshot?.revision) || snapshot.revision < latestRevision) return;
     latestRevision = snapshot.revision;
     latestSnapshot = snapshot;
+    clearTimeout(expiryTimer);
+    const expiresAt = snapshot.trial?.expiresAt;
+    if (snapshot.plan !== "pro" && Number.isSafeInteger(expiresAt) && expiresAt > Date.now()) {
+      expiryTimer = setTimeout(refresh, Math.min(2_147_483_647, expiresAt - Date.now() + 10));
+    }
     document.documentElement.setAttribute(SNAPSHOT_ATTRIBUTE, JSON.stringify(snapshot));
     document.dispatchEvent(new CustomEvent(SNAPSHOT_EVENT));
   }
@@ -31,6 +38,7 @@
   function publishUnavailable(code) {
     publish({ revision: Math.max(0, latestRevision), state: "access_error", plan: "free", code,
       grant: null, capabilities: { openPanel: true, beginLoop: false, editLoop: false,
+        freeEffects: true,
         tempo: false, preservePitch: false, savePreset: false, maximizeLooper: false,
         editLoopPrecise: false, exportLoop: false, exportTrackEffects: false } });
   }
@@ -80,5 +88,17 @@
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes["scdl.playerTools.access.v1"]) refresh();
   });
+  async function resume() {
+    if (document.hidden) return;
+    await refresh();
+    if (Date.now() - lastCommerceRefresh < 60_000) return;
+    lastCommerceRefresh = Date.now();
+    try {
+      await chrome.runtime.sendMessage({ type: "GET_PLAYER_TOOLS_COMMERCE", revalidate: true });
+      await refresh();
+    } catch { /* Durable checkout alarms retry independently of this tab. */ }
+  }
+  document.addEventListener("visibilitychange", resume);
+  globalThis.addEventListener?.("focus", resume);
   refresh().catch(() => {});
 })();

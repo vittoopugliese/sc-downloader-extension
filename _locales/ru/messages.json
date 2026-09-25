@@ -489,7 +489,7 @@
     "message": "Как использовать Looper"
   },
   "looper_intro": {
-    "message": "Попробуйте Player Tools в течение 7 дней и создайте до 20 новых петель A–B. Экспорт WAV и обработанного аудио требует Pro."
+    "message": "Пробуйте Player Tools 7 дней: до 20 петель A–B, все FX, EQ, Likes Explorer и функции петель/пианино сэмплера. Reverb и Echo остаются бесплатными. WAV и обработанный экспорт требуют Pro."
   },
   "looper_step_open_title": {
     "message": "Откройте отдельный трек"
@@ -533,7 +533,7 @@
   "player_tools_trial_last_day": {
     "message": "Last day of your Player Tools trial"
   },
-  "player_tools_trial_expired": { "message": "Пробный период завершен. Player Tools Pro разблокирует музыкальные инструменты." },
+  "player_tools_trial_expired": { "message": "Пробный период закончился. Reverb и Echo остаются бесплатными; премиум-эффекты, EQ, Likes Explorer и функции петель/пианино сэмплера требуют Pro." },
   "player_tools_get_pro": { "message": "Получить Pro" },
   "player_tools_try": { "message": "Попробовать" },
   "player_tools_pro_title": { "message": "Player Tools Pro" },

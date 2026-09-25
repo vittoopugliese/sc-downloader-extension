@@ -24,6 +24,7 @@
 
   const CLOCK_ROLLBACK_TOLERANCE_MS = 5 * 60 * 1000;
   const MAX_RECEIPT_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
+  const REVALIDATION_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
   function create({ storage, identityStorage = null, legacyIdentityStorage = null, sessionStorage = null, alarms = null, request = fetch, randomUUID = () => crypto.randomUUID(),
     access, apiBaseUrl = API_BASE_URL, now = () => Date.now(), version = "unknown",
@@ -38,8 +39,14 @@
       if (!alarms) return;
       try {
         const expiresAt = state.activation?.receiptExpiresAt;
-        if (state.status === "active" && Number.isSafeInteger(expiresAt) && expiresAt < Number.MAX_SAFE_INTEGER) {
-          await alarms.create(LICENSE_REVALIDATION_ALARM, { when: Math.max(now() + 1000, expiresAt) });
+        if (state.status === "pending" && now() - state.pendingCheckoutAt < 24 * 60 * 60 * 1000) {
+          await alarms.create(LICENSE_REVALIDATION_ALARM, { when: now() + 30_000 });
+        } else if (state.status === "active" && Number.isSafeInteger(expiresAt) && expiresAt < Number.MAX_SAFE_INTEGER) {
+          await alarms.create(LICENSE_REVALIDATION_ALARM, { when: Math.max(now() + 1000,
+            Math.min(expiresAt, Math.max(now() + 5 * 60 * 1000,
+              (state.activation.lastCheckedAt || now()) + REVALIDATION_INTERVAL_MS))) });
+        } else if (state.status === "error" && state.activation?.instanceId) {
+          await alarms.create(LICENSE_REVALIDATION_ALARM, { when: now() + 5 * 60 * 1000 });
         } else {
           await alarms.clear(LICENSE_REVALIDATION_ALARM);
         }
@@ -214,7 +221,7 @@
     }
     async function validateEntitlement(entitlement) {
       const state = await read();
-      if (!entitlement?.receipt || !state.activation?.instanceId ||
+      if (state.status === "revoked" || !entitlement?.receipt || !state.activation?.instanceId ||
           state.activation.licenseId !== entitlement.licenseId) return false;
       try {
         const claims = await RECEIPTS.verify(entitlement.receipt, {
@@ -233,6 +240,7 @@
       return exclusive(async () => {
         if (await validateEntitlement(entitlement)) return { status: "active", entitlement };
         const state = await read();
+        if (state.status === "revoked") return { status: "revoked", code: "license_revoked" };
         if (!state.activation?.instanceId) return { status: "invalid", code: "pro-required" };
         const cached = { status: "active", licenseId: state.activation.licenseId,
           checkedAt: state.activation.lastCheckedAt, expiresAt: state.activation.receiptExpiresAt, receipt: state.activation.receipt };
@@ -266,27 +274,22 @@
             // SoundCloud return, popup open or service-worker startup.
           }
         }
-        if (state.activation?.instanceId) {
-          let receiptValid = false;
-          try {
-            const claims = await RECEIPTS.verify(state.activation.receipt, { publicJwk: entitlementPublicJwk, installationId: state.installationId });
-            receiptValid = claims.type === "pro" && claims.licenseId === state.activation.licenseId &&
-              claims.instanceId === state.activation.instanceId && claims.expiresAt > now();
-            state.activation.receiptExpiresAt = claims.expiresAt;
-          } catch { receiptValid = false; }
-          if (receiptValid) {
+        if (state.activation?.instanceId && state.status !== "revoked") {
+          const receiptValid = await validateEntitlement({ receipt: state.activation.receipt, licenseId: state.activation.licenseId });
+          if (receiptValid && !revalidate) {
             await applyEntitlement(state, true);
           } else if (revalidate) {
-          try {
-            const result = await post("/license/status", { installationId: state.installationId,
-              instanceId: state.activation.instanceId });
-            await applyProResult(state, result);
-          } catch (error) {
-            if (error.code === "license_revoked") await applyEntitlement(state, false, "revoked");
-            else { await applyEntitlement(state, false, "error"); }
-          }
+            try {
+              const result = await post("/license/status", { installationId: state.installationId,
+                instanceId: state.activation.instanceId });
+              await applyProResult(state, result);
+            } catch (error) {
+              if (error.code === "license_revoked") await applyEntitlement(state, false, "revoked");
+              else { await applyEntitlement(state, receiptValid, receiptValid ? "active" : "error"); }
+            }
           } else await applyEntitlement(state, false, "error");
         }
+        await scheduleRevalidation(state);
         return state;
       });
     }
@@ -298,6 +301,7 @@
         if (!/^https:\/\//.test(result.checkoutUrl || "")) throw Object.assign(new Error("Checkout did not return a secure URL."), { code: "invalid-checkout" });
         state.status = "pending"; state.pendingCheckoutAt = now();
         await write(state);
+        await scheduleRevalidation(state);
         return { ...publicState(state), checkoutUrl: result.checkoutUrl };
       });
     }
@@ -316,6 +320,7 @@
         if (state.status !== "pending") return state;
         const result = await post("/checkout/claim", { installationId: state.installationId });
         if (result.active === true) await applyProResult(state, result);
+        await scheduleRevalidation(state);
         return state;
       });
     }
@@ -351,13 +356,14 @@
     async function validateTrial(value) {
       const state = await read();
       if (!value?.receipt) return { status: "invalid" };
+      if (now() + CLOCK_ROLLBACK_TOLERANCE_MS < state.clock.maxObservedClientTime) return { status: "invalid" };
       try {
         const claims = await RECEIPTS.verify(value.receipt, {
           publicJwk: entitlementPublicJwk, installationId: state.installationId,
         });
         const matches = claims.type === "trial" && claims.startedAt === value.startedAt &&
           claims.expiresAt === value.expiresAt && claims.used === value.used &&
-          claims.limit === value.limit;
+          claims.limit === value.limit && claims.startedAt <= now() + CLOCK_ROLLBACK_TOLERANCE_MS;
         if (!matches) return { status: "invalid" };
         let grantValid = false;
         if (value.grant && typeof claims.grantTrackIdentityHash === "string") {

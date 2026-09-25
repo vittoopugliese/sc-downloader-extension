@@ -1567,11 +1567,13 @@ function requestBulkTracks(limit) {
   return requestFromActiveTab({ type: "GET_BULK_TRACKS", limit });
 }
 
-async function syncPlayerToolsOffer() {
+let playerToolsOfferTimer = null;
+let playerToolsOfferExpiryTimer = null;
+async function syncPlayerToolsOffer({ revalidate = true, startTrial = true } = {}) {
   try {
     // Opening the download popup is one of the two product-defined trial entry points.
-    await chrome.runtime.sendMessage({ type: "START_PLAYER_TOOLS_TRIAL" });
-    const commerceResponse = await chrome.runtime.sendMessage({ type: "GET_PLAYER_TOOLS_COMMERCE", revalidate: true });
+    if (startTrial) await chrome.runtime.sendMessage({ type: "START_PLAYER_TOOLS_TRIAL" });
+    const commerceResponse = await chrome.runtime.sendMessage({ type: "GET_PLAYER_TOOLS_COMMERCE", revalidate });
     const response = await chrome.runtime.sendMessage({ type: "GET_PLAYER_TOOLS_SNAPSHOT" });
     const snapshot = response?.snapshot;
     const commerce = commerceResponse?.commerce;
@@ -1584,6 +1586,11 @@ async function syncPlayerToolsOffer() {
       commercePrice.textContent = `${format(offer.priceCents)} ${offer.currency}`;
     }
     const active = snapshot?.plan === "pro" || commerce?.status === "active";
+    clearTimeout(playerToolsOfferExpiryTimer);
+    if (!active && Number.isSafeInteger(snapshot?.trial?.expiresAt) && snapshot.trial.expiresAt > Date.now()) {
+      playerToolsOfferExpiryTimer = setTimeout(() => syncPlayerToolsOffer({ revalidate: false, startTrial: false }),
+        Math.min(2_147_483_647, snapshot.trial.expiresAt - Date.now() + 10));
+    }
     commerceRestoreBtn.textContent = t("player_tools_restore");
     document.body.classList.toggle("pro-active", active);
     productOffers.hidden = active;
@@ -1647,6 +1654,11 @@ commerceRestoreBtn.addEventListener("click", async () => {
 });
 
 syncPlayerToolsOffer();
+chrome.storage?.onChanged?.addListener((changes, area) => {
+  if (area !== "local" || !changes["scdl.playerTools.access.v1"]) return;
+  clearTimeout(playerToolsOfferTimer);
+  playerToolsOfferTimer = setTimeout(() => syncPlayerToolsOffer({ revalidate: false, startTrial: false }), 50);
+});
 
 window.addEventListener("unload", () => {
   stopPolling();

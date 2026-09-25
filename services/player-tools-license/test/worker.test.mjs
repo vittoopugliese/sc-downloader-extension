@@ -100,7 +100,13 @@ function managementLicenseList() {
     user_email: "buyer@example.com", key: "license-key", status: "inactive", disabled: 0,
   } }] };
 }
+function validationResponse() {
+  return new Response(JSON.stringify({ ...activationResponse(), valid: true, activated: undefined, instance: undefined }));
+}
 function automaticActivationFetch(url) {
+  if (String(url).endsWith("/licenses/validate")) return validationResponse();
+  if (String(url).endsWith("/license-keys/license-1")) return new Response(JSON.stringify(managementLicense()));
+  if (String(url).includes("/license-key-instances?")) return new Response(JSON.stringify(managementInstances()));
   if (String(url).includes("/license-keys?filter%5Border_id%5D=4")) {
     return new Response(JSON.stringify(managementLicenseList()), { status: 200 });
   }
@@ -151,10 +157,77 @@ async function sendWebhook(LICENSE_DB, payload) {
   }), { ...env, LICENSE_DB });
 }
 
+test("a wrong email or product never consumes a remote activation", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  for (const meta of [{ customer_email: "other@example.com" }, { variant_id: 999 }]) {
+    const LICENSE_DB = sqliteD1();
+    const calls = [];
+    globalThis.fetch = async (url) => {
+      calls.push(url);
+      const value = activationResponse();
+      return new Response(JSON.stringify({ ...value, valid: true, meta: { ...value.meta, ...meta } }));
+    };
+    const result = await worker.fetch(request("/api/player-tools/license/activate", {
+      installationId, email: "buyer@example.com", licenseKey: "license-key",
+    }), { ...env, LICENSE_DB });
+    assert.equal(result.status, 403);
+    assert.ok(calls.every(url => url.endsWith("/licenses/validate")));
+    assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM activation_operations").get().count, 0);
+  }
+});
+
+test("inactive license updates preserve a lifetime purchase", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  globalThis.fetch = automaticActivationFetch;
+  const LICENSE_DB = sqliteD1();
+  assert.equal((await sendWebhook(LICENSE_DB, orderWebhook("order_created"))).status, 200);
+  assert.equal((await sendWebhook(LICENSE_DB, {
+    meta: { event_name: "license_key_updated" },
+    data: { type: "license-keys", id: "license-1", attributes: {
+      store_id: 1, product_id: 2, status: "inactive", disabled: 0, expires_at: null,
+    } },
+  })).status, 200);
+  assert.equal(LICENSE_DB.database.prepare("SELECT status FROM licenses").get().status, "active");
+});
+
+test("checkout claims reconcile revocations even if a webhook was missed", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  globalThis.fetch = automaticActivationFetch;
+  const LICENSE_DB = sqliteD1();
+  assert.equal((await sendWebhook(LICENSE_DB, orderWebhook("order_created"))).status, 200);
+  globalThis.fetch = async () => new Response(JSON.stringify(managementLicense({ status: "disabled", disabled: 1 })));
+  const result = await worker.fetch(request("/api/player-tools/checkout/claim", { installationId }), { ...env, LICENSE_DB });
+  assert.equal((await result.json()).active, false);
+  assert.equal(LICENSE_DB.database.prepare("SELECT status FROM licenses").get().status, "revoked");
+});
+
+test("unpaid orders cannot auto-activate and provider pagination cannot leak the API key", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  globalThis.fetch = automaticActivationFetch;
+  const LICENSE_DB = sqliteD1();
+  assert.equal((await sendWebhook(LICENSE_DB, orderWebhook("order_created", { status: "pending" }))).status, 400);
+  assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM licenses").get().count, 0);
+  assert.equal((await sendWebhook(LICENSE_DB, orderWebhook("order_created"))).status, 200);
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(url);
+    return new Response(JSON.stringify(url.includes("/license-key-instances?")
+      ? { data: [], links: { next: "https://attacker.example/steal" } } : managementLicense()));
+  };
+  const result = await worker.fetch(request("/api/player-tools/license/status", { installationId, instanceId: "instance-1" }), { ...env, LICENSE_DB });
+  assert.equal(result.status, 500);
+  assert.ok(calls.every(url => new URL(url).origin === "https://api.lemonsqueezy.com"));
+  assert.equal(LICENSE_DB.database.prepare("SELECT status FROM licenses").get().status, "active");
+});
+
 test("activation persists Lemon license, instance and metadata from their documented sibling objects", async (t) => {
   const previousFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = previousFetch; });
-  globalThis.fetch = async () => new Response(JSON.stringify(activationResponse()), { status: 200 });
+  globalThis.fetch = async (url) => url.endsWith("/licenses/validate") ? validationResponse() : new Response(JSON.stringify(activationResponse()), { status: 200 });
   const LICENSE_DB = db();
   const response = await worker.fetch(request("/api/player-tools/license/activate", {
     installationId, email: "Buyer@Example.com", licenseKey: "license-key",
@@ -176,7 +249,7 @@ test("activation fails closed for incomplete or mismatched provider responses", 
   const previousFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = previousFetch; });
   const LICENSE_DB = db();
-  globalThis.fetch = async () => new Response(JSON.stringify({ ...activationResponse(), instance: null }), { status: 200 });
+  globalThis.fetch = async (url) => url.endsWith("/licenses/validate") ? validationResponse() : new Response(JSON.stringify({ ...activationResponse(), instance: null }), { status: 200 });
   const response = await worker.fetch(request("/api/player-tools/license/activate", {
     installationId, email: "buyer@example.com", licenseKey: "license-key",
   }), { ...env, LICENSE_DB });
@@ -192,6 +265,7 @@ test("two concurrent profiles reserve the only seats atomically and a third neve
   const LICENSE_DB = sqliteD1();
   let providerCalls = 0;
   globalThis.fetch = async (_url, options) => {
+    if (_url.endsWith("/licenses/validate")) return validationResponse();
     providerCalls += 1;
     const installation = new URLSearchParams(options.body).get("instance_name");
     return new Response(JSON.stringify({ ...activationResponse(), instance: { id: `instance-${installation}`, name: installation } }), { status: 200 });
@@ -212,15 +286,19 @@ test("a duplicate activation waits for its durable operation and retry reuses th
   const LICENSE_DB = sqliteD1();
   let providerCalls = 0;
   let resolveProvider;
+  let resolveProviderStarted;
   const providerResult = new Promise((resolve) => { resolveProvider = resolve; });
-  globalThis.fetch = async () => {
+  const providerStarted = new Promise((resolve) => { resolveProviderStarted = resolve; });
+  globalThis.fetch = async (url) => {
+    if (url.endsWith("/licenses/validate")) return validationResponse();
     providerCalls += 1;
+    resolveProviderStarted();
     await providerResult;
     return new Response(JSON.stringify(activationResponse()), { status: 200 });
   };
   const body = { installationId, email: "buyer@example.com", licenseKey: "license-key" };
   const first = worker.fetch(request("/api/player-tools/license/activate", body), { ...env, LICENSE_DB });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await providerStarted;
   const duplicate = await worker.fetch(request("/api/player-tools/license/activate", body), { ...env, LICENSE_DB });
   assert.equal(duplicate.status, 409);
   assert.deepEqual(await duplicate.json(), { active: false, error: "activation_in_progress" });
@@ -238,7 +316,7 @@ test("an idempotent activation never ignores a mismatched email", async (t) => {
   t.after(() => { globalThis.fetch = previousFetch; });
   const LICENSE_DB = sqliteD1();
   let providerCalls = 0;
-  globalThis.fetch = async () => { providerCalls += 1; return new Response(JSON.stringify(activationResponse()), { status: 200 }); };
+  globalThis.fetch = async (url) => { if (url.endsWith("/licenses/validate")) return validationResponse(); providerCalls += 1; return new Response(JSON.stringify(activationResponse()), { status: 200 }); };
   const valid = { installationId, email: "buyer@example.com", licenseKey: "license-key" };
   assert.equal((await worker.fetch(request("/api/player-tools/license/activate", valid), { ...env, LICENSE_DB })).status, 200);
   const mismatch = await worker.fetch(request("/api/player-tools/license/activate", {
@@ -281,7 +359,7 @@ test("a D1 interruption after Lemon activation is retried through the original r
   LICENSE_DB.database.prepare("UPDATE activation_operations SET lease_expires_at=0 WHERE installation_id=?").run(installationId);
   const retry = await worker.fetch(request("/api/player-tools/license/activate", body), { ...env, LICENSE_DB });
   assert.equal(retry.status, 200);
-  assert.equal(providerCalls, 3);
+  assert.equal(providerCalls, 4);
   assert.equal(activationCalls, 1, "recovery must reconcile the orphan instead of activating twice");
   assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM activation_operations WHERE state='active'").get().count, 1);
   assert.equal(LICENSE_DB.database.prepare("SELECT COUNT(*) AS count FROM activations").get().count, 1);
@@ -292,6 +370,7 @@ test("status reconciles the local activation against Lemon license and instance 
   t.after(() => { globalThis.fetch = previousFetch; });
   const LICENSE_DB = sqliteD1();
   globalThis.fetch = async (url) => {
+    if (url.endsWith("/licenses/validate")) return validationResponse();
     if (url.endsWith("/licenses/activate")) return new Response(JSON.stringify(activationResponse()), { status: 200 });
     if (url.endsWith("/license-keys/license-1")) return new Response(JSON.stringify(managementLicense()), { status: 200 });
     if (url.includes("/license-key-instances?")) return new Response(JSON.stringify(managementInstances()), { status: 200 });
@@ -316,6 +395,7 @@ test("status deactivates only the missing remote instance and preserves the purc
   t.after(() => { globalThis.fetch = previousFetch; });
   const LICENSE_DB = sqliteD1();
   globalThis.fetch = async (url) => {
+    if (url.endsWith("/licenses/validate")) return validationResponse();
     if (url.endsWith("/licenses/activate")) return new Response(JSON.stringify(activationResponse()), { status: 200 });
     if (url.endsWith("/license-keys/license-1")) return new Response(JSON.stringify(managementLicense()), { status: 200 });
     if (url.includes("/license-key-instances?")) return new Response(JSON.stringify(managementInstances({ present: false })), { status: 200 });
@@ -337,6 +417,7 @@ test("status never revokes an active local purchase merely because Lemon is unav
   t.after(() => { globalThis.fetch = previousFetch; });
   const LICENSE_DB = sqliteD1();
   globalThis.fetch = async (url) => {
+    if (url.endsWith("/licenses/validate")) return validationResponse();
     if (url.endsWith("/licenses/activate")) return new Response(JSON.stringify(activationResponse()), { status: 200 });
     return new Response(JSON.stringify({ errors: [{ title: "temporary" }] }), { status: 500 });
   };
@@ -351,9 +432,9 @@ test("status never revokes an active local purchase merely because Lemon is unav
 test("provider authentication and schema errors never revoke local Pro", async (t) => {
   const previousFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = previousFetch; });
-  for (const status of [401, 403, 408, 409, 422, 429, 500]) {
+  for (const status of [200, 401, 403, 408, 409, 422, 429, 500]) {
     const LICENSE_DB = sqliteD1();
-    globalThis.fetch = async (url) => url.endsWith("/licenses/activate")
+    globalThis.fetch = async (url) => url.endsWith("/licenses/validate") ? validationResponse() : url.endsWith("/licenses/activate")
       ? new Response(JSON.stringify(activationResponse()), { status: 200 })
       : new Response(JSON.stringify({ errors: [{ title: "provider error" }] }), { status });
     await worker.fetch(request("/api/player-tools/license/activate", {
@@ -373,6 +454,7 @@ test("instance reconciliation follows pagination", async (t) => {
   t.after(() => { globalThis.fetch = previousFetch; });
   const LICENSE_DB = sqliteD1();
   globalThis.fetch = async (url) => {
+    if (url.endsWith("/licenses/validate")) return validationResponse();
     if (url.endsWith("/licenses/activate")) return new Response(JSON.stringify(activationResponse()), { status: 200 });
     if (url.endsWith("/license-keys/license-1")) return new Response(JSON.stringify(managementLicense()), { status: 200 });
     if (url.includes("page%5Bnumber%5D=2")) return new Response(JSON.stringify(managementInstances()), { status: 200 });
@@ -453,7 +535,7 @@ test("a full refund received before its order remains authoritative through dela
   assert.equal((await sendWebhook(LICENSE_DB, refund)).status, 200);
   assert.equal((await sendWebhook(LICENSE_DB, orderWebhook("order_created"))).status, 200);
 
-  globalThis.fetch = async () => new Response(JSON.stringify(activationResponse()), { status: 200 });
+  globalThis.fetch = async (url) => url.endsWith("/licenses/validate") ? validationResponse() : new Response(JSON.stringify(activationResponse()), { status: 200 });
   const response = await worker.fetch(request("/api/player-tools/license/activate", {
     installationId, email: "buyer@example.com", licenseKey: "license-key",
   }), { ...env, LICENSE_DB });
@@ -489,7 +571,7 @@ test("a refund tombstone blocks activation even when the order-created webhook n
   assert.equal((await sendWebhook(LICENSE_DB, orderWebhook("order_refunded", {
     refunded: true, refunded_amount: 369, updated_at: "2026-09-21T10:00:00.000Z",
   }))).status, 200);
-  globalThis.fetch = async () => new Response(JSON.stringify(activationResponse()), { status: 200 });
+  globalThis.fetch = async (url) => url.endsWith("/licenses/validate") ? validationResponse() : new Response(JSON.stringify(activationResponse()), { status: 200 });
   const response = await worker.fetch(request("/api/player-tools/license/activate", {
     installationId, email: "buyer@example.com", licenseKey: "license-key",
   }), { ...env, LICENSE_DB });
@@ -505,8 +587,9 @@ test("restore reconciles an existing local activation before issuing another rec
   t.after(() => { globalThis.fetch = previousFetch; });
   const LICENSE_DB = sqliteD1();
   globalThis.fetch = async (url) => {
+    if (String(url).endsWith("/licenses/validate")) return validationResponse();
     if (String(url).endsWith("/licenses/activate")) return new Response(JSON.stringify(activationResponse()), { status: 200 });
-    if (String(url).endsWith("/license-keys/license-1")) return new Response(JSON.stringify(managementLicense({ status: "inactive" })), { status: 200 });
+    if (String(url).endsWith("/license-keys/license-1")) return new Response(JSON.stringify(managementLicense({ status: "disabled", disabled: 1 })), { status: 200 });
     throw new Error(`unexpected Lemon URL ${url}`);
   };
   const body = { installationId, email: "buyer@example.com", licenseKey: "license-key" };
@@ -592,7 +675,7 @@ test("a refund removes active reservations and a repeated activation stays revok
   t.after(() => { globalThis.fetch = previousFetch; });
   const LICENSE_DB = sqliteD1();
   let providerCalls = 0;
-  globalThis.fetch = async () => { providerCalls += 1; return new Response(JSON.stringify(activationResponse()), { status: 200 }); };
+  globalThis.fetch = async (url) => { if (url.endsWith("/licenses/validate")) return validationResponse(); providerCalls += 1; return new Response(JSON.stringify(activationResponse()), { status: 200 }); };
   const body = { installationId, email: "buyer@example.com", licenseKey: "license-key" };
   assert.equal((await worker.fetch(request("/api/player-tools/license/activate", body), { ...env, LICENSE_DB })).status, 200);
   assert.equal((await sendWebhook(LICENSE_DB, orderWebhook("order_refunded", {
@@ -608,6 +691,7 @@ test("support seat release requires admin auth and updates D1 only after Lemon c
   t.after(() => { globalThis.fetch = previousFetch; });
   const LICENSE_DB = sqliteD1();
   globalThis.fetch = async (url) => {
+    if (url.endsWith("/licenses/validate")) return validationResponse();
     if (url.endsWith("/licenses/activate")) return new Response(JSON.stringify(activationResponse()), { status: 200 });
     if (url.endsWith("/licenses/deactivate")) return new Response(JSON.stringify({ deactivated: true }), { status: 200 });
     throw new Error(`unexpected Lemon URL ${url}`);
@@ -634,6 +718,7 @@ test("reactivating a released profile replaces the stale Lemon instance everywhe
   const LICENSE_DB = sqliteD1();
   let generation = 1;
   globalThis.fetch = async (url) => {
+    if (url.endsWith("/licenses/validate")) return validationResponse();
     if (url.endsWith("/licenses/activate")) return new Response(JSON.stringify({
       ...activationResponse(), instance: { id: `instance-${generation}`, name: installationId },
     }), { status: 200 });
@@ -668,7 +753,7 @@ test("public rate limiting returns a uniform retryable response before remote ef
   const previousFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = previousFetch; });
   let providerCalls = 0;
-  globalThis.fetch = async () => { providerCalls += 1; return new Response(JSON.stringify(activationResponse()), { status: 200 }); };
+  globalThis.fetch = async (url) => { if (url.endsWith("/licenses/validate")) return validationResponse(); providerCalls += 1; return new Response(JSON.stringify(activationResponse()), { status: 200 }); };
   const response = await worker.fetch(request("/api/player-tools/license/activate", {
     installationId, email: "buyer@example.com", licenseKey: "license-key",
   }), { ...env, LICENSE_DB: sqliteD1(), LICENSE_RATE_LIMITER: { async limit() { return { success: false }; } } });
@@ -682,7 +767,7 @@ test("admin inspection exposes activation state without returning the license ke
   const previousFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = previousFetch; });
   const LICENSE_DB = sqliteD1();
-  globalThis.fetch = async () => new Response(JSON.stringify(activationResponse()), { status: 200 });
+  globalThis.fetch = async (url) => url.endsWith("/licenses/validate") ? validationResponse() : new Response(JSON.stringify(activationResponse()), { status: 200 });
   await worker.fetch(request("/api/player-tools/license/activate", {
     installationId, email: "buyer@example.com", licenseKey: "license-key",
   }), { ...env, LICENSE_DB });
@@ -703,7 +788,7 @@ test("a known disabled license update revokes every local activation", async (t)
   const previousFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = previousFetch; });
   const LICENSE_DB = sqliteD1();
-  globalThis.fetch = async () => new Response(JSON.stringify(activationResponse()), { status: 200 });
+  globalThis.fetch = async (url) => url.endsWith("/licenses/validate") ? validationResponse() : new Response(JSON.stringify(activationResponse()), { status: 200 });
   await worker.fetch(request("/api/player-tools/license/activate", {
     installationId, email: "buyer@example.com", licenseKey: "license-key",
   }), { ...env, LICENSE_DB });
