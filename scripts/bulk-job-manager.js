@@ -62,6 +62,25 @@ let offscreenClosePending = false;
 let legacyMigrationPromise = null;
 let activeEnumerationPromise = null;
 let activeEnumerationJobId = null;
+const cancelledInstrumentOperations = new Map();
+const instrumentOperationPhases = new Map();
+const INSTRUMENT_CANCEL_TTL_MS = 5 * 60 * 1000;
+
+function pruneCancelledInstrumentOperations() {
+  const cutoff = Date.now() - INSTRUMENT_CANCEL_TTL_MS;
+  for (const [operationId, cancelledAt] of cancelledInstrumentOperations) {
+    if (cancelledAt < cutoff) cancelledInstrumentOperations.delete(operationId);
+  }
+}
+
+function throwIfInstrumentCancelled(operationId) {
+  pruneCancelledInstrumentOperations();
+  if (!cancelledInstrumentOperations.has(operationId)) return;
+  throw Object.assign(new Error("Instrument preparation cancelled."), {
+    name: "AbortError",
+    code: "instrument_cancelled",
+  });
+}
 
 function withJobState(fn) {
   const run = stateQueue.then(fn);
@@ -1189,16 +1208,22 @@ const BulkJobManager = {
 
   async renderLoopInstrument(trackData, trimRange, playbackTransform, effects, name, operationId = `instrument_${Date.now()}`) {
     singleDownloadsInFlight += 1;
+    instrumentOperationPhases.set(operationId, "queued");
     try {
+      throwIfInstrumentCancelled(operationId);
       await startKeepalive();
       return await queueSingleDownload(async () => {
+        throwIfInstrumentCancelled(operationId);
         let result;
         for (let attempt = 0; attempt < 2; attempt += 1) {
+          throwIfInstrumentCancelled(operationId);
           const resolved = await SCDownloadSource.resolve(trackData, "auto", {
             forceRefresh: attempt > 0,
             reason: attempt > 0 ? "expired_media" : "initial",
             attempt,
           });
+          throwIfInstrumentCancelled(operationId);
+          instrumentOperationPhases.set(operationId, "offscreen");
           result = await sendOffscreenMessage({
             type: "OFFSCREEN_INSTRUMENT_RENDER",
             buildId: `track_${operationId}`,
@@ -1210,12 +1235,15 @@ const BulkJobManager = {
             playbackTransform,
             effects,
           });
+          instrumentOperationPhases.set(operationId, "queued");
+          throwIfInstrumentCancelled(operationId);
           if (result?.success || ![401, 403, 404].includes(result?.status)) break;
         }
         if (!result?.success) throw new Error(result?.error || "Could not prepare the loop instrument.");
         return result;
       });
     } finally {
+      instrumentOperationPhases.delete(operationId);
       singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);
       const activeJob = await loadJob().catch(() => null);
       if ((!activeJob || !isActiveJobStatus(activeJob.status)) && singleDownloadsInFlight === 0) {
@@ -1223,6 +1251,19 @@ const BulkJobManager = {
         await closeOffscreenDocument().catch(() => {});
       }
     }
+  },
+
+  async cancelLoopInstrument(operationId) {
+    if (typeof operationId !== "string" || !/^instrument_[A-Za-z0-9_-]{8,100}$/.test(operationId)) {
+      throw new Error("Invalid instrument operation.");
+    }
+    pruneCancelledInstrumentOperations();
+    cancelledInstrumentOperations.set(operationId, Date.now());
+    if (instrumentOperationPhases.get(operationId) !== "offscreen") {
+      return { success: true, cancelled: false, code: "instrument_cancelled" };
+    }
+    return sendOffscreenMessage({ type: "OFFSCREEN_INSTRUMENT_CANCEL", operationId })
+      .catch(() => ({ success: true, cancelled: false, code: "instrument_cancelled" }));
   },
 
   async padMessage(message) {

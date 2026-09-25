@@ -15,6 +15,9 @@ let messageListener = null;
 const tabMessages = [];
 const downloads = [];
 const instrumentRenders = [];
+const instrumentCancels = [];
+const sessionState = {};
+let instrumentRenderBlocker = null;
 const resolvedTrack = {
   id: 7,
   title: "Track",
@@ -65,14 +68,25 @@ const context = vm.createContext({
     },
     async renderLoopInstrument(...args) {
       instrumentRenders.push(args);
+      if (instrumentRenderBlocker) await instrumentRenderBlocker.promise;
       return { success: true, instrument: { name: args[4], dataUrl: "data:audio/wav;base64,UklGRg==" } };
+    },
+    async cancelLoopInstrument(operationId) {
+      instrumentCancels.push(operationId);
+      instrumentRenderBlocker?.reject(Object.assign(new Error("Instrument preparation cancelled."), {
+        code: "instrument_cancelled", name: "AbortError",
+      }));
+      return { success: true, cancelled: true };
     },
   },
   chrome: {
     storage: {
       local: { async get() { return {}; }, async set() {}, async setAccessLevel() {} },
       sync: { async get() { return {}; } },
-      session: { async get() { return {}; }, async set() {} },
+      session: {
+        async get(key) { return { [key]: structuredClone(sessionState[key]) }; },
+        async set(value) { Object.assign(sessionState, structuredClone(value)); },
+      },
     },
     runtime: {
       id: "test-extension",
@@ -110,6 +124,13 @@ function dispatch(request, sender) {
     const handled = messageListener(request, sender, resolve);
     if (handled !== true) reject(new Error("Background did not keep the response open"));
   });
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
 }
 
 (async () => {
@@ -185,6 +206,34 @@ function dispatch(request, sender) {
   assert.deepEqual(instrumentRenders[0][3], effects);
   assert.equal(instrumentRenders[0][4], "Loop Instrument");
   assert.equal(instrumentRenders[0][5], "instrument_routing_001");
+
+  instrumentRenderBlocker = deferred();
+  const cancellableRequest = {
+    type: "RENDER_LOOP_INSTRUMENT",
+    operationId: "instrument_routing_cancel_001",
+    trackUrl: "https://soundcloud.com/artist/track",
+    trimRange,
+    playbackTransform,
+    effects,
+    name: "Cancellable Instrument",
+  };
+  const owner = { id: "test-extension", tab: { id: 42 }, frameId: 0, documentId: "document-a",
+    url: "https://soundcloud.com/artist/track" };
+  const firstRender = dispatch(cancellableRequest, owner);
+  const duplicateRender = dispatch({ ...cancellableRequest }, owner);
+  while (instrumentRenders.length < 2) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(instrumentRenders.length, 2, "duplicate request must share one render");
+  const foreignCancel = await dispatch({ type: "CANCEL_LOOP_INSTRUMENT",
+    operationId: cancellableRequest.operationId }, { ...owner, tab: { id: 43 }, documentId: "document-b" });
+  assert.equal(foreignCancel.code, "unknown_operation");
+  assert.equal(instrumentCancels.length, 0, "another tab cannot cancel the operation");
+  const ownCancel = await dispatch({ type: "CANCEL_LOOP_INSTRUMENT",
+    operationId: cancellableRequest.operationId }, owner);
+  assert.equal(ownCancel.cancelled, true);
+  assert.deepEqual(instrumentCancels, [cancellableRequest.operationId]);
+  assert.equal((await firstRender).code, "instrument_cancelled");
+  assert.equal((await duplicateRender).code, "instrument_cancelled");
+  instrumentRenderBlocker = null;
 
   console.log("Loop background routing verification passed.");
 })().catch((error) => {

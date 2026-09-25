@@ -149,6 +149,7 @@ window.addEventListener?.("message", (event) => {
     store: "STORE_LOOP_PAD_AUDIO",
     render: "RENDER_LOOP_PAD",
     instrument: "RENDER_LOOP_INSTRUMENT",
+    "cancel-instrument": "CANCEL_LOOP_INSTRUMENT",
   };
   if (!types[action]) return;
   const payload = { type: types[action] };
@@ -167,6 +168,7 @@ window.addEventListener?.("message", (event) => {
     payload.effects = event.data.effects;
     payload.name = event.data.name;
   }
+  if (action === "cancel-instrument") payload.operationId = event.data.operationId;
   chrome.runtime.sendMessage(payload).then((result) => {
     window.postMessage({ source: "scdl-pad-content", id, result }, location.origin);
   }).catch((error) => {

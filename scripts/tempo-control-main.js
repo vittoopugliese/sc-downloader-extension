@@ -149,6 +149,7 @@
   let instrumentNoteRevision = 0;
   let instrumentResumePromise = null;
   let instrumentIntentVersion = 0;
+  let instrumentOperationId = null;
   let instrumentSnapshot = null;
   const instrumentVoices = new Set();
   const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
@@ -305,11 +306,31 @@
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         padRequests.delete(id);
+        if (action === "instrument" && payload.operationId) {
+          window.postMessage({ source: "scdl-pad-main", id: `cancel_${id}`,
+            action: "cancel-instrument", operationId: payload.operationId }, location.origin);
+        }
         reject(new Error("The pad request timed out."));
       }, 120000);
-      padRequests.set(id, { resolve, reject, timeout });
+      padRequests.set(id, { resolve, reject, timeout, action, operationId: payload.operationId || null });
       window.postMessage({ source: "scdl-pad-main", id, action, ...payload }, location.origin);
     });
+  }
+
+  function cancelInstrumentRequest() {
+    const operationId = instrumentOperationId;
+    instrumentOperationId = null;
+    if (!operationId) return;
+    for (const [id, request] of padRequests) {
+      if (request.action !== "instrument" || request.operationId !== operationId) continue;
+      padRequests.delete(id);
+      clearTimeout(request.timeout);
+      const error = new Error("Instrument preparation cancelled.");
+      error.name = "AbortError";
+      request.reject(error);
+    }
+    window.postMessage({ source: "scdl-pad-main", id: `cancel_${Date.now()}_${++padRequestNumber}`,
+      action: "cancel-instrument", operationId }, location.origin);
   }
 
   async function hydrateDrumPads() {
@@ -507,12 +528,14 @@
   }
 
   function disableInstrument(message = "") {
+    cancelInstrumentRequest();
     instrumentIntentVersion += 1;
     instrumentPreparing = false;
     setInstrumentMode(false, { clearBuffer: true, message });
   }
 
   function exitInstrument({ clearBuffer = false, message = "" } = {}) {
+    cancelInstrumentRequest();
     instrumentIntentVersion += 1;
     instrumentPreparing = false;
     setInstrumentMode(false, { clearBuffer, message });
@@ -561,6 +584,7 @@
     instrumentSnapshot = descriptor;
     try {
       const operationId = `instrument_${Date.now()}_${++padRequestNumber}`;
+      instrumentOperationId = operationId;
       const result = await requestPad("instrument", {
         operationId,
         trackUrl: descriptor.trackIdentity.replace(/^permalink:/, ""),
@@ -577,10 +601,12 @@
       if (intentVersion !== instrumentIntentVersion || !loopMatchesInstrumentSnapshot(descriptor)) return;
       instrumentBuffer = buffer;
       instrumentPreparing = false;
+      instrumentOperationId = null;
       setInstrumentMode(true);
     } catch (error) {
       if (intentVersion !== instrumentIntentVersion) return;
       instrumentPreparing = false;
+      instrumentOperationId = null;
       instrumentSnapshot = null;
       setInstrumentMode(false, { clearBuffer: true, message: error?.message || "Could not prepare this loop instrument." });
     }

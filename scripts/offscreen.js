@@ -2,7 +2,9 @@ const activeBuilds = new Map();
 const buildRecords = new Map();
 const directorySaves = new Map();
 const padRenders = new Map();
+const instrumentCancellations = new Map();
 const SERVICE_WORKER_KEEPALIVE_MS = 10000;
+const INSTRUMENT_CANCEL_TTL_MS = 5 * 60 * 1000;
 const PAD_MAX_BYTES = 12 * 1024 * 1024;
 let padDatabasePromise = null;
 
@@ -36,6 +38,34 @@ async function padTransaction(mode, action) {
 
 function validPadIndex(index) { return Number.isInteger(index) && index >= 0 && index < 6; }
 function validPadOperationId(id) { return typeof id === "string" && /^pad_[A-Za-z0-9_-]{8,100}$/.test(id); }
+function validInstrumentOperationId(id) { return typeof id === "string" && /^instrument_[A-Za-z0-9_-]{8,100}$/.test(id); }
+
+function instrumentAbortError() {
+  return Object.assign(new Error("Instrument preparation cancelled."), {
+    name: "AbortError",
+    code: "instrument_cancelled",
+  });
+}
+
+function pruneInstrumentCancellations() {
+  const cutoff = Date.now() - INSTRUMENT_CANCEL_TTL_MS;
+  for (const [id, cancelledAt] of instrumentCancellations) {
+    if (cancelledAt < cutoff) instrumentCancellations.delete(id);
+  }
+  while (instrumentCancellations.size > 200) {
+    instrumentCancellations.delete(instrumentCancellations.keys().next().value);
+  }
+}
+
+function cancelInstrumentRender(operationId) {
+  if (!validInstrumentOperationId(operationId)) throw new Error("Invalid instrument operation.");
+  pruneInstrumentCancellations();
+  instrumentCancellations.set(operationId, Date.now());
+  const record = padRenders.get(operationId);
+  record?.controller?.abort();
+  try { record?.reader?.abort(); } catch {}
+  return { success: true, cancelled: Boolean(record), code: "instrument_cancelled" };
+}
 
 async function beginPadOperation(index, id, kind) {
   if (!validPadIndex(index) || !validPadOperationId(id) || !["store", "render"].includes(kind)) throw new Error("Invalid pad operation.");
@@ -137,29 +167,57 @@ async function handlePadMessage(message) {
       const records = await padTransaction("readonly", (store) => store.getAll());
       return { success: true, pads: records.map(({ index, name, updatedAt }) => ({ index, name, updatedAt })) };
     }
+    if (message.type === "OFFSCREEN_INSTRUMENT_CANCEL") {
+      return cancelInstrumentRender(message.operationId);
+    }
     if (message.type === "OFFSCREEN_INSTRUMENT_RENDER") {
-      if (typeof message.operationId !== "string" || !/^instrument_[A-Za-z0-9_-]{8,100}$/.test(message.operationId)) {
+      if (!validInstrumentOperationId(message.operationId)) {
         throw new Error("Invalid instrument operation.");
       }
+      pruneInstrumentCancellations();
+      if (instrumentCancellations.has(message.operationId)) throw instrumentAbortError();
       const controller = new AbortController();
-      padRenders.set(message.operationId, { controller });
+      const record = padRenders.get(message.operationId) || {};
+      record.controller = controller;
+      record.reader = null;
+      padRenders.set(message.operationId, record);
       const keepaliveId = setInterval(() => chrome.runtime.sendMessage({ type: "OFFSCREEN_KEEPALIVE", buildId: message.buildId }).catch(() => {}), SERVICE_WORKER_KEEPALIVE_MS);
       try {
         const { blob } = await SCDownload.buildTrackBlob(message.streamUrl, message.trackData, null, controller.signal,
           message.trimRange, message.playbackTransform, message.effects, true);
+        if (controller.signal.aborted || instrumentCancellations.has(message.operationId)) throw instrumentAbortError();
         if (!(blob instanceof Blob) || blob.size > PAD_MAX_BYTES) {
           throw new Error("This loop is too large for the instrument.");
         }
         const dataUrl = await new Promise((resolve, reject) => {
           const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = () => reject(reader.error);
+          record.reader = reader;
+          const abortReader = () => {
+            try { reader.abort(); } catch { reject(instrumentAbortError()); }
+          };
+          controller.signal.addEventListener("abort", abortReader, { once: true });
+          reader.onload = () => {
+            controller.signal.removeEventListener("abort", abortReader);
+            record.reader = null;
+            resolve(reader.result);
+          };
+          reader.onerror = () => {
+            controller.signal.removeEventListener("abort", abortReader);
+            record.reader = null;
+            reject(reader.error);
+          };
+          reader.onabort = () => {
+            controller.signal.removeEventListener("abort", abortReader);
+            record.reader = null;
+            reject(instrumentAbortError());
+          };
           reader.readAsDataURL(blob);
         });
+        if (controller.signal.aborted || instrumentCancellations.has(message.operationId)) throw instrumentAbortError();
         return { success: true, instrument: { name: String(message.name || "Loop instrument").slice(0, 100), dataUrl } };
       } finally {
         clearInterval(keepaliveId);
-        padRenders.delete(message.operationId);
+        if (padRenders.get(message.operationId) === record) padRenders.delete(message.operationId);
       }
     }
     if (!validPadIndex(message.index)) throw new Error("Invalid pad.");
@@ -205,7 +263,8 @@ async function handlePadMessage(message) {
         success: false, error: error?.message || "Could not prepare this pad.", code: error?.code || "pad_failed", status: error?.status,
       }));
     }
-    return { success: false, error: error?.message || "Could not prepare this pad.", code: error?.code || "pad_failed", status: error?.status };
+    return { success: false, error: error?.message || "Could not prepare this pad.",
+      code: error?.code || (error?.name === "AbortError" ? "instrument_cancelled" : "pad_failed"), status: error?.status };
   }
 }
 
@@ -218,8 +277,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
   if (!message || typeof message.type !== "string") return false;
-  if (["OFFSCREEN_PAD_LIST", "OFFSCREEN_PAD_GET", "OFFSCREEN_PAD_STORE", "OFFSCREEN_PAD_RENDER", "OFFSCREEN_INSTRUMENT_RENDER"].includes(message.type)) {
+  if (["OFFSCREEN_PAD_LIST", "OFFSCREEN_PAD_GET", "OFFSCREEN_PAD_STORE", "OFFSCREEN_PAD_RENDER",
+      "OFFSCREEN_INSTRUMENT_RENDER", "OFFSCREEN_INSTRUMENT_CANCEL"].includes(message.type)) {
     const operationId = message.operationId;
+    if (message.type === "OFFSCREEN_INSTRUMENT_CANCEL") {
+      Promise.resolve(handlePadMessage(message)).then(sendResponse);
+      return true;
+    }
     if (operationId && padRenders.has(operationId) && padRenders.get(operationId).promise) {
       padRenders.get(operationId).promise.then(sendResponse);
       return true;

@@ -156,6 +156,155 @@ function isSoundCloudTopFrameSender(sender) {
   }
 }
 
+const INSTRUMENT_OPERATIONS_KEY = "scdl.instrument.operations.v1";
+const INSTRUMENT_OPERATION_TTL_MS = 5 * 60 * 1000;
+const instrumentOperations = new Map();
+const instrumentRenderPromises = new Map();
+let instrumentOperationsLoaded = false;
+let instrumentOperationQueue = Promise.resolve();
+
+function instrumentOwner(sender) {
+  return {
+    tabId: sender?.tab?.id,
+    frameId: Number.isInteger(sender?.frameId) ? sender.frameId : 0,
+    documentId: typeof sender?.documentId === "string" ? sender.documentId : null,
+  };
+}
+
+function sameInstrumentOwner(left, right) {
+  return left?.tabId === right?.tabId && left?.frameId === right?.frameId &&
+    left?.documentId === right?.documentId;
+}
+
+function withInstrumentOperationState(action) {
+  const run = instrumentOperationQueue.then(action);
+  instrumentOperationQueue = run.then(() => {}, () => {});
+  return run;
+}
+
+async function loadInstrumentOperations() {
+  if (instrumentOperationsLoaded) return;
+  instrumentOperationsLoaded = true;
+  const stored = await chrome.storage.session.get(INSTRUMENT_OPERATIONS_KEY).catch(() => ({}));
+  for (const record of stored?.[INSTRUMENT_OPERATIONS_KEY] || []) {
+    if (record && typeof record.id === "string") instrumentOperations.set(record.id, record);
+  }
+}
+
+function pruneInstrumentOperations() {
+  const cutoff = Date.now() - INSTRUMENT_OPERATION_TTL_MS;
+  for (const [id, record] of instrumentOperations) {
+    if (!Number.isFinite(record.updatedAt) || record.updatedAt < cutoff) instrumentOperations.delete(id);
+  }
+  while (instrumentOperations.size > 100) {
+    instrumentOperations.delete(instrumentOperations.keys().next().value);
+  }
+}
+
+async function persistInstrumentOperations() {
+  await chrome.storage.session.set({
+    [INSTRUMENT_OPERATIONS_KEY]: [...instrumentOperations.values()],
+  });
+}
+
+function instrumentRequestSignature(request) {
+  return JSON.stringify({
+    trackUrl: request.trackUrl || null,
+    trimRange: request.trimRange || null,
+    playbackTransform: request.playbackTransform || null,
+    effects: request.effects || null,
+    name: request.name || null,
+  });
+}
+
+async function beginInstrumentOperation(request, sender) {
+  return withInstrumentOperationState(async () => {
+    await loadInstrumentOperations();
+    pruneInstrumentOperations();
+    const id = request.operationId;
+    if (typeof id !== "string" || !/^instrument_[A-Za-z0-9_-]{8,100}$/.test(id)) {
+      throw Object.assign(new Error("Invalid instrument operation."), { code: "invalid_operation" });
+    }
+    const owner = instrumentOwner(sender);
+    const signature = instrumentRequestSignature(request);
+    const existing = instrumentOperations.get(id);
+    if (existing && (!sameInstrumentOwner(existing.owner, owner) || existing.signature !== signature)) {
+      throw Object.assign(new Error("Instrument operation ID conflict."), { code: "operation_conflict" });
+    }
+    if (existing?.state === "cancelled") {
+      throw Object.assign(new Error("Instrument preparation cancelled."), { code: "instrument_cancelled", name: "AbortError" });
+    }
+    const record = existing || { id, owner, signature, state: "pending", updatedAt: Date.now() };
+    record.updatedAt = Date.now();
+    instrumentOperations.set(id, record);
+    await persistInstrumentOperations();
+    return record;
+  });
+}
+
+async function instrumentOperationCancelled(id) {
+  return withInstrumentOperationState(async () => {
+    await loadInstrumentOperations();
+    return instrumentOperations.get(id)?.state === "cancelled";
+  });
+}
+
+async function finishInstrumentOperation(record) {
+  return withInstrumentOperationState(async () => {
+    await loadInstrumentOperations();
+    const current = instrumentOperations.get(record.id);
+    if (current && current.signature === record.signature && sameInstrumentOwner(current.owner, record.owner) &&
+        current.state !== "cancelled") {
+      instrumentOperations.delete(record.id);
+      await persistInstrumentOperations();
+    }
+  });
+}
+
+async function cancelInstrumentOperation(request, sender) {
+  const record = await withInstrumentOperationState(async () => {
+    await loadInstrumentOperations();
+    pruneInstrumentOperations();
+    const current = instrumentOperations.get(request.operationId);
+    if (!current || !sameInstrumentOwner(current.owner, instrumentOwner(sender))) return null;
+    current.state = "cancelled";
+    current.updatedAt = Date.now();
+    await persistInstrumentOperations();
+    return current;
+  });
+  if (!record) return { success: true, cancelled: false, code: "unknown_operation" };
+  await BulkJobManager.cancelLoopInstrument(record.id);
+  return { success: true, cancelled: true, code: "instrument_cancelled" };
+}
+
+async function renderInstrumentOperation(request, sender) {
+  const record = await beginInstrumentOperation(request, sender);
+  const existing = instrumentRenderPromises.get(record.id);
+  if (existing) return existing;
+  const promise = (async () => {
+    try {
+      const access = await playerToolsAccess.authorize(sender, { operation: "play-loop-instrument" });
+      if (!access.allowed) throw new Error("Player Tools Pro is required to play a loop as an instrument.");
+      if (await instrumentOperationCancelled(record.id)) {
+        throw Object.assign(new Error("Instrument preparation cancelled."), { code: "instrument_cancelled", name: "AbortError" });
+      }
+      const trackData = await resolveLoopTrack(request, sender);
+      if (await instrumentOperationCancelled(record.id)) {
+        throw Object.assign(new Error("Instrument preparation cancelled."), { code: "instrument_cancelled", name: "AbortError" });
+      }
+      return await BulkJobManager.renderLoopInstrument(trackData, request.trimRange,
+        request.playbackTransform, request.effects || {}, request.name || `${trackData.title || "Track"} instrument`, request.operationId);
+    } finally {
+      await finishInstrumentOperation(record).catch(() => {});
+    }
+  })();
+  instrumentRenderPromises.set(record.id, promise);
+  promise.finally(() => {
+    if (instrumentRenderPromises.get(record.id) === promise) instrumentRenderPromises.delete(record.id);
+  }).catch(() => {});
+  return promise;
+}
+
 async function requestTopFrameLoopTrack(tabId, trackUrl) {
   if (!Number.isInteger(tabId)) {
     throw new Error(t("soundcloud_tab_not_found"));
@@ -541,10 +690,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  if (["RENDER_LOOP_PAD", "RENDER_LOOP_INSTRUMENT", "GET_LOOP_PAD_LIST", "GET_LOOP_PAD_AUDIO", "STORE_LOOP_PAD_AUDIO"].includes(request.type)) {
+  if (["RENDER_LOOP_PAD", "RENDER_LOOP_INSTRUMENT", "CANCEL_LOOP_INSTRUMENT",
+      "GET_LOOP_PAD_LIST", "GET_LOOP_PAD_AUDIO", "STORE_LOOP_PAD_AUDIO"].includes(request.type)) {
     if (sender.id !== chrome.runtime.id || !sender.tab || !/^https:\/\/soundcloud\.com\//.test(sender.url || "")) {
       sendResponse({ success: false, error: "This action is only available on SoundCloud." });
       return false;
+    }
+    if (request.type === "CANCEL_LOOP_INSTRUMENT") {
+      cancelInstrumentOperation(request, sender)
+        .then(sendResponse)
+        .catch((error) => sendResponse(errorResponse(error)));
+      return true;
     }
     const index = request.index;
     if (!["GET_LOOP_PAD_LIST", "RENDER_LOOP_INSTRUMENT"].includes(request.type) && (!Number.isInteger(index) || index < 0 || index >= 6)) {
@@ -558,18 +714,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: false, error: "Pad samples can be up to 30 seconds long." });
         return false;
       }
-      playerToolsAccess.authorize(sender, { operation: request.type === "RENDER_LOOP_INSTRUMENT" ? "play-loop-instrument" : "save-loop-pad" })
+      if (request.type === "RENDER_LOOP_INSTRUMENT") {
+        renderInstrumentOperation(request, sender)
+          .then(sendResponse)
+          .catch((error) => sendResponse(errorResponse(error)));
+        return true;
+      }
+      playerToolsAccess.authorize(sender, { operation: "save-loop-pad" })
         .then((access) => {
-          if (!access.allowed) throw new Error(request.type === "RENDER_LOOP_INSTRUMENT"
-            ? "Player Tools Pro is required to play a loop as an instrument."
-            : "Player Tools Pro is required to save a loop to a pad.");
+          if (!access.allowed) throw new Error("Player Tools Pro is required to save a loop to a pad.");
           return resolveLoopTrack(request, sender);
         })
-        .then((trackData) => request.type === "RENDER_LOOP_INSTRUMENT"
-          ? BulkJobManager.renderLoopInstrument(trackData, request.trimRange,
-            request.playbackTransform, request.effects || {}, request.name || `${trackData.title || "Track"} instrument`, request.operationId)
-          : BulkJobManager.renderLoopPad(trackData, index, request.trimRange,
-            request.playbackTransform, request.effects || {}, request.name || `${trackData.title || "Track"} loop`, request.operationId))
+        .then((trackData) => BulkJobManager.renderLoopPad(trackData, index, request.trimRange,
+          request.playbackTransform, request.effects || {}, request.name || `${trackData.title || "Track"} loop`, request.operationId))
         .then(sendResponse)
         .catch((error) => sendResponse(errorResponse(error)));
       return true;

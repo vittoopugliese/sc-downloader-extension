@@ -42,7 +42,7 @@ function fixture() {
   const scope = {
     instrumentMode: false, instrumentOctave: 0, instrumentPreparing: false,
     instrumentBuffer: null, instrumentVoice: null, instrumentNoteRevision: 0,
-    instrumentResumePromise: null, instrumentIntentVersion: 0,
+    instrumentResumePromise: null, instrumentIntentVersion: 0, instrumentOperationId: null,
     instrumentSnapshot: null, instrumentVoices: new Set(), padRenderPending: false, padRequestNumber: 0,
     padRequests: new Map(), loopState: { active: true, trackIdentity: 'permalink:track', generation: 1, startMs: 0, endMs: 1000, durationMs: 10000 },
     ui: { panel: { hidden: false } }, document: { hidden: false }, hoveredDrum: null, panelOpenMode: null,
@@ -63,7 +63,7 @@ function fixture() {
   for (const name of ['invalidatePendingInstrumentNotes', 'cleanupInstrumentVoice', 'releaseInstrumentVoice',
     'stopInstrumentVoice', 'stopAllInstrumentVoices', 'setInstrumentMode', 'loopMatchesInstrumentSnapshot',
     'normalizedInstrumentNumber', 'buildInstrumentDescriptor', 'disableInstrument', 'exitInstrument',
-    'requestPad', 'toggleLoopInstrument', 'playInstrumentNote', 'closePanel']) {
+    'requestPad', 'cancelInstrumentRequest', 'toggleLoopInstrument', 'playInstrumentNote', 'closePanel']) {
     vm.runInContext(extract(name), scope);
   }
   return { scope, audio, state, effectsState, starts, messages, timers };
@@ -96,14 +96,13 @@ async function main() {
     await flush();
     assert.equal(messages.length, 1);
     scope.disableInstrument();
-    assert.equal(messages.length, 1); // No cancel message.
-    assert.equal(scope.padRequests.size, 1);
-    assert.equal(timers.size, 1);
-    const request = [...scope.padRequests.values()][0];
-    request.resolve({ instrument: { dataUrl: 'unused' } });
+    assert.equal(messages.length, 2);
+    assert.equal(messages[1].action, 'cancel-instrument');
+    assert.equal(scope.padRequests.size, 0);
+    assert.equal(timers.size, 0);
     await pending;
-    assert.equal(scope.instrumentMode, false); // Late success is correctly ignored.
-    console.log('P1: local cancel leaves request/timer and sends no cancellation; late result is ignored');
+    assert.equal(scope.instrumentMode, false);
+    console.log('P1: local cancel clears request/timer and dispatches cancellation');
   }
   {
     const { scope, audio, starts } = fixture();
@@ -141,7 +140,6 @@ async function main() {
     await flush();
     assert.equal(messages.length, 1);
     scope.disableInstrument();
-    [...scope.padRequests.values()][0].resolve({});
     await pending;
     assert.equal(scope.instrumentMode, false);
     console.log('P5: changed rate/pitch/FX require a fresh render');
