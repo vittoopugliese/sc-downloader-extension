@@ -1,4 +1,10 @@
 {
+  "piano_mode_status": {
+    "message": "Piano mode on · ← → octave ({octave})"
+  },
+  "piano_mode_help": {
+    "message": "Play the selected loop with your keyboard, using physical QWERTY key positions. At octave 0, Q and comma play C5 (the original sample); Z plays C4. The Z and Q rows play white notes; the A and number rows add sharps. Every mapped key sounds: the gaps repeat nearby notes. Semicolon, quote, brackets, comma, period, slash, minus and equals are included. ← lowers one octave; → raises one (range −4 to +3). The number in the message shows the octave shift. Higher notes play faster and shorter; lower notes play slower and longer. Each note replaces the previous one. Escape exits; entering again resets the octave. The track stays paused. Typing in text fields and Ctrl/Cmd/Alt shortcuts remain available."
+  },
   "app_name": {
     "message": "SoundCloud Track Downloader"
   },

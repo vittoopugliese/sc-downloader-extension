@@ -41,6 +41,10 @@ if (window.top === window) {
 }
 
 function exposeTempoControlAssets() {
+  document.documentElement?.setAttribute?.("data-scdl-piano-copy", JSON.stringify({
+    status: t("piano_mode_status"),
+    help: t("piano_mode_help"),
+  }));
   document.documentElement?.setAttribute?.(
     EXTENSION_LOGO_ATTRIBUTE,
     chrome.runtime.getURL("assets/LooperPlayerToolkit.png")

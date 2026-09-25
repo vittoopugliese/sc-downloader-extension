@@ -41,6 +41,7 @@
     path.filter((node) => node?.nodeType === Node.DOCUMENT_FRAGMENT_NODE && node.host).forEach(listen);
     return path.find((node) =>
       node?.tagName === "BUTTON" ||
+      node?.hasAttribute?.("data-scdl-tooltip") ||
       (node?.tagName === "SELECT" && node.classList.contains("popup-control-btn")) ||
       (node?.tagName === "INPUT" && node.classList.contains("popup-control-input"))
     ) || null;
@@ -76,7 +77,7 @@
     hide();
     if (!button || button.hidden) return;
     const title = button.getAttribute("title");
-    const label = title || button.getAttribute("aria-label") || button.textContent?.trim();
+    const label = button.getAttribute("data-scdl-tooltip") || title || button.getAttribute("aria-label") || button.textContent?.trim();
     if (!label) return;
     activeButton = button;
     savedTitle = title;
@@ -84,7 +85,9 @@
     showTimer = setTimeout(() => {
       if (activeButton !== button || !button.isConnected) return;
       mount();
-      tooltip.textContent = label;
+      tooltip.style.maxWidth = button.hasAttribute("data-scdl-tooltip")
+        ? "min(440px, calc(100vw - 16px))" : "min(280px, calc(100vw - 16px))";
+      tooltip.textContent = button.getAttribute("data-scdl-tooltip") || label;
       position();
       tooltip.style.visibility = "visible";
     }, SHOW_DELAY_MS);

@@ -133,6 +133,7 @@
   let selectingLoopPad = null;
   let padRequestNumber = 0;
   let instrumentMode = false;
+  let instrumentOctave = 0;
   let instrumentPreparing = false;
   let instrumentBuffer = null;
   let instrumentVoice = null;
@@ -325,9 +326,27 @@
 
   function showDrumError(message) {
     if (!ui) return;
+    ui.drumMessage.removeAttribute("data-scdl-tooltip");
+    ui.drumMessage.removeAttribute("tabindex");
     ui.drumMessage.textContent = message;
     ui.drumMessage.hidden = !message;
   }
+
+  function renderInstrumentMessage() {
+    if (!ui || !instrumentMode) return;
+    let copy = {};
+    try { copy = JSON.parse(document.documentElement.getAttribute("data-scdl-piano-copy") || "{}"); } catch {}
+    const octave = instrumentOctave >= 0 ? `+${instrumentOctave}` : String(instrumentOctave);
+    const status = typeof copy.status === "string" && copy.status !== "piano_mode_status"
+      ? copy.status : "Piano mode on · ← → octave ({octave})";
+    showDrumError(status.replace("{octave}", octave));
+    if (typeof copy.help === "string" && copy.help !== "piano_mode_help") {
+      ui.drumMessage.setAttribute("data-scdl-tooltip", copy.help);
+      ui.drumMessage.tabIndex = 0;
+    }
+  }
+
+  document.addEventListener(EXTENSION_ASSETS_EVENT, renderInstrumentMessage);
 
   function setSamplerCollapsed(collapsed) {
     samplerCollapsed = Boolean(collapsed);
@@ -359,6 +378,7 @@
   }
 
   function setInstrumentMode(enabled, { clearBuffer = false, message = "" } = {}) {
+    if (enabled && !instrumentMode) instrumentOctave = 0;
     instrumentMode = Boolean(enabled);
     if (!instrumentMode) stopInstrumentVoice();
     if (clearBuffer) {
@@ -370,6 +390,7 @@
       ui.instrumentToggle.classList.toggle("is-preparing", instrumentPreparing);
     }
     if (message || !instrumentMode) showDrumError(message);
+    if (instrumentMode) renderInstrumentMessage();
     renderLoop();
   }
 
@@ -400,7 +421,9 @@
     if (!await authorizePlayerTools("play-loop-instrument", "loopInstrument")) return;
     if (!capability("loopInstrument") || !loopState.active || padRenderPending) return;
     if (instrumentBuffer && loopMatchesInstrumentSnapshot()) {
-      setInstrumentMode(true, { message: "Piano mode: Z = C3, A = C4, Q = C5. Press Escape to exit." });
+      const audio = controller.getActiveAudio();
+      if (audio && !audio.paused) audio.pause();
+      setInstrumentMode(true);
       return;
     }
     const state = controller.snapshot();
@@ -410,6 +433,8 @@
       return;
     }
     cancelLoopPadSelection();
+    const audio = controller.getActiveAudio();
+    if (audio && !audio.paused) audio.pause();
     const intentVersion = ++instrumentIntentVersion;
     const snapshot = {
       trackIdentity: loopState.trackIdentity,
@@ -438,7 +463,7 @@
       if (intentVersion !== instrumentIntentVersion || !loopMatchesInstrumentSnapshot(snapshot)) return;
       instrumentBuffer = buffer;
       instrumentPreparing = false;
-      setInstrumentMode(true, { message: "Piano mode: Z = C3, A = C4, Q = C5. Press Escape to exit." });
+      setInstrumentMode(true);
     } catch (error) {
       if (intentVersion !== instrumentIntentVersion) return;
       instrumentPreparing = false;
@@ -558,11 +583,21 @@
       }
       const target = event.composedPath()[0];
       if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName || "")) return;
-      const midiNote = globalThis.SCSamplerCore.midiForKey(event.key);
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (!event.repeat) {
+          instrumentOctave = globalThis.SCSamplerCore.shiftOctave(instrumentOctave, event.key === "ArrowLeft" ? -1 : 1);
+          stopInstrumentVoice();
+          renderInstrumentMessage();
+        }
+        return;
+      }
+      const midiNote = globalThis.SCSamplerCore.midiForEvent(event);
       if (midiNote === null) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (!event.repeat) playInstrumentNote(midiNote);
+      if (!event.repeat) playInstrumentNote(midiNote + instrumentOctave * 12);
       return;
     }
     if (event.repeat) return;

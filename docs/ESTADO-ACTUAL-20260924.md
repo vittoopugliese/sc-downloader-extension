@@ -45,7 +45,7 @@ Este registro tiene precedencia sobre estados y órdenes históricos. [10 — ch
 5. **C7 operación:** embudo real separado de test, baseline por versión, errores/refunds, soporte y conciliación del primer payout cuando corresponda.
 6. **M01:** resolver el requisito por cuenta verificada contra reinstalación. Hoy sigue siendo trial por installation ID/perfil; D1 y firmas no identifican una persona. Definir identidad/migración/consentimiento o diferimiento explícito.
 
-**Proyectos posteriores, no requisitos nuevos para cobrar:** presets completos con nombre y loops guardados; optimización/colecciones de terceros de Explorer; biblioteca/múltiples regiones/undo/BPM/práctica/batch del Looper; nuevos FX, teclado y slices; SEO multipágina, piezas de video y experimentos de precio. No se archivan como implementados.
+**Proyectos posteriores, no requisitos nuevos para cobrar:** presets completos con nombre y loops guardados; optimización/colecciones de terceros de Explorer; biblioteca/múltiples regiones/undo/BPM/práctica/batch del Looper; pendientes del instrumento y slices; SEO multipágina, piezas de video y experimentos de precio. Actualización 25/09: los nuevos FX y el teclado monofónico con pitch ya tienen implementación; los pendientes y gates se distinguen en el plan del instrumento. Los pads se mantienen siempre en seis.
 
 ## Inventario documental completo
 
@@ -76,7 +76,7 @@ Este registro tiene precedencia sobre estados y órdenes históricos. [10 — ch
 | [Header/reset](archive/closed-20260924/PLAYER-TOOLS-HEADER-PLAN-20260922.md) | Cerrado técnico; archivado. |
 | [Player Tools — producto](PLAYER-TOOLS-PRODUCT-AND-TECHNICAL-PLAN-20260912.md) | Base implementada; contrato posterior en 01/10. QA/evolución abiertos. |
 | [Player Tools — foundation](PLAYER-TOOLS-FOUNDATION-HANDOFF-20260913.md) | Handoff histórico; autoridad evolucionó a D1/ES256. |
-| [Instrumento/FX/sampler](PLAYER-TOOLS-INSTRUMENT-FX-SAMPLER-PLAN-20260923.md) | Borrador abierto; seis pads actuales no son teclado/16 pads/slices. |
+| [Instrumento/FX/sampler](PLAYER-TOOLS-INSTRUMENT-FX-SAMPLER-PLAN-20260923.md) | Actualizado 25/09: FX y teclado monofónico implementados; seis pads fijos. Slices y otros pendientes detallados en el plan. |
 | [Looper](LOOPER-PRODUCT-IMPLEMENTATION-PLAN-20260920.md) | Backlog abierto; base A–B/export existente. |
 | [Explorer — implementación](LIKES-EXPLORER-IMPLEMENTATION-PLAN-20260912.md) | V1 implementada; QA real y evolución abiertos. |
 | [Explorer — handoff](LIKES-EXPLORER-HANDOFF-20260916.md) | Histórico; corregidos trial y retirada de bookmarks. |

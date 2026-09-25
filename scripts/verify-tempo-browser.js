@@ -785,25 +785,86 @@ async function main() {
     const instrumentToggle = host.locator(".loop-instrument");
     assert.equal(await instrumentToggle.isDisabled(), false,
       "Piano mode must be available while a loop selection is active.");
+    await page.locator("audio").evaluate((audio) => {
+      window.instrumentSourcePaused = false;
+      window.instrumentPauseCalls = 0;
+      Object.defineProperty(audio, "paused", { configurable: true, get: () => window.instrumentSourcePaused });
+      window.originalAudioPause = audio.pause;
+      audio.pause = () => { window.instrumentPauseCalls++; window.instrumentSourcePaused = true; };
+    });
     await instrumentToggle.click();
     await page.waitForFunction(() => document.querySelector("#scdl-tempo-control")?.shadowRoot
       ?.querySelector(".loop-instrument")?.getAttribute("aria-pressed") === "true");
     const instrumentRender = await page.evaluate(() => window.instrumentRenderRequests.at(-1));
+    assert.equal(await page.evaluate(() => window.instrumentSourcePaused), true);
+    assert.equal(await page.evaluate(() => window.instrumentPauseCalls), 1);
     assert.deepEqual(instrumentRender.trimRange, { startMs: 12345, endMs: 20678, durationMs: 120000 });
     assert.equal(instrumentRender.playbackTransform.rate, 1.25);
     assert.equal(instrumentRender.effects.reverb, 24);
     await host.locator(".brand-name").hover();
-    await page.keyboard.press("a");
-    await page.waitForFunction(() => window.drumStarts === 5);
     await page.keyboard.press("q");
+    await page.waitForFunction(() => window.drumStarts === 5);
+    await page.keyboard.press("i");
     await page.waitForFunction(() => window.drumStarts === 6);
     assert.deepEqual(await page.evaluate(() => window.sourcePlaybackRates.slice(-2)), [1, 2],
-      "A/Q must play the loop at C4/C5 without also triggering sampler pads.");
+      "Q/I must play the original loop and its upper octave without also triggering sampler pads.");
+    for (const locale of ["en", "es", "de", "ru", "pt_BR"]) {
+      const messages = JSON.parse(fs.readFileSync(path.join(projectRoot, "_locales", locale, "messages.json"), "utf8"));
+      const copy = { status: messages.piano_mode_status.message, help: messages.piano_mode_help.message };
+      await page.evaluate((copy) => {
+        document.documentElement.setAttribute("data-scdl-piano-copy", JSON.stringify(copy));
+        document.dispatchEvent(new CustomEvent("scdl:extension-assets-ready"));
+      }, copy);
+      assert.equal(await host.locator(".drum-message").textContent(), copy.status.replace("{octave}", "+0"));
+      await host.locator(".drum-message").hover();
+      await page.waitForFunction(() => document.querySelector("#scdl-fast-tooltip")?.style.visibility === "visible");
+      assert.equal(await page.locator("#scdl-fast-tooltip").textContent(), copy.help);
+      await host.locator(".brand-name").hover();
+    }
     await page.keyboard.press("Escape");
     assert.equal(await instrumentToggle.getAttribute("aria-pressed"), "false");
     assert.equal(await panel.isVisible(), true, "Escape must leave piano mode without closing the panel.");
+    await instrumentToggle.click();
+    await page.waitForFunction(() => document.querySelector("#scdl-tempo-control")?.shadowRoot
+      ?.querySelector(".loop-instrument")?.getAttribute("aria-pressed") === "true");
+    assert.equal(await page.evaluate(() => window.instrumentPauseCalls), 1,
+      "Reactivating a cached instrument must leave an already paused source alone.");
+    const startsBeforePunctuation = await page.evaluate(() => window.drumStarts);
+    for (const key of ["Comma", "Period", "Shift+Slash"]) await page.keyboard.press(key);
+    await page.waitForFunction((starts) => window.drumStarts === starts + 3, startsBeforePunctuation);
+    const punctuationRates = await page.evaluate(() => window.sourcePlaybackRates.slice(-3));
+    for (const [index, semitones] of [0, 2, 4].entries()) {
+      assert.ok(Math.abs(punctuationRates[index] - 2 ** (semitones / 12)) < 1e-6);
+    }
+    await page.keyboard.press("Escape");
+    const startsBeforeOctaves = await page.evaluate(() => window.drumStarts);
+    await instrumentToggle.click();
+    await page.waitForFunction(() => document.querySelector("#scdl-tempo-control")?.shadowRoot
+      ?.querySelector(".loop-instrument")?.getAttribute("aria-pressed") === "true");
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("q");
+    await page.waitForFunction((n) => window.drumStarts === n + 1, startsBeforeOctaves);
+    assert.equal(await page.evaluate(() => window.sourcePlaybackRates.at(-1)), 0.5);
+    assert.match(await host.locator(".drum-message").textContent(), /-1/);
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("q");
+    await page.waitForFunction((n) => window.drumStarts === n + 2, startsBeforeOctaves);
+    assert.equal(await page.evaluate(() => window.sourcePlaybackRates.at(-1)), 2);
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => { window.instrumentSourcePaused = false; });
+    await instrumentToggle.click();
+    await page.waitForFunction(() => window.instrumentPauseCalls === 2);
+    assert.match(await host.locator(".drum-message").textContent(), /\+0/);
+    assert.equal(await page.evaluate(() => window.instrumentRenderRequests.length), 1,
+      "Cached activation must pause playback without rendering again.");
+    await page.keyboard.press("Escape");
+    await page.locator("audio").evaluate((audio) => {
+      delete audio.paused;
+      audio.pause = window.originalAudioPause;
+    });
     await page.keyboard.press("a");
-    await page.waitForFunction(() => window.drumStarts === 7);
+    await page.waitForFunction(() => window.drumStarts === 12);
     await host.locator("#scdl-effect-reverb").evaluate((slider) => { slider.value = "0"; slider.dispatchEvent(new Event("change", { bubbles: true })); });
     await host.locator("#scdl-effect-delay").evaluate((slider) => { slider.value = "0"; slider.dispatchEvent(new Event("change", { bubbles: true })); });
     await host.locator(".waveform-toggle").evaluate((button) => button.click());
