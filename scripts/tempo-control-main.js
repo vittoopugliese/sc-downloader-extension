@@ -137,8 +137,13 @@
   let instrumentPreparing = false;
   let instrumentBuffer = null;
   let instrumentVoice = null;
+  let instrumentNoteRevision = 0;
+  let instrumentResumePromise = null;
   let instrumentIntentVersion = 0;
   let instrumentSnapshot = null;
+  const instrumentVoices = new Set();
+  const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+  let renderedPlayingNote = "";
   const padRequests = new Map();
   const drumPads = DRUM_DEFAULTS.map((defaultPad) => ({ ...defaultPad, buffer: null, loading: null, customName: "", saved: false, busy: false, version: 0 }));
   try {
@@ -335,9 +340,11 @@
 
   function renderPlayingNote(midiNote = null) {
     if (!ui) return;
-    const names = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
-    ui.playingNote.textContent = Number.isInteger(midiNote)
-      ? `${names[midiNote % 12]}${Math.floor(midiNote / 12) - 1}` : "";
+    const value = Number.isInteger(midiNote)
+      ? `${NOTE_NAMES[midiNote % 12]}${Math.floor(midiNote / 12) - 1}` : "";
+    if (value === renderedPlayingNote) return;
+    renderedPlayingNote = value;
+    ui.playingNote.textContent = value;
   }
 
   function renderInstrumentMessage() {
@@ -372,18 +379,53 @@
     return drumAudioContext;
   }
 
-  function stopInstrumentVoice(releaseMs = 8) {
-    const voice = instrumentVoice;
-    instrumentVoice = null;
-    renderPlayingNote();
-    if (!voice) return;
+  function invalidatePendingInstrumentNotes() {
+    instrumentNoteRevision += 1;
+  }
+
+  function cleanupInstrumentVoice(voice) {
+    if (!voice || voice.cleaned) return;
+    voice.cleaned = true;
+    if (voice.cleanupTimer !== null) clearTimeout(voice.cleanupTimer);
+    voice.cleanupTimer = null;
+    voice.source.onended = null;
+    try { voice.source.disconnect(); } catch {}
+    try { voice.gain.disconnect(); } catch {}
+    instrumentVoices.delete(voice);
+    if (instrumentVoice === voice) {
+      instrumentVoice = null;
+      renderPlayingNote();
+    }
+  }
+
+  function releaseInstrumentVoice(voice, releaseMs = 8) {
+    if (!voice || voice.releasing || voice.cleaned) return;
+    voice.releasing = true;
     const now = voice.context.currentTime;
     try {
       voice.gain.gain.cancelScheduledValues(now);
       voice.gain.gain.setValueAtTime(Math.max(0.0001, voice.gain.gain.value), now);
       voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + releaseMs / 1000);
       voice.source.stop(now + releaseMs / 1000 + 0.002);
-    } catch {}
+      voice.cleanupTimer = setTimeout(() => cleanupInstrumentVoice(voice), releaseMs + 100);
+    } catch {
+      cleanupInstrumentVoice(voice);
+    }
+  }
+
+  function stopInstrumentVoice(releaseMs = 8) {
+    invalidatePendingInstrumentNotes();
+    const voice = instrumentVoice;
+    instrumentVoice = null;
+    renderPlayingNote();
+    releaseInstrumentVoice(voice, releaseMs);
+  }
+
+  function stopAllInstrumentVoices(releaseMs = 8) {
+    invalidatePendingInstrumentNotes();
+    instrumentVoice = null;
+    renderPlayingNote();
+    for (const voice of instrumentVoices) releaseInstrumentVoice(voice, releaseMs);
   }
 
   function setInstrumentMode(enabled, { clearBuffer = false, message = "" } = {}) {
@@ -417,6 +459,13 @@
     setInstrumentMode(false, { clearBuffer: true, message });
   }
 
+  function exitInstrument({ clearBuffer = false, message = "" } = {}) {
+    instrumentIntentVersion += 1;
+    instrumentPreparing = false;
+    setInstrumentMode(false, { clearBuffer, message });
+    stopAllInstrumentVoices();
+  }
+
   async function toggleLoopInstrument() {
     if (instrumentMode) {
       setInstrumentMode(false, { message: "" });
@@ -427,33 +476,41 @@
       return;
     }
     if (!loopState.active || padRenderPending) return;
-    if (!await authorizePlayerTools("play-loop-instrument", "loopInstrument")) return;
-    if (!capability("loopInstrument") || !loopState.active || padRenderPending) return;
+    const intentVersion = ++instrumentIntentVersion;
+    instrumentPreparing = true;
+    setInstrumentMode(false, { message: "Preparing loop instrument…" });
+    const authorized = await authorizePlayerTools("play-loop-instrument", "loopInstrument");
+    if (intentVersion !== instrumentIntentVersion || ui?.panel.hidden || document.hidden) return;
+    if (!authorized || !capability("loopInstrument") || !loopState.active || padRenderPending) {
+      instrumentPreparing = false;
+      renderLoop();
+      return;
+    }
     if (instrumentBuffer && loopMatchesInstrumentSnapshot()) {
       const audio = controller.getActiveAudio();
       if (audio && !audio.paused) audio.pause();
+      instrumentPreparing = false;
       setInstrumentMode(true);
       return;
     }
     const state = controller.snapshot();
     const duration = (loopState.endMs - loopState.startMs) / state.effectiveRate;
     if (duration > 30000) {
+      instrumentPreparing = false;
       showDrumError("Instrument samples can be up to 30 seconds long. Shorten the loop or increase its speed.");
+      renderLoop();
       return;
     }
     cancelLoopPadSelection();
     const audio = controller.getActiveAudio();
     if (audio && !audio.paused) audio.pause();
-    const intentVersion = ++instrumentIntentVersion;
     const snapshot = {
       trackIdentity: loopState.trackIdentity,
       generation: loopState.generation,
       startMs: loopState.startMs,
       endMs: loopState.endMs,
     };
-    instrumentPreparing = true;
     instrumentSnapshot = snapshot;
-    setInstrumentMode(false, { message: "Preparing loop instrument…" });
     try {
       const operationId = `instrument_${Date.now()}_${++padRequestNumber}`;
       const result = await requestPad("instrument", {
@@ -483,29 +540,44 @@
 
   async function playInstrumentNote(midiNote) {
     if (!capability("loopInstrument") || !instrumentMode || !instrumentBuffer) return;
+    const noteRevision = ++instrumentNoteRevision;
+    const buffer = instrumentBuffer;
     try {
       const context = getDrumAudioContext();
-      await context.resume();
-      if (!capability("loopInstrument") || !instrumentMode || !instrumentBuffer) return;
-      stopInstrumentVoice();
+      if (context.state !== "running") {
+        if (!instrumentResumePromise) {
+          instrumentResumePromise = Promise.resolve(context.resume())
+            .finally(() => { instrumentResumePromise = null; });
+        }
+        await instrumentResumePromise;
+      }
+      if (noteRevision !== instrumentNoteRevision || !capability("loopInstrument") ||
+          !instrumentMode || instrumentBuffer !== buffer || ui?.panel.hidden || document.hidden) return;
+      const previousVoice = instrumentVoice;
+      instrumentVoice = null;
+      releaseInstrumentVoice(previousVoice);
       const source = context.createBufferSource();
       const gain = context.createGain();
-      source.buffer = instrumentBuffer;
+      source.buffer = buffer;
       source.playbackRate.value = globalThis.SCSamplerCore.playbackRateForMidi(midiNote);
       gain.gain.setValueAtTime(0.0001, context.currentTime);
       gain.gain.exponentialRampToValueAtTime(1, context.currentTime + 0.004);
       source.connect(gain).connect(context.destination);
-      const voice = { source, gain, context };
+      const voice = { source, gain, context, cleanupTimer: null, releasing: false, cleaned: false };
+      instrumentVoices.add(voice);
       instrumentVoice = voice;
       source.onended = () => {
-        if (instrumentVoice === voice) {
-          instrumentVoice = null;
-          renderPlayingNote();
-        }
+        cleanupInstrumentVoice(voice);
       };
-      source.start();
-      renderPlayingNote(midiNote);
+      try {
+        source.start();
+        renderPlayingNote(midiNote);
+      } catch (error) {
+        cleanupInstrumentVoice(voice);
+        throw error;
+      }
     } catch (error) {
+      if (noteRevision !== instrumentNoteRevision) return;
       showDrumError(error?.message || "Could not play the loop instrument.");
     }
   }
@@ -2393,8 +2465,7 @@
     panelOpenMode = null;
     hoveredDrum = null;
     cancelLoopPadSelection();
-    if (instrumentPreparing) disableInstrument("");
-    else if (instrumentMode) setInstrumentMode(false, { message: "" });
+    exitInstrument({ message: "" });
     setPanelOpen(false);
   }
 
@@ -2711,9 +2782,14 @@
       event.preventDefault();
       releaseEchoFreeze();
     });
-    window.addEventListener("blur", releaseEchoFreeze);
+    const exitForPageLifecycle = () => {
+      releaseEchoFreeze();
+      exitInstrument({ message: "" });
+    };
+    window.addEventListener("blur", exitForPageLifecycle);
+    window.addEventListener("pagehide", exitForPageLifecycle);
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) releaseEchoFreeze();
+      if (document.hidden) exitForPageLifecycle();
     });
     root.querySelectorAll(".preset").forEach((button) => {
       if (button.classList.contains("custom-preset")) return;

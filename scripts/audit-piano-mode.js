@@ -1,5 +1,4 @@
-// Characterization of known defects, not a regression gate. After fixes these
-// assertions should fail and be replaced with assertions of correct behavior.
+// Focused regression coverage for the piano-mode races from the mitigation plan.
 // Executes the actual functions from MAIN with controlled external dependencies.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -34,10 +33,11 @@ function fixture() {
   const state = { effectiveRate: 1, preservePitch: false };
   const scope = {
     instrumentMode: false, instrumentOctave: 0, instrumentPreparing: false,
-    instrumentBuffer: null, instrumentVoice: null, instrumentIntentVersion: 0,
-    instrumentSnapshot: null, padRenderPending: false, padRequestNumber: 0,
+    instrumentBuffer: null, instrumentVoice: null, instrumentNoteRevision: 0,
+    instrumentResumePromise: null, instrumentIntentVersion: 0,
+    instrumentSnapshot: null, instrumentVoices: new Set(), padRenderPending: false, padRequestNumber: 0,
     padRequests: new Map(), loopState: { active: true, trackIdentity: 'permalink:track', generation: 1, startMs: 0, endMs: 1000, durationMs: 10000 },
-    ui: { panel: { hidden: false } }, hoveredDrum: null, panelOpenMode: null,
+    ui: { panel: { hidden: false } }, document: { hidden: false }, hoveredDrum: null, panelOpenMode: null,
     capability: () => true, authorizePlayerTools: async () => true,
     controller: { snapshot: () => state, getActiveAudio: () => ({ paused: true }) },
     effectsController: { snapshot: () => ({ reverb: 0 }) },
@@ -46,11 +46,14 @@ function fixture() {
     clearHoverTimers() {}, cancelLoopPadSelection() {}, setPanelOpen(value) { scope.ui.panel.hidden = !value; },
     window: { postMessage: value => messages.push(value) }, location: { origin: 'https://soundcloud.com' },
     setTimeout(callback) { const id = timers.size + 1; timers.set(id, callback); return id; },
+    clearTimeout(id) { timers.delete(id); },
     fetch: async () => ({ arrayBuffer: async () => new ArrayBuffer(0) }),
     SCSamplerCore: { playbackRateForMidi: note => 2 ** ((note - 72) / 12) },
   };
   vm.createContext(scope);
-  for (const name of ['stopInstrumentVoice', 'setInstrumentMode', 'loopMatchesInstrumentSnapshot', 'disableInstrument', 'requestPad', 'toggleLoopInstrument', 'playInstrumentNote', 'closePanel']) {
+  for (const name of ['invalidatePendingInstrumentNotes', 'cleanupInstrumentVoice', 'releaseInstrumentVoice',
+    'stopInstrumentVoice', 'stopAllInstrumentVoices', 'setInstrumentMode', 'loopMatchesInstrumentSnapshot',
+    'disableInstrument', 'exitInstrument', 'requestPad', 'toggleLoopInstrument', 'playInstrumentNote', 'closePanel']) {
     vm.runInContext(extract(name), scope);
   }
   return { scope, audio, state, starts, messages, timers };
@@ -81,8 +84,8 @@ async function main() {
     scope.stopInstrumentVoice(); // Same stop used by octave change.
     resume.resolve();
     await pending;
-    assert.equal(starts.length, 1);
-    console.log('P3: one source starts after stop while resume was pending');
+    assert.equal(starts.length, 0);
+    console.log('P3: stop invalidates a note while resume is pending');
   }
   {
     const { scope, audio, starts } = fixture();
@@ -93,8 +96,8 @@ async function main() {
     const notes = [72, 74, 76].map(note => scope.playInstrumentNote(note));
     resume.resolve();
     await Promise.all(notes);
-    assert.equal(starts.length, 3);
-    console.log('P3: all three pending notes start, rather than only the last');
+    assert.equal(starts.length, 1);
+    console.log('P3: only the last pending note starts after resume');
   }
   {
     const { scope, state, messages } = fixture();
@@ -116,11 +119,10 @@ async function main() {
     const second = scope.toggleLoopInstrument();
     auth.resolve(true);
     await flush();
-    assert.equal(messages.length, 2);
-    scope.disableInstrument();
-    for (const request of scope.padRequests.values()) request.resolve({});
+    assert.equal(messages.length, 0);
     await Promise.all([first, second]);
-    console.log('P1.a: two clicks awaiting authorization dispatch two renders');
+    assert.equal(scope.instrumentMode, false);
+    console.log('P1.a: a second click cancels authorization before render dispatch');
   }
   {
     const { scope, messages } = fixture();
@@ -130,12 +132,11 @@ async function main() {
     scope.closePanel();
     auth.resolve(true);
     await flush();
-    assert.equal(messages.length, 1);
-    [...scope.padRequests.values()][0].resolve({ instrument: { dataUrl: 'mock' } });
+    assert.equal(messages.length, 0);
     await pending;
     assert.equal(scope.ui.panel.hidden, true);
-    assert.equal(scope.instrumentMode, true);
-    console.log('P1.b: authorization completing after panel close activates hidden piano mode');
+    assert.equal(scope.instrumentMode, false);
+    console.log('P1.b: closing during authorization prevents hidden piano mode');
   }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
