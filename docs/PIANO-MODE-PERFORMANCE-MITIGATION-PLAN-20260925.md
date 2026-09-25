@@ -1,8 +1,8 @@
 # Piano mode: mitigación de rendimiento y ciclo de vida
 
 Fecha: 25/09/2026. Base inspeccionada: `cd8fd3c`.
-Estado: **plan técnico; las mitigaciones todavía no están implementadas**.
-Alcance original: documentar el plan. Auditoría posterior: validar los hallazgos y ampliar la evidencia, sin implementar mitigaciones ni crear commits. La implementación se divide en etapas verificables.
+Estado: **mitigaciones P1–P5 implementadas y verificadas localmente**.
+Alcance original: documentar el plan. La auditoría posterior validó los hallazgos y amplió la evidencia; la implementación del 25/09/2026 cerró las etapas funcionales y agregó regresiones automatizadas.
 
 ## 1. Objetivo y límites
 
@@ -62,7 +62,7 @@ Se agregan como variantes de P1, porque comparten su causa y su corrección; no 
 
 Ejecutado en esta auditoría:
 
-- `node scripts/audit-piano-mode.js`: **6 escenarios reproducidos** (P1, dos variantes de P3, P5, P1.a y P1.b). El script extrae y ejecuta las funciones reales de MAIN, con autorización/resume/transporte/audio controlados. No copia una implementación alternativa de esas funciones ni modifica producción. Es una **caracterización de defectos**, fuera del gate `verify-*`: después de corregirlos sus aserciones deben reemplazarse por expectativas de comportamiento correcto. No mide audio real ni demuestra el aborto del fetch remoto.
+- `node scripts/audit-piano-mode.js`: inicialmente reprodujo **6 escenarios** (P1, dos variantes de P3, P5, P1.a y P1.b). Ahora contiene las expectativas corregidas y se ejecuta desde `verify-piano-mode.js` como parte de `npm test`. El script extrae y ejecuta las funciones reales de MAIN con autorización, `resume()`, transporte y audio controlados. La cancelación de offscreen tiene además un verificador dedicado.
 - `npm run test:e2e:tempo`: **pasó** en Chromium headless, incluida la cobertura existente de piano, mapa de notas, octavas, idiomas y reutilización del buffer.
 
 P2/P4 se confirman por flujo de código; quedan pendientes los contadores de DOM/canvas, la reproducción de blur/hidden con audio real y el perfil de rendimiento de E0/E5. No se ejecutó la batería completa de release: esta entrega cambia documentación y agrega el reproductor de auditoría, sin cambiar el código de producción. No se requiere publicación para corregir los hallazgos en una rama local.
@@ -257,6 +257,21 @@ Los contadores son de test/desarrollo: no registrar cada tecla en producción ni
 ## 11. Rollback y cierre
 
 Rollback por etapa mediante revert del commit concreto. No cambia IndexedDB ni borra samples. Revertir en conjunto ambos extremos de cualquier protocolo nuevo; una cancelación no soportada debe seguir invalidando localmente y descartando resultados viejos sin romper playback.
+
+## 12. Implementación y resultado
+
+Implementado el 25/09/2026 en commits separados y revertibles:
+
+| Etapa | Commit | Resultado |
+| --- | --- | --- |
+| Evidencia | `3b48e47` | Plan revalidado y reproductor controlado de las seis carreras originales. |
+| E1 | `26f6253` | Revisión de note-ons, un solo `resume()` compartido, cleanup de nodos y salida centralizada por cierre, blur, hidden y pagehide. |
+| E2 | `4e0b1eb` | Descriptor canónico completo para pista, rango, duración, rate, Keep Tone, bypass, FX avanzados y EQ; el request y la firma usan la misma captura. |
+| E3 | `0d888d2` | Cancelación MAIN → content → background → cola → offscreen, ownership por tab/frame/document, tombstones acotados, abort de fetch y FileReader y deduplicación en curso. |
+| E4 | `c61562c` | Presentación comparada, commits agrupados por frame, canvas estático separado del playhead y supresión de draws con panel/sección/documento ocultos. |
+| Gate | `2a3264d` | El fixture E2E restablece su autoridad en memoria si Manifest V3 reinicia el service worker. |
+
+La regresión de navegador mide el caso estable pausado después del calentamiento: durante 1 s de polling hubo **0 redibujos del canvas estático y 0 mutaciones de los controles del loop**. P1 también verifica cancelación activa y previa al render, propiedad entre pestañas y deduplicación. No se atribuye una cifra de mejora de CPU/RAM: no se realizó un perfil reproducible en SoundCloud real ni una medición de memoria nativa de audio.
 
 Cerrar cada P1–P5 sólo con sus pruebas y evidencia. Entrega final de implementación: commits, resultados de comandos, reporte de perfil con límites, QA audible y actualización de este documento. No afirmar cancelación instantánea de decode/render nativo ni ausencia de fugas sólo porque pasen unitarios.
 

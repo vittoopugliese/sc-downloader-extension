@@ -825,9 +825,10 @@ async function main() {
       assert.equal(await page.locator("#scdl-fast-tooltip").textContent(), copy.help);
       await host.locator(".brand-name").hover();
     }
-    await page.keyboard.press("Escape");
+    await page.evaluate(() => window.dispatchEvent(new Event("blur")));
     assert.equal(await instrumentToggle.getAttribute("aria-pressed"), "false");
-    assert.equal(await panel.isVisible(), true, "Escape must leave piano mode without closing the panel.");
+    assert.equal(await host.locator(".playing-note").textContent(), "");
+    assert.equal(await panel.isVisible(), true, "Window blur must leave the panel visible while disabling piano mode.");
     await instrumentToggle.click();
     await page.waitForFunction(() => document.querySelector("#scdl-tempo-control")?.shadowRoot
       ?.querySelector(".loop-instrument")?.getAttribute("aria-pressed") === "true");
