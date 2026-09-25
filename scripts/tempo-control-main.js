@@ -89,6 +89,15 @@
   const DOWNLOAD_STATUS_DURATION_MS = 30000;
   const DOWNLOAD_REQUEST_TIMEOUT_MS = 120000;
   const DEFAULT_EFFECT_TOGGLE_WET = 20;
+  const EFFECT_SIGNATURE_FIELDS = Object.freeze([
+    "schemaVersion",
+    "reverb", "delay", "flanger", "phaser", "bitcrusher", "saturation",
+    "reverbRoom", "reverbSize", "reverbDecay", "reverbPreDelay", "reverbTone",
+    "delayTime", "delayFeedback", "delayTone",
+    "flangerRate", "flangerDepth", "flangerFeedback",
+    "phaserRate", "phaserDepth", "phaserFeedback",
+    "bitDepth", "sampleRateReduction", "saturationDrive", "saturationTone",
+  ]);
   let ui = null;
   let equalizerUi = null;
   const collapsible = globalThis.SCPlayerToolsCollapsible;
@@ -445,12 +454,56 @@
     renderLoop();
   }
 
+  function normalizedInstrumentNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.round(number * 1e6) / 1e6 : null;
+  }
+
+  function buildInstrumentDescriptor() {
+    const playback = controller.snapshot();
+    const snapshot = effectsController?.snapshot() || {};
+    const effects = {};
+    for (const field of EFFECT_SIGNATURE_FIELDS) {
+      const value = snapshot[field] ?? effectsApi?.DEFAULTS?.[field];
+      effects[field] = typeof value === "number" ? normalizedInstrumentNumber(value) : value;
+    }
+    effects.bypassed = snapshot.bypassed === true;
+    const normalizedEq = globalThis.SCParametricEQ?.normalize(snapshot.eq) || {
+      enabled: snapshot.eq?.enabled !== false,
+      hardClip: snapshot.eq?.hardClip === true,
+      bands: Array.isArray(snapshot.eq?.bands) ? snapshot.eq.bands : [],
+    };
+    effects.eq = {
+      enabled: normalizedEq.enabled !== false,
+      hardClip: normalizedEq.hardClip === true,
+      bands: normalizedEq.bands.map((band) => ({
+        type: String(band.type || "peaking"),
+        frequency: normalizedInstrumentNumber(band.frequency),
+        gain: normalizedInstrumentNumber(band.gain),
+        q: normalizedInstrumentNumber(band.q),
+      })),
+    };
+    const descriptor = {
+      signatureVersion: 1,
+      trackIdentity: String(loopState.trackIdentity || ""),
+      generation: Number.isInteger(loopState.generation) ? loopState.generation : null,
+      trimRange: {
+        startMs: normalizedInstrumentNumber(loopState.startMs),
+        endMs: normalizedInstrumentNumber(loopState.endMs),
+        durationMs: normalizedInstrumentNumber(loopState.durationMs),
+      },
+      playbackTransform: {
+        rate: normalizedInstrumentNumber(playback.effectiveRate),
+        preservePitch: playback.preservePitch === true,
+      },
+      effects,
+    };
+    return Object.freeze({ ...descriptor, signature: JSON.stringify(descriptor) });
+  }
+
   function loopMatchesInstrumentSnapshot(snapshot = instrumentSnapshot) {
     return Boolean(snapshot && loopState.active &&
-      snapshot.trackIdentity === loopState.trackIdentity &&
-      snapshot.generation === loopState.generation &&
-      snapshot.startMs === loopState.startMs &&
-      snapshot.endMs === loopState.endMs);
+      snapshot.signature === buildInstrumentDescriptor().signature);
   }
 
   function disableInstrument(message = "") {
@@ -493,8 +546,9 @@
       setInstrumentMode(true);
       return;
     }
-    const state = controller.snapshot();
-    const duration = (loopState.endMs - loopState.startMs) / state.effectiveRate;
+    const descriptor = buildInstrumentDescriptor();
+    const duration = (descriptor.trimRange.endMs - descriptor.trimRange.startMs) /
+      descriptor.playbackTransform.rate;
     if (duration > 30000) {
       instrumentPreparing = false;
       showDrumError("Instrument samples can be up to 30 seconds long. Shorten the loop or increase its speed.");
@@ -504,29 +558,23 @@
     cancelLoopPadSelection();
     const audio = controller.getActiveAudio();
     if (audio && !audio.paused) audio.pause();
-    const snapshot = {
-      trackIdentity: loopState.trackIdentity,
-      generation: loopState.generation,
-      startMs: loopState.startMs,
-      endMs: loopState.endMs,
-    };
-    instrumentSnapshot = snapshot;
+    instrumentSnapshot = descriptor;
     try {
       const operationId = `instrument_${Date.now()}_${++padRequestNumber}`;
       const result = await requestPad("instrument", {
         operationId,
-        trackUrl: String(loopState.trackIdentity || "").replace(/^permalink:/, ""),
-        trimRange: { startMs: loopState.startMs, endMs: loopState.endMs, durationMs: loopState.durationMs },
-        playbackTransform: { rate: state.effectiveRate, preservePitch: state.preservePitch },
-        effects: effectsController?.snapshot() || {},
-        name: `Instrument ${(loopState.startMs / 1000).toFixed(1)}–${(loopState.endMs / 1000).toFixed(1)}s`,
+        trackUrl: descriptor.trackIdentity.replace(/^permalink:/, ""),
+        trimRange: descriptor.trimRange,
+        playbackTransform: descriptor.playbackTransform,
+        effects: descriptor.effects,
+        name: `Instrument ${(descriptor.trimRange.startMs / 1000).toFixed(1)}–${(descriptor.trimRange.endMs / 1000).toFixed(1)}s`,
       });
-      if (intentVersion !== instrumentIntentVersion || !loopMatchesInstrumentSnapshot(snapshot)) return;
+      if (intentVersion !== instrumentIntentVersion || !loopMatchesInstrumentSnapshot(descriptor)) return;
       const dataUrl = result.instrument?.dataUrl;
       if (!dataUrl) throw new Error("The prepared instrument audio is unavailable.");
       const response = await fetch(dataUrl);
       const buffer = await getDrumAudioContext().decodeAudioData(await response.arrayBuffer());
-      if (intentVersion !== instrumentIntentVersion || !loopMatchesInstrumentSnapshot(snapshot)) return;
+      if (intentVersion !== instrumentIntentVersion || !loopMatchesInstrumentSnapshot(descriptor)) return;
       instrumentBuffer = buffer;
       instrumentPreparing = false;
       setInstrumentMode(true);
@@ -1068,8 +1116,9 @@
       !nextLoop.active ||
       nextLoop.trackIdentity !== instrumentSnapshot.trackIdentity ||
       nextLoop.generation !== instrumentSnapshot.generation ||
-      nextLoop.startMs !== instrumentSnapshot.startMs ||
-      nextLoop.endMs !== instrumentSnapshot.endMs
+      nextLoop.startMs !== instrumentSnapshot.trimRange.startMs ||
+      nextLoop.endMs !== instrumentSnapshot.trimRange.endMs ||
+      (Number.isFinite(nextLoop.durationMs) ? nextLoop.durationMs : state.durationMs) !== instrumentSnapshot.trimRange.durationMs
     )) {
       disableInstrument("");
     }
@@ -3007,6 +3056,7 @@
       effectsBypassed = effectiveBypass;
       effectsController?.setBypassed(effectsBypassed);
     }
+    if (instrumentSnapshot && !loopMatchesInstrumentSnapshot()) disableInstrument("");
     renderRate(state.effectiveRate, animateRate);
     ui.host.setAttribute(RATE_ATTRIBUTE, String(state.effectiveRate));
     ui.host.setAttribute(PITCH_ATTRIBUTE, String(state.preservePitch));

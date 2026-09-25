@@ -31,6 +31,14 @@ function fixture() {
     createBufferSource: () => ({ playbackRate: {}, connect() { return { connect() {} }; }, start() { starts.push(this); }, stop() {} }),
   };
   const state = { effectiveRate: 1, preservePitch: false };
+  const effectFields = ['schemaVersion', 'reverb', 'delay', 'flanger', 'phaser', 'bitcrusher', 'saturation',
+    'reverbRoom', 'reverbSize', 'reverbDecay', 'reverbPreDelay', 'reverbTone',
+    'delayTime', 'delayFeedback', 'delayTone', 'flangerRate', 'flangerDepth', 'flangerFeedback',
+    'phaserRate', 'phaserDepth', 'phaserFeedback', 'bitDepth', 'sampleRateReduction',
+    'saturationDrive', 'saturationTone'];
+  const effectsState = Object.fromEntries(effectFields.map(field => [field, field === 'reverbRoom' ? 'hall' : 0]));
+  Object.assign(effectsState, { schemaVersion: 2, bypassed: false, preset: 'custom', available: true,
+    initialized: true, eq: { enabled: true, hardClip: false, bands: [] } });
   const scope = {
     instrumentMode: false, instrumentOctave: 0, instrumentPreparing: false,
     instrumentBuffer: null, instrumentVoice: null, instrumentNoteRevision: 0,
@@ -40,7 +48,8 @@ function fixture() {
     ui: { panel: { hidden: false } }, document: { hidden: false }, hoveredDrum: null, panelOpenMode: null,
     capability: () => true, authorizePlayerTools: async () => true,
     controller: { snapshot: () => state, getActiveAudio: () => ({ paused: true }) },
-    effectsController: { snapshot: () => ({ reverb: 0 }) },
+    effectsController: { snapshot: () => effectsState }, effectsApi: { DEFAULTS: {} },
+    EFFECT_SIGNATURE_FIELDS: effectFields,
     getDrumAudioContext: () => audio,
     renderPlayingNote() {}, renderLoop() {}, renderInstrumentMessage() {}, showDrumError() {},
     clearHoverTimers() {}, cancelLoopPadSelection() {}, setPanelOpen(value) { scope.ui.panel.hidden = !value; },
@@ -53,12 +62,34 @@ function fixture() {
   vm.createContext(scope);
   for (const name of ['invalidatePendingInstrumentNotes', 'cleanupInstrumentVoice', 'releaseInstrumentVoice',
     'stopInstrumentVoice', 'stopAllInstrumentVoices', 'setInstrumentMode', 'loopMatchesInstrumentSnapshot',
-    'disableInstrument', 'exitInstrument', 'requestPad', 'toggleLoopInstrument', 'playInstrumentNote', 'closePanel']) {
+    'normalizedInstrumentNumber', 'buildInstrumentDescriptor', 'disableInstrument', 'exitInstrument',
+    'requestPad', 'toggleLoopInstrument', 'playInstrumentNote', 'closePanel']) {
     vm.runInContext(extract(name), scope);
   }
-  return { scope, audio, state, starts, messages, timers };
+  return { scope, audio, state, effectsState, starts, messages, timers };
 }
 async function main() {
+  {
+    const { scope, effectsState } = fixture();
+    const baseline = scope.buildInstrumentDescriptor().signature;
+    for (const field of scope.EFFECT_SIGNATURE_FIELDS) {
+      const previous = effectsState[field];
+      effectsState[field] = typeof previous === 'number' ? previous + 1 : 'room';
+      assert.notEqual(scope.buildInstrumentDescriptor().signature, baseline, `missing ${field}`);
+      effectsState[field] = previous;
+    }
+    effectsState.bypassed = true;
+    assert.notEqual(scope.buildInstrumentDescriptor().signature, baseline, 'missing global bypass');
+    effectsState.bypassed = false;
+    effectsState.eq = { enabled: true, hardClip: true, bands: [{ type: 'peaking', frequency: 1000, gain: 3, q: 1 }] };
+    assert.notEqual(scope.buildInstrumentDescriptor().signature, baseline, 'missing EQ');
+    effectsState.eq = { enabled: true, hardClip: false, bands: [] };
+    effectsState.preset = 'wide';
+    effectsState.available = false;
+    effectsState.initialized = false;
+    assert.equal(scope.buildInstrumentDescriptor().signature, baseline, 'UI/runtime FX state changed content signature');
+    console.log('P5: descriptor covers render inputs and excludes non-musical FX state');
+  }
   {
     const { scope, messages, timers } = fixture();
     const pending = scope.toggleLoopInstrument();
@@ -100,16 +131,20 @@ async function main() {
     console.log('P3: only the last pending note starts after resume');
   }
   {
-    const { scope, state, messages } = fixture();
-    scope.instrumentSnapshot = { ...scope.loopState };
+    const { scope, state, effectsState, messages } = fixture();
+    scope.instrumentSnapshot = scope.buildInstrumentDescriptor();
     scope.instrumentBuffer = { original: true };
     state.effectiveRate = 2;
     state.preservePitch = true;
-    scope.effectsController.snapshot = () => ({ reverb: 80 });
-    await scope.toggleLoopInstrument();
-    assert.equal(scope.instrumentMode, true);
-    assert.equal(messages.length, 0);
-    console.log('P5: changed rate/pitch/FX reuse the old buffer without a render');
+    effectsState.reverb = 80;
+    const pending = scope.toggleLoopInstrument();
+    await flush();
+    assert.equal(messages.length, 1);
+    scope.disableInstrument();
+    [...scope.padRequests.values()][0].resolve({});
+    await pending;
+    assert.equal(scope.instrumentMode, false);
+    console.log('P5: changed rate/pitch/FX require a fresh render');
   }
   {
     const { scope, messages } = fixture();
