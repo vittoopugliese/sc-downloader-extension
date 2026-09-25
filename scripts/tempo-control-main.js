@@ -330,6 +330,14 @@
     ui.drumMessage.removeAttribute("tabindex");
     ui.drumMessage.textContent = message;
     ui.drumMessage.hidden = !message;
+    ui.drumStatus.hidden = !message;
+  }
+
+  function renderPlayingNote(midiNote = null) {
+    if (!ui) return;
+    const names = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+    ui.playingNote.textContent = Number.isInteger(midiNote)
+      ? `${names[midiNote % 12]}${Math.floor(midiNote / 12) - 1}` : "";
   }
 
   function renderInstrumentMessage() {
@@ -367,6 +375,7 @@
   function stopInstrumentVoice(releaseMs = 8) {
     const voice = instrumentVoice;
     instrumentVoice = null;
+    renderPlayingNote();
     if (!voice) return;
     const now = voice.context.currentTime;
     try {
@@ -488,8 +497,14 @@
       source.connect(gain).connect(context.destination);
       const voice = { source, gain, context };
       instrumentVoice = voice;
-      source.onended = () => { if (instrumentVoice === voice) instrumentVoice = null; };
+      source.onended = () => {
+        if (instrumentVoice === voice) {
+          instrumentVoice = null;
+          renderPlayingNote();
+        }
+      };
       source.start();
+      renderPlayingNote(midiNote);
     } catch (error) {
       showDrumError(error?.message || "Could not play the loop instrument.");
     }
@@ -2064,7 +2079,10 @@
         .drum-pad:focus-visible { outline: 2px solid #ff5500; outline-offset: 2px; }
         .drum-key { flex: 0 0 auto; font-size: 14px; font-weight: 800; line-height: 1; }
         .drum-file { display: none; }
-        .drum-message { margin: 0; padding: 4px 7px 6px; color: #ffb199; font-size: 10px; line-height: 1.2; }
+        .drum-status { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0; padding: 4px 7px 6px; color: #ffb199; font-size: 10px; line-height: 1.2; }
+        .drum-status[hidden] { display: none; }
+        .drum-message { min-width: 0; }
+        .playing-note { flex: 0 0 auto; text-align: right; font-variant-numeric: tabular-nums; }
         .brand { display: contents; }
         .brand-logo { width: 32px; height: 32px; flex-basis: 32px; border-radius: 8px; object-fit: cover; }
         .panel-header .brand-logo { grid-column: 1; grid-row: 1; }
@@ -2271,7 +2289,7 @@
               ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
             </div>
           </div>
-          <p class="drum-message" role="status" aria-live="polite" hidden></p>
+          <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="playing-note" aria-live="off"></span></p>
         </section>
         <section class="waveform-shell" id="scdl-loop-region" role="group" aria-label="Loop Region">
           ${collapsible.header({ title: "Loop Region", bodyId: "scdl-loop-region-body", toggleClass: "waveform-toggle", headerClass: "waveform-header", actionsClass: "waveform-actions", icon: '<svg class="tool-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>', actions: '<div class="waveform-header-setters"><button class="setter header-set-a" type="button" aria-label="Set loop start">Set A</button><button class="setter header-set-b" type="button" aria-label="Set loop end">Set B</button></div><button class="clear-loop" type="button" aria-label="Clear loop"><img class="cross-icon" alt="" aria-hidden="true" /><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button>' })}
@@ -2437,6 +2455,8 @@
       samplerToggle: root.querySelector(".sampler-toggle"),
       samplerIcon: root.querySelector(".sampler-icon"),
       drumMessage: root.querySelector(".drum-message"),
+      drumStatus: root.querySelector(".drum-status"),
+      playingNote: root.querySelector(".playing-note"),
       slider: root.querySelector(".slider"),
       pitchToggle: root.querySelector(".pitch-toggle"),
       current: root.querySelector(".current"),
