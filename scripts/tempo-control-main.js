@@ -186,6 +186,8 @@
   let expandedEffectSettings = null;
   let effectsFailure = "";
   let effectsBypassed = false;
+  let echoFreezePlayback = null;
+  let echoFreezeRevision = 0;
   const effectWetMemory = Object.fromEntries(EFFECT_NAMES.map((name) => [name, DEFAULT_EFFECT_TOGGLE_WET]));
   const customRates = CUSTOM_RATE_STORAGE.map((key, index) => {
     try {
@@ -1048,6 +1050,54 @@
       : "";
     render();
     return state;
+  }
+
+  function startEchoFreeze() {
+    if (effectsController?.isDelayFrozen?.()) return;
+    if (!effectsController?.setDelayFreeze(true)) return;
+    echoFreezeRevision += 1;
+    echoFreezePlayback = null;
+    const audio = controller.getActiveAudio?.();
+    if (audio?.paused === false) {
+      try {
+        audio.pause();
+        echoFreezePlayback = {
+          audio,
+          source: audio.currentSrc || audio.src || "",
+        };
+      } catch (error) {
+        effectsController.setDelayFreeze(false);
+        effectsFailure = "Could not pause playback for Echo Freeze.";
+        console.warn("[SC Downloader Effects]", error);
+      }
+    }
+    renderEffects();
+  }
+
+  function releaseEchoFreeze({ resumePlayback = true } = {}) {
+    const wasFrozen = effectsController?.isDelayFrozen?.() === true;
+    const playback = echoFreezePlayback;
+    if (!wasFrozen && !playback) return;
+    echoFreezePlayback = null;
+    const revision = ++echoFreezeRevision;
+    if (wasFrozen) effectsController.setDelayFreeze(false);
+    renderEffects();
+    if (!resumePlayback || !playback?.audio || playback.audio.paused === false) return;
+    const currentSource = playback.audio.currentSrc || playback.audio.src || "";
+    if (currentSource !== playback.source) return;
+    try {
+      Promise.resolve(playback.audio.play()).catch((error) => {
+        if (revision !== echoFreezeRevision || effectsController?.isDelayFrozen?.()) return;
+        playbackFailure = "Echo Freeze ended, but playback could not resume. Press play to continue.";
+        console.warn("[SC Downloader Effects]", error);
+        render();
+      });
+    } catch (error) {
+      if (revision !== echoFreezeRevision || effectsController?.isDelayFrozen?.()) return;
+      playbackFailure = "Echo Freeze ended, but playback could not resume. Press play to continue.";
+      console.warn("[SC Downloader Effects]", error);
+      render();
+    }
   }
 
   function writeSetting(key, value) {
@@ -2880,17 +2930,11 @@
         applyEffect(() => effectsController?.setCharacter(name, value), name);
       });
     }
-    const releaseEchoFreeze = () => {
-      if (!effectsController?.isDelayFrozen?.()) return;
-      effectsController.setDelayFreeze(false);
-      renderEffects();
-    };
     ui.effectFreeze.addEventListener("pointerdown", (event) => {
       if (event.button !== 0 || ui.effectFreeze.disabled) return;
       event.preventDefault();
       ui.effectFreeze.setPointerCapture?.(event.pointerId);
-      effectsController?.setDelayFreeze(true);
-      renderEffects();
+      startEchoFreeze();
     });
     for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"]) {
       ui.effectFreeze.addEventListener(eventName, releaseEchoFreeze);
@@ -2898,8 +2942,7 @@
     ui.effectFreeze.addEventListener("keydown", (event) => {
       if (![' ', 'Enter'].includes(event.key) || event.repeat || ui.effectFreeze.disabled) return;
       event.preventDefault();
-      effectsController?.setDelayFreeze(true);
-      renderEffects();
+      startEchoFreeze();
     });
     ui.effectFreeze.addEventListener("keyup", (event) => {
       if (![' ', 'Enter'].includes(event.key)) return;
@@ -2911,7 +2954,10 @@
       exitInstrument({ message: "" });
     };
     window.addEventListener("blur", exitForPageLifecycle);
-    window.addEventListener("pagehide", exitForPageLifecycle);
+    window.addEventListener("pagehide", () => {
+      releaseEchoFreeze({ resumePlayback: false });
+      exitInstrument({ message: "" });
+    });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) exitForPageLifecycle();
       else renderLoop();

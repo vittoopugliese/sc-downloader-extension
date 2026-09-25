@@ -159,10 +159,21 @@ const { chromium } = require("playwright");
     assert.equal(await host.locator('[data-effect-character-value="bitDepth"]').textContent(), '7bit');
     await page.waitForFunction(() => window.workletLoads >= 1);
     await host.locator('[data-effect-settings="delay"]').click();
+    assert.equal(await page.evaluate(() => player.paused), false,
+      "The fixture track must be playing before Echo Freeze");
     await host.locator('[data-effect-freeze]').dispatchEvent('pointerdown', { button: 0, pointerId: 1 });
     assert.equal(await host.locator('[data-effect-freeze]').getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.evaluate(() => player.paused), true,
+      "Holding Echo Freeze must pause the track so only the frozen delay remains");
     await host.locator('[data-effect-freeze]').dispatchEvent('pointerup', { button: 0, pointerId: 1 });
     assert.equal(await host.locator('[data-effect-freeze]').getAttribute('aria-pressed'), 'false');
+    await page.waitForFunction(() => player.paused === false);
+    await page.evaluate(() => player.pause());
+    await host.locator('[data-effect-freeze]').dispatchEvent('pointerdown', { button: 0, pointerId: 2 });
+    await host.locator('[data-effect-freeze]').dispatchEvent('pointerup', { button: 0, pointerId: 2 });
+    assert.equal(await page.evaluate(() => player.paused), true,
+      "Echo Freeze must not start a track that was already paused");
+    await page.evaluate(() => player.play());
     await host.locator('[data-fx-preset="dub"]').click();
     assert.equal(await host.locator('#scdl-effect-delay-feedback').inputValue(), '60');
     assert.equal(await host.locator('[data-effect-value="reverb"]').textContent(), "12%");
