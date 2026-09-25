@@ -133,6 +133,10 @@
   let waveformLoadId = 0;
   let waveformDrag = null;
   let waveformDrawPreview = null;
+  let waveformRevision = 0;
+  let waveformStaticKey = "";
+  let loopPresentationKey = "";
+  let loopRenderFrame = null;
   let suppressWaveformClick = false;
   let panelOpenMode = null;
   let hoverOpenTimer = null;
@@ -1272,18 +1276,24 @@
   }
 
   function drawWaveform() {
-    if (!ui?.waveformCanvas || waveformCollapsed) return;
+    if (!ui?.waveformCanvas || waveformCollapsed || ui.panel.hidden || document.hidden) return;
     const canvas = ui.waveformCanvas;
     const rect = canvas.getBoundingClientRect();
     const scale = Math.max(1, window.devicePixelRatio || 1);
     const width = Math.max(1, Math.round(rect.width * scale));
     const height = Math.max(1, Math.round(rect.height * scale));
+    const windowRange = visibleWaveformWindow();
+    const displayedRange = waveformDrawPreview || loopState;
+    const drawKey = JSON.stringify([waveformRevision, width, height, scale,
+      loopState.durationMs, windowRange?.startMs, windowRange?.endMs,
+      displayedRange.startMs, displayedRange.endMs, loopState.active]);
+    if (drawKey === waveformStaticKey) return;
+    waveformStaticKey = drawKey;
     if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
     const context = canvas.getContext("2d");
     context.clearRect(0, 0, width, height);
     context.fillStyle = "#0e1216";
     context.fillRect(0, 0, width, height);
-    const windowRange = visibleWaveformWindow();
     if (!windowRange) return;
     const durationMs = loopState.durationMs;
     const samples = waveformSamples.length ? waveformSamples : Array.from({ length: 180 }, (_, index) => 22 + Math.abs(Math.sin(index * 1.73) * 58 + Math.sin(index * .29) * 18));
@@ -1291,7 +1301,6 @@
     const last = Math.max(first + 1, Math.ceil(windowRange.endMs / durationMs * samples.length));
     const visible = samples.slice(first, last);
     const maximum = Math.max(1, ...visible.map((sample) => Math.abs(Number(sample) || 0)));
-    const displayedRange = waveformDrawPreview || loopState;
     const complete = Number.isFinite(displayedRange.startMs) && Number.isFinite(displayedRange.endMs);
     const start = complete ? loopPercentInWindow(displayedRange.startMs, windowRange) : -1;
     const end = complete ? loopPercentInWindow(displayedRange.endMs, windowRange) : -1;
@@ -1305,9 +1314,18 @@
     }
     context.globalAlpha = 1;
     if (complete) { context.fillStyle = "rgba(255, 106, 26, .18)"; context.fillRect(width * start / 100, 0, width * (end - start) / 100, height); }
-    if (Number.isFinite(loopState.currentTimeMs)) {
-      const playhead = loopPercentInWindow(loopState.currentTimeMs, windowRange);
-      if (playhead >= 0 && playhead <= 100) { context.fillStyle = "rgba(255,255,255,.72)"; context.fillRect(width * playhead / 100, 0, Math.max(1, scale), height); }
+  }
+
+  function renderWaveformPlayhead() {
+    if (!ui?.waveformPlayhead || waveformCollapsed || ui.panel.hidden || document.hidden) return;
+    const windowRange = visibleWaveformWindow();
+    const position = Number.isFinite(loopState.currentTimeMs) && windowRange
+      ? loopPercentInWindow(loopState.currentTimeMs, windowRange) : null;
+    const visible = position !== null && position >= 0 && position <= 100;
+    if (ui.waveformPlayhead.hidden === visible) ui.waveformPlayhead.hidden = !visible;
+    if (visible) {
+      const left = `${position}%`;
+      if (ui.waveformPlayhead.style.left !== left) ui.waveformPlayhead.style.left = left;
     }
   }
 
@@ -1325,21 +1343,23 @@
     waveformSourceUrl = descriptor.waveformUrl || null;
     waveformZoom = null;
     waveformSamples = [];
+    waveformRevision += 1;
     const loadId = waveformLoadId += 1;
-    if (Array.isArray(descriptor.samples)) { waveformSamples = descriptor.samples; drawWaveform(); return; }
-    if (!descriptor.waveformUrl) { drawWaveform(); return; }
+    if (Array.isArray(descriptor.samples)) { waveformSamples = descriptor.samples; waveformRevision += 1; renderLoop(); return; }
+    if (!descriptor.waveformUrl) { renderLoop(); return; }
     try {
       const response = await fetch(descriptor.waveformUrl);
       const data = await response.json();
       if (loadId !== waveformLoadId) return;
       waveformSamples = Array.isArray(data.samples) ? data.samples : [];
     } catch { waveformSamples = []; }
-    drawWaveform();
+    waveformRevision += 1;
+    renderLoop();
   }
 
-  function renderLoop() {
+  function commitLoopRender() {
+    loopRenderFrame = null;
     if (!ui?.waveformStage) return;
-    sectionControllers.loop?.setCollapsed(waveformCollapsed, { notify: false });
     const duration = Number.isFinite(loopState.durationMs) ? loopState.durationMs : 0;
     const displayedRange = waveformDrawPreview || loopState;
     const start = Number.isFinite(displayedRange.startMs) ? displayedRange.startMs : 0;
@@ -1347,6 +1367,15 @@
     const windowRange = visibleWaveformWindow();
     const startPercent = loopPercentInWindow(start, windowRange);
     const endPercent = loopPercentInWindow(end, windowRange);
+    const presentationKey = JSON.stringify({
+      waveformCollapsed, duration, start: displayedRange.startMs, end: displayedRange.endMs,
+      preview: Boolean(waveformDrawPreview), active: loopState.active, available: loopState.available, windowRange,
+      loopDownloadPending, padRenderPending, saveAllowed: capability("saveLoopPad"),
+      instrumentAllowed: capability("loopInstrument"), instrumentMode, instrumentPreparing,
+    });
+    if (presentationKey !== loopPresentationKey) {
+      loopPresentationKey = presentationKey;
+      sectionControllers.loop?.setCollapsed(waveformCollapsed, { notify: false });
     ui.waveformSelection.style.left = `${startPercent}%`;
     ui.waveformSelection.style.width = `${Math.max(0, endPercent - startPercent)}%`;
     ui.waveformSelection.hidden = !waveformDrawPreview && !loopState.active;
@@ -1397,7 +1426,19 @@
     ui.waveformStartLabel.textContent = formatLoopTime(windowRange?.startMs || 0);
     ui.waveformMiddleLabel.textContent = formatLoopTime(windowRange ? (windowRange.startMs + windowRange.endMs) / 2 : 0);
     ui.waveformEndLabel.textContent = formatLoopTime(windowRange?.endMs || duration);
+    }
     drawWaveform();
+    renderWaveformPlayhead();
+  }
+
+  function renderLoop() {
+    if (loopRenderFrame !== null) return;
+    if (typeof requestAnimationFrame === "function") {
+      loopRenderFrame = requestAnimationFrame(commitLoopRender);
+    } else {
+      loopRenderFrame = true;
+      queueMicrotask(commitLoopRender);
+    }
   }
 
   function setWaveformCollapsed(collapsed) {
@@ -1410,6 +1451,8 @@
       waveformTrackUrl = null;
       waveformSourceUrl = null;
       waveformZoom = null;
+      waveformRevision += 1;
+      waveformStaticKey = "";
       ui.waveformCanvas.width = 1;
       ui.waveformCanvas.height = 1;
     }
@@ -1418,7 +1461,7 @@
     renderControlsVisibility();
     if (!waveformCollapsed && !ui.panel.hidden) {
       loadPlayerWaveform();
-      setTimeout(drawWaveform, 180);
+      setTimeout(renderLoop, 180);
     }
     if (!ui.panel.hidden) positionPanel();
   }
@@ -2265,6 +2308,7 @@
         .waveform-shell.is-collapsed { height: 32px; touch-action: auto; }
         .waveform-stage { position: absolute; inset: 34px 8px 27px; cursor: crosshair; }
         .waveform-canvas { display: block; width: 100%; height: 100%; border-radius: 8px; }
+        .waveform-playhead { position: absolute; z-index: 4; inset: 0 auto 0 0; width: 1px; background: rgba(255,255,255,.72); pointer-events: none; }
         .waveform-selection { position: absolute; inset: 0 auto 0; border: 0; border-inline: 1px solid #ff741f; background: linear-gradient(90deg, rgba(255, 145, 85, .28), rgba(255, 106, 26, .055) 50%, rgba(255, 145, 85, .28)); cursor: grab; }
         .waveform-marker { position: absolute; z-index: 7; top: -2px; width: 18px; height: 18px; margin-left: -9px; padding: 0; border: 0; border-radius: 5px 5px 3px 3px; color: #fff; background: #ff741f; font-size: 11px; font-weight: 800; line-height: 1; text-transform: lowercase; cursor: ew-resize; box-shadow: 0 2px 7px rgba(255, 116, 31, .28); }
         .waveform-marker::after { content: ""; position: absolute; top: 18px; left: 50%; width: 1px; height: 90px; background: #ff741f; transform: translateX(-50%); }
@@ -2443,6 +2487,7 @@
           <div class="waveform-body" id="scdl-loop-region-body">
           <div class="waveform-stage">
             <canvas class="waveform-canvas" aria-hidden="true"></canvas>
+            <div class="waveform-playhead" aria-hidden="true" hidden></div>
             <div class="waveform-selection" hidden></div>
             <button class="waveform-marker waveform-start" type="button" role="slider" aria-label="Loop start A">A</button>
             <button class="waveform-marker waveform-end" type="button" role="slider" aria-label="Loop end B">B</button>
@@ -2510,7 +2555,10 @@
     ui.trigger.setAttribute("aria-expanded", String(open));
     setVolumeLayerOpen(open);
     renderControlsVisibility();
-    if (open) positionPanel();
+    if (open) {
+      positionPanel();
+      renderLoop();
+    }
   }
 
   function clearHoverTimers() {
@@ -2635,6 +2683,7 @@
       waveformActions: root.querySelector(".waveform-actions"),
       waveformStage: root.querySelector(".waveform-stage"),
       waveformCanvas: root.querySelector(".waveform-canvas"),
+      waveformPlayhead: root.querySelector(".waveform-playhead"),
       waveformSelection: root.querySelector(".waveform-selection"),
       waveformStart: root.querySelector(".waveform-start"),
       waveformEnd: root.querySelector(".waveform-end"),
@@ -2865,6 +2914,7 @@
     window.addEventListener("pagehide", exitForPageLifecycle);
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) exitForPageLifecycle();
+      else renderLoop();
     });
     root.querySelectorAll(".preset").forEach((button) => {
       if (button.classList.contains("custom-preset")) return;
@@ -3242,7 +3292,10 @@
     },
     true
   );
-  window.addEventListener("resize", positionPanel);
+  window.addEventListener("resize", () => {
+    positionPanel();
+    renderLoop();
+  });
   window.addEventListener("storage", (event) => {
     if (event.key === RATE_STORAGE) controller.setRate(readStoredRate());
     if (event.key === PITCH_STORAGE) {

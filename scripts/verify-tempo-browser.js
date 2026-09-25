@@ -727,6 +727,8 @@ async function main() {
     assert.equal(draftLoop.active, false, "A draft marker must not activate a loop");
     await page.locator("audio").evaluate((audio) => { audio.currentTime = 20.678; });
     await host.locator(".waveform-times .set-b").click();
+    await page.waitForFunction(() => document.querySelector("#scdl-tempo-control")?.shadowRoot
+      ?.querySelector(".waveform-times .set-b")?.textContent?.trim() === "00:20.678");
     const capturedLoop = await page.evaluate(() =>
       JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session"))
     );
@@ -759,6 +761,8 @@ async function main() {
     }
     await page.locator("audio").evaluate((audio) => { audio.currentTime = 12.345; });
     await setA.click();
+    await page.waitForFunction(() => document.querySelector("#scdl-tempo-control")?.shadowRoot
+      ?.querySelector(".save-loop-pad")?.disabled === false);
     assert.equal(await host.locator(".save-loop-pad").isDisabled(), false);
     await host.locator("#scdl-effect-reverb").evaluate((slider) => { slider.value = "24"; slider.dispatchEvent(new Event("change", { bubbles: true })); });
     await host.locator("#scdl-effect-delay").evaluate((slider) => { slider.value = "17"; slider.dispatchEvent(new Event("change", { bubbles: true })); });
@@ -909,6 +913,35 @@ async function main() {
       throw new Error(`Interactive waveform layout is incomplete: ${JSON.stringify(waveformUi)}`);
     }
 
+    await page.locator("audio").evaluate((audio) => audio.pause());
+    await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      const canvas = root.querySelector(".waveform-canvas");
+      const context = canvas.getContext("2d");
+      window.waveformIdleMetrics = { draws: 0, mutations: 0, originalClear: context.clearRect };
+      context.clearRect = function (...args) {
+        window.waveformIdleMetrics.draws += 1;
+        return window.waveformIdleMetrics.originalClear.apply(this, args);
+      };
+      const observer = new MutationObserver((records) => { window.waveformIdleMetrics.mutations += records.length; });
+      for (const target of root.querySelectorAll(".waveform-selection, .waveform-marker, .waveform-times, .waveform-actions, .loop-edit")) {
+        observer.observe(target, { attributes: true, childList: true, characterData: true, subtree: true });
+      }
+      window.waveformIdleMetrics.observer = observer;
+    });
+    await page.waitForTimeout(500);
+    await page.evaluate(() => { window.waveformIdleMetrics.draws = 0; window.waveformIdleMetrics.mutations = 0; });
+    await page.waitForTimeout(1000);
+    const idleMetrics = await page.evaluate(() => {
+      const metrics = window.waveformIdleMetrics;
+      metrics.observer.disconnect();
+      const context = document.querySelector("#scdl-tempo-control").shadowRoot.querySelector(".waveform-canvas").getContext("2d");
+      context.clearRect = metrics.originalClear;
+      return { draws: metrics.draws, mutations: metrics.mutations };
+    });
+    assert.deepEqual(idleMetrics, { draws: 0, mutations: 0 },
+      "Stable paused polling must not redraw the waveform or rewrite loop controls");
+
     const endMarker = host.locator(".waveform-end");
     const markerBox = await endMarker.boundingBox();
     await host.evaluate((element) => {
@@ -1001,6 +1034,9 @@ async function main() {
     assert.equal(await host.locator('.visibility-down-icon').isVisible(), true,
       'The normal state must use a downward chevron.');
     await visibility.click();
+    await page.waitForFunction(() => [...document.querySelector("#scdl-tempo-control").shadowRoot
+      .querySelectorAll('.sampler-toggle, .waveform-toggle, .effects-toggle, .peq-toggle')]
+      .every((button) => button.getAttribute('aria-expanded') === 'false'));
     assert.deepEqual(await sectionToggles.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-expanded'))),
       ['false', 'false', 'false', 'false']);
     assert.deepEqual(await sectionToggles.evaluateAll((buttons) => buttons.map((button) => {
