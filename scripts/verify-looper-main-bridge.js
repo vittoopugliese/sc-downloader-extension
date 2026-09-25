@@ -183,6 +183,65 @@ assert.equal(
 );
 assert.equal(command("set-global-bypass", { bypassed: false }).loop.effectiveEnabled, true);
 
+// Moving the selection can seek into unbuffered audio. Until seeked fires,
+// playback events and animation frames must not restart that same seek.
+let pendingTime = 2;
+let pendingTarget = null;
+let seekWrites = 0;
+Object.defineProperty(currentMedia, "currentTime", {
+  configurable: true,
+  get: () => pendingTime,
+  set(value) {
+    seekWrites += 1;
+    pendingTarget = value;
+    currentMedia.seeking = true;
+  },
+});
+command("set-loop", { startMs: 10001, endMs: 12001, enabled: true, startPlayback: false });
+function tickLoop() {
+  const [id, callback] = [...animationCallbacks.entries()].at(-1);
+  animationCallbacks.delete(id);
+  callback();
+}
+tickLoop();
+assert.equal(pendingTarget, 10.001, "Moving the loop forward must seek to its new A");
+for (let frame = 0; frame < 20; frame += 1) {
+  currentMedia.listeners.get("seeking")?.();
+  currentMedia.listeners.get("timeupdate")?.();
+  tickLoop();
+}
+assert.equal(seekWrites, 1, "A pending loop seek must not be restarted by playback events or frames");
+
+// Media timestamps may land just below A at the nearest audio sample.
+pendingTime = 10.00099;
+currentMedia.seeking = false;
+currentMedia.listeners.get("seeked")?.();
+tickLoop();
+assert.equal(seekWrites, 1, "Sub-millisecond seek rounding must not freeze playback at A");
+pendingTime = 12.001;
+tickLoop();
+assert.equal(seekWrites, 2, "The moved loop must still wrap from its new B to A");
+pendingTime = pendingTarget;
+currentMedia.seeking = false;
+currentMedia.listeners.get("seeked")?.();
+
+pendingTime = 20;
+currentMedia.listeners.get("timeupdate")?.();
+assert.equal(seekWrites, 3, "Seeking past B must return to the active loop");
+command("set-loop", { startMs: 15001, endMs: 17001, enabled: true, startPlayback: false });
+tickLoop();
+assert.equal(seekWrites, 3, "Moving A-B during a pending seek must allow it to finish");
+pendingTime = pendingTarget;
+currentMedia.seeking = false;
+currentMedia.listeners.get("seeked")?.();
+assert.equal(pendingTarget, 15.001, "Seek completion must use the latest selection without Clear");
+assert.equal(seekWrites, 4);
+pendingTime = pendingTarget;
+currentMedia.seeking = false;
+currentMedia.listeners.get("seeked")?.();
+tickLoop();
+assert.equal(seekWrites, 4, "Playback inside the moved selection must be allowed to advance");
+
 const replacementMedia = new FakeAudio("https://cf-media.sndcdn.com/replacement.mp3");
 replacementMedia.isConnected = true;
 documentMedia = [replacementMedia];

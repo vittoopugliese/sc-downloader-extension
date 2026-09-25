@@ -6,6 +6,7 @@
   const SESSION_ATTRIBUTE = "data-scdl-loop-session";
   const SESSION_EVENT = "scdl-loop-session:changed";
   const CHANNEL_NAME = "scdl-loop-session-v2";
+  const SEEK_ROUNDING_TOLERANCE_MS = 1;
   if (window[INSTALLED_FLAG] || !globalThis.SCLoopSession) return;
   Object.defineProperty(window, INSTALLED_FLAG, { value: true });
   const knownMedia = new Set();
@@ -37,9 +38,11 @@
   function stopLoopFrame() { if (loopFrameId !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(loopFrameId); loopFrameId = null; }
   function clearLoopState() { stopLoopFrame(); loopMedia = null; loopSession.command({ type: "clear" }); publishLoopState(); }
   function enforceLoop() {
-    if (!loopState.effectiveEnabled || !loopMedia || remoteOwner) return;
+    // Let asynchronous seeks finish before correcting again, including while
+    // dragging A-B into audio that has not been buffered yet.
+    if (!loopState.effectiveEnabled || !loopMedia || remoteOwner || loopMedia.seeking) return;
     const now = Number.isFinite(loopMedia.currentTime) ? loopMedia.currentTime * 1000 : null;
-    if (Number.isFinite(now) && (now < loopState.startMs || now >= loopState.endMs)) { try { loopMedia.currentTime = loopState.startMs / 1000; } catch { loopSession.command({ type: "set-error", error: "seek-failed" }); } }
+    if (Number.isFinite(now) && (now < loopState.startMs - SEEK_ROUNDING_TOLERANCE_MS || now >= loopState.endMs)) { try { loopMedia.currentTime = loopState.startMs / 1000; } catch { loopSession.command({ type: "set-error", error: "seek-failed" }); } }
   }
   function loopFrame() { loopFrameId = null; reconcileTrack(); enforceLoop(); if (loopState.effectiveEnabled && loopMedia && typeof requestAnimationFrame === "function") loopFrameId = requestAnimationFrame(loopFrame); }
   function startLoopFrame() { stopLoopFrame(); if (loopState.effectiveEnabled && loopMedia && !remoteOwner && typeof requestAnimationFrame === "function") loopFrameId = requestAnimationFrame(loopFrame); }
@@ -49,7 +52,7 @@
     if (!observedMedia.has(media)) {
       observedMedia.add(media);
       media.addEventListener("playing", () => { reconcileTrack(); if (loopState.active && trackIdentity === loopState.trackIdentity) loopMedia = media; lastPlayingMedia = media; startLoopFrame(); });
-      media.addEventListener("timeupdate", enforceLoop); media.addEventListener("seeking", enforceLoop);
+      media.addEventListener("timeupdate", enforceLoop); media.addEventListener("seeked", enforceLoop);
       media.addEventListener("loadedmetadata", () => { reconcileTrack(); if (media === loopMedia && loopState.active) publishLoopState(); });
       media.addEventListener("emptied", () => { if (media === loopMedia) publishLoopState(); });
     }
