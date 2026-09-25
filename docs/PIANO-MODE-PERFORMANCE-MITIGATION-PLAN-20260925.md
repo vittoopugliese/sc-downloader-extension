@@ -2,7 +2,7 @@
 
 Fecha: 25/09/2026. Base inspeccionada: `cd8fd3c`.
 Estado: **plan técnico; las mitigaciones todavía no están implementadas**.
-Alcance de esta entrega: documentar y commitear el plan. La implementación se divide en etapas verificables.
+Alcance original: documentar el plan. Auditoría posterior: validar los hallazgos y ampliar la evidencia, sin implementar mitigaciones ni crear commits. La implementación se divide en etapas verificables.
 
 ## 1. Objetivo y límites
 
@@ -30,6 +30,42 @@ No incluye polifonía, MIDI, nueva persistencia del instrumento, cambios comerci
 Por nota no se reconstruye el panel: se cambia el indicador y se crean los nodos de esa voz. No se demostró una fuga de memoria ni se midió CPU/RAM en SoundCloud real. La falta de `disconnect()` explícito merece cleanup, pero no demuestra por sí sola una fuga.
 
 La cola `queueSingleDownload()` ya serializa trabajos: P1 puede acumular **trabajos pendientes y espera**, no implica necesariamente renders simultáneos. No modificar su concurrencia global para solucionar el instrumento.
+
+### 2.1 Revalidación del 25/09/2026
+
+Código auditado: **`7e32a88`**, con árbol limpio al comenzar. Las líneas siguientes corresponden a esa revisión; las rutas de producción están bajo `scripts/`. Los cinco hallazgos son reales, pero la evidencia distingue defectos funcionales, trabajo redundante y decisiones de comportamiento. No hay mediciones de CPU, memoria nativa o latencia audible que permitan cuantificar su impacto en SoundCloud real.
+
+| ID | Veredicto y evidencia contrastada | Viabilidad |
+| --- | --- | --- |
+| P1 | **Confirmado.** `tempo-control-main.js:414` sólo invalida estado local; `requestPad()` (`:289`) conserva la promesa/timer hasta respuesta o 120 s. `content.js:146` no enruta cancelación de instrumento; `background.js:544` tampoco la recibe. `bulk-job-manager.js:1190` continúa resolución/cola/retries y `offscreen.js:140` crea un controlador sin cancelación externa. El reproductor sí descarta la respuesta vieja: el bug no es una activación tardía después de cancelar una preparación ya registrada. | Corregible con E3; la UI puede terminar inmediatamente, el procesamiento nativo ya iniciado no necesariamente. |
+| P2 | **Confirmado como trabajo redundante, no como alto consumo medido.** Polling en `tempo-control-main.js:3102`, lectura y render incondicional en `:990`, escrituras de controles en `:1193`. `drawWaveform()` (`:1127`) **ya retorna si la waveform está colapsada**; no tiene guard de panel cerrado/documento oculto. Por tanto no es cierto que haya draws en todos los estados, aunque sí se reescriben controles. | Corregible con E4; medir antes de escoger overlay/otra capa y antes de atribuir mejoras de CPU. |
+| P3 | **Confirmado con ejecución controlada.** `playInstrumentNote()` (`:484`) espera `resume()` y sólo revisa capacidad/modo/buffer. `stopInstrumentVoice()` (`:375`) no invalida esa espera. Nota → stop de octava → resolver resume inicia una voz; tres notas pendientes inician tres fuentes. | Corregible en E1 con revisión por solicitud y revisión al detener. |
+| P4 | **Confirmada la ausencia de salida.** Los únicos listeners de blur/visibility (`tempo-control-main.js:2714`) llaman a `releaseEchoFreeze`; no detienen voz ni apagan modo y no hay handler de `pagehide`. Una fuente ya iniciada no recibe `stop()` por estos eventos. Que el navegador suspenda audio por su cuenta depende de su política. Apagar también el modo y conservar caché es la decisión propuesta en §7, no una garantía que ya existiera. | Corregible en E1, con validación de foco/visibilidad en navegador. |
+| P5 | **Confirmado con ejecución controlada.** Comparación en `tempo-control-main.js:406` y reutilización en `:432`: rate/Keep Tone/FX no participan. Cambiar esos valores y reactivar usa el buffer anterior sin request. Los call sites de cambios/render (`:2845–2947`) no agregan la invalidación faltante. También falta `durationMs`, usado por el request. | Corregible en E2; compartir descriptor entre firma y request es necesario. |
+
+### 2.2 Casos adicionales confirmados
+
+Se agregan como variantes de P1, porque comparten su causa y su corrección; no se inflan los cinco hallazgos con IDs duplicados.
+
+- **P1.a — Doble preparación durante autorización.** En `toggleLoopInstrument()` el guard de `instrumentPreparing` está antes del `await authorizePlayerTools()` (`:430`), pero la bandera se activa recién en `:454`. Dos clics mientras la autorización está pendiente pasan ambos guards y, al autorizar, emiten **dos requests de render**. El segundo no cancela al primero. Reproducción controlada: dos invocaciones, una autorización diferida, resolver ambas → dos mensajes `instrument`. E3 debe registrar la intención antes del await; probar que el segundo clic cancela sin emitir trabajos.
+- **P1.b — Cerrar durante autorización permite activar modo con panel oculto.** `closePanel()` (`:2391`) sólo cancela si `instrumentPreparing` o `instrumentMode` ya están activos. Durante autorización ambos son falsos. Resolver autorización y render después del cierre deja `ui.panel.hidden === true` e `instrumentMode === true`. También puede pausar la pista después del cierre si estaba reproduciéndose. La reproducción automatizada demuestra panel oculto/modo activo; el efecto de pausa se deriva del call site `:445–446`. E1/E3 deben invalidar también la autorización pendiente y comprobar panel/sesión antes de continuar. El código actual no valida eso después del await.
+
+### 2.3 Comprobaciones contra falsos positivos
+
+- **Escape sin reentrada no revive una nota:** el guard de modo tras `resume()` evita ese caso. P3 requiere stop que conserve modo (octava), o salir/reentrar antes de resolver, o reemplazar buffer/sesión. Mantener Escape como prueba de regresión, no presentarlo como reproducción aislada del bug actual.
+- **No se confirmó acumulación de listeners por remount SPA.** `mount()` (`:2999`) usa `ui?.host || createUi()` y reutiliza el host aunque lo haya removido. Que los listeners estén dentro de `createUi()` no demuestra que se registren otra vez en cada remount. La recomendación de §7 es preventiva; no requiere refactor obligatorio sin una reproducción adicional.
+- **No se confirmó una fuga de nodos.** Falta cleanup explícito, pero eso no demuestra retención indefinida por el navegador. La prueba de `start()` fallido sigue siendo una prueba de robustez, no evidencia de una fuga medida.
+- **No todos los bucles PCM carecen de yields.** `loop-audio-renderer.js`, en `renderPreserved()`, ya cede con `setTimeout(..., 0)` cada 256 bloques. Inspeccionar y medir las otras etapas; no agregar un Worker o duplicar yields por asumir que todo el render bloquea sin pausas.
+- La prueba de navegador existente usa un bridge de render simulado para la UI; que pase no certifica la cancelación a través de background/offscreen ni estas carreras.
+
+### 2.4 Evidencia reproducible y límites
+
+Ejecutado en esta auditoría:
+
+- `node scripts/audit-piano-mode.js`: **6 escenarios reproducidos** (P1, dos variantes de P3, P5, P1.a y P1.b). El script extrae y ejecuta las funciones reales de MAIN, con autorización/resume/transporte/audio controlados. No copia una implementación alternativa de esas funciones ni modifica producción. Es una **caracterización de defectos**, fuera del gate `verify-*`: después de corregirlos sus aserciones deben reemplazarse por expectativas de comportamiento correcto. No mide audio real ni demuestra el aborto del fetch remoto.
+- `npm run test:e2e:tempo`: **pasó** en Chromium headless, incluida la cobertura existente de piano, mapa de notas, octavas, idiomas y reutilización del buffer.
+
+P2/P4 se confirman por flujo de código; quedan pendientes los contadores de DOM/canvas, la reproducción de blur/hidden con audio real y el perfil de rendimiento de E0/E5. No se ejecutó la batería completa de release: esta entrega cambia documentación y agrega el reproductor de auditoría, sin cambiar el código de producción. No se requiere publicación para corregir los hallazgos en una rama local.
 
 ## 3. Contratos compartidos
 
