@@ -160,6 +160,39 @@ function fixture(used) {
   const expiredTrial = fixture(0); const expiredAccess = expiredTrial.restart(); await expiredAccess.startTrial();
   expiredTrial.advance(policy.TRIAL_DURATION_MS);
   assert.equal((await expiredAccess.authorize(owner, request("expired"))).code, "trial-expired");
+  const freeFx = fixture(0); const freeFxAccess = freeFx.restart(); await freeFxAccess.startTrial();
+  const premiumCapabilities = ["premiumEffects", "parametricEq", "saveLoopPad", "loopInstrument", "likesExplorer"];
+  let trialValidation = "valid";
+  freeFxAccess.configureAuthority({ ...freeFx.authority, async validateTrial() {
+    if (trialValidation === "throws") throw new Error("service unavailable");
+    return { status: trialValidation };
+  } });
+  for (const status of ["invalid", "unavailable", "throws"]) {
+    trialValidation = status;
+    await assert.rejects(freeFxAccess.getSnapshot(owner), { code: "trial-invalid" });
+    const free = await freeFxAccess.authorize(owner, { operation: "set-free-effect" });
+    assert.equal(free.allowed, true, "free effects remain usable without a verified trial");
+    assert.equal(free.snapshot.grant, null);
+    for (const [name, enabled] of Object.entries(free.snapshot.capabilities)) {
+      assert.equal(enabled, ["openPanel", "freeEffects"].includes(name), `${status}: ${name}`);
+    }
+    const denied = await freeFxAccess.authorize(owner, { operation: "set-effect" });
+    assert.equal(denied.allowed, false);
+    assert.equal(denied.snapshot.capabilities.premiumEffects, false, "denials must not restore premium controls either");
+  }
+  trialValidation = "valid";
+  const recovered = await freeFxAccess.authorize(owner, { operation: "set-free-effect" });
+  for (const name of premiumCapabilities) assert.equal(recovered.snapshot.capabilities[name], true, name);
+  freeFx.advance(policy.TRIAL_DURATION_MS);
+  trialValidation = "expired";
+  const expiredFree = await freeFxAccess.authorize(owner, { operation: "set-free-effect" });
+  assert.equal(expiredFree.allowed, true);
+  for (const name of premiumCapabilities) assert.equal(expiredFree.snapshot.capabilities[name], false, name);
+  await freeFxAccess.setEntitlement({ status: "active", licenseId: "paid", expiresAt: 1_900_000_000_000 });
+  trialValidation = "invalid";
+  const proFree = await freeFxAccess.authorize(owner, { operation: "set-free-effect" });
+  assert.equal(proFree.snapshot.plan, "pro");
+  for (const name of premiumCapabilities) assert.equal(proFree.snapshot.capabilities[name], true, name);
   const lastGrace = fixture(19); const lastGraceAccess = lastGrace.restart(); await lastGraceAccess.startTrial();
   const lastGrant = await lastGraceAccess.authorize(owner, request("last"));
   lastGraceAccess.configureAuthority({ ...lastGrace.authority,

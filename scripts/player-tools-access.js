@@ -113,7 +113,27 @@
         const owner = ownerKey(sender);
         const state = await read(); const timestamp = now();
         const entitlementError = await verifyEntitlement(state);
-        const reply = (allowed, code = null, extra = {}) => ({ allowed, code, snapshot: POLICY.snapshot(state, owner, timestamp), ...extra });
+        const reply = async (allowed, code = null, extra = {}) => {
+          const snapshot = POLICY.snapshot(state, owner, now());
+          if (snapshot.plan !== "pro" && state.trial.startedAt !== null) {
+            const grant = snapshot.state === "trial_last_session"
+              ? state.trial.grants.find((item) => item.active && item.ownerKey === owner) : null;
+            const validation = await verifyTrial(state, grant);
+            if (!["valid", "expired"].includes(validation?.status) ||
+                (grant && validation.status === "expired" && !validation.grantValid)) {
+              // Every authorization response is published by the client, including
+              // free effects and denied operations. Never publish unverified access.
+              snapshot.state = "access_error";
+              snapshot.code = validation?.status === "expired" ? "trial-expired" :
+                validation?.status === "invalid" ? "trial-invalid" : "trial-unavailable";
+              snapshot.grant = null;
+              for (const name of Object.keys(snapshot.capabilities)) {
+                snapshot.capabilities[name] = name === "openPanel" || name === "freeEffects";
+              }
+            }
+          }
+          return { allowed, code, snapshot, ...extra };
+        };
         const operation = request?.operation;
         // Reverb and echo remain available after trial expiry or a licensing outage.
         if (operation === "set-free-effect") return reply(true);
