@@ -675,6 +675,7 @@
     "message": "Ultimo dia de tu prueba de Player Tools"
   },
   "player_tools_trial_expired": { "message": "Tu prueba terminó. Reverb y Echo siguen gratis; los efectos premium, EQ, Likes Explorer y las funciones de loops/piano del sampler requieren Pro." },
+  "player_tools_trial_unavailable": { "message": "No se pudo confirmar tu prueba gratuita. Volvé a intentarlo." },
   "player_tools_get_pro": { "message": "Obtener Pro" },
   "player_tools_try": { "message": "Probar herramientas" },
   "player_tools_pro_title": { "message": "Player Tools Pro" },

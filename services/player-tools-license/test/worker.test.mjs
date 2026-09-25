@@ -131,6 +131,47 @@ async function digest(value) {
   const hashed = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(hashed), (item) => item.toString(16).padStart(2, "0")).join("");
 }
+
+test("test mode accepts both known extension origins and rejects unknown origins", async () => {
+  const unpackedOrigin = "chrome-extension://oopghidjdmcbbfkicnlcfjlmifjldmli";
+  const priorOrigin = "chrome-extension://hccfkgjcaigahlnmobpjdhcbhkejkack";
+  const testRequest = new Request("https://worker.example/api/player-tools/trial/start", {
+    method: "POST",
+    headers: { origin: unpackedOrigin, "content-type": "application/json" },
+    body: JSON.stringify({ installationId }),
+  });
+  const accepted = await worker.fetch(testRequest, {
+    ...env,
+    ALLOWED_ORIGINS: `${priorOrigin},${unpackedOrigin}`,
+    LICENSE_DB: sqliteD1(),
+  });
+  assert.equal(accepted.status, 200);
+  assert.equal(accepted.headers.get("access-control-allow-origin"), unpackedOrigin);
+
+  const priorRequest = new Request("https://worker.example/api/player-tools/trial/start", {
+    method: "POST",
+    headers: { origin: priorOrigin, "content-type": "application/json" },
+    body: JSON.stringify({ installationId }),
+  });
+  const priorAccepted = await worker.fetch(priorRequest, {
+    ...env,
+    ALLOWED_ORIGINS: `${priorOrigin},${unpackedOrigin}`,
+    LICENSE_DB: sqliteD1(),
+  });
+  assert.equal(priorAccepted.status, 200);
+
+  const unknown = new Request("https://worker.example/api/player-tools/trial/start", {
+    method: "POST",
+    headers: { origin: "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "content-type": "application/json" },
+    body: JSON.stringify({ installationId }),
+  });
+  const rejected = await worker.fetch(unknown, {
+    ...env,
+    ALLOWED_ORIGINS: `${priorOrigin},${unpackedOrigin}`,
+    LICENSE_DB: sqliteD1(),
+  });
+  assert.equal(rejected.status, 403);
+});
 function orderWebhook(eventName, overrides = {}) {
   return {
     meta: { event_name: eventName, custom_data: { installation_id: installationId } },

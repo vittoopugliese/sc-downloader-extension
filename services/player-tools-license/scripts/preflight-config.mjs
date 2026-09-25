@@ -22,7 +22,7 @@ const check = (condition, message) => { if (!condition) failures.push(message); 
 const binding = selected.d1_databases?.find((item) => item.binding === "LICENSE_DB");
 const route = selected.routes?.[0]?.pattern || "";
 const vars = selected.vars || {};
-const origin = String(vars.ALLOWED_ORIGINS || "");
+const origins = String(vars.ALLOWED_ORIGINS || "").split(",").map((value) => value.trim()).filter(Boolean);
 const requiredRateLimiters = ["TRIAL_RATE_LIMITER", "LICENSE_RATE_LIMITER", "CHECKOUT_RATE_LIMITER", "EVENT_RATE_LIMITER"];
 const selectedSurface = {
   name: selected.name,
@@ -43,7 +43,8 @@ for (const name of ["LEMON_STORE_ID", "LEMON_PRODUCT_ID", "LEMON_VARIANT_ID"]) {
 }
 check(/^[A-Za-z0-9._-]{1,128}$/.test(String(vars.ENTITLEMENT_KEY_ID || "")) && !String(vars.ENTITLEMENT_KEY_ID).includes("YYYY"),
   `${environment}: ENTITLEMENT_KEY_ID must match the generated signing key.`);
-check(/^chrome-extension:\/\/[a-p]{32}$/.test(origin), `${environment}: ALLOWED_ORIGINS must be one explicit Chrome extension origin.`);
+check(origins.length > 0 && origins.every((value) => /^chrome-extension:\/\/[a-p]{32}$/.test(value)),
+  `${environment}: ALLOWED_ORIGINS must contain only explicit Chrome extension origins.`);
 check(!/REPLACE_WITH|localhost|127\.0\.0\.1/.test(JSON.stringify(selectedSurface)), `${environment}: placeholders or local origins remain.`);
 for (const name of requiredSecrets) check(selected.secrets?.required?.includes(name), `${environment}: declare required secret ${name}.`);
 const rateLimiters = selected.ratelimits || [];

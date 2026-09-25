@@ -97,6 +97,11 @@ onDocumentEvent(OPEN_LOOPER_GUIDE_EVENT, () => {
 onDocumentEvent(OPEN_PLAYER_TOOLS_PRO_EVENT, () => {
   chrome.runtime.sendMessage({ type: "SET_POPUP_START_VIEW", view: "pro" })
     .then(() => chrome.runtime.sendMessage({ type: "OPEN_EXTENSION_POPUP" }))
+    .then((result) => {
+      if (!result?.success) {
+        throw new Error(result?.error || "The extension popup could not open.");
+      }
+    })
     .catch(async (error) => {
       await chrome.runtime.sendMessage({ type: "SET_POPUP_START_VIEW", view: null }).catch(() => {});
       console.warn("[SC Downloader] Could not open Player Tools Pro.", error);

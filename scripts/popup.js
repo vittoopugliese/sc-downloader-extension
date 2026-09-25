@@ -1484,6 +1484,11 @@ function attachDownloadListener() {
 }
 
 function showTrackLoadError(reason) {
+  if (!commercePanel.hidden) {
+    hideLoading();
+    errorOverlay.classList.remove("is-visible");
+    return;
+  }
   if (isSelectionMode) {
     exitSelectionMode();
   }
@@ -1572,12 +1577,22 @@ let playerToolsOfferExpiryTimer = null;
 async function syncPlayerToolsOffer({ revalidate = true, startTrial = true } = {}) {
   try {
     // Opening the download popup is one of the two product-defined trial entry points.
-    if (startTrial) await chrome.runtime.sendMessage({ type: "START_PLAYER_TOOLS_TRIAL" });
+    let trialStartError = null;
+    if (startTrial) {
+      const trialResponse = await chrome.runtime.sendMessage({ type: "START_PLAYER_TOOLS_TRIAL" });
+      if (!trialResponse?.success) trialStartError = trialResponse?.error || "Trial service unavailable";
+    }
     const commerceResponse = await chrome.runtime.sendMessage({ type: "GET_PLAYER_TOOLS_COMMERCE", revalidate });
     const response = await chrome.runtime.sendMessage({ type: "GET_PLAYER_TOOLS_SNAPSHOT" });
     const snapshot = response?.snapshot;
     const commerce = commerceResponse?.commerce;
     const offer = commerceResponse?.commerce?.offer;
+    if (!response?.success || !snapshot || !commerceResponse?.success || !commerce) {
+      throw new Error("Player Tools state is unavailable");
+    }
+    if (trialStartError && snapshot.plan !== "pro" && snapshot.trial?.startedAt == null) {
+      throw new Error(trialStartError);
+    }
     if (offer) {
       const format = (cents) => new Intl.NumberFormat(chrome.i18n.getUILanguage(), {
         style: "currency", currency: offer.currency,
@@ -1612,7 +1627,7 @@ async function syncPlayerToolsOffer({ revalidate = true, startTrial = true } = {
   } catch {
     productOffers.hidden = false;
     playerToolsOffer.hidden = false;
-    playerToolsTrialStatus.textContent = "";
+    playerToolsTrialStatus.textContent = t("player_tools_trial_unavailable");
   }
 }
 

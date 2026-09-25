@@ -8,7 +8,7 @@
   "routes": [{ "pattern": "sctd-test.vpugliese.online/api/player-tools/*", "zone_name": "vpugliese.online" }],
   "vars": {
     "LEMON_MODE": "test",
-    "ALLOWED_ORIGINS": "chrome-extension://hccfkgjcaigahlnmobpjdhcbhkejkack",
+    "ALLOWED_ORIGINS": "chrome-extension://hccfkgjcaigahlnmobpjdhcbhkejkack,chrome-extension://oopghidjdmcbbfkicnlcfjlmifjldmli",
     "LEMON_STORE_ID": "480165",
     "LEMON_PRODUCT_ID": "1383559",
     "LEMON_VARIANT_ID": "2161516",

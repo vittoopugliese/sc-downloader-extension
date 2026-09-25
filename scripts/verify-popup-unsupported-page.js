@@ -19,6 +19,9 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
     const worker =
       context.serviceWorkers()[0] || (await context.waitForEvent("serviceworker"));
     const extensionId = new URL(worker.url()).host;
+    await worker.evaluate(async () => {
+      await chrome.storage.local.set({ "scdl.popup.startView": "pro" });
+    });
     const popup = await context.newPage();
 
     await popup.addInitScript(() => {
@@ -30,6 +33,25 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
 
     await assert.doesNotReject(
       popup.waitForFunction(
+        () => !document.getElementById("commercePanel").hidden &&
+          !document.getElementById("errorOverlay").classList.contains("is-visible"),
+        null,
+        { timeout: 1500 },
+      ),
+      "A requested Pro view must remain usable even when the active tab is outside SoundCloud",
+    );
+
+    await popup.close();
+    const regularPopup = await context.newPage();
+    await regularPopup.addInitScript(() => {
+      chrome.tabs.query = (_queryInfo, callback) => {
+        callback([{ id: 1, url: "https://example.com/not-soundcloud" }]);
+      };
+    });
+    await regularPopup.goto(`chrome-extension://${extensionId}/popup.html`);
+
+    await assert.doesNotReject(
+      regularPopup.waitForFunction(
         () =>
           document.getElementById("loadingOverlay").classList.contains("is-hidden") &&
           document.getElementById("errorOverlay").classList.contains("is-visible"),
@@ -38,6 +60,23 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
       ),
       "Opening the popup outside SoundCloud must immediately replace loading with the unsupported-page error",
     );
+
+    await regularPopup.close();
+    await context.route("https://soundcloud.com/**", (route) => route.fulfill({
+      contentType: "text/html",
+      body: "<!doctype html><html><body>SoundCloud test page</body></html>",
+    }));
+    const soundcloud = await context.newPage();
+    await soundcloud.goto("https://soundcloud.com/test-track");
+    await soundcloud.waitForTimeout(250);
+    await soundcloud.evaluate(() => {
+      document.dispatchEvent(new CustomEvent("scdl:open-player-tools-pro"));
+    });
+    await soundcloud.waitForTimeout(500);
+    const storedView = await worker.evaluate(async () =>
+      (await chrome.storage.local.get("scdl.popup.startView"))["scdl.popup.startView"]);
+    assert.equal(storedView, undefined,
+      "A failed programmatic popup open must not leave a stale Pro start view behind");
 
     console.log("Popup unsupported-page verification passed.");
   } finally {
