@@ -75,7 +75,7 @@ function cancelInstrumentRender(operationId) {
 }
 
 async function beginPadOperation(index, id, kind) {
-  if (!validPadIndex(index) || !validPadOperationId(id) || !["store", "render"].includes(kind)) throw new Error("Invalid pad operation.");
+  if (!validPadIndex(index) || !validPadOperationId(id) || !["store", "render", "delete"].includes(kind)) throw new Error("Invalid pad operation.");
   const database = await openPadDatabase();
   const result = await new Promise((resolve, reject) => {
     const transaction = database.transaction(["operations", "claims"], "readwrite");
@@ -133,6 +133,9 @@ async function finishPadOperation(id, blob, name, failure = null) {
           result = { success: false, code: "obsolete_pad", error: "A newer sample replaced this operation." };
         } else if (failure) {
           result = { success: false, code: failure.code || "pad_failed", error: failure.message || "Could not prepare this pad.", status: failure.status };
+        } else if (operation.kind === "delete") {
+          samples.delete(operation.index);
+          result = { success: true };
         } else if (!(blob instanceof Blob) || blob.size > PAD_MAX_BYTES) {
           result = { success: false, code: "pad_too_large", error: "This sample is too large for a pad." };
         } else {
@@ -251,6 +254,11 @@ async function handlePadMessage(message) {
       }
     }
     if (!validPadIndex(message.index)) throw new Error("Invalid pad.");
+    if (message.type === "OFFSCREEN_PAD_DELETE") {
+      const operation = await beginPadOperation(message.index, message.operationId, "delete");
+      if (operation.state !== "pending") return operation.result;
+      return await finishPadOperation(message.operationId);
+    }
     if (message.type === "OFFSCREEN_PAD_GET") {
       const record = await padTransaction("readonly", (store) => store.get(message.index));
       if (!record) return { success: true, pad: null };
@@ -312,7 +320,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: false, code: "slice_failed", error: error?.message || "Could not prepare the slices." }));
     return true;
   }
-  if (["OFFSCREEN_PAD_LIST", "OFFSCREEN_PAD_GET", "OFFSCREEN_PAD_STORE", "OFFSCREEN_PAD_RENDER",
+  if (["OFFSCREEN_PAD_LIST", "OFFSCREEN_PAD_DELETE", "OFFSCREEN_PAD_GET", "OFFSCREEN_PAD_STORE", "OFFSCREEN_PAD_RENDER",
       "OFFSCREEN_INSTRUMENT_RENDER", "OFFSCREEN_INSTRUMENT_CANCEL", "OFFSCREEN_INSTRUMENT_READ"].includes(message.type)) {
     const operationId = message.operationId;
     if (["OFFSCREEN_INSTRUMENT_CANCEL", "OFFSCREEN_INSTRUMENT_READ"].includes(message.type)) {

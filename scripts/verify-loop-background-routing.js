@@ -290,6 +290,13 @@ function deferred() {
     assert.equal((await dispatch({ type: "GET_LOOP_PAD_AUDIO", index }, owner)).success, true);
     assert.equal(sliceMessages.at(-1).index, index);
   }
+  const deleteOperation = "pad_delete_routing_test";
+  assert.equal((await dispatch({ type: "DELETE_LOOP_PAD_AUDIO", index: 7, operationId: deleteOperation }, owner)).success, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(sliceMessages.at(-1))), {
+    type: "OFFSCREEN_PAD_DELETE", index: 7, operationId: deleteOperation,
+  });
+  const invalidDelete = await new Promise(resolve => messageListener({ type: "DELETE_LOOP_PAD_AUDIO", index: 8, operationId: deleteOperation }, owner, resolve));
+  assert.equal(invalidDelete.success, false);
   const invalidPad = await new Promise(resolve => messageListener({ type: "GET_LOOP_PAD_AUDIO", index: 8 }, owner, resolve));
   assert.equal(invalidPad.success, false);
 

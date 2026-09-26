@@ -763,7 +763,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (["RENDER_LOOP_PAD", "RENDER_LOOP_INSTRUMENT", "CANCEL_LOOP_INSTRUMENT",
-      "GET_LOOP_PAD_LIST", "GET_LOOP_PAD_AUDIO", "STORE_LOOP_PAD_AUDIO"].includes(request.type)) {
+      "GET_LOOP_PAD_LIST", "GET_LOOP_PAD_AUDIO", "STORE_LOOP_PAD_AUDIO", "DELETE_LOOP_PAD_AUDIO"].includes(request.type)) {
     if (sender.id !== chrome.runtime.id || !sender.tab || !/^https:\/\/soundcloud\.com\//.test(sender.url || "")) {
       sendResponse({ success: false, error: "This action is only available on SoundCloud." });
       return false;
@@ -808,6 +808,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       ? { type: "OFFSCREEN_PAD_LIST" }
       : request.type === "GET_LOOP_PAD_AUDIO"
         ? { type: "OFFSCREEN_PAD_GET", index }
+        : request.type === "DELETE_LOOP_PAD_AUDIO"
+          ? { type: "OFFSCREEN_PAD_DELETE", index, operationId: request.operationId }
         : { type: "OFFSCREEN_PAD_STORE", index, name: request.name, mimeType: request.mimeType, base64: request.base64, operationId: request.operationId };
     if (request.type === "RENDER_LOOP_PAD") offscreenRequest.operationId = request.operationId;
     BulkJobManager.padMessage(offscreenRequest).then(sendResponse).catch((error) => sendResponse(errorResponse(error)));

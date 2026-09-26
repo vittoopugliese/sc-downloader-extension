@@ -171,6 +171,7 @@ window.addEventListener?.("message", (event) => {
   if (typeof id !== "string" || id.length > 100) return;
   const types = {
     list: "GET_LOOP_PAD_LIST",
+    delete: "DELETE_LOOP_PAD_AUDIO",
     get: "GET_LOOP_PAD_AUDIO",
     store: "STORE_LOOP_PAD_AUDIO",
     render: "RENDER_LOOP_PAD",
@@ -183,6 +184,7 @@ window.addEventListener?.("message", (event) => {
   if (!types[action]) return;
   const payload = { type: types[action] };
   if (action !== "list") payload.index = index;
+  if (action === "delete") payload.operationId = event.data.operationId;
   if (action === "store") {
     payload.operationId = event.data.operationId;
     payload.name = event.data.name;

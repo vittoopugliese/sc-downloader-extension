@@ -406,6 +406,8 @@
         });
         padsHydrated = true;
         updateDrumLabels();
+        if (ui?.drumMessage.textContent === "Could not restore saved samples. Reopen Sampler to retry.") showDrumError("");
+        if (ui && !ui.panel.hidden) positionPanel();
         return true;
       } catch (error) {
         if (ui && !ui.panel.hidden) showDrumError("Could not restore saved samples. Reopen Sampler to retry.");
@@ -433,6 +435,8 @@
       const button = ui.drumButtons[index];
       button.querySelector(".drum-key").textContent = pad.key ? pad.key.toUpperCase() : "·";
       button.classList.toggle("is-saving", pad.busy);
+      ui.drumResets[index].hidden = !pad.saved;
+      ui.drumResets[index].disabled = pad.busy;
       button.setAttribute("aria-label", `${pad.customName || pad.name} drum pad. Key ${pad.key ? pad.key.toUpperCase() : "unassigned"}. Hold to load an audio sample.`);
       button.title = `${Array.from(pad.customName || pad.name).slice(0, 20).join("")} · hold to load`;
     });
@@ -972,17 +976,19 @@
     const base = document.documentElement.getAttribute(EXTENSION_DRUM_SAMPLES_ATTRIBUTE);
     if (!base && !pad.saved) throw new Error("The drum samples are not ready yet.");
     const version = pad.version;
-    pad.loading = (async () => {
+    const cacheRevision = padCacheRevision;
+    const loading = (async () => {
       const url = pad.saved ? (await requestPad("get", { index: drumPads.indexOf(pad) })).pad?.dataUrl : new URL(pad.sample, base).href;
       if (!url) throw new Error("The saved sample is unavailable.");
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Could not load ${pad.name}.`);
       const buffer = await getDrumAudioContext().decodeAudioData(await response.arrayBuffer());
-      if (pad.version === version) pad.buffer = buffer;
+      if (pad.version === version && padCacheRevision === cacheRevision) pad.buffer = buffer;
       return buffer;
     })();
-    try { return await pad.loading; }
-    finally { pad.loading = null; }
+    pad.loading = loading;
+    try { return await loading; }
+    finally { if (pad.loading === loading) pad.loading = null; }
   }
 
   async function playDrum(index) {
@@ -990,9 +996,14 @@
     if (!pad || pad.busy) return;
     try {
       const context = getDrumAudioContext();
-      const ready = context.resume();
+      await context.resume();
+      if (padHydration || !padsHydrated) {
+        if (!await hydrateDrumPads()) throw new Error("Could not restore saved samples. Reopen Sampler to retry.");
+      }
+      if (pad.busy) return;
+      const version = pad.version;
       const buffer = pad.buffer || await loadDefaultDrum(pad);
-      await ready;
+      if (pad.version !== version || pad.busy || ui?.panel.hidden) return;
       const source = context.createBufferSource();
       source.buffer = buffer;
       source.connect(context.destination);
@@ -1032,15 +1043,37 @@
         reader.readAsDataURL(file);
       });
       const name = file.name.replace(/\.[^.]+$/, "") || pad.name;
-      await requestPad("store", { index, name, mimeType: file.type || "audio/wav", base64, operationId: `pad_${Date.now()}_${++padRequestNumber}` });
+      await requestPad("store", { index, name, mimeType: file.type || "audio/wav", base64, operationId: `pad_${crypto.randomUUID()}` });
       if (pad.version !== version) return;
-      pad.buffer = buffer;
+      pad.buffer = ui?.panel.hidden ? null : buffer;
       pad.saved = true;
       pad.customName = name;
       updateDrumLabels();
       showDrumError("");
     } catch (error) {
       showDrumError(error?.message || "Could not read that audio sample.");
+    } finally {
+      pad.busy = false;
+      updateDrumLabels();
+    }
+  }
+
+  async function resetDrumPad(index) {
+    const pad = drumPads[index];
+    if (!pad?.saved || pad.busy) return;
+    pad.busy = true;
+    pad.version += 1;
+    updateDrumLabels();
+    try {
+      await requestPad("delete", { index, operationId: `pad_${crypto.randomUUID()}` });
+      pad.saved = false;
+      pad.customName = "";
+      pad.updatedAt = undefined;
+      pad.buffer = null;
+      pad.loading = null;
+      showDrumError("Default sample restored.");
+    } catch (error) {
+      showDrumError(error?.message || "Could not remove the saved sample.");
     } finally {
       pad.busy = false;
       updateDrumLabels();
@@ -2274,7 +2307,7 @@
     renderLoop();
     showDrumError(`Preparing loop for pad ${index + 1}…`);
     try {
-      const operationId = `pad_${Date.now()}_${++padRequestNumber}`;
+      const operationId = `pad_${crypto.randomUUID()}`;
       const result = await requestPad("render", { index, operationId, ...sample });
       pad.version += 1;
       pad.buffer = null;
@@ -2808,6 +2841,9 @@
         .drum-pad.is-saving { opacity: .55; cursor: progress; }
         .drum-pad:focus-visible { outline: 2px solid #ff5500; outline-offset: 2px; }
         .drum-key { flex: 0 0 auto; font-size: 14px; font-weight: 800; line-height: 1; }
+        .drum-slot { position: relative; }
+        .drum-reset { display: block; margin: 2px auto 0; border: 0; border-radius: 4px; color: #ccc; background: #292929; cursor: pointer; }
+        .drum-reset:hover { color: #ff7b38; }
         .drum-file { display: none; }
         .drum-status { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0; padding: 4px 7px 6px; color: #ffb199; font-size: 10px; line-height: 1.2; }
         .drum-status[hidden] { display: none; }
@@ -3019,7 +3055,7 @@
           <dialog class="slice-dialog" aria-labelledby="slice-title" aria-describedby="slice-description"><h3 id="slice-title"></h3><p id="slice-description"></p><div><button class="slice-cancel" type="button" autofocus></button><button class="slice-replace" type="button"></button></div></dialog>
           <div class="sampler-body" id="scdl-sampler-pads">
             <div class="drum-pads">
-              ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
+              ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><button class="drum-reset" type="button" title="Remove saved sample and restore default" aria-label="Restore ${pad.name} default sample" hidden>↺</button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
             </div>
           </div>
           <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="drum-note-controls" aria-live="off"><span class="playing-note"></span><label class="instrument-cut-label" title="Cut itself" data-scdl-tooltip="Cut itself" hidden><input class="instrument-cut-itself" type="checkbox" aria-label="Cut itself" checked /></label><label class="instrument-adsr-label" title="ADSR" data-scdl-tooltip="ADSR" hidden><input class="instrument-adsr-toggle" type="checkbox" aria-label="ADSR" checked /></label></span></p>
@@ -3122,6 +3158,8 @@
     panelOpenMode = mode;
     if (ui.panel.hidden) ui.panel.scrollTop = 0;
     setPanelOpen(true);
+    clearTimeout(padCacheTimer);
+    hydrateDrumPads();
     document.dispatchEvent(new CustomEvent(PLAYER_TOOLS_OPENED_EVENT));
     if (!waveformCollapsed) loadPlayerWaveform();
   }
@@ -3139,6 +3177,7 @@
     cancelLoopPadSelection();
     exitInstrument({ message: "" });
     setPanelOpen(false);
+    schedulePadCacheRelease();
   }
 
   function pointerIsOverTempoControl() {
@@ -3194,6 +3233,7 @@
       panel: root.querySelector(".panel"),
       drumButtons: [...root.querySelectorAll(".drum-pad")],
       drumFiles: [...root.querySelectorAll(".drum-file")],
+      drumResets: [...root.querySelectorAll(".drum-reset")],
       drumSection: root.querySelector(".drum-section"),
       samplerToggle: root.querySelector(".sampler-toggle"),
       samplerIcon: root.querySelector(".sampler-icon"),
@@ -3283,7 +3323,7 @@
       toggle: ui.samplerToggle,
       body: root.querySelector(".sampler-body"),
       collapsed: samplerCollapsed,
-      onChange(value) { samplerCollapsed = value; renderControlsVisibility(); if (!ui.panel.hidden) positionPanel(); },
+      onChange(value) { samplerCollapsed = value; if (!value) hydrateDrumPads(); renderControlsVisibility(); if (!ui.panel.hidden) positionPanel(); },
     });
     sectionControllers.loop = collapsible.mount({
       section: ui.waveformShell,
@@ -3301,6 +3341,7 @@
     });
 
     updateDrumLabels();
+    ui.drumResets.forEach((button, index) => button.addEventListener("click", () => resetDrumPad(index)));
     ui.drumButtons.forEach((button, index) => {
       const input = ui.drumFiles[index];
       let pressedAt = 0;
