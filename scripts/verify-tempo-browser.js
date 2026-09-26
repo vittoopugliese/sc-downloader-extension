@@ -812,6 +812,27 @@ async function main() {
     await page.waitForFunction(() => window.drumStarts === 6);
     assert.deepEqual(await page.evaluate(() => window.sourcePlaybackRates.slice(-2)), [1, 2],
       "Q/I must play the original loop and its upper octave without also triggering sampler pads.");
+    const envelope = host.locator(".instrument-controls");
+    assert.equal(await envelope.isVisible(), true);
+    assert.equal(await envelope.getByRole("slider").count(), 4);
+    const attackKnob = envelope.getByRole("slider", { name: "Attack", exact: true });
+    await attackKnob.focus();
+    await page.keyboard.press("ArrowRight");
+    assert.equal(await attackKnob.getAttribute("aria-valuenow"), "14");
+    assert.match(await host.locator(".drum-message").textContent(), /\+0/, "Knob arrows must not change octave");
+    const attackBox = await attackKnob.boundingBox();
+    await page.mouse.move(attackBox.x + attackBox.width / 2, attackBox.y + attackBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(attackBox.x + attackBox.width / 2, attackBox.y + attackBox.height / 2 - 30);
+    await page.mouse.up();
+    assert.ok(Number(await attackKnob.getAttribute("aria-valuenow")) > 14, "Dragging changes attack");
+    const cutItself = envelope.getByRole("checkbox", { name: "Cut itself" });
+    assert.equal(await cutItself.isChecked(), true);
+    await cutItself.uncheck();
+    assert.equal(await cutItself.isChecked(), false);
+    await cutItself.check();
+    await page.screenshot({ path: path.join(projectRoot, "test-results", "sampler-adsr.png") });
+    await instrumentToggle.focus();
     for (const locale of ["en", "es", "de", "ru", "pt_BR"]) {
       const messages = JSON.parse(fs.readFileSync(path.join(projectRoot, "_locales", locale, "messages.json"), "utf8"));
       const copy = { status: messages.piano_mode_status.message, help: messages.piano_mode_help.message };
@@ -827,6 +848,7 @@ async function main() {
     }
     await page.evaluate(() => window.dispatchEvent(new Event("blur")));
     assert.equal(await instrumentToggle.getAttribute("aria-pressed"), "false");
+    await envelope.waitFor({ state: "hidden" });
     assert.equal(await host.locator(".playing-note").textContent(), "");
     assert.equal(await panel.isVisible(), true, "Window blur must leave the panel visible while disabling piano mode.");
     await instrumentToggle.click();

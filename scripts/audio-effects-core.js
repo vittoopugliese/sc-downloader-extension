@@ -7,59 +7,80 @@
 
   if (globalThis.SCTempoEffects) return;
   // Observe sources from document_start: a media element can only have one.
-  // Observe the site's source early so EQ can preserve its downstream dry path.
+  // Observe final outputs early so EQ preserves the site's volume/mute graph.
   const mediaSources = new WeakMap();
-  const sourceRoutes = new WeakMap();
+  const outputRoutes = new WeakMap();
   const bitcrusherModuleLoads = new WeakMap();
-  function rememberSource(target, source) {
-    mediaSources.set(target, source);
-    if (sourceRoutes.has(source)) return source;
-    const connect = source.connect;
-    const disconnect = source.disconnect;
-    const route = { edges: [], output: null, eq: null, connect, disconnect };
-    sourceRoutes.set(source, route);
-    // Observe only this source's outgoing edges, before the site connects it.
-    // Once EQ is installed, future site connections/disconnections use its output.
-    source.connect = function (...args) {
-      const result = connect.apply(route.output || source, args);
-      if (!route.edges.some((edge) => edge[0] === args[0] && (edge[1] || 0) === (args[1] || 0) && (edge[2] || 0) === (args[2] || 0))) route.edges.push(args);
-      return result;
+  const nodePrototype = globalThis.AudioNode?.prototype;
+  const nativeConnect = nodePrototype?.connect;
+  const nativeDisconnect = nodePrototype?.disconnect;
+  function outputRoute(context) {
+    let route = outputRoutes.get(context);
+    if (!route) {
+      route = { edges: [], eq: null };
+      outputRoutes.set(context, route);
+    }
+    return route;
+  }
+  if (nodePrototype) {
+    nodePrototype.connect = function (...args) {
+      if (args[0] !== this.context.destination) return nativeConnect.apply(this, args);
+      const route = outputRoute(this.context);
+      const destination = args[0];
+      if (route.eq) args[0] = route.eq.input;
+      nativeConnect.apply(this, args);
+      route.edges = route.edges.filter((edge) => edge.source.deref());
+      if (!route.edges.some((edge) => edge.source.deref() === this && edge.output === (args[1] || 0))) {
+        route.edges.push({ source: new WeakRef(this), output: args[1] || 0 });
+      }
+      return destination;
     };
-    source.disconnect = function (...args) {
-      const result = disconnect.apply(route.output || source, args);
-      route.edges = route.edges.filter((edge) => {
+    nodePrototype.disconnect = function (...args) {
+      const route = outputRoutes.get(this.context);
+      const destination = args[0] === this.context.destination;
+      const actual = [...args];
+      if (destination && route?.eq) actual[0] = route.eq.input;
+      const result = nativeDisconnect.apply(this, actual);
+      if (route) route.edges = route.edges.filter((edge) => {
+        const source = edge.source.deref();
+        if (!source) return false;
+        if (source !== this) return true;
         if (!args.length) return false;
-        if (typeof args[0] === "number") return (edge[1] || 0) !== args[0];
-        return edge[0] !== args[0] || (args.length > 1 && (edge[1] || 0) !== args[1]) ||
-          (args.length > 2 && (edge[2] || 0) !== args[2]);
+        if (typeof args[0] === "number") return edge.output !== args[0];
+        return !destination || (args.length > 1 && edge.output !== args[1]);
       });
       return result;
     };
+  }
+  function rememberSource(target, source) {
+    mediaSources.set(target, source);
     return source;
   }
 
-  function insertEqualizer(source) {
-    const route = sourceRoutes.get(source);
-    if (!route || !globalThis.SCParametricEQ) throw new Error("Reload SoundCloud to enable the equalizer.");
+  function insertEqualizer(context) {
+    const route = outputRoute(context);
+    if (!nativeConnect || !globalThis.SCParametricEQ) throw new Error("Reload SoundCloud to enable the equalizer.");
     if (route.eq) return route.eq;
-    const eq = globalThis.SCParametricEQ.createGraph(source.context, { analyse: true });
+    const eq = globalThis.SCParametricEQ.createGraph(context, { analyse: true });
     const moved = [];
     try {
-      // Disconnect only recorded edges; preserve the site's volume/mute graph.
+      // Sum dry audio, effect returns and instrument voices before one final EQ.
       for (const edge of route.edges) {
-        const exactEdge = typeof edge[0]?.numberOfInputs === "number"
-          ? [edge[0], edge[1] || 0, edge[2] || 0] : [edge[0], edge[1] || 0];
-        route.disconnect.apply(source, exactEdge);
-        moved.push(edge);
-        route.connect.apply(eq.output, edge);
+        const source = edge.source.deref();
+        if (!source) continue;
+        nativeDisconnect.call(source, context.destination, edge.output, 0);
+        moved.push({ source, output: edge.output });
+        nativeConnect.call(source, eq.input, edge.output, 0);
       }
-      route.connect.call(source, eq.input);
-      route.output = eq.output;
+      nativeConnect.call(eq.output, context.destination);
       route.eq = eq;
       return eq;
     } catch (error) {
       eq.output.disconnect();
-      for (const edge of moved) route.connect.apply(source, edge);
+      for (const { source, output } of moved) {
+        try { nativeDisconnect.call(source, eq.input, output, 0); } catch {}
+        nativeConnect.call(source, context.destination, output, 0);
+      }
       throw error;
     }
   }

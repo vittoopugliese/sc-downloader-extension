@@ -23,12 +23,11 @@ function fixture() {
   const messages = [];
   const timers = new Map();
   const starts = [];
-  const params = { setValueAtTime() {}, exponentialRampToValueAtTime() {}, cancelScheduledValues() {}, value: 1 };
   const audio = {
     currentTime: 0, destination: {}, resume: async () => {},
     decodeAudioData: async () => ({ decoded: true }),
-    createGain: () => ({ gain: params, connect() {} }),
-    createBufferSource: () => ({ playbackRate: {}, connect() { return { connect() {} }; }, start() { starts.push(this); }, stop() {} }),
+    createGain: () => ({ gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, cancelScheduledValues() {}, value: 1 }, connect() {} }),
+    createBufferSource: () => ({ playbackRate: {}, stops: [], connect() { return { connect() {} }; }, start() { starts.push(this); }, stop(time) { this.stops.push(time); } }),
   };
   const state = { effectiveRate: 1, preservePitch: false };
   const effectFields = ['schemaVersion', 'reverb', 'delay', 'flanger', 'phaser', 'bitcrusher', 'saturation',
@@ -44,6 +43,8 @@ function fixture() {
     instrumentBuffer: null, instrumentVoice: null, instrumentNoteRevision: 0,
     instrumentResumePromise: null, instrumentIntentVersion: 0, instrumentOperationId: null,
     instrumentSnapshot: null, instrumentVoices: new Set(), padRenderPending: false, padRequestNumber: 0,
+    instrumentKeys: new Map(), instrumentCutItself: true,
+    instrumentEnvelope: { attack: 4, decay: 100, sustain: 100, release: 100 },
     padRequests: new Map(), loopState: { active: true, trackIdentity: 'permalink:track', generation: 1, startMs: 0, endMs: 1000, durationMs: 10000 },
     ui: { panel: { hidden: false } }, document: { hidden: false }, hoveredDrum: null, panelOpenMode: null,
     capability: () => true, authorizePlayerTools: async () => true,
@@ -60,7 +61,7 @@ function fixture() {
     SCSamplerCore: { playbackRateForMidi: note => 2 ** ((note - 72) / 12) },
   };
   vm.createContext(scope);
-  for (const name of ['invalidatePendingInstrumentNotes', 'cleanupInstrumentVoice', 'releaseInstrumentVoice',
+  for (const name of ['invalidatePendingInstrumentNotes', 'instrumentGainAt', 'scheduleInstrumentEnvelope', 'releaseInstrumentKey', 'cleanupInstrumentVoice', 'releaseInstrumentVoice',
     'stopInstrumentVoice', 'stopAllInstrumentVoices', 'setInstrumentMode', 'loopMatchesInstrumentSnapshot',
     'normalizedInstrumentNumber', 'buildInstrumentDescriptor', 'disableInstrument', 'exitInstrument',
     'requestPad', 'cancelInstrumentRequest', 'toggleLoopInstrument', 'playInstrumentNote', 'closePanel']) {
@@ -69,6 +70,98 @@ function fixture() {
   return { scope, audio, state, effectsState, starts, messages, timers };
 }
 async function main() {
+  {
+    const { scope, audio } = fixture();
+    scope.instrumentMode = true;
+    scope.instrumentBuffer = {};
+    Object.assign(scope.instrumentEnvelope, { attack: 100, decay: 200, sustain: 40, release: 500 });
+    await scope.playInstrumentNote(72, 'KeyQ');
+    const voice = scope.instrumentVoice;
+    assert.equal(scope.instrumentGainAt(voice, 0), 0);
+    assert.equal(scope.instrumentGainAt(voice, 0.05), 0.5);
+    assert.equal(scope.instrumentGainAt(voice, 0.1), 1);
+    assert.ok(Math.abs(scope.instrumentGainAt(voice, 0.2) - 0.7) < 1e-9);
+    assert.equal(scope.instrumentGainAt(voice, 1), 0.4);
+    audio.currentTime = 0.05;
+    scope.releaseInstrumentKey({ code: 'KeyQ', preventDefault() {}, stopImmediatePropagation() {} });
+    assert.equal(scope.instrumentGainAt(voice, 0.05), 0.5, 'release starts from the current attack level');
+    assert.ok(Math.abs(scope.instrumentGainAt(voice, 0.3) - 0.25) < 1e-9);
+    assert.equal(scope.instrumentGainAt(voice, 0.55), 0);
+    assert.ok(Math.abs(voice.source.stops.at(-1) - 0.552) < 1e-9);
+    audio.currentTime = 0.3;
+    voice.releaseMs = 1000;
+    scope.scheduleInstrumentEnvelope(voice);
+    assert.ok(Math.abs(scope.instrumentGainAt(voice, 0.3) - 0.25) < 1e-9, 'live release preserves current gain');
+    assert.equal(scope.instrumentGainAt(voice, 1.05), 0);
+    scope.setInstrumentMode(false);
+    assert.ok(voice.source.stops.at(-1) < 0.32, 'exit shortens long release tails');
+    console.log('ADSR: attack, decay, sustain, note-off, live release and forced stop');
+  }
+  {
+    const { scope, audio, starts } = fixture();
+    const resume = deferred();
+    audio.resume = () => resume.promise;
+    scope.instrumentMode = true;
+    scope.instrumentBuffer = {};
+    scope.instrumentCutItself = false;
+    const pending = [scope.playInstrumentNote(72, 'KeyQ'), scope.playInstrumentNote(76, 'KeyE')];
+    resume.resolve();
+    await Promise.all(pending);
+    assert.equal(starts.length, 2, 'polyphony preserves pending notes during resume');
+    assert.ok(starts.every(source => source.stops.length === 0));
+    scope.releaseInstrumentKey({ code: 'KeyQ', preventDefault() {}, stopImmediatePropagation() {} });
+    assert.equal(starts[0].stops.length, 1);
+    assert.equal(starts[1].stops.length, 0, 'note-off only releases its own key');
+    scope.setInstrumentMode(false);
+    assert.ok(starts.every(source => source.stops.length > 0), 'exit stops every voice');
+    console.log('Polyphony: resume race, independent note-off and mode exit');
+  }
+  {
+    const { scope, audio, starts } = fixture();
+    const resume = deferred();
+    audio.resume = () => resume.promise;
+    scope.instrumentMode = true;
+    scope.instrumentBuffer = {};
+    const pending = scope.playInstrumentNote(72, 'KeyQ');
+    scope.releaseInstrumentKey({ code: 'KeyQ', preventDefault() {}, stopImmediatePropagation() {} });
+    resume.resolve();
+    await pending;
+    assert.equal(starts.length, 0, 'released keys cannot start after resume');
+    audio.state = 'running';
+    await scope.playInstrumentNote(72, 'KeyQ');
+    await scope.playInstrumentNote(74, 'KeyW');
+    assert.equal(starts[0].stops.length, 1, 'cut itself stops the previous note');
+    assert.equal(starts[1].stops.length, 0);
+    console.log('Cut itself: latest note wins; early keyup cancels pending playback');
+  }
+  {
+    const { scope, audio } = fixture();
+    audio.state = 'running';
+    scope.instrumentMode = true;
+    scope.instrumentBuffer = {};
+    scope.instrumentCutItself = false;
+    await scope.playInstrumentNote(72, 'KeyQ');
+    const first = scope.instrumentVoice;
+    audio.currentTime = 0.002;
+    scope.instrumentEnvelope.attack = 100;
+    scope.scheduleInstrumentEnvelope(first);
+    assert.equal(scope.instrumentGainAt(first, 0.002), 0.5, 'live attack does not jump');
+    assert.equal(scope.instrumentGainAt(first, 0.1), 1);
+    audio.currentTime = 0.25;
+    scope.instrumentEnvelope.sustain = 25;
+    scope.scheduleInstrumentEnvelope(first);
+    assert.equal(scope.instrumentGainAt(first, 0.26), 0.25, 'sustain changes on a held voice');
+    await scope.playInstrumentNote(72, 'KeyK');
+    scope.releaseInstrumentKey({ code: 'KeyQ', preventDefault() {}, stopImmediatePropagation() {} });
+    assert.equal(scope.instrumentVoice.releasing, false, 'duplicate pitches retain independent physical keys');
+    for (let i = 0; i < 35; i++) await scope.playInstrumentNote(72, `test-${i}`);
+    assert.equal(scope.instrumentVoices.size, 32, 'polyphony is bounded');
+    assert.equal(first.cleaned, true, 'stolen voices disconnect');
+    const last = scope.instrumentVoice;
+    last.source.onended();
+    assert.equal(scope.instrumentKeys.has('test-34'), false, 'natural sample end clears its key');
+    console.log('Live envelopes, duplicate pitches, voice limit and natural cleanup');
+  }
   {
     const { scope, effectsState } = fixture();
     const baseline = scope.buildInstrumentDescriptor().signature;
