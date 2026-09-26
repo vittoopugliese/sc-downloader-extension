@@ -26,8 +26,8 @@ function fixture() {
   const audio = {
     currentTime: 0, destination: {}, resume: async () => {},
     decodeAudioData: async () => ({ decoded: true }),
-    createGain: () => ({ gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, cancelScheduledValues() {}, value: 1 }, connect() {} }),
-    createBufferSource: () => ({ playbackRate: {}, stops: [], connect() { return { connect() {} }; }, start() { starts.push(this); }, stop(time) { this.stops.push(time); } }),
+    createGain: () => ({ gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, cancelScheduledValues() {}, value: 1 }, connect(target) { return target; }, disconnect() {} }),
+    createBufferSource: () => ({ playbackRate: {}, stops: [], connect(target) { return target; }, disconnect() {}, start(...args) { this.startArgs = args; starts.push(this); }, stop(time) { this.stops.push(time); } }),
   };
   const state = { effectiveRate: 1, preservePitch: false };
   const effectFields = ['schemaVersion', 'reverb', 'delay', 'flanger', 'phaser', 'bitcrusher', 'saturation',
@@ -44,7 +44,9 @@ function fixture() {
     instrumentResumePromise: null, instrumentIntentVersion: 0, instrumentOperationId: null,
     instrumentSnapshot: null, instrumentVoices: new Set(), padRenderPending: false, padRequestNumber: 0,
     instrumentKeys: new Map(), instrumentCutItself: true,
+    instrumentAdsrEnabled: true,
     instrumentEnvelope: { attack: 4, decay: 100, sustain: 100, release: 100 },
+    waveformDrawPreview: null,
     padRequests: new Map(), loopState: { active: true, trackIdentity: 'permalink:track', generation: 1, startMs: 0, endMs: 1000, durationMs: 10000 },
     ui: { panel: { hidden: false } }, document: { hidden: false }, hoveredDrum: null, panelOpenMode: null,
     capability: () => true, authorizePlayerTools: async () => true,
@@ -62,18 +64,112 @@ function fixture() {
   };
   vm.createContext(scope);
   for (const name of ['invalidatePendingInstrumentNotes', 'instrumentGainAt', 'scheduleInstrumentEnvelope', 'releaseInstrumentKey', 'cleanupInstrumentVoice', 'releaseInstrumentVoice',
-    'stopInstrumentVoice', 'stopAllInstrumentVoices', 'setInstrumentMode', 'loopMatchesInstrumentSnapshot',
+    'stopInstrumentVoice', 'stopAllInstrumentVoices', 'setInstrumentMode', 'setInstrumentAdsrEnabled', 'loopMatchesInstrumentSnapshot',
     'normalizedInstrumentNumber', 'buildInstrumentDescriptor', 'disableInstrument', 'exitInstrument',
-    'requestPad', 'cancelInstrumentRequest', 'toggleLoopInstrument', 'playInstrumentNote', 'closePanel']) {
+    'requestPad', 'cancelInstrumentRequest', 'toggleLoopInstrument', 'instrumentSelection', 'syncInstrumentSelection', 'playInstrumentNote', 'closePanel']) {
     vm.runInContext(extract(name), scope);
   }
   return { scope, audio, state, effectsState, starts, messages, timers };
 }
 async function main() {
   {
+    const { scope, audio, starts } = fixture();
+    audio.state = 'running';
+    scope.instrumentMode = true;
+    scope.instrumentBuffer = { duration: 10 };
+    Object.assign(scope.instrumentEnvelope, { attack: 5000, decay: 5000, sustain: 0, release: 2000 });
+    scope.setInstrumentAdsrEnabled(false);
+    await scope.playInstrumentNote(72, 'KeyQ');
+    const first = scope.instrumentVoice;
+    assert.equal(scope.instrumentGainAt(first, .01), 1, 'bypassed ADSR ignores saved attack and sustain');
+    audio.currentTime = .1;
+    scope.releaseInstrumentKey({ code: 'KeyQ', preventDefault() {}, stopImmediatePropagation() {} });
+    assert.equal(first.releasing, false, 'one-shot playback ignores keyup');
+    assert.equal(first.source.stops.at(-1), 1, 'one-shot still stops at the sample boundary');
+    await scope.playInstrumentNote(74, 'KeyW');
+    assert.equal(first.releasing, true, 'cut itself still cuts the previous one-shot');
+    assert.ok(first.source.stops.at(-1) < .12);
+    scope.setInstrumentAdsrEnabled(true);
+    scope.setInstrumentAdsrEnabled(false);
+    assert.equal(first.releasing, true, 'ADSR toggles never revive cut voices');
+    scope.stopAllInstrumentVoices();
+    scope.instrumentCutItself = false;
+    await scope.playInstrumentNote(72, 'KeyQ');
+    const polyFirst = scope.instrumentVoice;
+    scope.releaseInstrumentKey({ code: 'KeyQ', preventDefault() {}, stopImmediatePropagation() {} });
+    await scope.playInstrumentNote(72, 'KeyQ');
+    assert.equal(polyFirst.releasing, false, 'repeated one-shots overlap when cut itself is off');
+    scope.releaseInstrumentKey({ code: 'KeyQ', preventDefault() {}, stopImmediatePropagation() {} });
+    scope.setInstrumentAdsrEnabled(true);
+    assert.equal(polyFirst.releasing, true, 'enabling ADSR releases notes whose keys are already up');
+    assert.equal(scope.instrumentVoice.releasing, true);
+    audio.currentTime = .2;
+    scope.setInstrumentAdsrEnabled(false);
+    assert.equal(scope.instrumentVoice.releasing, false, 'disabling ADSR during release restores one-shot playback');
+    assert.equal(scope.instrumentVoice.source.stops.at(-1), scope.instrumentVoice.sampleEndAt);
+    scope.setInstrumentMode(false);
+    assert.ok(starts.every(source => source.stops.at(-1) < .22), 'leaving piano mode stops all one-shots');
+    assert.equal(scope.instrumentEnvelope.attack, 5000, 'bypassing keeps knob settings');
+    console.log('ADSR bypass: one-shots, cut itself, repeated-key polyphony and live toggles');
+  }
+  {
+    const { scope, audio, starts } = fixture();
+    const resume = deferred();
+    audio.resume = () => resume.promise;
+    scope.instrumentMode = true;
+    scope.instrumentBuffer = { duration: 10 };
+    scope.setInstrumentAdsrEnabled(false);
+    const pending = scope.playInstrumentNote(72, 'KeyQ');
+    scope.releaseInstrumentKey({ code: 'KeyQ', preventDefault() {}, stopImmediatePropagation() {} });
+    resume.resolve();
+    await pending;
+    assert.equal(starts.length, 1, 'a quick one-shot tap survives pending audio resume');
+    assert.equal(scope.instrumentVoice.keyReleased, true);
+    assert.equal(scope.instrumentKeys.size, 0);
+    scope.setInstrumentAdsrEnabled(true);
+    assert.equal(scope.instrumentVoice.releasing, true);
+    console.log('ADSR bypass: quick taps while audio resumes');
+  }
+  {
+    const { scope, audio, state, starts } = fixture();
+    audio.state = 'running';
+    scope.instrumentMode = true;
+    scope.instrumentBuffer = { duration: 50 };
+    state.effectiveRate = 2;
+    scope.instrumentSnapshot = scope.buildInstrumentDescriptor();
+    scope.loopState.startMs = 2000;
+    scope.loopState.endMs = 6000;
+    assert.equal(scope.loopMatchesInstrumentSnapshot(), true, 'moving the selection keeps the prepared source');
+    await scope.playInstrumentNote(84, 'KeyI');
+    const voice = scope.instrumentVoice;
+    assert.deepEqual(starts[0].startArgs, [0, 1], 'selection start maps through the prepared tempo');
+    assert.equal(starts[0].stops.at(-1), 1, 'sample duration also follows note pitch');
+    audio.currentTime = 0.1;
+    scope.loopState.startMs = 8000;
+    scope.loopState.endMs = 14000;
+    scope.syncInstrumentSelection();
+    assert.equal(scope.instrumentVoice, voice, 'live selection keeps the held envelope');
+    assert.equal(starts[1].startArgs[1], 4.2, 'moving beyond the original sample retargets the held voice');
+    assert.equal(starts[1].stops.at(-1), 1.5);
+    assert.ok(starts[0].stops.at(-1) < 0.12, 'old source fades out');
+    starts[0].onended();
+    assert.equal(voice.cleaned, false, 'crossfade cleanup must not remove the replacement voice');
+    scope.loopState.endMs = 18000;
+    scope.syncInstrumentSelection();
+    assert.equal(starts.length, 2, 'moving only the end reschedules without restarting');
+    assert.equal(voice.source.stops.at(-1), 2.5);
+    scope.releaseInstrumentKey({ code: 'KeyI', preventDefault() {}, stopImmediatePropagation() {} });
+    scope.loopState.endMs = 20000;
+    scope.syncInstrumentSelection();
+    assert.ok(voice.source.stops.at(-1) < .3, 'selection edits do not revive released notes');
+    scope.loopState.generation++;
+    assert.equal(scope.loopMatchesInstrumentSnapshot(), false, 'a new track generation still invalidates the cache');
+    console.log('Editable sample: cached full source, live retargeting, end extension and note-off');
+  }
+  {
     const { scope, audio } = fixture();
     scope.instrumentMode = true;
-    scope.instrumentBuffer = {};
+    scope.instrumentBuffer = { duration: 100 };
     Object.assign(scope.instrumentEnvelope, { attack: 100, decay: 200, sustain: 40, release: 500 });
     await scope.playInstrumentNote(72, 'KeyQ');
     const voice = scope.instrumentVoice;
@@ -102,18 +198,18 @@ async function main() {
     const resume = deferred();
     audio.resume = () => resume.promise;
     scope.instrumentMode = true;
-    scope.instrumentBuffer = {};
+    scope.instrumentBuffer = { duration: 100 };
     scope.instrumentCutItself = false;
     const pending = [scope.playInstrumentNote(72, 'KeyQ'), scope.playInstrumentNote(76, 'KeyE')];
     resume.resolve();
     await Promise.all(pending);
     assert.equal(starts.length, 2, 'polyphony preserves pending notes during resume');
-    assert.ok(starts.every(source => source.stops.length === 0));
+    assert.ok(starts.every(source => source.stops.length === 1));
     scope.releaseInstrumentKey({ code: 'KeyQ', preventDefault() {}, stopImmediatePropagation() {} });
-    assert.equal(starts[0].stops.length, 1);
-    assert.equal(starts[1].stops.length, 0, 'note-off only releases its own key');
+    assert.equal(starts[0].stops.length, 2);
+    assert.equal(starts[1].stops.length, 1, 'note-off only releases its own key');
     scope.setInstrumentMode(false);
-    assert.ok(starts.every(source => source.stops.length > 0), 'exit stops every voice');
+    assert.ok(starts.every(source => source.stops.length > 1), 'exit stops every voice');
     console.log('Polyphony: resume race, independent note-off and mode exit');
   }
   {
@@ -121,7 +217,7 @@ async function main() {
     const resume = deferred();
     audio.resume = () => resume.promise;
     scope.instrumentMode = true;
-    scope.instrumentBuffer = {};
+    scope.instrumentBuffer = { duration: 100 };
     const pending = scope.playInstrumentNote(72, 'KeyQ');
     scope.releaseInstrumentKey({ code: 'KeyQ', preventDefault() {}, stopImmediatePropagation() {} });
     resume.resolve();
@@ -130,15 +226,15 @@ async function main() {
     audio.state = 'running';
     await scope.playInstrumentNote(72, 'KeyQ');
     await scope.playInstrumentNote(74, 'KeyW');
-    assert.equal(starts[0].stops.length, 1, 'cut itself stops the previous note');
-    assert.equal(starts[1].stops.length, 0);
+    assert.equal(starts[0].stops.length, 2, 'cut itself stops the previous note');
+    assert.equal(starts[1].stops.length, 1);
     console.log('Cut itself: latest note wins; early keyup cancels pending playback');
   }
   {
     const { scope, audio } = fixture();
     audio.state = 'running';
     scope.instrumentMode = true;
-    scope.instrumentBuffer = {};
+    scope.instrumentBuffer = { duration: 100 };
     scope.instrumentCutItself = false;
     await scope.playInstrumentNote(72, 'KeyQ');
     const first = scope.instrumentVoice;
@@ -202,7 +298,7 @@ async function main() {
     const resume = deferred();
     audio.resume = () => resume.promise;
     scope.instrumentMode = true;
-    scope.instrumentBuffer = {};
+    scope.instrumentBuffer = { duration: 100 };
     const pending = scope.playInstrumentNote(72);
     scope.stopInstrumentVoice(); // Same stop used by octave change.
     resume.resolve();
@@ -215,7 +311,7 @@ async function main() {
     const resume = deferred();
     audio.resume = () => resume.promise;
     scope.instrumentMode = true;
-    scope.instrumentBuffer = {};
+    scope.instrumentBuffer = { duration: 100 };
     const notes = [72, 74, 76].map(note => scope.playInstrumentNote(note));
     resume.resolve();
     await Promise.all(notes);

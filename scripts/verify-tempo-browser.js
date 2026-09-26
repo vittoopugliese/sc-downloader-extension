@@ -136,7 +136,7 @@ async function main() {
       window.padRenderRequests = [];
       window.instrumentRenderRequests = [];
       window.savedPadSamples = {};
-      window.addEventListener("message", (event) => {
+      window.addEventListener("message", async (event) => {
         const data = event.data;
         if (event.source !== window || data?.source !== "scdl-pad-main") return;
         let result = { success: true };
@@ -148,7 +148,22 @@ async function main() {
           result.pad = { name: data.name };
         } else if (data.action === "instrument") {
           window.instrumentRenderRequests.push(data);
-          result.instrument = { name: data.name, dataUrl: `${location.origin}/assets/drums/tom1.wav` };
+          const frames = Math.ceil(data.trimRange.durationMs / 1000 / data.playbackTransform.rate * 8000);
+          const bytes = new Uint8Array(44 + frames * 2);
+          const view = new DataView(bytes.buffer);
+          const text = (at, value) => [...value].forEach((character, i) => view.setUint8(at + i, character.charCodeAt(0)));
+          text(0, "RIFF"); view.setUint32(4, bytes.length - 8, true); text(8, "WAVEfmt ");
+          view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+          view.setUint32(24, 8000, true); view.setUint32(28, 16000, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+          text(36, "data"); view.setUint32(40, frames * 2, true);
+          for (let i = 0; i < frames; i++) view.setInt16(44 + i * 2, Math.sin(i * Math.PI * 440 / 8000) * 16000, true);
+          const blob = new Blob([bytes], { type: "audio/wav" });
+          for (let offset = 0; offset < blob.size; offset += 1024 * 1024) {
+            const part = blob.slice(offset, offset + 1024 * 1024);
+            const dataUrl = await new Promise((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.readAsDataURL(part); });
+            window.postMessage({ source: "scdl-pad-content", operationId: data.operationId, chunk: { offset, byteLength: part.size, dataUrl } }, location.origin);
+          }
+          result.instrument = { name: data.name, fullTrack: true, byteLength: blob.size, mimeType: blob.type };
         } else if (data.action === "store") {
           window.savedPadSamples[data.index] = { name: data.name, dataUrl: `${location.origin}/assets/drums/hat1.wav` };
           result.pad = { name: data.name };
@@ -302,11 +317,13 @@ async function main() {
     await page.evaluate(() => {
       window.drumStarts = 0;
       window.sourcePlaybackRates = [];
+      window.sourceStartArguments = [];
       const originalStart = AudioBufferSourceNode.prototype.start;
       AudioBufferSourceNode.prototype.start = function (...args) {
         window.drumStarts += 1;
         window.lastSampleContext = this.context;
         window.sourcePlaybackRates.push(this.playbackRate.value);
+        window.sourceStartArguments.push(args);
         return originalStart.apply(this, args);
       };
     });
@@ -814,7 +831,8 @@ async function main() {
     const instrumentRender = await page.evaluate(() => window.instrumentRenderRequests.at(-1));
     assert.equal(await page.evaluate(() => window.instrumentSourcePaused), true);
     assert.equal(await page.evaluate(() => window.instrumentPauseCalls), 1);
-    assert.deepEqual(instrumentRender.trimRange, { startMs: 12345, endMs: 20678, durationMs: 120000 });
+    assert.deepEqual(instrumentRender.trimRange, { startMs: 0, endMs: 120000, durationMs: 120000 });
+    assert.equal(instrumentRender.fullTrack, true);
     assert.equal(instrumentRender.playbackTransform.rate, 1.25);
     assert.equal(instrumentRender.effects.reverb, 24);
     assert.deepEqual(instrumentRender.effects.eq, { enabled: false, hardClip: false, bands: [] },
@@ -822,6 +840,7 @@ async function main() {
     await host.locator(".brand-name").hover();
     await page.keyboard.press("q");
     await page.waitForFunction(() => window.drumStarts === 5);
+    assert.equal(await page.evaluate(() => window.sourceStartArguments.at(-1)[1]), 12.345 / 1.25);
     await page.waitForFunction(() => window.masterEqualizers.some((eq) =>
       eq.input.context === window.lastSampleContext && eq.readSpectrum().values.some((db) => db > -90)));
     await page.keyboard.press("i");
@@ -830,11 +849,18 @@ async function main() {
       "Q/I must play the original loop and its upper octave without also triggering sampler pads.");
     const envelope = host.locator(".instrument-controls");
     assert.equal(await envelope.isVisible(), true);
+    assert.equal(await host.locator(".sampler-body").isVisible(), false, "Fixed pads stay hidden in piano mode");
     assert.equal(await envelope.getByRole("slider").count(), 4);
     const attackKnob = envelope.getByRole("slider", { name: "Attack", exact: true });
+    const graph = envelope.locator(".envelope-graph");
+    const curveBefore = await graph.locator(".envelope-curve").getAttribute("d");
     await attackKnob.focus();
     await page.keyboard.press("ArrowRight");
     assert.equal(await attackKnob.getAttribute("aria-valuenow"), "14");
+    assert.notEqual(await graph.locator(".envelope-curve").getAttribute("d"), curveBefore);
+    const graphBox = await graph.boundingBox();
+    const releaseBox = await envelope.getByRole("slider", { name: "Release", exact: true }).boundingBox();
+    assert.ok(graphBox.x > releaseBox.x + releaseBox.width, "Small graph sits beside the four knobs");
     assert.match(await host.locator(".drum-message").textContent(), /\+0/, "Knob arrows must not change octave");
     const attackBox = await attackKnob.boundingBox();
     await page.mouse.move(attackBox.x + attackBox.width / 2, attackBox.y + attackBox.height / 2);
@@ -842,11 +868,33 @@ async function main() {
     await page.mouse.move(attackBox.x + attackBox.width / 2, attackBox.y + attackBox.height / 2 - 30);
     await page.mouse.up();
     assert.ok(Number(await attackKnob.getAttribute("aria-valuenow")) > 14, "Dragging changes attack");
-    const cutItself = envelope.getByRole("checkbox", { name: "Cut itself" });
+    const cutItself = host.getByRole("checkbox", { name: "Cut itself" });
+    const adsrToggle = host.getByRole("checkbox", { name: "ADSR", exact: true });
+    assert.equal(await adsrToggle.isChecked(), true);
+    await adsrToggle.uncheck();
+    assert.match(await envelope.getAttribute("class"), /is-bypassed/);
+    const savedAttack = await attackKnob.getAttribute("aria-valuenow");
+    await adsrToggle.check();
+    assert.doesNotMatch(await envelope.getAttribute("class"), /is-bypassed/);
+    assert.equal(await attackKnob.getAttribute("aria-valuenow"), savedAttack, "ADSR on/off preserves knob settings");
     assert.equal(await cutItself.isChecked(), true);
     await cutItself.uncheck();
     assert.equal(await cutItself.isChecked(), false);
     await cutItself.check();
+    const cutLabel = host.locator(".instrument-cut-label");
+    assert.equal((await cutLabel.textContent()).trim(), "", "Cut itself has no visible text label");
+    const cutBox = await cutLabel.boundingBox();
+    const noteBox = await host.locator(".playing-note").boundingBox();
+    const statusBox = await host.locator(".drum-status").boundingBox();
+    assert.ok(cutBox.x >= noteBox.x + noteBox.width && cutBox.y >= statusBox.y &&
+      cutBox.y + cutBox.height <= statusBox.y + statusBox.height, "Checkbox sits beside the current note in the status row");
+    await cutItself.hover();
+    await page.waitForFunction(() => document.querySelector("#scdl-fast-tooltip")?.textContent === "Cut itself" &&
+      document.querySelector("#scdl-fast-tooltip")?.style.visibility === "visible");
+    await adsrToggle.hover();
+    await page.waitForFunction(() => document.querySelector("#scdl-fast-tooltip")?.textContent === "ADSR" &&
+      document.querySelector("#scdl-fast-tooltip")?.style.visibility === "visible");
+    await host.locator(".brand-name").hover();
     await page.screenshot({ path: path.join(projectRoot, "test-results", "sampler-adsr.png") });
     await instrumentToggle.focus();
     for (const locale of ["en", "es", "de", "ru", "pt_BR"]) {
@@ -865,6 +913,9 @@ async function main() {
     await page.evaluate(() => window.dispatchEvent(new Event("blur")));
     assert.equal(await instrumentToggle.getAttribute("aria-pressed"), "false");
     await envelope.waitFor({ state: "hidden" });
+    assert.equal(await cutItself.isVisible(), false);
+    assert.equal(await adsrToggle.isVisible(), false);
+    assert.equal(await host.locator(".sampler-body").isVisible(), true, "Leaving piano mode restores the fixed pads");
     assert.equal(await host.locator(".playing-note").textContent(), "");
     assert.equal(await panel.isVisible(), true, "Window blur must leave the panel visible while disabling piano mode.");
     await instrumentToggle.click();
@@ -908,6 +959,40 @@ async function main() {
     });
     await page.keyboard.press("a");
     await page.waitForFunction(() => window.drumStarts === 12);
+    await instrumentToggle.click();
+    await page.waitForFunction(() => document.querySelector("#scdl-tempo-control").shadowRoot.querySelector(".loop-instrument").getAttribute("aria-pressed") === "true");
+    const editSampleTime = async (marker, time, expectedMs) => {
+      await host.locator(`.loop-${marker}-time`).evaluate((input, value) => {
+        input.value = value;
+        input.dispatchEvent(new Event("blur"));
+      }, time);
+      await page.waitForFunction(({ marker, expectedMs }) => JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session"))[`${marker}Ms`] === expectedMs, { marker, expectedMs });
+    };
+    await editSampleTime("end", "00:40.000", 40000);
+    await editSampleTime("start", "00:30.000", 30000);
+    assert.equal(await instrumentToggle.getAttribute("aria-pressed"), "true", "Moving outside the original sample must keep piano mode active");
+    await adsrToggle.uncheck();
+    await page.keyboard.press("e");
+    await page.waitForTimeout(250);
+    assert.equal(await host.locator(".playing-note").textContent(), "E5", "ADSR off lets a quick tap keep playing after keyup");
+    await adsrToggle.check();
+    await page.waitForFunction(() => document.querySelector("#scdl-tempo-control").shadowRoot.querySelector(".playing-note").textContent === "");
+    await instrumentToggle.focus();
+    const startsBeforeLiveEdit = await page.evaluate(() => window.drumStarts);
+    await page.keyboard.down("q");
+    await page.waitForFunction((n) => window.drumStarts > n, startsBeforeLiveEdit);
+    assert.equal(await page.evaluate(() => window.sourceStartArguments.at(-1)[1]), 24);
+    await editSampleTime("start", "00:31.000", 31000);
+    await page.waitForFunction((n) => window.drumStarts > n + 1, startsBeforeLiveEdit);
+    assert.ok(await page.evaluate(() => window.sourceStartArguments.at(-1)[1] >= 24.8), "Held note follows the edited sample start");
+    const startsBeforeEndEdit = await page.evaluate(() => window.drumStarts);
+    await editSampleTime("end", "00:41.000", 41000);
+    assert.equal(await page.evaluate(() => window.drumStarts), startsBeforeEndEdit, "Editing only the end must not restart the held note");
+    await page.keyboard.up("q");
+    assert.equal(await page.evaluate(() => window.instrumentRenderRequests.length), 1, "Live sample edits reuse the prepared track");
+    await editSampleTime("start", "00:12.345", 12345);
+    await editSampleTime("end", "00:20.678", 20678);
+    await page.keyboard.press("Escape");
     await host.locator("#scdl-effect-reverb").evaluate((slider) => { slider.value = "0"; slider.dispatchEvent(new Event("change", { bubbles: true })); });
     await host.locator("#scdl-effect-delay").evaluate((slider) => { slider.value = "0"; slider.dispatchEvent(new Event("change", { bubbles: true })); });
     await host.locator(".waveform-toggle").evaluate((button) => button.click());
@@ -1562,6 +1647,31 @@ async function main() {
     assert.equal(renderedInstrument.name, "Rendered Instrument");
     assert.equal(renderedInstrument.signature, "RIFF");
     assert.ok(renderedInstrument.bytes > 1000);
+    const fullInstrument = await page.evaluate(async () => {
+      const operationId = "instrument_full_transfer_integration";
+      const result = await window.sendOffscreenTest({
+        type: "OFFSCREEN_INSTRUMENT_RENDER", operationId, fullTrack: true,
+        streamUrl: `${location.origin}/assets/drums/tom1.wav`,
+        trackData: { streamProtocol: "progressive", durationMs: 420, title: "Tom", artist: "Test" },
+        trimRange: { startMs: 100, endMs: 200 }, playbackTransform: { rate: .5, preservePitch: false }, effects: {},
+      });
+      if (!result.success) return result;
+      const parts = [];
+      for (let offset = 0; offset < result.instrument.byteLength;) {
+        const part = await window.sendOffscreenTest({ type: "OFFSCREEN_INSTRUMENT_READ", operationId, offset });
+        if (!part.success) return part;
+        parts.push(await (await fetch(part.chunk.dataUrl)).arrayBuffer());
+        offset += part.chunk.byteLength;
+      }
+      const context = new AudioContext();
+      const original = await context.decodeAudioData(await (await fetch(`${location.origin}/assets/drums/tom1.wav`)).arrayBuffer());
+      const decoded = await context.decodeAudioData(await new Blob(parts).arrayBuffer());
+      await context.close();
+      return { success: true, originalDuration: original.duration, duration: decoded.duration };
+    });
+    assert.equal(fullInstrument.success, true, fullInstrument.error);
+    assert.ok(Math.abs(fullInstrument.duration - fullInstrument.originalDuration * 2) < .002,
+      "Full-track transfer must retain audio outside the initial selection at the prepared speed");
     await page.reload();
     const persistedName = await page.evaluate(() => new Promise((resolve, reject) => {
       const request = indexedDB.open("scdl-player-pads", 2);

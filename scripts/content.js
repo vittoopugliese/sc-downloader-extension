@@ -109,6 +109,11 @@ onDocumentEvent(OPEN_PLAYER_TOOLS_PRO_EVENT, () => {
 });
 
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+  if (request.type === "LOOP_INSTRUMENT_CHUNK") {
+    window.postMessage({ source: "scdl-pad-content", operationId: request.operationId, chunk: request.chunk }, location.origin);
+    sendResponse({ success: true });
+    return false;
+  }
   if (request.type === 'GET_LIKES_CONTEXT') {
     Promise.all([intake.resolveClientId(), intake.getCollection() ? Promise.resolve(intake.getCollection()) : intake.extractCurrent()])
       .then(([clientId, collection]) => sendResponse({ success: true, clientId, sourceUserId: collection?.sourceUserId || null, sourceName: collection?.artist || null, sourceUrl: collection?.sourceUrl || collection?.pageUrl || null }))
@@ -166,6 +171,7 @@ window.addEventListener?.("message", (event) => {
     payload.base64 = event.data.base64;
   }
   if (action === "render" || action === "instrument") {
+    if (action === "instrument") payload.fullTrack = event.data.fullTrack === true;
     payload.operationId = event.data.operationId;
     payload.trackUrl = event.data.trackUrl;
     payload.trimRange = event.data.trimRange;

@@ -3,6 +3,9 @@ const buildRecords = new Map();
 const directorySaves = new Map();
 const padRenders = new Map();
 const instrumentCancellations = new Map();
+const instrumentTransfers = new Map();
+const INSTRUMENT_MAX_BYTES = 128 * 1024 * 1024;
+const INSTRUMENT_CHUNK_BYTES = 1024 * 1024;
 const SERVICE_WORKER_KEEPALIVE_MS = 10000;
 const INSTRUMENT_CANCEL_TTL_MS = 5 * 60 * 1000;
 const PAD_MAX_BYTES = 12 * 1024 * 1024;
@@ -49,6 +52,9 @@ function instrumentAbortError() {
 
 function pruneInstrumentCancellations() {
   const cutoff = Date.now() - INSTRUMENT_CANCEL_TTL_MS;
+  for (const [id, transfer] of instrumentTransfers) {
+    if (transfer.updatedAt < cutoff) instrumentTransfers.delete(id);
+  }
   for (const [id, cancelledAt] of instrumentCancellations) {
     if (cancelledAt < cutoff) instrumentCancellations.delete(id);
   }
@@ -61,6 +67,7 @@ function cancelInstrumentRender(operationId) {
   if (!validInstrumentOperationId(operationId)) throw new Error("Invalid instrument operation.");
   pruneInstrumentCancellations();
   instrumentCancellations.set(operationId, Date.now());
+  instrumentTransfers.delete(operationId);
   const record = padRenders.get(operationId);
   record?.controller?.abort();
   try { record?.reader?.abort(); } catch {}
@@ -170,6 +177,24 @@ async function handlePadMessage(message) {
     if (message.type === "OFFSCREEN_INSTRUMENT_CANCEL") {
       return cancelInstrumentRender(message.operationId);
     }
+    if (message.type === "OFFSCREEN_INSTRUMENT_READ") {
+      pruneInstrumentCancellations();
+      const transfer = instrumentTransfers.get(message.operationId);
+      if (!transfer || message.offset !== transfer.offset) throw new Error("Instrument transfer is unavailable or out of order.");
+      const part = transfer.blob.slice(transfer.offset, transfer.offset + INSTRUMENT_CHUNK_BYTES);
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(part);
+      });
+      if (instrumentCancellations.has(message.operationId)) throw instrumentAbortError();
+      const offset = transfer.offset;
+      transfer.offset += part.size;
+      transfer.updatedAt = Date.now();
+      if (transfer.offset === transfer.blob.size) instrumentTransfers.delete(message.operationId);
+      return { success: true, chunk: { offset, byteLength: part.size, dataUrl } };
+    }
     if (message.type === "OFFSCREEN_INSTRUMENT_RENDER") {
       if (!validInstrumentOperationId(message.operationId)) {
         throw new Error("Invalid instrument operation.");
@@ -184,10 +209,15 @@ async function handlePadMessage(message) {
       const keepaliveId = setInterval(() => chrome.runtime.sendMessage({ type: "OFFSCREEN_KEEPALIVE", buildId: message.buildId }).catch(() => {}), SERVICE_WORKER_KEEPALIVE_MS);
       try {
         const { blob } = await SCDownload.buildTrackBlob(message.streamUrl, message.trackData, null, controller.signal,
-          message.trimRange, message.playbackTransform, message.effects, true);
+          message.fullTrack === true ? null : message.trimRange, message.playbackTransform, message.effects, true);
         if (controller.signal.aborted || instrumentCancellations.has(message.operationId)) throw instrumentAbortError();
-        if (!(blob instanceof Blob) || blob.size > PAD_MAX_BYTES) {
+        if (!(blob instanceof Blob) || blob.size === 0 || blob.size > (message.fullTrack === true ? INSTRUMENT_MAX_BYTES : PAD_MAX_BYTES)) {
           throw new Error("This loop is too large for the instrument.");
+        }
+        if (message.fullTrack === true) {
+          instrumentTransfers.set(message.operationId, { blob, offset: 0, updatedAt: Date.now() });
+          return { success: true, instrument: { fullTrack: true, byteLength: blob.size, mimeType: blob.type,
+            name: String(message.name || "Loop instrument").slice(0, 100) } };
         }
         const dataUrl = await new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -278,9 +308,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (!message || typeof message.type !== "string") return false;
   if (["OFFSCREEN_PAD_LIST", "OFFSCREEN_PAD_GET", "OFFSCREEN_PAD_STORE", "OFFSCREEN_PAD_RENDER",
-      "OFFSCREEN_INSTRUMENT_RENDER", "OFFSCREEN_INSTRUMENT_CANCEL"].includes(message.type)) {
+      "OFFSCREEN_INSTRUMENT_RENDER", "OFFSCREEN_INSTRUMENT_CANCEL", "OFFSCREEN_INSTRUMENT_READ"].includes(message.type)) {
     const operationId = message.operationId;
-    if (message.type === "OFFSCREEN_INSTRUMENT_CANCEL") {
+    if (["OFFSCREEN_INSTRUMENT_CANCEL", "OFFSCREEN_INSTRUMENT_READ"].includes(message.type)) {
       Promise.resolve(handlePadMessage(message)).then(sendResponse);
       return true;
     }

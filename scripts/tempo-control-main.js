@@ -159,6 +159,7 @@
   const instrumentKeys = new Map();
   const instrumentEnvelope = { attack: 4, decay: 100, sustain: 100, release: 100 };
   let instrumentCutItself = true;
+  let instrumentAdsrEnabled = true;
   const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
   let renderedPlayingNote = "";
   const padRequests = new Map();
@@ -302,11 +303,34 @@
 
   window.addEventListener("message", (event) => {
     if (event.source !== window || event.origin !== location.origin || event.data?.source !== "scdl-pad-content") return;
+    if (event.data.chunk) {
+      const request = [...padRequests.values()].find((pending) => pending.action === "instrument" && pending.operationId === event.data.operationId);
+      if (!request || request.transferError) return;
+      try {
+        const { offset, byteLength, dataUrl } = event.data.chunk;
+        if (offset !== request.byteLength || !Number.isSafeInteger(byteLength) || byteLength <= 0 ||
+            byteLength > 1024 * 1024 || offset + byteLength > 128 * 1024 * 1024 ||
+            typeof dataUrl !== "string" || dataUrl.length > 1500000 || !/^data:[^,]*;base64,/.test(dataUrl)) {
+          throw new Error("Invalid instrument audio chunk.");
+        }
+        const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
+        if (binary.length !== byteLength) throw new Error("Incomplete instrument audio chunk.");
+        request.chunks.push(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
+        request.byteLength += byteLength;
+      } catch (error) { request.transferError = error; }
+      return;
+    }
     const request = padRequests.get(event.data.id);
     if (!request) return;
     padRequests.delete(event.data.id);
     clearTimeout(request.timeout);
-    if (event.data.result?.success) request.resolve(event.data.result);
+    if (request.transferError) request.reject(request.transferError);
+    else if (event.data.result?.success && event.data.result.instrument?.fullTrack) {
+      if (request.byteLength !== event.data.result.instrument.byteLength || !request.byteLength) {
+        request.reject(new Error("The instrument audio transfer was incomplete."));
+      } else request.resolve({ ...event.data.result, audioBlob: new Blob(request.chunks, { type: event.data.result.instrument.mimeType }) });
+    }
+    else if (event.data.result?.success) request.resolve(event.data.result);
     else request.reject(new Error(event.data.result?.error || "Could not prepare this pad."));
   });
 
@@ -321,7 +345,7 @@
         }
         reject(new Error("The pad request timed out."));
       }, 120000);
-      padRequests.set(id, { resolve, reject, timeout, action, operationId: payload.operationId || null });
+      padRequests.set(id, { resolve, reject, timeout, action, operationId: payload.operationId || null, chunks: [], byteLength: 0 });
       window.postMessage({ source: "scdl-pad-main", id, action, ...payload }, location.origin);
     });
   }
@@ -448,7 +472,10 @@
     if (voice.releasing) {
       const end = Math.max(now + 0.002, voice.releaseStartedAt + voice.releaseMs / 1000);
       points.push([end, 0]);
-      voice.source.stop(end + 0.002);
+      voice.source.stop(Math.min(end + 0.002, voice.sampleEndAt ?? Infinity));
+    } else if (!instrumentAdsrEnabled) {
+      // Keep the short anti-click fade even when the musical envelope is off.
+      points.push([now + (initial ? .004 : .008), 1]);
     } else {
       const attackEnd = voice.startedAt + instrumentEnvelope.attack / 1000;
       const decayEnd = attackEnd + instrumentEnvelope.decay / 1000;
@@ -467,8 +494,12 @@
     const key = event.code || event.key;
     const held = instrumentKeys.get(key);
     if (!held) return;
-    instrumentKeys.delete(key);
-    releaseInstrumentVoice(held.voice, instrumentEnvelope.release, true);
+    held.released = true;
+    if (held.voice) held.voice.keyReleased = true;
+    if (instrumentAdsrEnabled || held.voice) instrumentKeys.delete(key);
+    if (instrumentAdsrEnabled) {
+      releaseInstrumentVoice(held.voice, instrumentEnvelope.release, true);
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
   }
@@ -480,6 +511,7 @@
     voice.cleanupTimer = null;
     voice.source.onended = null;
     try { voice.source.disconnect(); } catch {}
+    try { voice.sourceFade?.disconnect(); } catch {}
     try { voice.gain.disconnect(); } catch {}
     instrumentVoices.delete(voice);
     if (instrumentKeys.get(voice.key)?.voice === voice) instrumentKeys.delete(voice.key);
@@ -506,6 +538,33 @@
     stopAllInstrumentVoices(releaseMs);
   }
 
+  function setInstrumentAdsrEnabled(enabled) {
+    instrumentAdsrEnabled = Boolean(enabled);
+    if (ui?.instrumentAdsrToggle) ui.instrumentAdsrToggle.checked = instrumentAdsrEnabled;
+    ui?.instrumentControls?.classList.toggle("is-bypassed", !instrumentAdsrEnabled);
+    if (instrumentAdsrEnabled) {
+      for (const [key, held] of instrumentKeys) {
+        if (held.released) instrumentKeys.delete(key);
+      }
+    }
+    for (const voice of instrumentVoices) {
+      if (voice.cleaned || (voice.releasing && !voice.envelopeRelease)) continue;
+      if (instrumentAdsrEnabled && voice.keyReleased) {
+        releaseInstrumentVoice(voice, instrumentEnvelope.release, true);
+        continue;
+      }
+      if (voice.releasing) {
+        // A completed release cannot be restarted; cut voices stay cut, too.
+        if (voice.context.currentTime >= voice.envelopePoints.at(-1)[0] ||
+            voice.context.currentTime >= voice.sampleEndAt) continue;
+        voice.releasing = false;
+        voice.envelopeRelease = false;
+        voice.source.stop(voice.sampleEndAt);
+      }
+      scheduleInstrumentEnvelope(voice);
+    }
+  }
+
   function bindInstrumentControls() {
     for (const knob of ui.instrumentControls.querySelectorAll(".envelope-knob")) {
       const name = knob.dataset.envelope;
@@ -524,6 +583,8 @@
       const update = (value) => {
         instrumentEnvelope[name] = Math.round(Math.max(0, Math.min(maximum, value)));
         render();
+        renderInstrumentEnvelopeGraph();
+        if (!instrumentAdsrEnabled) return;
         for (const voice of instrumentVoices) {
           if (voice.cleaned) continue;
           if (voice.releasing) {
@@ -559,18 +620,40 @@
       });
       render();
     }
-    ui.instrumentControls.querySelector(".instrument-cut-itself").addEventListener("change", (event) => {
+    renderInstrumentEnvelopeGraph();
+    ui.instrumentAdsrToggle.addEventListener("change", (event) => setInstrumentAdsrEnabled(event.target.checked));
+    setInstrumentAdsrEnabled(instrumentAdsrEnabled);
+    ui.instrumentCutItself.addEventListener("change", (event) => {
       instrumentCutItself = event.target.checked;
       if (instrumentCutItself) {
         invalidatePendingInstrumentNotes();
         for (const voice of instrumentVoices) {
           if (voice !== instrumentVoice) releaseInstrumentVoice(voice);
         }
-        if (instrumentVoice && !instrumentVoice.releasing) {
-          instrumentKeys.set(instrumentVoice.key, { voice: instrumentVoice });
+        if (instrumentVoice && !instrumentVoice.releasing && !instrumentVoice.keyReleased) {
+          instrumentKeys.set(instrumentVoice.key, { voice: instrumentVoice, released: instrumentVoice.keyReleased });
         }
       }
     });
+  }
+
+  function renderInstrumentEnvelopeGraph() {
+    const graph = ui?.instrumentControls.querySelector(".envelope-graph");
+    if (!graph) return;
+    const { attack, decay, sustain, release } = instrumentEnvelope;
+    // Sustain is a level held until keyup, represented by a fixed-width plateau.
+    const scale = 76 / Math.max(500, attack + decay + release);
+    const a = 5 + attack * scale;
+    const d = a + decay * scale;
+    const s = d + 24;
+    const r = s + release * scale;
+    const y = 43 - sustain * .35;
+    const line = `M5 43 L${a} 8 L${d} ${y} L${s} ${y} L${r} 43`;
+    graph.querySelector(".envelope-curve").setAttribute("d", line);
+    graph.querySelector(".envelope-fill").setAttribute("d", `${line} Z`);
+    graph.querySelector(".envelope-keyup").setAttribute("x1", s);
+    graph.querySelector(".envelope-keyup").setAttribute("x2", s);
+    graph.setAttribute("aria-label", `ADSR: attack ${attack} ms, decay ${decay} ms, sustain ${sustain}%, release ${release} ms. Dashed line: key release.`);
   }
 
   function stopAllInstrumentVoices(releaseMs = 8) {
@@ -614,12 +697,12 @@
     // The master EQ stays live while playing notes; never bake it into the voice.
     effects.eq = { enabled: false, hardClip: false, bands: [] };
     const descriptor = {
-      signatureVersion: 1,
+      signatureVersion: 2,
       trackIdentity: String(loopState.trackIdentity || ""),
       generation: Number.isInteger(loopState.generation) ? loopState.generation : null,
       trimRange: {
-        startMs: normalizedInstrumentNumber(loopState.startMs),
-        endMs: normalizedInstrumentNumber(loopState.endMs),
+        startMs: 0,
+        endMs: normalizedInstrumentNumber(loopState.durationMs),
         durationMs: normalizedInstrumentNumber(loopState.durationMs),
       },
       playbackTransform: {
@@ -679,11 +762,10 @@
       return;
     }
     const descriptor = buildInstrumentDescriptor();
-    const duration = (descriptor.trimRange.endMs - descriptor.trimRange.startMs) /
-      descriptor.playbackTransform.rate;
-    if (duration > 30000) {
+    const duration = descriptor.trimRange.durationMs;
+    if (!Number.isFinite(duration) || duration <= 0) {
       instrumentPreparing = false;
-      showDrumError("Instrument samples can be up to 30 seconds long. Shorten the loop or increase its speed.");
+      showDrumError("The track duration is not available yet.");
       renderLoop();
       return;
     }
@@ -696,6 +778,7 @@
       instrumentOperationId = operationId;
       const result = await requestPad("instrument", {
         operationId,
+        fullTrack: true,
         trackUrl: descriptor.trackIdentity.replace(/^permalink:/, ""),
         trimRange: descriptor.trimRange,
         playbackTransform: descriptor.playbackTransform,
@@ -703,10 +786,16 @@
         name: `Instrument ${(descriptor.trimRange.startMs / 1000).toFixed(1)}–${(descriptor.trimRange.endMs / 1000).toFixed(1)}s`,
       });
       if (intentVersion !== instrumentIntentVersion || !loopMatchesInstrumentSnapshot(descriptor)) return;
-      const dataUrl = result.instrument?.dataUrl;
-      if (!dataUrl) throw new Error("The prepared instrument audio is unavailable.");
-      const response = await fetch(dataUrl);
-      const buffer = await getDrumAudioContext().decodeAudioData(await response.arrayBuffer());
+      if (!result.audioBlob) throw new Error("The prepared instrument audio is unavailable.");
+      const context = getDrumAudioContext();
+      const expectedSeconds = duration / 1000 / descriptor.playbackTransform.rate;
+      if (expectedSeconds * context.sampleRate * 2 * 4 > 256 * 1024 * 1024) {
+        throw new Error("This track is too large to keep in sampler memory at this speed.");
+      }
+      const buffer = await context.decodeAudioData(await result.audioBlob.arrayBuffer());
+      if (buffer.length * buffer.numberOfChannels * 4 > 256 * 1024 * 1024) {
+        throw new Error("This track is too large to keep in sampler memory.");
+      }
       if (intentVersion !== instrumentIntentVersion || !loopMatchesInstrumentSnapshot(descriptor)) return;
       instrumentBuffer = buffer;
       instrumentPreparing = false;
@@ -718,6 +807,53 @@
       instrumentOperationId = null;
       instrumentSnapshot = null;
       setInstrumentMode(false, { clearBuffer: true, message: error?.message || "Could not prepare this loop instrument." });
+    }
+  }
+
+  function instrumentSelection() {
+    const range = waveformDrawPreview || loopState;
+    const rate = instrumentSnapshot?.playbackTransform.rate || 1;
+    const start = Math.max(0, range.startMs / 1000 / rate);
+    const end = Math.min(instrumentBuffer?.duration || 0, range.endMs / 1000 / rate);
+    return Number.isFinite(start) && Number.isFinite(end) && end > start ? { start, end } : null;
+  }
+
+  function syncInstrumentSelection() {
+    if (!instrumentMode || !instrumentBuffer) return;
+    const range = instrumentSelection();
+    for (const voice of instrumentVoices) {
+      if (voice.releasing || voice.cleaned) continue;
+      const now = voice.context.currentTime;
+      const elapsed = Math.max(0, now - voice.startedAt);
+      const position = range ? range.start + elapsed * voice.playbackRate : Infinity;
+      if (!range || position >= range.end) {
+        releaseInstrumentVoice(voice);
+        continue;
+      }
+      voice.sampleEndAt = voice.startedAt + (range.end - range.start) / voice.playbackRate;
+      if (voice.selectionStart !== range.start) {
+        const previousSource = voice.source;
+        const previousFade = voice.sourceFade;
+        const source = voice.context.createBufferSource();
+        const fade = voice.context.createGain();
+        source.buffer = instrumentBuffer;
+        source.playbackRate.value = voice.playbackRate;
+        source.connect(fade).connect(voice.gain);
+        fade.gain.setValueAtTime(0, now);
+        fade.gain.linearRampToValueAtTime(1, now + .008);
+        source.start(now, position);
+        previousSource.onended = () => { previousSource.disconnect(); previousFade.disconnect(); };
+        const heldGain = previousFade.gain.value;
+        if (previousFade.gain.cancelAndHoldAtTime) previousFade.gain.cancelAndHoldAtTime(now);
+        else { previousFade.gain.cancelScheduledValues(now); previousFade.gain.setValueAtTime(heldGain, now); }
+        previousFade.gain.linearRampToValueAtTime(0, now + .008);
+        previousSource.stop(now + .008);
+        voice.source = source;
+        voice.sourceFade = fade;
+        voice.selectionStart = range.start;
+        source.onended = () => cleanupInstrumentVoice(voice);
+      }
+      voice.source.stop(voice.sampleEndAt);
     }
   }
 
@@ -740,6 +876,8 @@
       }
       if (noteRevision !== instrumentNoteRevision || instrumentKeys.get(key) !== held || !capability("loopInstrument") ||
           !instrumentMode || instrumentBuffer !== buffer || ui?.panel.hidden || document.hidden) return;
+      const range = instrumentSelection();
+      if (!range) return;
       if (instrumentCutItself) {
         for (const voice of instrumentVoices) releaseInstrumentVoice(voice);
       }
@@ -751,10 +889,13 @@
       }
       const source = context.createBufferSource();
       const gain = context.createGain();
+      const sourceFade = context.createGain();
       source.buffer = buffer;
       source.playbackRate.value = globalThis.SCSamplerCore.playbackRateForMidi(midiNote);
-      source.connect(gain).connect(context.destination);
-      const voice = { source, gain, context, key, startedAt: context.currentTime,
+      source.connect(sourceFade).connect(gain).connect(context.destination);
+      const voice = { source, sourceFade, gain, context, key, keyReleased: held.released === true, startedAt: context.currentTime,
+        selectionStart: range.start, playbackRate: source.playbackRate.value,
+        sampleEndAt: context.currentTime + (range.end - range.start) / source.playbackRate.value,
         cleanupTimer: null, releasing: false, cleaned: false };
       held.voice = voice;
       instrumentVoices.add(voice);
@@ -764,7 +905,9 @@
       };
       try {
         scheduleInstrumentEnvelope(voice, true);
-        source.start();
+        source.start(voice.startedAt, range.start);
+        source.stop(voice.sampleEndAt);
+        if (held.released && instrumentKeys.get(key) === held) instrumentKeys.delete(key);
         renderPlayingNote(midiNote);
       } catch (error) {
         cleanupInstrumentVoice(voice);
@@ -864,9 +1007,9 @@
         return;
       }
       const target = event.composedPath()[0];
-      if (target?.classList?.contains("envelope-knob") && /^(Arrow|Home$|End$)/.test(event.key)) return;
+      if ((target?.classList?.contains("envelope-knob") || target?.classList?.contains("waveform-marker")) && /^(Arrow|Home$|End$)/.test(event.key)) return;
       if (target?.isContentEditable || (/^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName || "") &&
-          !target.classList.contains("instrument-cut-itself"))) return;
+          !target.classList.contains("instrument-cut-itself") && !target.classList.contains("instrument-adsr-toggle"))) return;
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -1313,8 +1456,6 @@
       !nextLoop.active ||
       nextLoop.trackIdentity !== instrumentSnapshot.trackIdentity ||
       nextLoop.generation !== instrumentSnapshot.generation ||
-      nextLoop.startMs !== instrumentSnapshot.trimRange.startMs ||
-      nextLoop.endMs !== instrumentSnapshot.trimRange.endMs ||
       (Number.isFinite(nextLoop.durationMs) ? nextLoop.durationMs : state.durationMs) !== instrumentSnapshot.trimRange.durationMs
     )) {
       disableInstrument("");
@@ -1332,6 +1473,7 @@
     loopState.durationMs = Number.isFinite(loopState.durationMs)
       ? loopState.durationMs
       : state.durationMs;
+    syncInstrumentSelection();
     renderLoop();
   }
 
@@ -1578,6 +1720,9 @@
     ui.saveLoopPad.title = capability("saveLoopPad") ? "Save loop to a pad" : "Player Tools Pro required";
     ui.instrumentToggle.disabled = !capability("loopInstrument") || !loopState.active || padRenderPending;
     ui.instrumentControls.hidden = !instrumentMode;
+    ui.instrumentCutLabel.hidden = !instrumentMode;
+    ui.instrumentAdsrLabel.hidden = !instrumentMode;
+    ui.drumSection.classList.toggle("is-instrument", instrumentMode);
     ui.instrumentToggle.setAttribute("aria-pressed", String(instrumentMode));
     ui.instrumentToggle.classList.toggle("is-preparing", instrumentPreparing);
     ui.instrumentToggle.setAttribute("aria-label", instrumentPreparing
@@ -1836,6 +1981,7 @@
         timeMs
       );
       waveformDrawPreview = nextRange;
+      syncInstrumentSelection();
       renderLoop();
       return;
     } else if (waveformDrag.kind === "selection") {
@@ -1861,6 +2007,7 @@
       setTimeout(() => { suppressWaveformClick = false; }, 0);
       setWaveformRange(nextRange, null, { showPendingUi: false }).finally(() => {
         if (waveformDrawPreview === nextRange) waveformDrawPreview = null;
+        syncInstrumentSelection();
         renderLoop();
       });
     }
@@ -2416,15 +2563,22 @@
         .loop-instrument.is-preparing svg { animation: instrument-pulse .8s ease-in-out infinite alternate; }
         .instrument-controls { padding: 8px 2px 4px; }
         .instrument-controls[hidden] { display: none; }
-        .instrument-envelope { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+        .instrument-controls.is-bypassed .instrument-envelope { opacity: .45; }
+        .instrument-envelope { display: grid; grid-template-columns: repeat(4, minmax(42px, 1fr)) minmax(76px, 1.7fr); gap: 4px; align-items: center; }
+        .envelope-graph { display: block; width: 100%; height: 60px; overflow: visible; }
+        .envelope-curve { fill: none; stroke: #ff8a4c; stroke-width: 1.6; stroke-linejoin: round; }
+        .envelope-fill { fill: #ff8a4c; opacity: .1; }
+        .envelope-axis, .envelope-keyup { fill: none; stroke: #666; stroke-width: .6; }
+        .envelope-keyup { stroke-dasharray: 2 2; }
         .envelope-control { display: grid; justify-items: center; gap: 5px; color: #ccc; font-size: 11px; }
         .envelope-control output { font-size: 10px; color: #aaa; font-variant-numeric: tabular-nums; }
         .envelope-knob { position: relative; width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 2px solid #666; background: radial-gradient(circle at 35% 30%, #535353, #252525); cursor: ns-resize; touch-action: none; }
         .envelope-knob::after { content: ""; position: absolute; inset: 3px 13px 14px; border-radius: 2px; background: #ff8a4c; transform-origin: 50% 12px; transform: rotate(var(--knob-angle)); }
         .envelope-knob:hover { border-color: #ff8a4c; }
         .envelope-knob:focus-visible { outline: 2px solid #ff8a4c; outline-offset: 3px; }
-        .instrument-cut-label { display: flex; align-items: center; gap: 6px; width: fit-content; margin-top: 10px; color: #ccc; font-size: 11px; cursor: pointer; }
-        .instrument-cut-itself { accent-color: #ff7b38; margin: 0; }
+        .instrument-cut-label, .instrument-adsr-label { display: grid; place-items: center; width: 22px; height: 22px; margin: 0; padding: 0; cursor: help; }
+        .instrument-cut-label[hidden], .instrument-adsr-label[hidden] { display: none; }
+        .instrument-cut-itself, .instrument-adsr-toggle { width: 16px; height: 16px; accent-color: #ff7b38; margin: 0; }
         @keyframes instrument-pulse { to { opacity: .35; transform: scale(.88); } }
         .save-loop-pad svg, .loop-instrument svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
         .clear-loop:disabled, .download-loop:disabled, .save-loop-pad:disabled, .loop-instrument:disabled { cursor: not-allowed; opacity: .45; }
@@ -2436,6 +2590,7 @@
         .panel-header { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-rows: 32px; align-items: center; column-gap: 5px; row-gap: 2px; padding-bottom: 6px; }
         .drum-section { margin: 0 0 6px; overflow: hidden; border: 1px solid #343434; border-radius: 11px; background: rgba(255,255,255,.025); }
         .sampler-body { padding: 6px 7px; }
+        .drum-section.is-instrument .sampler-body { display: none; }
         .drum-pads { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
         .drum-pad { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100%; height: 28px; padding: 3px 6px; border: 1px solid #4a4a4a; border-radius: 8px; color: #fff; background: #292929; font: inherit; cursor: pointer; user-select: none; touch-action: manipulation; transition: transform 90ms ease, background-color 90ms ease, border-color 90ms ease; }
         .drum-slot:nth-child(2) .drum-pad { background: #383838; }
@@ -2448,9 +2603,10 @@
         .drum-pad:focus-visible { outline: 2px solid #ff5500; outline-offset: 2px; }
         .drum-key { flex: 0 0 auto; font-size: 14px; font-weight: 800; line-height: 1; }
         .drum-file { display: none; }
-        .drum-status { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0; padding: 4px 7px 6px; color: #ffb199; font-size: 10px; line-height: 1.2; }
+        .drum-status { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0; padding: 4px 7px 6px; color: #ffb199; font-size: 10px; line-height: 1.2; }
         .drum-status[hidden] { display: none; }
         .drum-message { min-width: 0; }
+        .drum-note-controls { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
         .playing-note { flex: 0 0 auto; text-align: right; font-variant-numeric: tabular-nums; }
         .brand { display: contents; }
         .brand-logo { width: 32px; height: 32px; flex-basis: 32px; border-radius: 8px; object-fit: cover; }
@@ -2659,12 +2815,12 @@
               ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
             </div>
           </div>
-          <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="playing-note" aria-live="off"></span></p>
+          <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="drum-note-controls" aria-live="off"><span class="playing-note"></span><label class="instrument-cut-label" title="Cut itself" data-scdl-tooltip="Cut itself" hidden><input class="instrument-cut-itself" type="checkbox" aria-label="Cut itself" checked /></label><label class="instrument-adsr-label" title="ADSR" data-scdl-tooltip="ADSR" hidden><input class="instrument-adsr-toggle" type="checkbox" aria-label="ADSR" checked /></label></span></p>
           <div class="instrument-controls" role="group" aria-label="Sample envelope" hidden>
             <div class="instrument-envelope">
               ${["attack", "decay", "sustain", "release"].map((name) => `<div class="envelope-control"><span>${name[0].toUpperCase() + name.slice(1)}</span><button class="envelope-knob" type="button" role="slider" data-envelope="${name}" aria-label="${name[0].toUpperCase() + name.slice(1)}" aria-valuemin="0" aria-valuemax="${name === "sustain" ? 100 : 5000}" aria-orientation="vertical" title="Drag up or down; use arrow keys to adjust"></button><output></output></div>`).join("")}
+              <svg class="envelope-graph" viewBox="0 0 110 52" role="img" aria-label="ADSR envelope"><title>ADSR · dashed line marks key release</title><path class="envelope-axis" d="M5 5 V43 H105"/><path class="envelope-fill"/><line class="envelope-keyup" y1="5" y2="45"/><path class="envelope-curve"/></svg>
             </div>
-            <label class="instrument-cut-label" title="Stop previous notes when a new note plays"><input class="instrument-cut-itself" type="checkbox" checked />Cut itself</label>
           </div>
         </section>
         <section class="waveform-shell" id="scdl-loop-region" role="group" aria-label="Loop Region">
@@ -2882,6 +3038,10 @@
       saveLoopPad: root.querySelector(".save-loop-pad"),
       instrumentToggle: root.querySelector(".loop-instrument"),
       instrumentControls: root.querySelector(".instrument-controls"),
+      instrumentCutLabel: root.querySelector(".instrument-cut-label"),
+      instrumentCutItself: root.querySelector(".instrument-cut-itself"),
+      instrumentAdsrLabel: root.querySelector(".instrument-adsr-label"),
+      instrumentAdsrToggle: root.querySelector(".instrument-adsr-toggle"),
       playerToolsUpgrade: root.querySelector(".player-tools-upgrade"),
       effectsShell: root.querySelector(".effects-shell"),
       effectsToggle: root.querySelector(".effects-toggle"),

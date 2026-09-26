@@ -1206,7 +1206,7 @@ const BulkJobManager = {
     }
   },
 
-  async renderLoopInstrument(trackData, trimRange, playbackTransform, effects, name, operationId = `instrument_${Date.now()}`) {
+  async renderLoopInstrument(trackData, trimRange, playbackTransform, effects, name, operationId = `instrument_${Date.now()}`, { fullTrack = false, onChunk } = {}) {
     singleDownloadsInFlight += 1;
     instrumentOperationPhases.set(operationId, "queued");
     try {
@@ -1226,6 +1226,7 @@ const BulkJobManager = {
           instrumentOperationPhases.set(operationId, "offscreen");
           result = await sendOffscreenMessage({
             type: "OFFSCREEN_INSTRUMENT_RENDER",
+            fullTrack,
             buildId: `track_${operationId}`,
             operationId,
             name,
@@ -1240,8 +1241,32 @@ const BulkJobManager = {
           if (result?.success || ![401, 403, 404].includes(result?.status)) break;
         }
         if (!result?.success) throw new Error(result?.error || "Could not prepare the loop instrument.");
+        if (fullTrack) {
+          if (!result.instrument?.fullTrack || !Number.isSafeInteger(result.instrument.byteLength) ||
+              result.instrument.byteLength <= 0 || result.instrument.byteLength > 128 * 1024 * 1024 || typeof onChunk !== "function") {
+            throw new Error("Invalid instrument transfer.");
+          }
+          instrumentOperationPhases.set(operationId, "offscreen");
+          for (let offset = 0; offset < result.instrument.byteLength;) {
+            throwIfInstrumentCancelled(operationId);
+            const part = await sendOffscreenMessage({ type: "OFFSCREEN_INSTRUMENT_READ", operationId, offset });
+            throwIfInstrumentCancelled(operationId);
+            if (!part?.success || part.chunk?.offset !== offset || !Number.isSafeInteger(part.chunk?.byteLength) ||
+                part.chunk.byteLength <= 0 || part.chunk.byteLength > 1024 * 1024 || offset + part.chunk.byteLength > result.instrument.byteLength) {
+              throw new Error(part?.error || "Could not transfer the instrument audio.");
+            }
+            await onChunk(part.chunk);
+            offset += part.chunk.byteLength;
+          }
+          throwIfInstrumentCancelled(operationId);
+        }
         return result;
       });
+    } catch (error) {
+      if (fullTrack && instrumentOperationPhases.get(operationId) === "offscreen") {
+        await sendOffscreenMessage({ type: "OFFSCREEN_INSTRUMENT_CANCEL", operationId }).catch(() => {});
+      }
+      throw error;
     } finally {
       instrumentOperationPhases.delete(operationId);
       singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);

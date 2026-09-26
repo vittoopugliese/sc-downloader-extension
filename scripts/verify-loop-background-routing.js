@@ -69,6 +69,10 @@ const context = vm.createContext({
     async renderLoopInstrument(...args) {
       instrumentRenders.push(args);
       if (instrumentRenderBlocker) await instrumentRenderBlocker.promise;
+      if (args[6]?.fullTrack) {
+        await args[6].onChunk({ offset: 0, byteLength: 4, dataUrl: "data:audio/wav;base64,UklGRg==" });
+        return { success: true, instrument: { fullTrack: true, byteLength: 4 } };
+      }
       return { success: true, instrument: { name: args[4], dataUrl: "data:audio/wav;base64,UklGRg==" } };
     },
     async cancelLoopInstrument(operationId) {
@@ -106,7 +110,8 @@ const context = vm.createContext({
       onRemoved: { addListener() {} },
       sendMessage(tabId, message, options, callback) {
         tabMessages.push({ tabId, message, options });
-        callback({ success: true, trackData: resolvedTrack });
+        if (callback) callback({ success: true, trackData: resolvedTrack });
+        else return Promise.resolve({ success: true });
       },
     },
     action: {},
@@ -234,6 +239,24 @@ function deferred() {
   assert.equal((await firstRender).code, "instrument_cancelled");
   assert.equal((await duplicateRender).code, "instrument_cancelled");
   instrumentRenderBlocker = null;
+
+  const fullTrack = await dispatch({
+    type: "RENDER_LOOP_INSTRUMENT", operationId: "instrument_full_track_routing_001", fullTrack: true,
+    trackUrl: "https://soundcloud.com/artist/track",
+    trimRange: { startMs: 0, endMs: 240000, durationMs: 240000 },
+    playbackTransform, effects, name: "Editable sample",
+  }, owner);
+  assert.equal(fullTrack.success, true, JSON.stringify(fullTrack));
+  assert.equal(instrumentRenders.at(-1)[6].fullTrack, true, "full instruments bypass the pad-only 30 second limit");
+  const transferred = tabMessages.find(entry => entry.message.type === "LOOP_INSTRUMENT_CHUNK");
+  assert.equal(transferred.tabId, 42);
+  assert.equal(transferred.options.documentId, "document-a", "audio is sent only to the requesting document");
+  assert.equal(transferred.message.operationId, "instrument_full_track_routing_001");
+  const padLimit = await new Promise(resolve => messageListener({
+    type: "RENDER_LOOP_PAD", index: 0, fullTrack: true,
+    trimRange: { startMs: 0, endMs: 240000 }, playbackTransform,
+  }, owner, resolve));
+  assert.equal(padLimit.success, false, "fullTrack cannot bypass pad duration limits");
 
   console.log("Loop background routing verification passed.");
 })().catch((error) => {

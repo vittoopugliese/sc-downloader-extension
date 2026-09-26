@@ -209,6 +209,7 @@ async function persistInstrumentOperations() {
 
 function instrumentRequestSignature(request) {
   return JSON.stringify({
+    fullTrack: request.fullTrack === true,
     trackUrl: request.trackUrl || null,
     trimRange: request.trimRange || null,
     playbackTransform: request.playbackTransform || null,
@@ -293,7 +294,14 @@ async function renderInstrumentOperation(request, sender) {
         throw Object.assign(new Error("Instrument preparation cancelled."), { code: "instrument_cancelled", name: "AbortError" });
       }
       return await BulkJobManager.renderLoopInstrument(trackData, request.trimRange,
-        request.playbackTransform, request.effects || {}, request.name || `${trackData.title || "Track"} instrument`, request.operationId);
+        request.playbackTransform, request.effects || {}, request.name || `${trackData.title || "Track"} instrument`, request.operationId, {
+          fullTrack: request.fullTrack === true,
+          onChunk: async (chunk) => {
+            if (await instrumentOperationCancelled(record.id)) throw Object.assign(new Error("Instrument preparation cancelled."), { code: "instrument_cancelled" });
+            await chrome.tabs.sendMessage(sender.tab.id, { type: "LOOP_INSTRUMENT_CHUNK", operationId: record.id, chunk },
+              sender.documentId ? { documentId: sender.documentId } : { frameId: sender.frameId || 0 });
+          },
+        });
     } finally {
       await finishInstrumentOperation(record).catch(() => {});
     }
@@ -710,7 +718,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === "RENDER_LOOP_PAD" || request.type === "RENDER_LOOP_INSTRUMENT") {
       const duration = Number(request.trimRange?.endMs) - Number(request.trimRange?.startMs);
       const rate = Number(request.playbackTransform?.rate);
-      if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(rate) || rate <= 0 || duration / rate > 30000) {
+      const editableInstrument = request.type === "RENDER_LOOP_INSTRUMENT" && request.fullTrack === true;
+      if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(rate) || rate <= 0 || (!editableInstrument && duration / rate > 30000)) {
         sendResponse({ success: false, error: "Pad samples can be up to 30 seconds long." });
         return false;
       }
