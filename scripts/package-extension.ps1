@@ -21,9 +21,10 @@ $packageItems = @(
     "offscreen.html",
     "assets/icon48.png",
     "assets/icon128.png",
-    "assets/icons/player-toolkit.png",
+    "assets/LooperPlayerToolkit.png",
     "assets/icons",
     "assets/drums",
+    "assets/images/default_avatar.png",
     "assets/images/likes-explorer.png",
     "_locales",
     "scripts/background.js",
@@ -104,6 +105,30 @@ foreach ($item in $packageItems) {
 Get-ChildItem -LiteralPath $stagingRoot -Recurse -Force -File |
     Where-Object { $_.Name -in @(".DS_Store", "Thumbs.db") } |
     Remove-Item -Force
+
+$requiredRuntimeAssets = @(
+    "assets/LooperPlayerToolkit.png",
+    "assets/images/default_avatar.png",
+    "assets/images/likes-explorer.png",
+    "assets/icons/player-toolkit.png",
+    "assets/icons/eq.svg",
+    "assets/icons/megaphone.svg",
+    "assets/icons/sound-cloud-social-badge.svg",
+    "assets/icons/detach.svg",
+    "assets/icons/trash.svg",
+    "assets/icons/expand.svg",
+    "assets/icons/cross.svg"
+)
+$missingRuntimeAssets = @($requiredRuntimeAssets | Where-Object {
+    -not (Test-Path -LiteralPath (Join-Path $stagingRoot $_) -PathType Leaf)
+})
+if ($missingRuntimeAssets.Count -gt 0) {
+    throw "Package asset smoke check failed. Missing runtime assets: $($missingRuntimeAssets -join ', ')"
+}
+$nestedIconsPath = Join-Path $stagingRoot "assets/icons/icons"
+if (Test-Path -LiteralPath $nestedIconsPath -PathType Container) {
+    throw "Package asset smoke check failed. Icons were copied under assets/icons/icons instead of assets/icons."
+}
 
 $commercePath = Join-Path $stagingRoot "scripts/player-tools-commerce.js"
 $commerceSource = Get-Content -LiteralPath $commercePath -Raw
