@@ -694,5 +694,47 @@
   "player_tools_restore_success": { "message": "Pro activado. Tus controles de Player Tools ya estan desbloqueados." },
   "player_tools_restore_error": { "message": "No se pudo recuperar la compra. Revisa los datos o contacta a soporte." },
   "email": { "message": "Email" },
-  "close": { "message": "Cerrar" }
+  "close": { "message": "Cerrar" },
+  "sampler_slice": {
+    "message": "Dividir el loop seleccionado en 8 pads"
+  },
+  "sampler_title": {
+    "message": "¿Reemplazar los ocho pads?"
+  },
+  "sampler_confirm": {
+    "message": "El loop seleccionado entre A y B se dividirá en ocho partes iguales. Se reemplazarán los ocho sonidos, incluidos los samples personalizados. Se conservarán tus teclas asignadas."
+  },
+  "sampler_replace": {
+    "message": "Reemplazar con 8 cortes"
+  },
+  "sampler_cancel": {
+    "message": "Cancelar"
+  },
+  "sampler_preparing": {
+    "message": "Preparando 8 cortes… Escape para cancelar."
+  },
+  "sampler_stop": {
+    "message": "Cancelar la preparación de cortes"
+  },
+  "sampler_done": {
+    "message": "8 cortes guardados. Tocalos con las teclas de tus pads."
+  },
+  "sampler_cancelled": {
+    "message": "Preparación cancelada. Los pads no cambiaron."
+  },
+  "sampler_changed": {
+    "message": "Cambió el loop o su configuración. Preparación cancelada."
+  },
+  "sampler_failed": {
+    "message": "No se pudieron guardar los ocho cortes. Volvé a intentarlo."
+  },
+  "sampler_tooLong": {
+    "message": "Seleccioná un loop de hasta 30 segundos a la velocidad actual."
+  },
+  "sampler_locked": {
+    "message": "Requiere Player Tools Pro"
+  },
+  "sampler_selectPad": {
+    "message": "Elegí uno de los ocho pads. Escape para cancelar."
+  }
 }

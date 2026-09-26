@@ -559,5 +559,47 @@
   "player_tools_restore_success": { "message": "Pro aktiviert. Player Tools ist freigeschaltet." },
   "player_tools_restore_error": { "message": "Der Kauf konnte nicht wiederhergestellt werden. Angaben prüfen oder Support kontaktieren." },
   "email": { "message": "E-Mail" },
-  "close": { "message": "Schließen" }
+  "close": { "message": "Schließen" },
+  "sampler_slice": {
+    "message": "Ausgewählten Loop auf 8 Pads aufteilen"
+  },
+  "sampler_title": {
+    "message": "Alle acht Pads ersetzen?"
+  },
+  "sampler_confirm": {
+    "message": "Der ausgewählte Loop zwischen A und B wird in acht gleich lange Abschnitte geteilt. Alle acht Sounds werden ersetzt, auch eigene Samples. Deine Tastenbelegung bleibt erhalten."
+  },
+  "sampler_replace": {
+    "message": "Durch 8 Slices ersetzen"
+  },
+  "sampler_cancel": {
+    "message": "Abbrechen"
+  },
+  "sampler_preparing": {
+    "message": "8 Slices werden vorbereitet… Escape zum Abbrechen."
+  },
+  "sampler_stop": {
+    "message": "Slice-Vorbereitung abbrechen"
+  },
+  "sampler_done": {
+    "message": "8 Slices gespeichert. Spiele sie mit deinen Pad-Tasten."
+  },
+  "sampler_cancelled": {
+    "message": "Vorbereitung abgebrochen. Die Pads wurden nicht geändert."
+  },
+  "sampler_changed": {
+    "message": "Der Loop oder seine Einstellungen wurden geändert. Vorbereitung abgebrochen."
+  },
+  "sampler_failed": {
+    "message": "Die acht Slices konnten nicht gespeichert werden. Bitte erneut versuchen."
+  },
+  "sampler_tooLong": {
+    "message": "Wähle einen Loop mit höchstens 30 Sekunden bei der aktuellen Geschwindigkeit."
+  },
+  "sampler_locked": {
+    "message": "Player Tools Pro erforderlich"
+  },
+  "sampler_selectPad": {
+    "message": "Wähle eines der acht Pads. Escape zum Abbrechen."
+  }
 }

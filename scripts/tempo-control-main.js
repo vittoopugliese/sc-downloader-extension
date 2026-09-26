@@ -63,6 +63,8 @@
     { name: "Kick 2", sample: "kick2.wav", key: "f" },
     { name: "Snare", sample: "snare1.wav", key: "g" },
     { name: "Tom", sample: "tom1.wav", key: "h" },
+    { name: "Clap 2", sample: "clap2.wav", key: "j" },
+    { name: "Hat 2", sample: "hat2.wav", key: "k" },
   ];
   const HOVER_OPEN_DELAY_MS = 254;
   // The panel sits eight pixels above its trigger. This brief grace period
@@ -117,6 +119,9 @@
   let trackDownloadPending = false;
   let loopDownloadPending = false;
   let padRenderPending = false;
+  let sliceJob = null;
+  let sliceConfirmation = null;
+  let suppressPanelEscape = false;
   let loopState = { active: false, enabled: false, startMs: null, endMs: null, durationMs: null };
   let accessSnapshot = { state: "loading", plan: "free", capabilities: {} };
   let playerToolsSessionId = null;
@@ -163,15 +168,26 @@
   const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
   let renderedPlayingNote = "";
   const padRequests = new Map();
+  let padHydration = null;
+  let padsHydrated = false;
+  let padCacheTimer = null;
+  let padCacheRevision = 0;
   const drumPads = DRUM_DEFAULTS.map((defaultPad) => ({ ...defaultPad, buffer: null, loading: null, customName: "", saved: false, busy: false, version: 0 }));
   try {
     const savedKeys = JSON.parse(localStorage.getItem(DRUM_KEYS_STORAGE) || "null");
     if (Array.isArray(savedKeys)) {
-      savedKeys.forEach((key, index) => {
+      savedKeys.slice(0, drumPads.length).forEach((key, index) => {
         if (key === "" || (typeof key === "string" && /^[a-z0-9]$/i.test(key))) {
           drumPads[index].key = key.toLowerCase();
         }
       });
+      // New defaults must never steal a key from an existing custom assignment.
+      for (let index = savedKeys.length; index < drumPads.length; index++) {
+        if (drumPads.slice(0, index).some(pad => pad.key === drumPads[index].key)) {
+          drumPads[index].key = [..."jklqwertyuiopzxcvbnm1234567890"].find(key =>
+            !drumPads.some((pad, other) => other !== index && pad.key === key)) || "";
+        }
+      }
     }
   } catch {}
   let panelDetached = (() => {
@@ -339,12 +355,12 @@
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         padRequests.delete(id);
-        if (action === "instrument" && payload.operationId) {
+        if ((action === "instrument" || action === "slices") && payload.operationId) {
           window.postMessage({ source: "scdl-pad-main", id: `cancel_${id}`,
-            action: "cancel-instrument", operationId: payload.operationId }, location.origin);
+            action: action === "slices" ? "cancel-slices" : "cancel-instrument", operationId: payload.operationId }, location.origin);
         }
         reject(new Error("The pad request timed out."));
-      }, 120000);
+      }, action === "list" ? 10000 : 120000);
       padRequests.set(id, { resolve, reject, timeout, action, operationId: payload.operationId || null, chunks: [], byteLength: 0 });
       window.postMessage({ source: "scdl-pad-main", id, action, ...payload }, location.origin);
     });
@@ -366,19 +382,49 @@
       action: "cancel-instrument", operationId }, location.origin);
   }
 
-  async function hydrateDrumPads() {
-    try {
-      const result = await requestPad("list");
-      for (const record of result.pads || []) {
-        const pad = drumPads[record.index];
-        if (!pad || pad.busy || pad.version) continue;
-        pad.customName = record.name;
-        pad.saved = true;
-        pad.buffer = null;
-        pad.loading = null;
-      }
-      updateDrumLabels();
-    } catch (error) { console.warn("[SC Downloader Pads]", error); }
+  function hydrateDrumPads() {
+    if (padHydration) return padHydration;
+    // MAIN runs at document_start; content.js announces its bridge only after
+    // installing the message listener. An early postMessage would be lost.
+    if (!document.documentElement.getAttribute(EXTENSION_DRUM_SAMPLES_ATTRIBUTE)) return Promise.resolve(false);
+    const versions = drumPads.map(pad => pad.version);
+    padHydration = (async () => {
+      try {
+        const result = await requestPad("list");
+        if (!Array.isArray(result.pads)) throw new Error("Could not restore saved samples.");
+        drumPads.forEach((pad, index) => {
+          if (pad.busy || pad.version !== versions[index]) return;
+          const record = result.pads.find(record => record.index === index);
+          const name = record?.name || "";
+          if (pad.saved === Boolean(record) && pad.customName === name && pad.updatedAt === record?.updatedAt) return;
+          pad.version += 1;
+          pad.customName = name;
+          pad.saved = Boolean(record);
+          pad.updatedAt = record?.updatedAt;
+          pad.buffer = null;
+          pad.loading = null;
+        });
+        padsHydrated = true;
+        updateDrumLabels();
+        return true;
+      } catch (error) {
+        if (ui && !ui.panel.hidden) showDrumError("Could not restore saved samples. Reopen Sampler to retry.");
+        console.warn("[SC Downloader Pads]", error);
+        return false;
+      } finally { padHydration = null; }
+    })();
+    return padHydration;
+  }
+
+  document.addEventListener(EXTENSION_ASSETS_EVENT, () => { if (ui) hydrateDrumPads(); });
+
+  function schedulePadCacheRelease() {
+    clearTimeout(padCacheTimer);
+    padCacheTimer = setTimeout(() => {
+      padCacheTimer = null;
+      padCacheRevision += 1;
+      for (const pad of drumPads) pad.buffer = null;
+    }, 60000);
   }
 
   function updateDrumLabels() {
@@ -941,7 +987,7 @@
 
   async function playDrum(index) {
     const pad = drumPads[index];
-    if (!pad) return;
+    if (!pad || pad.busy) return;
     try {
       const context = getDrumAudioContext();
       const ready = context.resume();
@@ -969,6 +1015,8 @@
     }
     const pad = drumPads[index];
     const version = ++pad.version;
+    pad.busy = true;
+    updateDrumLabels();
     try {
       if (file.size > 12 * 1024 * 1024) throw new Error("This sample is too large for a pad.");
       const bytes = await file.arrayBuffer();
@@ -993,11 +1041,21 @@
       showDrumError("");
     } catch (error) {
       showDrumError(error?.message || "Could not read that audio sample.");
+    } finally {
+      pad.busy = false;
+      updateDrumLabels();
     }
   }
 
   function handleDrumKeydown(event) {
     if (!ui || ui.panel.hidden || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+    if (ui.sliceDialog.open) return;
+    if (sliceJob && event.key === "Escape") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      cancelSlices();
+      return;
+    }
     if (instrumentMode) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -1181,6 +1239,7 @@
   async function resetPlayerTools() {
     if (resetInProgress) return;
     resetInProgress = true;
+    cancelSlices();
     const generation = ++resetGeneration;
     playbackIntentVersion += 1;
     rateIntent = null;
@@ -1679,7 +1738,7 @@
     const presentationKey = JSON.stringify({
       waveformCollapsed, duration, start: displayedRange.startMs, end: displayedRange.endMs,
       preview: Boolean(waveformDrawPreview), active: loopState.active, available: loopState.available, windowRange,
-      loopDownloadPending, padRenderPending, saveAllowed: capability("saveLoopPad"),
+      slicePending: Boolean(sliceJob), sliceCommitting: sliceJob?.committing, loopDownloadPending, padRenderPending, saveAllowed: capability("saveLoopPad"),
       instrumentAllowed: capability("loopInstrument"), instrumentMode, instrumentPreparing,
     });
     if (presentationKey !== loopPresentationKey) {
@@ -1716,6 +1775,10 @@
     const hasLoopMarker = Number.isFinite(loopState.startMs) || Number.isFinite(loopState.endMs);
     ui.clearLoop.disabled = !loopState.available || !hasLoopMarker || loopDownloadPending;
     ui.downloadLoop.disabled = !loopState.active || loopDownloadPending;
+    ui.sliceButton.disabled = sliceJob ? sliceJob.committing : !capability("saveLoopPad") || !loopState.active || padRenderPending;
+    ui.sliceButton.title = samplerCopy(!capability("saveLoopPad") ? "locked" : sliceJob ? "stop" : "slice");
+    ui.sliceButton.setAttribute("aria-label", ui.sliceButton.title);
+    ui.sliceButton.setAttribute("aria-busy", String(Boolean(sliceJob)));
     ui.saveLoopPad.disabled = !capability("saveLoopPad") || !loopState.active || padRenderPending;
     ui.saveLoopPad.title = capability("saveLoopPad") ? "Save loop to a pad" : "Player Tools Pro required";
     ui.instrumentToggle.disabled = !capability("loopInstrument") || !loopState.active || padRenderPending;
@@ -1745,6 +1808,8 @@
   }
 
   function renderLoop() {
+    if (sliceConfirmation && !sliceIsCurrent(sliceConfirmation)) closeSliceConfirmation();
+    if (sliceJob && !sliceJob.committing && !sliceIsCurrent(sliceJob.snapshot)) cancelSlices(samplerCopy("changed"));
     if (loopRenderFrame !== null) return;
     if (typeof requestAnimationFrame === "function") {
       loopRenderFrame = requestAnimationFrame(commitLoopRender);
@@ -2031,6 +2096,139 @@
     renderLoop();
   }
 
+  const SAMPLER_COPY = {
+    slice: "Slice selected loop into 8 pads",
+    title: "Replace all eight pads?",
+    confirm: "The selected A–B loop will be split into eight equal slices. This replaces all eight sounds, including custom samples. Your assigned keys will stay the same.",
+    replace: "Replace with 8 slices", cancel: "Cancel",
+    preparing: "Preparing 8 slices… Press Escape to cancel.",
+    stop: "Cancel slice preparation", done: "8 slices saved. Play them with your pad keys.",
+    cancelled: "Slice preparation cancelled. Pads were not changed.",
+    changed: "The loop or its settings changed. Slice preparation cancelled.",
+    failed: "Could not save the eight slices. Please try again.",
+    tooLong: "Select a loop of up to 30 seconds at the current speed.",
+    locked: "Player Tools Pro required",
+    selectPad: "Choose one of the eight pads. Press Escape to cancel.",
+  };
+
+  function samplerCopy(key) {
+    let copy = {};
+    try { copy = JSON.parse(document.documentElement.getAttribute("data-scdl-sampler-copy") || "{}"); } catch {}
+    return typeof copy[key] === "string" && copy[key] !== `sampler_${key}` ? copy[key] : SAMPLER_COPY[key];
+  }
+
+  function sliceDescriptor() {
+    if (!loopState.active || waveformDrawPreview || !Number.isFinite(loopState.startMs) ||
+        !Number.isFinite(loopState.endMs) || loopState.endMs <= loopState.startMs) return null;
+    const { signature: _signature, ...snapshot } = buildInstrumentDescriptor();
+    snapshot.trimRange = { startMs: loopState.startMs, endMs: loopState.endMs, durationMs: loopState.durationMs };
+    return { ...snapshot, signature: JSON.stringify(snapshot) };
+  }
+
+  function sliceIsCurrent(snapshot) {
+    return capability("saveLoopPad") && snapshot?.signature === sliceDescriptor()?.signature;
+  }
+
+  function closeSliceConfirmation() {
+    sliceConfirmation = null;
+    suppressPanelEscape = true;
+    setTimeout(() => { suppressPanelEscape = false; }, 0);
+    if (ui?.sliceDialog.open) ui.sliceDialog.close();
+  }
+
+  function cancelSlices(message = samplerCopy("cancelled")) {
+    closeSliceConfirmation();
+    suppressPanelEscape = true;
+    setTimeout(() => { suppressPanelEscape = false; }, 0);
+    const job = sliceJob;
+    // Once submitted, the atomic commit is the linearization point.
+    if (!job || job.committing) return;
+    sliceJob = null;
+    for (const [id, pending] of padRequests) {
+      if (pending.action !== "slices" || pending.operationId !== job.operationId) continue;
+      padRequests.delete(id);
+      clearTimeout(pending.timeout);
+      pending.reject(Object.assign(new Error("Slice preparation cancelled."), { name: "AbortError" }));
+    }
+    requestPad("cancel-slices", { operationId: job.operationId }).catch(() => {});
+    padRenderPending = false;
+    drumPads.forEach(pad => { pad.busy = false; });
+    updateDrumLabels();
+    showDrumError(message);
+    renderLoop();
+  }
+
+  function openSliceConfirmation() {
+    if (sliceJob) { cancelSlices(); return; }
+    if (!capability("saveLoopPad") || padRenderPending || drumPads.some(pad => pad.busy)) return;
+    const snapshot = sliceDescriptor();
+    if (!snapshot) return;
+    if ((snapshot.trimRange.endMs - snapshot.trimRange.startMs) / snapshot.playbackTransform.rate > 30000) {
+      showDrumError(samplerCopy("tooLong"));
+      return;
+    }
+    sliceConfirmation = snapshot;
+    ui.sliceTitle.textContent = samplerCopy("title");
+    ui.sliceDescription.textContent = samplerCopy("confirm");
+    ui.sliceReplace.textContent = samplerCopy("replace");
+    ui.sliceCancel.textContent = samplerCopy("cancel");
+    ui.sliceDialog.showModal();
+    ui.sliceCancel.focus();
+  }
+
+  async function sliceLoopToPads() {
+    const snapshot = sliceConfirmation;
+    closeSliceConfirmation();
+    if (!snapshot || !sliceIsCurrent(snapshot) || padRenderPending || drumPads.some(pad => pad.busy)) return;
+    cancelLoopPadSelection();
+    exitInstrument();
+    setSamplerCollapsed(false);
+    const job = { operationId: `pad_slice_${Date.now()}_${++padRequestNumber}`, snapshot, committing: false };
+    sliceJob = job;
+    padRenderPending = true;
+    drumPads.forEach(pad => { pad.busy = true; });
+    updateDrumLabels();
+    showDrumError(samplerCopy("preparing"));
+    renderLoop();
+    try {
+      const prepared = await requestPad("slices", {
+        operationId: job.operationId, count: 8,
+        trackIdentity: snapshot.trackIdentity, generation: snapshot.generation,
+        trackUrl: snapshot.trackIdentity.replace(/^permalink:/, ""),
+        trimRange: snapshot.trimRange, playbackTransform: snapshot.playbackTransform, effects: snapshot.effects,
+        name: `Loop ${(snapshot.trimRange.startMs / 1000).toFixed(1)}–${(snapshot.trimRange.endMs / 1000).toFixed(1)}s`,
+      });
+      if (sliceJob !== job) return;
+      if (!sliceIsCurrent(snapshot)) { cancelSlices(samplerCopy("changed")); return; }
+      job.committing = true;
+      renderLoop();
+      const result = prepared.pads ? prepared : await requestPad("commit-slices", { operationId: job.operationId });
+      for (const record of result.pads || []) {
+        const pad = drumPads[record.index];
+        if (!pad) continue;
+        pad.version++;
+        pad.buffer = null;
+        pad.loading = null;
+        pad.saved = true;
+        pad.customName = record.name;
+      }
+      showDrumError(samplerCopy("done"));
+    } catch (error) {
+      if (sliceJob !== job) return;
+      requestPad("cancel-slices", { operationId: job.operationId }).catch(() => {});
+      console.warn("[SC Downloader Slices]", error);
+      showDrumError(samplerCopy("failed"));
+    } finally {
+      if (sliceJob === job) {
+        sliceJob = null;
+        padRenderPending = false;
+        drumPads.forEach(pad => { pad.busy = false; });
+        updateDrumLabels();
+        renderLoop();
+      }
+    }
+  }
+
   function cancelLoopPadSelection() {
     if (!selectingLoopPad) return;
     selectingLoopPad = null;
@@ -2060,7 +2258,7 @@
     setSamplerCollapsed(false);
     ui.drumSection.classList.add("is-selecting");
     ui.saveLoopPad.setAttribute("aria-pressed", "true");
-    showDrumError("Choose one of the six pads. Press Escape to cancel.");
+    showDrumError(samplerCopy("selectPad"));
   }
 
   async function saveLoopToPad(index) {
@@ -2557,8 +2755,8 @@
         .clear-loop, .download-loop { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 26px; border-radius: 5px; cursor: pointer; font-size: 10px; font-weight: 600; line-height: 1; }
         .clear-loop { border: 1px solid #484848; color: #fff; background: #292929; }
         .download-loop { border: 1px solid #b84400; color: #fff; background: #ff5500; }
-        .save-loop-pad, .loop-instrument { display: grid; place-items: center; width: 24px; height: 26px; padding: 0; border: 1px solid #484848; border-radius: 5px; color: #d6d6d6; background: #292929; cursor: pointer; }
-        .save-loop-pad:hover, .save-loop-pad[aria-pressed="true"], .loop-instrument:hover, .loop-instrument[aria-pressed="true"] { color: #fff; border-color: #ff7b38; }
+        .save-loop-pad, .loop-instrument, .slice-loop { display: grid; place-items: center; width: 24px; height: 26px; padding: 0; border: 1px solid #484848; border-radius: 5px; color: #d6d6d6; background: #292929; cursor: pointer; }
+        .save-loop-pad:hover, .save-loop-pad[aria-pressed="true"], .loop-instrument:hover, .loop-instrument[aria-pressed="true"], .slice-loop:hover { color: #fff; border-color: #ff7b38; }
         .loop-instrument[aria-pressed="true"] { color: #ff8a4c; background: #462619; }
         .loop-instrument.is-preparing svg { animation: instrument-pulse .8s ease-in-out infinite alternate; }
         .instrument-controls { padding: 8px 2px 4px; }
@@ -2580,8 +2778,8 @@
         .instrument-cut-label[hidden], .instrument-adsr-label[hidden] { display: none; }
         .instrument-cut-itself, .instrument-adsr-toggle { width: 16px; height: 16px; accent-color: #ff7b38; margin: 0; }
         @keyframes instrument-pulse { to { opacity: .35; transform: scale(.88); } }
-        .save-loop-pad svg, .loop-instrument svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-        .clear-loop:disabled, .download-loop:disabled, .save-loop-pad:disabled, .loop-instrument:disabled { cursor: not-allowed; opacity: .45; }
+        .save-loop-pad svg, .loop-instrument svg, .slice-loop svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+        .clear-loop:disabled, .download-loop:disabled, .save-loop-pad:disabled, .loop-instrument:disabled, .slice-loop:disabled { cursor: not-allowed; opacity: .45; }
         .clear-loop svg, .clear-loop img, .download-loop svg { width: 12px; height: 12px; flex: 0 0 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .status { margin-top: 5px; }
 
@@ -2589,9 +2787,17 @@
         .panel { width: min(420px, calc(100vw - 16px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 7px; border: 1px solid #262626; border-radius: 14px; background: linear-gradient(145deg, #171717, #050505); box-shadow: 0 16px 50px rgba(0,0,0,.58), inset 0 1px rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: #4b4b4b transparent; }
         .panel-header { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-rows: 32px; align-items: center; column-gap: 5px; row-gap: 2px; padding-bottom: 6px; }
         .drum-section { margin: 0 0 6px; overflow: hidden; border: 1px solid #343434; border-radius: 11px; background: rgba(255,255,255,.025); }
+        .slice-dialog { width: min(330px, calc(100vw - 48px)); box-sizing: border-box; padding: 18px; border: 1px solid #555; border-radius: 12px; color: #eee; background: #202020; font: 13px/1.5 system-ui, sans-serif; }
+        .slice-dialog::backdrop { background: rgb(0 0 0 / .65); }
+        .slice-dialog h3 { margin: 0 0 10px; font-size: 16px; }
+        .slice-dialog p { margin: 0 0 18px; }
+        .slice-dialog > div { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+        .slice-dialog button { padding: 7px 10px; border: 1px solid #777; border-radius: 6px; color: #fff; background: #333; cursor: pointer; font: inherit; }
+        .slice-dialog .slice-replace { background: #a83700; border-color: #ff7b38; }
+        .slice-dialog button:focus-visible { outline: 2px solid #ff7b38; outline-offset: 3px; }
         .sampler-body { padding: 6px 7px; }
         .drum-section.is-instrument .sampler-body { display: none; }
-        .drum-pads { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+        .drum-pads { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
         .drum-pad { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100%; height: 28px; padding: 3px 6px; border: 1px solid #4a4a4a; border-radius: 8px; color: #fff; background: #292929; font: inherit; cursor: pointer; user-select: none; touch-action: manipulation; transition: transform 90ms ease, background-color 90ms ease, border-color 90ms ease; }
         .drum-slot:nth-child(2) .drum-pad { background: #383838; }
         .drum-slot:nth-child(3) .drum-pad { background: #464646; }
@@ -2713,11 +2919,11 @@
           .bypass, .bypass svg { width: 16px; height: 16px; }
         }
         .clear-loop, .download-loop { height: 22px; padding: 0 6px; border-radius: 6px; opacity: .82; }
-        .save-loop-pad, .loop-instrument { width: 22px; height: 22px; }
+        .save-loop-pad, .loop-instrument, .slice-loop { width: 22px; height: 22px; }
         .loop-edit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
         ${collapsible.styles}
         .drum-section, .waveform-shell, .effects-shell { transition:height 160ms ease; }
-        .drum-section > .tool-section-header .tool-section-heading { padding-right:58px; }
+        .drum-section > .tool-section-header .tool-section-heading { padding-right:84px; }
         .waveform-shell > .tool-section-header .tool-section-heading,
         .effects-shell > .tool-section-header .tool-section-heading { padding-right:164px; }
         .effect-group-title { margin: 5px 0 2px; color: #858c92; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
@@ -2809,7 +3015,8 @@
         </div>
         </div>
         <section class="drum-section is-collapsed" id="scdl-sampler" aria-label="Sampler">
-          ${collapsible.header({ title: "Sampler", bodyId: "scdl-sampler-pads", expanded: false, toggleClass: "sampler-toggle", actionsClass: "sampler-actions", icon: '<img class="tool-section-icon sampler-icon" alt="" aria-hidden="true" />', actions: '<button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button><button class="loop-instrument" type="button" aria-label="Play selected loop in piano mode" aria-pressed="false" title="Play selected loop in piano mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM7 5v8M12 5v8M17 5v8M5 13h4M10 13h4M15 13h4"/></svg></button>' })}
+          ${collapsible.header({ title: "Sampler", bodyId: "scdl-sampler-pads", expanded: false, toggleClass: "sampler-toggle", actionsClass: "sampler-actions", icon: '<img class="tool-section-icon sampler-icon" alt="" aria-hidden="true" />', actions: '<button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button><button class="loop-instrument" type="button" aria-label="Play selected loop in piano mode" aria-pressed="false" title="Play selected loop in piano mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM7 5v8M12 5v8M17 5v8M5 13h4M10 13h4M15 13h4"/></svg></button><button class="slice-loop" type="button" aria-label="Slice selected loop into 8 pads"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM6 5v14M9 5v14M12 5v14M15 5v14M18 5v14"/></svg></button>' })}
+          <dialog class="slice-dialog" aria-labelledby="slice-title" aria-describedby="slice-description"><h3 id="slice-title"></h3><p id="slice-description"></p><div><button class="slice-cancel" type="button" autofocus></button><button class="slice-replace" type="button"></button></div></dialog>
           <div class="sampler-body" id="scdl-sampler-pads">
             <div class="drum-pads">
               ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
@@ -2925,6 +3132,7 @@
   });
 
   function closePanel() {
+    cancelSlices();
     clearHoverTimers();
     panelOpenMode = null;
     hoveredDrum = null;
@@ -3035,6 +3243,12 @@
       loopEndTime: root.querySelector(".loop-end-time"),
       clearLoop: root.querySelector(".clear-loop"),
       downloadLoop: root.querySelector(".download-loop"),
+      sliceButton: root.querySelector(".slice-loop"),
+      sliceDialog: root.querySelector(".slice-dialog"),
+      sliceTitle: root.querySelector("#slice-title"),
+      sliceDescription: root.querySelector("#slice-description"),
+      sliceReplace: root.querySelector(".slice-replace"),
+      sliceCancel: root.querySelector(".slice-cancel"),
       saveLoopPad: root.querySelector(".save-loop-pad"),
       instrumentToggle: root.querySelector(".loop-instrument"),
       instrumentControls: root.querySelector(".instrument-controls"),
@@ -3246,11 +3460,13 @@
       releaseEchoFreeze();
     });
     const exitForPageLifecycle = () => {
+      cancelSlices();
       releaseEchoFreeze();
       exitInstrument({ message: "" });
     };
     window.addEventListener("blur", exitForPageLifecycle);
     window.addEventListener("pagehide", () => {
+      cancelSlices();
       releaseEchoFreeze({ resumePlayback: false });
       exitInstrument({ message: "" });
     });
@@ -3355,6 +3571,15 @@
     }
     ui.clearLoop.addEventListener("click", clearLoop);
     ui.downloadLoop.addEventListener("click", downloadLoopFromPlayer);
+    ui.sliceButton.addEventListener("click", openSliceConfirmation);
+    ui.sliceReplace.addEventListener("click", sliceLoopToPads);
+    ui.sliceCancel.addEventListener("click", closeSliceConfirmation);
+    ui.sliceDialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeSliceConfirmation();
+    });
+    ui.sliceDialog.addEventListener("close", () => { sliceConfirmation = null; ui.sliceButton.focus(); });
     ui.saveLoopPad.addEventListener("click", selectLoopPad);
     ui.instrumentToggle.addEventListener("click", toggleLoopInstrument);
     bindInstrumentControls();
@@ -3620,6 +3845,19 @@
   document.addEventListener(
     "keydown",
     (event) => {
+      if (ui?.sliceDialog.open) return;
+      if (event.key === "Escape" && suppressPanelEscape) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (event.key === "Escape" && sliceJob) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        cancelSlices();
+        ui?.sliceButton.focus();
+        return;
+      }
       if (event.key === "Escape" && instrumentMode) {
         event.preventDefault();
         event.stopImmediatePropagation();

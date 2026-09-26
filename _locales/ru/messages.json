@@ -559,5 +559,47 @@
   "player_tools_restore_success": { "message": "Pro активирован. Player Tools разблокирован." },
   "player_tools_restore_error": { "message": "Не удалось восстановить покупку. Проверьте данные или обратитесь в поддержку." },
   "email": { "message": "Email" },
-  "close": { "message": "Закрыть" }
+  "close": { "message": "Закрыть" },
+  "sampler_slice": {
+    "message": "Разделить выбранный луп на 8 пэдов"
+  },
+  "sampler_title": {
+    "message": "Заменить все восемь пэдов?"
+  },
+  "sampler_confirm": {
+    "message": "Выбранный луп между A и B будет разделён на восемь равных частей. Все восемь звуков будут заменены, включая пользовательские сэмплы. Назначенные клавиши сохранятся."
+  },
+  "sampler_replace": {
+    "message": "Заменить на 8 слайсов"
+  },
+  "sampler_cancel": {
+    "message": "Отмена"
+  },
+  "sampler_preparing": {
+    "message": "Подготовка 8 слайсов… Escape для отмены."
+  },
+  "sampler_stop": {
+    "message": "Отменить подготовку слайсов"
+  },
+  "sampler_done": {
+    "message": "8 слайсов сохранены. Играйте назначенными клавишами пэдов."
+  },
+  "sampler_cancelled": {
+    "message": "Подготовка отменена. Пэды не изменены."
+  },
+  "sampler_changed": {
+    "message": "Луп или его настройки изменились. Подготовка отменена."
+  },
+  "sampler_failed": {
+    "message": "Не удалось сохранить восемь слайсов. Попробуйте ещё раз."
+  },
+  "sampler_tooLong": {
+    "message": "Выберите луп длительностью до 30 секунд при текущей скорости."
+  },
+  "sampler_locked": {
+    "message": "Требуется Player Tools Pro"
+  },
+  "sampler_selectPad": {
+    "message": "Выберите один из восьми пэдов. Escape для отмены."
+  }
 }

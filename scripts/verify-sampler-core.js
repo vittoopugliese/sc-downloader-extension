@@ -48,3 +48,53 @@ for (let octave = -4; octave <= 3; octave++) {
 }
 
 console.log("Sampler core verification passed.");
+
+assert.equal(sampler.PAD_COUNT, 8);
+for (const total of [8, 9, 15, 1003, 48000 * 30 + 1]) {
+  const ranges = sampler.sliceRanges(total);
+  assert.equal(ranges.length, 8);
+  assert.equal(ranges[0].start, 0);
+  assert.equal(ranges.at(-1).end, total);
+  assert.equal(ranges.reduce((sum, range) => sum + range.end - range.start, 0), total);
+  ranges.forEach((range, index) => {
+    assert.ok(range.end > range.start);
+    if (index) assert.equal(range.start, ranges[index - 1].end);
+  });
+}
+for (const invalid of [0, 7, NaN, Infinity, -10, 8.5]) assert.throws(() => sampler.sliceRanges(invalid));
+
+const frames = 1003;
+const bytes = new ArrayBuffer(44 + (frames + 200) * 4);
+const wav = new DataView(bytes);
+for (const [at, value] of [[0, "RIFF"], [8, "WAVEfmt "], [36, "data"]]) {
+  [...value].forEach((letter, index) => wav.setUint8(at + index, letter.charCodeAt(0)));
+}
+wav.setUint32(4, bytes.byteLength - 8, true);
+wav.setUint32(16, 16, true);
+wav.setUint16(20, 1, true);
+wav.setUint16(22, 2, true);
+wav.setUint32(24, 8000, true);
+wav.setUint16(32, 4, true);
+wav.setUint16(34, 16, true);
+wav.setUint32(40, bytes.byteLength - 44, true);
+for (let i = 0; i < frames + 200; i++) {
+  wav.setInt16(44 + i * 4, 10000 + i, true);
+  wav.setInt16(46 + i * 4, -10000 - i, true);
+}
+const slices = sampler.sliceWav(bytes, { startMs: 1000, endMs: 1000 + frames / 8 }, 1);
+assert.equal(slices.length, 8);
+assert.equal(slices.reduce((sum, slice) => sum + (slice.bytes.byteLength - 44) / 4, 0), frames, "tails after B are excluded");
+slices.forEach(slice => {
+  const output = new DataView(slice.bytes);
+  assert.equal(output.getUint16(22, true), 2);
+  assert.equal(output.getUint32(24, true), 8000);
+  const length = slice.endFrame - slice.startFrame;
+  assert.equal(output.getInt16(44, true), 0);
+  assert.equal(output.getInt16(44 + (length - 1) * 4, true), 0);
+  const middle = Math.floor(length / 2);
+  assert.equal(output.getInt16(44 + middle * 4, true), 10000 + slice.startFrame + middle);
+  assert.equal(output.getInt16(46 + middle * 4, true), -10000 - slice.startFrame - middle);
+});
+assert.throws(() => sampler.sliceWav(bytes, { startMs: 0, endMs: 9999 }, 1), /incomplete/);
+assert.throws(() => sampler.sliceWav(new ArrayBuffer(12), { startMs: 0, endMs: 1 }, 1), /Invalid/);
+console.log("Eight-slice PCM coverage, channels, fades and tail boundaries passed.");

@@ -41,6 +41,22 @@ if (window.top === window) {
 }
 
 function exposeTempoControlAssets() {
+  document.documentElement?.setAttribute?.("data-scdl-sampler-copy", JSON.stringify({
+    slice: t("sampler_slice"),
+    title: t("sampler_title"),
+    confirm: t("sampler_confirm"),
+    replace: t("sampler_replace"),
+    cancel: t("sampler_cancel"),
+    preparing: t("sampler_preparing"),
+    stop: t("sampler_stop"),
+    done: t("sampler_done"),
+    cancelled: t("sampler_cancelled"),
+    changed: t("sampler_changed"),
+    failed: t("sampler_failed"),
+    tooLong: t("sampler_tooLong"),
+    locked: t("sampler_locked"),
+    selectPad: t("sampler_selectPad"),
+  }));
   document.documentElement?.setAttribute?.("data-scdl-piano-copy", JSON.stringify({
     status: t("piano_mode_status"),
     help: t("piano_mode_help"),
@@ -158,6 +174,9 @@ window.addEventListener?.("message", (event) => {
     get: "GET_LOOP_PAD_AUDIO",
     store: "STORE_LOOP_PAD_AUDIO",
     render: "RENDER_LOOP_PAD",
+    slices: "RENDER_LOOP_SLICES",
+    "commit-slices": "COMMIT_LOOP_SLICES",
+    "cancel-slices": "CANCEL_LOOP_SLICES",
     instrument: "RENDER_LOOP_INSTRUMENT",
     "cancel-instrument": "CANCEL_LOOP_INSTRUMENT",
   };
@@ -170,7 +189,7 @@ window.addEventListener?.("message", (event) => {
     payload.mimeType = event.data.mimeType;
     payload.base64 = event.data.base64;
   }
-  if (action === "render" || action === "instrument") {
+  if (action === "render" || action === "instrument" || action === "slices") {
     if (action === "instrument") payload.fullTrack = event.data.fullTrack === true;
     payload.operationId = event.data.operationId;
     payload.trackUrl = event.data.trackUrl;
@@ -179,6 +198,12 @@ window.addEventListener?.("message", (event) => {
     payload.effects = event.data.effects;
     payload.name = event.data.name;
   }
+  if (action === "slices") {
+    payload.count = event.data.count;
+    payload.trackIdentity = event.data.trackIdentity;
+    payload.generation = event.data.generation;
+  }
+  if (action === "commit-slices" || action === "cancel-slices") payload.operationId = event.data.operationId;
   if (action === "cancel-instrument") payload.operationId = event.data.operationId;
   chrome.runtime.sendMessage(payload).then((result) => {
     window.postMessage({ source: "scdl-pad-content", id, result }, location.origin);

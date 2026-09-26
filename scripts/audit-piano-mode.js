@@ -55,7 +55,7 @@ function fixture() {
     EFFECT_SIGNATURE_FIELDS: effectFields,
     getDrumAudioContext: () => audio,
     renderPlayingNote() {}, renderLoop() {}, renderInstrumentMessage() {}, showDrumError() {},
-    clearHoverTimers() {}, cancelLoopPadSelection() {}, setPanelOpen(value) { scope.ui.panel.hidden = !value; },
+    clearHoverTimers() {}, cancelSlices() {}, cancelLoopPadSelection() {}, setPanelOpen(value) { scope.ui.panel.hidden = !value; },
     window: { postMessage: value => messages.push(value) }, location: { origin: 'https://soundcloud.com' },
     setTimeout(callback) { const id = timers.size + 1; timers.set(id, callback); return id; },
     clearTimeout(id) { timers.delete(id); },

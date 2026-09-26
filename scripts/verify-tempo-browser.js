@@ -28,7 +28,7 @@ function listen(server) {
 
 async function main() {
   const server = http.createServer((request, response) => {
-    const sampleName = /^\/assets\/drums\/(kick1|kick2|clap1|hat1|snare1|tom1)\.wav$/.exec(request.url || "");
+    const sampleName = /^\/assets\/drums\/(kick1|kick2|clap1|clap2|hat1|hat2|snare1|tom1)\.wav$/.exec(request.url || "");
     if (sampleName) {
       response.setHeader("Content-Type", "audio/wav");
       fs.createReadStream(path.join(projectRoot, "assets", "drums", `${sampleName[1]}.wav`)).pipe(response);
@@ -134,6 +134,9 @@ async function main() {
       window.trackDownloadRequests = [];
       window.loopDownloadRequests = [];
       window.padRenderRequests = [];
+      window.sliceRenderRequests = [];
+      window.sliceCommitRequests = [];
+      window.preparedSlices = {};
       window.instrumentRenderRequests = [];
       window.savedPadSamples = {};
       window.addEventListener("message", async (event) => {
@@ -146,6 +149,17 @@ async function main() {
           window.padRenderRequests.push(data);
           window.savedPadSamples[data.index] = { name: data.name, dataUrl: `${location.origin}/assets/drums/tom1.wav` };
           result.pad = { name: data.name };
+        } else if (data.action === "slices") {
+          window.sliceRenderRequests.push(data);
+          window.preparedSlices[data.operationId] = data;
+          if (window.sliceDelay) await new Promise(resolve => setTimeout(resolve, window.sliceDelay));
+        } else if (data.action === "cancel-slices") {
+          delete window.preparedSlices[data.operationId];
+        } else if (data.action === "commit-slices") {
+          window.sliceCommitRequests.push(data);
+          const snapshot = window.preparedSlices[data.operationId];
+          result.pads = Array.from({ length: 8 }, (_, index) => ({ index, name: `${snapshot.name} · ${index + 1}/8` }));
+          result.pads.forEach(pad => { window.savedPadSamples[pad.index] = { name: pad.name, dataUrl: `${location.origin}/assets/drums/tom1.wav` }; });
         } else if (data.action === "instrument") {
           window.instrumentRenderRequests.push(data);
           const frames = Math.ceil(data.trimRange.durationMs / 1000 / data.playbackTransform.rate * 8000);
@@ -296,14 +310,14 @@ async function main() {
     }
     const drumPads = host.locator(".drum-pad");
     const samplerToggle = host.locator(".sampler-toggle");
-    assert.equal(await drumPads.count(), 6, "The sampler must contain six drum pads.");
+    assert.equal(await drumPads.count(), 8, "The sampler must contain eight drum pads.");
     assert.equal(await samplerToggle.getAttribute("aria-expanded"), "false");
     assert.equal(await drumPads.nth(0).isHidden(), true, "The sampler starts collapsed.");
     await samplerToggle.click();
     assert.equal(await samplerToggle.getAttribute("aria-expanded"), "true");
-    assert.deepEqual(await drumPads.allTextContents(), ["A", "S", "D", "F", "G", "H"]);
+    assert.deepEqual(await drumPads.allTextContents(), ["A", "S", "D", "F", "G", "H", "J", "K"]);
     assert.deepEqual(await drumPads.evaluateAll((pads) => pads.map((pad) => pad.title)),
-      ["Kick", "Clap", "Hat", "Kick 2", "Snare", "Tom"].map((name) => `${name} · hold to load`));
+      ["Kick", "Clap", "Hat", "Kick 2", "Snare", "Tom", "Clap 2", "Hat 2"].map((name) => `${name} · hold to load`));
     const drumPlacement = await host.evaluate((element) => {
       const root = element.shadowRoot;
       const header = root.querySelector(".panel-header").getBoundingClientRect();
@@ -815,6 +829,52 @@ async function main() {
       "Saved loop pads must receive the master EQ live, without baking it in twice");
     await drumPads.nth(5).click();
     await page.waitForFunction(() => window.drumStarts === 4);
+    const sliceButton = host.locator(".sampler-actions > .slice-loop");
+    assert.equal(await sliceButton.count(), 1);
+    const originalPadTitles = await drumPads.evaluateAll(buttons => buttons.map(button => button.title));
+    const originalPadKeys = await host.locator(".drum-key").allTextContents();
+    await sliceButton.click();
+    assert.equal(await host.locator(".slice-dialog").isVisible(), true);
+    await page.keyboard.press("Escape");
+    assert.equal(await host.locator(".slice-dialog").isVisible(), false);
+    assert.equal(await page.evaluate(() => window.sliceRenderRequests.length), 0, "Escape cancels before any render");
+    assert.deepEqual(await drumPads.evaluateAll(buttons => buttons.map(button => button.title)), originalPadTitles);
+    await sliceButton.click();
+    await host.locator(".slice-replace").click();
+    await page.waitForFunction(() => window.sliceCommitRequests.length === 1);
+    await page.waitForFunction(() => !document.querySelector("#scdl-tempo-control").shadowRoot.querySelector(".save-loop-pad").disabled);
+    const sliceRequest = await page.evaluate(() => window.sliceRenderRequests.at(-1));
+    assert.equal(sliceRequest.count, 8);
+    assert.deepEqual(sliceRequest.trimRange, padRender.trimRange, "slices use A–B, never the full track");
+    assert.equal(sliceRequest.fullTrack, undefined);
+    assert.deepEqual(sliceRequest.playbackTransform, padRender.playbackTransform);
+    assert.deepEqual(await host.locator(".drum-key").allTextContents(), originalPadKeys, "slices preserve key assignments");
+    await page.evaluate(() => { window.sliceDelay = 250; });
+    await sliceButton.click();
+    await host.locator(".slice-replace").click();
+    await page.waitForFunction(() => window.sliceRenderRequests.length === 2);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    assert.equal(await page.evaluate(() => window.sliceCommitRequests.length), 1, "cancelled render never commits");
+    assert.equal(await panel.isVisible(), true, "Cancelling slices must keep the panel open");
+    await sliceButton.click();
+    await host.locator(".slice-replace").click();
+    await page.waitForFunction(() => window.sliceRenderRequests.length === 3);
+    await host.locator("#scdl-effect-reverb").evaluate(slider => {
+      slider.value = "25";
+      slider.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await page.waitForTimeout(350);
+    assert.equal(await page.evaluate(() => window.sliceCommitRequests.length), 1,
+      "Changing FX during preparation must discard the stale slices");
+    await host.locator("#scdl-effect-reverb").evaluate(slider => {
+      slider.value = "24";
+      slider.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await page.waitForFunction(() => document.querySelector("#scdl-tempo-control").shadowRoot
+      .querySelector('[data-effect-value="reverb"]').textContent === "24%");
+    await page.evaluate(() => { window.sliceDelay = 0; });
+    await page.screenshot({ path: path.join(projectRoot, "test-results", "sampler-eight-pads.png") });
     const instrumentToggle = host.locator(".loop-instrument");
     assert.equal(await instrumentToggle.isDisabled(), false,
       "Piano mode must be available while a loop selection is active.");
@@ -838,11 +898,12 @@ async function main() {
     assert.deepEqual(instrumentRender.effects.eq, { enabled: false, hardClip: false, bands: [] },
       "Piano samples must receive the master EQ live, without baking it in twice");
     await host.locator(".brand-name").hover();
-    await page.keyboard.press("q");
+    await page.keyboard.down("q");
     await page.waitForFunction(() => window.drumStarts === 5);
     assert.equal(await page.evaluate(() => window.sourceStartArguments.at(-1)[1]), 12.345 / 1.25);
     await page.waitForFunction(() => window.masterEqualizers.some((eq) =>
       eq.input.context === window.lastSampleContext && eq.readSpectrum().values.some((db) => db > -90)));
+    await page.keyboard.up("q");
     await page.keyboard.press("i");
     await page.waitForFunction(() => window.drumStarts === 6);
     assert.deepEqual(await page.evaluate(() => window.sourcePlaybackRates.slice(-2)), [1, 2],
@@ -1477,6 +1538,7 @@ async function main() {
       throw new Error('Reset control must appear when any effect or playback setting is active.');
     }
     const globalVisibility = host.locator('.visibility-button');
+    const padsBeforeReset = await drumPads.evaluateAll(pads => pads.map(pad => pad.title));
     if (await globalVisibility.getAttribute('data-state') === 'normal') await globalVisibility.click();
     if (await globalVisibility.getAttribute('data-state') === 'collapsed') await globalVisibility.click();
     assert.equal(await globalVisibility.getAttribute('data-state'), 'hidden');
@@ -1533,7 +1595,7 @@ async function main() {
       });
       throw new Error(`Global reset did not settle: ${JSON.stringify(state)}`);
     });
-    assert.equal(await host.locator('.drum-pad').nth(3).getAttribute('title'), 'hat1 · hold to load',
+    assert.deepEqual(await drumPads.evaluateAll(pads => pads.map(pad => pad.title)), padsBeforeReset,
       'Global reset must preserve custom Sampler assignments');
     await globalVisibility.click();
     await host.locator('.peq-toggle').click();

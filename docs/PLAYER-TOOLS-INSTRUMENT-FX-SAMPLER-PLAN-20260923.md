@@ -1,14 +1,16 @@
 # Player Tools como instrumento: plan de FX, teclado sampler y slices
 
-> **IMPLEMENTACIÓN PARCIAL — revisión 25/09/2026.** El teclado con pitch y los FX adicionales ya tienen implementación. Los pads son y seguirán siendo exactamente seis. Slices y los pendientes detallados abajo siguen abiertos.
+> **IMPLEMENTACIÓN PARCIAL — revisión 26/09/2026.** El teclado con pitch, los FX adicionales y Slice to pads tienen implementación. Por decisión de producto del 26/09, el sampler pasa a **ocho pads** y el nuevo botón del header divide **solamente el loop A–B seleccionado en ocho partes iguales**, con confirmación antes de reemplazar los sonidos. Las propuestas anteriores de seis pads y cortes 4/6 quedan sustituidas.
 
 Fecha inicial: 23 de septiembre de 2026. Este documento registra implementación y trabajo pendiente; no implica publicación ni cambios comerciales.
 
-### Estado comprobado en código (25/09/2026)
+### Estado comprobado en código (26/09/2026)
 
-- **Implementado:** loop instrumental renderizado con velocidad, Keep Tone y FX; reproducción monofónica con pitch por resampling. Mapa físico tipo FL con 45 teclas: Q = C5 (sample original), Z = C4, filas Z/Q de notas blancas y filas A/números de sostenidos y notas duplicadas para completar los huecos. Incluye puntuación, comillas, corchetes, menos e igual. ←/→ desplazan una octava (−4 a +3), sin capturar escritura ni Ctrl/Cmd/Alt; al entrar se reinicia en 0. Mensaje breve con desplazamiento visible y ayuda detallada sólo en tooltip, traducidos a los cinco idiomas. Al iniciar la preparación o reactivar el buffer se pausa el track si estaba sonando; si ya estaba pausado, sigue así. Salir del instrumento no reanuda la pista.
+- **Implementado:** loop instrumental renderizado con velocidad, Keep Tone y FX; reproducción con pitch por resampling y Cut itself configurable. Mapa físico tipo FL con 45 teclas: Q = C5 (sample original), Z = C4, filas Z/Q de notas blancas y filas A/números de sostenidos y notas duplicadas para completar los huecos. Incluye puntuación, comillas, corchetes, menos e igual. ←/→ desplazan una octava (−4 a +3), sin capturar escritura ni Ctrl/Cmd/Alt; al entrar se reinicia en 0. Mensaje breve con desplazamiento visible y ayuda detallada sólo en tooltip, traducidos a los cinco idiomas. Al iniciar la preparación o reactivar el buffer se pausa el track si estaba sonando; si ya estaba pausado, sigue así. Salir del instrumento no reanuda la pista.
 - **Implementado:** flanger, phaser, saturación y bitcrusher en `audio-effects-core.js`, con procesamiento live/offline; Echo Freeze momentáneo y controles en `tempo-control-main.js`. Freeze no se exporta.
-- **Pendiente:** motor extraído `sampler-engine.js`, polifonía, note-off por keyup, control de nota raíz, persistencia/restauración del instrumento y Slice to pads.
+- **Implementado en piano:** ADSR editable, note-off por keyup, opción Cut itself y límite de 32 voces con descarte de la más antigua; el audio completo se prepara para poder mover la selección sin volver a descargar. Cada nota reproduce la selección vigente. Esto es independiente del nuevo flujo de slices, que sólo renderiza A–B.
+- **Implementado en pads/slices:** ocho slots (0–7); se conservan samples y teclas previos. Clap 2 y Hat 2 copiados del repo local `drumpads-main/files` completan los defaults, con J/K iniciales sin pisar teclas personalizadas. Botón junto a guardar loop y piano, confirmación modal, render único, ocho WAV con microfades, preparación y commit atómico separados, cancelación, claims por slot y receipts persistidos. Se reutiliza la autorización `save-loop-pad` (trial/Pro).
+- **Pendiente fuera de esta entrega:** motor extraído `sampler-engine.js`, mediciones del presupuesto de voces, control de nota raíz y persistencia/restauración del instrumento piano. La presencia de FX en código no da por completado todo el gate de paridad/rendimiento/QA audible.
 - **Validación:** existen verificadores del sampler, FX y navegador. La implementación no equivale a completar todos los gates de rendimiento, accesibilidad, locales y QA audible de este plan.
 
 Las secciones siguientes describen el diseño objetivo; no son una lista de tareas ya completadas.
@@ -23,7 +25,7 @@ Convertir Player Tools en una superficie más tocable sin transformarlo en un DA
 - bitcrusher;
 - saturación;
 - un modo de teclado que toque el loop activo como un instrumento afinado;
-- `Slice to pads` en 4 o 6 cortes.
+- `Slice to pads` en exactamente 8 cortes del loop seleccionado.
 
 Quedan expresamente fuera: un filtro nuevo (se conserva el EQ actual), stutter/beat repeat, tape stop, reverb freeze, reverse por pad, roll, secuenciador, choke groups y grabación de automatización XY. El plan tampoco agrega detección de BPM o transientes como requisito de esta entrega.
 
@@ -49,11 +51,11 @@ La documentación vigente de Web Audio confirma que un `AudioBufferSourceNode` s
 El plan usa estos defaults para quedar implementable. Cambiarlos antes de E1 no invalida la arquitectura.
 
 1. **Freeze:** botón momentáneo; al presionar deja de entrar señal nueva al echo y sostiene el contenido del delay; al soltar vuelve suavemente al feedback anterior. No persiste, no se guarda en presets y se cancela al cambiar de pista, resetear o activar bypass.
-2. **Teclado:** teclado QWERTY físico tipo FL, no Web MIDI en esta entrega. Filas Z/Q de notas blancas, A/números de sostenidos y duplicados; todas las 45 teclas del mapa suenan. Polifonía y note-off por `keyup` pendientes. Sólo captura teclas mientras el modo Instrument está activado y el foco no está en un campo editable.
+2. **Teclado:** teclado QWERTY físico tipo FL, no Web MIDI en esta entrega. Filas Z/Q de notas blancas, A/números de sostenidos y duplicados; todas las 45 teclas del mapa suenan. Tiene polifonía acotada, note-off por `keyup`, ADSR y Cut itself. Sólo captura teclas mientras el modo Instrument está activado y el foco no está en un campo editable.
 3. **Afinación:** C5 (MIDI 72) es la nota raíz por defecto; Q reproduce el sample original y Z una octava abajo. ←/→ cambian la octava, con desplazamiento visible y reinicio al activar. La transposición usa `detune`/`playbackRate`, por lo que notas agudas duran menos y graves duran más, como resampling clásico. El control de nota raíz queda pendiente, sin time-stretch por nota.
 4. **Fuente del instrumento:** snapshot del loop activo con velocidad, Keep Tone, EQ y FX persistentes ya aplicados. Máximo 30 s de audio resultante. El instrumento queda disponible durante la sesión y se conserva en IndexedDB para restaurarlo al reabrir, hasta reemplazarlo o borrarlo.
-5. **Pads:** exactamente seis, ahora y en futuras etapas. Se conservan índices 0–5, disposición y teclas configurables actuales; no se amplía la superficie.
-6. **Slices:** 4 o 6 divisiones temporales iguales del loop, sin detección de transientes. Se asignan desde el pad 1 en orden; con 4 se reemplazan sólo esos slots. Antes de sobrescribir pads ocupados se muestra un resumen y se pide confirmación.
+5. **Pads (decisión 26/09):** ocho. Se conservan índices 0–5 y teclas configurables actuales; se agregan índices 6–7 con el mismo aspecto, en una fila de ocho.
+6. **Slices (decisión 26/09):** exactamente ocho divisiones temporales iguales del loop A–B, sin detección de transientes. Se reemplazan los ocho sonidos en orden tras una confirmación explícita; las teclas asignadas se conservan. Cancelar conserva los sonidos anteriores.
 7. **Bordes:** cada slice aplica un microfade de 3 ms limitado por su duración para evitar clics. No hay choke group; los slices pueden superponerse.
 8. **FX:** los cinco efectos nuevos funcionan en vivo y, salvo el gesto Freeze, quedan incluidos en loop-to-pad, slices, instrumento y exportaciones con FX. Bypass y Reset afectan a todos.
 9. **Oferta:** los nuevos FX siguen la capacidad `tempo` actual durante trial/Pro. Crear instrumento, guardar sus datos y `Slice to pads` son Pro, igual que el render actual de loop a pad. No se cambia el precio ni el trial en este proyecto.
@@ -70,7 +72,7 @@ El plan usa estos defaults para quedar implementable. Cambiarlos antes de E1 no 
 - La preparación asíncrona captura `trackIdentity`, generación, rango y revisión de intención. Una respuesta tardía no activa un instrumento ni reemplaza pads de otra pista.
 - `AudioBufferSourceNode` es desechable: cada nota y pad crea su propia fuente; nunca se reinicia una fuente finalizada.
 - Un batch de slices es todo o nada respecto de sus slots. Un fallo no deja media cuadrícula nueva y media antigua.
-- Ninguna operación vuelve a descargar o decodificar la misma fuente seis veces dentro de un batch.
+- Ninguna operación vuelve a descargar o decodificar la misma fuente ocho veces dentro de un batch.
 - El teclado no intercepta atajos cuando el modo está apagado, el panel está cerrado, hay un modal, el foco es editable o se usan Ctrl/Cmd/Alt.
 
 ## 5. Modelo de FX y grafo de audio
@@ -154,7 +156,7 @@ engine.stopAll({ releaseMs: 12 });
 engine.setMode("pads" | "instrument");
 ```
 
-Cada voz usa `AudioBufferSourceNode -> GainNode -> sampler master`. `detune = (midiNote - rootMidi) * 100`. Agregar ataque corto y release corto para evitar clics; mantener polifonía inicial de 24 voces con voice stealing de la voz más antigua si se supera. Ignorar `event.repeat`; liberar todas las voces en `blur`, `visibilitychange`, salida del modo, bypass y cambio de pista.
+Cada voz usa `AudioBufferSourceNode -> GainNode -> sampler master`. `detune = (midiNote - rootMidi) * 100`. La implementación limita a 32 voces y descarta la más antigua al superar ese límite. Ignora `event.repeat` y libera las voces en `blur`, `visibilitychange`, salida del modo, bypass y cambio de pista.
 
 El botón Instrument se ubica junto al botón actual de enviar loop a pad. Flujo:
 
@@ -169,57 +171,33 @@ El botón Instrument se ubica junto al botón actual de enviar loop a pad. Flujo
 
 Al activar Instrument, pausar el audio activo de SoundCloud si estaba reproduciéndose, antes de preparar el sample o reactivar uno ya cargado. Si ya estaba pausado, no cambiar su estado. No modificar el volumen ni reanudar automáticamente al salir, cancelar o fallar la preparación.
 
-## 7. Slice to pads
+## 7. Slice to pads — implementación 26/09
 
-Añadir un botón `Slice` junto a las acciones de Loop Region. Al pulsarlo se abre un popover accesible con 4 y 6, resumen de slots a reemplazar y cancelar/confirmar.
+El botón está en el **header del Sampler**, junto a guardar loop a pad y modo piano. Se habilita con un loop A–B activo y el acceso existente a guardar loops (trial/Pro). No toma la pista completa ni el buffer completo del piano.
 
-`sampler-core` calcula límites en frames, no acumulando milisegundos redondeados:
+Flujo:
 
-```text
-startFrame(i) = floor(totalFrames * i / count)
-endFrame(i)   = floor(totalFrames * (i + 1) / count)
-```
+1. Capturar selección, identidad/generación de pista, velocidad, Keep Tone y FX persistentes. El EQ maestro sigue vivo; no se hornea dos veces.
+2. Mostrar confirmación modal que advierte que reemplaza los ocho sonidos, incluidos samples personalizados. Cancelar/Escape conserva todos los pads y devuelve el foco.
+3. Renderizar A–B una vez con el pipeline existente. Máximo 30 segundos a la velocidad elegida, y 12 MiB de WAV preparado agregado.
+4. Cortar el WAV PCM16 directamente, manteniendo sample rate/canales y sin ocho descargas ni otro resampling. Las colas de FX posteriores a B se excluyen. Los límites son `floor(totalFrames * i / 8)` y `floor(totalFrames * (i + 1) / 8)`: cobertura completa y diferencia máxima de un frame entre duraciones. Microfades de hasta 3 ms dentro de cada corte.
+5. Persistir la preparación sin cambiar `samples`. MAIN verifica que el snapshot sigue vigente y recién entonces solicita commit. Cambiar pista, selección o ajustes, cerrar el panel, perder foco o cancelar durante preparación invalida la operación.
+6. Commit de los ocho blobs y receipt en una sola transacción IndexedDB. Todos los claims deben seguir perteneciendo al batch: una carga más reciente en cualquier slot invalida el conjunto. Un error de cuota revierte toda la transacción.
 
-Así no quedan huecos ni se pierde el último frame. La fuente es el mismo snapshot renderizado que usaría Instrument. Se renderiza el loop una vez, se divide el `AudioBuffer` resultante, se aplican microfades y se codifica cada slice. Nombre sugerido: `Track · Slice 01/6`.
+Protocolo: `RENDER_LOOP_SLICES` (count fijo 8), `COMMIT_LOOP_SLICES`, `CANCEL_LOOP_SLICES`. Background valida remitente/owner, rango/duración/generación, track URL y allowlist de FX; resuelve el stream por el puente existente. Offscreen usa `OFFSCREEN_SLICES_BEGIN/RENDER/COMMIT/CANCEL` y guarda firma completa, owner, claims, preparación y receipt. Reintentar el mismo ID no vuelve a reemplazar; cambiar su firma produce conflicto. La cancelación anterior al inicio deja un tombstone. Una vez enviado el commit, ese guardado atómico es el punto de aplicación.
 
-Nuevo protocolo batch:
+## 8. Persistencia y compatibilidad
 
-```json
-{
-  "type": "RENDER_LOOP_SLICES",
-  "operationId": "slice_...",
-  "count": 6,
-  "startIndex": 0,
-  "trimRange": {},
-  "playbackTransform": {},
-  "effects": {},
-  "trackIdentity": "...",
-  "expectedGeneration": 0
-}
-```
+Se conserva **IndexedDB v2**: `samples`, `operations` y `claims` ya permiten este batch; no hace falta una migración destructiva ni agregar un store. Validadores aceptan 0–7. Los seis registros previos se conservan sin re-encodear y los nuevos defaults no se escriben sobre muestras personalizadas.
 
-Background valida 4/6, slots, duración, tamaño agregado, autorización y pertenencia del sender. Offscreen crea una operación idempotente, mantiene claims para todos los slots y compromete los registros en una sola transacción IndexedDB sólo después de preparar todos los blobs. Cancelar aborta fetch/render y no toca pads existentes. Una segunda operación que reclama un slot invalida limpiamente la anterior.
-
-## 8. Persistencia y migración
-
-Subir la base `scdl-player-pads` a v3:
-
-- conservar `samples` por índice, limitado siempre a 0–5;
-- añadir metadatos `kind: "pad" | "slice"`, `source`, `durationMs`, `revision` y `schemaVersion`, sin exigirlos a registros v2;
-- crear store `instrument` con una única clave estable y blob/metadatos;
-- generalizar `claims` para operaciones batch;
-- conservar receipts de operaciones sólo con retención acotada para evitar crecimiento indefinido.
-
-La migración no re-encodea los seis blobs existentes. Abrir v3 y listar debe mostrar exactamente los registros anteriores en 0–5. Si falla la migración, abortar y conservar v2; nunca borrar la base como recuperación automática.
-
-Revisar los límites por blob y total. El límite inicial sigue siendo 12 MB por muestra y 30 s para el loop instrumental; antes de release medir el peor caso de 6 slices y rechazar antes de renderizar si excede el presupuesto agregado.
+`scripts/sampler-slices.js` contiene la coordinación offscreen. Las operaciones `kind: "slices"` almacenan owner, firma, snapshot y blobs preparados hasta el commit. Preparaciones/receipts tienen vigencia de cinco minutos y se limpian al iniciar otro batch; los samples guardados no caducan. Las preparaciones sobreviven al cierre/reinicio del offscreen. Persistir/restaurar el instrumento piano sigue siendo una tarea distinta.
 
 ## 9. UI, interacción y accesibilidad
 
 - FX se organiza en grupos `Space` (Reverb/Echo), `Motion` (Flanger/Phaser) y `Color` (Saturation/Bitcrusher), manteniendo controles compactos de bypass individual.
 - Renombrar visualmente Delay a Echo sólo después de conservar claves y migración. Freeze es un botón con `aria-pressed`, instrucciones de mantener pulsado y soporte Pointer + Space/Enter; `pointercancel`, `blur` y pérdida de visibilidad equivalen a soltar.
 - Instrument muestra un mensaje breve de modo activo y flechas/octava; la explicación detallada queda sólo en el tooltip del mensaje. Escape sale. Mantener estados de preparación/error.
-- Los seis pads conservan su disposición actual con número, tecla y nombre abreviado. Mantener carga por hold/Shift+Enter y navegación por teclado.
+- Los ocho pads conservan el aspecto actual con número, tecla y nombre abreviado. Mantener carga por hold/Shift+Enter y navegación por teclado.
 - Slice informa qué pads reemplazará. La confirmación inicial recibe foco, Escape cancela y el resultado se anuncia por `aria-live`.
 - Respetar `prefers-reduced-motion`; no usar parpadeos para indicar nota o freeze.
 - Todo texto visible nuevo debe ir a `_locales/en`, `es`, `de`, `ru` y `pt_BR`; eliminar strings ingleses inline del flujo tocado.
@@ -232,7 +210,7 @@ Validaciones obligatorias en background/offscreen:
 
 - remitente de la extensión y página SoundCloud permitida;
 - identidad/generación/rango coherentes;
-- count sólo 4/6 e índices 0–5;
+- count sólo 8 e índices 0–7;
 - FX normalizados con allowlist, nunca objetos arbitrarios;
 - duración efectiva, bytes base64/blob, nombre y operation ID acotados;
 - URLs resueltas por el pipeline existente, no aceptadas desde MAIN como autoridad;
@@ -270,9 +248,9 @@ Refactorizar la rama delay con input gain y estado efímero. Implementar gesto m
 
 Salida: freeze tocable sin runaway, pop ni audio viejo en otra pista.
 
-### E5 — Sampler engine y 6 pads
+### E5 — Sampler engine y 8 pads
 
-Conservar los seis slots en IndexedDB, UI y validadores; cualquier migración sólo añade metadatos/stores. Sustituir `playDrum` por el motor de voces. Mantener carga de archivo, teclas editables y loop-to-pad. Añadir stop/release y manejo de foco.
+Conservar los seis slots previos y ampliar a ocho en IndexedDB, UI y validadores; cualquier migración sólo añade metadatos/stores. Sustituir `playDrum` por el motor de voces. Mantener carga de archivo, teclas editables y loop-to-pad. Añadir stop/release y manejo de foco.
 
 Salida: regresión funcional completa del sampler actual sobre el motor nuevo.
 
@@ -284,7 +262,7 @@ Salida: loop activo tocable en notas con latencia estable y sin bloquear escritu
 
 ### E7 — Slice to pads
 
-Implementar cálculo por frames, render único, microfades, batch atómico, confirmación de overwrite, progreso/cancelación e idempotencia. Probar 4/6 y fallos en fetch, render, cuota y commit.
+Implementar cálculo por frames, render único, microfades, batch atómico, confirmación de overwrite, progreso/cancelación e idempotencia. Probar 8 cortes y fallos en fetch, render, cuota y commit.
 
 Salida: slices ordenados, sin huecos ni reemplazos parciales.
 
@@ -313,7 +291,7 @@ Actualizar presets, reset global, descargas con FX, locales, ayuda, manifest, em
 - cambio de elemento audio, track, URL SPA, panel cerrado y pestaña oculta;
 - reset/bypass no revive tails ni voces;
 - instrumento/slice descartan respuestas viejas;
-- migración mantiene pads 0–5 y operaciones idempotentes sobreviven reinicio del service worker;
+- compatibilidad mantiene pads 0–5, admite los nuevos 6–7 y las operaciones idempotentes sobreviven reinicio del service worker;
 - batch cancela sin escrituras y fallo de cuota no toca datos anteriores;
 - exportación y loop-to-pad incluyen FX persistentes nuevos.
 
@@ -321,7 +299,7 @@ Actualizar presets, reset global, descargas con FX, locales, ayuda, manifest, em
 
 - Pointer, teclado y accesibilidad de Freeze;
 - QWERTY note-on/off, foco editable, Escape, blur y combinaciones del navegador;
-- 6 pads en 420 px y viewport angosto;
+- 8 pads en 420 px y viewport angosto;
 - confirmación y anuncio de overwrite;
 - Free/trial/Pro según matriz confirmada;
 - cinco locales sin claves faltantes;
@@ -333,8 +311,8 @@ Actualizar presets, reset global, descargas con FX, locales, ayuda, manifest, em
 - Ningún sample es NaN/Infinity; pico final ≤ 0 dBFS y sin crecimiento sostenido con feedback máximo.
 - Freeze puede mantenerse 60 s y soltarse sin salto evidente ni audio de la pista anterior.
 - Note-on responde en el mismo gesto una vez cargado; objetivo inicial de latencia de scheduling ≤ 20 ms en la máquina de prueba, reportando hardware/browser.
-- Veinticuatro voces y 6 pads no producen crecimiento continuo de nodos después de `stopAll`.
-- Los 6 slices concatenados reproducen el mismo número total de frames que el loop renderizado, salvo las rampas de borde aplicadas dentro de cada slice.
+- Treinta y dos voces y 8 pads no producen crecimiento continuo de nodos después de `stopAll`.
+- Los 8 slices concatenados reproducen el mismo número total de frames que A–B transformado, con las rampas de borde dentro de cada slice y sin tails posteriores a B.
 - Una preparación cancelada o stale no cambia instrumento ni pads.
 - Pads existentes sobreviven migración y rollback de código no borra IndexedDB.
 - `npm test`, `npm run test:e2e:effects`, verificadores nuevos de sampler/slices, `npm run test:player-tools` y `npm run test:package` pasan; luego se hace QA audible manual.
@@ -356,6 +334,15 @@ Actualizar presets, reset global, descargas con FX, locales, ayuda, manifest, em
 
 ## 15. Rollback y entrega
 
-Cada etapa queda detrás de una constante de feature local hasta completar su gate. El schema v3 es aditivo: desactivar UI nueva no elimina blobs. Si una nueva rama FX falla, el normalizador conserva valores pero su wet efectivo se fuerza a cero y la ruta seca continúa. Si Instrument/Slice falla, el loop, los seis pads históricos y loop-to-pad tradicional siguen operativos.
+Cada etapa queda detrás de una constante de feature local hasta completar su gate. Esta entrega conserva schema v2: desactivar UI nueva no elimina blobs. Si una nueva rama FX falla, el normalizador conserva valores pero su wet efectivo se fuerza a cero y la ruta seca continúa. Si Instrument/Slice falla, el loop, los seis pads históricos y loop-to-pad tradicional siguen operativos.
 
 La entrega final debe incluir: código, migración, tests, actualización de manifest/package/locales/ayuda, informe breve de mediciones y QA audible. No incluye commit, push, publicación en Chrome Web Store, cambio de precio ni deploy de servicios salvo pedido separado.
+
+## 16. Verificaciones de esta entrega
+
+- `node scripts/verify-sampler-core.js`: límites por frames, cobertura completa, estéreo, microfades y exclusión de tails posteriores a B.
+- `npm run test:e2e:slices`: Chromium + audio sintético e IndexedDB real; render único, contenido de A–B, conservación v2, commit atómico, cancelación antes/durante preparación, owner/firma, claims, rollback de cuota y restauración de preparación tras recarga.
+- `npm run test:e2e:tempo`: ocho pads, botón en el header, confirmación/Escape, conservación de teclas y cancelación sin commit, más regresiones existentes de piano/FX/loops.
+- QA audible manual en SoundCloud real sigue siendo gate previo a publicación.
+
+Validación de cierre (26/09): `npm test` pasó sus 51 verificaciones; también pasaron `test:e2e:tempo` (incluido cambio de FX durante preparación y preservación de los ocho pads al resetear), las tres variantes de `test:e2e:effects` y `test:player-tools` (34 tests del servicio). El paquete local se generó con la configuración de pruebas existente y pasó su smoke estático, incluyendo los dos WAV nuevos y `sampler-slices.js`. No se realizó publicación ni QA audible manual.

@@ -1165,6 +1165,32 @@ const BulkJobManager = {
     }
   },
 
+  async renderLoopSlices(trackData, operationId, owner) {
+    singleDownloadsInFlight += 1;
+    try {
+      await startKeepalive();
+      return await queueSingleDownload(async () => {
+        let result;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const resolved = await SCDownloadSource.resolve(trackData, "auto", {
+            forceRefresh: attempt > 0, reason: attempt > 0 ? "expired_media" : "initial", attempt,
+          });
+          result = await sendOffscreenMessage({ type: "OFFSCREEN_SLICES_RENDER", operationId, owner,
+            streamUrl: resolved.streamUrl, trackData: resolved.trackData });
+          if (result?.success || ![401, 403, 404].includes(result?.status)) break;
+        }
+        return result;
+      });
+    } finally {
+      singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);
+      const activeJob = await loadJob().catch(() => null);
+      if ((!activeJob || !isActiveJobStatus(activeJob.status)) && singleDownloadsInFlight === 0) {
+        await stopKeepalive().catch(() => {});
+        await closeOffscreenDocument().catch(() => {});
+      }
+    }
+  },
+
   async renderLoopPad(trackData, index, trimRange, playbackTransform, effects, name, operationId = `pad_${Date.now()}_${index}`) {
     singleDownloadsInFlight += 1;
     try {

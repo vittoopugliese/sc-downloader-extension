@@ -39,7 +39,7 @@ async function padTransaction(mode, action) {
   });
 }
 
-function validPadIndex(index) { return Number.isInteger(index) && index >= 0 && index < 6; }
+function validPadIndex(index) { return Number.isInteger(index) && index >= 0 && index < 8; }
 function validPadOperationId(id) { return typeof id === "string" && /^pad_[A-Za-z0-9_-]{8,100}$/.test(id); }
 function validInstrumentOperationId(id) { return typeof id === "string" && /^instrument_[A-Za-z0-9_-]{8,100}$/.test(id); }
 
@@ -307,6 +307,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
   if (!message || typeof message.type !== "string") return false;
+  if (["OFFSCREEN_SLICES_BEGIN", "OFFSCREEN_SLICES_RENDER", "OFFSCREEN_SLICES_COMMIT", "OFFSCREEN_SLICES_CANCEL"].includes(message.type)) {
+    SCSamplerSlices.handle(message, openPadDatabase).then(sendResponse).catch(error =>
+      sendResponse({ success: false, code: "slice_failed", error: error?.message || "Could not prepare the slices." }));
+    return true;
+  }
   if (["OFFSCREEN_PAD_LIST", "OFFSCREEN_PAD_GET", "OFFSCREEN_PAD_STORE", "OFFSCREEN_PAD_RENDER",
       "OFFSCREEN_INSTRUMENT_RENDER", "OFFSCREEN_INSTRUMENT_CANCEL", "OFFSCREEN_INSTRUMENT_READ"].includes(message.type)) {
     const operationId = message.operationId;

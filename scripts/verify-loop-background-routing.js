@@ -16,6 +16,8 @@ const tabMessages = [];
 const downloads = [];
 const instrumentRenders = [];
 const instrumentCancels = [];
+const sliceMessages = [];
+const sliceRenders = [];
 const sessionState = {};
 let instrumentRenderBlocker = null;
 const resolvedTrack = {
@@ -50,6 +52,11 @@ const context = vm.createContext({
     }),
   },
   BulkJobManager: {
+    async padMessage(message) {
+      sliceMessages.push(message);
+      return { success: true, state: "pending" };
+    },
+    async renderLoopSlices(...args) { sliceRenders.push(args); return { success: true, state: "prepared" }; },
     KEEPALIVE_ALARM: "keepalive",
     recoverRunningJob: async () => {},
     ensureJobRunning: async () => {},
@@ -257,6 +264,34 @@ function deferred() {
     trimRange: { startMs: 0, endMs: 240000 }, playbackTransform,
   }, owner, resolve));
   assert.equal(padLimit.success, false, "fullTrack cannot bypass pad duration limits");
+
+  const sliceRequest = { type: "RENDER_LOOP_SLICES", operationId: "pad_slice_routing_001", count: 8,
+    trackUrl: "https://soundcloud.com/artist/track", trackIdentity: "permalink:https://soundcloud.com/artist/track", generation: 1,
+    trimRange, playbackTransform, effects: { reverb: 20, unknown: "ignored" }, name: "Selected" };
+  assert.equal((await dispatch(sliceRequest, owner)).success, true);
+  assert.equal(sliceRenders.length, 1);
+  const begun = sliceMessages.find(message => message.type === "OFFSCREEN_SLICES_BEGIN");
+  assert.equal(begun.input.count, 8);
+  assert.deepEqual(JSON.parse(JSON.stringify(begun.input.trimRange)), trimRange);
+  assert.equal(begun.input.effects.unknown, undefined, "only allowlisted effects cross the renderer boundary");
+  assert.equal(begun.input.effects.reverb, 20);
+  assert.equal(JSON.parse(begun.owner).documentId, owner.documentId);
+  for (const change of [{ count: 6 }, { generation: -1 }, { trackIdentity: "another-track" },
+    { trimRange: { ...trimRange, startMs: -1 } }, { trimRange: { startMs: 0, endMs: 31000, durationMs: 90000 }, playbackTransform: { rate: 1 } },
+    { effects: { delay: NaN } }]) {
+    assert.equal((await dispatch({ ...sliceRequest, ...change }, owner)).success, false);
+  }
+  assert.equal(sliceRenders.length, 1, "invalid slice requests never render");
+  await dispatch({ type: "COMMIT_LOOP_SLICES", operationId: sliceRequest.operationId }, owner);
+  assert.equal(sliceMessages.at(-1).type, "OFFSCREEN_SLICES_COMMIT");
+  await dispatch({ type: "CANCEL_LOOP_SLICES", operationId: sliceRequest.operationId }, owner);
+  assert.equal(sliceMessages.at(-1).type, "OFFSCREEN_SLICES_CANCEL");
+  for (const index of [6, 7]) {
+    assert.equal((await dispatch({ type: "GET_LOOP_PAD_AUDIO", index }, owner)).success, true);
+    assert.equal(sliceMessages.at(-1).index, index);
+  }
+  const invalidPad = await new Promise(resolve => messageListener({ type: "GET_LOOP_PAD_AUDIO", index: 8 }, owner, resolve));
+  assert.equal(invalidPad.success, false);
 
   console.log("Loop background routing verification passed.");
 })().catch((error) => {

@@ -72,6 +72,7 @@ $packageItems = @(
     "scripts/stream-selector.js",
     "scripts/tempo-control-core.js",
     "scripts/sampler-core.js",
+    "scripts/sampler-slices.js",
     "scripts/tempo-control-main.js",
     "scripts/track-download-execution.js",
     "scripts/vendor/id3-writer.js",

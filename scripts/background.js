@@ -698,6 +698,70 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (["RENDER_LOOP_SLICES", "COMMIT_LOOP_SLICES", "CANCEL_LOOP_SLICES"].includes(request.type)) {
+    if (sender.id !== chrome.runtime.id || !sender.tab || !/^https:\/\/soundcloud\.com\//.test(sender.url || "")) {
+      sendResponse({ success: false, error: "This action is only available on SoundCloud." });
+      return false;
+    }
+    const owner = JSON.stringify(instrumentOwner(sender));
+    const operationId = request.operationId;
+    if (typeof operationId !== "string" || !/^pad_slice_[A-Za-z0-9_-]{8,80}$/.test(operationId)) {
+      sendResponse({ success: false, error: "Invalid slice operation." });
+      return false;
+    }
+    const run = async () => {
+      if (request.type === "CANCEL_LOOP_SLICES") {
+        return BulkJobManager.padMessage({ type: "OFFSCREEN_SLICES_CANCEL", operationId, owner });
+      }
+      const access = await playerToolsAccess.authorize(sender, { operation: "save-loop-pad" });
+      if (!access.allowed) throw new Error("Player Tools Pro is required to save a loop to pads.");
+      if (request.type === "COMMIT_LOOP_SLICES") {
+        return BulkJobManager.padMessage({ type: "OFFSCREEN_SLICES_COMMIT", operationId, owner });
+      }
+      const range = request.trimRange;
+      const rate = request.playbackTransform?.rate;
+      if (request.count !== 8 || !range || !Number.isFinite(range.startMs) || !Number.isFinite(range.endMs) ||
+          !Number.isFinite(range.durationMs) || range.startMs < 0 || range.endMs <= range.startMs ||
+          range.endMs > range.durationMs || !Number.isFinite(rate) || rate < .1 || rate > 4 ||
+          (range.endMs - range.startMs) / rate > 30000 ||
+          typeof request.trackIdentity !== "string" || request.trackIdentity !== `permalink:${request.trackUrl}` ||
+          !/^https:\/\/soundcloud\.com\/[^/]+\/[^/?#]+$/.test(request.trackUrl) ||
+          !Number.isSafeInteger(request.generation) || request.generation < 0) {
+        throw new Error("Select a loop of up to 30 seconds at the current speed.");
+      }
+      const effects = { schemaVersion: 2, bypassed: request.effects?.bypassed === true,
+        eq: { enabled: false, hardClip: false, bands: [] } };
+      for (const field of ["reverb", "delay", "flanger", "phaser", "bitcrusher", "saturation", "reverbSize",
+        "reverbDecay", "reverbPreDelay", "reverbTone", "delayTime", "delayFeedback", "delayTone", "flangerRate",
+        "flangerDepth", "flangerFeedback", "phaserRate", "phaserDepth", "phaserFeedback", "bitDepth",
+        "sampleRateReduction", "saturationDrive", "saturationTone"]) {
+        if (request.effects?.[field] === undefined) continue;
+        if (!Number.isFinite(request.effects[field])) throw new Error("Invalid effects snapshot.");
+        effects[field] = request.effects[field];
+      }
+      if (typeof request.effects?.reverbRoom === "string") effects.reverbRoom = request.effects.reverbRoom.slice(0, 32);
+      const input = {
+        count: 8, trackIdentity: request.trackIdentity, generation: request.generation,
+        trimRange: { startMs: range.startMs, endMs: range.endMs, durationMs: range.durationMs },
+        playbackTransform: { rate: Math.round(rate * 1000) / 1000, preservePitch: request.playbackTransform.preservePitch === true },
+        effects, name: String(request.name || "Loop").slice(0, 70),
+      };
+      // FX are normalized by the shared offline renderer before applying them.
+      const begun = await BulkJobManager.padMessage({ type: "OFFSCREEN_SLICES_BEGIN", operationId, owner, input });
+      if (!begun?.success || begun.state === "prepared" || begun.pads) return begun;
+      try {
+        // Resolve only through the SoundCloud content bridge; MAIN cannot supply a stream URL.
+        const trackData = await requestTopFrameLoopTrack(sender.tab.id, request.trackUrl);
+        return await BulkJobManager.renderLoopSlices(trackData, operationId, owner);
+      } catch (error) {
+        await BulkJobManager.padMessage({ type: "OFFSCREEN_SLICES_CANCEL", operationId, owner }).catch(() => {});
+        throw error;
+      }
+    };
+    run().then(sendResponse).catch(error => sendResponse(errorResponse(error)));
+    return true;
+  }
+
   if (["RENDER_LOOP_PAD", "RENDER_LOOP_INSTRUMENT", "CANCEL_LOOP_INSTRUMENT",
       "GET_LOOP_PAD_LIST", "GET_LOOP_PAD_AUDIO", "STORE_LOOP_PAD_AUDIO"].includes(request.type)) {
     if (sender.id !== chrome.runtime.id || !sender.tab || !/^https:\/\/soundcloud\.com\//.test(sender.url || "")) {
@@ -711,7 +775,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
     const index = request.index;
-    if (!["GET_LOOP_PAD_LIST", "RENDER_LOOP_INSTRUMENT"].includes(request.type) && (!Number.isInteger(index) || index < 0 || index >= 6)) {
+    if (!["GET_LOOP_PAD_LIST", "RENDER_LOOP_INSTRUMENT"].includes(request.type) && (!Number.isInteger(index) || index < 0 || index >= 8)) {
       sendResponse({ success: false, error: "Invalid pad." });
       return false;
     }

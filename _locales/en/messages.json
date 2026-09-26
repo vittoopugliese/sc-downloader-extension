@@ -694,5 +694,47 @@
   "player_tools_restore_success": { "message": "Pro activated. Your Player Tools controls are unlocked." },
   "player_tools_restore_error": { "message": "The purchase could not be restored. Check the details or contact support." },
   "email": { "message": "Email" },
-  "close": { "message": "Close" }
+  "close": { "message": "Close" },
+  "sampler_slice": {
+    "message": "Slice selected loop into 8 pads"
+  },
+  "sampler_title": {
+    "message": "Replace all eight pads?"
+  },
+  "sampler_confirm": {
+    "message": "The selected A–B loop will be split into eight equal slices. This replaces all eight sounds, including custom samples. Your assigned keys will stay the same."
+  },
+  "sampler_replace": {
+    "message": "Replace with 8 slices"
+  },
+  "sampler_cancel": {
+    "message": "Cancel"
+  },
+  "sampler_preparing": {
+    "message": "Preparing 8 slices… Press Escape to cancel."
+  },
+  "sampler_stop": {
+    "message": "Cancel slice preparation"
+  },
+  "sampler_done": {
+    "message": "8 slices saved. Play them with your pad keys."
+  },
+  "sampler_cancelled": {
+    "message": "Slice preparation cancelled. Pads were not changed."
+  },
+  "sampler_changed": {
+    "message": "The loop or its settings changed. Slice preparation cancelled."
+  },
+  "sampler_failed": {
+    "message": "Could not save the eight slices. Please try again."
+  },
+  "sampler_tooLong": {
+    "message": "Select a loop of up to 30 seconds at the current speed."
+  },
+  "sampler_locked": {
+    "message": "Player Tools Pro required"
+  },
+  "sampler_selectPad": {
+    "message": "Choose one of the eight pads. Press Escape to cancel."
+  }
 }
