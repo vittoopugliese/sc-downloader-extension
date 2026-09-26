@@ -410,6 +410,7 @@
   }
 
   function getDrumAudioContext() {
+    if (effectsController) return effectsController.getPlaybackContext();
     if (!drumAudioContext) {
       const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextConstructor) throw new Error("Audio playback is unavailable in this browser.");
@@ -610,21 +611,8 @@
       effects[field] = typeof value === "number" ? normalizedInstrumentNumber(value) : value;
     }
     effects.bypassed = snapshot.bypassed === true;
-    const normalizedEq = globalThis.SCParametricEQ?.normalize(snapshot.eq) || {
-      enabled: snapshot.eq?.enabled !== false,
-      hardClip: snapshot.eq?.hardClip === true,
-      bands: Array.isArray(snapshot.eq?.bands) ? snapshot.eq.bands : [],
-    };
-    effects.eq = {
-      enabled: normalizedEq.enabled !== false,
-      hardClip: normalizedEq.hardClip === true,
-      bands: normalizedEq.bands.map((band) => ({
-        type: String(band.type || "peaking"),
-        frequency: normalizedInstrumentNumber(band.frequency),
-        gain: normalizedInstrumentNumber(band.gain),
-        q: normalizedInstrumentNumber(band.q),
-      })),
-    };
+    // The master EQ stays live while playing notes; never bake it into the voice.
+    effects.eq = { enabled: false, hardClip: false, bands: [] };
     const descriptor = {
       signatureVersion: 1,
       trackIdentity: String(loopState.trackIdentity || ""),
@@ -819,6 +807,7 @@
       const source = context.createBufferSource();
       source.buffer = buffer;
       source.connect(context.destination);
+      source.onended = () => source.disconnect();
       source.start();
       ui?.drumButtons[index].classList.add("is-active");
       setTimeout(() => ui?.drumButtons[index].classList.remove("is-active"), 140);
@@ -1918,7 +1907,7 @@
       trackUrl: String(loopState.trackIdentity || "").replace(/^permalink:/, ""),
       trimRange: { startMs: loopState.startMs, endMs: loopState.endMs, durationMs: loopState.durationMs },
       playbackTransform: { rate: state.effectiveRate, preservePitch: state.preservePitch },
-      effects: effectsController?.snapshot() || {},
+      effects: { ...effectsController?.snapshot(), eq: { enabled: false, hardClip: false, bands: [] } },
       name: `Loop ${(loopState.startMs / 1000).toFixed(1)}–${(loopState.endMs / 1000).toFixed(1)}s`,
     };
     setSamplerCollapsed(false);

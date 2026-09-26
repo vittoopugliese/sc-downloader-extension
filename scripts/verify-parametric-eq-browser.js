@@ -44,10 +44,9 @@ const { chromium } = require("playwright");
         const fx = SCTempoEffects.create({ getActiveAudio: () => active });
         fx.setEqualizerAllowed(true);
         fx.setEqualizer({ enabled: true, bands: [{ frequency: 1000, gain: 0, q: 1 }] });
-        if (!meter) {
-          meter = siteContext.createAnalyser();
-          siteSource.connect(meter);
-        }
+        // Measure the final output, after the site's volume and all FX returns.
+        meter = siteContext.createAnalyser();
+        fx.analyseEqualizer().output.connect(meter);
         const samples = new Float32Array(meter.fftSize);
         const rms = () => { meter.getFloatTimeDomainData(samples); return Math.sqrt(samples.reduce((sum, x) => sum + x * x, 0) / samples.length); };
         const peak = () => { meter.getFloatTimeDomainData(samples); return samples.reduce((highest, x) => Math.max(highest, Math.abs(x)), 0); };
@@ -64,6 +63,8 @@ const { chromium } = require("playwright");
         await sleep(300);
         const lowpass = rms();
         const lowpassResponse = fx.analyseEqualizer().response(new Float32Array([100, 10000]));
+        fx.setBypassed(true); await sleep(300); const cutoffBypass = rms();
+        fx.setBypassed(false);
         fx.setEqualizer({ enabled: true, hardClip: false, bands: [{ frequency: 1000, gain: 24, q: 2 }] });
         await sleep(300);
         const unclippedPeak = peak();
@@ -87,15 +88,48 @@ const { chromium } = require("playwright");
           siteSource.disconnect(volume); await sleep(150);
           siteSource.connect(volume); await sleep(150); reconnect = rms();
         }
+        fx.setEqualizer({ enabled: true, bands: [] });
+        fx.setCharacter("reverbDecay", 4);
+        fx.set("reverb", 100);
+        await sleep(600);
+        player.pause();
+        await sleep(350);
+        const tail = rms();
+        const tailSpectrum = fx.analyseEqualizer().readSpectrum().values.some((db) => db > -90);
+        fx.setEqualizer({ enabled: true, bands: [{ type: "lowpass", frequency: 20, gain: 0, q: Math.SQRT1_2 }] });
+        await sleep(350);
+        const filteredTail = rms();
+        fx.setEqualizer({ enabled: true, bands: [] });
+        await sleep(350);
+        const restoredTail = rms();
+        fx.reset();
+        fx.setEqualizer({ enabled: true, bands: [{ frequency: 1000, gain: -12, q: 2 }] });
         // An SPA replacement must receive the saved EQ without another gesture.
         player.pause();
         const replacement = new Audio(url); replacement.loop = true; await replacement.play();
+        const replacementContext = mode === "owned" ? null : new AudioContext({ sampleRate: 44100 });
+        if (replacementContext) replacementContext.createMediaElementSource(replacement).connect(replacementContext.destination);
         active = replacement; fx.applyToActive(); await sleep(150);
         const replacementResponse = fx.analyseEqualizer().response(new Float32Array([1000]))[0];
+        const playbackContextMatches = fx.getPlaybackContext() === (replacementContext || siteContext);
+        let previousContextCut = null, combinedSpectrum = true;
+        if (replacementContext) {
+          const voice = siteContext.createOscillator(); voice.frequency.value = 500;
+          const level = siteContext.createGain(); level.gain.value = 0.05;
+          voice.connect(level).connect(siteContext.destination); voice.start();
+          await sleep(350); const previousContextBase = rms();
+          const spectrum = fx.analyseEqualizer().readSpectrum();
+          combinedSpectrum = [500, 1000].every((hz) => spectrum.values[Math.round(hz * spectrum.fftSize / spectrum.sampleRate)] > -65);
+          fx.setEqualizer({ enabled: true, bands: [{ frequency: 500, gain: -18, q: 2 }] });
+          await sleep(300); previousContextCut = 20 * Math.log10(rms() / previousContextBase);
+          voice.stop(); level.disconnect();
+          await replacementContext.close();
+        }
         replacement.pause(); player.pause(); await siteContext.close(); URL.revokeObjectURL(url);
         return { base, boost, highpass, lowpass,
           highpassResponse: [...highpassResponse], lowpassResponse: [...lowpassResponse],
-          unclippedPeak, clippedPeak, cut, bypass, restored, revoked, response, replacementResponse, hasSpectrum, muted, reconnect };
+          unclippedPeak, clippedPeak, cut, bypass, cutoffBypass, restored, revoked, response, replacementResponse, hasSpectrum, muted, reconnect,
+          tail, tailSpectrum, filteredTail, restoredTail, playbackContextMatches, previousContextCut, combinedSpectrum };
       }, mode);
       assert.ok(result.base > 0.001, `${mode}: fixture must be audible`);
       const db = (value) => 20 * Math.log10(value / result.base);
@@ -108,11 +142,17 @@ const { chromium } = require("playwright");
         `${mode}: hard clip must measurably clamp boosted audio: ${JSON.stringify(result)}`);
       assert.ok(Math.abs(db(result.cut) + 12) < 0.6, `${mode}: dry signal was not cut by 12 dB: ${JSON.stringify(result)}`);
       assert.ok(Math.abs(db(result.bypass)) < 0.2, `${mode}: bypass must restore unity`);
+      assert.ok(Math.abs(db(result.cutoffBypass)) < 0.2, `${mode}: bypass must also disable cutoff filters`);
       assert.ok(Math.abs(db(result.revoked)) < 0.2, `${mode}: revoked EQ must restore unity`);
       assert.ok(Math.abs(db(result.restored) + 12) < 0.6);
       assert.ok(Math.abs(result.response + 12) < 0.1);
       assert.ok(Math.abs(result.replacementResponse + 12) < 0.1);
+      assert.ok(result.playbackContextMatches && result.combinedSpectrum, `${mode}: replaced contexts must share settings and display all sounding audio`);
+      if (result.previousContextCut !== null) assert.ok(result.previousContextCut < -15, "EQ edits must also reach notes still playing in the previous context");
       assert.ok(result.hasSpectrum);
+      assert.ok(result.tail > 1e-5 && result.tailSpectrum, `${mode}: reverb must remain audible and visible after pausing`);
+      assert.ok(result.filteredTail < result.tail * 0.2 && result.restoredTail > result.filteredTail * 5,
+        `${mode}: EQ must edit an already sounding reverb tail: ${JSON.stringify(result)}`);
       if (mode !== "owned") {
         assert.ok(result.muted < 1e-6, "Site mute must remain effective");
         assert.ok(Math.abs(db(result.reconnect) + 12) < 0.6, "Site reconnect must preserve EQ");
@@ -120,6 +160,77 @@ const { chromium } = require("playwright");
       console.log(`Parametric EQ audio: ${mode}, cut ${db(result.cut).toFixed(2)} dB; bypass, revocation, SPA and spectrum passed.`);
       await page.close();
     }
+
+    const samplerPage = await browser.newPage();
+    await samplerPage.goto("about:blank");
+    for (const file of ["parametric-eq.js", "audio-effects-core.js"]) await samplerPage.addScriptTag({ path: path.join(__dirname, file) });
+    const sampler = await samplerPage.evaluate(async () => {
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      // No track is loaded, and the sample starts before EQ is enabled.
+      const fx = SCTempoEffects.create();
+      const context = fx.getPlaybackContext();
+      await context.resume();
+      const buffer = context.createBuffer(1, context.sampleRate, context.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = 0.1 * Math.sin(2 * Math.PI * 1000 * i / context.sampleRate);
+      const pad = context.createBufferSource();
+      pad.buffer = buffer; pad.loop = true;
+      const returnedDestination = pad.connect(context.destination);
+      pad.start();
+      fx.setEqualizerAllowed(true);
+      const eq = fx.analyseEqualizer();
+      const meter = context.createAnalyser(); eq.output.connect(meter);
+      const samples = new Float32Array(meter.fftSize);
+      const rms = () => { meter.getFloatTimeDomainData(samples); return Math.sqrt(samples.reduce((sum, x) => sum + x * x, 0) / samples.length); };
+      for (let frame = 0; frame < 20; frame++) { await sleep(33); eq.readSpectrum(); }
+      const base = rms();
+      const spectrumBefore = Math.max(...eq.readSpectrum().values);
+      fx.setEqualizer({ enabled: true, bands: [{ frequency: 1000, gain: -18, q: 1 }] });
+      // Read at the editor's cadence so analyser smoothing can settle.
+      for (let frame = 0; frame < 20; frame++) { await sleep(33); eq.readSpectrum(); }
+      const cut = rms();
+      const spectrumAfter = Math.max(...eq.readSpectrum().values);
+      pad.stop(); pad.disconnect(context.destination, 0, 0);
+      // A pitched note with an envelope uses the same final output, exactly once.
+      const note = context.createBufferSource(); note.buffer = buffer; note.loop = true;
+      const envelope = context.createGain(); envelope.gain.value = 0.5;
+      note.connect(envelope).connect(context.destination);
+      note.start(); await sleep(300);
+      const noteCut = rms();
+      const reconnect = [];
+      for (const args of [[context.destination], [context.destination, 0], [context.destination, 0, 0], [0], []]) {
+        envelope.disconnect(...args);
+        await sleep(80);
+        const silent = rms();
+        envelope.connect(context.destination, 0, 0);
+        envelope.connect(context.destination); // Duplicate connections must not double volume.
+        await sleep(100);
+        reconnect.push({ silent, level: rms() });
+      }
+      fx.setBypassed(true); await sleep(250); const bypass = rms();
+      fx.setBypassed(false);
+      fx.setEqualizerAllowed(false); await sleep(250); const revoked = rms();
+      fx.setEqualizerAllowed(true); await sleep(250); const restored = rms();
+      fx.reset(); await sleep(250); const reset = rms();
+      const sameContext = fx.getPlaybackContext() === context;
+      note.stop(); envelope.disconnect(); await context.close();
+      return { base, cut, spectrumBefore, spectrumAfter, noteCut, reconnect, bypass, revoked, restored, reset, sameContext,
+        returnsDestination: returnedDestination === context.destination };
+    });
+    assert.ok(sampler.base > 0.01 && sampler.sameContext && sampler.returnsDestination);
+    const samplerDb = (value, base = sampler.base) => 20 * Math.log10(value / base);
+    assert.ok(Math.abs(samplerDb(sampler.cut) + 18) < 0.5, `Sample EQ: ${JSON.stringify(sampler)}`);
+    assert.ok(sampler.spectrumBefore > -40 && sampler.spectrumAfter < sampler.spectrumBefore - 12,
+      `Sampler spectrum must show processed audio with no track loaded: ${JSON.stringify(sampler)}`);
+    assert.ok(Math.abs(samplerDb(sampler.noteCut, sampler.cut) + 6.02) < 0.5, "Piano envelope and master EQ must each apply once");
+    for (const value of sampler.reconnect) {
+      assert.ok(value.silent < 1e-6 && Math.abs(samplerDb(value.level, sampler.noteCut)) < 0.3,
+        "All destination disconnect/reconnect overloads must preserve the master EQ without doubling audio");
+    }
+    for (const value of [sampler.bypass, sampler.revoked, sampler.reset]) assert.ok(Math.abs(samplerDb(value) + 6.02) < 0.5);
+    assert.ok(Math.abs(samplerDb(sampler.restored, sampler.noteCut)) < 0.3);
+    console.log("Master EQ: standalone sampler, piano envelopes, live edits, spectrum, bypass, reset and output reconnection passed.");
+    await samplerPage.close();
 
     const clipPage = await browser.newPage();
     await clipPage.goto("about:blank");
@@ -159,13 +270,25 @@ const { chromium } = require("playwright");
       const settings = { eq: { enabled: true, bands: [{ type: "peaking", frequency: 1000, gain: 12, q: 2 }] } };
       const processed = await SCTempoEffects.renderSample(source, settings);
       const bypassed = await SCTempoEffects.renderSample(source, { ...settings, bypassed: true });
-      return { original: rms(source), processed: rms(processed), bypassed: rms(bypassed) };
+      const color = { saturation: 100, saturationDrive: 80, bitcrusher: 70, bitDepth: 4, sampleRateReduction: 30 };
+      const cutoff = { enabled: true, bands: [{ type: "lowpass", frequency: 500, gain: 0, q: 0.707 }] };
+      const colored = await SCTempoEffects.renderSample(source, color);
+      const final = await SCTempoEffects.renderSample(source, { ...color, eq: cutoff });
+      const reference = new OfflineAudioContext(1, colored.length, colored.sampleRate);
+      const referenceSource = reference.createBufferSource(); referenceSource.buffer = colored;
+      const referenceEq = SCParametricEQ.createGraph(reference); referenceEq.apply(cutoff, false, true);
+      referenceSource.connect(referenceEq.input); referenceEq.output.connect(reference.destination); referenceSource.start();
+      const expected = await reference.startRendering();
+      const actual = final.getChannelData(0);
+      const orderError = Math.max(...expected.getChannelData(0).map((sample, index) => Math.abs(sample - actual[index])));
+      return { original: rms(source), processed: rms(processed), bypassed: rms(bypassed), orderError };
     });
     const exportedGainDb = 20 * Math.log10(exportLevels.processed / exportLevels.original);
     assert.ok(exportedGainDb > 10 && exportedGainDb < 16,
       `Export renderer must apply the active EQ: ${JSON.stringify({ ...exportLevels, exportedGainDb })}`);
     assert.ok(Math.abs(exportLevels.bypassed / exportLevels.original - 1) < 0.001,
       "Bypassed EQ must leave exported audio unchanged");
+    assert.ok(exportLevels.orderError < 1e-5, `Export EQ must follow saturation, bitcrusher and limiter: ${exportLevels.orderError}`);
     await exportPage.close();
 
     const page = await browser.newPage({ viewport: { width: 420, height: 550 } });

@@ -229,13 +229,7 @@
     limiter.ratio.value = 12;
     limiter.attack.value = 0.003;
     limiter.release.value = 0.12;
-    let effectSource = source;
-    if (eqActive) {
-      const equalizer = globalThis.SCParametricEQ.createGraph(context);
-      equalizer.apply(eqSettings, false, true);
-      source.connect(equalizer.input);
-      effectSource = equalizer.output;
-    }
+    const effectSource = source;
     effectSource.connect(master);
     if (reverbWet) {
       const preDelay = context.createDelay(0.25);
@@ -337,21 +331,19 @@
     if (bitcrusherWet) {
       crusherSource = context.createBufferSource();
       crusherSource.buffer = crushBuffer(buffer, settings?.bitDepth ?? DEFAULTS.bitDepth, settings?.sampleRateReduction ?? DEFAULTS.sampleRateReduction);
-      let crusherEffectSource = crusherSource;
-      if (eqActive) {
-        const crusherEqualizer = globalThis.SCParametricEQ.createGraph(context);
-        crusherEqualizer.apply(eqSettings, false, true);
-        crusherSource.connect(crusherEqualizer.input);
-        crusherEffectSource = crusherEqualizer.output;
-      }
       const wet = context.createGain();
       wet.gain.value = bitcrusherWet / 100 * MAX_SEND.bitcrusher;
-      crusherEffectSource.connect(wet);
+      crusherSource.connect(wet);
       wet.connect(master);
       crusherSource.start();
     }
     master.connect(limiter);
-    limiter.connect(context.destination);
+    if (eqActive) {
+      const equalizer = globalThis.SCParametricEQ.createGraph(context);
+      equalizer.apply(eqSettings, false, true);
+      limiter.connect(equalizer.input);
+      equalizer.output.connect(context.destination);
+    } else limiter.connect(context.destination);
     source.start();
     const rendered = await context.startRendering();
     if (signal?.aborted) throw new DOMException("Render aborted.", "AbortError");
@@ -462,6 +454,7 @@
     let graph = null;
     const graphs = new WeakMap();
     const graphReferences = new Set();
+    const outputs = new Map();
     let bypassed = false;
     let available = true;
     let reason = "";
@@ -504,13 +497,28 @@
     }
 
     function updateEqualizer(targetGraph = graph) {
-      if (!targetGraph) return;
-      if (eqRequested && eqAllowed && !targetGraph.eq) targetGraph.eq = insertEqualizer(targetGraph.source);
+      if (targetGraph && !outputs.has(targetGraph.context)) outputs.set(targetGraph.context, {});
       const key = `${eqRevision}:${bypassed}:${eqAllowed}`;
-      if (targetGraph.eq && targetGraph.eqKey !== key) {
-        targetGraph.eq.apply(eqSettings, bypassed || !eqAllowed);
-        targetGraph.eqKey = key;
+      for (const [outputContext, output] of outputs) {
+        if (outputContext.state === "closed") { outputs.delete(outputContext); continue; }
+        if (eqRequested && eqAllowed && !output.eq) output.eq = insertEqualizer(outputContext);
+        if (output.eq && output.key !== key) {
+          output.eq.apply(eqSettings, bypassed || !eqAllowed);
+          output.key = key;
+        }
       }
+    }
+
+    function getPlaybackContext() {
+      eqRequested = true;
+      applyToActive();
+      if (!context || context.state === "closed") {
+        context = new AudioContextConstructor();
+        ownsContext = true;
+      }
+      if (!outputs.has(context)) outputs.set(context, {});
+      updateEqualizer();
+      return context;
     }
 
     function setEqualizer(value) {
@@ -528,7 +536,7 @@
     function setEqualizerAllowed(value) {
       if (eqAllowed === Boolean(value)) return;
       eqAllowed = Boolean(value);
-      for (const reference of graphReferences) updateEqualizer(reference.deref());
+      updateEqualizer();
     }
 
     function analyseEqualizer() {
@@ -537,7 +545,26 @@
       applyToActive();
       if (!graph) initialize();
       updateEqualizer();
-      return graph?.eq || null;
+      const equalizers = [...outputs.values()].map((output) => output.eq).filter(Boolean);
+      if (equalizers.length <= 1) return equalizers[0] || null;
+      // A site can replace its AudioContext while old notes/tails still sound.
+      // Combine their spectral power on the current output's frequency grid.
+      const current = outputs.get(context)?.eq || equalizers[0];
+      return { response: current.response, readSpectrum() {
+        const spectra = equalizers.map((eq) => eq.readSpectrum());
+        const reference = current.readSpectrum();
+        const values = new Float32Array(reference.values.length);
+        for (let index = 0; index < values.length; index++) {
+          const hz = index * reference.sampleRate / reference.fftSize;
+          let power = 0;
+          for (const spectrum of spectra) {
+            const bin = Math.round(hz * spectrum.fftSize / spectrum.sampleRate);
+            if (bin < spectrum.values.length) power += 10 ** (spectrum.values[bin] / 10);
+          }
+          values[index] = power > 0 ? 10 * Math.log10(power) : -Infinity;
+        }
+        return { ...reference, values };
+      } };
     }
 
     function updateCharacter(targetGraph = graph) {
@@ -614,6 +641,7 @@
     }
 
     function updateAllReturns() {
+      updateEqualizer();
       for (const reference of graphReferences) {
         const targetGraph = reference.deref();
         if (targetGraph) updateReturns(targetGraph);
@@ -737,7 +765,7 @@
       try {
         const existingSource = mediaSources.get(target);
         ownsContext = !existingSource;
-        context = existingSource?.context || new AudioContextConstructor();
+        context = existingSource?.context || (context?.state !== "closed" && context) || new AudioContextConstructor();
         if (!connectAudio(target)) throw new Error(reason);
         if (context.state === "suspended") context.resume().catch(() => {});
         onAvailabilityChange(true);
@@ -836,6 +864,7 @@
       delayFrozen = false;
       eqSettings = globalThis.SCParametricEQ?.normalize(null);
       eqRevision += 1;
+      updateEqualizer();
       if (resetTimer !== null) clearTimeout(resetTimer);
       resetTimer = null;
       for (const reference of graphReferences) {
@@ -878,7 +907,7 @@
     }
 
     return Object.freeze({ applyPreset, applyToActive, discover, isDelayFrozen, reset, set, setBypassed, setCharacter, setDelayFreeze, snapshot,
-      setEqualizer, setEqualizerAllowed, analyseEqualizer });
+      setEqualizer, setEqualizerAllowed, analyseEqualizer, getPlaybackContext });
   }
 
   globalThis.SCTempoEffects = Object.freeze({ create, renderSample, clampPercent, DEFAULTS, EFFECT_NAMES, PRESETS, REVERB_ROOMS });

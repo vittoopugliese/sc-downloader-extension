@@ -175,7 +175,7 @@ async function main() {
     assert.notEqual(scope.buildInstrumentDescriptor().signature, baseline, 'missing global bypass');
     effectsState.bypassed = false;
     effectsState.eq = { enabled: true, hardClip: true, bands: [{ type: 'peaking', frequency: 1000, gain: 3, q: 1 }] };
-    assert.notEqual(scope.buildInstrumentDescriptor().signature, baseline, 'missing EQ');
+    assert.equal(scope.buildInstrumentDescriptor().signature, baseline, 'live master EQ must not invalidate or be baked into the instrument');
     effectsState.eq = { enabled: true, hardClip: false, bands: [] };
     effectsState.preset = 'wide';
     effectsState.available = false;

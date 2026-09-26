@@ -77,6 +77,13 @@ async function main() {
     }
     await page.addScriptTag({ path: path.join(__dirname, "player-tools-policy.js") });
     await page.evaluate(([logoUrl, eqUrl, headerIcons]) => {
+      const eqApi = globalThis.SCParametricEQ;
+      window.masterEqualizers = [];
+      globalThis.SCParametricEQ = Object.freeze({ ...eqApi, createGraph(context, options) {
+        const graph = eqApi.createGraph(context, options);
+        if (options?.analyse) window.masterEqualizers.push(graph);
+        return graph;
+      } });
       const playerToolsSnapshot = {
         revision: 1,
         plan: "pro",
@@ -298,12 +305,15 @@ async function main() {
       const originalStart = AudioBufferSourceNode.prototype.start;
       AudioBufferSourceNode.prototype.start = function (...args) {
         window.drumStarts += 1;
+        window.lastSampleContext = this.context;
         window.sourcePlaybackRates.push(this.playbackRate.value);
         return originalStart.apply(this, args);
       };
     });
     await drumPads.nth(0).click();
     await page.waitForFunction(() => window.drumStarts === 1);
+    await page.waitForFunction(() => window.masterEqualizers.some((eq) =>
+      eq.input.context === window.lastSampleContext && eq.readSpectrum().values.some((db) => db > -90)));
     await drumPads.nth(1).hover();
     await page.keyboard.press("j");
     assert.equal(await drumPads.nth(1).locator(".drum-key").textContent(), "J",
@@ -784,6 +794,8 @@ async function main() {
     assert.equal(padRender.playbackTransform.preservePitch, true);
     assert.equal(padRender.effects.reverb, 24);
     assert.equal(padRender.effects.delay, 17);
+    assert.deepEqual(padRender.effects.eq, { enabled: false, hardClip: false, bands: [] },
+      "Saved loop pads must receive the master EQ live, without baking it in twice");
     await drumPads.nth(5).click();
     await page.waitForFunction(() => window.drumStarts === 4);
     const instrumentToggle = host.locator(".loop-instrument");
@@ -805,9 +817,13 @@ async function main() {
     assert.deepEqual(instrumentRender.trimRange, { startMs: 12345, endMs: 20678, durationMs: 120000 });
     assert.equal(instrumentRender.playbackTransform.rate, 1.25);
     assert.equal(instrumentRender.effects.reverb, 24);
+    assert.deepEqual(instrumentRender.effects.eq, { enabled: false, hardClip: false, bands: [] },
+      "Piano samples must receive the master EQ live, without baking it in twice");
     await host.locator(".brand-name").hover();
     await page.keyboard.press("q");
     await page.waitForFunction(() => window.drumStarts === 5);
+    await page.waitForFunction(() => window.masterEqualizers.some((eq) =>
+      eq.input.context === window.lastSampleContext && eq.readSpectrum().values.some((db) => db > -90)));
     await page.keyboard.press("i");
     await page.waitForFunction(() => window.drumStarts === 6);
     assert.deepEqual(await page.evaluate(() => window.sourcePlaybackRates.slice(-2)), [1, 2],

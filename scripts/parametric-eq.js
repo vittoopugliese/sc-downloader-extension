@@ -95,7 +95,7 @@
       set(clipped.gain, clipActive ? 0.4 : 0);
       filters.forEach((filter, index) => {
         const band = settings.bands[index];
-        filter.type = band?.type || "peaking";
+        filter.type = active ? band?.type || "peaking" : "peaking";
         set(filter.frequency, Math.min(band?.frequency || 1000, context.sampleRate * 0.49));
         set(filter.Q, band?.q || 1);
         set(filter.gain, active && filter.type === "peaking" ? band?.gain || 0 : 0);
