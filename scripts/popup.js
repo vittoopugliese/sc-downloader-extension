@@ -198,6 +198,7 @@ async function openRequestedPopupView() {
 
 let commerceReturnFocus = null;
 function openCommercePanel() {
+  if (globalThis.SCReleaseConfig?.FREE_PRO_ENABLED) return;
   commerceReturnFocus = document.activeElement;
   commerceStatus.textContent = "";
   document.body.classList.add("commerce-mode");
@@ -1588,6 +1589,14 @@ function requestBulkTracks(limit) {
 let playerToolsOfferTimer = null;
 let playerToolsOfferExpiryTimer = null;
 async function syncPlayerToolsOffer({ revalidate = true, startTrial = true } = {}) {
+  if (globalThis.SCReleaseConfig?.FREE_PRO_ENABLED) {
+    productOffers.hidden = true;
+    playerToolsProBtn.hidden = true;
+    commercePanel.hidden = true;
+    document.body.classList.add("pro-active");
+    document.body.classList.remove("offers-pending", "commerce-mode");
+    return;
+  }
   try {
     // Opening the download popup is one of the two product-defined trial entry points.
     let trialStartError = null;

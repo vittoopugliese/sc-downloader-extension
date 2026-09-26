@@ -1,6 +1,7 @@
 /* Player Tools commerce lives in the service worker. Pages only use typed messages. */
 (function (root) {
   "use strict";
+  const CONFIG = root.SCReleaseConfig || (typeof require === "function" && require("./release-config.js"));
 
   const STORAGE_KEY = "scdl.playerTools.commerce.v1";
   const IDENTITY_KEY = "scdl.playerTools.installation.v1";
@@ -29,6 +30,17 @@
   function create({ storage, identityStorage = null, legacyIdentityStorage = null, sessionStorage = null, alarms = null, request = fetch, randomUUID = () => crypto.randomUUID(),
     access, apiBaseUrl = API_BASE_URL, now = () => Date.now(), version = "unknown",
     requestTimeoutMs = REQUEST_TIMEOUT_MS, maxResponseBytes = MAX_RESPONSE_BYTES, entitlementPublicJwk = null }) {
+    if (CONFIG?.FREE_PRO_ENABLED) {
+      const getState = async () => {
+        try { await alarms?.clear(LICENSE_REVALIDATION_ALARM); } catch { /* Access never depends on alarms. */ }
+        return { status: "active", freePro: true, canCheckout: false, offer: OFFER, licenseId: null };
+      };
+      const disabled = async () => { throw Object.assign(new Error("Pro is free; no purchase or license is required."), { code: "free-pro-enabled" }); };
+      return { getState, startCheckout: disabled, activate: disabled, claimCheckout: getState,
+        startTrial: disabled, consumeTrial: disabled, track: async () => false,
+        validateEntitlement: async () => true, ensureEntitlement: async () => ({ status: "active" }),
+        validateTrial: async () => ({ status: "valid" }) };
+    }
     let queue = Promise.resolve();
     const exclusive = (task) => {
       const next = queue.then(task);

@@ -72,6 +72,7 @@
       } catch { return { status: "unavailable" }; }
     }
     function getSnapshot(sender) {
+      if (POLICY.FREE_PRO_ENABLED) return Promise.resolve(POLICY.snapshot(undefined, ownerKey(sender), now()));
       return runExclusive(async () => {
         const state = await read(); await verifyEntitlement(state);
         const owner = ownerKey(sender); const timestamp = now();
@@ -93,6 +94,7 @@
       });
     }
     function startTrial() {
+      if (POLICY.FREE_PRO_ENABLED) return getSnapshot();
       return runExclusive(async () => {
         if (!authority?.startTrial) throw Object.assign(new Error("Trial service unavailable"), { code: "trial-unavailable" });
         const state = await read(); const timestamp = now();
@@ -109,6 +111,15 @@
       });
     }
     function authorize(sender, request) {
+      if (POLICY.FREE_PRO_ENABLED) {
+        const owner = ownerKey(sender);
+        const operation = request?.operation;
+        const isLoop = operation === "begin-loop" || operation === "edit-loop";
+        const invalid = isLoop ? (!owner ? "owner-gone" : POLICY.validateLoopRequest(request)) : null;
+        const decision = POLICY.canAuthorize(undefined, owner, operation, request?.sessionId, now());
+        return Promise.resolve({ allowed: !invalid && decision.allowed, code: invalid || decision.reason,
+          snapshot: POLICY.snapshot(undefined, owner, now()), grant: null, notice: null });
+      }
       return runExclusive(async () => {
         const owner = ownerKey(sender);
         const state = await read(); const timestamp = now();
@@ -204,6 +215,7 @@
       });
     }
     function endSession(sender, request) {
+      if (POLICY.FREE_PRO_ENABLED) return getSnapshot(sender).then(snapshot => ({ success: true, snapshot }));
       return runExclusive(async () => {
         const owner = ownerKey(sender);
         const state = await read(); const timestamp = now();
@@ -214,6 +226,7 @@
       });
     }
     function endTab(tabId) {
+      if (POLICY.FREE_PRO_ENABLED) return Promise.resolve();
       return runExclusive(async () => {
         const state = await read();
         const grants = state.trial.grants.filter((g) => g.active && g.ownerKey.startsWith(`${tabId}:`));
@@ -221,6 +234,7 @@
       });
     }
     function setEntitlement(entitlement) {
+      if (POLICY.FREE_PRO_ENABLED) return getSnapshot();
       return runExclusive(async () => {
         const state = await read();
         const next = entitlement?.status === "active"

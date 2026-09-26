@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "SoundCloud Track Downloader",
+  "name": "SoundCloud Track Downloader - Player tools and Likes Explorer",
   "default_locale": "en",
   "version": "2026.10.5",
   "permissions": ["cookies", "tabs", "downloads", "offscreen", "notifications", "storage", "alarms"],

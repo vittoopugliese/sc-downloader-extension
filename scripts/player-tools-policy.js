@@ -1,6 +1,7 @@
 /* Pure, shared policy. No storage, DOM, clocks or transport authority here. */
 (function (root) {
   "use strict";
+  const CONFIG = root.SCReleaseConfig || (typeof require === "function" && require("./release-config.js"));
   const TRIAL_LIMIT = 20;
   const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
   const SCHEMA_VERSION = 3;
@@ -82,10 +83,10 @@
   }
 
   function snapshot(raw, ownerKey, now = Date.now()) {
-    const state = normalize(raw);
+    const state = normalize(CONFIG?.FREE_PRO_ENABLED ? undefined : raw);
     if (!validTimestamp(now)) throw invalidState();
     const grant = state.trial.grants.find((item) => item.active && item.ownerKey === ownerKey);
-    const pro = state.entitlement.status === "active" && now < state.entitlement.expiresAt;
+    const pro = CONFIG?.FREE_PRO_ENABLED || (state.entitlement.status === "active" && now < state.entitlement.expiresAt);
     const started = state.trial.startedAt !== null;
     const expired = started && now >= state.trial.expiresAt;
     const trialAvailable = started && !expired && state.trial.used < TRIAL_LIMIT;
@@ -153,7 +154,7 @@
     return null;
   }
 
-  const api = { TRIAL_LIMIT, TRIAL_DURATION_MS, SCHEMA_VERSION, normalize, startTrial, snapshot, canAuthorize, validateLoopRequest };
+  const api = { FREE_PRO_ENABLED: CONFIG?.FREE_PRO_ENABLED === true, TRIAL_LIMIT, TRIAL_DURATION_MS, SCHEMA_VERSION, normalize, startTrial, snapshot, canAuthorize, validateLoopRequest };
   root.SCPlayerToolsPolicy = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);

@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+globalThis.SCReleaseConfig = Object.freeze({ FREE_PRO_ENABLED: false });
 const policy = require("./player-tools-policy.js");
 const NOW = 1_800_000_000_000;
 const notStarted = policy.normalize();

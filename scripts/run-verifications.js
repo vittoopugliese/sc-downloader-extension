@@ -4,6 +4,7 @@ const path = require("node:path");
 
 const scriptsDirectory = __dirname;
 const excluded = new Set([
+  "verify-free-pro-browser.js",
   "verify-sampler-slices-browser.js",
   "verify-effects-browser.js",
   "verify-player-tools-browser.js",

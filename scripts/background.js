@@ -1,4 +1,5 @@
 importScripts(
+  "release-config.js",
   "i18n.js",
   "format-utils.js",
   "player-tools-policy.js",

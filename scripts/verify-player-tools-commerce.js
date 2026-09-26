@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+globalThis.SCReleaseConfig = Object.freeze({ FREE_PRO_ENABLED: false });
 const { create, STORAGE_KEY, LICENSE_REVALIDATION_ALARM, OFFER } = require("./player-tools-commerce.js");
 const receipts = require("./player-tools-receipts.js");
 const TEST_PRIVATE_JWK = { key_ops: ["sign"], ext: true, kty: "EC", crv: "P-256", kid: "test",

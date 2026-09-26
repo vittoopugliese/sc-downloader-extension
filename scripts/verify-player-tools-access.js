@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+globalThis.SCReleaseConfig = Object.freeze({ FREE_PRO_ENABLED: false });
 const policy = require("./player-tools-policy.js");
 const { create, STORAGE_KEY, ownerKey } = require("./player-tools-access.js");
 const owner = { tab: { id: 1 }, frameId: 0, documentId: "document-a" };
