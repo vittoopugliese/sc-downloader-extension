@@ -132,6 +132,28 @@ const iconDataUrls = Object.fromEntries(
         }
       }
     }
+    const compactProDimensions = await page.evaluate(() => {
+      const offers = document.querySelector(".product-offers");
+      offers.hidden = true;
+      document.body.classList.add("pro-active");
+      const restricted = {
+        height: document.body.offsetHeight,
+        scrollHeight: document.documentElement.scrollHeight,
+      };
+      document.getElementById("downloadPolicyNotice").classList.add("is-hidden");
+      document.body.classList.remove("restricted-downloads");
+      const unrestricted = {
+        height: document.body.offsetHeight,
+        scrollHeight: document.documentElement.scrollHeight,
+      };
+      offers.hidden = false;
+      document.body.classList.remove("pro-active");
+      return { restricted, unrestricted };
+    });
+    assert.deepEqual(compactProDimensions, {
+      restricted: { height: 292, scrollHeight: 292 },
+      unrestricted: { height: 256, scrollHeight: 256 },
+    }, "Hiding the product banners must reduce the download popup height by 25%");
     await page.evaluate(() => {
       document.getElementById("downloadPolicyNotice").classList.add("is-hidden");
       document.body.classList.remove("restricted-downloads");

@@ -448,7 +448,7 @@
     ui.drumMessage.removeAttribute("tabindex");
     ui.drumMessage.textContent = message;
     ui.drumMessage.hidden = !message;
-    ui.drumStatus.hidden = false;
+    ui.drumStatus.hidden = !message && !ui.playingNote.textContent;
   }
 
   function renderPlayingNote(midiNote = null) {
@@ -458,6 +458,7 @@
     if (value === renderedPlayingNote) return;
     renderedPlayingNote = value;
     ui.playingNote.textContent = value;
+    ui.drumStatus.hidden = !value && !ui.drumMessage.textContent;
   }
 
   function renderInstrumentMessage() {
@@ -1855,7 +1856,7 @@
     ui.instrumentControls.hidden = false;
     ui.instrumentCutLabel.hidden = false;
     ui.instrumentAdsrLabel.hidden = false;
-    ui.drumStatus.hidden = false;
+    ui.drumStatus.hidden = !ui.drumMessage.textContent && !ui.playingNote.textContent;
     ui.drumSection.classList.toggle("is-instrument", instrumentMode);
     ui.instrumentToggle.setAttribute("aria-pressed", String(instrumentMode));
     ui.instrumentToggle.classList.toggle("is-preparing", instrumentPreparing);
@@ -2461,6 +2462,12 @@
   }
 
   function template() {
+    const envelopeHelp = {
+      attack: "Attack: time for the sound to reach full volume.",
+      decay: "Decay: time for the sound to fall from full volume to the sustain level.",
+      sustain: "Sustain: volume held while the key is pressed.",
+      release: "Release: time for the sound to fade out after you release the key.",
+    };
     return `
       <style>
         :host {
@@ -2833,9 +2840,12 @@
         .instrument-controls { padding: 8px 2px 4px; }
         .instrument-controls[hidden],
         .drum-section.is-collapsed:not(.is-instrument) .instrument-controls,
+        .drum-section.is-collapsed:not(.is-instrument) .drum-status,
         .drum-section.is-collapsed:not(.is-instrument) .drum-note-controls { display: none; }
-        .instrument-controls.is-bypassed .instrument-envelope { opacity: .45; }
-        .instrument-envelope { display: grid; grid-template-columns: repeat(4, minmax(42px, 1fr)) minmax(76px, 1.7fr); gap: 4px; align-items: center; }
+        .instrument-controls.is-bypassed .envelope-control,
+        .instrument-controls.is-bypassed .envelope-graph { opacity: .45; }
+        .instrument-envelope { display: grid; grid-template-columns: repeat(4, minmax(42px, 1fr)) minmax(76px, 1.7fr) 22px; gap: 4px; align-items: center; }
+        .instrument-toggles { display: flex; flex-direction: column; gap: 4px; }
         .envelope-graph { display: block; width: 100%; height: 60px; overflow: visible; }
         .envelope-curve { fill: none; stroke: #ff8a4c; stroke-width: 1.6; stroke-linejoin: round; }
         .envelope-fill { fill: #ff8a4c; opacity: .1; }
@@ -3084,7 +3094,7 @@
           <div class="presets" role="group" aria-label="Quick playback speeds">
             ${customRates.map((rate, index) => `<button class="preset custom-preset" type="button" data-custom-index="${index}" data-saved="true" aria-pressed="false" title="Saved speed ${formatRate(rate)}. Hold to replace">${formatRate(rate)}</button>`).join("")}
           </div>
-          <label class="pitch-label" title="Keep tone"><input class="pitch-toggle" type="checkbox" aria-label="Keep tone" title="Keep tone" /></label>
+          <label class="pitch-label" data-scdl-tooltip="Keep tone: change playback speed without changing the pitch."><input class="pitch-toggle" type="checkbox" aria-label="Keep tone" /></label>
         <div class="speed-status">
           <output class="current">1x</output>
           <button class="bypass" type="button" aria-label="Bypass loop and playback effects" aria-pressed="false" title="Bypass loop and playback effects">${BYPASS_ICON}</button>
@@ -3098,11 +3108,12 @@
               ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><button class="drum-reset" type="button" title="Remove saved sample and restore default" aria-label="Restore ${pad.name} default sample" hidden>↺</button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
             </div>
           </div>
-          <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="drum-note-controls" aria-live="off"><span class="playing-note"></span><label class="instrument-cut-label" title="Cut itself" data-scdl-tooltip="Cut itself" hidden><input class="instrument-cut-itself" type="checkbox" aria-label="Cut itself" checked /></label><label class="instrument-adsr-label" title="ADSR" data-scdl-tooltip="ADSR" hidden><input class="instrument-adsr-toggle" type="checkbox" aria-label="ADSR" /></label></span></p>
+          <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="drum-note-controls" aria-live="off"><span class="playing-note"></span></span></p>
           <div class="instrument-controls" role="group" aria-label="Sample envelope" hidden>
             <div class="instrument-envelope">
-              ${["attack", "decay", "sustain", "release"].map((name) => `<div class="envelope-control"><span>${name[0].toUpperCase() + name.slice(1)}</span><button class="envelope-knob" type="button" role="slider" data-envelope="${name}" aria-label="${name[0].toUpperCase() + name.slice(1)}" aria-valuemin="0" aria-valuemax="${name === "sustain" ? 100 : 5000}" aria-orientation="vertical" title="Drag up or down; use arrow keys to adjust"></button><output></output></div>`).join("")}
-              <svg class="envelope-graph" viewBox="0 0 110 52" role="img" aria-label="ADSR envelope"><title>ADSR · dashed line marks key release</title><path class="envelope-axis" d="M5 5 V43 H105"/><path class="envelope-fill"/><line class="envelope-keyup" y1="5" y2="45"/><path class="envelope-curve"/></svg>
+              ${["attack", "decay", "sustain", "release"].map((name) => `<div class="envelope-control"><span>${name[0].toUpperCase() + name.slice(1)}</span><button class="envelope-knob" type="button" role="slider" data-envelope="${name}" aria-label="${name[0].toUpperCase() + name.slice(1)}" aria-valuemin="0" aria-valuemax="${name === "sustain" ? 100 : 5000}" aria-orientation="vertical" data-scdl-tooltip="${envelopeHelp[name]} Drag up or down, or use arrow keys to adjust."></button><output></output></div>`).join("")}
+              <svg class="envelope-graph" viewBox="0 0 110 52" role="img" aria-label="ADSR envelope" data-scdl-tooltip="ADSR: how the volume changes over time. The dashed line marks when you release the key."><path class="envelope-axis" d="M5 5 V43 H105"/><path class="envelope-fill"/><line class="envelope-keyup" y1="5" y2="45"/><path class="envelope-curve"/></svg>
+              <div class="instrument-toggles"><label class="instrument-cut-label" title="Cut itself" data-scdl-tooltip="Cut itself" hidden><input class="instrument-cut-itself" type="checkbox" aria-label="Cut itself" checked /></label><label class="instrument-adsr-label" title="ADSR" data-scdl-tooltip="ADSR" hidden><input class="instrument-adsr-toggle" type="checkbox" aria-label="ADSR" /></label></div>
             </div>
           </div>
         </section>

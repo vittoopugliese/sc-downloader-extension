@@ -90,6 +90,15 @@
             height: 389px;
         }
 
+        /* Pro hides both product banners, so reclaim that vertical space. */
+        body.pro-active:not(.restricted-downloads):not(.selection-mode):not(.help-mode):not(.commerce-mode) {
+            height: 256px;
+        }
+
+        body.pro-active.restricted-downloads:not(.selection-mode):not(.help-mode):not(.commerce-mode) {
+            height: 292px;
+        }
+
         #downloadPolicyNotice {
             margin: 0;
             color: #f3c7a6;

@@ -313,6 +313,19 @@ async function main() {
     assert.equal(await drumPads.count(), 8, "The sampler must contain eight drum pads.");
     assert.equal(await samplerToggle.getAttribute("aria-expanded"), "false");
     assert.equal(await drumPads.nth(0).isHidden(), true, "The sampler starts collapsed.");
+    const collapsedSamplerLayout = await host.evaluate((element) => {
+      const root = element.shadowRoot;
+      const section = root.querySelector("#scdl-sampler");
+      const header = section.querySelector(":scope > .tool-section-header");
+      const style = getComputedStyle(section);
+      return {
+        sectionHeight: section.getBoundingClientRect().height,
+        expectedHeight: header.getBoundingClientRect().height +
+          Number.parseFloat(style.borderTopWidth) + Number.parseFloat(style.borderBottomWidth),
+      };
+    });
+    assert.ok(Math.abs(collapsedSamplerLayout.sectionHeight - collapsedSamplerLayout.expectedHeight) < 0.2,
+      `A collapsed sampler must not reserve empty space below its header: ${JSON.stringify(collapsedSamplerLayout)}`);
     await samplerToggle.click();
     assert.equal(await samplerToggle.getAttribute("aria-expanded"), "true");
     assert.deepEqual(await drumPads.allTextContents(), ["A", "S", "D", "F", "G", "H", "J", "K"]);
@@ -542,7 +555,7 @@ async function main() {
         presetSize: [preset.offsetWidth, preset.offsetHeight],
         toggleSize: [toggle.offsetWidth, toggle.offsetHeight],
         pitchText: pitchLabel.textContent.trim(),
-        pitchTooltip: toggle.title,
+        pitchTooltip: pitchLabel.getAttribute("data-scdl-tooltip"),
         pitchContainerWidth: pitchLabel.offsetWidth,
         downloadTrackButtonSize: [downloadTrackButton.offsetWidth, downloadTrackButton.offsetHeight],
         downloadTrackIconSize: [downloadTrackIcon.clientWidth, downloadTrackIcon.clientHeight],
@@ -574,7 +587,7 @@ async function main() {
       compactStyles.presetSize.join("x") !== "32x12" ||
       compactStyles.toggleSize.join("x") !== "16x16" ||
       compactStyles.pitchText !== "" ||
-      compactStyles.pitchTooltip !== "Keep tone" ||
+      compactStyles.pitchTooltip !== "Keep tone: change playback speed without changing the pitch." ||
       compactStyles.pitchContainerWidth !== 22 ||
       compactStyles.downloadTrackButtonSize.join("x") !== "23x20" ||
       compactStyles.downloadTrackIconSize.join("x") !== "12x12" ||
@@ -943,6 +956,20 @@ async function main() {
     assert.equal(await envelope.getByRole("slider").count(), 4);
     const attackKnob = envelope.getByRole("slider", { name: "Attack", exact: true });
     const graph = envelope.locator(".envelope-graph");
+    for (const [target, tooltipOwner] of [
+      [host.locator(".pitch-toggle"), host.locator(".pitch-label")],
+      [graph, graph],
+      ...await envelope.locator(".envelope-knob").all().then((knobs) => knobs.map((knob) => [knob, knob])),
+    ]) {
+      const help = await tooltipOwner.getAttribute("data-scdl-tooltip");
+      await target.hover();
+      await page.waitForFunction((text) => {
+        const tip = document.querySelector("#scdl-fast-tooltip");
+        return tip?.textContent === text && tip.style.visibility === "visible";
+      }, help);
+      assert.equal(await target.getAttribute("title"), null, "Custom tooltip targets must not show native titles");
+    }
+    assert.equal(await graph.locator("title").count(), 0, "The SVG must not expose a native title tooltip");
     const curveBefore = await graph.locator(".envelope-curve").getAttribute("d");
     await attackKnob.focus();
     await page.keyboard.press("ArrowRight");
@@ -974,10 +1001,12 @@ async function main() {
     const cutLabel = host.locator(".instrument-cut-label");
     assert.equal((await cutLabel.textContent()).trim(), "", "Cut itself has no visible text label");
     const cutBox = await cutLabel.boundingBox();
-    const noteBox = await host.locator(".playing-note").boundingBox();
-    const statusBox = await host.locator(".drum-status").boundingBox();
-    assert.ok(cutBox.x >= noteBox.x + noteBox.width && cutBox.y >= statusBox.y &&
-      cutBox.y + cutBox.height <= statusBox.y + statusBox.height, "Checkbox sits beside the current note in the status row");
+    const adsrBox = await host.locator(".instrument-adsr-label").boundingBox();
+    const currentGraphBox = await graph.boundingBox();
+    assert.ok(cutBox.x >= currentGraphBox.x + currentGraphBox.width &&
+      cutBox.x === adsrBox.x && adsrBox.y >= cutBox.y + cutBox.height &&
+      cutBox.y >= currentGraphBox.y && adsrBox.y + adsrBox.height <= currentGraphBox.y + currentGraphBox.height,
+      "Cut itself and ADSR checkboxes sit vertically beside the envelope graph");
     await cutItself.hover();
     await page.waitForFunction(() => document.querySelector("#scdl-fast-tooltip")?.textContent === "Cut itself" &&
       document.querySelector("#scdl-fast-tooltip")?.style.visibility === "visible");
@@ -1008,6 +1037,8 @@ async function main() {
     assert.equal(await adsrToggle.isVisible(), true);
     assert.equal(await host.locator(".sampler-body").isVisible(), true, "Leaving piano mode restores the fixed pads");
     assert.equal(await host.locator(".playing-note").textContent(), "");
+    assert.equal(await host.locator(".drum-status").isVisible(), false,
+      "An empty status row must not reserve space above the envelope controls");
     assert.equal(await panel.isVisible(), true, "Window blur must leave the panel visible while disabling piano mode.");
     await instrumentToggle.click();
     await page.waitForFunction(() => document.querySelector("#scdl-tempo-control")?.shadowRoot
