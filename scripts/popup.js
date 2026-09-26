@@ -1622,6 +1622,7 @@ async function syncPlayerToolsOffer({ revalidate = true, startTrial = true } = {
     commerceRestoreBtn.textContent = t("player_tools_restore");
     document.body.classList.toggle("pro-active", active);
     productOffers.hidden = active;
+    document.body.classList.remove("offers-pending");
     playerToolsOffer.hidden = false;
     playerToolsProBtn.hidden = active;
     playerToolsProBtn.textContent = t("player_tools_get_pro");
@@ -1638,8 +1639,7 @@ async function syncPlayerToolsOffer({ revalidate = true, startTrial = true } = {
         once: true, scope: "session" }).catch(() => {});
     }
   } catch {
-    productOffers.hidden = false;
-    playerToolsOffer.hidden = false;
+    // Keep the last known layout; a failed lookup does not establish free access.
     playerToolsTrialStatus.textContent = t("player_tools_trial_unavailable");
   }
 }

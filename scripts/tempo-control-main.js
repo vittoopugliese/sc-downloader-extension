@@ -2463,10 +2463,10 @@
 
   function template() {
     const envelopeHelp = {
-      attack: "Attack: time for the sound to reach full volume.",
-      decay: "Decay: time for the sound to fall from full volume to the sustain level.",
-      sustain: "Sustain: volume held while the key is pressed.",
-      release: "Release: time for the sound to fade out after you release the key.",
+      attack: "Time for the sound to reach full volume.",
+      decay: "Time for the sound to fall from full volume to the sustain level.",
+      sustain: "Volume held while the key is pressed.",
+      release: "Time for the sound to fade out after you release the key.",
     };
     return `
       <style>
@@ -3111,7 +3111,7 @@
           <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="drum-note-controls" aria-live="off"><span class="playing-note"></span></span></p>
           <div class="instrument-controls" role="group" aria-label="Sample envelope" hidden>
             <div class="instrument-envelope">
-              ${["attack", "decay", "sustain", "release"].map((name) => `<div class="envelope-control"><span>${name[0].toUpperCase() + name.slice(1)}</span><button class="envelope-knob" type="button" role="slider" data-envelope="${name}" aria-label="${name[0].toUpperCase() + name.slice(1)}" aria-valuemin="0" aria-valuemax="${name === "sustain" ? 100 : 5000}" aria-orientation="vertical" data-scdl-tooltip="${envelopeHelp[name]} Drag up or down, or use arrow keys to adjust."></button><output></output></div>`).join("")}
+              ${["attack", "decay", "sustain", "release"].map((name) => `<div class="envelope-control"><button class="envelope-knob" type="button" role="slider" data-envelope="${name}" aria-label="${name[0].toUpperCase() + name.slice(1)}" aria-valuemin="0" aria-valuemax="${name === "sustain" ? 100 : 5000}" aria-orientation="vertical" data-scdl-tooltip="${name[0].toUpperCase() + name.slice(1)}: ${envelopeHelp[name]}"></button><output></output></div>`).join("")}
               <svg class="envelope-graph" viewBox="0 0 110 52" role="img" aria-label="ADSR envelope" data-scdl-tooltip="ADSR: how the volume changes over time. The dashed line marks when you release the key."><path class="envelope-axis" d="M5 5 V43 H105"/><path class="envelope-fill"/><line class="envelope-keyup" y1="5" y2="45"/><path class="envelope-curve"/></svg>
               <div class="instrument-toggles"><label class="instrument-cut-label" title="Cut itself" data-scdl-tooltip="Cut itself" hidden><input class="instrument-cut-itself" type="checkbox" aria-label="Cut itself" checked /></label><label class="instrument-adsr-label" title="ADSR" data-scdl-tooltip="ADSR" hidden><input class="instrument-adsr-toggle" type="checkbox" aria-label="ADSR" /></label></div>
             </div>

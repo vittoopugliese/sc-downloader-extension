@@ -90,11 +90,13 @@
             height: 389px;
         }
 
-        /* Pro hides both product banners, so reclaim that vertical space. */
+        /* Start compact while access is unknown to avoid a resize for Pro. */
+        body.offers-pending:not(.restricted-downloads):not(.selection-mode):not(.help-mode):not(.commerce-mode),
         body.pro-active:not(.restricted-downloads):not(.selection-mode):not(.help-mode):not(.commerce-mode) {
             height: 256px;
         }
 
+        body.offers-pending.restricted-downloads:not(.selection-mode):not(.help-mode):not(.commerce-mode),
         body.pro-active.restricted-downloads:not(.selection-mode):not(.help-mode):not(.commerce-mode) {
             height: 292px;
         }
@@ -1004,6 +1006,7 @@
             padding: 7px 4px 10px;
         }
 
+        body.offers-pending:not(.selection-mode) .track-info,
         body.pro-active:not(.selection-mode) .track-info {
             margin-block: auto;
         }
@@ -1394,7 +1397,7 @@
     </style>
 </head>
 
-<body>
+<body class="offers-pending">
     <div id="loadingOverlay">
         <div class="spinner-ring">
             <img src="./assets/icon128.png" class="spinner-logo" alt="Loading" draggable="false">
@@ -1488,7 +1491,7 @@
             <p id="failedSummary"></p>
             <ul id="failedDetails" aria-live="polite"></ul>
         </div>
-        <div class="product-offers">
+        <div class="product-offers" hidden>
             <section id="playerToolsOffer" class="player-tools-offer" aria-label="Player Tools">
                 <div class="player-tools-offer-copy">
                     <p class="player-tools-offer-title">Player Tools</p>

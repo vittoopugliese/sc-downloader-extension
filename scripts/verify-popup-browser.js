@@ -31,6 +31,8 @@ const iconDataUrls = Object.fromEntries(
     await page.setContent(html);
     await page.addScriptTag({ path: path.join(__dirname, "fast-tooltips.js") });
     await page.evaluate(({ logoUrl, playerToolsUrl, likesExplorerUrl, icons }) => {
+      document.body.classList.remove("offers-pending");
+      document.querySelector(".product-offers").hidden = false;
       document.querySelector("#loadingOverlay").classList.add("is-hidden");
       document.querySelector("#title").textContent = "t t o r i o - Tracks";
       document.querySelector("#artist").textContent = "t t o r i o";
