@@ -330,11 +330,18 @@ async function main() {
     assert.equal(drumPlacement, true, "The sampler must fit between the tempo and loop controls.");
     await page.evaluate(() => {
       window.drumStarts = 0;
+      window.sampleSources = [];
+      const originalStop = AudioBufferSourceNode.prototype.stop;
+      AudioBufferSourceNode.prototype.stop = function (time) {
+        this.testStopAt = time;
+        return originalStop.call(this, time);
+      };
       window.sourcePlaybackRates = [];
       window.sourceStartArguments = [];
       const originalStart = AudioBufferSourceNode.prototype.start;
       AudioBufferSourceNode.prototype.start = function (...args) {
         window.drumStarts += 1;
+        window.sampleSources.push(this);
         window.lastSampleContext = this.context;
         window.sourcePlaybackRates.push(this.playbackRate.value);
         window.sourceStartArguments.push(args);
@@ -849,6 +856,28 @@ async function main() {
     assert.equal(sliceRequest.fullTrack, undefined);
     assert.deepEqual(sliceRequest.playbackTransform, padRender.playbackTransform);
     assert.deepEqual(await host.locator(".drum-key").allTextContents(), originalPadKeys, "slices preserve key assignments");
+    assert.equal(await host.locator(".instrument-controls").isVisible(), true, "Slices retain the ADSR graph");
+    assert.equal(await drumPads.nth(7).isVisible(), true, "All eight pads stay visible with ADSR");
+    const padAdsr = host.getByRole("checkbox", { name: "ADSR", exact: true });
+    assert.equal(await padAdsr.isChecked(), false, "Pads default to one-shot playback");
+    assert.equal(await host.getByRole("checkbox", { name: "Cut itself" }).isChecked(), true);
+    await padAdsr.check();
+    await host.locator(".brand-name").hover();
+    const sliceStarts = await page.evaluate(() => window.drumStarts);
+    await page.keyboard.down(originalPadKeys[0].toLowerCase());
+    await page.waitForFunction(count => window.drumStarts === count + 1, sliceStarts);
+    await page.keyboard.up(originalPadKeys[0].toLowerCase());
+    assert.equal(await page.evaluate(() => {
+      const source = window.sampleSources.at(-1);
+      return source.testStopAt <= source.context.currentTime + .11;
+    }), true, "Releasing a slice key schedules the ADSR release");
+    const padBox = await drumPads.nth(0).boundingBox();
+    await page.mouse.move(padBox.x + padBox.width / 2, padBox.y + padBox.height / 2);
+    await page.mouse.down();
+    await page.waitForFunction(count => window.drumStarts === count + 2, sliceStarts);
+    await page.mouse.up();
+    assert.equal(await page.evaluate(() => window.drumStarts), sliceStarts + 2, "Pointer release does not retrigger the pad");
+    await padAdsr.uncheck();
     await page.evaluate(() => { window.sliceDelay = 250; });
     await sliceButton.click();
     await host.locator(".slice-replace").click();
@@ -899,13 +928,13 @@ async function main() {
       "Piano samples must receive the master EQ live, without baking it in twice");
     await host.locator(".brand-name").hover();
     await page.keyboard.down("q");
-    await page.waitForFunction(() => window.drumStarts === 5);
+    await page.waitForFunction(() => window.drumStarts === 7);
     assert.equal(await page.evaluate(() => window.sourceStartArguments.at(-1)[1]), 12.345 / 1.25);
     await page.waitForFunction(() => window.masterEqualizers.some((eq) =>
       eq.input.context === window.lastSampleContext && eq.readSpectrum().values.some((db) => db > -90)));
     await page.keyboard.up("q");
     await page.keyboard.press("i");
-    await page.waitForFunction(() => window.drumStarts === 6);
+    await page.waitForFunction(() => window.drumStarts === 8);
     assert.deepEqual(await page.evaluate(() => window.sourcePlaybackRates.slice(-2)), [1, 2],
       "Q/I must play the original loop and its upper octave without also triggering sampler pads.");
     const envelope = host.locator(".instrument-controls");
@@ -931,7 +960,7 @@ async function main() {
     assert.ok(Number(await attackKnob.getAttribute("aria-valuenow")) > 14, "Dragging changes attack");
     const cutItself = host.getByRole("checkbox", { name: "Cut itself" });
     const adsrToggle = host.getByRole("checkbox", { name: "ADSR", exact: true });
-    assert.equal(await adsrToggle.isChecked(), true);
+    assert.equal(await adsrToggle.isChecked(), false);
     await adsrToggle.uncheck();
     assert.match(await envelope.getAttribute("class"), /is-bypassed/);
     const savedAttack = await attackKnob.getAttribute("aria-valuenow");
@@ -973,9 +1002,10 @@ async function main() {
     }
     await page.evaluate(() => window.dispatchEvent(new Event("blur")));
     assert.equal(await instrumentToggle.getAttribute("aria-pressed"), "false");
-    await envelope.waitFor({ state: "hidden" });
-    assert.equal(await cutItself.isVisible(), false);
-    assert.equal(await adsrToggle.isVisible(), false);
+    await host.locator(".sampler-body").waitFor({ state: "visible" });
+    await envelope.waitFor({ state: "visible" });
+    assert.equal(await cutItself.isVisible(), true);
+    assert.equal(await adsrToggle.isVisible(), true);
     assert.equal(await host.locator(".sampler-body").isVisible(), true, "Leaving piano mode restores the fixed pads");
     assert.equal(await host.locator(".playing-note").textContent(), "");
     assert.equal(await panel.isVisible(), true, "Window blur must leave the panel visible while disabling piano mode.");
@@ -1019,7 +1049,7 @@ async function main() {
       audio.pause = window.originalAudioPause;
     });
     await page.keyboard.press("a");
-    await page.waitForFunction(() => window.drumStarts === 12);
+    await page.waitForFunction(() => window.drumStarts === 14);
     await instrumentToggle.click();
     await page.waitForFunction(() => document.querySelector("#scdl-tempo-control").shadowRoot.querySelector(".loop-instrument").getAttribute("aria-pressed") === "true");
     const editSampleTime = async (marker, time, expectedMs) => {
@@ -1128,6 +1158,7 @@ async function main() {
       "Stable paused polling must not redraw the waveform or rewrite loop controls");
 
     const endMarker = host.locator(".waveform-end");
+    await endMarker.scrollIntoViewIfNeeded();
     const markerBox = await endMarker.boundingBox();
     await host.evaluate((element) => {
       const root = element.shadowRoot;
@@ -1155,6 +1186,7 @@ async function main() {
     if (!(draggedEnd < 20678)) throw new Error(`Dragging marker B did not update the shared loop session: ${draggedEnd}`);
 
     const waveformCanvas = host.locator(".waveform-canvas");
+    await waveformCanvas.scrollIntoViewIfNeeded();
     const canvasBox = await waveformCanvas.boundingBox();
     await page.mouse.move(canvasBox.x + canvasBox.width * .8, canvasBox.y + canvasBox.height * .75);
     await page.mouse.down();
@@ -1244,6 +1276,9 @@ async function main() {
       (sections) => sections.map((section) => getComputedStyle(section).display)), ['none', 'none', 'none', 'none']);
     await visibility.click();
     assert.equal(await visibility.getAttribute('data-state'), 'normal');
+    await page.waitForFunction(() => [...document.querySelector("#scdl-tempo-control").shadowRoot
+      .querySelectorAll('.sampler-toggle, .waveform-toggle, .effects-toggle, .peq-toggle')]
+      .every((button) => button.getAttribute('aria-expanded') === 'true'));
     assert.deepEqual(await sectionToggles.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-expanded'))),
       ['true', 'true', 'true', 'true']);
     await host.locator('.effects-toggle').click();

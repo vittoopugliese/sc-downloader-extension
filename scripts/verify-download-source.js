@@ -28,7 +28,9 @@ const context = vm.createContext({
 for (const name of ["soundcloud-http.js", "download-track.js", "download-source.js"]) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, name), "utf8"), context);
 }
-const create = vm.runInContext("SCDownloadSource.create", context);
+const createSource = vm.runInContext("SCDownloadSource.create", context);
+// Existing cases exercise the preserved unrestricted behavior.
+const create = adapter => createSource({ getDownloadPolicy: async () => ({ allDownloadsActivated: true }), ...adapter });
 
 function response(status, data) {
   return { ok: status >= 200 && status < 300, status, json: async () => data };

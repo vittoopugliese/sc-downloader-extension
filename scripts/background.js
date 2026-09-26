@@ -10,6 +10,7 @@ importScripts(
   "soundcloud-http.js",
   "stream-selector.js",
   "download-track.js",
+  "download-policy.js",
   "download-source.js",
   "download-destination.js",
   "track-download-execution.js",
@@ -93,9 +94,13 @@ function getOAuthToken() {
   });
 }
 
+const downloadPolicy = globalThis.SCDownloadPolicy?.create({
+  apiBaseUrl: globalThis.SCPlayerToolsCommerce?.API_BASE_URL,
+});
 const downloadSource = SCDownloadSource.configure({
   request: (url, options) => fetch(url, options),
   getOAuthToken,
+  getDownloadPolicy: () => downloadPolicy?.getPolicy() || { allDownloadsActivated: false },
 });
 
 const likesJobs = globalThis.SCLikesJobs?.create({ getToken: getOAuthToken, resolveUser: clientId => downloadSource.resolveLoggedInUser(clientId), access: playerToolsAccess });
@@ -545,8 +550,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // Compatibility for content/popup instances that outlive a worker upgrade.
   if (request.type === "GET_MP3_URL" || request.type === "GET_STREAM_URL") {
     return respond(
-      downloadSource.resolveStream(
+      downloadSource.resolveDownloadStream(
         SCDownloadTrack.migrate({
+          id: request.trackId || /soundcloud:tracks:(\d+)/.exec(request.streamUrl || "")?.[1],
           streamUrl: request.streamUrl,
           clientId: request.clientId,
           trackAuthorization: request.trackAuthorization,

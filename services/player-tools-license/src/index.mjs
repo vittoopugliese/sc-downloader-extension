@@ -834,6 +834,15 @@ export default {
       if (!origin) return json(403, { error: "origin_not_allowed" });
       const corsHeaders = cors(origin);
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
+      if (request.method === "POST" && url.pathname === "/api/player-tools/download-policy") {
+        try {
+          const setting = await env.LICENSE_DB.prepare("SELECT enabled FROM download_settings WHERE key=?")
+            .bind("all_downloads_activated").first();
+          return json(200, { allDownloadsActivated: setting?.enabled === 1 }, corsHeaders);
+        } catch {
+          return json(503, { allDownloadsActivated: false }, corsHeaders);
+        }
+      }
       const raw = await readBody(request, MAX_BODY_BYTES);
       let body; try { body = raw ? JSON.parse(new TextDecoder().decode(raw)) : null; } catch { body = null; }
       if (request.method === "POST" && url.pathname === "/api/player-tools/checkout") {

@@ -164,7 +164,7 @@
   const instrumentKeys = new Map();
   const instrumentEnvelope = { attack: 4, decay: 100, sustain: 100, release: 100 };
   let instrumentCutItself = true;
-  let instrumentAdsrEnabled = true;
+  let instrumentAdsrEnabled = false;
   const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
   let renderedPlayingNote = "";
   const padRequests = new Map();
@@ -448,7 +448,7 @@
     ui.drumMessage.removeAttribute("tabindex");
     ui.drumMessage.textContent = message;
     ui.drumMessage.hidden = !message;
-    ui.drumStatus.hidden = !message;
+    ui.drumStatus.hidden = false;
   }
 
   function renderPlayingNote(midiNote = null) {
@@ -714,7 +714,10 @@
   }
 
   function setInstrumentMode(enabled, { clearBuffer = false, message = "" } = {}) {
-    if (enabled && !instrumentMode) instrumentOctave = 0;
+    if (enabled && !instrumentMode) {
+      stopAllInstrumentVoices();
+      instrumentOctave = 0;
+    }
     instrumentMode = Boolean(enabled);
     if (!instrumentMode) stopAllInstrumentVoices();
     if (clearBuffer) {
@@ -991,9 +994,13 @@
     finally { if (pad.loading === loading) pad.loading = null; }
   }
 
-  async function playDrum(index) {
+  async function playDrum(index, key = `pad:${index}`, released = true) {
     const pad = drumPads[index];
-    if (!pad || pad.busy) return;
+    if (!pad || pad.busy || instrumentMode) return;
+    const noteRevision = instrumentCutItself ? ++instrumentNoteRevision : instrumentNoteRevision;
+    const held = { voice: null, released };
+    releaseInstrumentVoice(instrumentKeys.get(key)?.voice);
+    instrumentKeys.set(key, held);
     try {
       const context = getDrumAudioContext();
       await context.resume();
@@ -1003,17 +1010,46 @@
       if (pad.busy) return;
       const version = pad.version;
       const buffer = pad.buffer || await loadDefaultDrum(pad);
-      if (pad.version !== version || pad.busy || ui?.panel.hidden) return;
+      if (noteRevision !== instrumentNoteRevision || instrumentKeys.get(key) !== held ||
+          pad.version !== version || pad.busy || instrumentMode || ui?.panel.hidden || document.hidden) return;
+      if (instrumentCutItself) {
+        for (const voice of instrumentVoices) releaseInstrumentVoice(voice);
+      }
+      if (instrumentVoices.size >= 32) {
+        const oldest = instrumentVoices.values().next().value;
+        oldest.source.stop();
+        cleanupInstrumentVoice(oldest);
+      }
       const source = context.createBufferSource();
+      const gain = context.createGain();
       source.buffer = buffer;
-      source.connect(context.destination);
-      source.onended = () => source.disconnect();
-      source.start();
+      source.connect(gain).connect(context.destination);
+      const voice = { source, gain, context, key, keyReleased: held.released === true,
+        startedAt: context.currentTime, sampleEndAt: context.currentTime + buffer.duration,
+        cleanupTimer: null, releasing: false, cleaned: false };
+      held.voice = voice;
+      instrumentVoices.add(voice);
+      instrumentVoice = voice;
+      source.onended = () => cleanupInstrumentVoice(voice);
+      try {
+        scheduleInstrumentEnvelope(voice, true);
+        source.start(voice.startedAt);
+        source.stop(voice.sampleEndAt);
+        if (held.released) {
+          instrumentKeys.delete(key);
+          if (instrumentAdsrEnabled) releaseInstrumentVoice(voice, instrumentEnvelope.release, true);
+        }
+      } catch (error) {
+        cleanupInstrumentVoice(voice);
+        throw error;
+      }
       ui?.drumButtons[index].classList.add("is-active");
       setTimeout(() => ui?.drumButtons[index].classList.remove("is-active"), 140);
       showDrumError("");
     } catch (error) {
-      showDrumError(error?.message || "Could not play this sample.");
+      if (noteRevision === instrumentNoteRevision) showDrumError(error?.message || "Could not play this sample.");
+    } finally {
+      if (!held.voice && instrumentKeys.get(key) === held) instrumentKeys.delete(key);
     }
   }
 
@@ -1127,7 +1163,8 @@
       return;
     }
     const target = event.composedPath()[0];
-    if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName || "")) return;
+    if (target?.isContentEditable || (/^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName || "") &&
+        !target.classList.contains("instrument-cut-itself") && !target.classList.contains("instrument-adsr-toggle"))) return;
     if (!/^[a-z0-9]$/i.test(event.key)) return;
     const key = event.key.toLowerCase();
     if (hoveredDrum !== null) {
@@ -1143,7 +1180,7 @@
     if (index < 0) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    playDrum(index);
+    playDrum(index, event.code || event.key, false);
   }
 
   function readStoredRate() {
@@ -1815,9 +1852,10 @@
     ui.saveLoopPad.disabled = !capability("saveLoopPad") || !loopState.active || padRenderPending;
     ui.saveLoopPad.title = capability("saveLoopPad") ? "Save loop to a pad" : "Player Tools Pro required";
     ui.instrumentToggle.disabled = !capability("loopInstrument") || !loopState.active || padRenderPending;
-    ui.instrumentControls.hidden = !instrumentMode;
-    ui.instrumentCutLabel.hidden = !instrumentMode;
-    ui.instrumentAdsrLabel.hidden = !instrumentMode;
+    ui.instrumentControls.hidden = false;
+    ui.instrumentCutLabel.hidden = false;
+    ui.instrumentAdsrLabel.hidden = false;
+    ui.drumStatus.hidden = false;
     ui.drumSection.classList.toggle("is-instrument", instrumentMode);
     ui.instrumentToggle.setAttribute("aria-pressed", String(instrumentMode));
     ui.instrumentToggle.classList.toggle("is-preparing", instrumentPreparing);
@@ -2793,7 +2831,9 @@
         .loop-instrument[aria-pressed="true"] { color: #ff8a4c; background: #462619; }
         .loop-instrument.is-preparing svg { animation: instrument-pulse .8s ease-in-out infinite alternate; }
         .instrument-controls { padding: 8px 2px 4px; }
-        .instrument-controls[hidden] { display: none; }
+        .instrument-controls[hidden],
+        .drum-section.is-collapsed:not(.is-instrument) .instrument-controls,
+        .drum-section.is-collapsed:not(.is-instrument) .drum-note-controls { display: none; }
         .instrument-controls.is-bypassed .instrument-envelope { opacity: .45; }
         .instrument-envelope { display: grid; grid-template-columns: repeat(4, minmax(42px, 1fr)) minmax(76px, 1.7fr); gap: 4px; align-items: center; }
         .envelope-graph { display: block; width: 100%; height: 60px; overflow: visible; }
@@ -3058,7 +3098,7 @@
               ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><button class="drum-reset" type="button" title="Remove saved sample and restore default" aria-label="Restore ${pad.name} default sample" hidden>↺</button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
             </div>
           </div>
-          <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="drum-note-controls" aria-live="off"><span class="playing-note"></span><label class="instrument-cut-label" title="Cut itself" data-scdl-tooltip="Cut itself" hidden><input class="instrument-cut-itself" type="checkbox" aria-label="Cut itself" checked /></label><label class="instrument-adsr-label" title="ADSR" data-scdl-tooltip="ADSR" hidden><input class="instrument-adsr-toggle" type="checkbox" aria-label="ADSR" checked /></label></span></p>
+          <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="drum-note-controls" aria-live="off"><span class="playing-note"></span><label class="instrument-cut-label" title="Cut itself" data-scdl-tooltip="Cut itself" hidden><input class="instrument-cut-itself" type="checkbox" aria-label="Cut itself" checked /></label><label class="instrument-adsr-label" title="ADSR" data-scdl-tooltip="ADSR" hidden><input class="instrument-adsr-toggle" type="checkbox" aria-label="ADSR" /></label></span></p>
           <div class="instrument-controls" role="group" aria-label="Sample envelope" hidden>
             <div class="instrument-envelope">
               ${["attack", "decay", "sustain", "release"].map((name) => `<div class="envelope-control"><span>${name[0].toUpperCase() + name.slice(1)}</span><button class="envelope-knob" type="button" role="slider" data-envelope="${name}" aria-label="${name[0].toUpperCase() + name.slice(1)}" aria-valuemin="0" aria-valuemax="${name === "sustain" ? 100 : 5000}" aria-orientation="vertical" title="Drag up or down; use arrow keys to adjust"></button><output></output></div>`).join("")}
@@ -3347,6 +3387,13 @@
       let pressedAt = 0;
       let holdTimer = null;
       let suppressClick = false;
+      let pointerPlaying = false;
+      const pointerKey = `pad-pointer:${index}`;
+      const releasePointer = () => {
+        if (!pointerPlaying) return;
+        pointerPlaying = false;
+        releaseInstrumentKey({ code: pointerKey, preventDefault() {}, stopImmediatePropagation() {} });
+      };
       const clearHold = () => {
         if (holdTimer !== null) clearTimeout(holdTimer);
         holdTimer = null;
@@ -3361,10 +3408,18 @@
       button.addEventListener("pointerdown", (event) => {
         if (selectingLoopPad || drumPads[index].busy) return;
         if (event.button !== 0) return;
+        suppressClick = false;
+        if (instrumentAdsrEnabled) {
+          pointerPlaying = true;
+          suppressClick = true;
+          button.setPointerCapture(event.pointerId);
+          playDrum(index, pointerKey, false);
+        }
         pressedAt = performance.now();
         holdTimer = setTimeout(() => button.classList.add("is-holding"), DRUM_LONG_PRESS_MS);
       });
       button.addEventListener("pointerup", (event) => {
+        releasePointer();
         const held = pressedAt && performance.now() - pressedAt >= DRUM_LONG_PRESS_MS;
         pressedAt = 0;
         clearHold();
@@ -3373,7 +3428,8 @@
         input.click();
         setTimeout(() => { suppressClick = false; }, 0);
       });
-      button.addEventListener("pointercancel", () => { pressedAt = 0; clearHold(); });
+      button.addEventListener("pointercancel", () => { releasePointer(); pressedAt = 0; clearHold(); });
+      button.addEventListener("lostpointercapture", releasePointer);
       button.addEventListener("contextmenu", (event) => event.preventDefault());
       button.addEventListener("keydown", (event) => {
         if (!event.shiftKey || !["Enter", " "].includes(event.key)) return;

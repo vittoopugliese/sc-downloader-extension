@@ -132,6 +132,7 @@ function assertEqual(actual, expected, label) {
 
 (async () => {
   evaluate(`SCDownloadSource.configure({
+    getDownloadPolicy: async () => ({ allDownloadsActivated: true }),
     request: async () => ({ ok: true, json: async () => ({ url: "https://example.com/audio.mp3" }) }),
     getOAuthToken: async () => { throw new Error("No session"); }
   })`);

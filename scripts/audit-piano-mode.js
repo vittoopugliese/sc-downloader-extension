@@ -66,12 +66,61 @@ function fixture() {
   for (const name of ['invalidatePendingInstrumentNotes', 'instrumentGainAt', 'scheduleInstrumentEnvelope', 'releaseInstrumentKey', 'cleanupInstrumentVoice', 'releaseInstrumentVoice',
     'stopInstrumentVoice', 'stopAllInstrumentVoices', 'setInstrumentMode', 'setInstrumentAdsrEnabled', 'loopMatchesInstrumentSnapshot',
     'normalizedInstrumentNumber', 'buildInstrumentDescriptor', 'disableInstrument', 'exitInstrument',
-    'requestPad', 'cancelInstrumentRequest', 'toggleLoopInstrument', 'instrumentSelection', 'syncInstrumentSelection', 'playInstrumentNote', 'closePanel']) {
+    'requestPad', 'cancelInstrumentRequest', 'toggleLoopInstrument', 'instrumentSelection', 'syncInstrumentSelection', 'playInstrumentNote', 'playDrum', 'closePanel']) {
     vm.runInContext(extract(name), scope);
   }
   return { scope, audio, state, effectsState, starts, messages, timers };
 }
 async function main() {
+  {
+    const { scope, audio, starts } = fixture();
+    scope.drumPads = Array.from({ length: 8 }, () => ({ buffer: { duration: 2 }, version: 0 }));
+    scope.ui.drumButtons = Array.from({ length: 8 }, () => ({ classList: { add() {}, remove() {} } }));
+    scope.padHydration = null;
+    scope.padsHydrated = true;
+    const keyup = code => scope.releaseInstrumentKey({ code, preventDefault() {}, stopImmediatePropagation() {} });
+    scope.setInstrumentAdsrEnabled(false);
+    await scope.playDrum(0, 'KeyA', false);
+    const first = scope.instrumentVoice;
+    keyup('KeyA');
+    assert.equal(first.releasing, false, 'pads play the full sample with ADSR bypassed');
+    assert.equal(scope.instrumentGainAt(first, .01), 1);
+    await scope.playDrum(7, 'KeyK', false);
+    assert.equal(first.releasing, true, 'cut itself chokes the previous slice across pads');
+    assert.equal(scope.instrumentVoice.sampleEndAt, 2);
+    scope.instrumentCutItself = false;
+    keyup('KeyK');
+    const second = scope.instrumentVoice;
+    await scope.playDrum(7, 'KeyK', false);
+    assert.equal(second.releasing, false, 'cut itself off allows repeated pad one-shots to overlap');
+    scope.setInstrumentAdsrEnabled(true);
+    assert.equal(second.releasing, true, 'live ADSR toggle releases unheld slices');
+    const held = scope.instrumentVoice;
+    assert.equal(held.releasing, false);
+    audio.currentTime = .1;
+    keyup('KeyK');
+    assert.equal(held.releaseMs, 100);
+    assert.equal(held.envelopeRelease, true, 'pad keyup uses the same release as piano notes');
+    assert.equal(held.source.stops.at(-1), .202);
+    scope.setInstrumentAdsrEnabled(false);
+    assert.equal(held.source.stops.at(-1), 2, 'bypassing release restores the remaining slice');
+    const resume = deferred();
+    audio.resume = () => resume.promise;
+    const pending = scope.playDrum(1, 'KeyS', false);
+    keyup('KeyS');
+    resume.resolve();
+    await pending;
+    assert.equal(scope.instrumentVoice.keyReleased, true, 'quick taps survive asynchronous pad loading in one-shot mode');
+    scope.setInstrumentAdsrEnabled(true);
+    const count = starts.length;
+    const cancelled = scope.playDrum(2, 'KeyD', false);
+    keyup('KeyD');
+    await cancelled;
+    assert.equal(starts.length, count, 'ADSR keyup cancels a pending pad attack');
+    scope.setInstrumentMode(true);
+    assert.ok([...scope.instrumentVoices].every(voice => voice.releasing), 'entering piano stops pad voices');
+    console.log('Pads: shared ADSR, cross-pad cut, polyphony, live bypass and pending key release');
+  }
   {
     const { scope, audio, starts } = fixture();
     audio.state = 'running';

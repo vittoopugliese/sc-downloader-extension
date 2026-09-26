@@ -15,6 +15,24 @@ const SCDownloadSource = (() => {
 
     const http = SCSoundCloudHttp.create(adapter.request);
 
+    async function allDownloadsActivated() {
+      try {
+        return (await adapter.getDownloadPolicy?.())?.allDownloadsActivated === true;
+      } catch {
+        return false;
+      }
+    }
+
+    function originalAvailable(track) {
+      return Boolean(track?.id && track.downloadable === true && track.hasDownloadsLeft !== false);
+    }
+
+    function requireOriginalAvailable(track) {
+      if (!originalAvailable(track)) {
+        throw createError("This track does not have an original file download available.", "download_not_permitted");
+      }
+    }
+
     async function authAttempts(clientId) {
       const attempts = [];
       if (clientId) attempts.push({ label: "public", clientId });
@@ -102,6 +120,16 @@ const SCDownloadSource = (() => {
       });
     }
 
+    async function resolveDownloadStream(trackData) {
+      let track = SCDownloadTrack.migrate(trackData);
+      if (!(await allDownloadsActivated())) {
+        if (!track?.id) throw createError("Track metadata cannot be refreshed.", "source_unavailable");
+        track = await refresh(track.id, track.clientId, track.formatPreference || "auto");
+        requireOriginalAvailable(track);
+      }
+      return resolveStream(track);
+    }
+
     async function refresh(trackId, clientId, formatPreference = "auto") {
       return tryAuthenticated(clientId, [401, 403, 404], async (attempt) => {
         const url = new URL("https://api-v2.soundcloud.com/tracks");
@@ -126,12 +154,14 @@ const SCDownloadSource = (() => {
 
     async function resolve(trackData, formatPreference = "auto", options = {}) {
       let track = SCDownloadTrack.migrate(trackData);
-      if (options.forceRefresh) {
-        if (!track.id || !track.clientId) {
+      const unrestricted = await allDownloadsActivated();
+      if (options.forceRefresh || !unrestricted) {
+        if (!track?.id || (unrestricted && !track.clientId)) {
           throw createError("Track metadata cannot be refreshed.", "source_unavailable");
         }
         track = await refresh(track.id, track.clientId, formatPreference);
       }
+      if (!unrestricted) requireOriginalAvailable(track);
       if (
         SCStreamSelector.shouldPreferOriginal(track, formatPreference)
       ) {
@@ -157,6 +187,7 @@ const SCDownloadSource = (() => {
       } catch (error) {
         if (!track.id || !track.clientId || !shouldRefresh(error)) throw error;
         track = { ...track, ...(await refresh(track.id, track.clientId, formatPreference)) };
+        if (!unrestricted) requireOriginalAvailable(track);
         const stream = await resolveStream(track);
         return { streamUrl: stream.url, trackData: track };
       }
@@ -245,6 +276,7 @@ const SCDownloadSource = (() => {
         for (const record of records || []) hydrated.set(String(record.id), record);
       }
       const items = [];
+      const unrestricted = await allDownloadsActivated();
       let unavailable = 0;
       for (const entry of values) {
         const value = hydrated.get(String(entry?.id)) || entry;
@@ -253,12 +285,13 @@ const SCDownloadSource = (() => {
           clientId, pageUrl: value.permalink_url || descriptor.sourceUrl || null, formatPreference,
         });
         if (!SCDownloadTrack.canDownload(track)) { unavailable += 1; continue; }
+        if (!unrestricted && !originalAvailable(track)) { unavailable += 1; continue; }
         items.push(track);
       }
       return { items, enumerated: values.length, skipped: { unavailable }, nextCursor: next, done: next == null };
     }
 
-    return { resolve, resolveStream, resolveOriginal, refresh, resolveLoggedInUser, collectionPage };
+    return { resolve, resolveStream, resolveDownloadStream, resolveOriginal, refresh, resolveLoggedInUser, collectionPage };
   }
 
   function configure(adapter) {
