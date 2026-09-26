@@ -152,9 +152,9 @@ const SCDownloadSource = (() => {
       );
     }
 
-    async function resolve(trackData, formatPreference = "auto", options = {}) {
+    async function resolveMedia(trackData, formatPreference = "auto", options = {}, enforceDownloadPolicy = true) {
       let track = SCDownloadTrack.migrate(trackData);
-      const unrestricted = await allDownloadsActivated();
+      const unrestricted = !enforceDownloadPolicy || await allDownloadsActivated();
       if (options.forceRefresh || !unrestricted) {
         if (!track?.id || (unrestricted && !track.clientId)) {
           throw createError("Track metadata cannot be refreshed.", "source_unavailable");
@@ -291,7 +291,10 @@ const SCDownloadSource = (() => {
       return { items, enumerated: values.length, skipped: { unavailable }, nextCursor: next, done: next == null };
     }
 
-    return { resolve, resolveStream, resolveDownloadStream, resolveOriginal, refresh, resolveLoggedInUser, collectionPage };
+    // Only the in-memory Player Tools renderers use resolveForPlayback.
+    const resolve = (...args) => resolveMedia(...args);
+    const resolveForPlayback = (track, preference, options) => resolveMedia(track, preference, options, false);
+    return { resolve, resolveForPlayback, resolveStream, resolveDownloadStream, resolveOriginal, refresh, resolveLoggedInUser, collectionPage };
   }
 
   function configure(adapter) {
@@ -308,6 +311,7 @@ const SCDownloadSource = (() => {
     create,
     configure,
     resolve: (...args) => current().resolve(...args),
+    resolveForPlayback: (...args) => current().resolveForPlayback(...args),
     resolveStream: (...args) => current().resolveStream(...args),
     resolveOriginal: (...args) => current().resolveOriginal(...args),
     refresh: (...args) => current().refresh(...args),

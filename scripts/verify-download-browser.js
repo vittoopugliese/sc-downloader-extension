@@ -61,9 +61,14 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
     for (let offset = 0; offset < audio.length; offset += 417) audio.set([0xff, 0xfb, 0x90, 0x00], offset);
     await worker.evaluate(audioUrl => {
       const originalFetch = fetch;
-      globalThis.fetch = (url, options) => String(url).includes("/media/test")
-        ? Promise.resolve(new Response(JSON.stringify({ url: audioUrl })))
-        : originalFetch(url, options);
+      globalThis.fetch = (url, options) => {
+        if (String(url).endsWith("/download-policy")) {
+          return Promise.resolve(new Response(JSON.stringify({ allDownloadsActivated: true })));
+        }
+        return String(url).includes("/media/test")
+          ? Promise.resolve(new Response(JSON.stringify({ url: audioUrl })))
+          : originalFetch(url, options);
+      };
     }, `data:audio/mpeg;base64,${audio.toString("base64")}`);
     await page.goto("https://soundcloud.com/discover");
     const tempo = page.locator("#scdl-tempo-control");

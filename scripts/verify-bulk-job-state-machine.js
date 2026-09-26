@@ -186,6 +186,7 @@ function createHarness(options = {}) {
     },
     SCDownloadSource: {
       resolve: async (trackData) => ({ trackData, streamUrl: trackData.streamUrl }),
+      resolveForPlayback: async (trackData) => ({ trackData, streamUrl: trackData.streamUrl }),
       collectionPage: async (_descriptor, cursor) => {
         bulkPageCalls.push(cursor ?? null);
         const page = options.bulkPages?.[cursor ?? "first"];

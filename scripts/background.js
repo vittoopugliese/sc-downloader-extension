@@ -96,6 +96,7 @@ function getOAuthToken() {
 
 const downloadPolicy = globalThis.SCDownloadPolicy?.create({
   apiBaseUrl: globalThis.SCPlayerToolsCommerce?.API_BASE_URL,
+  request: (url, options) => fetch(url, options),
 });
 const downloadSource = SCDownloadSource.configure({
   request: (url, options) => fetch(url, options),

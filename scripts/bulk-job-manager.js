@@ -1172,7 +1172,7 @@ const BulkJobManager = {
       return await queueSingleDownload(async () => {
         let result;
         for (let attempt = 0; attempt < 2; attempt++) {
-          const resolved = await SCDownloadSource.resolve(trackData, "auto", {
+          const resolved = await SCDownloadSource.resolveForPlayback(trackData, "auto", {
             forceRefresh: attempt > 0, reason: attempt > 0 ? "expired_media" : "initial", attempt,
           });
           result = await sendOffscreenMessage({ type: "OFFSCREEN_SLICES_RENDER", operationId, owner,
@@ -1198,7 +1198,7 @@ const BulkJobManager = {
       return await queueSingleDownload(async () => {
         let result;
         for (let attempt = 0; attempt < 2; attempt += 1) {
-          const resolved = await SCDownloadSource.resolve(trackData, "auto", {
+          const resolved = await SCDownloadSource.resolveForPlayback(trackData, "auto", {
             forceRefresh: attempt > 0,
             reason: attempt > 0 ? "expired_media" : "initial",
             attempt,
@@ -1243,7 +1243,7 @@ const BulkJobManager = {
         let result;
         for (let attempt = 0; attempt < 2; attempt += 1) {
           throwIfInstrumentCancelled(operationId);
-          const resolved = await SCDownloadSource.resolve(trackData, "auto", {
+          const resolved = await SCDownloadSource.resolveForPlayback(trackData, "auto", {
             forceRefresh: attempt > 0,
             reason: attempt > 0 ? "expired_media" : "initial",
             attempt,

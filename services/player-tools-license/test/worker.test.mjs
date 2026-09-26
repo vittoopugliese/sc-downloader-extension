@@ -24,6 +24,28 @@ const env = {
 
 const serviceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+test("download policy defaults to restricted and follows the database flag", async () => {
+  const store = sqliteD1();
+  try {
+    const read = () => worker.fetch(request("/api/player-tools/download-policy", {}), { ...env, LICENSE_DB: store });
+    let result = await read();
+    assert.equal(result.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await result.json(), { allDownloadsActivated: false });
+    store.database.exec("UPDATE download_settings SET enabled=1 WHERE key='all_downloads_activated'");
+    assert.deepEqual(await (await read()).json(), { allDownloadsActivated: true });
+    store.database.exec("UPDATE download_settings SET enabled=0 WHERE key='all_downloads_activated'");
+    assert.deepEqual(await (await read()).json(), { allDownloadsActivated: false });
+    store.database.exec("DELETE FROM download_settings");
+    assert.deepEqual(await (await read()).json(), { allDownloadsActivated: false });
+    store.database.exec("DROP TABLE download_settings");
+    result = await read();
+    assert.equal(result.status, 503);
+    assert.deepEqual(await result.json(), { allDownloadsActivated: false });
+    const forbidden = await worker.fetch(new Request("https://worker.example/api/player-tools/download-policy", { method: "POST" }), { ...env, LICENSE_DB: store });
+    assert.equal(forbidden.status, 403);
+  } finally { store.database.close(); }
+});
+
 function db() {
   const statements = [];
   return {
