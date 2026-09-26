@@ -95,6 +95,7 @@ function getOAuthToken() {
 }
 
 const downloadPolicy = globalThis.SCDownloadPolicy?.create({
+  storage: chrome.storage.local,
   apiBaseUrl: globalThis.SCPlayerToolsCommerce?.API_BASE_URL,
   request: (url, options) => fetch(url, options),
 });
@@ -404,6 +405,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === "GET_DOWNLOAD_POLICY") {
+    return respond(Promise.resolve(downloadPolicy?.getPolicy() || { allDownloadsActivated: false }),
+      sendResponse, (policy) => ({ policy }));
+  }
   if (["OFFSCREEN_KEEPALIVE", "OFFSCREEN_BUILD_PROGRESS"].includes(request?.type) &&
       (sender?.id !== chrome.runtime.id || sender?.tab ||
        sender?.url !== chrome.runtime.getURL("offscreen.html"))) {

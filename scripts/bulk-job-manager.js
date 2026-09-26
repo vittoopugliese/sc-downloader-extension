@@ -719,6 +719,7 @@ async function processTrack(jobId, trackIndex) {
       operationId: `track_${jobId.replace(/[^A-Za-z0-9_]/g, "")}_${trackIndex}`,
       trackData,
       formatPreference: job.formatPreference || "auto",
+      reuseEligibilitySnapshot: job.sourceType !== "legacy_message",
       destination: job.downloadDestination,
       collection: {
         folderName: job.folderName,

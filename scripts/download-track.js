@@ -51,6 +51,9 @@ const SCDownloadTrack = (() => {
       formatPreference,
       downloadable: rawTrack.downloadable === true,
       hasDownloadsLeft: rawTrack.has_downloads_left !== false,
+      downloadEligibilityCheckedAt: Number.isFinite(context.downloadEligibilityCheckedAt)
+        ? context.downloadEligibilityCheckedAt
+        : null,
       clientId: context.clientId || null,
       trackAuthorization: rawTrack.track_authorization || null,
       permalink: rawTrack.permalink_url || null,
@@ -110,6 +113,9 @@ const SCDownloadTrack = (() => {
       trackAuthorization: value.trackAuthorization || null,
       downloadable: value.downloadable === true,
       hasDownloadsLeft: value.hasDownloadsLeft !== false,
+      downloadEligibilityCheckedAt: Number.isFinite(value.downloadEligibilityCheckedAt)
+        ? value.downloadEligibilityCheckedAt
+        : null,
       clientId: value.clientId || null,
       permalink: value.permalink || null,
     };

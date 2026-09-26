@@ -1,4 +1,7 @@
 {
+  "download_policy_restricted": {
+    "message": "Solo se pueden descargar pistas cuyo artista habilitó la descarga y que aún tienen descargas disponibles."
+  },
   "piano_mode_status": {
     "message": "Modo piano activado · ← → octava ({octave})"
   },

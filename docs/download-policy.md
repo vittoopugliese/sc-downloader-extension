@@ -19,17 +19,31 @@ that base URL through `PLAYER_TOOLS_API_BASE_URL`, so no second URL needs updati
 The endpoint uses the existing origin allowlist and does not require a Pro license.
 It exposes no write operation.
 
-The client checks the flag for each source resolution and each bulk collection
-page, coalescing only requests already in flight. There is no persistent enabled
-cache. Missing settings, malformed values, network errors, timeouts, and an
-unavailable service default to restricted mode. A policy change affects subsequent
-source resolutions; it does not cancel an audio file already being built or saved.
+The client stores the flag and its check time in `chrome.storage.local`, scoped to
+the service URL, for five minutes when restricted (`false`) and seven days when
+unrestricted (`true`). Opening the popup reads this shared policy and
+shows a notice when only artist-enabled downloads with remaining quota are allowed.
+Downloads use the same policy: repeated tracks, popup openings, and service-worker
+restarts do not cause additional backend requests while that result is fresh. Concurrent
+reads share one request. With no fresh result, the first popup opening or download
+refreshes it; there is no background polling.
 
-Bulk collection enumeration counts ineligible tracks as unavailable. Every track
-is checked again against fresh metadata when its download begins, including tracks
-in existing queues. If permission has since been removed, that attempt reports
-`download_not_permitted` instead of downloading it. Previously skipped tracks need
-a new collection scan after enabling unrestricted downloads.
+Missing settings, malformed values, network errors, timeouts, and an unavailable
+service produce a restricted result, also stored for five minutes to avoid repeated
+requests. An expired unrestricted result is not reused on failure. Consequently,
+activation and recovery from an unsuccessful check are observed on the first use
+after the five-minute window expires. Disabling an already enabled policy can take
+up to seven days to appear. Existing stored results use these same windows based
+on their original check time. If local storage is unavailable, caching lasts only for
+the current worker lifetime. A policy change does not cancel an audio file already
+being built or saved.
+
+Bulk collection enumeration counts ineligible tracks as unavailable and records
+that the returned SoundCloud metadata was checked. The queue reuses that snapshot
+instead of fetching the same track metadata again. Existing queues without the
+marker still refresh each track, and an expired-media retry always refreshes and
+rechecks permission. Previously skipped tracks need a new collection scan after
+enabling unrestricted downloads.
 
 ## Deployment
 

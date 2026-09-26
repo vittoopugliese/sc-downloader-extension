@@ -36,11 +36,13 @@ const hydration = api.fromSoundCloud(raw, {
   clientId: "client",
   pageUrl: raw.permalink_url,
   formatPreference: "auto",
+  downloadEligibilityCheckedAt: 123456,
 });
 const refresh = api.fromSoundCloud(JSON.parse(JSON.stringify(raw)), {
   clientId: "client",
   pageUrl: raw.permalink_url,
   formatPreference: "auto",
+  downloadEligibilityCheckedAt: 123456,
 });
 assert.deepEqual(JSON.parse(JSON.stringify(hydration)), JSON.parse(JSON.stringify(refresh)));
 assert.equal(hydration.artworkUrl, "https://i.test/image-t500x500.jpg");
@@ -54,6 +56,7 @@ const durable = api.toDurable({
   coverUrl: "https://legacy.test/cover.jpg",
 }, "Fallback album");
 assert.equal(durable.artworkUrl, "https://legacy.test/cover.jpg");
+assert.equal(durable.downloadEligibilityCheckedAt, 123456);
 assert.equal("coverUrl" in durable, false);
 assert.equal(api.canDownload(durable), true);
 

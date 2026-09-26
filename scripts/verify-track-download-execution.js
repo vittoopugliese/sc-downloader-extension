@@ -82,6 +82,20 @@ function createHarness(overrides = {}) {
   ]);
   assert.deepEqual(collection.calls.at(-1), ["revoke", "blob:test"]);
 
+  let eligibilityOptions = null;
+  const optimizedCollection = createHarness({
+    async resolveSource(trackData, _formatPreference, options) {
+      eligibilityOptions = options;
+      return { trackData, streamUrl: "stream:test" };
+    },
+  });
+  await optimizedCollection.execution.execute({
+    trackData: { id: 21 },
+    reuseEligibilitySnapshot: true,
+  });
+  assert.equal(eligibilityOptions.reuseEligibilitySnapshot, true,
+    "Bulk execution must pass the enumerated eligibility snapshot to source resolution");
+
   const downloadsCollection = createHarness();
   const stages = [];
   await downloadsCollection.execution.execute({

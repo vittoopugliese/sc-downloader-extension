@@ -6,16 +6,51 @@ const { create } = require("./download-policy.js");
 
 (async () => {
   let flag = true;
-  const policy = create({ apiBaseUrl: "https://service.test/api/player-tools", request: async (url, options) => {
+  let policyReads = 0;
+  let currentTime = 1_000;
+  const week = 7 * 24 * 60 * 60 * 1000;
+  const fiveMinutes = 5 * 60 * 1000;
+  const stored = {};
+  const storage = { get: async key => ({ [key]: stored[key] }), set: async value => Object.assign(stored, structuredClone(value)) };
+  const configuration = { storage, apiBaseUrl: "https://service.test/api/player-tools", request: async (url, options) => {
+    policyReads += 1;
     assert.equal(url, "https://service.test/api/player-tools/download-policy");
     assert.equal(options.cache, "no-store");
     return { ok: true, json: async () => ({ allDownloadsActivated: flag }) };
-  } });
-  assert.equal((await policy.getPolicy()).allDownloadsActivated, true);
+  }, now: () => currentTime };
+  const policy = create(configuration);
+  const initial = await Promise.all(Array.from({ length: 200 }, () => policy.getPolicy()));
+  assert.ok(initial.every(value => value.allDownloadsActivated));
   flag = false;
-  assert.equal((await policy.getPolicy()).allDownloadsActivated, false, "Enabled state must not persist");
+  assert.equal((await policy.getPolicy()).allDownloadsActivated, true, "Policy should reuse its weekly cache");
+  currentTime += week - 1;
+  assert.equal((await create(configuration).getPolicy()).allDownloadsActivated, true, "Worker restart must preserve a fresh policy");
+  assert.equal(policyReads, 1, "Cached policy should avoid repeated Worker and D1 reads");
+  currentTime += 1;
+  assert.equal((await policy.getPolicy()).allDownloadsActivated, false, "Policy should refresh after the cache window");
+  assert.equal(policyReads, 2);
+  flag = true;
+  currentTime += fiveMinutes - 1;
+  assert.equal((await policy.getPolicy()).allDownloadsActivated, false);
+  assert.equal((await create(configuration).getPolicy()).allDownloadsActivated, false,
+    "Restricted policy must survive restarts without extending its five-minute window");
+  assert.equal(policyReads, 2);
+  currentTime += 1;
+  const activated = create(configuration);
+  const refreshed = await Promise.all(Array.from({ length: 200 }, () => activated.getPolicy()));
+  assert.ok(refreshed.every(value => value.allDownloadsActivated), "The next use after five minutes must observe activation");
+  assert.equal(policyReads, 3, "Concurrent reads at expiry must share a single refresh");
+  flag = false;
+  currentTime += week - 1;
+  assert.equal((await create(configuration).getPolicy()).allDownloadsActivated, true,
+    "An activated policy must switch to the seven-day cache window");
+  assert.equal(policyReads, 3);
+  currentTime += 1;
+  assert.equal((await create(configuration).getPolicy()).allDownloadsActivated, false);
+  assert.equal(policyReads, 4);
   for (const value of ["true", 1, null, undefined]) {
     flag = value;
+    currentTime += fiveMinutes;
     assert.equal((await policy.getPolicy()).allDownloadsActivated, false);
   }
   for (const request of [
@@ -26,6 +61,21 @@ const { create } = require("./download-policy.js");
   ]) {
     assert.equal((await create({ apiBaseUrl: "https://service.test", request, timeoutMs: 5 }).getPolicy()).allDownloadsActivated, false);
   }
+
+  flag = true;
+  currentTime += week;
+  await policy.getPolicy();
+  currentTime += week;
+  let failures = 0;
+  const offline = { ...configuration, request: async () => { failures++; throw new Error("offline"); } };
+  assert.equal((await create(offline).getPolicy()).allDownloadsActivated, false, "Expired unrestricted policy must fail closed");
+  currentTime += fiveMinutes - 1;
+  assert.equal((await create(offline).getPolicy()).allDownloadsActivated, false);
+  assert.equal(failures, 1, "Failed checks must also persist across restarts");
+  currentTime += 1;
+  assert.equal((await create(configuration).getPolicy()).allDownloadsActivated, true, "Retry after five minutes can recover");
+  const otherService = create({ ...configuration, apiBaseUrl: "https://other.test", request: async () => ({ ok: true, json: async () => ({ allDownloadsActivated: false }) }) });
+  assert.equal((await otherService.getPolicy()).allDownloadsActivated, false, "Different environments must not share flags");
 
   const context = vm.createContext({ console, URL, AbortController, setTimeout, clearTimeout });
   for (const name of ["soundcloud-http.js", "stream-selector.js", "download-track.js", "download-source.js"]) {
@@ -66,7 +116,16 @@ const { create } = require("./download-policy.js");
   downloadable = true;
   assert.equal((await source.resolve(track)).trackData.isOriginalDownload, true);
   assert.equal((await source.resolve(track, "mp3")).streamUrl, "https://cdn.test/stream.mp3");
-  assert.equal((await source.collectionPage(descriptor)).items.length, 1);
+  const enumeratedTrack = (await source.collectionPage(descriptor)).items[0];
+  assert.equal(Number.isFinite(enumeratedTrack.downloadEligibilityCheckedAt), true);
+  const readsAfterEnumeration = metadataReads;
+  downloadable = false;
+  assert.equal((await source.resolve(enumeratedTrack, "mp3", { reuseEligibilitySnapshot: true })).streamUrl,
+    "https://cdn.test/stream.mp3");
+  assert.equal(metadataReads, readsAfterEnumeration,
+    "Bulk downloads should reuse SoundCloud metadata already checked during enumeration");
+  await assert.rejects(source.resolve(enumeratedTrack, "mp3"), error => error.code === "download_not_permitted");
+  downloadable = true;
   hasDownloadsLeft = false;
   await assert.rejects(source.resolve(track), error => error.code === "download_not_permitted");
   hasDownloadsLeft = true;

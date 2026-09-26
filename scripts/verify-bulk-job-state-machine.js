@@ -25,6 +25,7 @@ function createHarness(options = {}) {
   const pausedGetContexts = new Promise((resolve) => { markPausedGetContexts = resolve; });
   const releases = [];
   const starts = [];
+  const eligibilitySnapshotUses = [];
   const effects = { create: 0, close: 0, notifications: 0, abort: 0 };
   const downloadListeners = new Set();
   const downloadStates = new Map(Object.entries(options.downloadStates || {}).map(([id, state]) => [Number(id), state]));
@@ -33,6 +34,7 @@ function createHarness(options = {}) {
   const bulkLibrary = {
     async createJob(spec) {
       const job = { jobId: spec.jobId, status: "enumerating", epoch: 0, revision: 0,
+        sourceType: spec.sourceType || "unknown",
         eligible: 0, saved: 0, failed: 0, retryableFailedCount: 0, ambiguousCount: 0,
         remaining: 0, createdAt: spec.createdAt || Date.now(),
         recentFailures: [], requestedLimit: spec.requestedLimit ?? null, nextCursor: spec.initialCursor ?? null };
@@ -146,6 +148,7 @@ function createHarness(options = {}) {
   const execution = {
     async execute(request) {
       starts.push(request.trackData.id);
+      eligibilitySnapshotUses.push(request.reuseEligibilitySnapshot === true);
       active += 1;
       maxActive = Math.max(maxActive, active);
       request.onStage?.("resolving");
@@ -266,6 +269,7 @@ function createHarness(options = {}) {
     manager: vm.runInContext("BulkJobManager", context),
     updateTrackProgress: vm.runInContext("updateTrackProgress", context),
     starts,
+    eligibilitySnapshotUses,
     bulkPageCalls,
     effects,
     get maxActive() { return maxActive; },
@@ -326,6 +330,8 @@ async function waitFor(predicate, label, timeout = 3000) {
   assert.equal(partial.maxActive, 1, "Bulk downloads must limit peak audio memory");
   assert.equal(partial.effects.notifications, 1);
   assert.equal(partial.effects.close, 1);
+  assert.equal(partial.eligibilitySnapshotUses.every(value => value === false), true,
+    "Legacy bulk tracks must not claim an enumeration snapshot");
   partial.setFailIds([]);
   assert.equal((await partial.manager.retryFailedJob()).success, true);
   await waitFor(
@@ -529,6 +535,8 @@ async function waitFor(predicate, label, timeout = 3000) {
   await waitFor(() => paged.job?.status === "completed", "paged collection job");
   assert.deepEqual(paged.bulkPageCalls, [null, "page-2"]);
   assert.deepEqual(paged.starts, [1, 2, 3]);
+  assert.equal(paged.eligibilitySnapshotUses.every(value => value === true), true,
+    "Paged collection tracks should reuse metadata checked during enumeration");
   assert.equal(Object.hasOwn(paged.session, "tracks"), false);
 
   const limited = createHarness({ bulkPages: {

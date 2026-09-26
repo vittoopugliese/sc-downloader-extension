@@ -106,6 +106,36 @@ const iconDataUrls = Object.fromEntries(
     console.log(dimensions);
     assert.equal(dimensions.scrollWidth, dimensions.width, "Popup must not overflow its right edge");
     assert.equal(dimensions.scrollHeight, dimensions.height, "Popup must not overflow its bottom edge");
+    const popupScript = fs.readFileSync(path.resolve(__dirname, "popup.js"), "utf8");
+    const noticeStart = popupScript.indexOf("async function loadDownloadPolicyNotice()");
+    await page.addScriptTag({ content: popupScript.slice(noticeStart, popupScript.indexOf("\n}", noticeStart) + 2) });
+    for (const mode of [false, true, "offline"]) {
+      await page.evaluate(async (mode) => {
+        globalThis.chrome = { runtime: { sendMessage: async ({ type }) => {
+          if (type !== "GET_DOWNLOAD_POLICY") throw new Error("Unexpected message");
+          if (mode === "offline") throw new Error("offline");
+          return { success: true, policy: { allDownloadsActivated: mode } };
+        } } };
+        await loadDownloadPolicyNotice();
+      }, mode);
+      assert.equal(await page.locator("#downloadPolicyNotice").isVisible(), mode !== true);
+      if (mode !== true) {
+        for (const locale of ["en", "es", "de", "pt_BR", "ru"]) {
+          const messages = JSON.parse(fs.readFileSync(path.resolve(__dirname, "..", "_locales", locale, "messages.json"), "utf8"));
+          await page.locator("#downloadPolicyNotice").evaluate((el, text) => { el.textContent = text; }, messages.download_policy_restricted.message);
+          assert.ok(await page.evaluate(() => {
+            const notice = document.getElementById("downloadPolicyNotice").getBoundingClientRect();
+            const next = document.getElementById("statusRow").getBoundingClientRect();
+            return notice.bottom <= next.top && notice.right <= document.body.offsetWidth &&
+              document.documentElement.scrollHeight <= Math.max(innerHeight, document.body.offsetHeight);
+          }), `Restricted notice must fit in ${locale}`);
+        }
+      }
+    }
+    await page.evaluate(() => {
+      document.getElementById("downloadPolicyNotice").classList.add("is-hidden");
+      document.body.classList.remove("restricted-downloads");
+    });
     const mainTheme = await page.evaluate(() => {
       const size = (element) => [element.offsetWidth, element.offsetHeight];
       const style = (selector) => getComputedStyle(document.querySelector(selector));

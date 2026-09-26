@@ -36,7 +36,12 @@ const SCTrackDownloadExecution = (() => {
           const resolved = await resolveSource(
             command.trackData,
             effectiveFormatPreference,
-            { forceRefresh: sourceAttempt > 0, reason: sourceAttempt > 0 ? "expired_media" : "initial", attempt: sourceAttempt }
+            {
+              forceRefresh: sourceAttempt > 0,
+              reuseEligibilitySnapshot: command.reuseEligibilitySnapshot === true,
+              reason: sourceAttempt > 0 ? "expired_media" : "initial",
+              attempt: sourceAttempt,
+            }
           );
 
           if (await isCancelled()) {

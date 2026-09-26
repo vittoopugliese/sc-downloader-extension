@@ -1,4 +1,7 @@
 {
+  "download_policy_restricted": {
+    "message": "Só é possível baixar faixas com download autorizado pelo artista e com downloads restantes."
+  },
   "piano_mode_status": {
     "message": "Modo piano ativado · ← → oitava ({octave})"
   },

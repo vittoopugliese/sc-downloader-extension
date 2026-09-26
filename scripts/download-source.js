@@ -14,6 +14,7 @@ const SCDownloadSource = (() => {
     }
 
     const http = SCSoundCloudHttp.create(adapter.request);
+    const now = typeof adapter.now === "function" ? adapter.now : Date.now;
 
     async function allDownloadsActivated() {
       try {
@@ -141,6 +142,7 @@ const SCDownloadSource = (() => {
           clientId: attempt.clientId || clientId,
           pageUrl: tracks[0].permalink_url || null,
           formatPreference,
+          downloadEligibilityCheckedAt: now(),
         });
       });
     }
@@ -155,7 +157,9 @@ const SCDownloadSource = (() => {
     async function resolveMedia(trackData, formatPreference = "auto", options = {}, enforceDownloadPolicy = true) {
       let track = SCDownloadTrack.migrate(trackData);
       const unrestricted = !enforceDownloadPolicy || await allDownloadsActivated();
-      if (options.forceRefresh || !unrestricted) {
+      const canReuseEligibilitySnapshot = options.reuseEligibilitySnapshot === true &&
+        Number.isFinite(track?.downloadEligibilityCheckedAt);
+      if (options.forceRefresh || (!unrestricted && !canReuseEligibilitySnapshot)) {
         if (!track?.id || (unrestricted && !track.clientId)) {
           throw createError("Track metadata cannot be refreshed.", "source_unavailable");
         }
@@ -277,12 +281,14 @@ const SCDownloadSource = (() => {
       }
       const items = [];
       const unrestricted = await allDownloadsActivated();
+      const downloadEligibilityCheckedAt = unrestricted ? null : now();
       let unavailable = 0;
       for (const entry of values) {
         const value = hydrated.get(String(entry?.id)) || entry;
         if (!value?.id || !value.title || !(value.media?.transcodings?.length || value.downloadable)) { unavailable += 1; continue; }
         const track = SCDownloadTrack.fromSoundCloud(value, {
           clientId, pageUrl: value.permalink_url || descriptor.sourceUrl || null, formatPreference,
+          downloadEligibilityCheckedAt,
         });
         if (!SCDownloadTrack.canDownload(track)) { unavailable += 1; continue; }
         if (!unrestricted && !originalAvailable(track)) { unavailable += 1; continue; }

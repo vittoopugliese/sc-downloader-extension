@@ -1,4 +1,7 @@
 {
+  "download_policy_restricted": {
+    "message": "Only tracks with downloads enabled by the artist and downloads remaining are available."
+  },
   "piano_mode_status": {
     "message": "Piano mode on · ← → octave ({octave})"
   },

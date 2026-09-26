@@ -232,6 +232,7 @@ function trapPanelFocus(event, panel) {
 
 document.addEventListener("DOMContentLoaded", async () => {
   SCDLI18n.localizeDocument();
+  loadDownloadPolicyNotice();
   await loadDownloadDestination();
 
   helpBtn.addEventListener("click", openHelp);
@@ -517,6 +518,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     startTrackFlow(false);
   });
 });
+
+async function loadDownloadPolicyNotice() {
+  const notice = document.getElementById("downloadPolicyNotice");
+  if (!notice) return;
+  let restricted = true;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "GET_DOWNLOAD_POLICY" });
+    restricted = response?.policy?.allDownloadsActivated !== true;
+  } catch { /* Match the downloader's restricted fallback. */ }
+  notice.classList.toggle("is-hidden", !restricted);
+  document.body.classList.toggle("restricted-downloads", restricted);
+}
 
 function isSoundCloudPage(url) {
   try {

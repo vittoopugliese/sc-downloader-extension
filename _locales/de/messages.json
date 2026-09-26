@@ -1,4 +1,7 @@
 {
+  "download_policy_restricted": {
+    "message": "Nur Tracks, deren Künstler Downloads erlaubt und deren Downloadlimit noch nicht erreicht ist, sind verfügbar."
+  },
   "piano_mode_status": {
     "message": "Pianomodus aktiv · ← → Oktave ({octave})"
   },
