@@ -1355,7 +1355,7 @@ async function main() {
     assert.ok(Math.abs(gridRects[2].x - gridRects[0].x) < 1, 'The third section wraps to the first column');
     assert.ok(Math.abs(gridRects[3].y - gridRects[1].bottom - 4) < 1, 'EQ sits immediately below Loop Region');
     assert.ok(Math.abs(gridRects[2].y - gridRects[0].bottom - 4) < 1, 'FX sits immediately below the sampler');
-    assert.ok(Math.abs(gridRects[4].y - gridRects[3].bottom - 4) < 1, 'Record sits immediately below EQ');
+    assert.ok(Math.abs(gridRects[4].x - gridRects[2].x) < 1 && Math.abs(gridRects[4].y - gridRects[2].bottom - 4) < 1, 'Record sits immediately below FX');
     assert.ok(Math.abs(gridRects[3].width - gridRects[1].width) < 1, 'EQ matches the Loop Region width');
     await page.screenshot({ path: path.join(projectRoot, 'test-results', 'controls-grid.png') });
     await page.setViewportSize({ width: 420, height: 1000 });

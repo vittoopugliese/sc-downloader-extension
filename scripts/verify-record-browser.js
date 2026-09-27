@@ -171,7 +171,7 @@ const { chromium } = require("playwright");
     await integrated.evaluate(() => document.dispatchEvent(new Event("scdl:open-player-tools-panel")));
     await host.locator(".sampler-toggle").click();
     await host.locator(".record-toggle").click();
-    assert.equal(await host.locator(".record-section").evaluate(section => section.previousElementSibling.classList.contains("peq")), true);
+    assert.equal(await host.locator(".record-section").evaluate(section => section.previousElementSibling.classList.contains("effects-shell")), true);
     await host.locator(".record-start").click();
     await integrated.waitForTimeout(120);
     await host.locator('.drum-pad[data-drum-index="0"]').click();
@@ -192,10 +192,10 @@ const { chromium } = require("playwright");
     await visibility.click();
     assert.equal(await host.locator(".record-section").isHidden(), true);
     await visibility.click();
-    const rects = await host.evaluate(element => [".peq", ".record-section"].map(selector => {
+    const rects = await host.evaluate(element => [".effects-shell", ".record-section"].map(selector => {
       const r = element.shadowRoot.querySelector(selector).getBoundingClientRect(); return { x: r.x, y: r.y, bottom: r.bottom };
     }));
-    assert.ok(Math.abs(rects[0].x - rects[1].x) < 1 && Math.abs(rects[1].y - rects[0].bottom - 4) < 1, "Record must follow EQ in the two-column layout");
+    assert.ok(Math.abs(rects[0].x - rects[1].x) < 1 && Math.abs(rects[1].y - rects[0].bottom - 4) < 1, "Record must follow FX in the two-column layout");
     await integrated.screenshot({ path: path.join(__dirname, "../test-results/record-player-tools.png") });
     await integrated.setViewportSize({ width: 420, height: 1000 });
     assert.equal(await host.locator(".record-section").evaluate(section => section.scrollWidth <= section.clientWidth), true, "Record must fit narrow layouts");

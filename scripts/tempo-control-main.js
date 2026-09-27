@@ -4112,7 +4112,7 @@
     const controlsLayout = document.createElement("div");
     controlsLayout.className = "controls-layout";
     ui.panel.querySelector(".drum-section").before(controlsLayout);
-    for (const selectors of [[".drum-section", ".effects-shell"], [".waveform-shell", ".peq", ".record-section"]]) {
+    for (const selectors of [[".drum-section", ".effects-shell", ".record-section"], [".waveform-shell", ".peq"]]) {
       const column = document.createElement("div");
       column.className = "controls-column";
       for (const selector of selectors) {
