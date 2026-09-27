@@ -2894,7 +2894,7 @@
         .panel.controls-grid {
           width: min(840px, calc(100vw - 16px));
         }
-        .controls-layout { display: grid; gap: 4px; }
+        .controls-layout { display: grid; gap: 4px; position:relative; }
         .controls-column { display: contents; }
         .controls-layout .drum-section { order: 0; }
         .controls-layout .waveform-shell { order: 1; }
@@ -2902,9 +2902,16 @@
         .controls-layout .peq { order: 3; }
         .controls-layout .record-section { order: 4; }
         .controls-layout > .controls-column > section { margin: 0; min-width: 0; }
+        .controls-layout.is-sortable > .controls-column > section { order:var(--section-order); }
+        .controls-layout.is-sortable .tool-section-toggle { touch-action:none; user-select:none; }
+        .controls-layout.is-sortable .tool-section-toggle:active { cursor:grabbing; }
+        .controls-layout.is-reordering, .controls-layout.is-reordering * { cursor:grabbing !important; }
+        .controls-column > section.is-reordering { opacity:.45; }
+        .section-drop-marker { position:absolute; z-index:10; height:2px; background:#ff7b38; box-shadow:0 0 5px #ff550080; pointer-events:none; }
         @media (min-width: 800px) {
           .controls-grid .controls-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
           .controls-grid .controls-column { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+          .controls-grid .controls-layout.is-sortable > .controls-column > section { order:0; }
         }
 
         @keyframes tempo-panel-enter {
@@ -4121,6 +4128,9 @@
       }
       controlsLayout.append(column);
     }
+    collapsible.reorder({ layout: controlsLayout, storageKey: "scdl.player-tools.section-order.v1",
+      onChange() { if (!ui.panel.hidden) positionPanel(); },
+    });
     renderControlsVisibility();
     render();
     syncBrandLogo();

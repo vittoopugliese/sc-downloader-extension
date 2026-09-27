@@ -199,7 +199,60 @@ const { chromium } = require("playwright");
     await integrated.screenshot({ path: path.join(__dirname, "../test-results/record-player-tools.png") });
     await integrated.setViewportSize({ width: 420, height: 1000 });
     assert.equal(await host.locator(".record-section").evaluate(section => section.scrollWidth <= section.clientWidth), true, "Record must fit narrow layouts");
+    await integrated.setViewportSize({ width: 1100, height: 1000 });
+    for (const toggle of await host.locator(".tool-section-toggle").all()) {
+      if (await toggle.getAttribute("aria-expanded") === "true") await toggle.click();
+    }
+    const columnIds = () => host.evaluate(element => [...element.shadowRoot.querySelectorAll(".controls-column")]
+      .map(column => [...column.children].map(section => section.id)));
+    const dragSection = async (source, target, { cancel = false } = {}) => {
+      await host.locator(`${source} .tool-section-toggle`).hover({ position: { x: 60, y: 12 } });
+      const from = await host.locator(`${source} .tool-section-toggle`).boundingBox();
+      const to = await host.locator(`${target} .tool-section-toggle`).boundingBox();
+      await integrated.mouse.move(from.x + 60, from.y + from.height / 2);
+      await integrated.mouse.down();
+      await integrated.mouse.move(to.x + 60, to.y + 3, { steps: 8 });
+      assert.equal(await host.locator(".section-drop-marker").isVisible(), true, JSON.stringify(await host.evaluate(element => {
+        const root = element.shadowRoot, marker = root.querySelector(".section-drop-marker");
+        return { layout: root.querySelector(".controls-layout").className, marker: marker?.outerHTML, bounds: root.querySelector(".controls-layout").getBoundingClientRect().toJSON() };
+      })));
+      if (cancel) await integrated.keyboard.press("Escape");
+      await integrated.mouse.up();
+    };
+    await dragSection("#scdl-record", "#scdl-sampler");
+    assert.deepEqual((await columnIds())[0], ["scdl-record", "scdl-sampler", "scdl-audio-effects"]);
+    assert.equal(await host.locator(".record-toggle").getAttribute("aria-expanded"), "false", "Dragging must not toggle the disclosure");
+    await host.locator(".record-toggle").click();
+    assert.equal(await host.locator(".record-toggle").getAttribute("aria-expanded"), "true", "The next normal click must still expand Record");
+    assert.equal(await host.locator(".record-download").isEnabled(), true, "Reordering must retain the recorded take");
+    await host.locator(".record-toggle").click();
+    await dragSection("#scdl-record", "#scdl-parametric-eq");
+    assert.deepEqual(await columnIds(), [["scdl-sampler", "scdl-audio-effects"], ["scdl-loop-region", "scdl-record", "scdl-parametric-eq"]]);
+    const beforeCancel = await columnIds();
+    await dragSection("#scdl-record", "#scdl-sampler", { cancel: true });
+    assert.deepEqual(await columnIds(), beforeCancel, "Escape must cancel a move");
+    assert.equal(await host.locator(".panel").isVisible(), true, "Cancelling a drag must not close Player Tools");
+    await host.locator(".peq-bypass").click();
+    assert.equal(await host.locator(".peq-bypass").getAttribute("aria-pressed"), "true", "Header actions must retain their click handlers");
+    assert.equal(await host.locator(".peq-toggle").getAttribute("aria-expanded"), "false");
+    await integrated.setViewportSize({ width: 420, height: 1000 });
+    await dragSection("#scdl-record", "#scdl-sampler");
+    const visualOrder = () => host.locator(".controls-column > section").evaluateAll(sections => sections
+      .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top).map(section => section.id));
+    assert.equal((await visualOrder())[0], "scdl-record", "Dragging must also reorder the narrow/single column layout");
+    const savedOrder = await visualOrder();
+    await integrated.screenshot({ path: path.join(__dirname, "../test-results/controls-reordered.png") });
+    await integrated.reload();
+    for (const file of ["tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "record-core.js", "record-ui.js"]) {
+      await integrated.addScriptTag({ path: path.join(__dirname, file) });
+    }
+    await integrated.evaluate(() => {
+      document.body.innerHTML = '<div class="playControls__elements" style="position:fixed;bottom:0;display:flex;height:48px"><div class="playControls__soundBadge"></div></div>';
+    });
+    await integrated.addScriptTag({ path: path.join(__dirname, "tempo-control-main.js") });
+    await integrated.evaluate(() => document.dispatchEvent(new Event("scdl:open-player-tools-panel")));
+    assert.deepEqual(await visualOrder(), savedOrder, "Saved order must survive a page reload");
     assert.deepEqual(integrationErrors, []);
-    console.log("Player Tools integration: built-in pads recorded, global collapse/hide, post-EQ placement and narrow layout passed.");
+    console.log("Player Tools integration: pads recorded, collapse/hide, responsive layout, drag between columns, preserved clicks/take, Escape and saved order passed.");
   } finally { await browser.close(); server.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
