@@ -14,6 +14,7 @@
     "test:e2e:popup": "node scripts/verify-popup-browser.js && node scripts/verify-popup-offer-loading.js && node scripts/verify-popup-unsupported-page.js",
     "test:e2e:feedback": "node scripts/verify-uninstall-feedback-browser.js",
     "test:e2e:tempo": "node scripts/verify-tempo-browser.js",
+    "test:e2e:waveform": "node scripts/spectral-waveform.browser-test.js && node scripts/spectral-waveform-long.browser-test.js",
     "test:e2e:sampler-persistence": "node scripts/sampler-persistence.browser-test.js",
     "test:e2e:slices": "node scripts/verify-sampler-slices-browser.js",
     "test:e2e:effects": "node scripts/verify-effects-browser.js && node scripts/verify-effects-browser.js --shared && node scripts/verify-effects-browser.js --shared --constructor",

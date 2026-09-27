@@ -23,6 +23,16 @@ async function main() {
   assert.equal(SCSpectralWaveform.needsStreaming(24 * 60 * 1000), true);
   assert.equal(SCSpectralWaveform.needsStreaming(10 * 60 * 1000), false);
 
+  // Incorrect duration metadata must still retain the end within the bin limit.
+  const underestimated = SCSpectralWaveformStream.createAccumulator(48000, 1);
+  const quiet = new Float32Array(48000);
+  for (let second = 0; second < 330; second++) underestimated.push([quiet]);
+  underestimated.push([new Float32Array([1])]);
+  const compacted = underestimated.finish();
+  assert.ok(compacted.peaks.length <= 65536);
+  assert.equal(compacted.peaks.at(-1), 1);
+  assert.equal(compacted.durationMs, (330 * 48000 + 1) / 48000 * 1000);
+
   let streamed = 0;
   const scope = vm.createContext({
     URL, ArrayBuffer, Uint8Array, TextDecoder, AbortController, setTimeout, clearTimeout,
