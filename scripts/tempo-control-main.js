@@ -450,10 +450,9 @@
       const button = ui.drumButtons[index];
       button.querySelector(".drum-key").textContent = pad.key ? pad.key.toUpperCase() : "·";
       button.classList.toggle("is-saving", pad.busy);
-      ui.drumResets[index].hidden = !pad.saved;
-      ui.drumResets[index].disabled = pad.busy;
-      button.setAttribute("aria-label", `${pad.customName || pad.name} drum pad. Key ${pad.key ? pad.key.toUpperCase() : "unassigned"}. Hold to load an audio sample.`);
-      button.title = `${Array.from(pad.customName || pad.name).slice(0, 20).join("")} · hold to load`;
+      button.setAttribute("aria-label", `${pad.customName || pad.name} drum pad. Key ${pad.key ? pad.key.toUpperCase() : "unassigned"}. Hold left click to remove the saved sample and restore the default. Shift + Enter or Shift + Space to load an audio sample.`);
+      button.title = `${Array.from(pad.customName || pad.name).slice(0, 20).join("")} · hold left click to restore default · Shift + Enter / Space to load`;
+      button.setAttribute("data-scdl-tooltip", button.title);
     });
   }
 
@@ -3075,8 +3074,6 @@
         .time-knob { cursor: not-allowed; }
         .pad-knob:hover { border-color: #ff8a4c; }
         .pad-knob:focus-visible { outline: 2px solid #ff8a4c; outline-offset: 2px; }
-        .drum-reset { display: block; margin: 2px auto 0; border: 0; border-radius: 4px; color: #ccc; background: #292929; cursor: pointer; }
-        .drum-reset:hover { color: #ff7b38; }
         .drum-file { display: none; }
         .drum-status { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0; padding: 4px 7px 6px; color: #ffb199; font-size: 10px; line-height: 1.2; }
         .drum-status[hidden] { display: none; }
@@ -3298,7 +3295,7 @@
           <dialog class="slice-dialog" aria-labelledby="slice-title" aria-describedby="slice-description"><h3 id="slice-title"></h3><p id="slice-description"></p><div><button class="slice-cancel" type="button" autofocus></button><button class="slice-replace" type="button"></button></div></dialog>
           <div class="sampler-body" id="scdl-sampler-pads">
             <div class="drum-pads">
-              ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><button class="drum-reset" type="button" title="Remove saved sample and restore default" aria-label="Restore ${pad.name} default sample" hidden>↺</button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
+              ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
             </div>
           </div>
           <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="drum-note-controls" aria-live="off"><span class="playing-note"></span></span></p>
@@ -3481,7 +3478,6 @@
       panel: root.querySelector(".panel"),
       drumButtons: [...root.querySelectorAll(".drum-pad")],
       drumFiles: [...root.querySelectorAll(".drum-file")],
-      drumResets: [...root.querySelectorAll(".drum-reset")],
       drumSection: root.querySelector(".drum-section"),
       samplerToggle: root.querySelector(".sampler-toggle"),
       samplerIcon: root.querySelector(".sampler-icon"),
@@ -3591,10 +3587,8 @@
     });
 
     updateDrumLabels();
-    ui.drumResets.forEach((button, index) => button.addEventListener("click", () => resetDrumPad(index)));
     ui.drumButtons.forEach((button, index) => {
       const input = ui.drumFiles[index];
-      let pressedAt = 0;
       let holdTimer = null;
       let suppressClick = false;
       let pointerPlaying = false;
@@ -3614,10 +3608,12 @@
       });
       button.addEventListener("pointerleave", () => {
         if (hoveredDrum === index) hoveredDrum = null;
+        clearHold();
       });
       button.addEventListener("pointerdown", (event) => {
         if (selectingLoopPad || drumPads[index].busy) return;
         if (event.button !== 0) return;
+        clearHold();
         suppressClick = false;
         if (instrumentAdsrEnabled) {
           pointerPlaying = true;
@@ -3625,21 +3621,16 @@
           button.setPointerCapture(event.pointerId);
           playDrum(index, pointerKey, false);
         }
-        pressedAt = performance.now();
-        holdTimer = setTimeout(() => button.classList.add("is-holding"), DRUM_LONG_PRESS_MS);
+        holdTimer = setTimeout(() => {
+          holdTimer = null;
+          suppressClick = true;
+          releasePointer();
+          resetDrumPad(index);
+        }, DRUM_LONG_PRESS_MS);
       });
-      button.addEventListener("pointerup", (event) => {
-        releasePointer();
-        const held = pressedAt && performance.now() - pressedAt >= DRUM_LONG_PRESS_MS;
-        pressedAt = 0;
-        clearHold();
-        if (!held || event.button !== 0) return;
-        suppressClick = true;
-        input.click();
-        setTimeout(() => { suppressClick = false; }, 0);
-      });
-      button.addEventListener("pointercancel", () => { releasePointer(); pressedAt = 0; clearHold(); });
-      button.addEventListener("lostpointercapture", releasePointer);
+      for (const eventName of ["pointerup", "pointercancel", "lostpointercapture", "blur"]) {
+        button.addEventListener(eventName, () => { releasePointer(); clearHold(); });
+      }
       button.addEventListener("contextmenu", (event) => event.preventDefault());
       button.addEventListener("keydown", (event) => {
         if (!event.shiftKey || !["Enter", " "].includes(event.key)) return;

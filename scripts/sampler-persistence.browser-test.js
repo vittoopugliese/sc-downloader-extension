@@ -90,8 +90,23 @@ const { chromium } = require('playwright');
     await restoredHost.locator('.sampler-toggle').click();
     await restoredHost.locator('.drum-pad').nth(7).click();
     await restored.waitForFunction(() => gets === 1);
-    await restoredHost.locator('.drum-reset').nth(7).click();
-    await restored.waitForFunction(() => document.querySelector('#scdl-tempo-control').shadowRoot.querySelectorAll('.drum-reset')[7].hidden);
+    assert.equal(await restoredHost.locator('.drum-reset').count(), 0);
+    const resetPad = restoredHost.locator('.drum-pad').nth(7);
+    assert.match(await resetPad.getAttribute('data-scdl-tooltip'), /hold left click to restore default/);
+    await resetPad.hover();
+    await restored.mouse.down();
+    await restored.waitForTimeout(200);
+    await restored.mouse.up();
+    assert.match(await resetPad.getAttribute('title'), /Persistent hat/);
+    await restored.mouse.down();
+    await restored.mouse.move(0, 0);
+    await restored.waitForTimeout(700);
+    await restored.mouse.up();
+    assert.match(await resetPad.getAttribute('title'), /Persistent hat/);
+    await resetPad.hover();
+    await restored.mouse.down();
+    await restored.waitForFunction(() => document.querySelector('#scdl-tempo-control').shadowRoot.querySelectorAll('.drum-pad')[7].title.startsWith('Hat 2'));
+    await restored.mouse.up();
     assert.equal(await restored.evaluate(async () => (await send({ type: 'OFFSCREEN_PAD_GET', index: 7 })).pad), null);
     // A delete invalidates an older pending render and retries cannot delete a newer save.
     assert.equal(await restored.evaluate(async () => {

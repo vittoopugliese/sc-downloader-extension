@@ -39,6 +39,22 @@ const { chromium } = require("playwright");
     await page.locator("#dynamic-help").evaluate((el) => { el.title = "Updated help"; el.focus(); });
     await page.waitForTimeout(450);
     assert.equal(await page.locator("#dynamic-help").getAttribute("title"), "");
+    // Detached shadow controls must restore without an observer feedback loop,
+    // then become suppressed again when reinserted.
+    await page.evaluate(() => {
+      const host = document.createElement("div");
+      host.id = "nested-host";
+      host.attachShadow({ mode: "open" }).innerHTML = '<button title="Nested help">Help</button>';
+      document.body.append(host);
+    });
+    assert.equal(await page.locator("#nested-host button").getAttribute("title"), "");
+    await page.evaluate(() => {
+      window.detachedHelp = document.querySelector("#nested-host");
+      window.detachedHelp.remove();
+    });
+    assert.equal(await page.evaluate(() => window.detachedHelp.shadowRoot.querySelector("button").title), "Nested help");
+    await page.evaluate(() => document.body.append(window.detachedHelp));
+    assert.equal(await page.locator("#nested-host button").getAttribute("title"), "");
     await toggle.evaluate((el) => el.click());
     assert.equal(await page.locator("#dynamic-help").getAttribute("title"), "Updated help");
     assert.equal(await page.locator("#native").getAttribute("title"), "Native help");

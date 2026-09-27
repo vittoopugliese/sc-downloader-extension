@@ -406,15 +406,11 @@ async function main() {
     await page.keyboard.press("j");
     await page.waitForFunction(() => window.drumStarts === 2);
     const sampleChooser = page.waitForEvent("filechooser");
-    const uploadPad = await drumPads.nth(3).boundingBox();
-    await page.mouse.move(uploadPad.x + uploadPad.width / 2, uploadPad.y + uploadPad.height / 2);
-    await page.mouse.down();
-    await page.waitForTimeout(650);
-    await page.mouse.up();
+    await drumPads.nth(3).press("Shift+Enter");
     await (await sampleChooser).setFiles(path.join(projectRoot, "assets", "drums", "hat1.wav"));
     await host.locator('.drum-pad[title="hat1 · hold to load"]').waitFor();
     assert.equal(await page.evaluate(() => window.drumStarts), 2,
-      "Holding a pad to upload must not also play it.");
+      "Using Shift + Enter to upload must not also play it.");
     await drumPads.nth(3).click();
     await page.waitForFunction(() => window.drumStarts === 3);
     await host.locator(".download-track-button").hover();

@@ -155,10 +155,10 @@
   }
 
   function listen(root) {
+    if (!observedRoots.has(root) && !enabled) suppressTitles(root);
     observedRoots.add(root);
     if (listenedRoots.has(root)) return;
     listenedRoots.add(root);
-    if (!enabled) suppressTitles(root);
     new MutationObserver((records) => {
       mount();
       for (const record of records) {

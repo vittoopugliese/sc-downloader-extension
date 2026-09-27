@@ -10,6 +10,7 @@ function audio(frequency, stereo = false) {
     getChannelData: channel => channel ? pcm.map(value => -value) : pcm };
 }
 async function main() {
+  await verifyLoading();
   for (const [frequency, band] of [[60, 0], [1000, 1], [10000, 2]]) {
     const result = await SCSpectralWaveform.analyze(audio(frequency));
     const energies = [0, 0, 0];
@@ -46,5 +47,53 @@ async function main() {
   assert.equal(result.waveform.peaks.length, 200);
   assert.equal(closed, 1);
   console.log('Spectral waveform: frequency bands, stereo, silence, transients, cancellation and decode passed.');
+}
+async function verifyLoading() {
+  const source = fs.readFileSync(path.join(__dirname, 'tempo-control-main.js'), 'utf8');
+  const loading = source.slice(source.indexOf('  async function loadPlayerWaveform()'), source.indexOf('  function commitLoopRender()'));
+  const pending = new Map();
+  let descriptor;
+  const scope = vm.createContext({
+    document: { documentElement: { getAttribute: () => JSON.stringify(descriptor) } },
+    requestPad: (_action, { trackUrl }) => new Promise((resolve, reject) => pending.set(trackUrl, { resolve, reject })),
+    renderLoop() {},
+  });
+  vm.runInContext(`
+    let waveformCollapsed = false, waveformSamples = [], waveformSpectrum = null;
+    let waveformTrackUrl = null, waveformSourceUrl = null, waveformZoom = null;
+    let waveformRevision = 0, waveformLoadId = 0, waveformAnalysisCache = null;
+    const PLAYER_WAVEFORM_ATTRIBUTE = 'waveform';
+    const ui = { waveformCanvas: {}, panel: { hidden: false } };
+    ${loading}
+  `, scope);
+  const load = () => vm.runInContext('loadPlayerWaveform()', scope);
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  const data = { peaks: [.8], bands: [1, 0, 0], durationMs: 1000 };
+  descriptor = { trackUrl: 'a', waveformUrl: null };
+  await load();
+  descriptor = { trackUrl: 'b', waveformUrl: null };
+  await load();
+  pending.get('a').resolve({ waveform: data });
+  await flush();
+  assert.equal(vm.runInContext('waveformSpectrum', scope), null, 'Stale track analysis must be ignored');
+  pending.get('b').resolve({ waveform: data });
+  await flush();
+  assert.equal(vm.runInContext('waveformSpectrum', scope), data);
+  descriptor = { trackUrl: 'c', waveformUrl: null };
+  await load();
+  assert.equal(vm.runInContext('waveformSpectrum', scope), null, 'Track switch clears previous colors immediately');
+  pending.get('c').reject(new Error('Unavailable'));
+  await flush();
+  assert.match(vm.runInContext('ui.waveformCanvas.title', scope), /unavailable/);
+  vm.runInContext('ui.panel.hidden = true', scope);
+  descriptor = { trackUrl: 'd', waveformUrl: null };
+  await load();
+  assert.equal(pending.has('d'), false, 'Hidden panel must not start audio analysis');
+  vm.runInContext('ui.panel.hidden = false', scope);
+  await load();
+  vm.runInContext('waveformCollapsed = true; waveformLoadId++', scope);
+  pending.get('d').resolve({ waveform: data });
+  await flush();
+  assert.equal(vm.runInContext('waveformSpectrum', scope), null, 'Collapsing must invalidate pending results');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
