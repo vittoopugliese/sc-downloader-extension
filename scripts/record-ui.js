@@ -20,13 +20,12 @@
       .record-time { margin-left:auto; color:#c7d8d5; font:10px ui-monospace,monospace; white-space:nowrap; }
       .record-stage { position:relative; height:126px; overflow:hidden; border:1px solid #586364; border-radius:3px; background:#3e494d; }
       .record-canvas { display:block; width:100%; height:100%; cursor:crosshair; touch-action:none; }
+      .record-canvas.is-zoomed { cursor:grab; }
+      .record-canvas.is-panning { cursor:grabbing; }
       .record-empty { position:absolute; inset:0; display:grid; place-content:center; text-align:center; pointer-events:none; color:#cad7d6; font:10px/1.6 system-ui,sans-serif; }
       .record-empty[hidden] { display:none; }
       .record-footer { display:flex; align-items:center; gap:7px; margin-top:6px; color:#9fa9aa; font:9px system-ui,sans-serif; }
-      .record-footer label { display:flex; align-items:center; gap:4px; margin-left:auto; }
-      .record-zoom { width:65px; accent-color:#a8c7c0; }
-      .record-scroll { width:100%; height:12px; margin:4px 0 0; accent-color:#a8c7c0; }
-      .record-message { min-height:12px; margin:5px 0 0; color:#b9c4c3; font:9px/1.4 system-ui,sans-serif; }
+      .record-notice { position:absolute; inset:auto 5px 5px; margin:0; padding:4px 6px; border-radius:3px; color:#eee; background:#20282bee; font:10px/1.4 system-ui,sans-serif; pointer-events:none; }
     </style>
     ${collapsible.header({ title: "Record", bodyId: "scdl-record-body", expanded: false, toggleClass: "record-toggle", icon: '<img class="tool-section-icon record-icon" alt="" aria-hidden="true" />' })}
     <div class="record-body" id="scdl-record-body" hidden>
@@ -34,30 +33,39 @@
         <button type="button" class="record-start" aria-label="Start recording" aria-pressed="false"><span class="record-dot" aria-hidden="true"></span>Rec</button>
         <button type="button" class="record-stop" aria-label="Stop recording or playback" disabled>■</button>
         <button type="button" class="record-play" aria-label="Play recorded sample" disabled>▶</button>
-        <button type="button" class="record-download" aria-label="Download recorded sample as WAV" disabled>↓ WAV</button>
+        <button type="button" class="record-download" aria-label="Download recorded sample as WAV" title="Download recorded sample as WAV. Up to 5 minutes per take. Download to keep your sample." disabled>↓ WAV</button>
         <button type="button" class="record-clear" aria-label="Clear recorded sample" disabled>×</button>
         <output class="record-time" aria-label="Recording duration">00:00.000</output>
       </div>
       <div class="record-stage">
-        <canvas class="record-canvas" tabindex="0" role="slider" aria-label="Recorded sample position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"></canvas>
+        <canvas class="record-canvas" tabindex="0" role="slider" aria-label="Recorded sample position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" data-scdl-tooltip="Wheel to zoom at the cursor. Drag or Shift + wheel to scroll. Click to seek. Keyboard: + / - zoom, Shift + arrows scroll, 0 resets the view."></canvas>
         <div class="record-empty">Record your mix<br>Track · pads · FX · EQ</div>
       </div>
-      <input class="record-scroll" type="range" min="0" max="1000" value="0" aria-label="Scroll recorded audio" hidden />
-      <div class="record-footer"><span class="record-format">STEREO · 48 kHz / 16-bit · POST EQ</span><label>Zoom <input class="record-zoom" type="range" min="1" max="32" value="1" aria-label="Recorded audio zoom" /></label></div>
-      <p class="record-message" role="status" aria-live="polite">Up to 5 minutes per take. Download to keep your sample.</p>
+      <div class="record-footer"><span class="record-format">STEREO · 48 kHz / 16-bit · POST EQ</span></div>
     </div>`;
     container.append(section);
     const find = name => section.querySelector(`.record-${name}`);
     const canvas = find("canvas"), painter = canvas.getContext("2d");
     let visible = false, frame = null, lastPaint = 0, liveReady = false, preparing = false;
     let zoom = 1, scroll = 0, lastState = "idle";
+    let pan = null;
     const live = new Float32Array(2048);
     const recorder = globalThis.SCRecord.create({ effects, onChange: render });
     const time = seconds => {
       const ms = Math.round(seconds * 1000);
       return `${String(Math.floor(ms / 60000)).padStart(2, "0")}:${((ms % 60000) / 1000).toFixed(3).padStart(6, "0")}`;
     };
-    const report = error => { find("message").textContent = error.message || "Could not record audio."; };
+    function notice(text) {
+      let element = find("notice");
+      if (!text) { element?.remove(); return; }
+      if (!element) {
+        element = document.createElement("p"); element.className = "record-notice";
+        element.setAttribute("role", "status"); element.setAttribute("aria-live", "polite");
+        find("stage").append(element);
+      }
+      element.textContent = text;
+    }
+    const report = error => notice(error.message || "Could not record audio.");
     const syncIcon = () => {
       const url = document.documentElement.getAttribute("data-scdl-extension-record-url");
       if (url) find("icon").src = url;
@@ -79,12 +87,11 @@
       find("play").setAttribute("aria-label", state.state === "playing" ? "Pause recorded sample" : "Play recorded sample");
       find("download").disabled = busy || !state.frames;
       find("clear").disabled = busy || !state.frames;
-      find("zoom").disabled = busy || !state.frames;
       canvas.setAttribute("aria-valuemax", String(state.duration));
-      if (state.state === "recording" && lastState !== "recording") { zoom = 1; scroll = 0; find("zoom").value = "1"; find("scroll").value = "0"; }
+      if (busy) cancelPan();
+      if (state.state === "recording" && lastState !== "recording") { zoom = 1; scroll = 0; }
       lastState = state.state;
-      find("scroll").hidden = zoom === 1 || busy;
-      find("message").textContent = state.message || (state.state === "preparing" ? "Preparing recorder…" : capturing ? "Recording the final mix. Keep playing your pads." : state.frames ? "Click the audio to seek. Download to keep this take before recording another." : "Up to 5 minutes per take. Download to keep your sample.");
+      notice(state.message);
       paint();
     }
     function windowRange(state) {
@@ -101,6 +108,7 @@
       painter.setTransform(dpr, 0, 0, dpr, 0, 0);
       painter.fillStyle = "#3e494d"; painter.fillRect(0, 0, width, height);
       const state = recorder.snapshot(), mid = (height + 16) / 2, scale = (height - 24) / 2;
+      canvas.classList.toggle("is-zoomed", zoom > 1);
       const range = windowRange(state);
       painter.fillStyle = "#303a3e"; painter.fillRect(0, 0, width, 16);
       painter.strokeStyle = "#657170"; painter.lineWidth = .5;
@@ -143,8 +151,8 @@
       painter.stroke();
       const pos = state.state === "recording" ? state.duration : recorder.position();
       if (state.frames) {
-        const x = Math.min(width - 1, (pos - range.start) / range.span * width);
-        if (x >= 0) { painter.fillStyle = state.state === "recording" ? "#ff7770" : "#ffb66f"; painter.fillRect(x, 16, 1, height - 16); }
+        const x = (pos - range.start) / range.span * width;
+        if (x >= 0 && x <= width) { painter.fillStyle = state.state === "recording" ? "#ff7770" : "#ffb66f"; painter.fillRect(Math.min(width - 1, x), 16, 1, height - 16); }
       }
       find("empty").hidden = Boolean(state.frames) || (liveReady && live.some(value => Math.abs(value) > .002));
       find("time").textContent = time(state.state === "playing" ? pos : state.duration);
@@ -157,6 +165,7 @@
       frame = requestAnimationFrame(animate);
     }
     function updateVisibility() {
+      cancelPan();
       if (frame !== null) cancelAnimationFrame(frame);
       frame = null;
       if (visible && !disclosure.isCollapsed()) {
@@ -172,7 +181,7 @@
     find("play").addEventListener("click", () => {
       if (recorder.snapshot().state === "playing") recorder.stopPreview(); else recorder.play().catch(report);
     });
-    find("clear").addEventListener("click", () => { recorder.clear(); zoom = 1; scroll = 0; find("zoom").value = "1"; find("scroll").value = "0"; render(); });
+    find("clear").addEventListener("click", () => { cancelPan(); recorder.clear(); zoom = 1; scroll = 0; render(); });
     find("download").addEventListener("click", () => {
       try {
         const url = URL.createObjectURL(recorder.exportWav());
@@ -182,13 +191,69 @@
         setTimeout(() => URL.revokeObjectURL(url), 60000);
       } catch (error) { report(error); }
     });
-    find("zoom").addEventListener("input", event => { zoom = Number(event.target.value); render(); });
-    find("scroll").addEventListener("input", event => { scroll = Number(event.target.value) / 1000; paint(); });
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    const canNavigate = () => {
+      const state = recorder.snapshot();
+      return state.frames && !["recording", "stopping", "preparing"].includes(state.state);
+    };
+    function setViewStart(seconds) {
+      const duration = recorder.snapshot().duration, span = duration / zoom;
+      scroll = duration > span ? clamp(seconds / (duration - span), 0, 1) : 0;
+      paint();
+    }
+    function zoomAt(ratio, direction) {
+      const range = windowRange(recorder.snapshot());
+      const focus = range.start + ratio * range.span;
+      zoom = clamp(zoom * (direction < 0 ? 1.25 : .8), 1, 32);
+      setViewStart(focus - ratio * recorder.snapshot().duration / zoom);
+    }
+    canvas.addEventListener("wheel", event => {
+      if (!canNavigate() || pan || (!event.deltaX && !event.deltaY)) return;
+      event.preventDefault(); event.stopPropagation();
+      const rect = canvas.getBoundingClientRect(), range = windowRange(recorder.snapshot());
+      if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+        const pixels = (event.deltaX || event.deltaY) * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.width : 1);
+        setViewStart(range.start + pixels / rect.width * range.span);
+      } else zoomAt(clamp((event.clientX - rect.left) / rect.width, 0, 1), event.deltaY);
+    }, { passive: false });
+    function cancelPan() {
+      if (!pan) return;
+      const id = pan.id; pan = null;
+      canvas.classList.remove("is-panning");
+      if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+    }
     canvas.addEventListener("pointerdown", event => {
-      const range = windowRange(recorder.snapshot()), rect = canvas.getBoundingClientRect();
-      Promise.resolve(recorder.seek(range.start + Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * range.span)).catch(report);
+      if (event.button !== 0 || !event.isPrimary || !canNavigate()) return;
+      const range = windowRange(recorder.snapshot());
+      pan = { id: event.pointerId, x: event.clientX, y: event.clientY, start: range.start, span: range.span, moved: false };
+      canvas.setPointerCapture(event.pointerId);
+      canvas.focus({ preventScroll: true });
     });
+    canvas.addEventListener("pointermove", event => {
+      if (event.pointerId !== pan?.id) return;
+      if (!pan.moved && Math.hypot(event.clientX - pan.x, event.clientY - pan.y) < 4) return;
+      pan.moved = true; canvas.classList.add("is-panning");
+      setViewStart(pan.start - (event.clientX - pan.x) / canvas.clientWidth * pan.span);
+    });
+    canvas.addEventListener("pointerup", event => {
+      if (event.pointerId !== pan?.id) return;
+      const moved = pan.moved;
+      cancelPan();
+      if (moved) return;
+      const range = windowRange(recorder.snapshot()), rect = canvas.getBoundingClientRect();
+      Promise.resolve(recorder.seek(range.start + clamp((event.clientX - rect.left) / rect.width, 0, 1) * range.span)).catch(report);
+    });
+    for (const type of ["pointercancel", "lostpointercapture", "blur"]) canvas.addEventListener(type, cancelPan);
     canvas.addEventListener("keydown", event => {
+      if (!canNavigate()) return;
+      if (["+", "=", "-", "0"].includes(event.key) || (event.shiftKey && ["ArrowLeft", "ArrowRight"].includes(event.key))) {
+        event.preventDefault(); event.stopPropagation(); cancelPan();
+        const range = windowRange(recorder.snapshot());
+        if (event.key === "0") { zoom = 1; setViewStart(0); }
+        else if (event.shiftKey && event.key.startsWith("Arrow")) setViewStart(range.start + range.span * (event.key === "ArrowLeft" ? -.1 : .1));
+        else zoomAt(.5, event.key === "-" ? 1 : -1);
+        return;
+      }
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       event.preventDefault(); event.stopPropagation();
       const state = recorder.snapshot();
