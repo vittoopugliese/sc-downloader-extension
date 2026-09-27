@@ -36,5 +36,9 @@
     }
     return { peaks: Array.from(peaks), bands: Array.from(bands), durationMs: buffer.length / buffer.sampleRate * 1000 };
   }
-  globalThis.SCSpectralWaveform = { analyze };
+  // Keep the established full-buffer analysis below its 256 MiB stereo budget.
+  function needsStreaming(durationMs) {
+    return Number(durationMs) / 1000 * 48000 * 2 * 4 > 256 * 1024 * 1024;
+  }
+  globalThis.SCSpectralWaveform = { analyze, needsStreaming };
 })();

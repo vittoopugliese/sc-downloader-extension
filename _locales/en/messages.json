@@ -1,4 +1,14 @@
 {
+  "sampler_presets": { "message": "Saved sampler states" },
+  "sampler_saveState": { "message": "Save state" },
+  "sampler_stateName": { "message": "State name" },
+  "sampler_noStates": { "message": "No saved states yet" },
+  "sampler_deleteState": { "message": "Delete state" },
+  "sampler_stateSaved": { "message": "Sampler state saved." },
+  "sampler_stateLoaded": { "message": "Sampler state restored." },
+  "sampler_stateFailed": { "message": "Could not update sampler states. Please try again." },
+  "sampler_statesLoading": { "message": "Loading states…" },
+  "sampler_stateBusy": { "message": "Wait for the samples to finish saving." },
   "download_policy_restricted": {
     "message": "Only tracks with downloads enabled by the artist and downloads remaining are available."
   },

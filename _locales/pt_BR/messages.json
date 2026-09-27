@@ -1,4 +1,14 @@
 {
+  "sampler_presets": { "message": "Estados salvos do sampler" },
+  "sampler_saveState": { "message": "Salvar estado" },
+  "sampler_stateName": { "message": "Nome do estado" },
+  "sampler_noStates": { "message": "Nenhum estado salvo ainda" },
+  "sampler_deleteState": { "message": "Excluir estado" },
+  "sampler_stateSaved": { "message": "Estado do sampler salvo." },
+  "sampler_stateLoaded": { "message": "Estado do sampler restaurado." },
+  "sampler_stateFailed": { "message": "Não foi possível atualizar os estados. Tente novamente." },
+  "sampler_statesLoading": { "message": "Carregando estados…" },
+  "sampler_stateBusy": { "message": "Aguarde os samples terminarem de salvar." },
   "download_policy_restricted": {
     "message": "Só é possível baixar faixas com download autorizado pelo artista e com downloads restantes."
   },

@@ -16,6 +16,7 @@ importScripts(
   "download-destination.js",
   "track-download-execution.js",
   "bulk-library.js",
+  "spectral-waveform.js",
   "bulk-job-manager.js",
   "soundcloud-likes-source.js",
   "likes-library.js",
@@ -787,11 +788,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  if (["RENDER_LOOP_PAD", "RENDER_LOOP_INSTRUMENT", "CANCEL_LOOP_INSTRUMENT",
+  if (["SAMPLER_PRESET_LIST", "SAMPLER_PRESET_SAVE", "SAMPLER_PRESET_LOAD", "SAMPLER_PRESET_DELETE",
+      "RENDER_LOOP_PAD", "RENDER_LOOP_INSTRUMENT", "CANCEL_LOOP_INSTRUMENT",
       "GET_LOOP_PAD_LIST", "GET_LOOP_PAD_AUDIO", "STORE_LOOP_PAD_AUDIO", "DELETE_LOOP_PAD_AUDIO"].includes(request.type)) {
     if (sender.id !== chrome.runtime.id || !sender.tab || !/^https:\/\/soundcloud\.com\//.test(sender.url || "")) {
       sendResponse({ success: false, error: "This action is only available on SoundCloud." });
       return false;
+    }
+    if (request.type.startsWith("SAMPLER_PRESET_")) {
+      BulkJobManager.padMessage({ type: `OFFSCREEN_${request.type}`, presetId: request.presetId,
+        name: request.name, settings: request.settings }).then(sendResponse)
+        .catch(error => sendResponse(errorResponse(error)));
+      return true;
     }
     if (request.type === "CANCEL_LOOP_INSTRUMENT") {
       cancelInstrumentOperation(request, sender)

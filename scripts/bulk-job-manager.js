@@ -1198,16 +1198,19 @@ const BulkJobManager = {
       await startKeepalive();
       return await queueSingleDownload(async () => {
         let result;
+        const streaming = SCSpectralWaveform.needsStreaming(trackData.durationMs);
         for (let attempt = 0; attempt < 2; attempt += 1) {
-          const resolved = await SCDownloadSource.resolveForPlayback(trackData, "auto", {
-            forceRefresh: attempt > 0,
+          const resolved = await SCDownloadSource.resolveForPlayback(trackData, streaming ? "mp3" : "auto", {
+            // Existing metadata may point to an original WAV/AAC file. Re-resolve
+            // long tracks as MP3 so the decoder can consume independent frames.
+            forceRefresh: attempt > 0 || (streaming && !trackData.streamMimeType?.includes('audio/mpeg')),
             reason: attempt > 0 ? "expired_media" : "initial",
             attempt,
           });
           result = await sendOffscreenMessage({ type: "OFFSCREEN_WAVEFORM", streamUrl: resolved.streamUrl, trackData: resolved.trackData });
           if (result?.success || ![401, 403, 404].includes(result?.status)) break;
         }
-        if (!result?.success) throw new Error(result?.error || "Could not prepare the loop sample.");
+        if (!result?.success) throw new Error(result?.error || "Could not analyze the waveform.");
         return result;
       });
     } finally {

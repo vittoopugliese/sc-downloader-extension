@@ -1,4 +1,14 @@
 {
+  "sampler_presets": { "message": "Gespeicherte Sampler-Zustände" },
+  "sampler_saveState": { "message": "Zustand speichern" },
+  "sampler_stateName": { "message": "Name des Zustands" },
+  "sampler_noStates": { "message": "Noch keine Zustände gespeichert" },
+  "sampler_deleteState": { "message": "Zustand löschen" },
+  "sampler_stateSaved": { "message": "Sampler-Zustand gespeichert." },
+  "sampler_stateLoaded": { "message": "Sampler-Zustand wiederhergestellt." },
+  "sampler_stateFailed": { "message": "Zustände konnten nicht aktualisiert werden. Bitte erneut versuchen." },
+  "sampler_statesLoading": { "message": "Zustände werden geladen…" },
+  "sampler_stateBusy": { "message": "Bitte warten, bis die Samples gespeichert sind." },
   "download_policy_restricted": {
     "message": "Nur Tracks, deren Künstler Downloads erlaubt und deren Downloadlimit noch nicht erreicht ist, sind verfügbar."
   },

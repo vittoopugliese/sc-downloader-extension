@@ -56,6 +56,10 @@ function exposeTempoControlAssets() {
     tooLong: t("sampler_tooLong"),
     locked: t("sampler_locked"),
     selectPad: t("sampler_selectPad"),
+    presets: t("sampler_presets"), saveState: t("sampler_saveState"), stateName: t("sampler_stateName"),
+    noStates: t("sampler_noStates"), deleteState: t("sampler_deleteState"), stateSaved: t("sampler_stateSaved"),
+    stateLoaded: t("sampler_stateLoaded"), stateFailed: t("sampler_stateFailed"),
+    statesLoading: t("sampler_statesLoading"), stateBusy: t("sampler_stateBusy"),
   }));
   document.documentElement?.setAttribute?.("data-scdl-piano-copy", JSON.stringify({
     status: t("piano_mode_status"),
@@ -172,6 +176,10 @@ window.addEventListener?.("message", (event) => {
   const types = {
     waveform: "ANALYZE_WAVEFORM",
     list: "GET_LOOP_PAD_LIST",
+    "preset-list": "SAMPLER_PRESET_LIST",
+    "preset-save": "SAMPLER_PRESET_SAVE",
+    "preset-load": "SAMPLER_PRESET_LOAD",
+    "preset-delete": "SAMPLER_PRESET_DELETE",
     delete: "DELETE_LOOP_PAD_AUDIO",
     get: "GET_LOOP_PAD_AUDIO",
     store: "STORE_LOOP_PAD_AUDIO",
@@ -184,6 +192,11 @@ window.addEventListener?.("message", (event) => {
   };
   if (!types[action]) return;
   const payload = { type: types[action] };
+  if (action.startsWith("preset-")) {
+    payload.presetId = event.data.presetId;
+    payload.name = event.data.name;
+    payload.settings = event.data.settings;
+  }
   if (action === "waveform") payload.trackUrl = event.data.trackUrl;
   if (action !== "list") payload.index = index;
   if (action === "delete") payload.operationId = event.data.operationId;

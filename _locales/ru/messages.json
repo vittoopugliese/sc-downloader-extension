@@ -1,4 +1,14 @@
 {
+  "sampler_presets": { "message": "Сохранённые состояния семплера" },
+  "sampler_saveState": { "message": "Сохранить состояние" },
+  "sampler_stateName": { "message": "Название состояния" },
+  "sampler_noStates": { "message": "Пока нет сохранённых состояний" },
+  "sampler_deleteState": { "message": "Удалить состояние" },
+  "sampler_stateSaved": { "message": "Состояние семплера сохранено." },
+  "sampler_stateLoaded": { "message": "Состояние семплера восстановлено." },
+  "sampler_stateFailed": { "message": "Не удалось обновить состояния. Попробуйте ещё раз." },
+  "sampler_statesLoading": { "message": "Загрузка состояний…" },
+  "sampler_stateBusy": { "message": "Дождитесь завершения сохранения семплов." },
   "download_policy_restricted": {
     "message": "Доступны только треки, для которых автор разрешил скачивание и лимит скачиваний ещё не исчерпан."
   },

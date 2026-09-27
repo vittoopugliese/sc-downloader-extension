@@ -714,6 +714,50 @@ const SCDownload = (() => {
     } finally { await context.close(); }
   }
 
+  async function* spectralChunks(urls, signal) {
+    for (const url of urls) {
+      throwIfAborted(signal);
+      const controller = new AbortController();
+      const onAbort = () => controller.abort();
+      signal?.addEventListener('abort', onAbort, { once: true });
+      let reader, timer;
+      try {
+        timer = setTimeout(onAbort, REQUEST_TIMEOUT_MS);
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) throw responseError('Waveform audio', response);
+        reader = response.body?.getReader();
+        if (!reader) throw new Error('The audio stream cannot be read.');
+        clearTimeout(timer);
+        while (true) {
+          throwIfAborted(signal);
+          timer = setTimeout(onAbort, REQUEST_TIMEOUT_MS);
+          const { value, done } = await reader.read();
+          clearTimeout(timer);
+          if (done) break;
+          yield value;
+        }
+      } finally {
+        clearTimeout(timer);
+        controller.abort();
+        await reader?.cancel().catch(() => {});
+        reader?.releaseLock();
+        signal?.removeEventListener('abort', onAbort);
+      }
+    }
+  }
+
+  async function analyzeLongWaveform(streamUrl, trackData, signal) {
+    let urls = [streamUrl];
+    if (trackData.streamProtocol === 'hls' || streamUrl.includes('.m3u8')) {
+      const { baseUrl, playlistText } = await resolveMediaPlaylist(streamUrl, signal);
+      const { initSegmentUrl, segmentUrls } = parseHlsPlaylist(baseUrl, playlistText);
+      if (initSegmentUrl || !segmentUrls.length) throw new Error('Long-track analysis requires an MP3 playlist.');
+      urls = segmentUrls;
+    }
+    return { success: true, waveform: await SCSpectralWaveformStream.analyze(
+      spectralChunks(urls, signal), trackData.durationMs, signal) };
+  }
+
   async function buildTrackBlob(
     streamUrl,
     trackData,
@@ -725,6 +769,9 @@ const SCDownload = (() => {
     allowWav = false,
     spectral = false
   ) {
+    if (spectral && SCSpectralWaveform.needsStreaming(trackData.durationMs)) {
+      return analyzeLongWaveform(streamUrl, trackData, signal);
+    }
     if (spectral) checkDecodeBudget(trackData, null, 48000);
     const normalizedTrimRange = normalizeTrimRange(trimRange);
     if (normalizedTrimRange || hasPlaybackTransform(playbackTransform) || hasSampleEffects(sampleEffects)) checkDecodeBudget(trackData);

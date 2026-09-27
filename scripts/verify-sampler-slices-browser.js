@@ -160,6 +160,34 @@ const { chromium } = require("playwright");
       check(lengths.reduce((sum, length) => sum + length, 0) ===
         Math.ceil((Math.ceil(1.9 * sampleRate) - Math.floor(1.123 * sampleRate)) / 1.25), "FX tails never extend the transformed A–B range");
       check(Math.max(...lengths) - Math.min(...lengths) <= 1, "fractional duration is split equally to the nearest frame");
+      // Named states retain the rendered slice audio, independently of the live pads.
+      const presetId = "preset_processed_slices";
+      const settings = { selectedPadIndex: 2, adsrEnabled: true, cutItself: false,
+        pads: [..."asdfghjk"].map(key => ({ key, gainPercent: 100, pitchSemitones: 0,
+          envelope: { attack: 4, decay: 100, sustain: 100, release: 100 } })) };
+      const presetRequest = { type: "OFFSCREEN_SAMPLER_PRESET_SAVE", presetId, name: "Processed slices", settings };
+      const beforePreset = await Promise.all(Array.from({ length: 8 }, (_, index) =>
+        send({ type: "OFFSCREEN_PAD_GET", index }).then(result => result.pad.dataUrl)));
+      check((await send(presetRequest)).success, "save rendered slice preset");
+      check((await send(presetRequest)).success && (await send({ type: "OFFSCREEN_SAMPLER_PRESET_LIST" })).presets.length === 1, "save retries do not duplicate presets");
+      await send({ type: "OFFSCREEN_PAD_DELETE", index: 3, operationId: "pad_preset_remove_slice" });
+      const beforeRestore = JSON.stringify(await list());
+      IDBObjectStore.prototype.put = function(record, ...args) {
+        if (this.name === "samples" && record.index === 4) {
+          this.transaction.abort();
+          return;
+        }
+        return put.call(this, record, ...args);
+      };
+      const failedRestore = await send({ type: "OFFSCREEN_SAMPLER_PRESET_LOAD", presetId });
+      IDBObjectStore.prototype.put = put;
+      check(!failedRestore.success, "failed state restore reported");
+      check(JSON.stringify(await list()) === beforeRestore, "state load rolls back all sample changes on failure");
+      const restoredPreset = await send({ type: "OFFSCREEN_SAMPLER_PRESET_LOAD", presetId });
+      check(restoredPreset.success && JSON.stringify(restoredPreset.settings) === JSON.stringify(settings), "restore sampler settings");
+      const afterPreset = await Promise.all(Array.from({ length: 8 }, (_, index) =>
+        send({ type: "OFFSCREEN_PAD_GET", index }).then(result => result.pad.dataUrl)));
+      check(JSON.stringify(beforePreset) === JSON.stringify(afterPreset), "all eight rendered slices restored byte for byte");
       await begin("restart");
       await render("restart");
       // Leave a prepared batch for a fresh offscreen document to commit.

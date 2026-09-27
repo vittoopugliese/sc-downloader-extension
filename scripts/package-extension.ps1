@@ -63,6 +63,7 @@ $packageItems = @(
     "scripts/looper.js",
     "scripts/loop-audio-renderer.js",
     "scripts/spectral-waveform.js",
+    "scripts/spectral-waveform-stream.js",
     "scripts/metadata.js",
     "scripts/offscreen.js",
     "scripts/page-intake.js",

@@ -14,12 +14,13 @@ let padDatabasePromise = null;
 function openPadDatabase() {
   if (!padDatabasePromise) {
     padDatabasePromise = new Promise((resolve, reject) => {
-      const request = indexedDB.open("scdl-player-pads", 2);
+      const request = indexedDB.open("scdl-player-pads", 3);
       request.onupgradeneeded = () => {
         const database = request.result;
         if (!database.objectStoreNames.contains("samples")) database.createObjectStore("samples", { keyPath: "index" });
         if (!database.objectStoreNames.contains("operations")) database.createObjectStore("operations", { keyPath: "id" });
         if (!database.objectStoreNames.contains("claims")) database.createObjectStore("claims", { keyPath: "index" });
+        if (!database.objectStoreNames.contains("presets")) database.createObjectStore("presets", { keyPath: "id" });
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -171,8 +172,86 @@ async function storePad(index, name, blob, id) {
   return finishPadOperation(id, blob, name);
 }
 
+// Presets own their audio blobs. Restoring all pads and invalidating pending
+// writes happen in one transaction, so an older render cannot overwrite a load.
+async function handleSamplerPreset(message) {
+  const action = message.type.replace("OFFSCREEN_SAMPLER_PRESET_", "");
+  const id = message.presetId;
+  if (action !== "LIST" && (typeof id !== "string" || !/^preset_[A-Za-z0-9_-]{8,100}$/.test(id))) {
+    throw new Error("Invalid sampler preset.");
+  }
+  const metadata = ({ id, name, createdAt }) => ({ id, name, createdAt });
+  if (action === "LIST") {
+    const records = await padTransactionFor("presets", "readonly", store => store.getAll());
+    return { success: true, presets: records.map(metadata).sort((a, b) => b.createdAt - a.createdAt) };
+  }
+  if (action === "DELETE") {
+    await padTransactionFor("presets", "readwrite", store => store.delete(id));
+    return { success: true };
+  }
+  let settings;
+  if (action === "SAVE") {
+    const state = message.settings;
+    const keys = new Set();
+    if (!state || !Array.isArray(state.pads) || state.pads.length !== 8 || !validPadIndex(state.selectedPadIndex)) {
+      throw new Error("Invalid sampler settings.");
+    }
+    settings = { selectedPadIndex: state.selectedPadIndex, adsrEnabled: state.adsrEnabled === true,
+      cutItself: state.cutItself === true, pads: state.pads.map(pad => {
+        if (!pad || typeof pad.key !== "string" || !/^([a-z0-9])?$/.test(pad.key) || (pad.key && keys.has(pad.key))) {
+          throw new Error("Invalid pad keys.");
+        }
+        if (pad.key) keys.add(pad.key);
+        const bounded = (value, min, max) => {
+          if (!Number.isFinite(value) || value < min || value > max) throw new Error("Invalid pad settings.");
+          return value;
+        };
+        return { key: pad.key, gainPercent: bounded(pad.gainPercent, 0, 154), pitchSemitones: bounded(pad.pitchSemitones, -12, 12),
+          envelope: Object.fromEntries(["attack", "decay", "sustain", "release"].map(key =>
+            [key, bounded(pad.envelope?.[key], 0, key === "sustain" ? 100 : 5000)])) };
+      }) };
+    if (typeof message.name !== "string" || !message.name.trim() || message.name.length > 80) throw new Error("Enter a preset name.");
+  }
+  const database = await openPadDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(["presets", "samples", "claims"], "readwrite");
+    const presets = tx.objectStore("presets");
+    const samples = tx.objectStore("samples");
+    let result;
+    const guard = callback => () => {
+      try { callback(); }
+      catch (error) { reject(error); try { tx.abort(); } catch {} }
+    };
+    const get = presets.get(id);
+    get.onsuccess = guard(() => {
+      const preset = get.result;
+      if (action === "SAVE") {
+        if (preset) { result = { success: true, preset: metadata(preset) }; return; }
+        const all = samples.getAll();
+        all.onsuccess = guard(() => {
+          const record = { id, name: message.name.trim(), createdAt: Date.now(), settings, samples: all.result };
+          presets.add(record);
+          result = { success: true, preset: metadata(record) };
+        });
+      } else if (action === "LOAD" && preset) {
+        samples.clear();
+        const updatedAt = Date.now();
+        const claimId = `preset_load_${crypto.randomUUID()}`;
+        for (let index = 0; index < 8; index++) tx.objectStore("claims").put({ index, id: claimId });
+        for (const sample of preset.samples) samples.put({ ...sample, updatedAt });
+        result = { success: true, settings: preset.settings,
+          pads: preset.samples.map(({ index, name }) => ({ index, name, updatedAt })) };
+      } else result = { success: false, error: "This sampler preset is no longer available." };
+    });
+    tx.oncomplete = () => resolve(result);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error("Could not save the sampler state."));
+  });
+}
+
 async function handlePadMessage(message) {
   try {
+    if (message.type.startsWith("OFFSCREEN_SAMPLER_PRESET_")) return await handleSamplerPreset(message);
     if (message.type === "OFFSCREEN_PAD_LIST") {
       const records = await padTransaction("readonly", (store) => store.getAll());
       return { success: true, pads: records.map(({ index, name, updatedAt }) => ({ index, name, updatedAt })) };
@@ -320,7 +399,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: false, code: "slice_failed", error: error?.message || "Could not prepare the slices." }));
     return true;
   }
-  if (["OFFSCREEN_PAD_LIST", "OFFSCREEN_PAD_DELETE", "OFFSCREEN_PAD_GET", "OFFSCREEN_PAD_STORE", "OFFSCREEN_PAD_RENDER",
+  if (["OFFSCREEN_SAMPLER_PRESET_LIST", "OFFSCREEN_SAMPLER_PRESET_SAVE", "OFFSCREEN_SAMPLER_PRESET_LOAD", "OFFSCREEN_SAMPLER_PRESET_DELETE",
+      "OFFSCREEN_PAD_LIST", "OFFSCREEN_PAD_DELETE", "OFFSCREEN_PAD_GET", "OFFSCREEN_PAD_STORE", "OFFSCREEN_PAD_RENDER",
       "OFFSCREEN_INSTRUMENT_RENDER", "OFFSCREEN_INSTRUMENT_CANCEL", "OFFSCREEN_INSTRUMENT_READ"].includes(message.type)) {
     const operationId = message.operationId;
     if (["OFFSCREEN_INSTRUMENT_CANCEL", "OFFSCREEN_INSTRUMENT_READ"].includes(message.type)) {
@@ -341,8 +421,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === "OFFSCREEN_WAVEFORM") {
-    SCDownload.buildTrackBlob(message.streamUrl, message.trackData, null, null, null, null, null, false, true)
-      .then(sendResponse).catch(error => sendResponse({ success: false, error: error.message, status: error.status }));
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 600000);
+    SCDownload.buildTrackBlob(message.streamUrl, message.trackData, null, controller.signal, null, null, null, false, true)
+      .then(sendResponse).catch(error => sendResponse({ success: false, error: error.message, status: error.status }))
+      .finally(() => clearTimeout(timeout));
     return true;
   }
   if (message.type === "OFFSCREEN_BUILD") {

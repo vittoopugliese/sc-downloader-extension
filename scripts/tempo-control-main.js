@@ -177,6 +177,9 @@
   const instrumentKeys = new Map();
   const instrumentEnvelope = { attack: 4, decay: 100, sustain: 100, release: 100 };
   let selectedPadIndex = 0;
+  let samplerPresetBusy = false;
+  let samplerPresets = [];
+  let samplerPresetListVersion = 0;
   let instrumentCutItself = true;
   let instrumentAdsrEnabled = false;
   const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
@@ -375,7 +378,7 @@
             action: action === "slices" ? "cancel-slices" : "cancel-instrument", operationId: payload.operationId }, location.origin);
         }
         reject(new Error("The pad request timed out."));
-      }, action === "list" ? 10000 : 120000);
+      }, action === "list" ? 10000 : action === "waveform" ? 660000 : 120000);
       padRequests.set(id, { resolve, reject, timeout, action, operationId: payload.operationId || null, chunks: [], byteLength: 0 });
       window.postMessage({ source: "scdl-pad-main", id, action, ...payload }, location.origin);
     });
@@ -433,7 +436,7 @@
     return padHydration;
   }
 
-  document.addEventListener(EXTENSION_ASSETS_EVENT, () => { if (ui) hydrateDrumPads(); });
+  document.addEventListener(EXTENSION_ASSETS_EVENT, () => { if (ui) { hydrateDrumPads(); renderSamplerPresetCopy(); } });
 
   function schedulePadCacheRelease() {
     clearTimeout(padCacheTimer);
@@ -446,6 +449,7 @@
 
   function updateDrumLabels() {
     if (!ui) return;
+    renderSamplerPresetBusy();
     drumPads.forEach((pad, index) => {
       const button = ui.drumButtons[index];
       button.querySelector(".drum-key").textContent = pad.key ? pad.key.toUpperCase() : "·";
@@ -1222,6 +1226,7 @@
 
   function handleDrumKeydown(event) {
     if (!ui || ui.panel.hidden || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+    if (ui.samplerPresetMenu.matches(":popover-open")) return;
     if (ui.sliceDialog.open) return;
     if (sliceJob && event.key === "Escape") {
       event.preventDefault();
@@ -2325,6 +2330,10 @@
   }
 
   const SAMPLER_COPY = {
+    presets: "Saved sampler states", saveState: "Save state", stateName: "State name",
+    noStates: "No saved states yet", deleteState: "Delete state", stateSaved: "Sampler state saved.",
+    stateLoaded: "Sampler state restored.", stateFailed: "Could not update sampler states. Please try again.",
+    statesLoading: "Loading states…", stateBusy: "Wait for the samples to finish saving.",
     slice: "Slice selected loop into 8 pads",
     title: "Replace all eight pads?",
     confirm: "The selected A–B loop will be split into eight equal slices. This replaces all eight sounds, including custom samples. Your assigned keys will stay the same.",
@@ -2343,6 +2352,153 @@
     let copy = {};
     try { copy = JSON.parse(document.documentElement.getAttribute("data-scdl-sampler-copy") || "{}"); } catch {}
     return typeof copy[key] === "string" && copy[key] !== `sampler_${key}` ? copy[key] : SAMPLER_COPY[key];
+  }
+
+  function closeSamplerPresets() {
+    if (!ui) return;
+    ui.samplerPresetMenu.hidePopover();
+    ui.samplerPresetToggle.setAttribute("aria-expanded", "false");
+  }
+
+  function renderSamplerPresetCopy() {
+    if (!ui) return;
+    ui.samplerPresetToggle.title = samplerCopy("presets");
+    ui.samplerPresetToggle.setAttribute("aria-label", samplerCopy("presets"));
+    ui.samplerPresetMenu.setAttribute("aria-label", samplerCopy("presets"));
+    ui.samplerPresetName.placeholder = samplerCopy("stateName");
+    ui.samplerPresetName.setAttribute("aria-label", samplerCopy("stateName"));
+    ui.samplerPresetSave.textContent = `+ ${samplerCopy("saveState")}`;
+  }
+
+  function renderSamplerPresetBusy() {
+    if (!ui?.samplerPresetMenu) return;
+    const busy = samplerPresetBusy || padRenderPending || drumPads.some(pad => pad.busy);
+    ui.samplerPresetMenu.querySelectorAll("button, input").forEach(control => { control.disabled = busy; });
+    ui.samplerPresetMenu.setAttribute("aria-busy", String(busy));
+  }
+
+  function renderSamplerPresets() {
+    const list = ui.samplerPresetList;
+    list.replaceChildren();
+    if (!samplerPresets.length) {
+      const empty = document.createElement("p");
+      empty.textContent = samplerCopy("noStates");
+      list.append(empty);
+    }
+    for (const preset of samplerPresets) {
+      const row = document.createElement("div");
+      row.className = "sampler-preset-row";
+      const load = document.createElement("button");
+      load.type = "button";
+      load.className = "sampler-preset-load";
+      load.textContent = preset.name;
+      load.title = preset.name;
+      load.addEventListener("click", () => runSamplerPreset("load", preset));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "sampler-preset-delete";
+      remove.textContent = "×";
+      remove.setAttribute("aria-label", `${samplerCopy("deleteState")}: ${preset.name}`);
+      remove.title = remove.getAttribute("aria-label");
+      remove.addEventListener("click", () => runSamplerPreset("delete", preset));
+      row.append(load, remove);
+      list.append(row);
+    }
+    renderSamplerPresetBusy();
+    positionSamplerPresets();
+  }
+
+  function positionSamplerPresets() {
+    const menu = ui?.samplerPresetMenu;
+    if (!menu?.matches(":popover-open")) return;
+    const rect = ui.samplerPresetToggle.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(rect.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(rect.bottom + 5, innerHeight - menu.offsetHeight - 8))}px`;
+  }
+
+  async function openSamplerPresets() {
+    if (ui.samplerPresetMenu.matches(":popover-open")) { closeSamplerPresets(); return; }
+    const menu = ui.samplerPresetMenu;
+    renderSamplerPresetCopy();
+    ui.samplerPresetStatus.textContent = samplerCopy("statesLoading");
+    menu.showPopover();
+    ui.samplerPresetToggle.setAttribute("aria-expanded", "true");
+    positionSamplerPresets();
+    ui.samplerPresetName.focus();
+    const version = ++samplerPresetListVersion;
+    try {
+      const result = await requestPad("preset-list");
+      if (version !== samplerPresetListVersion) return;
+      samplerPresets = result.presets;
+      renderSamplerPresets();
+      ui.samplerPresetStatus.textContent = "";
+      positionSamplerPresets();
+    } catch {
+      if (version === samplerPresetListVersion) ui.samplerPresetStatus.textContent = samplerCopy("stateFailed");
+    }
+  }
+
+  async function runSamplerPreset(action, preset = null) {
+    if (samplerPresetBusy || padRenderPending || drumPads.some(pad => pad.busy)) {
+      ui.samplerPresetStatus.textContent = samplerCopy("stateBusy");
+      return;
+    }
+    const name = ui.samplerPresetName.value.trim();
+    if (action === "save" && !name) { ui.samplerPresetName.reportValidity(); return; }
+    samplerPresetBusy = true;
+    samplerPresetListVersion++;
+    if (action !== "delete") {
+      cancelLoopPadSelection();
+      drumPads.forEach(pad => { pad.busy = true; });
+      padRenderPending = true;
+      updateDrumLabels();
+      renderLoop();
+    }
+    renderSamplerPresetBusy();
+    ui.samplerPresetStatus.textContent = "";
+    try {
+      const result = await requestPad(`preset-${action}`, { presetId: preset?.id || `preset_${crypto.randomUUID()}`, name,
+        ...(action === "save" ? { settings: { selectedPadIndex, adsrEnabled: instrumentAdsrEnabled, cutItself: instrumentCutItself,
+          pads: drumPads.map(({ key, gainPercent, pitchSemitones, envelope }) => ({ key, gainPercent, pitchSemitones, envelope: { ...envelope } })) } } : {}) });
+      if (action === "load") {
+        exitInstrument({ message: "" });
+        stopAllInstrumentVoices();
+        drumPads.forEach((pad, index) => {
+          const record = result.pads.find(item => item.index === index);
+          Object.assign(pad, result.settings.pads[index], { version: pad.version + 1, saved: Boolean(record),
+            customName: record?.name || "", updatedAt: record?.updatedAt, buffer: null, loading: null });
+        });
+        padsHydrated = true;
+        selectedPadIndex = result.settings.selectedPadIndex;
+        instrumentCutItself = result.settings.cutItself;
+        ui.instrumentCutItself.checked = instrumentCutItself;
+        setInstrumentAdsrEnabled(result.settings.adsrEnabled);
+        try { localStorage.setItem(DRUM_KEYS_STORAGE, JSON.stringify(drumPads.map(pad => pad.key))); } catch {}
+        setSamplerCollapsed(false);
+        renderSelectedPadControls();
+        closeSamplerPresets();
+        ui.samplerPresetToggle.focus();
+        showDrumError(samplerCopy("stateLoaded"));
+      } else if (action === "save") {
+        samplerPresets.unshift(result.preset);
+        ui.samplerPresetName.value = "";
+        ui.samplerPresetStatus.textContent = samplerCopy("stateSaved");
+      } else samplerPresets = samplerPresets.filter(item => item.id !== preset.id);
+      renderSamplerPresets();
+    } catch (error) {
+      console.warn("[SC Downloader Sampler Presets]", error);
+      ui.samplerPresetStatus.textContent = samplerCopy("stateFailed");
+    } finally {
+      samplerPresetBusy = false;
+      if (action !== "delete") {
+        drumPads.forEach(pad => { pad.busy = false; });
+        padRenderPending = false;
+        updateDrumLabels();
+        renderLoop();
+      }
+      renderSamplerPresetBusy();
+      positionSamplerPresets();
+    }
   }
 
   function sliceDescriptor() {
@@ -3004,7 +3160,7 @@
         .clear-loop, .download-loop { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 26px; border-radius: 5px; cursor: pointer; font-size: 10px; font-weight: 600; line-height: 1; }
         .clear-loop { border: 1px solid #484848; color: #fff; background: #292929; }
         .download-loop { border: 1px solid #b84400; color: #fff; background: #ff5500; }
-        .save-loop-pad, .loop-instrument, .slice-loop { display: grid; place-items: center; width: 24px; height: 26px; padding: 0; border: 1px solid #484848; border-radius: 5px; color: #d6d6d6; background: #292929; cursor: pointer; }
+        .save-loop-pad, .loop-instrument, .slice-loop, .sampler-preset-toggle { display: grid; place-items: center; width: 24px; height: 26px; padding: 0; border: 1px solid #484848; border-radius: 5px; color: #d6d6d6; background: #292929; cursor: pointer; }
         .save-loop-pad:hover, .save-loop-pad[aria-pressed="true"], .loop-instrument:hover, .loop-instrument[aria-pressed="true"], .slice-loop:hover { color: #fff; border-color: #ff7b38; }
         .loop-instrument[aria-pressed="true"] { color: #ff8a4c; background: #462619; }
         .loop-instrument.is-preparing svg { animation: instrument-pulse .8s ease-in-out infinite alternate; }
@@ -3034,7 +3190,7 @@
         .instrument-cut-label[hidden], .instrument-adsr-label[hidden] { display: none; }
         .instrument-cut-itself, .instrument-adsr-toggle { width: 16px; height: 16px; accent-color: #ff7b38; margin: 0; }
         @keyframes instrument-pulse { to { opacity: .35; transform: scale(.88); } }
-        .save-loop-pad svg, .loop-instrument svg, .slice-loop svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+        .save-loop-pad svg, .loop-instrument svg, .slice-loop svg, .sampler-preset-toggle svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
         .clear-loop:disabled, .download-loop:disabled, .save-loop-pad:disabled, .loop-instrument:disabled, .slice-loop:disabled { cursor: not-allowed; opacity: .45; }
         .clear-loop svg, .clear-loop img, .download-loop svg { width: 12px; height: 12px; flex: 0 0 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .status { margin-top: 5px; }
@@ -3051,6 +3207,23 @@
         .slice-dialog button { padding: 7px 10px; border: 1px solid #777; border-radius: 6px; color: #fff; background: #333; cursor: pointer; font: inherit; }
         .slice-dialog .slice-replace { background: #a83700; border-color: #ff7b38; }
         .slice-dialog button:focus-visible { outline: 2px solid #ff7b38; outline-offset: 3px; }
+        .sampler-preset-toggle:hover, .sampler-preset-toggle[aria-expanded="true"] { color:#fff; border-color:#ff7b38; }
+        .sampler-preset-menu { position:fixed; inset:auto; margin:0; width:260px; max-width:calc(100vw - 16px); max-height:calc(100vh - 16px); overflow:auto; padding:6px; border:1px solid #494949; border-radius:8px; background:#242424; color:#fff; box-shadow:0 8px 24px #0008; font:12px/1.4 system-ui,sans-serif; }
+        .sampler-preset-list { max-height:180px; overflow:auto; }
+        .sampler-preset-list p { margin:8px; color:#aaa; }
+        .sampler-preset-row { display:flex; gap:3px; }
+        .sampler-preset-menu button { min-height:30px; padding:5px 8px; border:0; border-radius:4px; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+        .sampler-preset-menu button:hover { background:#383838; }
+        .sampler-preset-menu button:focus-visible, .sampler-preset-toggle:focus-visible { outline:2px solid #ff7b38; outline-offset:-2px; }
+        .sampler-preset-load { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .sampler-preset-menu .sampler-preset-delete { flex:0 0 30px; text-align:center; font-size:19px; color:#aaa; }
+        .sampler-preset-menu .sampler-preset-delete:hover { color:#ff856b; }
+        .sampler-preset-form { display:grid; gap:4px; margin-top:5px; padding-top:7px; border-top:1px solid #414141; }
+        .sampler-preset-name { width:100%; padding:6px 8px; border:1px solid #555; border-radius:4px; color:#fff; background:#191919; font:inherit; }
+        .sampler-preset-menu .sampler-preset-save { color:#ff934d; }
+        .sampler-preset-menu :disabled { opacity:.5; cursor:wait; }
+        .sampler-preset-status { margin:4px 7px; color:#bbb; font-size:11px; }
+        .sampler-preset-status:empty { display:none; }
         .sampler-body { padding: 6px 7px; }
         .drum-section.is-instrument .sampler-body { display: none; }
         .drum-pads { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
@@ -3191,11 +3364,11 @@
           .bypass, .bypass svg { width: 16px; height: 16px; }
         }
         .clear-loop, .download-loop { height: 22px; padding: 0 6px; border-radius: 6px; opacity: .82; }
-        .save-loop-pad, .loop-instrument, .slice-loop { width: 22px; height: 22px; }
+        .save-loop-pad, .loop-instrument, .slice-loop, .sampler-preset-toggle { width: 22px; height: 22px; }
         .loop-edit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
         ${collapsible.styles}
         .drum-section, .waveform-shell, .effects-shell { transition:height 160ms ease; }
-        .drum-section > .tool-section-header .tool-section-heading { padding-right:84px; }
+        .drum-section > .tool-section-header .tool-section-heading { padding-right:110px; }
         .waveform-shell > .tool-section-header .tool-section-heading,
         .effects-shell > .tool-section-header .tool-section-heading { padding-right:164px; }
         .effect-group-title { margin: 5px 0 2px; color: #858c92; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
@@ -3291,8 +3464,13 @@
         </div>
         </div>
         <section class="drum-section is-collapsed" id="scdl-sampler" aria-label="Sampler">
-          ${collapsible.header({ title: "Sampler", bodyId: "scdl-sampler-pads", expanded: false, toggleClass: "sampler-toggle", actionsClass: "sampler-actions", icon: '<img class="tool-section-icon sampler-icon" alt="" aria-hidden="true" />', actions: '<button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button><button class="loop-instrument" type="button" aria-label="Play selected loop in piano mode" aria-pressed="false" title="Play selected loop in piano mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM7 5v8M12 5v8M17 5v8M5 13h4M10 13h4M15 13h4"/></svg></button><button class="slice-loop" type="button" aria-label="Slice selected loop into 8 pads"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM6 5v14M9 5v14M12 5v14M15 5v14M18 5v14"/></svg></button>' })}
+          ${collapsible.header({ title: "Sampler", bodyId: "scdl-sampler-pads", expanded: false, toggleClass: "sampler-toggle", actionsClass: "sampler-actions", icon: '<img class="tool-section-icon sampler-icon" alt="" aria-hidden="true" />', actions: '<button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button><button class="loop-instrument" type="button" aria-label="Play selected loop in piano mode" aria-pressed="false" title="Play selected loop in piano mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM7 5v8M12 5v8M17 5v8M5 13h4M10 13h4M15 13h4"/></svg></button><button class="slice-loop" type="button" aria-label="Slice selected loop into 8 pads"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM6 5v14M9 5v14M12 5v14M15 5v14M18 5v14"/></svg></button><button class="sampler-preset-toggle" type="button" aria-expanded="false" aria-haspopup="dialog" aria-controls="scdl-sampler-presets"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l4 4v14H3V3zM7 3v6h10V3M7 21v-8h10v8"/></svg></button>' })}
           <dialog class="slice-dialog" aria-labelledby="slice-title" aria-describedby="slice-description"><h3 id="slice-title"></h3><p id="slice-description"></p><div><button class="slice-cancel" type="button" autofocus></button><button class="slice-replace" type="button"></button></div></dialog>
+          <div class="sampler-preset-menu" id="scdl-sampler-presets" popover="manual" role="dialog" aria-label="Saved sampler states">
+            <div class="sampler-preset-list"></div>
+            <form class="sampler-preset-form"><input class="sampler-preset-name" type="text" maxlength="80" required autocomplete="off" /><button class="sampler-preset-save" type="submit"></button></form>
+            <p class="sampler-preset-status" role="status" aria-live="polite"></p>
+          </div>
           <div class="sampler-body" id="scdl-sampler-pads">
             <div class="drum-pads">
               ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
@@ -3415,6 +3593,7 @@
   });
 
   function closePanel() {
+    closeSamplerPresets();
     cancelSlices();
     clearHoverTimers();
     panelOpenMode = null;
@@ -3480,6 +3659,12 @@
       drumFiles: [...root.querySelectorAll(".drum-file")],
       drumSection: root.querySelector(".drum-section"),
       samplerToggle: root.querySelector(".sampler-toggle"),
+      samplerPresetToggle: root.querySelector(".sampler-preset-toggle"),
+      samplerPresetMenu: root.querySelector(".sampler-preset-menu"),
+      samplerPresetList: root.querySelector(".sampler-preset-list"),
+      samplerPresetName: root.querySelector(".sampler-preset-name"),
+      samplerPresetSave: root.querySelector(".sampler-preset-save"),
+      samplerPresetStatus: root.querySelector(".sampler-preset-status"),
       samplerIcon: root.querySelector(".sampler-icon"),
       drumMessage: root.querySelector(".drum-message"),
       drumStatus: root.querySelector(".drum-status"),
@@ -3564,6 +3749,16 @@
       ),
     };
 
+    renderSamplerPresetCopy();
+    ui.samplerPresetToggle.addEventListener("click", openSamplerPresets);
+    root.querySelector(".sampler-preset-form").addEventListener("submit", event => {
+      event.preventDefault();
+      runSamplerPreset("save");
+    });
+    document.addEventListener("pointerdown", event => {
+      if (ui.samplerPresetMenu.matches(":popover-open") && !event.composedPath().includes(ui.samplerPresetMenu) &&
+          !event.composedPath().includes(ui.samplerPresetToggle)) closeSamplerPresets();
+    }, true);
     sectionControllers.sampler = collapsible.mount({
       section: ui.drumSection,
       toggle: ui.samplerToggle,
@@ -4263,6 +4458,13 @@
     "keydown",
     (event) => {
       if (ui?.sliceDialog.open) return;
+      if (event.key === "Escape" && ui?.samplerPresetMenu.matches(":popover-open")) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        closeSamplerPresets();
+        ui.samplerPresetToggle.focus();
+        return;
+      }
       if (event.key === "Escape" && suppressPanelEscape) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -4293,6 +4495,7 @@
   );
   window.addEventListener("resize", () => {
     positionPanel();
+    positionSamplerPresets();
     renderLoop();
   });
   window.addEventListener("storage", (event) => {
