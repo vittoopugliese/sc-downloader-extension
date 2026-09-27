@@ -328,13 +328,29 @@ async function main() {
       `A collapsed sampler must not reserve empty space below its header: ${JSON.stringify(collapsedSamplerLayout)}`);
     await samplerToggle.click();
     assert.equal(await samplerToggle.getAttribute("aria-expanded"), "true");
-    const padGainKnob = host.locator('.pad-knob[data-pad-index="0"][data-pad-control="gainPercent"]');
-    const padPitchKnob = host.locator('.pad-knob[data-pad-index="0"][data-pad-control="pitchSemitones"]');
-    assert.equal(await host.locator('.pad-knob').count(), 16);
+    {
+    const padGainKnob = host.locator('.pad-knob[data-pad-control="gainPercent"]');
+    const padPitchKnob = host.locator('.pad-knob[data-pad-control="pitchSemitones"]');
+    assert.equal(await host.locator('.pad-knob').count(), 3);
+    assert.equal(await host.locator('.time-knob').isDisabled(), true);
     await padGainKnob.focus();
     await page.keyboard.press('End');
     assert.equal(await padGainKnob.getAttribute('aria-valuenow'), '154');
-    assert.equal(await host.locator('.pad-knob[data-pad-index="1"][data-pad-control="gainPercent"]').getAttribute('aria-valuenow'), '100');
+    const attackKnob = host.locator('.envelope-knob[data-envelope="attack"]');
+    await attackKnob.focus();
+    await page.keyboard.press('ArrowUp');
+    assert.equal(await attackKnob.getAttribute('aria-valuenow'), '14');
+    await drumPads.nth(1).click();
+    assert.equal(await drumPads.nth(1).getAttribute('aria-pressed'), 'true');
+    assert.equal(await padGainKnob.getAttribute('aria-valuenow'), '100');
+    assert.equal(await attackKnob.getAttribute('aria-valuenow'), '4');
+    await page.mouse.move(0, 0);
+    await page.keyboard.press('z');
+    assert.equal(await drumPads.nth(0).getAttribute('aria-pressed'), 'true');
+    assert.equal(await padGainKnob.getAttribute('aria-valuenow'), '154');
+    assert.equal(await attackKnob.getAttribute('aria-valuenow'), '14');
+    await attackKnob.focus();
+    await page.keyboard.press('ArrowDown');
     await padGainKnob.dblclick();
     assert.equal(await padGainKnob.getAttribute('aria-valuenow'), '100');
     await padPitchKnob.focus();
@@ -344,6 +360,7 @@ async function main() {
     assert.equal(await padPitchKnob.getAttribute('aria-valuenow'), '12');
     await padPitchKnob.dblclick();
     assert.equal(await padPitchKnob.getAttribute('aria-valuenow'), '0');
+    }
     assert.deepEqual(await drumPads.allTextContents(), ["Z", "X", "C", "V", "B", "N", "M", "L"]);
     assert.deepEqual(await drumPads.evaluateAll((pads) => pads.map((pad) => pad.title)),
       ["Kick", "Clap", "Hat", "Kick 2", "Snare", "Tom", "Clap 2", "Hat 2"].map((name) => `${name} · hold to load`));

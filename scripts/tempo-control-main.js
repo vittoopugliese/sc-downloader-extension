@@ -163,6 +163,7 @@
   const instrumentVoices = new Set();
   const instrumentKeys = new Map();
   const instrumentEnvelope = { attack: 4, decay: 100, sustain: 100, release: 100 };
+  let selectedPadIndex = 0;
   let instrumentCutItself = true;
   let instrumentAdsrEnabled = false;
   const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
@@ -172,7 +173,7 @@
   let padsHydrated = false;
   let padCacheTimer = null;
   let padCacheRevision = 0;
-  const drumPads = DRUM_DEFAULTS.map((defaultPad) => ({ ...defaultPad, gainPercent: 100, pitchSemitones: 0, buffer: null, loading: null, customName: "", saved: false, busy: false, version: 0 }));
+  const drumPads = DRUM_DEFAULTS.map((defaultPad) => ({ ...defaultPad, envelope: { ...instrumentEnvelope }, gainPercent: 100, pitchSemitones: 0, buffer: null, loading: null, customName: "", saved: false, busy: false, version: 0 }));
   try {
     const savedKeys = JSON.parse(localStorage.getItem(DRUM_KEYS_STORAGE) || "null");
     if (Array.isArray(savedKeys)) {
@@ -514,6 +515,7 @@
   }
 
   function scheduleInstrumentEnvelope(voice, initial = false) {
+    const envelope = voice.envelope || instrumentEnvelope;
     const now = voice.context.currentTime;
     const param = voice.gain.gain;
     const value = initial ? 0 : instrumentGainAt(voice, now);
@@ -529,14 +531,14 @@
       // Keep the short anti-click fade even when the musical envelope is off.
       points.push([now + (initial ? .004 : .008), 1]);
     } else {
-      const attackEnd = voice.startedAt + instrumentEnvelope.attack / 1000;
-      const decayEnd = attackEnd + instrumentEnvelope.decay / 1000;
+      const attackEnd = voice.startedAt + envelope.attack / 1000;
+      const decayEnd = attackEnd + envelope.decay / 1000;
       if (attackEnd > now) points.push([attackEnd, 1]);
       else if (initial) {
         param.setValueAtTime(1, now);
         points[0][1] = 1;
       }
-      points.push([Math.max(now + 0.002, decayEnd), instrumentEnvelope.sustain / 100]);
+      points.push([Math.max(now + 0.002, decayEnd), envelope.sustain / 100]);
     }
     for (const [time, level] of points.slice(1)) param.linearRampToValueAtTime(level, time);
     voice.envelopePoints = points;
@@ -550,7 +552,7 @@
     if (held.voice) held.voice.keyReleased = true;
     if (instrumentAdsrEnabled || held.voice) instrumentKeys.delete(key);
     if (instrumentAdsrEnabled) {
-      releaseInstrumentVoice(held.voice, instrumentEnvelope.release, true);
+      releaseInstrumentVoice(held.voice, (held.voice?.envelope || instrumentEnvelope).release, true);
     }
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -603,7 +605,7 @@
     for (const voice of instrumentVoices) {
       if (voice.cleaned || (voice.releasing && !voice.envelopeRelease)) continue;
       if (instrumentAdsrEnabled && voice.keyReleased) {
-        releaseInstrumentVoice(voice, instrumentEnvelope.release, true);
+        releaseInstrumentVoice(voice, (voice.envelope || instrumentEnvelope).release, true);
         continue;
       }
       if (voice.releasing) {
@@ -618,15 +620,29 @@
     }
   }
 
+  function selectedEnvelope() {
+    return instrumentMode ? instrumentEnvelope : drumPads[selectedPadIndex].envelope;
+  }
+
+  function renderSelectedPadControls() {
+    if (!ui?.instrumentControls) return;
+    ui.drumButtons.forEach((button, index) => {
+      button.classList.toggle("is-selected", index === selectedPadIndex);
+      button.setAttribute("aria-pressed", String(index === selectedPadIndex));
+    });
+    for (const knob of ui.instrumentControls.querySelectorAll("button")) knob.renderControl?.();
+    renderInstrumentEnvelopeGraph();
+  }
+
   function bindInstrumentControls() {
     for (const knob of ui.instrumentControls.querySelectorAll(".envelope-knob")) {
       const name = knob.dataset.envelope;
       const maximum = name === "sustain" ? 100 : 5000;
       const output = knob.parentElement.querySelector("output");
       const normalized = () => name === "sustain"
-        ? instrumentEnvelope[name] / 100 : Math.sqrt(instrumentEnvelope[name] / maximum);
+        ? selectedEnvelope()[name] / 100 : Math.sqrt(selectedEnvelope()[name] / maximum);
       const render = () => {
-        const value = instrumentEnvelope[name];
+        const value = selectedEnvelope()[name];
         const text = name === "sustain" ? `${value}%` : value < 1000 ? `${value} ms` : `${(value / 1000).toFixed(2)} s`;
         knob.style.setProperty("--knob-angle", `${-135 + normalized() * 270}deg`);
         knob.setAttribute("aria-valuenow", String(value));
@@ -634,15 +650,16 @@
         output.textContent = text;
       };
       const update = (value) => {
-        instrumentEnvelope[name] = Math.round(Math.max(0, Math.min(maximum, value)));
+        const envelope = selectedEnvelope();
+        envelope[name] = Math.round(Math.max(0, Math.min(maximum, value)));
         render();
         renderInstrumentEnvelopeGraph();
         if (!instrumentAdsrEnabled) return;
         for (const voice of instrumentVoices) {
-          if (voice.cleaned) continue;
+          if (voice.cleaned || (voice.envelope || instrumentEnvelope) !== envelope) continue;
           if (voice.releasing) {
             if (name !== "release" || !voice.envelopeRelease) continue;
-            voice.releaseMs = instrumentEnvelope.release;
+            voice.releaseMs = envelope.release;
           } else if (name === "release") continue;
           scheduleInstrumentEnvelope(voice);
         }
@@ -669,8 +686,9 @@
         event.stopPropagation();
         const step = (name === "sustain" ? 1 : 10) * (event.shiftKey ? 10 : 1);
         update(event.key === "Home" ? 0 : event.key === "End" ? maximum
-          : instrumentEnvelope[name] + (["ArrowUp", "ArrowRight"].includes(event.key) ? step : -step));
+          : selectedEnvelope()[name] + (["ArrowUp", "ArrowRight"].includes(event.key) ? step : -step));
       });
+      knob.renderControl = render;
       render();
     }
     renderInstrumentEnvelopeGraph();
@@ -693,7 +711,7 @@
   function renderInstrumentEnvelopeGraph() {
     const graph = ui?.instrumentControls.querySelector(".envelope-graph");
     if (!graph) return;
-    const { attack, decay, sustain, release } = instrumentEnvelope;
+    const { attack, decay, sustain, release } = selectedEnvelope();
     // Sustain is a level held until keyup, represented by a fixed-width plateau.
     const scale = 76 / Math.max(500, attack + decay + release);
     const a = 5 + attack * scale;
@@ -722,6 +740,7 @@
       instrumentOctave = 0;
     }
     instrumentMode = Boolean(enabled);
+    renderSelectedPadControls();
     if (!instrumentMode) stopAllInstrumentVoices();
     if (clearBuffer) {
       instrumentBuffer = null;
@@ -1021,14 +1040,13 @@
   }
 
   function bindPadControls(root) {
-    for (const knob of root.querySelectorAll(".pad-knob")) {
-      const index = Number(knob.dataset.padIndex);
+    for (const knob of root.querySelectorAll(".pad-knob[data-pad-control]")) {
       const name = knob.dataset.padControl;
       const gain = name === "gainPercent";
       const minimum = gain ? 0 : -12;
       const maximum = gain ? 154 : 12;
       const render = () => {
-        const value = drumPads[index][name];
+        const value = drumPads[selectedPadIndex][name];
         const label = gain ? `${value}%` : `${value > 0 ? "+" : ""}${value} st`;
         knob.style.setProperty("--knob-angle", `${-135 + (value - minimum) / (maximum - minimum) * 270}deg`);
         knob.setAttribute("aria-valuenow", String(value));
@@ -1036,11 +1054,11 @@
         knob.title = `${gain ? "Gain" : "Pitch"}: ${label} · Double-click to reset`;
         knob.nextElementSibling.textContent = label;
       };
-      const update = value => { updatePadControl(index, name, value); render(); };
+      const update = value => { updatePadControl(selectedPadIndex, name, value); render(); };
       let drag = null;
       knob.addEventListener("pointerdown", event => {
         if (event.button !== 0) return;
-        drag = { id: event.pointerId, y: event.clientY, value: drumPads[index][name] };
+        drag = { id: event.pointerId, y: event.clientY, value: drumPads[selectedPadIndex][name] };
         knob.setPointerCapture(event.pointerId);
         knob.focus();
         event.preventDefault();
@@ -1055,8 +1073,9 @@
         event.preventDefault();
         event.stopPropagation();
         update(event.key === "Home" ? minimum : event.key === "End" ? maximum
-          : drumPads[index][name] + (["ArrowUp", "ArrowRight"].includes(event.key) ? 1 : -1));
+          : drumPads[selectedPadIndex][name] + (["ArrowUp", "ArrowRight"].includes(event.key) ? 1 : -1));
       });
+      knob.renderControl = render;
       render();
     }
   }
@@ -1064,6 +1083,8 @@
   async function playDrum(index, key = `pad:${index}`, released = true) {
     const pad = drumPads[index];
     if (!pad || pad.busy || instrumentMode) return;
+    selectedPadIndex = index;
+    renderSelectedPadControls();
     const noteRevision = instrumentCutItself ? ++instrumentNoteRevision : instrumentNoteRevision;
     const held = { voice: null, released };
     releaseInstrumentVoice(instrumentKeys.get(key)?.voice);
@@ -1094,7 +1115,7 @@
       padGain.gain.value = (pad.gainPercent ?? 100) / 100;
       source.playbackRate.value = 2 ** ((pad.pitchSemitones ?? 0) / 12);
       source.connect(gain).connect(padGain).connect(context.destination);
-      const voice = { source, gain, padGain, padIndex: index, context, key, keyReleased: held.released === true,
+      const voice = { source, gain, padGain, padIndex: index, envelope: pad.envelope, context, key, keyReleased: held.released === true,
         padPosition: 0, padRateChangedAt: context.currentTime, playbackRate: source.playbackRate.value,
         startedAt: context.currentTime, sampleEndAt: context.currentTime + buffer.duration / source.playbackRate.value,
         cleanupTimer: null, releasing: false, cleaned: false };
@@ -1108,7 +1129,7 @@
         source.stop(voice.sampleEndAt);
         if (held.released) {
           instrumentKeys.delete(key);
-          if (instrumentAdsrEnabled) releaseInstrumentVoice(voice, instrumentEnvelope.release, true);
+          if (instrumentAdsrEnabled) releaseInstrumentVoice(voice, (voice.envelope || instrumentEnvelope).release, true);
         }
       } catch (error) {
         cleanupInstrumentVoice(voice);
@@ -2928,27 +2949,29 @@
         .save-loop-pad:hover, .save-loop-pad[aria-pressed="true"], .loop-instrument:hover, .loop-instrument[aria-pressed="true"], .slice-loop:hover { color: #fff; border-color: #ff7b38; }
         .loop-instrument[aria-pressed="true"] { color: #ff8a4c; background: #462619; }
         .loop-instrument.is-preparing svg { animation: instrument-pulse .8s ease-in-out infinite alternate; }
-        .instrument-controls { padding: 8px 2px 4px; }
+        .instrument-controls { padding: 5px 7px 7px; }
         .instrument-controls[hidden],
         .drum-section.is-collapsed:not(.is-instrument) .instrument-controls,
         .drum-section.is-collapsed:not(.is-instrument) .drum-status,
         .drum-section.is-collapsed:not(.is-instrument) .drum-note-controls { display: none; }
         .instrument-controls.is-bypassed .envelope-control,
         .instrument-controls.is-bypassed .envelope-graph { opacity: .45; }
-        .instrument-envelope { display: grid; grid-template-columns: repeat(4, minmax(42px, 1fr)) minmax(76px, 1.7fr) 22px; gap: 4px; align-items: center; }
+        .instrument-envelope { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)) minmax(40px, 1.5fr) 18px; gap: 3px; align-items: center; }
+        .is-instrument .instrument-envelope { grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(40px, 1.5fr) 18px; }
+        .is-instrument .instrument-envelope > .pad-control { display: none; }
         .instrument-toggles { display: flex; flex-direction: column; gap: 4px; }
-        .envelope-graph { display: block; width: 100%; height: 60px; overflow: visible; }
+        .envelope-graph { display: block; width: 100%; height: 46px; overflow: visible; }
         .envelope-curve { fill: none; stroke: #ff8a4c; stroke-width: 1.6; stroke-linejoin: round; }
         .envelope-fill { fill: #ff8a4c; opacity: .1; }
         .envelope-axis, .envelope-keyup { fill: none; stroke: #666; stroke-width: .6; }
         .envelope-keyup { stroke-dasharray: 2 2; }
-        .envelope-control { display: grid; justify-items: center; gap: 5px; color: #ccc; font-size: 11px; }
-        .envelope-control output { font-size: 10px; color: #aaa; font-variant-numeric: tabular-nums; }
-        .envelope-knob { position: relative; width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 2px solid #666; background: radial-gradient(circle at 35% 30%, #535353, #252525); cursor: ns-resize; touch-action: none; }
-        .envelope-knob::after { content: ""; position: absolute; inset: 3px 13px 14px; border-radius: 2px; background: #ff8a4c; transform-origin: 50% 12px; transform: rotate(var(--knob-angle)); }
+        .envelope-control { display: grid; justify-items: center; gap: 3px; min-width: 0; color: #aaa; font-size: 8px; }
+        .envelope-control output { font-size: 8px; color: #aaa; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .envelope-knob { position: relative; width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 1px solid #666; background: radial-gradient(circle at 35% 30%, #535353, #252525); cursor: ns-resize; touch-action: none; }
+        .envelope-knob::after { content: ""; position: absolute; width: 3px; height: 8px; left: calc(50% - 1.5px); top: 3px; border-radius: 2px; background: #ff8a4c; transform-origin: 50% 10px; transform: rotate(var(--knob-angle)); }
         .envelope-knob:hover { border-color: #ff8a4c; }
         .envelope-knob:focus-visible { outline: 2px solid #ff8a4c; outline-offset: 3px; }
-        .instrument-cut-label, .instrument-adsr-label { display: grid; place-items: center; width: 22px; height: 22px; margin: 0; padding: 0; cursor: help; }
+        .instrument-cut-label, .instrument-adsr-label { display: grid; place-items: center; width: 18px; height: 20px; margin: 0; padding: 0; cursor: help; }
         .instrument-cut-label[hidden], .instrument-adsr-label[hidden] { display: none; }
         .instrument-cut-itself, .instrument-adsr-toggle { width: 16px; height: 16px; accent-color: #ff7b38; margin: 0; }
         @keyframes instrument-pulse { to { opacity: .35; transform: scale(.88); } }
@@ -2983,11 +3006,13 @@
         .drum-pad:focus-visible { outline: 2px solid #ff5500; outline-offset: 2px; }
         .drum-key { flex: 0 0 auto; font-size: 14px; font-weight: 800; line-height: 1; }
         .drum-slot { position: relative; }
-        .pad-controls { display: flex; flex-wrap: wrap; justify-content: space-evenly; gap: 4px 2px; margin-top: 5px; }
-        .pad-control { display: grid; justify-items: center; gap: 2px; font-size: 8px; color: #aaa; }
+        .drum-pad.is-selected { border-color: #ff8a4c; background: #f77620 !important; }
+        .pad-control { display: grid; justify-items: center; gap: 3px; min-width: 0; font-size: 8px; color: #aaa; }
         .pad-control output { font-size: 8px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-        .pad-knob { position: relative; width: 21px; height: 21px; padding: 0; border: 1px solid #555; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #484848, #222); cursor: ns-resize; touch-action: none; }
-        .pad-knob::after { content: ""; position: absolute; width: 2px; height: 6px; left: 8.5px; top: 2px; border-radius: 2px; background: #ff8a4c; transform-origin: 50% 7.5px; transform: rotate(var(--knob-angle)); }
+        .pad-knob { position: relative; width: 28px; height: 28px; padding: 0; border: 1px solid #555; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #484848, #222); cursor: ns-resize; touch-action: none; }
+        .pad-knob::after { content: ""; position: absolute; width: 3px; height: 8px; left: calc(50% - 1.5px); top: 3px; border-radius: 2px; background: #ff8a4c; transform-origin: 50% 10px; transform: rotate(var(--knob-angle)); }
+        .time-control { opacity: .45; }
+        .time-knob { cursor: not-allowed; }
         .pad-knob:hover { border-color: #ff8a4c; }
         .pad-knob:focus-visible { outline: 2px solid #ff8a4c; outline-offset: 2px; }
         .drum-reset { display: block; margin: 2px auto 0; border: 0; border-radius: 4px; color: #ccc; background: #292929; cursor: pointer; }
@@ -3203,13 +3228,15 @@
           <dialog class="slice-dialog" aria-labelledby="slice-title" aria-describedby="slice-description"><h3 id="slice-title"></h3><p id="slice-description"></p><div><button class="slice-cancel" type="button" autofocus></button><button class="slice-replace" type="button"></button></div></dialog>
           <div class="sampler-body" id="scdl-sampler-pads">
             <div class="drum-pads">
-              ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><button class="drum-reset" type="button" title="Remove saved sample and restore default" aria-label="Restore ${pad.name} default sample" hidden>↺</button><div class="pad-controls">${[["gainPercent", "GAIN", 0, 154], ["pitchSemitones", "PITCH", -12, 12]].map(([name, label, min, max]) => `<div class="pad-control"><span>${label}</span><button class="pad-knob" type="button" role="slider" data-pad-index="${index}" data-pad-control="${name}" aria-label="Pad ${index + 1} ${label.toLowerCase()}" aria-valuemin="${min}" aria-valuemax="${max}" aria-orientation="vertical"></button><output></output></div>`).join("")}</div><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
+              ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><button class="drum-reset" type="button" title="Remove saved sample and restore default" aria-label="Restore ${pad.name} default sample" hidden>↺</button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
             </div>
           </div>
           <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="drum-note-controls" aria-live="off"><span class="playing-note"></span></span></p>
           <div class="instrument-controls" role="group" aria-label="Sample envelope" hidden>
             <div class="instrument-envelope">
-              ${["attack", "decay", "sustain", "release"].map((name) => `<div class="envelope-control"><button class="envelope-knob" type="button" role="slider" data-envelope="${name}" aria-label="${name[0].toUpperCase() + name.slice(1)}" aria-valuemin="0" aria-valuemax="${name === "sustain" ? 100 : 5000}" aria-orientation="vertical" data-scdl-tooltip="${name[0].toUpperCase() + name.slice(1)}: ${envelopeHelp[name]}"></button><output></output></div>`).join("")}
+              ${[["gainPercent", "GAIN", 0, 154], ["pitchSemitones", "PITCH", -12, 12]].map(([name, label, min, max]) => `<div class="pad-control"><span>${label}</span><button class="pad-knob" type="button" role="slider" data-pad-control="${name}" aria-label="Selected pad ${label.toLowerCase()}" aria-valuemin="${min}" aria-valuemax="${max}" aria-orientation="vertical"></button><output></output></div>`).join("")}
+              <div class="pad-control time-control" title="Time: coming soon"><span>TIME</span><button class="pad-knob time-knob" type="button" disabled aria-label="Time: coming soon" style="--knob-angle: 0deg"></button><output>100%</output></div>
+              ${["attack", "decay", "sustain", "release"].map((name) => `<div class="envelope-control"><span>${name[0].toUpperCase()}</span><button class="envelope-knob" type="button" role="slider" data-envelope="${name}" aria-label="${name[0].toUpperCase() + name.slice(1)}" aria-valuemin="0" aria-valuemax="${name === "sustain" ? 100 : 5000}" aria-orientation="vertical" data-scdl-tooltip="${name[0].toUpperCase() + name.slice(1)}: ${envelopeHelp[name]}"></button><output></output></div>`).join("")}
               <svg class="envelope-graph" viewBox="0 0 110 52" role="img" aria-label="ADSR envelope" data-scdl-tooltip="ADSR: how the volume changes over time. The dashed line marks when you release the key."><path class="envelope-axis" d="M5 5 V43 H105"/><path class="envelope-fill"/><line class="envelope-keyup" y1="5" y2="45"/><path class="envelope-curve"/></svg>
               <div class="instrument-toggles"><label class="instrument-cut-label" title="Cut itself" data-scdl-tooltip="Cut itself" hidden><input class="instrument-cut-itself" type="checkbox" aria-label="Cut itself" checked /></label><label class="instrument-adsr-label" title="ADSR" data-scdl-tooltip="ADSR" hidden><input class="instrument-adsr-toggle" type="checkbox" aria-label="ADSR" /></label></div>
             </div>
@@ -3791,6 +3818,7 @@
     ui.instrumentToggle.addEventListener("click", toggleLoopInstrument);
     bindInstrumentControls();
     bindPadControls(root);
+    renderSelectedPadControls();
     document.addEventListener("keyup", releaseInstrumentKey, true);
     ui.playerToolsUpgrade.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));

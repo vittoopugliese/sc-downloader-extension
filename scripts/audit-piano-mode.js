@@ -54,7 +54,7 @@ function fixture() {
     effectsController: { snapshot: () => effectsState }, effectsApi: { DEFAULTS: {} },
     EFFECT_SIGNATURE_FIELDS: effectFields,
     getDrumAudioContext: () => audio,
-    renderPlayingNote() {}, renderLoop() {}, renderInstrumentMessage() {}, showDrumError() {},
+    renderSelectedPadControls() {}, renderPlayingNote() {}, renderLoop() {}, renderInstrumentMessage() {}, showDrumError() {},
     clearHoverTimers() {}, schedulePadCacheRelease() {}, cancelSlices() {}, cancelLoopPadSelection() {}, setPanelOpen(value) { scope.ui.panel.hidden = !value; },
     window: { postMessage: value => messages.push(value) }, location: { origin: 'https://soundcloud.com' },
     setTimeout(callback) { const id = timers.size + 1; timers.set(id, callback); return id; },
@@ -72,6 +72,27 @@ function fixture() {
   return { scope, audio, state, effectsState, starts, messages, timers };
 }
 async function main() {
+  {
+    const { scope, audio } = fixture();
+    scope.drumPads = [25, 75].map(sustain => ({ buffer: { duration: 4 }, version: 0,
+      envelope: { attack: 0, decay: 0, sustain, release: sustain * 10 } }));
+    scope.ui.drumButtons = scope.drumPads.map(() => ({ classList: { add() {}, remove() {} } }));
+    scope.padHydration = null;
+    scope.padsHydrated = true;
+    scope.instrumentCutItself = false;
+    await scope.playDrum(0, 'KeyZ', false);
+    const first = scope.instrumentVoice;
+    await scope.playDrum(1, 'KeyX', false);
+    const second = scope.instrumentVoice;
+    assert.equal(scope.instrumentGainAt(first, .1), .25);
+    assert.equal(scope.instrumentGainAt(second, .1), .75);
+    audio.currentTime = .1;
+    scope.releaseInstrumentKey({ code: 'KeyZ', preventDefault() {}, stopImmediatePropagation() {} });
+    assert.equal(first.releaseMs, 250, 'note-off uses its own pad envelope after another pad was selected');
+    assert.equal(second.releasing, false);
+    assert.equal(scope.instrumentEnvelope.sustain, 100, 'pad envelopes leave piano settings intact');
+    console.log('Independent pad ADSR: overlapping sustain, note-off and piano isolation');
+  }
   {
     const { scope, audio } = fixture();
     scope.drumPads = Array.from({ length: 8 }, () => ({ buffer: { duration: 4 }, version: 0, gainPercent: 100, pitchSemitones: 0 }));
