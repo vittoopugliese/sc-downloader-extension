@@ -113,6 +113,7 @@
   ]);
   let ui = null;
   let equalizerUi = null;
+  let recordUi = null;
   const collapsible = globalThis.SCPlayerToolsCollapsible;
   const sectionControllers = {};
   const EQ_STORAGE = "scdl.parametric-eq.v1";
@@ -2077,7 +2078,7 @@
   }
 
   function areAllControlsCollapsed() {
-    return samplerCollapsed && waveformCollapsed && effectsCollapsed && Boolean(equalizerUi?.isCollapsed());
+    return samplerCollapsed && waveformCollapsed && effectsCollapsed && Boolean(equalizerUi?.isCollapsed()) && (recordUi?.isCollapsed() ?? true);
   }
 
   function renderControlsVisibility() {
@@ -2101,6 +2102,7 @@
     ui.visibilityExpandIcon.hidden = action.icon !== "expand";
     ui.visibilityGridIcon.toggleAttribute("hidden", action.icon !== "grid");
     equalizerUi?.setVisible(!ui.panel.hidden && !controlsHidden);
+    recordUi?.setVisible(!ui.panel.hidden && !controlsHidden);
   }
 
   function setAllControlsCollapsed(collapsed) {
@@ -2108,6 +2110,7 @@
     setWaveformCollapsed(collapsed);
     setEffectsCollapsed(collapsed);
     equalizerUi?.setCollapsed(collapsed, { notify: false });
+    recordUi?.setCollapsed(collapsed, { notify: false });
     renderControlsVisibility();
   }
 
@@ -2897,6 +2900,7 @@
         .controls-layout .waveform-shell { order: 1; }
         .controls-layout .effects-shell { order: 2; }
         .controls-layout .peq { order: 3; }
+        .controls-layout .record-section { order: 4; }
         .controls-layout > .controls-column > section { margin: 0; min-width: 0; }
         @media (min-width: 800px) {
           .controls-grid .controls-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
@@ -3381,7 +3385,8 @@
         .controls-hidden .drum-section,
         .controls-hidden .waveform-shell,
         .controls-hidden .effects-shell,
-        .controls-hidden .peq { display:none !important; }
+        .controls-hidden .peq,
+        .controls-hidden .record-section { display:none !important; }
         .controls-hidden-message { margin:5px 2px 1px; color:#aeb4b9; font-size:10px; line-height:1.45; text-align:center; }
         .visibility-symbol { display:block; width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
         .visibility-up-icon { stroke-width:1.7; }
@@ -3434,7 +3439,7 @@
           <button class="panel-tool detach-button" type="button" aria-label="Keep panel open when clicking outside" aria-pressed="false" title="Keep panel open when clicking outside">
             <img class="panel-tool-icon detach-icon" alt="" aria-hidden="true" hidden />
           </button>
-          <button class="panel-tool visibility-button" type="button" aria-controls="scdl-sampler scdl-loop-region scdl-audio-effects scdl-parametric-eq" aria-label="Collapse all controls" title="Collapse all controls"><svg class="visibility-symbol visibility-up-icon" viewBox="0 0 16 16" aria-hidden="true" hidden><path d="M3.5 8h9" /></svg><svg class="visibility-symbol visibility-down-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 6.5 4.5 4 4.5-4" /></svg><svg class="visibility-symbol visibility-grid-icon" viewBox="0 0 16 16" aria-hidden="true" hidden><rect x="2" y="2" width="4" height="4"/><rect x="10" y="2" width="4" height="4"/><rect x="2" y="10" width="4" height="4"/><rect x="10" y="10" width="4" height="4"/></svg><img class="panel-tool-icon visibility-expand-icon" alt="" aria-hidden="true" hidden /></button>
+          <button class="panel-tool visibility-button" type="button" aria-controls="scdl-sampler scdl-loop-region scdl-audio-effects scdl-parametric-eq scdl-record" aria-label="Collapse all controls" title="Collapse all controls"><svg class="visibility-symbol visibility-up-icon" viewBox="0 0 16 16" aria-hidden="true" hidden><path d="M3.5 8h9" /></svg><svg class="visibility-symbol visibility-down-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 6.5 4.5 4 4.5-4" /></svg><svg class="visibility-symbol visibility-grid-icon" viewBox="0 0 16 16" aria-hidden="true" hidden><rect x="2" y="2" width="4" height="4"/><rect x="10" y="2" width="4" height="4"/><rect x="2" y="10" width="4" height="4"/><rect x="10" y="10" width="4" height="4"/></svg><img class="panel-tool-icon visibility-expand-icon" alt="" aria-hidden="true" hidden /></button>
           <button class="panel-tool close-button" type="button" aria-label="Close panel" title="Close panel">
             <img class="cross-icon" alt="" aria-hidden="true" />
           </button>
@@ -3559,6 +3564,7 @@
     if (!ui) return;
     ui.panel.hidden = !open;
     equalizerUi?.setVisible(open && !controlsHidden);
+    recordUi?.setVisible(open && !controlsHidden);
     ui.trigger.setAttribute("aria-expanded", String(open));
     setVolumeLayerOpen(open);
     renderControlsVisibility();
@@ -4098,10 +4104,15 @@
         },
       });
     }
+    if (globalThis.SCRecordUI && effectsController) {
+      recordUi = globalThis.SCRecordUI.mount({ container: ui.panel, effects: effectsController,
+        onCollapsedChange() { renderControlsVisibility(); if (!ui.panel.hidden) positionPanel(); },
+      });
+    }
     const controlsLayout = document.createElement("div");
     controlsLayout.className = "controls-layout";
     ui.panel.querySelector(".drum-section").before(controlsLayout);
-    for (const selectors of [[".drum-section", ".effects-shell"], [".waveform-shell", ".peq"]]) {
+    for (const selectors of [[".drum-section", ".effects-shell"], [".waveform-shell", ".peq", ".record-section"]]) {
       const column = document.createElement("div");
       column.className = "controls-column";
       for (const selector of selectors) {

@@ -91,6 +91,8 @@ function exposeTempoControlAssets() {
   document.documentElement?.setAttribute?.(EXTENSION_TRASH_ICON_ATTRIBUTE, chrome.runtime.getURL("assets/icons/trash.svg"));
   document.documentElement?.setAttribute?.(EXTENSION_EXPAND_ICON_ATTRIBUTE, chrome.runtime.getURL("assets/icons/expand.svg"));
   document.documentElement?.setAttribute?.(EXTENSION_BITCRUSHER_WORKLET_ATTRIBUTE, chrome.runtime.getURL("scripts/bitcrusher-processor.js"));
+  document.documentElement?.setAttribute?.("data-scdl-extension-record-url", chrome.runtime.getURL("assets/icons/record.svg"));
+  document.documentElement?.setAttribute?.("data-scdl-extension-record-worklet-url", chrome.runtime.getURL("scripts/record-processor.js"));
   if (typeof document.dispatchEvent === "function" && typeof CustomEvent === "function") {
     document.dispatchEvent(new CustomEvent(EXTENSION_ASSETS_EVENT));
   }

@@ -50,6 +50,10 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 - **Inline download button** on playlist/set and likes pages ~ starts a background bulk job for the full collection
 - **User profile downloads** ~ open `soundcloud.com/{user}/tracks`, choose from every public upload, and download the selection as one background job
 
+### Record your performance
+
+Open **Record** below Parametric EQ in Player Tools. **Rec** captures the final mix of the playing track or loop, sampler pads, piano voices, and effects after EQ. The amplitude display shows live audio before a take and the captured sample afterwards; zoom, scroll, or click to seek, then preview or download a stereo 48 kHz / 16-bit WAV. Recording continues when the panel is collapsed or hidden and stops automatically at five minutes. Download your take before starting another or reloading the page; takes are kept in memory only.
+
 ### Playlists, sets & albums
 - Open any `soundcloud.com/{user}/sets/{name}` page
 - See the collection title, artist, total track count, and waveform preview (first track)

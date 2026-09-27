@@ -9,6 +9,8 @@ const excluded = new Set([
   "verify-effects-browser.js",
   "verify-player-tools-browser.js",
   "verify-parametric-eq-browser.js",
+  "verify-record-browser.js",
+  "verify-record-extension-browser.js",
   "verify-download-browser.js",
   "verify-bulk-limit-browser.js",
   "verify-loop-browser.js",

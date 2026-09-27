@@ -28,6 +28,10 @@ function listen(server) {
 
 async function main() {
   const server = http.createServer((request, response) => {
+    if (request.url === '/record-processor.js') {
+      response.setHeader('Content-Type', 'application/javascript');
+      response.end(fs.readFileSync(path.join(__dirname, 'record-processor.js'))); return;
+    }
     const sampleName = /^\/assets\/drums\/(kick1|kick2|clap1|clap2|hat1|hat2|snare1|tom1)\.wav$/.exec(request.url || "");
     if (sampleName) {
       response.setHeader("Content-Type", "audio/wav");
@@ -72,11 +76,12 @@ async function main() {
       path: path.join(__dirname, "tempo-control-core.js"),
     });
     await page.addScriptTag({ path: path.join(__dirname, "sampler-core.js") });
-    for (const file of ["parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js"]) {
+    for (const file of ["parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "record-core.js", "record-ui.js"]) {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
     await page.addScriptTag({ path: path.join(__dirname, "player-tools-policy.js") });
     await page.evaluate(([logoUrl, eqUrl, headerIcons]) => {
+      document.documentElement.setAttribute('data-scdl-extension-record-worklet-url', location.origin + '/record-processor.js');
       const eqApi = globalThis.SCParametricEQ;
       window.masterEqualizers = [];
       globalThis.SCParametricEQ = Object.freeze({ ...eqApi, createGraph(context, options) {
@@ -284,7 +289,7 @@ async function main() {
     // Hover opens after the intended dwell time, stays open while the pointer
     // is inside the panel, and closes when the pointer leaves it.
     await host.locator(".trigger").hover();
-    await page.waitForTimeout(90);
+    await page.waitForFunction(() => document.querySelector("#scdl-fast-tooltip")?.style.visibility === "visible");
     assert.deepEqual(await page.locator("#scdl-fast-tooltip").evaluate((tip) => ({
       text: tip.textContent, visible: tip.style.visibility,
     })), { text: "Playback speed 1.0x", visible: "visible" },
@@ -1286,10 +1291,10 @@ async function main() {
       const style = getComputedStyle(element);
       return { color: style.color, background: style.backgroundColor };
     }), loopHover, 'Hovering FX actions must highlight the whole header like Loop Region');
-    const sectionToggles = host.locator('.sampler-toggle, .waveform-toggle, .effects-toggle, .peq-toggle');
-    assert.equal(await sectionToggles.count(), 4, 'All four dropdowns must use the shared section header');
+    const sectionToggles = host.locator('.sampler-toggle, .waveform-toggle, .effects-toggle, .peq-toggle, .record-toggle');
+    assert.equal(await sectionToggles.count(), 5, 'All five dropdowns must use the shared section header');
     assert.deepEqual(await sectionToggles.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('title'))),
-      [null, null, null, null], 'Dropdown headers must not expose redundant tooltips');
+      [null, null, null, null, null], 'Dropdown headers must not expose redundant tooltips');
     const samplerIcon = host.locator('.sampler-icon');
     await page.mouse.move(10, 10);
     const samplerFilter = await samplerIcon.evaluate((icon) => getComputedStyle(icon).filter);
@@ -1312,15 +1317,15 @@ async function main() {
       'The normal state must use a downward chevron.');
     await visibility.click();
     await page.waitForFunction(() => [...document.querySelector("#scdl-tempo-control").shadowRoot
-      .querySelectorAll('.sampler-toggle, .waveform-toggle, .effects-toggle, .peq-toggle')]
+      .querySelectorAll('.sampler-toggle, .waveform-toggle, .effects-toggle, .peq-toggle, .record-toggle')]
       .every((button) => button.getAttribute('aria-expanded') === 'false'));
     assert.deepEqual(await sectionToggles.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-expanded'))),
-      ['false', 'false', 'false', 'false']);
+      ['false', 'false', 'false', 'false', 'false']);
     assert.deepEqual(await sectionToggles.evaluateAll((buttons) => buttons.map((button) => {
       const buttonRect = button.getBoundingClientRect();
       const chevronRect = button.querySelector('.tool-section-chevron').getBoundingClientRect();
       return Math.round((chevronRect.top + chevronRect.bottom - buttonRect.top - buttonRect.bottom) * 10) / 10;
-    })), [0, 0, 0, 0], 'Collapsed chevrons must remain vertically centered after rotation');
+    })), [0, 0, 0, 0, 0], 'Collapsed chevrons must remain vertically centered after rotation');
     assert.equal(await visibility.getAttribute('data-state'), 'collapsed');
     assert.equal(await host.locator('.visibility-up-icon').isVisible(), true,
       'The collapsed state must use the medium dash.');
@@ -1332,16 +1337,16 @@ async function main() {
       'The maximize state must show the expand asset instead of a plus character');
     assert.equal(await host.locator('.visibility-up-icon').textContent(), '');
     assert.equal(await host.locator('.controls-hidden-message').isVisible(), true);
-    assert.deepEqual(await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq').evaluateAll(
-      (sections) => sections.map((section) => getComputedStyle(section).display)), ['none', 'none', 'none', 'none']);
+    assert.deepEqual(await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq, #scdl-record').evaluateAll(
+      (sections) => sections.map((section) => getComputedStyle(section).display)), ['none', 'none', 'none', 'none', 'none']);
     const singleColumnViewport = page.viewportSize();
     await page.setViewportSize({ width: 1100, height: 1000 });
     await visibility.click();
     assert.equal(await visibility.getAttribute('data-state'), 'grid');
     assert.equal(await host.locator('.visibility-grid-icon').isVisible(), true);
     await page.waitForTimeout(200);
-    const gridRects = await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq').evaluateAll(
-      sections => ['scdl-sampler', 'scdl-loop-region', 'scdl-audio-effects', 'scdl-parametric-eq'].map(id => {
+    const gridRects = await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq, #scdl-record').evaluateAll(
+      sections => ['scdl-sampler', 'scdl-loop-region', 'scdl-audio-effects', 'scdl-parametric-eq', 'scdl-record'].map(id => {
         const { x, y, width, bottom } = sections.find(section => section.id === id).getBoundingClientRect();
         return { x, y, width, bottom };
       }));
@@ -1350,10 +1355,11 @@ async function main() {
     assert.ok(Math.abs(gridRects[2].x - gridRects[0].x) < 1, 'The third section wraps to the first column');
     assert.ok(Math.abs(gridRects[3].y - gridRects[1].bottom - 4) < 1, 'EQ sits immediately below Loop Region');
     assert.ok(Math.abs(gridRects[2].y - gridRects[0].bottom - 4) < 1, 'FX sits immediately below the sampler');
+    assert.ok(Math.abs(gridRects[4].y - gridRects[3].bottom - 4) < 1, 'Record sits immediately below EQ');
     assert.ok(Math.abs(gridRects[3].width - gridRects[1].width) < 1, 'EQ matches the Loop Region width');
     await page.screenshot({ path: path.join(projectRoot, 'test-results', 'controls-grid.png') });
     await page.setViewportSize({ width: 420, height: 1000 });
-    const narrowSections = await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq').evaluateAll(
+    const narrowSections = await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq, #scdl-record').evaluateAll(
       sections => sections.map(section => ({ x: section.offsetLeft, width: section.offsetWidth, scroll: section.scrollWidth })));
     assert.ok(narrowSections.every(section => section.x === narrowSections[0].x && section.scroll <= section.width),
       'Narrow screens wrap to one column without section overflow');
@@ -1361,14 +1367,14 @@ async function main() {
     await visibility.click();
     assert.equal(await visibility.getAttribute('data-state'), 'normal');
     assert.equal(await host.locator('.panel').evaluate(panel => panel.classList.contains('controls-grid')), false);
-    const columnPositions = await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq').evaluateAll(
+    const columnPositions = await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq, #scdl-record').evaluateAll(
       sections => sections.map(section => section.getBoundingClientRect().x));
     assert.ok(columnPositions.every(x => Math.abs(x - columnPositions[0]) < 1), 'Exiting grid restores one column');
     await page.waitForFunction(() => [...document.querySelector("#scdl-tempo-control").shadowRoot
-      .querySelectorAll('.sampler-toggle, .waveform-toggle, .effects-toggle, .peq-toggle')]
+      .querySelectorAll('.sampler-toggle, .waveform-toggle, .effects-toggle, .peq-toggle, .record-toggle')]
       .every((button) => button.getAttribute('aria-expanded') === 'true'));
     assert.deepEqual(await sectionToggles.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-expanded'))),
-      ['true', 'true', 'true', 'true']);
+      ['true', 'true', 'true', 'true', 'true']);
     await host.locator('.effects-toggle').click();
     await host.locator('.peq-toggle').click();
     const waveformStage = host.locator(".waveform-stage");

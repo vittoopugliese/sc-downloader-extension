@@ -455,6 +455,7 @@
     const graphs = new WeakMap();
     const graphReferences = new Set();
     const outputs = new Map();
+    const outputListeners = new Set();
     let bypassed = false;
     let available = true;
     let reason = "";
@@ -501,12 +502,22 @@
       const key = `${eqRevision}:${bypassed}:${eqAllowed}`;
       for (const [outputContext, output] of outputs) {
         if (outputContext.state === "closed") { outputs.delete(outputContext); continue; }
-        if (eqRequested && eqAllowed && !output.eq) output.eq = insertEqualizer(outputContext);
+        if (((eqRequested && eqAllowed) || outputListeners.size) && !output.eq) output.eq = insertEqualizer(outputContext);
         if (output.eq && output.key !== key) {
           output.eq.apply(eqSettings, bypassed || !eqAllowed);
           output.key = key;
         }
+        if (output.eq) for (const listener of outputListeners) listener(outputContext, output.eq.output);
       }
+    }
+
+    // A post-EQ tap follows every context, including old sampler voices during
+    // an SPA player replacement. It never adds another audible output.
+    function observeOutput(listener) {
+      outputListeners.add(listener);
+      try { getPlaybackContext(); updateEqualizer(); }
+      catch (error) { outputListeners.delete(listener); throw error; }
+      return () => outputListeners.delete(listener);
     }
 
     function getPlaybackContext() {
@@ -892,22 +903,22 @@
       if (!graph) audio = candidate;
       else if (
         candidate !== audio && context &&
-        (EFFECT_NAMES.some((name) => values[name] > 0) || (eqRequested && eqAllowed))
+        (EFFECT_NAMES.some((name) => values[name] > 0) || (eqRequested && eqAllowed) || outputListeners.size > 0)
       ) connectAudio(candidate);
     }
 
     function applyToActive() {
       const candidate = getActiveAudio();
       if (candidate && candidate !== audio) {
-        if (graph && context && (EFFECT_NAMES.some((name) => values[name] > 0) || (eqRequested && eqAllowed))) connectAudio(candidate);
+        if (graph && context && (EFFECT_NAMES.some((name) => values[name] > 0) || (eqRequested && eqAllowed) || outputListeners.size > 0)) connectAudio(candidate);
         else audio = candidate;
       }
-      if (!graph && available && (EFFECT_NAMES.some((name) => values[name] > 0) || (eqRequested && eqAllowed))) initialize();
+      if (!graph && available && (EFFECT_NAMES.some((name) => values[name] > 0) || (eqRequested && eqAllowed) || outputListeners.size > 0)) initialize();
       return snapshot();
     }
 
     return Object.freeze({ applyPreset, applyToActive, discover, isDelayFrozen, reset, set, setBypassed, setCharacter, setDelayFreeze, snapshot,
-      setEqualizer, setEqualizerAllowed, analyseEqualizer, getPlaybackContext });
+      setEqualizer, setEqualizerAllowed, analyseEqualizer, getPlaybackContext, observeOutput });
   }
 
   globalThis.SCTempoEffects = Object.freeze({ create, renderSample, clampPercent, DEFAULTS, EFFECT_NAMES, PRESETS, REVERB_ROOMS });
