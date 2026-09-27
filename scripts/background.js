@@ -775,6 +775,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.type === "ANALYZE_WAVEFORM") {
+    if (sender.id !== chrome.runtime.id || !sender.tab || !/^https:\/\/soundcloud\.com\//.test(sender.url || "") ||
+        typeof request.trackUrl !== "string" || !/^https:\/\/soundcloud\.com\/[^/]+\/[^/?#]+$/.test(request.trackUrl)) {
+      sendResponse({ success: false, error: "Invalid waveform request." });
+      return false;
+    }
+    requestTopFrameLoopTrack(sender.tab.id, request.trackUrl)
+      .then(track => BulkJobManager.analyzeWaveform(track)).then(sendResponse)
+      .catch(error => sendResponse(errorResponse(error)));
+    return true;
+  }
+
   if (["RENDER_LOOP_PAD", "RENDER_LOOP_INSTRUMENT", "CANCEL_LOOP_INSTRUMENT",
       "GET_LOOP_PAD_LIST", "GET_LOOP_PAD_AUDIO", "STORE_LOOP_PAD_AUDIO", "DELETE_LOOP_PAD_AUDIO"].includes(request.type)) {
     if (sender.id !== chrome.runtime.id || !sender.tab || !/^https:\/\/soundcloud\.com\//.test(sender.url || "")) {

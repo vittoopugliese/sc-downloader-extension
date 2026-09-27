@@ -736,7 +736,7 @@ async function main() {
       panelFeatures.hasRatingLink ||
       panelFeatures.labels.join("|") !== "Tone & Velocity" ||
       panelFeatures.order.slice(0, 3).join("|") !==
-        "panel-header|tempo-row|drum-section"
+        "panel-header|tempo-row|controls-layout"
     ) {
       throw new Error("The combined panel layout or links are incomplete.");
     }
@@ -1345,13 +1345,16 @@ async function main() {
     assert.equal(await host.locator('.visibility-grid-icon').isVisible(), true);
     await page.waitForTimeout(200);
     const gridRects = await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq').evaluateAll(
-      sections => sections.map(section => {
-        const { x, y, width } = section.getBoundingClientRect();
-        return { x, y, width };
+      sections => ['scdl-sampler', 'scdl-loop-region', 'scdl-audio-effects', 'scdl-parametric-eq'].map(id => {
+        const { x, y, width, bottom } = sections.find(section => section.id === id).getBoundingClientRect();
+        return { x, y, width, bottom };
       }));
     assert.ok(Math.abs(gridRects[0].y - gridRects[1].y) < 10, 'The first two sections share a flex row');
     assert.ok(gridRects[1].x > gridRects[0].x + gridRects[0].width, 'Sections occupy two separate columns');
     assert.ok(Math.abs(gridRects[2].x - gridRects[0].x) < 1, 'The third section wraps to the first column');
+    assert.ok(Math.abs(gridRects[3].y - gridRects[1].bottom - 4) < 1, 'EQ sits immediately below Loop Region');
+    assert.ok(Math.abs(gridRects[2].y - gridRects[0].bottom - 4) < 1, 'FX sits immediately below the sampler');
+    assert.ok(Math.abs(gridRects[3].width - gridRects[1].width) < 1, 'EQ matches the Loop Region width');
     await page.screenshot({ path: path.join(projectRoot, 'test-results', 'controls-grid.png') });
     await page.setViewportSize({ width: 420, height: 1000 });
     const narrowSections = await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq').evaluateAll(
@@ -1434,7 +1437,7 @@ async function main() {
         visible: shell.offsetHeight > 0,
         collapsed: shell.classList.contains("is-collapsed"),
         values: [...root.querySelectorAll(".effect-value")].map((value) => value.textContent),
-        loopImmediatelyBefore: root.querySelector(".loop-edit").nextElementSibling === shell,
+        loopImmediatelyBefore: Math.abs(shell.getBoundingClientRect().top - root.querySelector(".waveform-shell").getBoundingClientRect().bottom - 4) < 1,
       };
     });
     if (
@@ -1444,6 +1447,39 @@ async function main() {
       throw new Error(`FX section was not compactly placed below the looper: ${JSON.stringify(collapsedFx)}`);
     }
     await host.locator(".effects-toggle").click();
+    const fxKnobLayout = await host.locator('.effect-knob-grid').evaluate(grid => {
+      const knobs = [...grid.querySelectorAll('.fx-knob')].map(node => node.getBoundingClientRect());
+      return knobs.length === 6 && knobs.every(box => Math.abs(box.y - knobs[0].y) < 1) && grid.scrollWidth <= grid.clientWidth;
+    });
+    assert.equal(fxKnobLayout, true, 'Six FX knobs share a horizontal row without overflow');
+    const mixKnob = host.locator('#scdl-effect-reverb');
+    assert.equal(await host.locator('.effect-settings-toggle').count(), 0);
+    assert.equal(await mixKnob.getAttribute('title'), null);
+    assert.match(await mixKnob.getAttribute('data-scdl-tooltip'), /Hold to open options/);
+    await mixKnob.scrollIntoViewIfNeeded();
+    const mixBox = await mixKnob.boundingBox();
+    assert.equal(Math.round(mixBox.width + 2), 28, 'FX shell matches the 28px sampler knobs');
+    await mixKnob.hover();
+    await page.waitForTimeout(450);
+    assert.match(await page.locator('#scdl-fast-tooltip').innerText(), /Hold to open options/);
+    const initialMix = await mixKnob.inputValue();
+    await page.mouse.down();
+    await page.waitForTimeout(600);
+    await page.mouse.up();
+    assert.equal(await host.locator('[data-effect-settings-panel="reverb"]').isVisible(), true);
+    assert.equal(await mixKnob.inputValue(), initialMix, 'Holding opens settings without changing the mix');
+    await mixKnob.press('Enter');
+    assert.equal(await host.locator('[data-effect-settings-panel="reverb"]').isVisible(), false);
+    await page.mouse.move(mixBox.x + mixBox.width / 2, mixBox.y + mixBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(mixBox.x + mixBox.width / 2, mixBox.y + mixBox.height / 2 - 42, { steps: 5 });
+    await page.waitForTimeout(600);
+    assert.equal(await host.locator('[data-effect-settings-panel="reverb"]').isVisible(), false, 'Dragging cancels the hold gesture');
+    await page.mouse.up();
+    await page.waitForFunction(() => document.querySelector('#scdl-tempo-control').shadowRoot.querySelector('[data-effect-value="reverb"]').textContent === '30%');
+    assert.equal(await mixKnob.getAttribute('aria-valuetext'), '30%');
+    await page.keyboard.press('ArrowUp');
+    await page.waitForFunction(() => document.querySelector('#scdl-tempo-control').shadowRoot.querySelector('[data-effect-value="reverb"]').textContent === '31%');
     await host.locator("#scdl-effect-reverb").evaluate((slider) => {
       slider.value = "35";
       slider.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1469,13 +1505,23 @@ async function main() {
     ) {
       throw new Error(`FX sliders or WAV notice failed: ${JSON.stringify(activeFx)}`);
     }
-    await host.locator('[data-effect-settings="delay"]').click();
+    await host.locator('[data-effect-settings="delay"]').press('Enter');
     await host.locator('#scdl-effect-delay-time').fill('400');
     await host.locator('#scdl-effect-delay-time').dispatchEvent('change');
     if (await host.locator('[data-effect-character-value="delayTime"]').textContent() !== '400ms') {
       throw new Error("FX character setting was reset while requesting authorization.");
     }
-    await host.locator('[data-effect-settings="delay"]').click();
+    assert.equal(await host.locator('#scdl-effect-delay-time').getAttribute('aria-valuetext'), '400ms');
+    await host.locator('[data-effect-settings="reverb"]').press('Enter');
+    const decayKnob = host.locator('#scdl-effect-reverb-decay');
+    await decayKnob.fill('2.4');
+    await decayKnob.dispatchEvent('change');
+    await decayKnob.focus();
+    await page.keyboard.press('ArrowUp');
+    await page.waitForFunction(() => document.querySelector('#scdl-tempo-control').shadowRoot.querySelector('[data-effect-character-value="reverbDecay"]').textContent === '2.5s');
+    await host.locator('.effects-shell').screenshot({ path: path.join(projectRoot, 'test-results', 'fx-knobs.png') });
+    await host.locator('[data-effect-settings="delay"]').press('Enter');
+    await host.locator('[data-effect-settings="delay"]').press('Enter');
     for (const selector of ["#scdl-effect-reverb", "#scdl-effect-delay"]) {
       await host.locator(selector).evaluate((slider) => {
         slider.value = "0";

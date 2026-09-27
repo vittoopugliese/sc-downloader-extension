@@ -170,6 +170,7 @@ window.addEventListener?.("message", (event) => {
   const { id, action, index } = event.data;
   if (typeof id !== "string" || id.length > 100) return;
   const types = {
+    waveform: "ANALYZE_WAVEFORM",
     list: "GET_LOOP_PAD_LIST",
     delete: "DELETE_LOOP_PAD_AUDIO",
     get: "GET_LOOP_PAD_AUDIO",
@@ -183,6 +184,7 @@ window.addEventListener?.("message", (event) => {
   };
   if (!types[action]) return;
   const payload = { type: types[action] };
+  if (action === "waveform") payload.trackUrl = event.data.trackUrl;
   if (action !== "list") payload.index = index;
   if (action === "delete") payload.operationId = event.data.operationId;
   if (action === "store") {

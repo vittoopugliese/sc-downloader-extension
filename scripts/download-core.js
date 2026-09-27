@@ -702,6 +702,18 @@ const SCDownload = (() => {
     }
   }
 
+  async function analyzeWaveform(trackData, buffer, signal) {
+    const context = new AudioContext({ sampleRate: 48000 });
+    try {
+      checkDecodeBudget(trackData, null, context.sampleRate);
+      throwIfAborted(signal);
+      const bytes = buffer instanceof ArrayBuffer ? buffer : buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+      const decoded = await context.decodeAudioData(bytes);
+      checkDecodeBudget(trackData, decoded);
+      return { success: true, waveform: await SCSpectralWaveform.analyze(decoded, signal) };
+    } finally { await context.close(); }
+  }
+
   async function buildTrackBlob(
     streamUrl,
     trackData,
@@ -710,8 +722,10 @@ const SCDownload = (() => {
     trimRange = null,
     playbackTransform = null,
     sampleEffects = null,
-    allowWav = false
+    allowWav = false,
+    spectral = false
   ) {
+    if (spectral) checkDecodeBudget(trackData, null, 48000);
     const normalizedTrimRange = normalizeTrimRange(trimRange);
     if (normalizedTrimRange || hasPlaybackTransform(playbackTransform) || hasSampleEffects(sampleEffects)) checkDecodeBudget(trackData);
     const isHlsStream =
@@ -747,7 +761,7 @@ const SCDownload = (() => {
           allowWav
         );
       }
-      return finalizeTrackBlob(trackData, buffer, onProgress, signal, allowWav);
+      return spectral ? analyzeWaveform(trackData, buffer, signal) : finalizeTrackBlob(trackData, buffer, onProgress, signal, allowWav);
     }
 
     if (isHlsStream) {
@@ -802,7 +816,7 @@ const SCDownload = (() => {
           allowWav
         );
       }
-      return finalizeTrackBlob(trackData, combined, onProgress, signal, allowWav);
+      return spectral ? analyzeWaveform(trackData, combined, signal) : finalizeTrackBlob(trackData, combined, onProgress, signal, allowWav);
     }
 
     onProgress?.("Downloading file...");
@@ -819,7 +833,7 @@ const SCDownload = (() => {
         allowWav
       );
     }
-    return finalizeTrackBlob(trackData, buffer, onProgress, signal, allowWav);
+    return spectral ? analyzeWaveform(trackData, buffer, signal) : finalizeTrackBlob(trackData, buffer, onProgress, signal, allowWav);
   }
 
   function triggerBlobDownload(blob, fileName) {

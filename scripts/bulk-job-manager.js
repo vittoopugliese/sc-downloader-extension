@@ -1192,6 +1192,36 @@ const BulkJobManager = {
     }
   },
 
+  async analyzeWaveform(trackData) {
+    singleDownloadsInFlight += 1;
+    try {
+      await startKeepalive();
+      return await queueSingleDownload(async () => {
+        let result;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const resolved = await SCDownloadSource.resolveForPlayback(trackData, "auto", {
+            forceRefresh: attempt > 0,
+            reason: attempt > 0 ? "expired_media" : "initial",
+            attempt,
+          });
+          result = await sendOffscreenMessage({ type: "OFFSCREEN_WAVEFORM", streamUrl: resolved.streamUrl, trackData: resolved.trackData });
+          if (result?.success || ![401, 403, 404].includes(result?.status)) break;
+        }
+        if (!result?.success) throw new Error(result?.error || "Could not prepare the loop sample.");
+        return result;
+      });
+    } finally {
+      singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);
+      const activeJob = await loadJob().catch(() => null);
+      if (!activeJob || !isActiveJobStatus(activeJob.status)) {
+        if (singleDownloadsInFlight === 0) {
+          await stopKeepalive().catch(() => {});
+          await closeOffscreenDocument().catch(() => {});
+        }
+      }
+    }
+  },
+
   async renderLoopPad(trackData, index, trimRange, playbackTransform, effects, name, operationId = `pad_${Date.now()}_${index}`) {
     singleDownloadsInFlight += 1;
     try {

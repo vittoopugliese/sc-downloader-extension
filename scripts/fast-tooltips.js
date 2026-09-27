@@ -2,6 +2,16 @@
   "use strict";
 
   const SHOW_DELAY_MS = 372;
+  const STORAGE_KEY = "scdl.tooltips.enabled";
+  const ENABLED_ATTRIBUTE = "data-scdl-tooltips-enabled";
+  function readEnabled() {
+    const value = document.documentElement?.getAttribute(ENABLED_ATTRIBUTE);
+    if (value !== null && value !== undefined) return value !== "false";
+    try { return localStorage.getItem(STORAGE_KEY) !== "false"; } catch { return true; }
+  }
+  let enabled = readEnabled();
+  const suppressedTitles = new Map();
+  const observedRoots = new Set();
   const tooltip = document.createElement("div");
   tooltip.id = "scdl-fast-tooltip";
   tooltip.setAttribute("role", "tooltip");
@@ -30,6 +40,35 @@
   let savedTitle = null;
   let showTimer = null;
   const listenedRoots = new WeakSet();
+
+  function suppressTitle(element) {
+    if (!element.isConnected) return;
+    const title = element.getAttribute?.("title");
+    if (!title) return;
+    suppressedTitles.set(element, title);
+    // Empty titles also prevent native tooltips inherited from ancestors.
+    element.setAttribute("title", "");
+  }
+
+  function suppressTitles(root) {
+    suppressTitle(root);
+    root.querySelectorAll?.("[title]").forEach(suppressTitle);
+  }
+
+  function applyEnabled() {
+    enabled = readEnabled();
+    hide();
+    if (!enabled) {
+      tooltip.style.setProperty("display", "none", "important");
+      observedRoots.forEach(suppressTitles);
+    } else {
+      tooltip.style.removeProperty("display");
+      for (const [element, title] of suppressedTitles) {
+        if (element.getAttribute("title") === "") element.setAttribute("title", title);
+      }
+      suppressedTitles.clear();
+    }
+  }
 
   function mount() {
     // Content scripts run at document_start, before <html> exists.
@@ -73,6 +112,7 @@
   }
 
   function show(button) {
+    if (!enabled) return;
     if (button === activeButton) return;
     hide();
     if (!button || button.hidden) return;
@@ -83,7 +123,7 @@
     savedTitle = title;
     if (title !== null) button.removeAttribute("title");
     showTimer = setTimeout(() => {
-      if (activeButton !== button || !button.isConnected) return;
+      if (!enabled || activeButton !== button || !button.isConnected) return;
       mount();
       tooltip.style.maxWidth = button.hasAttribute("data-scdl-tooltip")
         ? "min(440px, calc(100vw - 16px))" : "min(280px, calc(100vw - 16px))";
@@ -115,8 +155,33 @@
   }
 
   function listen(root) {
+    observedRoots.add(root);
     if (listenedRoots.has(root)) return;
     listenedRoots.add(root);
+    if (!enabled) suppressTitles(root);
+    new MutationObserver((records) => {
+      mount();
+      for (const record of records) {
+        if (record.type === "attributes") {
+          if (!enabled) suppressTitle(record.target);
+        } else {
+          record.addedNodes.forEach((node) => {
+            if (!enabled) suppressTitles(node);
+            discoverShadowRoots(node);
+          });
+        }
+      }
+      // Release detached controls instead of retaining old tracks indefinitely.
+      for (const [element, title] of suppressedTitles) {
+        if (!element.isConnected) {
+          if (element.getAttribute("title") === "") element.setAttribute("title", title);
+          suppressedTitles.delete(element);
+        }
+      }
+      for (const observed of observedRoots) {
+        if (observed.host && !observed.host.isConnected) observedRoots.delete(observed);
+      }
+    }).observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["title"] });
     root.addEventListener("pointerover", onPointerOver, true);
     root.addEventListener("pointermove", onPointerMove, true);
     root.addEventListener("pointerout", onPointerOut, true);
@@ -131,19 +196,27 @@
 
   function discoverShadowRoots(node) {
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
-    if (node.shadowRoot) listen(node.shadowRoot);
+    if (node.shadowRoot) {
+      listen(node.shadowRoot);
+      for (const child of node.shadowRoot.children) discoverShadowRoots(child);
+    }
     node.querySelectorAll?.("*").forEach((element) => {
-      if (element.shadowRoot) listen(element.shadowRoot);
+      if (element.shadowRoot) {
+        listen(element.shadowRoot);
+        for (const child of element.shadowRoot.children) discoverShadowRoots(child);
+      }
     });
   }
 
   listen(document);
   discoverShadowRoots(document.documentElement);
-  new MutationObserver((records) => {
-    for (const record of records) {
-      record.addedNodes.forEach(discoverShadowRoots);
-    }
-  }).observe(document, { childList: true, subtree: true });
+  document.addEventListener("scdl:tooltips-changed", applyEnabled);
+  window.addEventListener("storage", (event) => {
+    if (event.key !== STORAGE_KEY && event.key !== null) return;
+    document.documentElement?.removeAttribute(ENABLED_ATTRIBUTE);
+    applyEnabled();
+  });
+  applyEnabled();
   window.addEventListener("resize", () => {
     if (activeButton && tooltip.style.visibility === "visible") position();
   });

@@ -340,6 +340,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     promise.then(sendResponse);
     return true;
   }
+  if (message.type === "OFFSCREEN_WAVEFORM") {
+    SCDownload.buildTrackBlob(message.streamUrl, message.trackData, null, null, null, null, null, false, true)
+      .then(sendResponse).catch(error => sendResponse({ success: false, error: error.message, status: error.status }));
+    return true;
+  }
   if (message.type === "OFFSCREEN_BUILD") {
     if (typeof message.buildId !== "string" || !/^track_[A-Za-z0-9_]+$/.test(message.buildId) ||
         message.buildId.length > 100 || typeof message.streamUrl !== "string" ||
