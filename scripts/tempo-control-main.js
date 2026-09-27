@@ -57,14 +57,14 @@
   const DRUM_LONG_PRESS_MS = 600;
   const DRUM_KEYS_STORAGE = "scdl.drums.keys";
   const DRUM_DEFAULTS = [
-    { name: "Kick", sample: "kick1.wav", key: "a" },
-    { name: "Clap", sample: "clap1.wav", key: "s" },
-    { name: "Hat", sample: "hat1.wav", key: "d" },
-    { name: "Kick 2", sample: "kick2.wav", key: "f" },
-    { name: "Snare", sample: "snare1.wav", key: "g" },
-    { name: "Tom", sample: "tom1.wav", key: "h" },
-    { name: "Clap 2", sample: "clap2.wav", key: "j" },
-    { name: "Hat 2", sample: "hat2.wav", key: "k" },
+    { name: "Kick", sample: "kick1.wav", key: "z" },
+    { name: "Clap", sample: "clap1.wav", key: "x" },
+    { name: "Hat", sample: "hat1.wav", key: "c" },
+    { name: "Kick 2", sample: "kick2.wav", key: "v" },
+    { name: "Snare", sample: "snare1.wav", key: "b" },
+    { name: "Tom", sample: "tom1.wav", key: "n" },
+    { name: "Clap 2", sample: "clap2.wav", key: "m" },
+    { name: "Hat 2", sample: "hat2.wav", key: "l" },
   ];
   const HOVER_OPEN_DELAY_MS = 254;
   // The panel sits eight pixels above its trigger. This brief grace period
@@ -172,7 +172,7 @@
   let padsHydrated = false;
   let padCacheTimer = null;
   let padCacheRevision = 0;
-  const drumPads = DRUM_DEFAULTS.map((defaultPad) => ({ ...defaultPad, buffer: null, loading: null, customName: "", saved: false, busy: false, version: 0 }));
+  const drumPads = DRUM_DEFAULTS.map((defaultPad) => ({ ...defaultPad, gainPercent: 100, pitchSemitones: 0, buffer: null, loading: null, customName: "", saved: false, busy: false, version: 0 }));
   try {
     const savedKeys = JSON.parse(localStorage.getItem(DRUM_KEYS_STORAGE) || "null");
     if (Array.isArray(savedKeys)) {
@@ -199,6 +199,7 @@
   let effectsCollapsed = true;
   let samplerCollapsed = true;
   let controlsHidden = false;
+  let controlsGrid = false;
   let resetInProgress = false;
   let resetGeneration = 0;
   let playbackIntentVersion = 0;
@@ -563,6 +564,7 @@
     voice.source.onended = null;
     try { voice.source.disconnect(); } catch {}
     try { voice.sourceFade?.disconnect(); } catch {}
+    try { voice.padGain?.disconnect(); } catch {}
     try { voice.gain.disconnect(); } catch {}
     instrumentVoices.delete(voice);
     if (instrumentKeys.get(voice.key)?.voice === voice) instrumentKeys.delete(voice.key);
@@ -995,6 +997,70 @@
     finally { if (pad.loading === loading) pad.loading = null; }
   }
 
+  function updatePadControl(index, name, value) {
+    const pad = drumPads[index];
+    if (!pad || !["gainPercent", "pitchSemitones"].includes(name) || !Number.isFinite(value)) return;
+    pad[name] = Math.round(Math.max(name === "gainPercent" ? 0 : -12, Math.min(name === "gainPercent" ? 154 : 12, value)));
+    for (const voice of instrumentVoices) {
+      if (voice.padIndex !== index || voice.cleaned) continue;
+      const now = voice.context.currentTime;
+      if (name === "gainPercent") {
+        voice.padGain.gain.setTargetAtTime(pad.gainPercent / 100, now, .008);
+      } else {
+        // Integrate the old rate before changing it; elapsed * new rate would
+        // move the sample cursor and truncate notes after live pitch edits.
+        voice.padPosition += Math.max(0, now - voice.padRateChangedAt) * voice.playbackRate;
+        voice.padRateChangedAt = now;
+        voice.playbackRate = 2 ** (pad.pitchSemitones / 12);
+        voice.source.playbackRate.setValueAtTime(voice.playbackRate, now);
+        voice.sampleEndAt = now + Math.max(0, voice.source.buffer.duration - voice.padPosition) / voice.playbackRate;
+        if (voice.releasing) scheduleInstrumentEnvelope(voice);
+        else voice.source.stop(voice.sampleEndAt);
+      }
+    }
+  }
+
+  function bindPadControls(root) {
+    for (const knob of root.querySelectorAll(".pad-knob")) {
+      const index = Number(knob.dataset.padIndex);
+      const name = knob.dataset.padControl;
+      const gain = name === "gainPercent";
+      const minimum = gain ? 0 : -12;
+      const maximum = gain ? 154 : 12;
+      const render = () => {
+        const value = drumPads[index][name];
+        const label = gain ? `${value}%` : `${value > 0 ? "+" : ""}${value} st`;
+        knob.style.setProperty("--knob-angle", `${-135 + (value - minimum) / (maximum - minimum) * 270}deg`);
+        knob.setAttribute("aria-valuenow", String(value));
+        knob.setAttribute("aria-valuetext", label);
+        knob.title = `${gain ? "Gain" : "Pitch"}: ${label} · Double-click to reset`;
+        knob.nextElementSibling.textContent = label;
+      };
+      const update = value => { updatePadControl(index, name, value); render(); };
+      let drag = null;
+      knob.addEventListener("pointerdown", event => {
+        if (event.button !== 0) return;
+        drag = { id: event.pointerId, y: event.clientY, value: drumPads[index][name] };
+        knob.setPointerCapture(event.pointerId);
+        knob.focus();
+        event.preventDefault();
+      });
+      knob.addEventListener("pointermove", event => {
+        if (drag?.id === event.pointerId) update(drag.value + (drag.y - event.clientY) * (maximum - minimum) / 140);
+      });
+      for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) knob.addEventListener(type, () => { drag = null; });
+      knob.addEventListener("dblclick", () => update(gain ? 100 : 0));
+      knob.addEventListener("keydown", event => {
+        if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        update(event.key === "Home" ? minimum : event.key === "End" ? maximum
+          : drumPads[index][name] + (["ArrowUp", "ArrowRight"].includes(event.key) ? 1 : -1));
+      });
+      render();
+    }
+  }
+
   async function playDrum(index, key = `pad:${index}`, released = true) {
     const pad = drumPads[index];
     if (!pad || pad.busy || instrumentMode) return;
@@ -1024,9 +1090,13 @@
       const source = context.createBufferSource();
       const gain = context.createGain();
       source.buffer = buffer;
-      source.connect(gain).connect(context.destination);
-      const voice = { source, gain, context, key, keyReleased: held.released === true,
-        startedAt: context.currentTime, sampleEndAt: context.currentTime + buffer.duration,
+      const padGain = context.createGain();
+      padGain.gain.value = (pad.gainPercent ?? 100) / 100;
+      source.playbackRate.value = 2 ** ((pad.pitchSemitones ?? 0) / 12);
+      source.connect(gain).connect(padGain).connect(context.destination);
+      const voice = { source, gain, padGain, padIndex: index, context, key, keyReleased: held.released === true,
+        padPosition: 0, padRateChangedAt: context.currentTime, playbackRate: source.playbackRate.value,
+        startedAt: context.currentTime, sampleEndAt: context.currentTime + buffer.duration / source.playbackRate.value,
         cleanupTimer: null, releasing: false, cleaned: false };
       held.voice = voice;
       instrumentVoices.add(voice);
@@ -1135,7 +1205,7 @@
         return;
       }
       const target = event.composedPath()[0];
-      if ((target?.classList?.contains("envelope-knob") || target?.classList?.contains("waveform-marker")) && /^(Arrow|Home$|End$)/.test(event.key)) return;
+      if ((target?.classList?.contains("envelope-knob") || target?.classList?.contains("pad-knob") || target?.classList?.contains("waveform-marker")) && /^(Arrow|Home$|End$)/.test(event.key)) return;
       if (target?.isContentEditable || (/^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName || "") &&
           !target.classList.contains("instrument-cut-itself") && !target.classList.contains("instrument-adsr-toggle"))) return;
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
@@ -1931,11 +2001,14 @@
     if (!ui?.visibilityButton) return;
     const allCollapsed = areAllControlsCollapsed();
     const action = controlsHidden
-      ? { label: "Show and expand all controls", icon: "expand", state: "hidden" }
-      : allCollapsed
+      ? { label: "Show all controls in two columns", icon: "expand", state: "hidden" }
+      : controlsGrid
+        ? { label: "Show controls in one column", icon: "grid", state: "grid" }
+        : allCollapsed
         ? { label: "Hide all controls", icon: "up", state: "collapsed" }
         : { label: "Collapse all controls", icon: "down", state: "normal" };
     ui.panel.classList.toggle("controls-hidden", controlsHidden);
+    ui.panel.classList.toggle("controls-grid", controlsGrid && !controlsHidden);
     ui.controlsHiddenMessage.hidden = !controlsHidden;
     ui.visibilityButton.dataset.state = action.state;
     ui.visibilityButton.setAttribute("aria-label", action.label);
@@ -1943,6 +2016,7 @@
     ui.visibilityUpIcon.toggleAttribute("hidden", action.icon !== "up");
     ui.visibilityDownIcon.toggleAttribute("hidden", action.icon !== "down");
     ui.visibilityExpandIcon.hidden = action.icon !== "expand";
+    ui.visibilityGridIcon.toggleAttribute("hidden", action.icon !== "grid");
     equalizerUi?.setVisible(!ui.panel.hidden && !controlsHidden);
   }
 
@@ -1957,7 +2031,11 @@
   function cycleControlsVisibility() {
     if (controlsHidden) {
       controlsHidden = false;
+      controlsGrid = true;
       setAllControlsCollapsed(false);
+    } else if (controlsGrid) {
+      controlsGrid = false;
+      renderControlsVisibility();
     } else if (areAllControlsCollapsed()) {
       controlsHidden = true;
       renderControlsVisibility();
@@ -2576,6 +2654,19 @@
           animation: tempo-panel-enter 180ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
+        .panel.controls-grid {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: flex-start;
+          column-gap: 8px;
+          width: min(840px, calc(100vw - 16px));
+        }
+        .controls-grid > * { flex: 1 0 100%; min-width: 0; }
+        .controls-grid > :is(.drum-section, .waveform-shell, .effects-shell, .peq) {
+          flex: 1 1 calc(50% - 4px);
+          min-width: min(100%, 380px);
+        }
+
         @keyframes tempo-panel-enter {
           from {
             opacity: 0;
@@ -2892,6 +2983,13 @@
         .drum-pad:focus-visible { outline: 2px solid #ff5500; outline-offset: 2px; }
         .drum-key { flex: 0 0 auto; font-size: 14px; font-weight: 800; line-height: 1; }
         .drum-slot { position: relative; }
+        .pad-controls { display: flex; flex-wrap: wrap; justify-content: space-evenly; gap: 4px 2px; margin-top: 5px; }
+        .pad-control { display: grid; justify-items: center; gap: 2px; font-size: 8px; color: #aaa; }
+        .pad-control output { font-size: 8px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .pad-knob { position: relative; width: 21px; height: 21px; padding: 0; border: 1px solid #555; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #484848, #222); cursor: ns-resize; touch-action: none; }
+        .pad-knob::after { content: ""; position: absolute; width: 2px; height: 6px; left: 8.5px; top: 2px; border-radius: 2px; background: #ff8a4c; transform-origin: 50% 7.5px; transform: rotate(var(--knob-angle)); }
+        .pad-knob:hover { border-color: #ff8a4c; }
+        .pad-knob:focus-visible { outline: 2px solid #ff8a4c; outline-offset: 2px; }
         .drum-reset { display: block; margin: 2px auto 0; border: 0; border-radius: 4px; color: #ccc; background: #292929; cursor: pointer; }
         .drum-reset:hover { color: #ff7b38; }
         .drum-file { display: none; }
@@ -3071,7 +3169,7 @@
           <button class="panel-tool detach-button" type="button" aria-label="Keep panel open when clicking outside" aria-pressed="false" title="Keep panel open when clicking outside">
             <img class="panel-tool-icon detach-icon" alt="" aria-hidden="true" hidden />
           </button>
-          <button class="panel-tool visibility-button" type="button" aria-controls="scdl-sampler scdl-loop-region scdl-audio-effects scdl-parametric-eq" aria-label="Collapse all controls" title="Collapse all controls"><svg class="visibility-symbol visibility-up-icon" viewBox="0 0 16 16" aria-hidden="true" hidden><path d="M3.5 8h9" /></svg><svg class="visibility-symbol visibility-down-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 6.5 4.5 4 4.5-4" /></svg><img class="panel-tool-icon visibility-expand-icon" alt="" aria-hidden="true" hidden /></button>
+          <button class="panel-tool visibility-button" type="button" aria-controls="scdl-sampler scdl-loop-region scdl-audio-effects scdl-parametric-eq" aria-label="Collapse all controls" title="Collapse all controls"><svg class="visibility-symbol visibility-up-icon" viewBox="0 0 16 16" aria-hidden="true" hidden><path d="M3.5 8h9" /></svg><svg class="visibility-symbol visibility-down-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 6.5 4.5 4 4.5-4" /></svg><svg class="visibility-symbol visibility-grid-icon" viewBox="0 0 16 16" aria-hidden="true" hidden><rect x="2" y="2" width="4" height="4"/><rect x="10" y="2" width="4" height="4"/><rect x="2" y="10" width="4" height="4"/><rect x="10" y="10" width="4" height="4"/></svg><img class="panel-tool-icon visibility-expand-icon" alt="" aria-hidden="true" hidden /></button>
           <button class="panel-tool close-button" type="button" aria-label="Close panel" title="Close panel">
             <img class="cross-icon" alt="" aria-hidden="true" />
           </button>
@@ -3105,7 +3203,7 @@
           <dialog class="slice-dialog" aria-labelledby="slice-title" aria-describedby="slice-description"><h3 id="slice-title"></h3><p id="slice-description"></p><div><button class="slice-cancel" type="button" autofocus></button><button class="slice-replace" type="button"></button></div></dialog>
           <div class="sampler-body" id="scdl-sampler-pads">
             <div class="drum-pads">
-              ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><button class="drum-reset" type="button" title="Remove saved sample and restore default" aria-label="Restore ${pad.name} default sample" hidden>↺</button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
+              ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><button class="drum-reset" type="button" title="Remove saved sample and restore default" aria-label="Restore ${pad.name} default sample" hidden>↺</button><div class="pad-controls">${[["gainPercent", "GAIN", 0, 154], ["pitchSemitones", "PITCH", -12, 12]].map(([name, label, min, max]) => `<div class="pad-control"><span>${label}</span><button class="pad-knob" type="button" role="slider" data-pad-index="${index}" data-pad-control="${name}" aria-label="Pad ${index + 1} ${label.toLowerCase()}" aria-valuemin="${min}" aria-valuemax="${max}" aria-orientation="vertical"></button><output></output></div>`).join("")}</div><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
             </div>
           </div>
           <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="drum-note-controls" aria-live="off"><span class="playing-note"></span></span></p>
@@ -3166,7 +3264,7 @@
   function positionPanel() {
     if (!ui || ui.panel.hidden) return;
     const anchor = ui.trigger.getBoundingClientRect();
-    const width = Math.min(420, innerWidth - 16);
+    const width = ui.panel.offsetWidth;
     const left = Math.max(8, Math.min(innerWidth - width - 8, anchor.right - width));
     ui.panel.style.left = `${left}px`;
     ui.panel.style.bottom = `${Math.max(8, innerHeight - anchor.top + 8)}px`;
@@ -3312,6 +3410,7 @@
       visibilityUpIcon: root.querySelector(".visibility-up-icon"),
       visibilityDownIcon: root.querySelector(".visibility-down-icon"),
       visibilityExpandIcon: root.querySelector(".visibility-expand-icon"),
+      visibilityGridIcon: root.querySelector(".visibility-grid-icon"),
       controlsHiddenMessage: root.querySelector(".controls-hidden-message"),
       setA: root.querySelector(".set-a"),
       setB: root.querySelector(".set-b"),
@@ -3691,6 +3790,7 @@
     ui.saveLoopPad.addEventListener("click", selectLoopPad);
     ui.instrumentToggle.addEventListener("click", toggleLoopInstrument);
     bindInstrumentControls();
+    bindPadControls(root);
     document.addEventListener("keyup", releaseInstrumentKey, true);
     ui.playerToolsUpgrade.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));

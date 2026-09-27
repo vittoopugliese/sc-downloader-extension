@@ -328,7 +328,23 @@ async function main() {
       `A collapsed sampler must not reserve empty space below its header: ${JSON.stringify(collapsedSamplerLayout)}`);
     await samplerToggle.click();
     assert.equal(await samplerToggle.getAttribute("aria-expanded"), "true");
-    assert.deepEqual(await drumPads.allTextContents(), ["A", "S", "D", "F", "G", "H", "J", "K"]);
+    const padGainKnob = host.locator('.pad-knob[data-pad-index="0"][data-pad-control="gainPercent"]');
+    const padPitchKnob = host.locator('.pad-knob[data-pad-index="0"][data-pad-control="pitchSemitones"]');
+    assert.equal(await host.locator('.pad-knob').count(), 16);
+    await padGainKnob.focus();
+    await page.keyboard.press('End');
+    assert.equal(await padGainKnob.getAttribute('aria-valuenow'), '154');
+    assert.equal(await host.locator('.pad-knob[data-pad-index="1"][data-pad-control="gainPercent"]').getAttribute('aria-valuenow'), '100');
+    await padGainKnob.dblclick();
+    assert.equal(await padGainKnob.getAttribute('aria-valuenow'), '100');
+    await padPitchKnob.focus();
+    await page.keyboard.press('Home');
+    assert.equal(await padPitchKnob.getAttribute('aria-valuenow'), '-12');
+    await page.keyboard.press('End');
+    assert.equal(await padPitchKnob.getAttribute('aria-valuenow'), '12');
+    await padPitchKnob.dblclick();
+    assert.equal(await padPitchKnob.getAttribute('aria-valuenow'), '0');
+    assert.deepEqual(await drumPads.allTextContents(), ["Z", "X", "C", "V", "B", "N", "M", "L"]);
     assert.deepEqual(await drumPads.evaluateAll((pads) => pads.map((pad) => pad.title)),
       ["Kick", "Clap", "Hat", "Kick 2", "Snare", "Tom", "Clap 2", "Hat 2"].map((name) => `${name} · hold to load`));
     const drumPlacement = await host.evaluate((element) => {
@@ -1079,7 +1095,7 @@ async function main() {
       delete audio.paused;
       audio.pause = window.originalAudioPause;
     });
-    await page.keyboard.press("a");
+    await page.keyboard.press(originalPadKeys[0].toLowerCase());
     await page.waitForFunction(() => window.drumStarts === 14);
     await instrumentToggle.click();
     await page.waitForFunction(() => document.querySelector("#scdl-tempo-control").shadowRoot.querySelector(".loop-instrument").getAttribute("aria-pressed") === "true");
@@ -1305,8 +1321,33 @@ async function main() {
     assert.equal(await host.locator('.controls-hidden-message').isVisible(), true);
     assert.deepEqual(await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq').evaluateAll(
       (sections) => sections.map((section) => getComputedStyle(section).display)), ['none', 'none', 'none', 'none']);
+    const singleColumnViewport = page.viewportSize();
+    await page.setViewportSize({ width: 1100, height: 1000 });
+    await visibility.click();
+    assert.equal(await visibility.getAttribute('data-state'), 'grid');
+    assert.equal(await host.locator('.visibility-grid-icon').isVisible(), true);
+    await page.waitForTimeout(200);
+    const gridRects = await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq').evaluateAll(
+      sections => sections.map(section => {
+        const { x, y, width } = section.getBoundingClientRect();
+        return { x, y, width };
+      }));
+    assert.ok(Math.abs(gridRects[0].y - gridRects[1].y) < 10, 'The first two sections share a flex row');
+    assert.ok(gridRects[1].x > gridRects[0].x + gridRects[0].width, 'Sections occupy two separate columns');
+    assert.ok(Math.abs(gridRects[2].x - gridRects[0].x) < 1, 'The third section wraps to the first column');
+    await page.screenshot({ path: path.join(projectRoot, 'test-results', 'controls-grid.png') });
+    await page.setViewportSize({ width: 420, height: 1000 });
+    const narrowSections = await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq').evaluateAll(
+      sections => sections.map(section => ({ x: section.offsetLeft, width: section.offsetWidth, scroll: section.scrollWidth })));
+    assert.ok(narrowSections.every(section => section.x === narrowSections[0].x && section.scroll <= section.width),
+      'Narrow screens wrap to one column without section overflow');
+    await page.setViewportSize(singleColumnViewport);
     await visibility.click();
     assert.equal(await visibility.getAttribute('data-state'), 'normal');
+    assert.equal(await host.locator('.panel').evaluate(panel => panel.classList.contains('controls-grid')), false);
+    const columnPositions = await host.locator('#scdl-sampler, #scdl-loop-region, #scdl-audio-effects, #scdl-parametric-eq').evaluateAll(
+      sections => sections.map(section => section.getBoundingClientRect().x));
+    assert.ok(columnPositions.every(x => Math.abs(x - columnPositions[0]) < 1), 'Exiting grid restores one column');
     await page.waitForFunction(() => [...document.querySelector("#scdl-tempo-control").shadowRoot
       .querySelectorAll('.sampler-toggle, .waveform-toggle, .effects-toggle, .peq-toggle')]
       .every((button) => button.getAttribute('aria-expanded') === 'true'));

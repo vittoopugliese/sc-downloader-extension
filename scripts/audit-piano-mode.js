@@ -26,8 +26,8 @@ function fixture() {
   const audio = {
     currentTime: 0, destination: {}, resume: async () => {},
     decodeAudioData: async () => ({ decoded: true }),
-    createGain: () => ({ gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, cancelScheduledValues() {}, value: 1 }, connect(target) { return target; }, disconnect() {} }),
-    createBufferSource: () => ({ playbackRate: {}, stops: [], connect(target) { return target; }, disconnect() {}, start(...args) { this.startArgs = args; starts.push(this); }, stop(time) { this.stops.push(time); } }),
+    createGain: () => ({ gain: { setTargetAtTime(value) { this.value = value; }, setValueAtTime() {}, linearRampToValueAtTime() {}, cancelScheduledValues() {}, value: 1 }, connect(target) { return target; }, disconnect() {} }),
+    createBufferSource: () => ({ playbackRate: { setValueAtTime(value) { this.value = value; } }, stops: [], connect(target) { return target; }, disconnect() {}, start(...args) { this.startArgs = args; starts.push(this); }, stop(time) { this.stops.push(time); } }),
   };
   const state = { effectiveRate: 1, preservePitch: false };
   const effectFields = ['schemaVersion', 'reverb', 'delay', 'flanger', 'phaser', 'bitcrusher', 'saturation',
@@ -66,12 +66,44 @@ function fixture() {
   for (const name of ['invalidatePendingInstrumentNotes', 'instrumentGainAt', 'scheduleInstrumentEnvelope', 'releaseInstrumentKey', 'cleanupInstrumentVoice', 'releaseInstrumentVoice',
     'stopInstrumentVoice', 'stopAllInstrumentVoices', 'setInstrumentMode', 'setInstrumentAdsrEnabled', 'loopMatchesInstrumentSnapshot',
     'normalizedInstrumentNumber', 'buildInstrumentDescriptor', 'disableInstrument', 'exitInstrument',
-    'requestPad', 'cancelInstrumentRequest', 'toggleLoopInstrument', 'instrumentSelection', 'syncInstrumentSelection', 'playInstrumentNote', 'playDrum', 'closePanel']) {
+    'requestPad', 'cancelInstrumentRequest', 'toggleLoopInstrument', 'instrumentSelection', 'syncInstrumentSelection', 'playInstrumentNote', 'updatePadControl', 'playDrum', 'closePanel']) {
     vm.runInContext(extract(name), scope);
   }
   return { scope, audio, state, effectsState, starts, messages, timers };
 }
 async function main() {
+  {
+    const { scope, audio } = fixture();
+    scope.drumPads = Array.from({ length: 8 }, () => ({ buffer: { duration: 4 }, version: 0, gainPercent: 100, pitchSemitones: 0 }));
+    scope.ui.drumButtons = Array.from({ length: 8 }, () => ({ classList: { add() {}, remove() {} } }));
+    scope.padHydration = null;
+    scope.padsHydrated = true;
+    scope.instrumentCutItself = false;
+    scope.setInstrumentAdsrEnabled(false);
+    scope.updatePadControl(0, 'gainPercent', 200);
+    scope.updatePadControl(0, 'pitchSemitones', 12);
+    await scope.playDrum(0);
+    const first = scope.instrumentVoice;
+    assert.equal(first.padGain.gain.value, 1.54, 'maximum gain is exactly 154%');
+    assert.equal(first.sampleEndAt, 2, 'upper octave halves sample duration');
+    await scope.playDrum(1);
+    const second = scope.instrumentVoice;
+    assert.equal(second.padGain.gain.value, 1);
+    assert.equal(second.sampleEndAt, 4, 'other pads keep their original pitch');
+    audio.currentTime = .5;
+    scope.updatePadControl(0, 'pitchSemitones', -12);
+    assert.equal(first.sampleEndAt, 6.5, 'one second of source was consumed before changing rate');
+    audio.currentTime = 1.5;
+    scope.updatePadControl(0, 'pitchSemitones', 0);
+    assert.equal(first.sampleEndAt, 4, 'multiple changes preserve the accumulated source position');
+    scope.updatePadControl(0, 'gainPercent', 50);
+    assert.equal(first.padGain.gain.value, .5);
+    assert.equal(second.padGain.gain.value, 1, 'live gain only changes the selected pad');
+    scope.releaseInstrumentVoice(first, 100, true);
+    scope.updatePadControl(0, 'pitchSemitones', -12);
+    assert.equal(first.source.stops.at(-1), 1.602, 'pitch edits do not cancel note release');
+    console.log('Pad controls: gain ceiling, independent voices, live pitch cursor and release');
+  }
   {
     const { scope, audio, starts } = fixture();
     scope.drumPads = Array.from({ length: 8 }, () => ({ buffer: { duration: 2 }, version: 0 }));
