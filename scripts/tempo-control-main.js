@@ -1308,6 +1308,30 @@
     playDrum(index, event.code || event.key, false);
   }
 
+  // Installed at document_start on window: SoundCloud can register capture
+  // listeners before the lazily mounted panel exists.
+  function handlePlayerToolsKey(event) {
+    if (event.type === "keyup") releaseInstrumentKey(event);
+    if (!ui || ui.panel.hidden || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+    const target = event.composedPath()[0];
+    const editable = target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName || "");
+    const samplerToggle = target?.classList?.contains("instrument-cut-itself") || target?.classList?.contains("instrument-adsr-toggle");
+    if (editable && !samplerToggle) return;
+    if (event.type === "keydown") handleDrumKeydown(event);
+    // Cover unassigned keys, held-key repeats, keypress and keyup as well.
+    // Leave focus navigation and the focused controls' arrow keys available.
+    const controlArrow = event.composedPath().includes(ui.host) && /^(Arrow|Home$|End$)/.test(event.key);
+    const controlSpace = event.key === " " && (target?.tagName === "BUTTON" || samplerToggle);
+    if (!controlArrow && !controlSpace && (/^[a-z0-9,./;'\[\]\\=\-]$/i.test(event.key) || /^( |ArrowLeft|ArrowRight|ArrowUp|ArrowDown)$/.test(event.key))) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }
+
+  for (const type of ["keydown", "keypress", "keyup"]) {
+    window.addEventListener(type, handlePlayerToolsKey, true);
+  }
+
   function readStoredRate() {
     try {
       const stored = localStorage.getItem(RATE_STORAGE);
@@ -3106,6 +3130,12 @@
         .bypass:hover { filter: brightness(1.15); }
         .bypass:focus-visible { outline: 2px solid #ff5500; outline-offset: 2px; }
         .speed-status { display: flex; align-items: center; gap: 6px; }
+        .current { border: 0; padding: 0; background: transparent; font: inherit; color: inherit; cursor: text; }
+        .rate-input { box-sizing: border-box; width: 54px; min-width: 0; padding: 2px; border: 0; border-bottom: 1px solid #f50; border-radius: 0; background: transparent; color: inherit; font: inherit; text-align: right; outline: none; appearance: textfield; }
+        .rate-input::-webkit-inner-spin-button, .rate-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .rate-input:focus-visible { outline: none; }
+        .current:focus-visible { outline: 1px solid #f50; outline-offset: 2px; }
+        .current[hidden], .rate-input[hidden] { display: none; }
         .bypass svg { width: 20px; height: 20px; animation: heart-float 3s ease-in-out infinite; }
         @keyframes heart-float {
           0%, 100% { transform: translateY(0); }
@@ -3128,7 +3158,7 @@
           accent-color: #ff5500;
         }
 
-        .current {
+        .current, .rate-input {
           width: 6ch;
           flex: 0 0 6ch;
           text-align: right;
@@ -3166,7 +3196,7 @@
         .pitch-label { gap: 7px; font-size: 13px; white-space: nowrap; }
         .pitch-toggle { width: 17px; height: 17px; }
         .speed-status { margin-left: auto; gap: 4px; }
-        .current { font-size: 15px; }
+        .current, .rate-input { font-size: 15px; }
         .bypass { width: 26px; height: 26px; }
         .bypass svg { width: 21px; height: 21px; }
         .slider-wrap { height: 26px; margin: 0 0 5px; }
@@ -3297,7 +3327,7 @@
         .pitch-label { display: grid; place-items: center; width: 22px; height: 26px; margin: 0; padding: 0; cursor: help; }
         .pitch-toggle { width: 16px; height: 16px; margin: 0; }
         .speed-status { position: static; align-self: center; justify-self: end; min-width: 0; height: 26px; justify-content: center; gap: 3px; }
-        .current { width: 6ch; flex: 0 0 auto; font-size: 13px; }
+        .current, .rate-input { width: 6ch; flex: 0 0 auto; font-size: 13px; }
         .current.is-bypassed { color: #d6d6d6; }
         .bypass { width: 20px; height: 22px; }
         .bypass svg { width: 19px; height: 19px; }
@@ -3382,7 +3412,7 @@
           .brand-logo { width: 28px; height: 28px; border-radius: 7px; }
           .brand-name { font-size: 11px; }
           .free-badge { height: 14px; padding: 0 3px; font-size: 7px; }
-          .current { font-size: 11px; }
+          .current, .rate-input { font-size: 11px; }
           .panel-tool { width: 20px; }
           .drum-pad { padding-inline: 4px; }
           .bypass, .bypass svg { width: 16px; height: 16px; }
@@ -3484,7 +3514,8 @@
           </div>
           <label class="pitch-label" data-scdl-tooltip="Keep tone: change playback speed without changing the pitch."><input class="pitch-toggle" type="checkbox" aria-label="Keep tone" /></label>
         <div class="speed-status">
-          <output class="current">1x</output>
+          <button class="current" type="button" aria-label="Edit playback speed" title="Click to edit playback speed">1x</button>
+          <input class="rate-input" type="number" min="0.1" max="3" step="${DEFAULTS.step}" aria-label="Playback speed multiplier" hidden />
           <button class="bypass" type="button" aria-label="Bypass loop and playback effects" aria-pressed="false" title="Bypass loop and playback effects">${BYPASS_ICON}</button>
         </div>
         </div>
@@ -3697,6 +3728,7 @@
       slider: root.querySelector(".slider"),
       pitchToggle: root.querySelector(".pitch-toggle"),
       current: root.querySelector(".current"),
+      rateInput: root.querySelector(".rate-input"),
       triggerLogo: root.querySelector(".trigger-icon"),
       triggerRate: root.querySelector(".trigger-rate"),
       bypass: root.querySelector(".bypass"),
@@ -3869,7 +3901,6 @@
         input.value = "";
       });
     });
-    document.addEventListener("keydown", handleDrumKeydown, true);
     ui.trigger.addEventListener("pointerenter", (event) => {
       if (event.pointerType !== "mouse") return;
       if (hoverCloseTimer !== null) {
@@ -4040,6 +4071,28 @@
     ui.slider.addEventListener("input", () => {
       applyPlayerRate(ui.slider.valueAsNumber);
     });
+    ui.current.addEventListener("click", () => {
+      ui.rateInput.value = String(rateIntent?.rate ?? controller.snapshot().rate);
+      ui.current.hidden = true;
+      ui.rateInput.hidden = false;
+      ui.rateInput.focus();
+      ui.rateInput.select();
+    });
+    const finishRateEdit = (commit, restoreFocus = false) => {
+      if (ui.rateInput.hidden) return;
+      const value = ui.rateInput.valueAsNumber;
+      ui.rateInput.hidden = true;
+      ui.current.hidden = false;
+      if (commit && Number.isFinite(value)) applyPlayerRate(clampRate(value));
+      if (restoreFocus) ui.current.focus();
+    };
+    ui.rateInput.addEventListener("blur", () => finishRateEdit(true));
+    ui.rateInput.addEventListener("keydown", event => {
+      if (event.key !== "Enter" && event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      finishRateEdit(event.key === "Enter", true);
+    });
     ui.slider.addEventListener("dblclick", () => {
       applyPlayerRate(DEFAULTS.rate, { animate: true });
     });
@@ -4102,7 +4155,6 @@
     bindInstrumentControls();
     bindPadControls(root);
     renderSelectedPadControls();
-    document.addEventListener("keyup", releaseInstrumentKey, true);
     ui.playerToolsUpgrade.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent(OPEN_LOOPER_GUIDE_EVENT));
     });
@@ -4186,6 +4238,8 @@
     ui.trigger.setAttribute("aria-label", `Playback speed ${triggerText}`);
     // Keep the thumb under the pointer while access is checked asynchronously.
     ui.slider.value = String(playbackAllowed && rateIntent ? rateIntent.rate : state.rate);
+    ui.current.disabled = !playbackAllowed;
+    ui.rateInput.disabled = !playbackAllowed;
     ui.slider.setAttribute("aria-valuetext", formatRate(state.rate));
     ui.bypass.setAttribute("aria-pressed", String(state.bypassed));
     ui.current.classList.toggle("is-bypassed", state.bypassed);
@@ -4490,6 +4544,7 @@
   document.addEventListener(
     "keydown",
     (event) => {
+      if (event.composedPath()[0] === ui?.rateInput) return;
       if (ui?.sliceDialog.open) return;
       if (event.key === "Escape" && ui?.samplerPresetMenu.matches(":popover-open")) {
         event.preventDefault();

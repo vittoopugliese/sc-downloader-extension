@@ -655,7 +655,7 @@ async function main() {
       compactStyles.triggerRatePosition !== "absolute" ||
       compactStyles.clearRateColor !== "rgb(255, 255, 255)" ||
       compactStyles.tempoOrder.join(" ") !== "slider-wrap presets pitch-label speed-status" ||
-      compactStyles.statusOrder.join(" ") !== "current bypass"
+      compactStyles.statusOrder.join(" ") !== "current rate-input bypass"
     ) {
       throw new Error(`Playback Speed panel compact styling is incomplete: ${JSON.stringify(compactStyles)}`);
     }
