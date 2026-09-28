@@ -176,11 +176,27 @@ async function storePad(index, name, blob, id) {
 // writes happen in one transaction, so an older render cannot overwrite a load.
 async function handleSamplerPreset(message) {
   const action = message.type.replace("OFFSCREEN_SAMPLER_PRESET_", "");
+  const readAudio = async audio => {
+    if (typeof audio !== "string" || audio.length > 44 * 1024 * 1024 || !/^data:audio\/wav;base64,[A-Za-z0-9+/=]+$/.test(audio)) throw new Error("Invalid instrument audio (maximum 32 MB).");
+    return (await fetch(audio)).blob();
+  };
+  if (action === "RENDER") {
+    const time = message.settings?.timePercent;
+    if (!Number.isInteger(time) || time < 25 || time > 400) throw new Error("Invalid instrument time.");
+    const blob = await renderPadTime(await readAudio(message.settings.audio), time);
+    const audio = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+    return { success: true, audio };
+  }
   const id = message.presetId;
   if (action !== "LIST" && (typeof id !== "string" || !/^preset_[A-Za-z0-9_-]{8,100}$/.test(id))) {
     throw new Error("Invalid sampler preset.");
   }
-  const metadata = ({ id, name, createdAt }) => ({ id, name, createdAt });
+  const metadata = ({ id, name, createdAt, settings }) => ({ id, name, createdAt, kind: settings?.kind || "pads" });
   if (action === "LIST") {
     const records = await padTransactionFor("presets", "readonly", store => store.getAll());
     return { success: true, presets: records.map(metadata).sort((a, b) => b.createdAt - a.createdAt) };
@@ -212,6 +228,14 @@ async function handleSamplerPreset(message) {
           envelope: Object.fromEntries(["attack", "decay", "sustain", "release"].map(key =>
             [key, bounded(pad.envelope?.[key], 0, key === "sustain" ? 100 : 5000)])) };
       }) };
+    settings.kind = state.kind === "piano" ? "piano" : "pads";
+    if (settings.kind === "piano") {
+      const instrument = state.instrument;
+      await readAudio(instrument?.audio);
+      if (!Number.isInteger(instrument.octave) || Math.abs(instrument.octave) > 4) throw new Error("Invalid octave.");
+      // Reuse the validated selected-pad shape for the keyboard-wide controls.
+      settings.instrument = { ...settings.pads[state.selectedPadIndex], audio: instrument.audio, octave: instrument.octave };
+    }
     if (typeof message.name !== "string" || !message.name.trim() || message.name.length > 80) throw new Error("Enter a preset name.");
   }
   const database = await openPadDatabase();
@@ -231,11 +255,15 @@ async function handleSamplerPreset(message) {
         if (preset) { result = { success: true, preset: metadata(preset) }; return; }
         const all = samples.getAll();
         all.onsuccess = guard(() => {
-          const record = { id, name: message.name.trim(), createdAt: Date.now(), settings, samples: all.result };
+          const record = { id, name: message.name.trim(), createdAt: Date.now(), settings, samples: settings.kind === "piano" ? [] : all.result };
           presets.add(record);
           result = { success: true, preset: metadata(record) };
         });
       } else if (action === "LOAD" && preset) {
+        if (preset.settings.kind === "piano") {
+          result = { success: true, settings: preset.settings, pads: [] };
+          return;
+        }
         samples.clear();
         const updatedAt = Date.now();
         const claimId = `preset_load_${crypto.randomUUID()}`;
@@ -253,7 +281,10 @@ async function handleSamplerPreset(message) {
 
 // Serialize time renders to bound decoder/WASM working memory across pads/tabs.
 let padTimeQueue = Promise.resolve();
+let pendingPadTimes = 0;
 function renderPadTime(blob, timePercent) {
+  if (pendingPadTimes >= 8) return Promise.reject(new Error("Sampler is busy preparing audio. Try again shortly."));
+  pendingPadTimes++;
   const keepalive = setInterval(() => chrome.runtime.sendMessage({ type: "OFFSCREEN_KEEPALIVE" }).catch(() => {}), SERVICE_WORKER_KEEPALIVE_MS);
   const render = padTimeQueue.then(async () => {
     if (blob.size > PAD_MAX_BYTES) throw new Error("This sample is too large for a pad.");
@@ -270,7 +301,7 @@ function renderPadTime(blob, timePercent) {
     } finally { await context.close(); }
   });
   padTimeQueue = render.catch(() => {});
-  return render.finally(() => clearInterval(keepalive));
+  return render.finally(() => { pendingPadTimes--; clearInterval(keepalive); });
 }
 
 async function handlePadMessage(message) {
@@ -435,7 +466,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: false, code: "slice_failed", error: error?.message || "Could not prepare the slices." }));
     return true;
   }
-  if (["OFFSCREEN_SAMPLER_PRESET_LIST", "OFFSCREEN_SAMPLER_PRESET_SAVE", "OFFSCREEN_SAMPLER_PRESET_LOAD", "OFFSCREEN_SAMPLER_PRESET_DELETE",
+  if (["OFFSCREEN_SAMPLER_PRESET_LIST", "OFFSCREEN_SAMPLER_PRESET_SAVE", "OFFSCREEN_SAMPLER_PRESET_LOAD", "OFFSCREEN_SAMPLER_PRESET_DELETE", "OFFSCREEN_SAMPLER_PRESET_RENDER",
       "OFFSCREEN_PAD_LIST", "OFFSCREEN_PAD_DELETE", "OFFSCREEN_PAD_GET", "OFFSCREEN_PAD_STORE", "OFFSCREEN_PAD_RENDER",
       "OFFSCREEN_INSTRUMENT_RENDER", "OFFSCREEN_INSTRUMENT_CANCEL", "OFFSCREEN_INSTRUMENT_READ"].includes(message.type)) {
     const operationId = message.operationId;

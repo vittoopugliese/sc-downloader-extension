@@ -27,6 +27,7 @@ const { chromium } = require('playwright');
       });
       await page.goto(url);
       await page.evaluate(() => {
+        document.documentElement.setAttribute('data-scdl-player-tools-access', JSON.stringify({ plan: 'pro', capabilities: { loopInstrument: true } }));
         window.chrome = { runtime: {
           id: 'test', getURL: file => /^(scripts\/vendor\/|assets\/drums\/)/.test(file)
             ? `${location.origin}/${file}` : `chrome-extension://test/${file}`,
@@ -213,7 +214,72 @@ const { chromium } = require('playwright');
     assert.equal(await presetPage.evaluate(async presetId => (await send({ type: 'OFFSCREEN_SAMPLER_PRESET_LOAD', presetId })).success, saved.id), false);
     await presetHost.locator('.sampler-toggle').click();
     assert.equal(await presetHost.locator('.sampler-preset-toggle').getAttribute('aria-expanded'), 'false', 'Clicking outside closes the dropdown');
-    console.log('Sampler persistence passed: lazy audio, reopen, new page, delete, stale writes, retry, cross-tab refresh and named state save/load/delete with audio and settings.');
+    // A piano preset owns its sample, loads without a loop, and leaves the kit intact.
+    assert.equal(await presetPage.evaluate(async () => {
+      const audio = await new Promise(async resolve => {
+        const reader = new FileReader(); reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(await (await fetch('/hat1.wav')).blob());
+      });
+      const pads = Array.from({ length: 8 }, () => ({ key: '', gainPercent: 80, pitchSemitones: 3,
+        timePercent: 100, envelope: { attack: 51, decay: 127, sustain: 66, release: 166 } }));
+      return (await send({ type: 'OFFSCREEN_SAMPLER_PRESET_SAVE', presetId: 'preset_piano_fixture', name: 'Piano sample',
+        settings: { kind: 'piano', selectedPadIndex: 0, adsrEnabled: true, cutItself: false,
+          pads, instrument: { audio, octave: 1 } } })).success;
+    }), true);
+    await presetHost.locator('.sampler-preset-toggle').click();
+    await presetHost.locator('.sampler-preset-load').filter({ hasText: 'Piano sample' }).click();
+    await presetPage.waitForFunction(() => document.querySelector('#scdl-tempo-control').shadowRoot.querySelector('.loop-instrument').getAttribute('aria-pressed') === 'true');
+    assert.equal(await presetHost.locator('[data-pad-control="gainPercent"]').getAttribute('aria-valuenow'), '80');
+    assert.equal(await presetHost.locator('[data-pad-control="pitchSemitones"]').getAttribute('aria-valuenow'), '3');
+    assert.equal(await presetHost.locator('[data-envelope="attack"]').getAttribute('aria-valuenow'), '51');
+    assert.equal(await presetHost.locator('[data-pad-control="gainPercent"]').isVisible(), true);
+    assert.equal(await presetPage.evaluate(async () => (await send({ type: 'OFFSCREEN_PAD_GET', index: 0 })).pad.dataUrl), originalAudio);
+    await presetHost.locator('[data-pad-control="gainPercent"]').press('ArrowUp');
+    await presetHost.locator('[data-pad-control="timePercent"]').press('ArrowUp');
+    await presetHost.locator('.sampler-preset-toggle').click();
+    await presetHost.locator('.sampler-preset-name').fill('Jam piano');
+    await presetHost.locator('.sampler-preset-save').click();
+    await presetHost.locator('.sampler-preset-load').filter({ hasText: 'Jam piano' }).waitFor();
+    const jam = await presetPage.evaluate(async () => {
+      const preset = (await send({ type: 'OFFSCREEN_SAMPLER_PRESET_LIST' })).presets.find(p => p.name === 'Jam piano');
+      return (await send({ type: 'OFFSCREEN_SAMPLER_PRESET_LOAD', presetId: preset.id })).settings;
+    });
+    assert.equal(jam.instrument.gainPercent, 81);
+    assert.equal(jam.instrument.timePercent, 101);
+    assert.equal(jam.instrument.octave, 1);
+    assert.equal(jam.cutItself, false);
+    assert.equal(jam.adsrEnabled, true);
+    const fresh = await context.newPage();
+    await install(fresh); await bridge(fresh);
+    await fresh.evaluate(() => document.dispatchEvent(new CustomEvent('scdl:open-player-tools-panel')));
+    const freshHost = fresh.locator('#scdl-tempo-control');
+    await freshHost.locator('.sampler-preset-toggle').click();
+    await freshHost.locator('.sampler-preset-load').filter({ hasText: 'Jam piano' }).click();
+    await fresh.waitForFunction(() => document.querySelector('#scdl-tempo-control').shadowRoot.querySelector('.loop-instrument').getAttribute('aria-pressed') === 'true');
+    assert.equal(await freshHost.locator('[data-pad-control="timePercent"]').getAttribute('aria-valuenow'), '101');
+    await freshHost.locator('.sampler-preset-menu').waitFor({ state: 'hidden' });
+    await fresh.bringToFront();
+    await fresh.evaluate(() => {
+      window.pianoHits = [];
+      const start = AudioBufferSourceNode.prototype.start;
+      AudioBufferSourceNode.prototype.start = function(...args) {
+        pianoHits.push({ duration: this.buffer.duration, rate: this.playbackRate.value });
+        return start.apply(this, args);
+      };
+    });
+    await freshHost.locator('[data-pad-control="timePercent"]').focus();
+    await fresh.keyboard.down('q');
+    await fresh.waitForFunction(() => pianoHits.length > 0).catch(async error => {
+      throw new Error(`${error.message}: ${await freshHost.locator('.drum-message').textContent()}`);
+    });
+    await fresh.keyboard.up('q');
+    const hit = await fresh.evaluate(() => pianoHits.at(-1));
+    assert.ok(hit.duration > 0);
+    assert.ok(hit.rate > 1, 'Keyboard octave and instrument pitch apply to rendered audio');
+    await freshHost.locator('.sampler-preset-toggle').click();
+    await fresh.waitForFunction(() => document.querySelector('#scdl-tempo-control').shadowRoot.querySelector('.sampler-preset-status').textContent === '');
+    await fresh.screenshot({ path: path.join(__dirname, '../test-results/sampler-piano-presets.png') });
+    console.log('Sampler persistence passed: pads and independent piano audio/settings survive fresh pages, save/load/delete and legacy presets.');
   } finally {
     await browser.close();
     await new Promise(resolve => server.close(resolve));

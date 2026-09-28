@@ -141,6 +141,13 @@
         for (const channels of chunks) {
           channels.forEach((channel, index) => buffer.copyToChannel(channel, index, at)); at += channels[0].length;
         }
+        // Keep the chunk interface for waveform/export, but share the preview PCM.
+        // Retaining the captured arrays as well would double a five-minute take.
+        chunks = [];
+        const channels = [buffer.getChannelData(0), buffer.getChannelData(1)];
+        for (let offset = 0; offset < frames; offset += 2048) {
+          chunks.push(channels.map(channel => channel.subarray(offset, Math.min(frames, offset + 2048))));
+        }
       }
       previewOffset = offset >= buffer.duration ? 0 : Math.max(0, offset);
       previewStart = context.currentTime;

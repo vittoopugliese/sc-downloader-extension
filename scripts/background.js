@@ -788,7 +788,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  if (["SAMPLER_PRESET_LIST", "SAMPLER_PRESET_SAVE", "SAMPLER_PRESET_LOAD", "SAMPLER_PRESET_DELETE",
+  if (["SAMPLER_PRESET_LIST", "SAMPLER_PRESET_SAVE", "SAMPLER_PRESET_LOAD", "SAMPLER_PRESET_DELETE", "SAMPLER_PRESET_RENDER",
       "RENDER_LOOP_PAD", "RENDER_LOOP_INSTRUMENT", "CANCEL_LOOP_INSTRUMENT",
       "GET_LOOP_PAD_LIST", "GET_LOOP_PAD_AUDIO", "STORE_LOOP_PAD_AUDIO", "DELETE_LOOP_PAD_AUDIO"].includes(request.type)) {
     if (sender.id !== chrome.runtime.id || !sender.tab || !/^https:\/\/soundcloud\.com\//.test(sender.url || "")) {

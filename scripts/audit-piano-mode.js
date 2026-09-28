@@ -39,6 +39,8 @@ function fixture() {
   Object.assign(effectsState, { schemaVersion: 2, bypassed: false, preset: 'custom', available: true,
     initialized: true, eq: { enabled: true, hardClip: false, bands: [] } });
   const scope = {
+    performance,
+    closeSamplerPresets() {},
     instrumentMode: false, instrumentOctave: 0, instrumentPreparing: false,
     instrumentBuffer: null, instrumentVoice: null, instrumentNoteRevision: 0,
     instrumentResumePromise: null, instrumentIntentVersion: 0, instrumentOperationId: null,
@@ -46,6 +48,7 @@ function fixture() {
     instrumentKeys: new Map(), instrumentCutItself: true,
     instrumentAdsrEnabled: true,
     instrumentEnvelope: { attack: 4, decay: 100, sustain: 100, release: 100 },
+    instrumentSettings: { gainPercent: 100, pitchSemitones: 0, timePercent: 100 }, instrumentTimeCache: null,
     waveformDrawPreview: null,
     padRequests: new Map(), loopState: { active: true, trackIdentity: 'permalink:track', generation: 1, startMs: 0, endMs: 1000, durationMs: 10000 },
     ui: { panel: { hidden: false } }, document: { hidden: false }, hoveredDrum: null, panelOpenMode: null,
@@ -72,6 +75,33 @@ function fixture() {
   return { scope, audio, state, effectsState, starts, messages, timers };
 }
 async function main() {
+  {
+    const { scope, audio } = fixture();
+    scope.instrumentMode = true;
+    scope.instrumentBuffer = { duration: 4 };
+    scope.instrumentSnapshot = { saved: true };
+    scope.instrumentCutItself = false;
+    scope.drumPads = [{ gainPercent: 100, pitchSemitones: 0, timePercent: 100 }];
+    await scope.playInstrumentNote(72, 'KeyQ');
+    const root = scope.instrumentVoice;
+    await scope.playInstrumentNote(84, 'KeyI');
+    const octave = scope.instrumentVoice;
+    scope.updatePadControl(0, 'gainPercent', 70);
+    assert.equal(root.padGain.gain.value, .7);
+    assert.equal(octave.padGain.gain.value, .7);
+    audio.currentTime = .5;
+    scope.updatePadControl(0, 'pitchSemitones', 12);
+    assert.equal(root.playbackRate, 2);
+    assert.equal(octave.playbackRate, 4);
+    assert.equal(root.sampleEndAt, 2.25);
+    assert.equal(octave.sampleEndAt, 1.25);
+    assert.equal(scope.drumPads[0].pitchSemitones, 0);
+    assert.equal(scope.drumPads[0].gainPercent, 100);
+    scope.updatePadControl(0, 'timePercent', 200);
+    assert.equal(scope.instrumentSettings.timePercent, 200);
+    assert.equal(scope.drumPads[0].timePercent, 100);
+    console.log('Piano controls: keyboard-wide gain/pitch, preserved intervals and cursor, isolated pad settings');
+  }
   {
     const { scope, audio } = fixture();
     scope.drumPads = [25, 75].map(sustain => ({ buffer: { duration: 4 }, version: 0,
@@ -259,7 +289,7 @@ async function main() {
     scope.loopState.endMs = 18000;
     scope.syncInstrumentSelection();
     assert.equal(starts.length, 2, 'moving only the end reschedules without restarting');
-    assert.equal(voice.source.stops.at(-1), 2.5);
+    assert.ok(Math.abs(voice.source.stops.at(-1) - 2.5) < 1e-9);
     scope.releaseInstrumentKey({ code: 'KeyI', preventDefault() {}, stopImmediatePropagation() {} });
     scope.loopState.endMs = 20000;
     scope.syncInstrumentSelection();

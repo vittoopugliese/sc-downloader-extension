@@ -65,6 +65,13 @@ const { chromium } = require("playwright");
         const state = recorder.snapshot();
         await recorder.play(); await sleep(80); const playing = recorder.snapshot().state;
         recorder.stopPreview(); const position = recorder.position();
+        const afterPreview = new Uint8Array(await recorder.exportWav().arrayBuffer());
+        if (afterPreview.length !== bytes.byteLength || afterPreview.some((value, i) => value !== new Uint8Array(bytes)[i])) {
+          throw new Error('Preview must preserve every captured sample for WAV export');
+        }
+        if (Math.abs(recorder.sampleAt(2049, 0) - decoded.getChannelData(0)[2049]) > .001) {
+          throw new Error('Waveform samples must survive preview PCM compaction');
+        }
         recorder.seek(.3); const seek = recorder.position();
         // A context replacement during the take must add the new track while old pads keep sounding.
         await recorder.start();

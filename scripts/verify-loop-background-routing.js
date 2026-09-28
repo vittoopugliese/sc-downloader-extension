@@ -2,6 +2,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+// Exercise paid/trial denial paths explicitly; the shipped free-Pro policy has its own suite.
+globalThis.SCReleaseConfig = Object.freeze({ FREE_PRO_ENABLED: false });
 const policy = require("./player-tools-policy.js");
 const { create, STORAGE_KEY } = require("./player-tools-access.js");
 let accessState = policy.normalize();

@@ -177,6 +177,8 @@
   const instrumentVoices = new Set();
   const instrumentKeys = new Map();
   const instrumentEnvelope = { attack: 4, decay: 100, sustain: 100, release: 100 };
+  const instrumentSettings = { gainPercent: 100, pitchSemitones: 0, timePercent: 100 };
+  let instrumentTimeCache = null;
   let selectedPadIndex = 0;
   let samplerPresetBusy = false;
   let samplerPresets = [];
@@ -445,6 +447,11 @@
       padCacheTimer = null;
       padCacheRevision += 1;
       for (const pad of drumPads) pad.buffer = null;
+      if (!instrumentMode && !instrumentPreparing) {
+        instrumentBuffer = null;
+        instrumentTimeCache = null;
+        instrumentSnapshot = null;
+      }
     }, 60000);
   }
 
@@ -761,6 +768,7 @@
     if (!instrumentMode) stopAllInstrumentVoices();
     if (clearBuffer) {
       instrumentBuffer = null;
+      instrumentTimeCache = null;
       instrumentSnapshot = null;
     }
     if (ui?.instrumentToggle) {
@@ -807,6 +815,7 @@
   }
 
   function loopMatchesInstrumentSnapshot(snapshot = instrumentSnapshot) {
+    if (snapshot?.saved) return true;
     return Boolean(snapshot && loopState.active &&
       snapshot.signature === buildInstrumentDescriptor().signature);
   }
@@ -890,6 +899,7 @@
       }
       if (intentVersion !== instrumentIntentVersion || !loopMatchesInstrumentSnapshot(descriptor)) return;
       instrumentBuffer = buffer;
+      instrumentTimeCache = null;
       instrumentPreparing = false;
       instrumentOperationId = null;
       setInstrumentMode(true);
@@ -903,6 +913,7 @@
   }
 
   function instrumentSelection() {
+    if (instrumentSnapshot?.saved) return { start: 0, end: instrumentBuffer.duration };
     const range = waveformDrawPreview || loopState;
     const rate = instrumentSnapshot?.playbackTransform.rate || 1;
     const start = Math.max(0, range.startMs / 1000 / rate);
@@ -911,18 +922,24 @@
   }
 
   function syncInstrumentSelection() {
-    if (!instrumentMode || !instrumentBuffer) return;
+    if (!instrumentMode || !instrumentBuffer || instrumentSnapshot?.saved) return;
     const range = instrumentSelection();
     for (const voice of instrumentVoices) {
+      if (voice.stretched) {
+        if (range?.start !== voice.originalSelection.start || range?.end !== voice.originalSelection.end) releaseInstrumentVoice(voice);
+        continue;
+      }
       if (voice.releasing || voice.cleaned) continue;
       const now = voice.context.currentTime;
-      const elapsed = Math.max(0, now - voice.startedAt);
-      const position = range ? range.start + elapsed * voice.playbackRate : Infinity;
+      const position = range ? voice.padPosition + Math.max(0, now - voice.padRateChangedAt) * voice.playbackRate + range.start - voice.selectionStart : Infinity;
       if (!range || position >= range.end) {
         releaseInstrumentVoice(voice);
         continue;
       }
-      voice.sampleEndAt = voice.startedAt + (range.end - range.start) / voice.playbackRate;
+      voice.padPosition = position;
+      voice.padRateChangedAt = now;
+      voice.selectionEnd = range.end;
+      voice.sampleEndAt = now + (range.end - position) / voice.playbackRate;
       if (voice.selectionStart !== range.start) {
         const previousSource = voice.source;
         const previousFade = voice.sourceFade;
@@ -968,8 +985,25 @@
       }
       if (noteRevision !== instrumentNoteRevision || instrumentKeys.get(key) !== held || !capability("loopInstrument") ||
           !instrumentMode || instrumentBuffer !== buffer || ui?.panel.hidden || document.hidden) return;
-      const range = instrumentSelection();
+      let range = instrumentSelection();
       if (!range) return;
+      const originalSelection = range;
+      let noteBuffer = buffer;
+      const timePercent = instrumentSettings.timePercent;
+      if (timePercent !== 100) {
+        const signature = `${range.start}:${range.end}:${timePercent}`;
+        if (instrumentTimeCache?.buffer !== buffer || instrumentTimeCache.signature !== signature) {
+          const promise = encodeInstrumentAudio(buffer, range)
+            .then(audio => requestPad("preset-render", { settings: { audio, timePercent } }))
+            .then(async result => context.decodeAudioData(await (await fetch(result.audio)).arrayBuffer()));
+          instrumentTimeCache = { buffer, signature, promise };
+          promise.catch(() => { if (instrumentTimeCache?.promise === promise) instrumentTimeCache = null; });
+        }
+        noteBuffer = await instrumentTimeCache.promise;
+        const currentRange = instrumentSelection();
+        if (noteRevision !== instrumentNoteRevision || instrumentKeys.get(key) !== held || !instrumentMode || instrumentBuffer !== buffer || instrumentSettings.timePercent !== timePercent || currentRange?.start !== range.start || currentRange?.end !== range.end || ui?.panel.hidden || document.hidden) return;
+        range = { start: 0, end: noteBuffer.duration };
+      }
       if (instrumentCutItself) {
         for (const voice of instrumentVoices) releaseInstrumentVoice(voice);
       }
@@ -982,10 +1016,14 @@
       const source = context.createBufferSource();
       const gain = context.createGain();
       const sourceFade = context.createGain();
-      source.buffer = buffer;
-      source.playbackRate.value = globalThis.SCSamplerCore.playbackRateForMidi(midiNote);
-      source.connect(sourceFade).connect(gain).connect(context.destination);
-      const voice = { source, sourceFade, gain, context, key, keyReleased: held.released === true, startedAt: context.currentTime,
+      source.buffer = noteBuffer;
+      source.playbackRate.value = globalThis.SCSamplerCore.playbackRateForMidi(midiNote) * 2 ** (instrumentSettings.pitchSemitones / 12);
+      const padGain = context.createGain();
+      padGain.gain.value = instrumentSettings.gainPercent / 100;
+      source.connect(sourceFade).connect(gain).connect(padGain).connect(context.destination);
+      const voice = { source, sourceFade, gain, padGain, midiNote, originalSelection, stretched: timePercent !== 100,
+        padPosition: range.start, padRateChangedAt: context.currentTime, selectionEnd: range.end,
+        context, key, keyReleased: held.released === true, startedAt: context.currentTime,
         selectionStart: range.start, playbackRate: source.playbackRate.value,
         sampleEndAt: context.currentTime + (range.end - range.start) / source.playbackRate.value,
         cleanupTimer: null, releasing: false, cleaned: false };
@@ -1011,6 +1049,22 @@
     }
   }
 
+  function cachePadBuffer(pad, buffer) {
+    // Bound reusable PCM per tab. Eviction never disconnects a sounding voice.
+    const bytes = value => value ? value.length * value.numberOfChannels * 4 : 0;
+    const budget = 64 * 1024 * 1024;
+    pad.buffer = null;
+    let total = bytes(buffer) + drumPads.reduce((sum, item) => sum + bytes(item.buffer), 0);
+    for (const other of drumPads.filter(item => item !== pad && item.buffer)
+      .sort((a, b) => (a.lastUsed || 0) - (b.lastUsed || 0))) {
+      if (total <= budget) break;
+      total -= bytes(other.buffer);
+      other.buffer = null;
+    }
+    pad.lastUsed = performance.now();
+    if (bytes(buffer) <= budget) pad.buffer = buffer;
+  }
+
   async function loadDefaultDrum(pad) {
     if (pad.buffer) return pad.buffer;
     if (pad.loading) return pad.loading;
@@ -1027,7 +1081,7 @@
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Could not load ${pad.name}.`);
       const buffer = await getDrumAudioContext().decodeAudioData(await response.arrayBuffer());
-      if (pad.version === version && padCacheRevision === cacheRevision) pad.buffer = buffer;
+      if (pad.version === version && padCacheRevision === cacheRevision) cachePadBuffer(pad, buffer);
       return buffer;
     })();
     pad.loading = loading;
@@ -1036,13 +1090,18 @@
   }
 
   function updatePadControl(index, name, value) {
-    const pad = drumPads[index];
+    const pad = instrumentMode ? instrumentSettings : drumPads[index];
     const limits = { gainPercent: [0, 154], pitchSemitones: [-12, 12], timePercent: [25, 400] };
     if (!pad || !limits[name] || !Number.isFinite(value) || pad.busy) return;
     const next = Math.round(Math.max(limits[name][0], Math.min(limits[name][1], value)));
     if (pad[name] === next) return;
     pad[name] = next;
     if (name === "timePercent") {
+      if (instrumentMode) {
+        instrumentTimeCache = null;
+        invalidatePendingInstrumentNotes();
+        return;
+      }
       // Re-render from the saved original on the next hit. Invalidate pending
       // notes too, so an older stretch can never play after a newer edit.
       pad.version++;
@@ -1051,7 +1110,7 @@
       return;
     }
     for (const voice of instrumentVoices) {
-      if (voice.padIndex !== index || voice.cleaned) continue;
+      if ((instrumentMode ? voice.midiNote === undefined : voice.padIndex !== index) || voice.cleaned) continue;
       const now = voice.context.currentTime;
       if (name === "gainPercent") {
         voice.padGain.gain.setTargetAtTime(pad.gainPercent / 100, now, .008);
@@ -1060,9 +1119,9 @@
         // move the sample cursor and truncate notes after live pitch edits.
         voice.padPosition += Math.max(0, now - voice.padRateChangedAt) * voice.playbackRate;
         voice.padRateChangedAt = now;
-        voice.playbackRate = 2 ** (pad.pitchSemitones / 12);
+        voice.playbackRate = 2 ** (pad.pitchSemitones / 12) * (instrumentMode ? globalThis.SCSamplerCore.playbackRateForMidi(voice.midiNote) : 1);
         voice.source.playbackRate.setValueAtTime(voice.playbackRate, now);
-        voice.sampleEndAt = now + Math.max(0, voice.source.buffer.duration - voice.padPosition) / voice.playbackRate;
+        voice.sampleEndAt = now + Math.max(0, (voice.selectionEnd ?? voice.source.buffer.duration) - voice.padPosition) / voice.playbackRate;
         if (voice.releasing) scheduleInstrumentEnvelope(voice);
         else voice.source.stop(voice.sampleEndAt);
       }
@@ -1070,6 +1129,7 @@
   }
 
   function bindPadControls(root) {
+    const selected = () => instrumentMode ? instrumentSettings : drumPads[selectedPadIndex];
     for (const knob of root.querySelectorAll(".pad-knob[data-pad-control]")) {
       const name = knob.dataset.padControl;
       const gain = name === "gainPercent";
@@ -1077,7 +1137,8 @@
       const minimum = gain ? 0 : time ? 25 : -12;
       const maximum = gain ? 154 : time ? 400 : 12;
       const render = () => {
-        const value = drumPads[selectedPadIndex][name];
+        const value = selected()[name];
+        knob.setAttribute("aria-label", `${instrumentMode ? "Keyboard" : "Selected pad"} ${gain ? "gain" : time ? "time" : "pitch"}`);
         const label = gain || time ? `${value}%` : `${value > 0 ? "+" : ""}${value} st`;
         knob.style.setProperty("--knob-angle", `${-135 + (value - minimum) / (maximum - minimum) * 270}deg`);
         knob.setAttribute("aria-valuenow", String(value));
@@ -1089,7 +1150,7 @@
       let drag = null;
       knob.addEventListener("pointerdown", event => {
         if (event.button !== 0) return;
-        drag = { id: event.pointerId, y: event.clientY, value: drumPads[selectedPadIndex][name] };
+        drag = { id: event.pointerId, y: event.clientY, value: selected()[name] };
         knob.setPointerCapture(event.pointerId);
         knob.focus();
         event.preventDefault();
@@ -1104,7 +1165,7 @@
         event.preventDefault();
         event.stopPropagation();
         update(event.key === "Home" ? minimum : event.key === "End" ? maximum
-          : drumPads[selectedPadIndex][name] + (["ArrowUp", "ArrowRight"].includes(event.key) ? 1 : -1) * (event.shiftKey ? 10 : 1));
+          : selected()[name] + (["ArrowUp", "ArrowRight"].includes(event.key) ? 1 : -1) * (event.shiftKey ? 10 : 1));
       });
       knob.renderControl = render;
       render();
@@ -1130,6 +1191,7 @@
       const version = pad.version;
       if (!pad.buffer && pad.timePercent !== 100) showDrumError("Preparing sample time…");
       const buffer = pad.buffer || await loadDefaultDrum(pad);
+      pad.lastUsed = performance.now();
       if (noteRevision !== instrumentNoteRevision || instrumentKeys.get(key) !== held ||
           pad.version !== version || pad.busy || instrumentMode || ui?.panel.hidden || document.hidden) return;
       if (instrumentCutItself) {
@@ -1205,7 +1267,8 @@
       const name = file.name.replace(/\.[^.]+$/, "") || pad.name;
       await requestPad("store", { index, name, mimeType: file.type || "audio/wav", base64, operationId: `pad_${crypto.randomUUID()}` });
       if (pad.version !== version) return;
-      pad.buffer = ui?.panel.hidden || pad.timePercent !== 100 ? null : buffer;
+      pad.buffer = null;
+      if (!ui?.panel.hidden && pad.timePercent === 100) cachePadBuffer(pad, buffer);
       pad.saved = true;
       pad.customName = name;
       updateDrumLabels();
@@ -1730,7 +1793,7 @@
     const state = response?.state;
     if (!state) return;
     const nextLoop = state.loop || { active: false, enabled: false };
-    if (instrumentSnapshot && (
+    if (instrumentSnapshot && !instrumentSnapshot.saved && (
       !nextLoop.active ||
       nextLoop.trackIdentity !== instrumentSnapshot.trackIdentity ||
       nextLoop.generation !== instrumentSnapshot.generation ||
@@ -2044,7 +2107,7 @@
     ui.sliceButton.setAttribute("aria-busy", String(Boolean(sliceJob)));
     ui.saveLoopPad.disabled = !capability("saveLoopPad") || !loopState.active || padRenderPending;
     ui.saveLoopPad.title = capability("saveLoopPad") ? "Save loop to a pad" : "Player Tools Pro required";
-    ui.instrumentToggle.disabled = !capability("loopInstrument") || !loopState.active || padRenderPending;
+    ui.instrumentToggle.disabled = !capability("loopInstrument") || (!loopState.active && !instrumentMode) || padRenderPending;
     ui.instrumentControls.hidden = false;
     ui.instrumentCutLabel.hidden = false;
     ui.instrumentAdsrLabel.hidden = false;
@@ -2402,6 +2465,35 @@
     ui.samplerPresetToggle.setAttribute("aria-expanded", "false");
   }
 
+  async function encodeInstrumentAudio(buffer, range) {
+    if (!buffer || !range) throw new Error("No instrument sample selected.");
+    const start = Math.max(0, Math.floor(range.start * buffer.sampleRate));
+    const frames = Math.min(buffer.length, Math.floor(range.end * buffer.sampleRate)) - start;
+    const channels = buffer.numberOfChannels;
+    const size = frames * channels * 2;
+    if (frames <= 0 || size > 32 * 1024 * 1024) throw new Error("Instrument samples must be smaller than 32 MB.");
+    const wav = new ArrayBuffer(44 + size);
+    const view = new DataView(wav);
+    const label = (offset, text) => [...text].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
+    label(0, "RIFF"); view.setUint32(4, 36 + size, true); label(8, "WAVE"); label(12, "fmt ");
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, channels, true);
+    view.setUint32(24, buffer.sampleRate, true); view.setUint32(28, buffer.sampleRate * channels * 2, true);
+    view.setUint16(32, channels * 2, true); view.setUint16(34, 16, true); label(36, "data"); view.setUint32(40, size, true);
+    for (let channel = 0; channel < channels; channel++) {
+      const data = buffer.getChannelData(channel);
+      for (let i = 0; i < frames; i++) {
+        const value = Math.max(-1, Math.min(1, data[start + i]));
+        view.setInt16(44 + (i * channels + channel) * 2, Math.round(value * (value < 0 ? 32768 : 32767)), true);
+      }
+    }
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(new Blob([wav], { type: "audio/wav" }));
+    });
+  }
+
   function renderSamplerPresetCopy() {
     if (!ui) return;
     ui.samplerPresetToggle.title = samplerCopy("presets");
@@ -2409,7 +2501,7 @@
     ui.samplerPresetMenu.setAttribute("aria-label", samplerCopy("presets"));
     ui.samplerPresetName.placeholder = samplerCopy("stateName");
     ui.samplerPresetName.setAttribute("aria-label", samplerCopy("stateName"));
-    ui.samplerPresetSave.textContent = `+ ${samplerCopy("saveState")}`;
+    ui.samplerPresetSave.textContent = `+ ${samplerCopy("saveState")} · ${instrumentMode ? "Piano" : "8 pads"}`;
   }
 
   function renderSamplerPresetBusy() {
@@ -2430,6 +2522,11 @@
     for (const preset of samplerPresets) {
       const row = document.createElement("div");
       row.className = "sampler-preset-row";
+      const kind = document.createElement("span");
+      kind.className = "sampler-preset-kind";
+      kind.textContent = preset.kind === "piano" ? "♫" : "▦";
+      kind.title = preset.kind === "piano" ? "Piano · 1 sample" : "8 pads";
+      kind.setAttribute("aria-label", kind.title);
       const load = document.createElement("button");
       load.type = "button";
       load.className = "sampler-preset-load";
@@ -2443,7 +2540,7 @@
       remove.setAttribute("aria-label", `${samplerCopy("deleteState")}: ${preset.name}`);
       remove.title = remove.getAttribute("aria-label");
       remove.addEventListener("click", () => runSamplerPreset("delete", preset));
-      row.append(load, remove);
+      row.append(kind, load, remove);
       list.append(row);
     }
     renderSamplerPresetBusy();
@@ -2499,13 +2596,19 @@
     renderSamplerPresetBusy();
     ui.samplerPresetStatus.textContent = "";
     try {
+      const piano = action === "save" && instrumentMode;
+      const instrument = piano ? { ...instrumentSettings, envelope: { ...instrumentEnvelope }, octave: instrumentOctave,
+        audio: await encodeInstrumentAudio(instrumentBuffer, instrumentSelection()) } : null;
       const result = await requestPad(`preset-${action}`, { presetId: preset?.id || `preset_${crypto.randomUUID()}`, name,
-        ...(action === "save" ? { settings: { selectedPadIndex, adsrEnabled: instrumentAdsrEnabled, cutItself: instrumentCutItself,
-          pads: drumPads.map(({ key, gainPercent, pitchSemitones, timePercent, envelope }) => ({ key, gainPercent, pitchSemitones, timePercent, envelope: { ...envelope } })) } } : {}) });
+        ...(action === "save" ? { settings: { kind: piano ? "piano" : "pads", instrument, selectedPadIndex, adsrEnabled: instrumentAdsrEnabled, cutItself: instrumentCutItself,
+          pads: drumPads.map(({ key, gainPercent, pitchSemitones, timePercent, envelope }, index) => ({ key, gainPercent, pitchSemitones, timePercent, envelope: { ...envelope },
+            ...(piano && index === selectedPadIndex ? { ...instrumentSettings, envelope: { ...instrumentEnvelope } } : {}) })) } } : {}) });
       if (action === "load") {
+        const savedInstrument = result.settings.kind === "piano" ? result.settings.instrument : null;
+        const restoredBuffer = savedInstrument ? await getDrumAudioContext().decodeAudioData(await (await fetch(savedInstrument.audio)).arrayBuffer()) : null;
         exitInstrument({ message: "" });
         stopAllInstrumentVoices();
-        drumPads.forEach((pad, index) => {
+        if (!savedInstrument) drumPads.forEach((pad, index) => {
           const record = result.pads.find(item => item.index === index);
           Object.assign(pad, { timePercent: 100 }, result.settings.pads[index], { version: pad.version + 1, saved: Boolean(record),
             customName: record?.name || "", updatedAt: record?.updatedAt, buffer: null, loading: null });
@@ -2515,12 +2618,22 @@
         instrumentCutItself = result.settings.cutItself;
         ui.instrumentCutItself.checked = instrumentCutItself;
         setInstrumentAdsrEnabled(result.settings.adsrEnabled);
+        if (savedInstrument) {
+          instrumentBuffer = restoredBuffer;
+          instrumentSnapshot = { saved: true };
+          instrumentTimeCache = null;
+          for (const key of ["gainPercent", "pitchSemitones", "timePercent"]) instrumentSettings[key] = savedInstrument[key];
+          Object.assign(instrumentEnvelope, savedInstrument.envelope);
+          setInstrumentMode(true);
+          instrumentOctave = savedInstrument.octave;
+          renderInstrumentMessage();
+        }
         try { localStorage.setItem(DRUM_KEYS_STORAGE, JSON.stringify(drumPads.map(pad => pad.key))); } catch {}
         setSamplerCollapsed(false);
         renderSelectedPadControls();
         closeSamplerPresets();
         ui.samplerPresetToggle.focus();
-        showDrumError(samplerCopy("stateLoaded"));
+        if (!savedInstrument) showDrumError(samplerCopy("stateLoaded"));
       } else if (action === "save") {
         samplerPresets.unshift(result.preset);
         ui.samplerPresetName.value = "";
@@ -3228,8 +3341,6 @@
         .instrument-controls.is-bypassed .envelope-control,
         .instrument-controls.is-bypassed .envelope-graph { opacity: .45; }
         .instrument-envelope { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)) minmax(40px, 1.5fr) 18px; gap: 3px; align-items: center; }
-        .is-instrument .instrument-envelope { grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(40px, 1.5fr) 18px; }
-        .is-instrument .instrument-envelope > .pad-control { display: none; }
         .instrument-toggles { display: flex; flex-direction: column; gap: 4px; }
         .envelope-graph { display: block; width: 100%; height: 46px; overflow: visible; }
         .envelope-curve { fill: none; stroke: #ff8a4c; stroke-width: 1.6; stroke-linejoin: round; }
@@ -3264,11 +3375,12 @@
         .slice-dialog .slice-replace { background: #a83700; border-color: #ff7b38; }
         .slice-dialog button:focus-visible { outline: 2px solid #ff7b38; outline-offset: 3px; }
         .sampler-preset-toggle:hover, .sampler-preset-toggle[aria-expanded="true"] { color:#fff; border-color:#ff7b38; }
-        .sampler-preset-menu { position:fixed; inset:auto; margin:0; width:260px; max-width:calc(100vw - 16px); max-height:calc(100vh - 16px); overflow:auto; padding:6px; border:1px solid #494949; border-radius:8px; background:#242424; color:#fff; box-shadow:0 8px 24px #0008; font:12px/1.4 system-ui,sans-serif; }
-        .sampler-preset-list { max-height:180px; overflow:auto; }
+        .sampler-preset-menu { position:fixed; inset:auto; margin:0; width:208px; max-width:calc(100vw - 16px); max-height:calc(100vh - 16px); overflow:auto; padding:5px; border:1px solid #494949; border-radius:8px; background:#242424; color:#fff; box-shadow:0 8px 24px #0008; font:11px/1.4 system-ui,sans-serif; }
+        .sampler-preset-list { max-height:168px; overflow:auto; }
         .sampler-preset-list p { margin:8px; color:#aaa; }
-        .sampler-preset-row { display:flex; gap:3px; }
-        .sampler-preset-menu button { min-height:30px; padding:5px 8px; border:0; border-radius:4px; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+        .sampler-preset-row { display:flex; gap:3px; height:24px; }
+        .sampler-preset-kind { flex:0 0 18px; align-self:center; text-align:center; color:#ff934d; }
+        .sampler-preset-menu button { min-height:24px; padding:3px 6px; border:0; border-radius:4px; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
         .sampler-preset-menu button:hover { background:#383838; }
         .sampler-preset-menu button:focus-visible, .sampler-preset-toggle:focus-visible { outline:2px solid #ff7b38; outline-offset:-2px; }
         .sampler-preset-load { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

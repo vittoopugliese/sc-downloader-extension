@@ -86,6 +86,12 @@ if (!state.initialized || state.reverb !== 40 || state.delay !== 0) {
   throw new Error(`Reverb did not initialize with its requested value: ${JSON.stringify(state)}`);
 }
 const graphNodes = FakeAudioContext.instances[0].nodes;
+const assert = require('node:assert/strict');
+const reverbNode = graphNodes.find(node => node.kind === 'convolver');
+const impulseBeforeDelayEdit = reverbNode.buffer;
+effects.setCharacter('delayTime', 300);
+assert.equal(reverbNode.buffer, impulseBeforeDelayEdit, 'Delay edits must reuse the reverb impulse');
+effects.setCharacter('delayTime', 250);
 const limiterNode = graphNodes.find((node) => node.kind === "compressor");
 const masterNode = graphNodes.find((node) => node.kind === "gain" && node.connections.includes(limiterNode));
 const delayNode = graphNodes.find((node) => node.kind === "delay" && node.delayTime.value === 0.25);

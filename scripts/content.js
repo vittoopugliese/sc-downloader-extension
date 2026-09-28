@@ -182,6 +182,7 @@ window.addEventListener?.("message", (event) => {
     "preset-save": "SAMPLER_PRESET_SAVE",
     "preset-load": "SAMPLER_PRESET_LOAD",
     "preset-delete": "SAMPLER_PRESET_DELETE",
+    "preset-render": "SAMPLER_PRESET_RENDER",
     delete: "DELETE_LOOP_PAD_AUDIO",
     get: "GET_LOOP_PAD_AUDIO",
     store: "STORE_LOOP_PAD_AUDIO",

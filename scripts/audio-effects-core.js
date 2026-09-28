@@ -581,7 +581,11 @@
     function updateCharacter(targetGraph = graph) {
       if (!targetGraph || !targetGraph.context) return;
       const contextForGraph = targetGraph.context;
-      targetGraph.reverb.buffer = createImpulse(contextForGraph, values.reverbRoom, values.reverbSize, values.reverbDecay);
+      const impulseKey = `${contextForGraph.sampleRate}:${values.reverbRoom}:${values.reverbSize}:${values.reverbDecay}`;
+      if (!targetGraph.reverb.buffer || targetGraph.impulseKey !== impulseKey) {
+        targetGraph.reverb.buffer = createImpulse(contextForGraph, values.reverbRoom, values.reverbSize, values.reverbDecay);
+        targetGraph.impulseKey = impulseKey;
+      }
       setParam(targetGraph.reverbPreDelay.delayTime, values.reverbPreDelay / 1000);
       setParam(targetGraph.reverbTone.frequency, 600 + values.reverbTone / 100 * 15400);
       setParam(targetGraph.delayTone.frequency, 500 + values.delayTone / 100 * 15500);
@@ -596,13 +600,19 @@
       targetGraph.phaserModulations.forEach((modulation, index) =>
         setParam(modulation.gain, [250, 500, 900, 1600][index] * values.phaserDepth / 100, contextForGraph));
       setParam(targetGraph.phaserFeedback.gain, values.phaserFeedback / 100 * 0.7, contextForGraph);
-      targetGraph.bitcrusherShaper.curve = createCrusherCurve(values.bitDepth);
+      if (targetGraph.crusherDepth !== values.bitDepth || !targetGraph.bitcrusherShaper.curve) {
+        targetGraph.bitcrusherShaper.curve = createCrusherCurve(values.bitDepth);
+        targetGraph.crusherDepth = values.bitDepth;
+      }
       targetGraph.bitcrusherTone.frequency.value = Math.max(800, contextForGraph.sampleRate / 2 * (1 - values.sampleRateReduction / 100 * 0.94));
       if (targetGraph.bitcrusherWorklet) {
         setParam(targetGraph.bitcrusherWorklet.parameters.get("bitDepth"), values.bitDepth, contextForGraph);
         setParam(targetGraph.bitcrusherWorklet.parameters.get("reduction"), values.sampleRateReduction, contextForGraph);
       }
-      targetGraph.saturationShaper.curve = createSaturationCurve(values.saturationDrive);
+      if (targetGraph.saturationDrive !== values.saturationDrive || !targetGraph.saturationShaper.curve) {
+        targetGraph.saturationShaper.curve = createSaturationCurve(values.saturationDrive);
+        targetGraph.saturationDrive = values.saturationDrive;
+      }
       setParam(targetGraph.saturationTone.frequency, 900 + values.saturationTone / 100 * 15100, contextForGraph);
     }
 

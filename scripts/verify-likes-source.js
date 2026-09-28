@@ -20,7 +20,8 @@ assert.equal(source.artwork('https://i1.sndcdn.com/a.mp3'),null);
 assert.equal(source.cursor('https://api-v2.soundcloud.com/users/42/likes?offset=50&client_id=secret&oauth_token=secret', '42'),'https://api-v2.soundcloud.com/users/42/likes?offset=50');
 assert.throws(()=>source.cursor('https://evil.com/users/42/likes','42'));
 assert.throws(()=>source.cursor('https://api-v2.soundcloud.com/users/43/likes','42'));
-assert.equal(policy.canAuthorize(undefined,null,'explore-likes').reason,'pro-required');
+assert.equal(policy.canAuthorize(undefined,null,'explore-likes').allowed,
+  require('./release-config').FREE_PRO_ENABLED, 'Likes follows the current release access policy');
 const trial=policy.startTrial(policy.normalize(), Date.now());
 assert.equal(policy.canAuthorize(trial,null,'explore-likes').allowed,true);
 const pro=policy.normalize(undefined); pro.entitlement={status:'active',licenseId:'license-1',checkedAt:Date.now(),expiresAt:Date.now()+60_000};

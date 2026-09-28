@@ -1,5 +1,6 @@
 {
   "manifest_version": 3,
+  "minimum_chrome_version": "116",
   "name": "SoundCloud Track Downloader - Free Player tools and Likes Explorer",
   "default_locale": "en",
   "version": "2026.9.28",
