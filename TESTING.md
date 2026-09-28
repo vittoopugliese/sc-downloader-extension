@@ -28,6 +28,8 @@ npm run test:e2e
 npm run test:e2e:download
 npm run test:e2e:popup
 npm run test:e2e:tempo
+npm run test:e2e:sampler-time
+npm run test:e2e:sampler-persistence
 npm run test:e2e:eq
 npm run test:feedback
 ```
@@ -35,6 +37,12 @@ npm run test:feedback
 `test:e2e:popup` checks that the popup background covers the bottom and right
 edges when the viewport is slightly larger than the content, at display scales
 of 100%, 125%, 150%, and 200%.
+
+`test:e2e:sampler-time` loads the working-tree extension and exercises the full
+sampler message bridge and packaged Signalsmith engine. It measures duration
+and stereo pitch at 25–400%, checks default and uploaded samples, independent
+PITCH, cache reuse, reset, obsolete renders and invalid input. Sampler persistence
+also verifies that named presets restore each pad's TIME setting.
 
 `test:e2e:eq` measures the live parametric EQ with a generated tone in the
 owned and shared player graphs, and checks the spectrum, editor controls,

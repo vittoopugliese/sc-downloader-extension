@@ -50,6 +50,10 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 - **Inline download button** on playlist/set and likes pages ~ starts a background bulk job for the full collection
 - **User profile downloads** ~ open `soundcloud.com/{user}/tracks`, choose from every public upload, and download the selection as one background job
 
+### Sampler duration
+
+In the sampler, **TIME** sets each pad's sample duration from **25% to 400%**, preserving its tone (200% is twice as long; 50% is half as long). It applies on the next hit and is saved in sampler presets. **PITCH** still controls transposition separately. Drag TIME vertically, use arrow keys (Shift for 10% steps), or double-click to reset to 100%. The first hit after a TIME change prepares the audio; subsequent hits use the cached result.
+
 ### Record your performance
 
 Open **Record** in Player Tools. **Rec** captures the final mix of the playing track or loop, sampler pads, piano voices, and effects after EQ. The amplitude display shows live audio before a take and the captured sample afterwards. Use the mouse wheel to zoom at the cursor, drag or Shift + wheel to scroll, and click to seek, then preview or download a stereo 48 kHz / 16-bit WAV. With the display focused, + / - zooms, Shift + arrows scrolls, and 0 restores the full view. Recording continues when the panel is collapsed or hidden and stops automatically at five minutes. Download your take before starting another or reloading the page; takes are kept in memory only.

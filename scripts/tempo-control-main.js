@@ -190,7 +190,7 @@
   let padsHydrated = false;
   let padCacheTimer = null;
   let padCacheRevision = 0;
-  const drumPads = DRUM_DEFAULTS.map((defaultPad) => ({ ...defaultPad, envelope: { ...instrumentEnvelope }, gainPercent: 100, pitchSemitones: 0, buffer: null, loading: null, customName: "", saved: false, busy: false, version: 0 }));
+  const drumPads = DRUM_DEFAULTS.map((defaultPad) => ({ ...defaultPad, envelope: { ...instrumentEnvelope }, gainPercent: 100, pitchSemitones: 0, timePercent: 100, buffer: null, loading: null, customName: "", saved: false, busy: false, version: 0 }));
   try {
     const savedKeys = JSON.parse(localStorage.getItem(DRUM_KEYS_STORAGE) || "null");
     if (Array.isArray(savedKeys)) {
@@ -1020,7 +1020,9 @@
     const version = pad.version;
     const cacheRevision = padCacheRevision;
     const loading = (async () => {
-      const url = pad.saved ? (await requestPad("get", { index: drumPads.indexOf(pad) })).pad?.dataUrl : new URL(pad.sample, base).href;
+      const url = pad.saved || pad.timePercent !== 100
+        ? (await requestPad("get", { index: drumPads.indexOf(pad), timePercent: pad.timePercent })).pad?.dataUrl
+        : new URL(pad.sample, base).href;
       if (!url) throw new Error("The saved sample is unavailable.");
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Could not load ${pad.name}.`);
@@ -1035,8 +1037,19 @@
 
   function updatePadControl(index, name, value) {
     const pad = drumPads[index];
-    if (!pad || !["gainPercent", "pitchSemitones"].includes(name) || !Number.isFinite(value)) return;
-    pad[name] = Math.round(Math.max(name === "gainPercent" ? 0 : -12, Math.min(name === "gainPercent" ? 154 : 12, value)));
+    const limits = { gainPercent: [0, 154], pitchSemitones: [-12, 12], timePercent: [25, 400] };
+    if (!pad || !limits[name] || !Number.isFinite(value) || pad.busy) return;
+    const next = Math.round(Math.max(limits[name][0], Math.min(limits[name][1], value)));
+    if (pad[name] === next) return;
+    pad[name] = next;
+    if (name === "timePercent") {
+      // Re-render from the saved original on the next hit. Invalidate pending
+      // notes too, so an older stretch can never play after a newer edit.
+      pad.version++;
+      pad.buffer = null;
+      pad.loading = null;
+      return;
+    }
     for (const voice of instrumentVoices) {
       if (voice.padIndex !== index || voice.cleaned) continue;
       const now = voice.context.currentTime;
@@ -1060,15 +1073,16 @@
     for (const knob of root.querySelectorAll(".pad-knob[data-pad-control]")) {
       const name = knob.dataset.padControl;
       const gain = name === "gainPercent";
-      const minimum = gain ? 0 : -12;
-      const maximum = gain ? 154 : 12;
+      const time = name === "timePercent";
+      const minimum = gain ? 0 : time ? 25 : -12;
+      const maximum = gain ? 154 : time ? 400 : 12;
       const render = () => {
         const value = drumPads[selectedPadIndex][name];
-        const label = gain ? `${value}%` : `${value > 0 ? "+" : ""}${value} st`;
+        const label = gain || time ? `${value}%` : `${value > 0 ? "+" : ""}${value} st`;
         knob.style.setProperty("--knob-angle", `${-135 + (value - minimum) / (maximum - minimum) * 270}deg`);
         knob.setAttribute("aria-valuenow", String(value));
         knob.setAttribute("aria-valuetext", label);
-        knob.title = `${gain ? "Gain" : "Pitch"}: ${label} · Double-click to reset`;
+        knob.title = `${gain ? "Gain" : time ? "Time (duration, keeps tone; next hit)" : "Pitch"}: ${label} · Double-click to reset`;
         knob.nextElementSibling.textContent = label;
       };
       const update = value => { updatePadControl(selectedPadIndex, name, value); render(); };
@@ -1084,13 +1098,13 @@
         if (drag?.id === event.pointerId) update(drag.value + (drag.y - event.clientY) * (maximum - minimum) / 140);
       });
       for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) knob.addEventListener(type, () => { drag = null; });
-      knob.addEventListener("dblclick", () => update(gain ? 100 : 0));
+      knob.addEventListener("dblclick", () => update(gain || time ? 100 : 0));
       knob.addEventListener("keydown", event => {
         if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
         event.preventDefault();
         event.stopPropagation();
         update(event.key === "Home" ? minimum : event.key === "End" ? maximum
-          : drumPads[selectedPadIndex][name] + (["ArrowUp", "ArrowRight"].includes(event.key) ? 1 : -1));
+          : drumPads[selectedPadIndex][name] + (["ArrowUp", "ArrowRight"].includes(event.key) ? 1 : -1) * (event.shiftKey ? 10 : 1));
       });
       knob.renderControl = render;
       render();
@@ -1114,6 +1128,7 @@
       }
       if (pad.busy) return;
       const version = pad.version;
+      if (!pad.buffer && pad.timePercent !== 100) showDrumError("Preparing sample time…");
       const buffer = pad.buffer || await loadDefaultDrum(pad);
       if (noteRevision !== instrumentNoteRevision || instrumentKeys.get(key) !== held ||
           pad.version !== version || pad.busy || instrumentMode || ui?.panel.hidden || document.hidden) return;
@@ -1190,7 +1205,7 @@
       const name = file.name.replace(/\.[^.]+$/, "") || pad.name;
       await requestPad("store", { index, name, mimeType: file.type || "audio/wav", base64, operationId: `pad_${crypto.randomUUID()}` });
       if (pad.version !== version) return;
-      pad.buffer = ui?.panel.hidden ? null : buffer;
+      pad.buffer = ui?.panel.hidden || pad.timePercent !== 100 ? null : buffer;
       pad.saved = true;
       pad.customName = name;
       updateDrumLabels();
@@ -2462,13 +2477,13 @@
     try {
       const result = await requestPad(`preset-${action}`, { presetId: preset?.id || `preset_${crypto.randomUUID()}`, name,
         ...(action === "save" ? { settings: { selectedPadIndex, adsrEnabled: instrumentAdsrEnabled, cutItself: instrumentCutItself,
-          pads: drumPads.map(({ key, gainPercent, pitchSemitones, envelope }) => ({ key, gainPercent, pitchSemitones, envelope: { ...envelope } })) } } : {}) });
+          pads: drumPads.map(({ key, gainPercent, pitchSemitones, timePercent, envelope }) => ({ key, gainPercent, pitchSemitones, timePercent, envelope: { ...envelope } })) } } : {}) });
       if (action === "load") {
         exitInstrument({ message: "" });
         stopAllInstrumentVoices();
         drumPads.forEach((pad, index) => {
           const record = result.pads.find(item => item.index === index);
-          Object.assign(pad, result.settings.pads[index], { version: pad.version + 1, saved: Boolean(record),
+          Object.assign(pad, { timePercent: 100 }, result.settings.pads[index], { version: pad.version + 1, saved: Boolean(record),
             customName: record?.name || "", updatedAt: record?.updatedAt, buffer: null, loading: null });
         });
         padsHydrated = true;
@@ -3254,8 +3269,6 @@
         .pad-control output { font-size: 8px; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .pad-knob { position: relative; width: 28px; height: 28px; padding: 0; border: 1px solid #555; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #484848, #222); cursor: ns-resize; touch-action: none; }
         .pad-knob::after { content: ""; position: absolute; width: 3px; height: 8px; left: calc(50% - 1.5px); top: 3px; border-radius: 2px; background: #ff8a4c; transform-origin: 50% 10px; transform: rotate(var(--knob-angle)); }
-        .time-control { opacity: .45; }
-        .time-knob { cursor: not-allowed; }
         .pad-knob:hover { border-color: #ff8a4c; }
         .pad-knob:focus-visible { outline: 2px solid #ff8a4c; outline-offset: 2px; }
         .drum-file { display: none; }
@@ -3491,8 +3504,7 @@
           <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="drum-note-controls" aria-live="off"><span class="playing-note"></span></span></p>
           <div class="instrument-controls" role="group" aria-label="Sample envelope" hidden>
             <div class="instrument-envelope">
-              ${[["gainPercent", "GAIN", 0, 154], ["pitchSemitones", "PITCH", -12, 12]].map(([name, label, min, max]) => `<div class="pad-control"><span>${label}</span><button class="pad-knob" type="button" role="slider" data-pad-control="${name}" aria-label="Selected pad ${label.toLowerCase()}" aria-valuemin="${min}" aria-valuemax="${max}" aria-orientation="vertical"></button><output></output></div>`).join("")}
-              <div class="pad-control time-control" data-scdl-tooltip="Time: coming soon"><span>TIME</span><button class="pad-knob time-knob" type="button" disabled aria-label="Time: coming soon" style="--knob-angle: 0deg"></button><output>100%</output></div>
+              ${[["gainPercent", "GAIN", 0, 154], ["pitchSemitones", "PITCH", -12, 12], ["timePercent", "TIME", 25, 400]].map(([name, label, min, max]) => `<div class="pad-control"><span>${label}</span><button class="pad-knob" type="button" role="slider" data-pad-control="${name}" aria-label="Selected pad ${label.toLowerCase()}" aria-valuemin="${min}" aria-valuemax="${max}" aria-orientation="vertical"></button><output></output></div>`).join("")}
               ${["attack", "decay", "sustain", "release"].map((name) => `<div class="envelope-control"><span>${name[0].toUpperCase()}</span><button class="envelope-knob" type="button" role="slider" data-envelope="${name}" aria-label="${name[0].toUpperCase() + name.slice(1)}" aria-valuemin="0" aria-valuemax="${name === "sustain" ? 100 : 5000}" aria-orientation="vertical" data-scdl-tooltip="${name[0].toUpperCase() + name.slice(1)}: ${envelopeHelp[name]}"></button><output></output></div>`).join("")}
               <svg class="envelope-graph" viewBox="0 0 110 52" role="img" aria-label="ADSR envelope" data-scdl-tooltip="ADSR: how the volume changes over time. The dashed line marks when you release the key."><path class="envelope-axis" d="M5 5 V43 H105"/><path class="envelope-fill"/><line class="envelope-keyup" y1="5" y2="45"/><path class="envelope-curve"/></svg>
               <div class="instrument-toggles"><label class="instrument-cut-label" title="Cut itself" data-scdl-tooltip="Cut itself" hidden><input class="instrument-cut-itself" type="checkbox" aria-label="Cut itself" checked /></label><label class="instrument-adsr-label" title="ADSR" data-scdl-tooltip="ADSR" hidden><input class="instrument-adsr-toggle" type="checkbox" aria-label="ADSR" /></label></div>

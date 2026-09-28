@@ -206,7 +206,9 @@ async function handleSamplerPreset(message) {
           if (!Number.isFinite(value) || value < min || value > max) throw new Error("Invalid pad settings.");
           return value;
         };
+        if (!Number.isInteger(pad.timePercent ?? 100)) throw new Error("Invalid pad time.");
         return { key: pad.key, gainPercent: bounded(pad.gainPercent, 0, 154), pitchSemitones: bounded(pad.pitchSemitones, -12, 12),
+          timePercent: bounded(pad.timePercent ?? 100, 25, 400),
           envelope: Object.fromEntries(["attack", "decay", "sustain", "release"].map(key =>
             [key, bounded(pad.envelope?.[key], 0, key === "sustain" ? 100 : 5000)])) };
       }) };
@@ -247,6 +249,28 @@ async function handleSamplerPreset(message) {
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error || new Error("Could not save the sampler state."));
   });
+}
+
+// Serialize time renders to bound decoder/WASM working memory across pads/tabs.
+let padTimeQueue = Promise.resolve();
+function renderPadTime(blob, timePercent) {
+  const keepalive = setInterval(() => chrome.runtime.sendMessage({ type: "OFFSCREEN_KEEPALIVE" }).catch(() => {}), SERVICE_WORKER_KEEPALIVE_MS);
+  const render = padTimeQueue.then(async () => {
+    if (blob.size > PAD_MAX_BYTES) throw new Error("This sample is too large for a pad.");
+    const context = new AudioContext({ sampleRate: 48000 });
+    try {
+      const decoded = await context.decodeAudioData(await blob.arrayBuffer());
+      if (decoded.duration > 30 || decoded.length * decoded.numberOfChannels * 4 > 16 * 1024 * 1024) {
+        throw new Error("Samples must be 30 seconds or shorter and fit the pad memory limit.");
+      }
+      const rendered = await SCLoopAudioRenderer.render(decoded,
+        { startMs: 0, endMs: decoded.duration * 1000 }, { rate: 100 / timePercent, preservePitch: true });
+      return new Blob([SCDownload.encodeWavSegment(rendered,
+        { startMs: 0, endMs: rendered.length / rendered.sampleRate * 1000 })], { type: "audio/wav" });
+    } finally { await context.close(); }
+  });
+  padTimeQueue = render.catch(() => {});
+  return render.finally(() => clearInterval(keepalive));
 }
 
 async function handlePadMessage(message) {
@@ -339,15 +363,27 @@ async function handlePadMessage(message) {
       return await finishPadOperation(message.operationId);
     }
     if (message.type === "OFFSCREEN_PAD_GET") {
+      const timePercent = message.timePercent ?? 100;
+      if (!Number.isInteger(timePercent) || timePercent < 25 || timePercent > 400) throw new Error("Invalid pad time.");
       const record = await padTransaction("readonly", (store) => store.get(message.index));
-      if (!record) return { success: true, pad: null };
+      if (!record && timePercent === 100) return { success: true, pad: null };
+      let blob = record?.blob;
+      if (timePercent !== 100) {
+        if (!blob) {
+          const samples = ["kick1", "clap1", "hat1", "kick2", "snare1", "tom1", "clap2", "hat2"];
+          const response = await fetch(chrome.runtime.getURL(`assets/drums/${samples[message.index]}.wav`));
+          if (!response.ok) throw new Error("Could not load the default sample.");
+          blob = await response.blob();
+        }
+        blob = await renderPadTime(blob, timePercent);
+      }
       const dataUrl = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
         reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(record.blob);
+        reader.readAsDataURL(blob);
       });
-      return { success: true, pad: { index: record.index, name: record.name, dataUrl } };
+      return { success: true, pad: { index: message.index, name: record?.name || "", dataUrl } };
     }
     if (message.type === "OFFSCREEN_PAD_STORE") {
       const operationId = message.operationId;

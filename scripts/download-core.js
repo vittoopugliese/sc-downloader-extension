@@ -900,6 +900,7 @@ const SCDownload = (() => {
   }
 
   return {
+    encodeWavSegment,
     sanitizeFilename,
     getFileExtension,
     getBlobType,

@@ -6,7 +6,10 @@ const { chromium } = require('playwright');
 
 (async () => {
   const server = http.createServer((req, res) => {
-    if (req.url.endsWith('.wav')) {
+    if (req.url === '/scripts/vendor/signalsmith/wasm-factory.mjs') {
+      res.setHeader('Content-Type', 'application/javascript');
+      res.end(fs.readFileSync(path.join(__dirname, 'vendor/signalsmith/wasm-factory.mjs')));
+    } else if (req.url.endsWith('.wav')) {
       res.setHeader('Content-Type', 'audio/wav');
       res.end(fs.readFileSync(path.join(__dirname, '../assets/drums/hat1.wav')));
     } else res.end('<!doctype html><style>.playControls__elements { position: fixed; bottom: 0; left: 0; right: 0; height: 48px; display: flex; }</style><div class="playControls__elements"><div class="playControls__soundBadge"></div></div>');
@@ -25,14 +28,15 @@ const { chromium } = require('playwright');
       await page.goto(url);
       await page.evaluate(() => {
         window.chrome = { runtime: {
-          id: 'test', getURL: file => `chrome-extension://test/${file}`,
+          id: 'test', getURL: file => /^(scripts\/vendor\/|assets\/drums\/)/.test(file)
+            ? `${location.origin}/${file}` : `chrome-extension://test/${file}`,
           onMessage: { addListener(fn) { window.offscreenListener = fn; } }, sendMessage: async () => {},
         } };
         window.send = message => new Promise(resolve => offscreenListener(message, {
           id: 'test', url: 'chrome-extension://test/scripts/background.js',
         }, resolve));
       });
-      for (const file of ['offscreen.js', 'tempo-control-core.js', 'sampler-core.js', 'parametric-eq.js',
+      for (const file of ['loop-audio-renderer.js', 'download-core.js', 'offscreen.js', 'tempo-control-core.js', 'sampler-core.js', 'parametric-eq.js',
         'audio-effects-core.js', 'player-tools-collapsible.js', 'parametric-eq-ui.js', 'tempo-control-main.js']) {
         await page.addScriptTag({ path: path.join(__dirname, file) });
       }
@@ -137,6 +141,7 @@ const { chromium } = require('playwright');
     await resetPad.click();
     await restoredHost.locator('[data-pad-control="gainPercent"]').press('End');
     await restoredHost.locator('[data-pad-control="pitchSemitones"]').press('ArrowUp');
+    await restoredHost.locator('[data-pad-control="timePercent"]').press('End');
     await restoredHost.locator('[data-envelope="attack"]').press('End');
     const originalAudio = await restored.evaluate(async () => (await send({ type: 'OFFSCREEN_PAD_GET', index: 0 })).pad.dataUrl);
     const toggle = restoredHost.locator('.sampler-preset-toggle');
@@ -174,6 +179,7 @@ const { chromium } = require('playwright');
     await presetHost.locator('.drum-message').filter({ hasText: 'Sampler state restored' }).waitFor();
     assert.equal(await presetHost.locator('[data-pad-control="gainPercent"]').getAttribute('aria-valuenow'), '154');
     assert.equal(await presetHost.locator('[data-pad-control="pitchSemitones"]').getAttribute('aria-valuenow'), '1');
+    assert.equal(await presetHost.locator('[data-pad-control="timePercent"]').getAttribute('aria-valuenow'), '400');
     assert.equal(await presetHost.locator('[data-envelope="attack"]').getAttribute('aria-valuenow'), '5000');
     assert.equal(await presetPage.evaluate(async () => (await send({ type: 'OFFSCREEN_PAD_GET', index: 0 })).pad.dataUrl), originalAudio);
     assert.equal(await presetPage.evaluate(async () => (await finishPadOperation('pad_preset_old_render', new Blob(['old']), 'Old')).code), 'obsolete_pad');
@@ -185,6 +191,18 @@ const { chromium } = require('playwright');
     assert.equal(await presetHost.locator('.sampler-preset-load').count(), 2);
     fs.mkdirSync(path.join(__dirname, '../test-results'), { recursive: true });
     await presetPage.screenshot({ path: path.join(__dirname, '../test-results/sampler-presets.png') });
+    // Presets written before TIME existed must reset it to 100%, even when the
+    // currently selected pad was previously stretched.
+    await presetPage.evaluate(async presetId => {
+      const legacy = await padTransactionFor('presets', 'readonly', store => store.get(presetId));
+      legacy.settings.pads.forEach(pad => { delete pad.timePercent; });
+      await padTransactionFor('presets', 'readwrite', store => store.put(legacy));
+    }, saved.id);
+    await presetHost.locator('.sampler-preset-load').filter({ hasText: 'My <kit>' }).click();
+    await presetHost.locator('.drum-message').filter({ hasText: 'Sampler state restored' }).waitFor();
+    assert.equal(await presetHost.locator('[data-pad-control="timePercent"]').getAttribute('aria-valuenow'), '100');
+    await presetHost.locator('.sampler-preset-toggle').click();
+    await presetPage.waitForFunction(() => document.querySelector('#scdl-tempo-control').shadowRoot.querySelector('.sampler-preset-status').textContent === '');
     await presetHost.locator('.sampler-preset-delete[aria-label="Delete state: My <kit>"]').click();
     await presetPage.waitForFunction(() => document.querySelector('#scdl-tempo-control').shadowRoot.querySelectorAll('.sampler-preset-load').length === 1);
     assert.equal(await presetHost.locator('.sampler-preset-load').textContent(), 'Quiet kit');

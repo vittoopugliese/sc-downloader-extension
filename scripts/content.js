@@ -202,6 +202,7 @@ window.addEventListener?.("message", (event) => {
   if (action === "waveform") payload.trackUrl = event.data.trackUrl;
   if (action !== "list") payload.index = index;
   if (action === "delete") payload.operationId = event.data.operationId;
+  if (action === "get") payload.timePercent = event.data.timePercent;
   if (action === "store") {
     payload.operationId = event.data.operationId;
     payload.name = event.data.name;

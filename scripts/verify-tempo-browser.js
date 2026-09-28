@@ -337,7 +337,17 @@ async function main() {
     const padGainKnob = host.locator('.pad-knob[data-pad-control="gainPercent"]');
     const padPitchKnob = host.locator('.pad-knob[data-pad-control="pitchSemitones"]');
     assert.equal(await host.locator('.pad-knob').count(), 3);
-    assert.equal(await host.locator('.time-knob').isDisabled(), true);
+    const padTimeKnob = host.locator('[data-pad-control="timePercent"]');
+    assert.equal(await padTimeKnob.isEnabled(), true);
+    await padTimeKnob.press('Home');
+    assert.equal(await padTimeKnob.getAttribute('aria-valuenow'), '25');
+    await padTimeKnob.press('End');
+    assert.equal(await padTimeKnob.getAttribute('aria-valuenow'), '400');
+    await padTimeKnob.dblclick();
+    await padTimeKnob.press('Shift+ArrowUp');
+    assert.equal(await padTimeKnob.getAttribute('aria-valuenow'), '110');
+    await padTimeKnob.dblclick();
+    assert.equal(await padTimeKnob.getAttribute('aria-valuenow'), '100');
     await padGainKnob.focus();
     await page.keyboard.press('End');
     assert.equal(await padGainKnob.getAttribute('aria-valuenow'), '154');
@@ -368,7 +378,7 @@ async function main() {
     }
     assert.deepEqual(await drumPads.allTextContents(), ["Z", "X", "C", "V", "B", "N", "M", "L"]);
     assert.deepEqual(await drumPads.evaluateAll((pads) => pads.map((pad) => pad.title)),
-      ["Kick", "Clap", "Hat", "Kick 2", "Snare", "Tom", "Clap 2", "Hat 2"].map((name) => `${name} · hold to load`));
+      ["Kick", "Clap", "Hat", "Kick 2", "Snare", "Tom", "Clap 2", "Hat 2"].map((name) => `${name} · hold left click to restore default · Shift + Enter / Space to load`));
     const drumPlacement = await host.evaluate((element) => {
       const root = element.shadowRoot;
       const header = root.querySelector(".panel-header").getBoundingClientRect();
@@ -413,7 +423,7 @@ async function main() {
     const sampleChooser = page.waitForEvent("filechooser");
     await drumPads.nth(3).press("Shift+Enter");
     await (await sampleChooser).setFiles(path.join(projectRoot, "assets", "drums", "hat1.wav"));
-    await host.locator('.drum-pad[title="hat1 · hold to load"]').waitFor();
+    await host.locator('.drum-pad[title^="hat1 ·"]').waitFor();
     assert.equal(await page.evaluate(() => window.drumStarts), 2,
       "Using Shift + Enter to upload must not also play it.");
     await drumPads.nth(3).click();
@@ -626,7 +636,7 @@ async function main() {
       compactStyles.downloadTrackButtonSize.join("x") !== "23x20" ||
       compactStyles.downloadTrackIconSize.join("x") !== "12x12" ||
       compactStyles.downloadTrackTooltip !== "Download current playing" ||
-      compactStyles.toolOrder.join("|") !== "panel-tool download-track-button|panel-tool reset-tools-button|panel-tool detach-button|panel-tool visibility-button|panel-tool close-button" ||
+      compactStyles.toolOrder.join("|") !== "panel-tool download-track-button|panel-tool tooltips-button|panel-tool reset-tools-button|panel-tool detach-button|panel-tool visibility-button|panel-tool close-button" ||
       compactStyles.detachButtonSize.join("x") !== "23x20" ||
       compactStyles.detachButtonRadius !== "4px" ||
       compactStyles.detachIconSize.join("x") !== "13x13" ||
@@ -727,7 +737,7 @@ async function main() {
         savedRateLabels: [...root.querySelectorAll(".custom-preset")].map((button) => button.textContent),
         hasRatingLink: Boolean(root.querySelector(".rating-link")),
         labels: [...root.querySelectorAll(".range-label")].map((node) => node.textContent),
-        order: [...root.querySelector(".panel").children].map((node) => node.className),
+        order: [...root.querySelector(".panel").children].map((node) => node.classList[0]),
       };
     });
     if (
@@ -871,7 +881,7 @@ async function main() {
     assert.equal(await drumPads.nth(5).isVisible(), true);
     assert.equal(await host.locator(".drum-section").evaluate((node) => node.classList.contains("is-selecting")), true);
     await drumPads.nth(5).click();
-    await host.locator('.drum-pad[title="Loop 12.3–20.7s · hold to load"]').waitFor();
+    await host.locator('.drum-pad[title^="Loop 12.3–20.7s ·"]').waitFor();
     const padRender = await page.evaluate(() => window.padRenderRequests.at(-1));
     assert.equal(padRender.index, 5);
     assert.deepEqual(padRender.trimRange, { startMs: 12345, endMs: 20678, durationMs: 120000 });
