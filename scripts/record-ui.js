@@ -9,14 +9,21 @@
       ${collapsible.styles}
       .record-section { overflow:hidden; border:1px solid #343434; border-radius:11px; background:#151515; color:#eee; }
       .record-body { padding:2px 9px 9px; }
-      .record-toolbar { display:flex; align-items:center; gap:5px; margin:3px 0 7px; }
+      .record-toolbar { gap:5px; pointer-events:none; }
+      .record-toolbar button { pointer-events:auto; }
+      .record-section .tool-section-toggle { padding-right:245px; }
+      .record-section button.record-download:not(.tool-section-toggle) { height:22px; min-height:22px; padding:0 6px; border-radius:6px; border:1px solid #b84400; color:#fff; background:#ff5500; opacity:.82; }
+      .record-download svg { width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+      .record-section button.record-download:disabled:not(.tool-section-toggle) { opacity:.45; }
+      .record-status { display:inline-flex; align-items:center; gap:5px; }
+      .record-status[hidden], .record-status .record-dot[hidden] { display:none; }
+      .record-section .record-stop { touch-action:none; user-select:none; }
       .record-section button:not(.tool-section-toggle) { display:inline-flex; align-items:center; justify-content:center; gap:4px; min-height:25px; padding:3px 7px; border:1px solid #474747; border-radius:5px; background:#262626; color:#eee; font:10px system-ui,sans-serif; cursor:pointer; }
       .record-section button:hover:not(:disabled) { border-color:#ff7b38; }
       .record-section button:disabled { opacity:.4; cursor:default; }
       .record-section :focus-visible { outline:2px solid #ff8b47; outline-offset:2px; }
       .record-dot { width:8px; height:8px; border-radius:50%; background:#f05c57; }
       .record-start[aria-pressed=true] { border-color:#fa6868 !important; background:#4e2323 !important; }
-      .record-section[data-recording=true] .tool-section-title::after { content:' ●'; color:#ff6b68; }
       .record-time { margin-left:auto; color:#c7d8d5; font:10px ui-monospace,monospace; white-space:nowrap; }
       .record-stage { position:relative; height:126px; overflow:hidden; border:1px solid #586364; border-radius:3px; background:#3e494d; }
       .record-canvas { display:block; width:100%; height:100%; cursor:crosshair; touch-action:none; }
@@ -27,16 +34,13 @@
       .record-footer { display:flex; align-items:center; gap:7px; margin-top:6px; color:#9fa9aa; font:9px system-ui,sans-serif; }
       .record-notice { position:absolute; inset:auto 5px 5px; margin:0; padding:4px 6px; border-radius:3px; color:#eee; background:#20282bee; font:10px/1.4 system-ui,sans-serif; pointer-events:none; }
     </style>
-    ${collapsible.header({ title: "Record", bodyId: "scdl-record-body", expanded: false, toggleClass: "record-toggle", icon: '<img class="tool-section-icon record-icon" alt="" aria-hidden="true" />' })}
-    <div class="record-body" id="scdl-record-body" hidden>
-      <div class="record-toolbar">
+    ${collapsible.header({ title: "Record", bodyId: "scdl-record-body", expanded: false, toggleClass: "record-toggle", icon: '<img class="tool-section-icon record-icon" alt="" aria-hidden="true" />', actionsClass: "record-toolbar", actions: `
+        <span class="record-status" hidden><span class="record-dot" aria-hidden="true"></span><output class="record-time" aria-label="Recording duration">00:00.000</output></span>
         <button type="button" class="record-start" aria-label="Start recording" aria-pressed="false"><span class="record-dot" aria-hidden="true"></span>Rec</button>
-        <button type="button" class="record-stop" aria-label="Stop recording or playback" disabled>■</button>
+        <button type="button" class="record-stop" aria-label="Stop recording or playback; hold to clear" data-scdl-tooltip="Stop · Hold to clear" disabled>■</button>
         <button type="button" class="record-play" aria-label="Play recorded sample" disabled>▶</button>
-        <button type="button" class="record-download" aria-label="Download recorded sample as WAV" title="Download recorded sample as WAV. Up to 5 minutes per take. Download to keep your sample." disabled>↓ WAV</button>
-        <button type="button" class="record-clear" aria-label="Clear recorded sample" disabled>×</button>
-        <output class="record-time" aria-label="Recording duration">00:00.000</output>
-      </div>
+        <button type="button" class="record-download" aria-label="Download WAV" data-scdl-tooltip="Download WAV" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button>` })}
+    <div class="record-body" id="scdl-record-body" hidden>
       <div class="record-stage">
         <canvas class="record-canvas" tabindex="0" role="slider" aria-label="Recorded sample position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" data-scdl-tooltip="Wheel to zoom at the cursor. Drag or Shift + wheel to scroll. Click to seek. Keyboard: + / - zoom, Shift + arrows scroll, 0 resets the view."></canvas>
         <div class="record-empty">Record your mix<br>Track · pads · FX · EQ</div>
@@ -81,17 +85,17 @@
       find("start").disabled = busy;
       find("start").setAttribute("aria-pressed", String(capturing));
       find("start").title = state.frames ? "Start a new take (replaces this sample)" : "Record the final mix";
-      find("stop").disabled = !capturing && state.state !== "playing";
+      find("stop").disabled = state.state === "preparing" || (!capturing && !state.frames);
       find("play").disabled = busy || !state.frames;
       find("play").textContent = state.state === "playing" ? "Ⅱ" : "▶";
       find("play").setAttribute("aria-label", state.state === "playing" ? "Pause recorded sample" : "Play recorded sample");
       find("download").disabled = busy || !state.frames;
-      find("clear").disabled = busy || !state.frames;
       canvas.setAttribute("aria-valuemax", String(state.duration));
       if (busy) cancelPan();
       if (state.state === "recording" && lastState !== "recording") { zoom = 1; scroll = 0; }
       lastState = state.state;
       notice(state.message);
+      updateVisibility();
       paint();
     }
     function windowRange(state) {
@@ -99,6 +103,10 @@
       return { start: scroll * (state.duration - span), span };
     }
     function paint() {
+      const current = recorder.snapshot();
+      find("time").textContent = time(current.state === "playing" ? recorder.position() : current.duration);
+      find("status").hidden = disclosure.isCollapsed() && (current.state !== "recording" || Math.round(current.duration * 1000) === 0);
+      find("status").querySelector(".record-dot").hidden = current.state !== "recording";
       const width = canvas.clientWidth, height = canvas.clientHeight;
       if (!width || !height) return;
       const dpr = window.devicePixelRatio || 1;
@@ -168,20 +176,46 @@
       cancelPan();
       if (frame !== null) cancelAnimationFrame(frame);
       frame = null;
-      if (visible && !disclosure.isCollapsed()) {
+      paint();
+      if (visible && (!disclosure.isCollapsed() || recorder.snapshot().state === "recording")) {
         frame = requestAnimationFrame(animate);
-        if (!liveReady && !preparing) {
+        if (!disclosure.isCollapsed() && !liveReady && !preparing) {
           preparing = true;
           recorder.prepare().then(() => { liveReady = true; }).catch(report).finally(() => { preparing = false; });
         }
       }
     }
     find("start").addEventListener("click", () => recorder.start().catch(report));
-    find("stop").addEventListener("click", () => recorder.stop().catch(report));
+    const stopButton = find("stop");
+    let holdTimer = null, held = false;
+    const cancelHold = () => { clearTimeout(holdTimer); holdTimer = null; };
+    const beginHold = () => {
+      cancelHold(); held = false;
+      holdTimer = setTimeout(async () => {
+        held = true; holdTimer = null;
+        try { await recorder.stop(); cancelPan(); recorder.clear(); zoom = 1; scroll = 0; render(); }
+        catch (error) { report(error); }
+      }, 650);
+    };
+    stopButton.addEventListener("pointerdown", event => {
+      if (event.button !== 0 || !event.isPrimary) return;
+      stopButton.setPointerCapture(event.pointerId); beginHold();
+    });
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture", "blur"]) stopButton.addEventListener(type, cancelHold);
+    stopButton.addEventListener("keydown", event => {
+      if (![" ", "Enter"].includes(event.key)) return;
+      event.preventDefault(); if (!event.repeat) beginHold();
+    });
+    stopButton.addEventListener("keyup", event => {
+      if (![" ", "Enter"].includes(event.key)) return;
+      event.preventDefault(); cancelHold(); if (!held) recorder.stop().catch(report);
+    });
+    stopButton.addEventListener("click", () => {
+      cancelHold(); if (!held) recorder.stop().catch(report);
+    });
     find("play").addEventListener("click", () => {
       if (recorder.snapshot().state === "playing") recorder.stopPreview(); else recorder.play().catch(report);
     });
-    find("clear").addEventListener("click", () => { cancelPan(); recorder.clear(); zoom = 1; scroll = 0; render(); });
     find("download").addEventListener("click", () => {
       try {
         const url = URL.createObjectURL(recorder.exportWav());
@@ -261,7 +295,7 @@
       Promise.resolve(recorder.seek(seconds)).catch(report);
     });
     const resize = new ResizeObserver(paint); resize.observe(canvas);
-    const dispose = () => { if (frame !== null) cancelAnimationFrame(frame); resize.disconnect(); document.removeEventListener("scdl:extension-assets-ready", syncIcon); recorder.dispose(); };
+    const dispose = () => { cancelHold(); if (frame !== null) cancelAnimationFrame(frame); resize.disconnect(); document.removeEventListener("scdl:extension-assets-ready", syncIcon); recorder.dispose(); };
     window.addEventListener("pagehide", event => { if (!event.persisted) dispose(); });
     render();
     return Object.freeze({ setVisible(value) { if (visible === value) return; visible = value; updateVisibility(); },

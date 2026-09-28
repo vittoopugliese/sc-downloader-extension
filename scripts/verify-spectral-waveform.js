@@ -85,6 +85,13 @@ async function verifyLoading() {
   pending.get('c').reject(new Error('Unavailable'));
   await flush();
   assert.match(vm.runInContext('ui.waveformCanvas.title', scope), /unavailable/);
+  // Reopening the same track after a transient analysis failure must recover.
+  pending.delete('c');
+  await load();
+  assert.equal(pending.has('c'), true, 'Blank waveform must retry the same track after a failed load');
+  pending.get('c').resolve({ waveform: data });
+  await flush();
+  assert.equal(vm.runInContext('waveformSpectrum', scope), data, 'Retry restores visible waveform data');
   vm.runInContext('ui.panel.hidden = true', scope);
   descriptor = { trackUrl: 'd', waveformUrl: null };
   await load();
