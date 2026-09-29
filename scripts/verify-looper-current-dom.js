@@ -97,6 +97,7 @@ const context = vm.createContext({
 
 const source = fs
   .readFileSync(path.resolve(__dirname, "looper.js"), "utf8")
+  .replace(/\r\n/g, "\n")
   .replace(
     "  const looper = { ensureMounted: runEnsureMounted, reset, getState };",
     "  globalThis.__discoverLooperTarget = discoverTarget;\n  const looper = { ensureMounted: runEnsureMounted, reset, getState };"

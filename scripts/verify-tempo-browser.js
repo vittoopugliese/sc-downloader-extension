@@ -997,7 +997,8 @@ async function main() {
     const envelope = host.locator(".instrument-controls");
     assert.equal(await envelope.isVisible(), true);
     assert.equal(await host.locator(".sampler-body").isVisible(), false, "Fixed pads stay hidden in piano mode");
-    assert.equal(await envelope.getByRole("slider").count(), 4);
+    assert.equal(await envelope.locator(".envelope-knob").count(), 4);
+    assert.equal(await envelope.locator(".pad-knob").count(), 3, "Gain, pitch and TIME accompany the ADSR controls");
     const attackKnob = envelope.getByRole("slider", { name: "Attack", exact: true });
     const graph = envelope.locator(".envelope-graph");
     for (const [target, tooltipOwner] of [
@@ -1449,14 +1450,14 @@ async function main() {
         visible: shell.offsetHeight > 0,
         collapsed: shell.classList.contains("is-collapsed"),
         values: [...root.querySelectorAll(".effect-value")].map((value) => value.textContent),
-        loopImmediatelyBefore: Math.abs(shell.getBoundingClientRect().top - root.querySelector(".waveform-shell").getBoundingClientRect().bottom - 4) < 1,
+        samplerImmediatelyBefore: Math.abs(shell.getBoundingClientRect().top - root.querySelector(".drum-section").getBoundingClientRect().bottom - 4) < 1,
       };
     });
     if (
       !collapsedFx.visible || !collapsedFx.collapsed ||
-      collapsedFx.values.join("|") !== "0%|0%|0%|0%|0%|0%" || !collapsedFx.loopImmediatelyBefore
+      collapsedFx.values.join("|") !== "0%|0%|0%|0%|0%|0%" || !collapsedFx.samplerImmediatelyBefore
     ) {
-      throw new Error(`FX section was not compactly placed below the looper: ${JSON.stringify(collapsedFx)}`);
+      throw new Error(`FX section was not compactly placed below the sampler: ${JSON.stringify(collapsedFx)}`);
     }
     await host.locator(".effects-toggle").click();
     const fxKnobLayout = await host.locator('.effect-knob-grid').evaluate(grid => {
@@ -1918,10 +1919,14 @@ async function main() {
       "Full-track transfer must retain audio outside the initial selection at the prepared speed");
     await page.reload();
     const persistedName = await page.evaluate(() => new Promise((resolve, reject) => {
-      const request = indexedDB.open("scdl-player-pads", 2);
+      const request = indexedDB.open("scdl-player-pads");
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
-        const entry = request.result.transaction("samples").objectStore("samples").get(5);
+        const database = request.result;
+        const transaction = database.transaction("samples");
+        transaction.oncomplete = () => database.close();
+        transaction.onabort = () => database.close();
+        const entry = transaction.objectStore("samples").get(5);
         entry.onsuccess = () => resolve(entry.result?.name);
         entry.onerror = () => reject(entry.error);
       };

@@ -2002,7 +2002,8 @@
       waveformLoadId += 1; waveformSamples = []; waveformSpectrum = null;
       waveformTrackUrl = null; waveformSourceUrl = null; waveformRevision += 1; renderLoop(); return;
     }
-    if ((descriptor.trackUrl === waveformTrackUrl && descriptor.waveformUrl === waveformSourceUrl && !Array.isArray(descriptor.samples))) return;
+    if (descriptor.trackUrl === waveformTrackUrl && (descriptor.waveformUrl || null) === waveformSourceUrl &&
+        !Array.isArray(descriptor.samples) && (waveformSamples.length || waveformSpectrum || waveformAnalysisCache)) return;
     waveformTrackUrl = descriptor.trackUrl;
     waveformSourceUrl = descriptor.waveformUrl || null;
     waveformZoom = null;

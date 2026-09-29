@@ -52,10 +52,14 @@ async function verifyLoading() {
   const source = fs.readFileSync(path.join(__dirname, 'tempo-control-main.js'), 'utf8');
   const loading = source.slice(source.indexOf('  async function loadPlayerWaveform()'), source.indexOf('  function commitLoopRender()'));
   const pending = new Map();
+  let requests = 0;
   let descriptor;
   const scope = vm.createContext({
     document: { documentElement: { getAttribute: () => JSON.stringify(descriptor) } },
-    requestPad: (_action, { trackUrl }) => new Promise((resolve, reject) => pending.set(trackUrl, { resolve, reject })),
+    requestPad: (_action, { trackUrl }) => new Promise((resolve, reject) => {
+      requests++;
+      pending.set(trackUrl, { resolve, reject });
+    }),
     renderLoop() {},
   });
   vm.runInContext(`
@@ -71,6 +75,11 @@ async function verifyLoading() {
   const data = { peaks: [.8], bands: [1, 0, 0], durationMs: 1000 };
   descriptor = { trackUrl: 'a', waveformUrl: null };
   await load();
+  await load();
+  assert.equal(requests, 1, 'Repeated updates must share the pending analysis');
+  descriptor = { trackUrl: 'a' };
+  await load();
+  assert.equal(requests, 1, 'Missing and null waveform URLs identify the same source');
   descriptor = { trackUrl: 'b', waveformUrl: null };
   await load();
   pending.get('a').resolve({ waveform: data });
@@ -92,6 +101,9 @@ async function verifyLoading() {
   pending.get('c').resolve({ waveform: data });
   await flush();
   assert.equal(vm.runInContext('waveformSpectrum', scope), data, 'Retry restores visible waveform data');
+  const completedRequests = requests;
+  await load();
+  assert.equal(requests, completedRequests, 'Loaded analysis must not be fetched again');
   vm.runInContext('ui.panel.hidden = true', scope);
   descriptor = { trackUrl: 'd', waveformUrl: null };
   await load();

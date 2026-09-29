@@ -5,7 +5,7 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const popupHtml = fs.readFileSync(path.join(root, "popup.html"), "utf8");
-const popupSource = fs.readFileSync(path.join(__dirname, "popup.js"), "utf8");
+const popupSource = fs.readFileSync(path.join(__dirname, "popup.js"), "utf8").replace(/\r\n/g, "\n");
 const fallbackPath = "./assets/images/default_avatar.png";
 
 assert.match(

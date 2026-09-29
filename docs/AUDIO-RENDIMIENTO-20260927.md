@@ -56,5 +56,32 @@ simplemente por empaquetar el producto como extensión.
 - `npm run test:e2e:effects` y `test:e2e:record`.
 - `node scripts/verify-piano-mode.js`.
 
-La suite general y tempo deben informarse por separado: sus fixtures arrastran
-expectativas de permisos y layout y stubs incompletos; no equivalen a fallos de TIME.
+## Correcciones y verificación del 28/09/2026
+
+- Los tests de playback/discovery del looper y avatar normalizan CRLF antes de
+  extraer código. En Windows ejecutaban por error la inicialización completa;
+  eso provocaba `MutationObserver`/`SCStreamSelector` ausentes en sus fixtures.
+- El waveform vacío vuelve a intentar la misma pista después de un fallo de
+  análisis. Conserva la deduplicación de análisis pendiente o completado y trata
+  las URLs de waveform ausentes y nulas como la misma fuente. La regresión cubre
+  recuperación, solicitudes repetidas y descarte de resultados de otra pista.
+- El test de tempo verifica los cuatro controles ADSR y los tres de gain/pitch/
+  TIME por separado, y la ubicación de FX debajo del sampler en el layout actual.
+  La lectura de persistencia abre la versión existente de IndexedDB, sin forzar
+  la versión antigua 2, y cierra la conexión al terminar.
+
+Resultados locales: `npm test` (59 verificaciones), tempo y controles del sampler,
+sampler TIME, persistencia, FX (tres rutas), Record (incluida extensión instalada)
+y waveform aprobados.
+Waveform incluye MP3 de 24 minutos, HLS, cancelación y entrada truncada.
+La medición FX actual fue 0,107 ms por cambio, cero buffers nuevos y cero MiB de
+PCM asignado durante los 30 cambios de delay.
+
+Estos resultados usan Chromium 153.0.8010.12 de Playwright. No se dispone aquí de
+Chrome 116 ni de un equipo físico de 4 GB: la matriz sobre esa versión y las
+mediciones de simultaneidad/RAM/sesiones largas en hardware modesto siguen sin
+validar. No son fallos conocidos que estas pruebas puedan declarar arreglados.
+Las limitaciones de procesamiento descritas arriba siguen vigentes.
+
+La tabla «Antes/Después» es histórica: una vez incorporado el cambio al repo,
+`--baseline` mide el HEAD actual y ya no reproduce la implementación anterior.
