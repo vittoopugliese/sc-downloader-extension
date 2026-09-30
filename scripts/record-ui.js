@@ -31,7 +31,6 @@
       .record-canvas.is-panning { cursor:grabbing; }
       .record-empty { position:absolute; inset:0; display:grid; place-content:center; text-align:center; pointer-events:none; color:#cad7d6; font:10px/1.6 system-ui,sans-serif; }
       .record-empty[hidden] { display:none; }
-      .record-footer { display:flex; align-items:center; gap:7px; margin-top:6px; color:#9fa9aa; font:9px system-ui,sans-serif; }
       .record-notice { position:absolute; inset:auto 5px 5px; margin:0; padding:4px 6px; border-radius:3px; color:#eee; background:#20282bee; font:10px/1.4 system-ui,sans-serif; pointer-events:none; }
     </style>
     ${collapsible.header({ title: "Record", bodyId: "scdl-record-body", expanded: false, toggleClass: "record-toggle", icon: '<img class="tool-section-icon record-icon" alt="" aria-hidden="true" />', actionsClass: "record-toolbar", actions: `
@@ -45,7 +44,6 @@
         <canvas class="record-canvas" tabindex="0" role="slider" aria-label="Recorded sample position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" data-scdl-tooltip="Wheel to zoom at the cursor. Drag or Shift + wheel to scroll. Click to seek. Keyboard: + / - zoom, Shift + arrows scroll, 0 resets the view."></canvas>
         <div class="record-empty">Record your mix<br>Track · pads · FX · EQ</div>
       </div>
-      <div class="record-footer"><span class="record-format">STEREO · 48 kHz / 16-bit · POST EQ</span></div>
     </div>`;
     container.append(section);
     const find = name => section.querySelector(`.record-${name}`);
