@@ -99,3 +99,12 @@ Artefactos en `test-results/stems/` (ignorados por Git): modelo de prueba, `inpu
 - Para tienda: ejecutar el empaquetado completo con su configuración de release y probar el ZIP. Se validó la lista de assets y se amplió el smoke check, pero no se generó ni publicó un build de tienda.
 
 No queda un error funcional conocido que impida probar esta milestone en el checkout. La ingeniería inversa del modelo específico de Image-Line sigue pendiente y separada de esta integración.
+
+## Interfaz y waveforms — 01/10/2026
+
+- Página alineada con `index.html`: modo oscuro del looper, acentos naranja, tarjetas e iconos SVG locales. Logo existente `assets/icons/player-toolkit.png`. Español/inglés y layout verificado en escritorio y móviles de 390/320 px.
+- Waveform original y una por stem. Reutiliza `scripts/spectral-waveform.js` y copia `drawWaveform` de `scripts/tempo-control-main.js`: mismos picos, normalización, colores RGB por energía y resolución HiDPI. Si cambia ese dibujo en el looper, revisar también la copia de Stems.
+- Cursores con `requestAnimationFrame` desde el reloj de reproducción existente. Clic en cualquier waveform cambia la posición compartida; las waveforms conservan navegación por teclado (flechas, Home y End), sin slider de posición adicional. Mute/solo/comparación atenúan los stems que no se escuchan.
+- Análisis visual independiente del worker de separación y del grafo de audio; libera observadores y análisis pendientes al reemplazar resultados o cerrar la página. Sin cambios al modelo, inferencia ni formato WAV.
+- Validación: `npm run test:stems` (5 pruebas), `npm test` (60 verificaciones) y `npm run test:e2e:stems-ui`. La prueba UI usa PCM y un worker de separación de fixture, con análisis espectral y reproducción reales: colores, sincronización, pausa, seek, solo, comparación, descarga y layout. No repite inferencia ONNX real.
+- Capturas en `test-results/stems-ui/` (ignoradas por Git). La prueba de inferencia real sigue disponible en `npm run test:e2e:stems`.

@@ -3,6 +3,9 @@ import { MODEL } from './stem-model.mjs';
 
 const es = (globalThis.chrome?.i18n?.getUILanguage() || navigator.language).startsWith('es');
 const words = {
+  workspace: ['Your loop, layer by layer.', 'Tu loop, capa por capa.'], selected: ['SELECTED LOOP', 'LOOP SELECCIONADO'],
+  extract: ['Unpack your sound.', 'Separá tu sonido.'], listen: ['Find your mix.', 'Encontrá tu mezcla.'], local: ['On-device', 'En tu equipo'],
+  lows: ['Lows', 'Graves'], mids: ['Mids', 'Medios'], highs: ['Highs', 'Agudos'],
   experimental: ['Experimental', 'Experimental'], title: ["Hear what's inside your loop.", 'Escuchá qué hay dentro de tu loop.'],
   intro: ['Separate vocals, drums, bass and other instruments locally. Your audio stays in Chrome.', 'Separá voz, batería, bajo y otros instrumentos localmente. Tu audio se queda en Chrome.'],
   details: ['First use downloads a 166 MB model. Processing can take a few minutes and uses substantial memory. Up to 30 seconds, at original speed without effects.', 'El primer uso descarga un modelo de 166 MB. El proceso puede tardar unos minutos y consume bastante memoria. Hasta 30 segundos, a velocidad original y sin efectos.'],
@@ -24,6 +27,135 @@ const text = key => words[key]?.[es ? 1 : 0] || key;
 const $ = id => document.getElementById(id);
 document.documentElement.lang = es ? 'es' : 'en';
 document.querySelectorAll('[data-copy]').forEach(node => { node.textContent = text(node.dataset.copy); });
+// Local inline icons keep the extension page self-contained.
+const iconPaths = {
+  music: '<path d="M9 18V5l12-2v13M9 8l12-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="18" cy="16" rx="3" ry="3"/>',
+  layers: '<path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/>',
+  sliders: '<path d="M4 4v6m0 4v6M12 4v10m0 4v2M20 4v2m0 4v10M1 10h6m2 4h6m2-8h6"/>',
+  shield: '<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/>',
+  trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>',
+  close: '<path d="m6 6 12 12M6 18 18 6"/>',
+  play: '<path d="m8 4 12 8-12 8V4Z"/>', pause: '<path d="M8 4v16M16 4v16"/>',
+  download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
+  drums: '<ellipse cx="12" cy="9" rx="9" ry="4"/><path d="M3 9v8c0 5 18 5 18 0V9M7 13v6m10-6v6M5 2l6 4m8-4-5 4"/>',
+  bass: '<path d="M5 12v2m4-7v12m4-16v18m4-15v12m4-9v6"/>',
+  other: '<path d="M3 4h18v16H3zM7 4v9h3V4m4 0v9h3V4M9 13v7m6-7v7"/>',
+  vocals: '<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/>',
+};
+function icon(name) {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  node.setAttribute('viewBox', '0 0 24 24'); node.setAttribute('aria-hidden', 'true');
+  node.classList.add('icon'); node.innerHTML = iconPaths[name] || iconPaths.music;
+  return node;
+}
+document.querySelectorAll('[data-icon]').forEach(node => node.replaceChildren(icon(node.dataset.icon)));
+function playLabel(active) { $('play').replaceChildren(icon(active ? 'pause' : 'play'), document.createTextNode(text(active ? 'stop' : 'play'))); }
+const waveforms = new Set();
+function seekTo(value) {
+  const resume = playing; pause(); position = Math.max(0, Math.min(original.duration, value));
+  updatePlayheads();
+  if (resume) play().catch(error => status(error.message, true));
+}
+function updatePlayheads() {
+  if (!original) return;
+  const percent = Math.max(0, offset()) / original.duration * 100;
+  for (const view of waveforms) {
+    view.playhead.style.left = `${Math.min(100, percent)}%`;
+    view.element.setAttribute('aria-valuenow', offset().toFixed(1));
+  }
+}
+function mountWaveform(parent, buffer, label) {
+  const element = document.createElement('div'); element.className = 'waveform';
+  element.tabIndex = 0; element.setAttribute('role', 'slider');
+  element.setAttribute('aria-label', label); element.setAttribute('aria-valuemin', '0');
+  element.setAttribute('aria-valuemax', String(buffer.duration)); element.setAttribute('aria-valuenow', '0');
+  element.addEventListener('keydown', event => {
+    const steps = { ArrowLeft: -0.1, ArrowDown: -0.1, ArrowRight: 0.1, ArrowUp: 0.1 };
+    if (!(event.key in steps) && event.key !== 'Home' && event.key !== 'End') return;
+    event.preventDefault();
+    seekTo(event.key === 'Home' ? 0 : event.key === 'End' ? original.duration : offset() + steps[event.key]);
+  });
+  const canvas = document.createElement('canvas'); canvas.setAttribute('role', 'img'); canvas.setAttribute('aria-label', label);
+  const playhead = document.createElement('span'); playhead.className = 'waveform-playhead'; playhead.setAttribute('aria-hidden', 'true');
+  element.append(canvas, playhead); parent.append(element);
+  element.addEventListener('pointerdown', event => {
+    if (event.button !== 0) return;
+    const rect = element.getBoundingClientRect();
+    seekTo((event.clientX - rect.left) / rect.width * original.duration);
+  });
+  const controller = new AbortController();
+  const view = { element, playhead, draw: () => drawWaveform(), dispose() { controller.abort(); observer.disconnect(); waveforms.delete(view); element.remove(); } };
+  waveforms.add(view);
+  const ui = { waveformCanvas: canvas, panel: $('audition') };
+  const waveformCollapsed = false, waveformSamples = [], waveformDrawPreview = null;
+  let waveformSpectrum, waveformStaticKey = '', waveformRevision = 0;
+  const loopState = { durationMs: buffer.duration * 1000 };
+  const visibleWaveformWindow = () => ({ startMs: 0, endMs: loopState.durationMs });
+  const loopPercentInWindow = (time, range) => (time - range.startMs) / (range.endMs - range.startMs) * 100;
+  // Copied from tempo-control-main.js: same physical-pixel peak aggregation,
+  // RGB energy mapping and normalization as the Player Tools looper.
+  function drawWaveform() {
+    if (!ui?.waveformCanvas || waveformCollapsed || ui.panel.hidden || document.hidden) return;
+    const canvas = ui.waveformCanvas;
+    const rect = canvas.getBoundingClientRect();
+    const scale = Math.max(1, window.devicePixelRatio || 1);
+    const width = Math.max(1, Math.round(rect.width * scale));
+    const height = Math.max(1, Math.round(rect.height * scale));
+    const windowRange = visibleWaveformWindow();
+    const displayedRange = waveformDrawPreview || loopState;
+    const drawKey = JSON.stringify([waveformRevision, width, height, scale,
+      loopState.durationMs, windowRange?.startMs, windowRange?.endMs,
+      displayedRange.startMs, displayedRange.endMs, loopState.active]);
+    if (drawKey === waveformStaticKey) return;
+    waveformStaticKey = drawKey;
+    if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+    const context = canvas.getContext("2d");
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = "#0e1216";
+    context.fillRect(0, 0, width, height);
+    if (!windowRange) return;
+    const durationMs = loopState.durationMs;
+    const samples = waveformSpectrum?.peaks || waveformSamples;
+    const complete = Number.isFinite(displayedRange.startMs) && Number.isFinite(displayedRange.endMs);
+    const start = complete ? loopPercentInWindow(displayedRange.startMs, windowRange) : -1;
+    const end = complete ? loopPercentInWindow(displayedRange.endMs, windowRange) : -1;
+    // One column per physical pixel; peak aggregation preserves short transients.
+    let maximum = 0;
+    for (const sample of samples) maximum = Math.max(maximum, Math.abs(Number(sample) || 0));
+    if (!samples.length || !maximum) return;
+    const bands = waveformSpectrum?.bands;
+    const sourceDuration = waveformSpectrum?.durationMs || durationMs;
+    for (let x = 0; x < width; x += 1) {
+      const from = (windowRange.startMs + x / width * (windowRange.endMs - windowRange.startMs)) / sourceDuration * samples.length;
+      const to = (windowRange.startMs + (x + 1) / width * (windowRange.endMs - windowRange.startMs)) / sourceDuration * samples.length;
+      let peak = 0, low = 0, mid = 0, high = 0;
+      for (let i = Math.max(0, Math.floor(from)); i < Math.min(samples.length, Math.max(Math.floor(from) + 1, Math.ceil(to))); i += 1) {
+        peak = Math.max(peak, Math.abs(Number(samples[i]) || 0));
+        if (bands) { low += bands[i * 3]; mid += bands[i * 3 + 1]; high += bands[i * 3 + 2]; }
+      }
+      const energy = Math.max(low, mid, high);
+      context.fillStyle = bands && energy > 0
+        ? 'rgb(' + [low, mid, high].map(value => Math.round(55 + 190 * Math.sqrt(value / energy))).join(',') + ')'
+        : '#858d96';
+      const percent = x / width * 100;
+      context.globalAlpha = complete && (percent < start || percent > end) ? .58 : .96;
+      const barHeight = peak / maximum * height * .88;
+      context.fillRect(x, (height - barHeight) / 2, 1, barHeight);
+    }
+    context.globalAlpha = 1;
+  }
+
+
+  const observer = new ResizeObserver(drawWaveform); observer.observe(canvas);
+  globalThis.SCSpectralWaveform.analyze(buffer, controller.signal).then(spectrum => {
+    if (controller.signal.aborted) return;
+    waveformSpectrum = spectrum; waveformRevision++; drawWaveform(); updatePlayheads();
+  }).catch(error => { if (error.name !== 'AbortError') console.error('[Stems waveform]', error); });
+  return view;
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) for (const view of waveforms) view.draw();
+});
 const jobId = new URL(location.href).searchParams.get('job');
 let original, buffers = [], context, nodes = [], outputs = [], urls = [];
 let mode = 'original', playing = false, position = 0, startedAt = 0;
@@ -57,7 +189,7 @@ function pause() {
   position = offset(); playing = false;
   for (const { source, gain } of nodes) { source.stop(); source.disconnect(); gain.disconnect(); }
   nodes = [];
-  $('play').textContent = text('play');
+  playLabel(false); updatePlayheads();
 }
 function applyMix() {
   const solo = states.some(state => state.solo);
@@ -66,6 +198,10 @@ function applyMix() {
     const value = index === 0 ? Number(mode === 'original') :
       mode === 'mix' && !state.muted && (!solo || state.solo) ? state.gain : 0;
     gain.gain.setTargetAtTime(value, context.currentTime, 0.008);
+  });
+  document.querySelectorAll('.stem').forEach((row, index) => {
+    const state = states[index];
+    row.classList.toggle('is-silent', mode === 'original' || state.muted || (solo && !state.solo) || state.gain === 0);
   });
   $('original').setAttribute('aria-pressed', String(mode === 'original'));
   $('mix').setAttribute('aria-pressed', String(mode === 'mix'));
@@ -84,11 +220,12 @@ async function play() {
     source.start(startedAt, position);
     return { source, gain };
   });
-  playing = true; applyMix(); $('play').textContent = text('stop');
+  playing = true; applyMix(); playLabel(true);
 }
 function disposeResults() {
   pause(); buffers = []; outputs = [];
   urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
+  for (const view of waveforms) if ($('stems').contains(view.element)) view.dispose();
   $('stems').replaceChildren(); $('mix').disabled = true; $('quality-note').hidden = true;
   mode = 'original'; applyMix();
 }
@@ -99,7 +236,7 @@ function showResults(result) {
   states = STEMS.map(() => ({ muted: false, solo: false, gain: 1 }));
   STEMS.forEach((stem, index) => {
     const row = document.createElement('div'); row.className = 'stem';
-    const name = document.createElement('h2'); name.textContent = text(stem);
+    const name = document.createElement('h2'); name.append(icon(stem), document.createTextNode(text(stem)));
     const controls = ['mute', 'solo'].map(kind => {
       const button = document.createElement('button'); button.type = 'button'; button.textContent = text(kind);
       button.setAttribute('aria-label', `${text(kind)} ${text(stem)}`); button.setAttribute('aria-pressed', 'false');
@@ -119,8 +256,9 @@ function showResults(result) {
     const link = document.createElement('a'); link.className = 'download';
     const url = URL.createObjectURL(new Blob([encodeWav(outputs[index])], { type: 'audio/wav' })); urls.push(url);
     link.href = url; link.download = `${title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 80)}_${stem}.wav`;
-    link.textContent = 'WAV'; link.setAttribute('aria-label', `${text('download')} ${text(stem)}`);
+    link.append(icon('download'), document.createTextNode('WAV')); link.setAttribute('aria-label', `${text('download')} ${text(stem)}`);
     row.append(name, ...controls, label, level, link); $('stems').append(row);
+    mountWaveform(row, buffers[index], `${text(stem)} · ${text('position')}`);
   });
   outputs = [];
   $('mix').disabled = false; $('quality-note').hidden = false; mode = 'mix'; applyMix();
@@ -171,7 +309,8 @@ async function separate() {
         if (version !== revision) return;
         if (!decoded.length || decoded.duration > MAX_SECONDS + 1 / SAMPLE_RATE) throw new Error('The rendered loop exceeds 30 seconds.');
         original = audioBuffer([decoded.getChannelData(0), decoded.getChannelData(Math.min(1, decoded.numberOfChannels - 1))]);
-        $('seek').max = String(original.duration); $('audition').hidden = false;
+        $('audition').hidden = false;
+        mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
       }
       if (version !== revision) return;
       const result = await runWorker([original.getChannelData(0).slice(), original.getChannelData(1).slice()]);
@@ -198,14 +337,21 @@ $('play').onclick = () => { if (playing) pause(); else play().catch(error => sta
 $('original').onclick = () => { mode = 'original'; applyMix(); };
 $('mix').onclick = () => { mode = 'mix'; applyMix(); };
 $('repeat').onchange = () => { const resume = playing; pause(); if (resume) play().catch(error => status(error.message, true)); };
-$('seek').oninput = () => { const resume = playing; pause(); position = Number($('seek').value); if (resume) play().catch(error => status(error.message, true)); };
-setInterval(() => {
+let animationFrame;
+function animate() {
+  updatePlayheads();
+  animationFrame = requestAnimationFrame(animate);
+}
+animate();
+const timeInterval = setInterval(() => {
   if (!original) return;
   const current = Math.max(0, offset());
   if (playing && !$('repeat').checked && current >= original.duration) { pause(); position = 0; }
-  $('seek').value = String(current); $('time').textContent = `${current.toFixed(1)} / ${original.duration.toFixed(1)} s`;
+  $('time').textContent = `${current.toFixed(1)} / ${original.duration.toFixed(1)} s`;
 }, 100);
 window.addEventListener('pagehide', () => {
+  cancelAnimationFrame(animationFrame); clearInterval(timeInterval);
+  for (const view of waveforms) view.dispose();
   worker?.terminate(); pause(); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
   chrome.runtime.sendMessage({ type: 'STEM_LOOP_CANCEL', jobId }).catch(() => {});
 });

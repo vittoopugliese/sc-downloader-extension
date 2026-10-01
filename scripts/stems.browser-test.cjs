@@ -130,7 +130,7 @@ const { chromium } = require('playwright');
     clearInterval(heartbeat);
     const args = await background.evaluate(() => globalThis.stemRenderArgs);
     assert.deepEqual(args.slice(1, 4), [{ startMs: 3000, endMs: 5000 }, { rate: 1, preservePitch: false }, {}]);
-    const actualFrames = Math.round(Number(await page.locator('#seek').getAttribute('max')) * 44100);
+    const actualFrames = Math.round(Number(await page.locator('#original-waveform .waveform').getAttribute('aria-valuemax')) * 44100);
     assert.ok(Math.abs(actualFrames - frames) <= 1, 'Browser resampling may round the boundary by one sample.');
     const renderedAudio = await background.evaluate(() => globalThis.stemRenderedAudio);
     const trimError = await page.evaluate(async ({ renderedAudio, expected }) => {

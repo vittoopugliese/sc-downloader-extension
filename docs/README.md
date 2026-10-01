@@ -1,5 +1,7 @@
 # Documentación y estado
 
+**01/10/2026 — Interfaz de Stems:** estética de la landing, logo Player Tools, iconos y waveforms del looper con cursores sincronizados. Implementación y pruebas al final de [loop-stems.md](loop-stems.md).
+
 **30/09/2026 — Stems de loops:** [milestone funcional, pruebas y handoff para sesión en frío](loop-stems.md). Separación local HTDemucs en Chrome; evaluación musical contra FL Studio pendiente.
 
 Entrada vigente: [Estado actual, cierres e inventario completo — 24/09/2026](ESTADO-ACTUAL-20260924.md), contrastado con `29d7946` y los últimos commits.

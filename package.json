@@ -6,6 +6,7 @@
   "scripts": {
     "vendor:stems": "node scripts/vendor-stem-runtime.cjs",
     "test:stems": "node --test scripts/stems.test.mjs",
+    "test:e2e:stems-ui": "node scripts/stems-ui.browser-test.cjs",
     "test:e2e:stems": "node scripts/stems.browser-test.cjs",
     "test:contact-content": "node scripts/verify-contact-content.js && node scripts/verify-contact-content-runtime.js",
     "test:contact-content:browser": "node scripts/verify-contact-content-browser.js",
