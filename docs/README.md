@@ -1,5 +1,7 @@
 # Documentación y estado
 
+**30/09/2026 — Stems de loops:** [milestone funcional, pruebas y handoff para sesión en frío](loop-stems.md). Separación local HTDemucs en Chrome; evaluación musical contra FL Studio pendiente.
+
 Entrada vigente: [Estado actual, cierres e inventario completo — 24/09/2026](ESTADO-ACTUAL-20260924.md), contrastado con `29d7946` y los últimos commits.
 
 **CERRADO:** integración técnica de Lemon; compra, activación automática de PRO y salida del trial de siete días en Test Mode confirmadas por el usuario. **ABIERTO:** restore, perfiles adicionales, refund/revocación, otros casos externos, Live, QA/candidato, Store, operación y M01 por cuenta verificada.

@@ -12,6 +12,8 @@
     "https://*.sndcdn.com/*",
     "https://*.media-streaming.soundcloud.cloud/*",
     "https://playback.media-streaming.soundcloud.cloud/*"
+    ,"https://huggingface.co/*"
+    ,"https://*.hf.co/*"
     ,"https://sctd-test.vpugliese.online/*"
   ],
   "background": {

@@ -2102,6 +2102,7 @@
     const hasLoopMarker = Number.isFinite(loopState.startMs) || Number.isFinite(loopState.endMs);
     ui.clearLoop.disabled = !loopState.available || !hasLoopMarker || loopDownloadPending;
     ui.downloadLoop.disabled = !loopState.active || loopDownloadPending;
+    if (ui.separateStems) ui.separateStems.disabled = !loopState.active || ui.separateStems.dataset.pending === "true";
     ui.sliceButton.disabled = sliceJob ? sliceJob.committing : !capability("saveLoopPad") || !loopState.active || padRenderPending;
     ui.sliceButton.title = samplerCopy(!capability("saveLoopPad") ? "locked" : sliceJob ? "stop" : "slice");
     ui.sliceButton.setAttribute("aria-label", ui.sliceButton.title);
@@ -2875,6 +2876,27 @@
     });
   }
 
+  async function separateLoopStems() {
+    if (!loopState.active || ui.separateStems.dataset.pending === "true") return;
+    if (loopState.endMs - loopState.startMs > 30000) {
+      showDownloadStatus("Stem separation supports loops up to 30 seconds. Shorten the selected loop first.");
+      return;
+    }
+    const snapshot = { trackUrl: String(loopState.trackIdentity || "").replace(/^permalink:/, ""),
+      trimRange: { startMs: loopState.startMs, endMs: loopState.endMs } };
+    ui.separateStems.dataset.pending = "true";
+    renderLoop();
+    try {
+      await requestPad("stems", snapshot);
+      if (String(loopState.trackIdentity || "").replace(/^permalink:/, "") === snapshot.trackUrl) {
+        const audio = controller.getActiveAudio?.();
+        if (audio && !audio.paused) audio.pause();
+      }
+      showDownloadStatus("Loop opened in Stems. Separation uses the original speed without effects.", { dismissAfter: 6000 });
+    } catch (error) { showDownloadStatus(error.message || "Could not open stem separation."); }
+    finally { ui.separateStems.dataset.pending = "false"; renderLoop(); }
+  }
+
   async function downloadLoopFromPlayer() {
     if (!loopState.active || !Number.isFinite(loopState.startMs) || !Number.isFinite(loopState.endMs)) {
       showDownloadStatus("Set both loop markers before downloading.");
@@ -3327,8 +3349,8 @@
         .loop-range:disabled::-webkit-slider-thumb { opacity: .45; cursor: not-allowed; }
         .loop-edit { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 5px; margin-top: 4px; }
         .loop-time { min-width: 0; height: 26px; padding: 0 6px; border: 1px solid #484848; border-radius: 5px; color: #fff; background: #292929; font: 11px/1 monospace; }
-        .clear-loop, .download-loop { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 26px; border-radius: 5px; cursor: pointer; font-size: 10px; font-weight: 600; line-height: 1; }
-        .clear-loop { border: 1px solid #484848; color: #fff; background: #292929; }
+        .clear-loop, .download-loop, .separate-stems { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 26px; border-radius: 5px; cursor: pointer; font-size: 10px; font-weight: 600; line-height: 1; }
+        .clear-loop, .separate-stems { border: 1px solid #484848; color: #fff; background: #292929; }
         .download-loop { border: 1px solid #b84400; color: #fff; background: #ff5500; }
         .save-loop-pad, .loop-instrument, .slice-loop, .sampler-preset-toggle { display: grid; place-items: center; width: 24px; height: 26px; padding: 0; border: 1px solid #484848; border-radius: 5px; color: #d6d6d6; background: #292929; cursor: pointer; }
         .save-loop-pad:hover, .save-loop-pad[aria-pressed="true"], .loop-instrument:hover, .loop-instrument[aria-pressed="true"], .slice-loop:hover { color: #fff; border-color: #ff7b38; }
@@ -3359,7 +3381,7 @@
         .instrument-cut-itself, .instrument-adsr-toggle { width: 16px; height: 16px; accent-color: #ff7b38; margin: 0; }
         @keyframes instrument-pulse { to { opacity: .35; transform: scale(.88); } }
         .save-loop-pad svg, .loop-instrument svg, .slice-loop svg, .sampler-preset-toggle svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-        .clear-loop:disabled, .download-loop:disabled, .save-loop-pad:disabled, .loop-instrument:disabled, .slice-loop:disabled { cursor: not-allowed; opacity: .45; }
+        .clear-loop:disabled, .download-loop:disabled, .separate-stems:disabled, .save-loop-pad:disabled, .loop-instrument:disabled, .slice-loop:disabled { cursor: not-allowed; opacity: .45; }
         .clear-loop svg, .clear-loop img, .download-loop svg { width: 12px; height: 12px; flex: 0 0 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .status { margin-top: 5px; }
 
@@ -3530,7 +3552,7 @@
           .drum-pad { padding-inline: 4px; }
           .bypass, .bypass svg { width: 16px; height: 16px; }
         }
-        .clear-loop, .download-loop { height: 22px; padding: 0 6px; border-radius: 6px; opacity: .82; }
+        .clear-loop, .download-loop, .separate-stems { height: 22px; padding: 0 6px; border-radius: 6px; opacity: .82; }
         .save-loop-pad, .loop-instrument, .slice-loop, .sampler-preset-toggle { width: 22px; height: 22px; }
         .loop-edit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
         ${collapsible.styles}
@@ -4253,6 +4275,14 @@
       input.addEventListener("blur", () => { if (input.value.trim()) commitLoopTime(marker); });
     }
     ui.clearLoop.addEventListener("click", clearLoop);
+    ui.separateStems = document.createElement("button");
+    ui.separateStems.type = "button";
+    ui.separateStems.className = "separate-stems";
+    ui.separateStems.textContent = "Stems";
+    ui.separateStems.title = "Separate the selected loop into vocals, drums, bass and other (up to 30 seconds)";
+    ui.separateStems.setAttribute("aria-label", ui.separateStems.title);
+    ui.downloadLoop.before(ui.separateStems);
+    ui.separateStems.addEventListener("click", separateLoopStems);
     ui.downloadLoop.addEventListener("click", downloadLoopFromPlayer);
     ui.sliceButton.addEventListener("click", openSliceConfirmation);
     ui.sliceReplace.addEventListener("click", sliceLoopToPads);

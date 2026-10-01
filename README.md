@@ -54,6 +54,21 @@ If you used an older version and ran into bugs ~ stale track data, blank screens
 
 In the sampler, **TIME** sets each pad's sample duration from **25% to 400%**, preserving its tone (200% is twice as long; 50% is half as long). It applies on the next hit and is saved in sampler presets. **PITCH** still controls transposition separately. Drag TIME vertically, use arrow keys (Shift for 10% steps), or double-click to reset to 100%. The first hit after a TIME change prepares the audio; subsequent hits use the cached result.
 
+### Separate a selected loop (experimental)
+
+In **Player Tools → Loop Region**, select A and B (up to 30 seconds), then click
+**Stems**. The analyzer opens in a separate extension tab. Click **Separate loop**
+to extract drums, bass, other instruments and vocals with HTDemucs. Compare the
+original with the stem mix, use solo/mute and volume controls, or download each
+stem as a stereo float WAV.
+
+Separation runs locally in Chrome at the original speed, without playback
+effects. First use downloads and caches a 166 MB model; your audio is not uploaded.
+Processing needs substantial memory and can take minutes. Keep the tab open until
+you download your results. This uses a public Demucs model, not Image-Line's
+extractor, and quality has not been compared with FL Studio. See the
+[implementation, validation and handoff](docs/loop-stems.md).
+
 ### Record your performance
 
 Open **Record** in Player Tools. **Rec** captures the final mix of the playing track or loop, sampler pads, piano voices, and effects after EQ. The amplitude display shows live audio before a take and the captured sample afterwards. Use the mouse wheel to zoom at the cursor, drag or Shift + wheel to scroll, and click to seek, then preview or download a stereo 48 kHz / 16-bit WAV. With the display focused, + / - zooms, Shift + arrows scrolls, and 0 restores the full view. Recording continues when the panel is collapsed or hidden and stops automatically at five minutes. Download your take before starting another or reloading the page; takes are kept in memory only.

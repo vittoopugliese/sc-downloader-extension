@@ -18,6 +18,7 @@ importScripts(
   "bulk-library.js",
   "spectral-waveform.js",
   "bulk-job-manager.js",
+  "stem-jobs.js",
   "soundcloud-likes-source.js",
   "likes-library.js",
   "likes-jobs.js"
@@ -378,6 +379,14 @@ async function openPlayerToolsPanel() {
   return { tabId: tab.id };
 }
 
+const stemJobs = globalThis.SCStemJobs?.create({
+  chrome,
+  authorize: sender => playerToolsAccess.authorize(sender, { operation: "export-loop" }),
+  resolveTrack: resolveLoopTrack,
+  render: (...args) => BulkJobManager.renderLoopInstrument(...args),
+  cancel: operationId => BulkJobManager.cancelLoopInstrument(operationId),
+});
+
 chrome.runtime.onInstalled.addListener((details) => {
   configureUninstallFeedback().catch(() => {});
   BulkJobManager.recoverRunningJob().catch(() => {});
@@ -390,6 +399,7 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  stemJobs?.removeTab(tabId).catch(error => console.warn("Stem session cleanup failed", error));
   playerToolsAccess.endTab(tabId).catch((error) => console.warn("Player Tools session cleanup failed", error.code));
 });
 
@@ -407,6 +417,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (stemJobs?.accepts(request.type)) {
+    stemJobs.handle(request, sender).then(sendResponse).catch(error => sendResponse(errorResponse(error)));
+    return true;
+  }
   if (request.type === "GET_DOWNLOAD_POLICY") {
     return respond(Promise.resolve(downloadPolicy?.getPolicy() || { allDownloadsActivated: false }),
       sendResponse, (policy) => ({ policy }));

@@ -21,14 +21,17 @@ function smokePackage(zipPath, apiPermission) {
   const forbidden = /(^|\/)(?:\.git|\.agents|\.codex|docs|services|repos|node_modules|dist|test|tests)(?:\/|$)|(^|\/)verify-[^/]+\.js$|uninstall-feedback-emails|(^|\/)(?:\.DS_Store|Thumbs\.db|\.dev\.vars[^/]*)$/;
   const prohibited = files.filter(entry => forbidden.test(entry));
   if (prohibited.length) throw new Error(`Package contains development-only files: ${prohibited.join(', ')}`);
-  for (const required of ['manifest.json', 'popup.html', 'offscreen.html', 'scripts/background.js', 'THIRD_PARTY_LICENSES.md']) {
+  for (const required of ['manifest.json', 'popup.html', 'offscreen.html', 'stems.html', 'assets/stems.css',
+    'scripts/stem-worker.mjs', 'scripts/stem-model.mjs', 'scripts/stem-audio.mjs', 'scripts/stem-jobs.js',
+    'scripts/vendor/onnxruntime/ort.wasm.min.mjs', 'scripts/vendor/onnxruntime/ort-wasm-simd-threaded.mjs',
+    'scripts/vendor/onnxruntime/ort-wasm-simd-threaded.wasm', 'scripts/background.js', 'THIRD_PARTY_LICENSES.md']) {
     if (!entries.has(required)) throw new Error(`Package smoke check: missing ${required}.`);
   }
   const manifest = JSON.parse(zipText(zipPath, 'manifest.json'));
   if (!manifest.host_permissions?.includes(apiPermission)) throw new Error(`Package smoke check: missing API host permission ${apiPermission}.`);
   const referencedScripts = [manifest.background?.service_worker,
     ...(manifest.content_scripts || []).flatMap(item => item.js || []),
-    ...['popup.html', 'offscreen.html'].flatMap((html) => [...zipText(zipPath, html).matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map(match => match[1]))]
+    ...['popup.html', 'offscreen.html', 'stems.html'].flatMap((html) => [...zipText(zipPath, html).matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map(match => match[1]))]
     .filter(Boolean);
   for (const script of referencedScripts) {
     const entry = script.replace(/^\.\//, '');

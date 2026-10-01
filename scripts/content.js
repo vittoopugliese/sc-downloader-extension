@@ -191,6 +191,7 @@ window.addEventListener?.("message", (event) => {
     "commit-slices": "COMMIT_LOOP_SLICES",
     "cancel-slices": "CANCEL_LOOP_SLICES",
     instrument: "RENDER_LOOP_INSTRUMENT",
+    stems: "OPEN_LOOP_STEMS",
     "cancel-instrument": "CANCEL_LOOP_INSTRUMENT",
   };
   if (!types[action]) return;
@@ -210,7 +211,7 @@ window.addEventListener?.("message", (event) => {
     payload.mimeType = event.data.mimeType;
     payload.base64 = event.data.base64;
   }
-  if (action === "render" || action === "instrument" || action === "slices") {
+  if (action === "render" || action === "instrument" || action === "slices" || action === "stems") {
     if (action === "instrument") payload.fullTrack = event.data.fullTrack === true;
     payload.operationId = event.data.operationId;
     payload.trackUrl = event.data.trackUrl;
