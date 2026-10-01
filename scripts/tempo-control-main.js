@@ -269,6 +269,7 @@
         pad.saved = true;
         const record = (await requestPad("get", { index: editor.index, original: true })).pad;
         editor.updatedAt = record.updatedAt;
+        pad.updatedAt = record.updatedAt;
       }
       await requestPad("trim", { index: editor.index, trim, expectedUpdatedAt: editor.updatedAt });
     });
@@ -1369,6 +1370,7 @@
         reader.readAsDataURL(file);
       });
       const name = file.name.replace(/\.[^.]+$/, "") || pad.name;
+      await pad.trimSave;
       await requestPad("store", { index, name, mimeType: file.type || "audio/wav", base64, operationId: `pad_${crypto.randomUUID()}` });
       if (pad.version !== version) return;
       pad.buffer = null;
@@ -1393,6 +1395,7 @@
     pad.version += 1;
     updateDrumLabels();
     try {
+      await pad.trimSave;
       await requestPad("delete", { index, operationId: `pad_${crypto.randomUUID()}` });
       pad.saved = false;
       pad.customName = "";
@@ -2249,7 +2252,16 @@
     ui.editorTrack.setAttribute("aria-pressed", String(!padEditor));
     ui.editorPad.setAttribute("aria-pressed", String(Boolean(padEditor)));
     ui.editorReset.hidden = !padEditor;
+    ui.editorReset.disabled = !padEditor?.buffer;
     ui.editorReset.textContent = editorCopy("reset");
+    ui.editorPad.disabled = Boolean(waveformDrag) || padRenderPending;
+    for (const [marker, input, letter] of [[ui.waveformStart, ui.loopStartTime, "A"], [ui.waveformEnd, ui.loopEndTime, "B"]]) {
+      const label = (padEditor ? ui.editorPad.textContent : editorCopy("track")) + " " + letter;
+      marker.setAttribute("aria-label", label);
+      marker.setAttribute("aria-valuemin", "0");
+      marker.setAttribute("aria-valuemax", String(duration));
+      input.setAttribute("aria-label", label);
+    }
     for (const button of [ui.setA, ui.setB, ui.headerSetA, ui.headerSetB]) button.disabled = Boolean(padEditor) || !loopState.available;
     if (padEditor) for (const button of [ui.clearLoop, ui.downloadLoop, ui.separateStems, ui.sliceButton, ui.saveLoopPad, ui.instrumentToggle]) button.disabled = true;
     drawWaveform();
@@ -2452,12 +2464,12 @@
     const startMs = marker === "start" ? value : loopState.startMs;
     const endMs = marker === "end" ? value : loopState.endMs;
     if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs - startMs < (padEditor ? 1 : 250)) {
-      loopFailure = "Loop end must be at least 250 ms after its start.";
+      loopFailure = padEditor ? editorCopy("invalidRange") : "Loop end must be at least 250 ms after its start.";
       render();
       return;
     }
     const payload = { marker, startMs, endMs, enabled: true, startPlayback: !loopState.active };
-    if (padEditor) await setPadRange(payload);
+    if (padEditor) { loopFailure = ""; await setPadRange(payload); }
     else await applyAuthorizedLoop(payload);
   }
 
@@ -2575,8 +2587,8 @@
 
   function editorCopy(key) {
     const es = (document.documentElement.lang || navigator.language).startsWith("es");
-    return (es ? { track: "Pista", back: "Volver a pista", edit: "Editar pads", reset: "Restaurar l\u00edmites" }
-      : { track: "Track", back: "Back to track", edit: "Edit pads", reset: "Reset bounds" })[key];
+    return (es ? { track: "Pista", back: "Volver a pista", edit: "Editar pads", reset: "Restaurar límites", invalidRange: "B debe estar al menos 1 ms después de A." }
+      : { track: "Track", back: "Back to track", edit: "Edit pads", reset: "Reset bounds", invalidRange: "B must be at least 1 ms after A." })[key];
   }
 
   const SAMPLER_COPY = {
@@ -2742,6 +2754,7 @@
     ui.samplerPresetStatus.textContent = "";
     try {
       const piano = action === "save" && instrumentMode;
+      await Promise.all(drumPads.map(pad => pad.trimSave));
       const instrument = piano ? { ...instrumentSettings, envelope: { ...instrumentEnvelope }, octave: instrumentOctave,
         audio: await encodeInstrumentAudio(instrumentBuffer, instrumentSelection()) } : null;
       const result = await requestPad(`preset-${action}`, { presetId: preset?.id || `preset_${crypto.randomUUID()}`, name,
@@ -2876,6 +2889,7 @@
     showDrumError(samplerCopy("preparing"));
     renderLoop();
     try {
+      await Promise.all(drumPads.map(pad => pad.trimSave));
       const prepared = await requestPad("slices", {
         operationId: job.operationId, count: 8,
         trackIdentity: snapshot.trackIdentity, generation: snapshot.generation,
@@ -3935,6 +3949,7 @@
   });
 
   function closePanel() {
+    if (padEditor) leavePadEditor();
     closeSamplerPresets();
     cancelSlices();
     clearHoverTimers();
@@ -4430,7 +4445,7 @@
       if (timeMs !== null) requestLoop("seek", { timeMs });
     });
     for (const [input, marker] of [[ui.loopStartTime, "start"], [ui.loopEndTime, "end"]]) {
-      input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); commitLoopTime(marker); input.blur(); } if (event.key === "Escape") { input.value = Number.isFinite(loopState[`${marker}Ms`]) ? formatLoopTime(loopState[`${marker}Ms`]) : ""; input.blur(); } });
+      input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); commitLoopTime(marker); input.blur(); } if (event.key === "Escape") { input.value = Number.isFinite(editorState()[`${marker}Ms`]) ? formatLoopTime(editorState()[`${marker}Ms`]) : ""; input.blur(); } });
       input.addEventListener("blur", () => { if (input.value.trim()) commitLoopTime(marker); });
     }
     ui.clearLoop.addEventListener("click", clearLoop);

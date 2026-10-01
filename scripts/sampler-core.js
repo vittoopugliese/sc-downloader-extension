@@ -64,7 +64,7 @@
 
   // Split the canonical PCM16 WAV produced by SCDownload.encodeWavSegment.
   // Keeping PCM frames avoids another decode/resample and preserves exact edges.
-  function sliceWav(bytes, trimRange, rate) {
+  function sliceWav(bytes, trimRange, rate, includeAudio = true) {
     const view = new DataView(bytes);
     const text = (at, length) => String.fromCharCode(...new Uint8Array(bytes, at, length));
     if (bytes.byteLength < 44 || text(0, 4) !== "RIFF" || text(8, 8) !== "WAVEfmt " ||
@@ -89,6 +89,7 @@
       Math.floor(trimRange.startMs / 1000 * sampleRate)) / rate);
     if (selectedFrames > dataLength / blockSize) throw new Error("The rendered loop is incomplete.");
     return sliceRanges(selectedFrames).map(({ start, end }) => {
+      if (!includeAudio) return { startFrame: start, endFrame: end, sampleRate };
       const length = end - start;
       const result = new ArrayBuffer(44 + length * blockSize);
       new Uint8Array(result).set(new Uint8Array(bytes, 0, 44));

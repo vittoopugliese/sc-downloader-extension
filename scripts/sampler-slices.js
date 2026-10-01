@@ -123,7 +123,7 @@
             controller.signal, input.trimRange, input.playbackTransform, input.effects, true);
           if (controller.signal.aborted) throw new Error("Slice preparation cancelled.");
           if (!(blob instanceof Blob) || blob.size > MAX_BYTES) throw new Error("This loop is too large for the sampler.");
-          const slices = SCSamplerCore.sliceWav(await blob.arrayBuffer(), input.trimRange, input.playbackTransform.rate);
+          const slices = SCSamplerCore.sliceWav(await blob.arrayBuffer(), input.trimRange, input.playbackTransform.rate, false);
           const prepared = slices.map((slice, index) => ({
             index, kind: "slice", schemaVersion: 2,
             name: `${String(input.name || "Loop").slice(0, 70)} · ${index + 1}/8`,

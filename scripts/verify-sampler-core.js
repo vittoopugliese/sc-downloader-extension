@@ -98,3 +98,10 @@ slices.forEach(slice => {
 assert.throws(() => sampler.sliceWav(bytes, { startMs: 0, endMs: 9999 }, 1), /incomplete/);
 assert.throws(() => sampler.sliceWav(new ArrayBuffer(12), { startMs: 0, endMs: 1 }, 1), /Invalid/);
 console.log("Eight-slice PCM coverage, channels, fades and tail boundaries passed.");
+const shortPad = { startMs: 10, endMs: 50, durationMs: 100 };
+assert.equal(sampler.editRange(shortPad, "start", 49).startMs, 49);
+assert.equal(sampler.editRange(shortPad, "end", 1000).endMs, 100);
+assert.equal(sampler.editRange(shortPad, "selection", 99, 10).startMs, 60);
+assert.equal(sampler.editRange(shortPad, "create", 20, 20).endMs, 21);
+assert.equal(shortPad.startMs, 10, "editing a pad does not mutate the input range");
+console.log("Pad bounds allow short samples, overlaps and clamped gestures.");
