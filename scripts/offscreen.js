@@ -14,13 +14,14 @@ let padDatabasePromise = null;
 function openPadDatabase() {
   if (!padDatabasePromise) {
     padDatabasePromise = new Promise((resolve, reject) => {
-      const request = indexedDB.open("scdl-player-pads", 3);
+      const request = indexedDB.open("scdl-player-pads", 4);
       request.onupgradeneeded = () => {
         const database = request.result;
         if (!database.objectStoreNames.contains("samples")) database.createObjectStore("samples", { keyPath: "index" });
         if (!database.objectStoreNames.contains("operations")) database.createObjectStore("operations", { keyPath: "id" });
         if (!database.objectStoreNames.contains("claims")) database.createObjectStore("claims", { keyPath: "index" });
         if (!database.objectStoreNames.contains("presets")) database.createObjectStore("presets", { keyPath: "id" });
+        if (!database.objectStoreNames.contains("sources")) database.createObjectStore("sources", { keyPath: "id" });
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -37,6 +38,40 @@ async function padTransaction(mode, action) {
     transaction.oncomplete = () => resolve(request.result);
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error || new Error("Could not save the pad sample."));
+  });
+}
+
+async function readPadBlob(record) {
+  if (!record?.audioId) return record?.blob;
+  const database = await openPadDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction("sources", "readonly");
+    const get = tx.objectStore("sources").get(record.audioId);
+    tx.oncomplete = () => resolve(get.result?.blob);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function prunePadSources() {
+  const database = await openPadDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(["sources", "samples", "presets"], "readwrite");
+    const samples = tx.objectStore("samples").getAll();
+    const presets = tx.objectStore("presets").getAll();
+    presets.onsuccess = () => {
+      const used = new Set([...samples.result, ...presets.result.flatMap(preset => preset.samples || [])]
+        .map(sample => sample.audioId).filter(Boolean));
+      const cursor = tx.objectStore("sources").openCursor();
+      cursor.onsuccess = () => {
+        const item = cursor.result;
+        if (!item) return;
+        if (!used.has(item.key)) item.delete();
+        item.continue();
+      };
+    };
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
   });
 }
 
@@ -393,13 +428,59 @@ async function handlePadMessage(message) {
       if (operation.state !== "pending") return operation.result;
       return await finishPadOperation(message.operationId);
     }
+    if (message.type === "OFFSCREEN_PAD_TRIM") {
+      const before = await padTransaction("readonly", store => store.get(message.index));
+      if (!before || before.updatedAt !== message.expectedUpdatedAt) throw new Error("The sample changed.");
+      let durationMs = before.sourceDurationMs;
+      if (!Number.isFinite(durationMs)) {
+        const context = new AudioContext();
+        try { durationMs = (await context.decodeAudioData(await (await readPadBlob(before)).arrayBuffer())).duration * 1000; }
+        finally { await context.close(); }
+      }
+      const database = await openPadDatabase();
+      return await new Promise((resolve, reject) => {
+        const tx = database.transaction("samples", "readwrite");
+        const store = tx.objectStore("samples");
+        const get = store.get(message.index);
+        let result;
+        get.onsuccess = () => {
+          const record = get.result;
+          const trim = message.trim;
+          if (!record || record.updatedAt !== message.expectedUpdatedAt ||
+              !Number.isFinite(trim?.startMs) || !Number.isFinite(trim?.endMs) ||
+              trim.startMs < 0 || trim.endMs - trim.startMs < 1 ||
+              trim.endMs > durationMs) {
+            result = { success: false, error: "The sample changed or its bounds are invalid." };
+            return;
+          }
+          record.trim = { startMs: trim.startMs, endMs: trim.endMs };
+          record.sourceDurationMs = durationMs;
+          store.put(record);
+          result = { success: true };
+        };
+        tx.oncomplete = () => resolve(result);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+    }
     if (message.type === "OFFSCREEN_PAD_GET") {
       const timePercent = message.timePercent ?? 100;
       if (!Number.isInteger(timePercent) || timePercent < 25 || timePercent > 400) throw new Error("Invalid pad time.");
       const record = await padTransaction("readonly", (store) => store.get(message.index));
       if (!record && timePercent === 100) return { success: true, pad: null };
-      let blob = record?.blob;
-      if (timePercent !== 100) {
+      let blob = await readPadBlob(record);
+      if (blob && record.trim && !message.original) {
+        let bytes = await blob.arrayBuffer();
+        if (record.schemaVersion !== 2 || record.kind !== "slice") {
+          const context = new AudioContext({ sampleRate: record.sampleRate || 48000 });
+          try {
+            const decoded = await context.decodeAudioData(bytes);
+            bytes = SCDownload.encodeWavSegment(decoded, { startMs: 0, endMs: decoded.duration * 1000 }).buffer;
+          } finally { await context.close(); }
+        }
+        blob = new Blob([SCSamplerCore.cropWav(bytes, record.trim.startMs, record.trim.endMs)], { type: "audio/wav" });
+      }
+      if (timePercent !== 100 && !message.original) {
         if (!blob) {
           const samples = ["kick1", "clap1", "hat1", "kick2", "snare1", "tom1", "clap2", "hat2"];
           const response = await fetch(chrome.runtime.getURL(`assets/drums/${samples[message.index]}.wav`));
@@ -414,7 +495,8 @@ async function handlePadMessage(message) {
         reader.onerror = () => reject(reader.error);
         reader.readAsDataURL(blob);
       });
-      return { success: true, pad: { index: message.index, name: record?.name || "", dataUrl } };
+      return { success: true, pad: { index: message.index, name: record?.name || "", dataUrl, trim: record?.trim, originalTrim: record?.originalTrim,
+        sourceDurationMs: record?.sourceDurationMs, updatedAt: record?.updatedAt, audioId: record?.audioId } };
     }
     if (message.type === "OFFSCREEN_PAD_STORE") {
       const operationId = message.operationId;
@@ -462,12 +544,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (!message || typeof message.type !== "string") return false;
   if (["OFFSCREEN_SLICES_BEGIN", "OFFSCREEN_SLICES_RENDER", "OFFSCREEN_SLICES_COMMIT", "OFFSCREEN_SLICES_CANCEL"].includes(message.type)) {
-    SCSamplerSlices.handle(message, openPadDatabase).then(sendResponse).catch(error =>
+    SCSamplerSlices.handle(message, openPadDatabase).then(result => {
+      sendResponse(result);
+      if (message.type === "OFFSCREEN_SLICES_COMMIT") prunePadSources().catch(console.warn);
+    }).catch(error =>
       sendResponse({ success: false, code: "slice_failed", error: error?.message || "Could not prepare the slices." }));
     return true;
   }
   if (["OFFSCREEN_SAMPLER_PRESET_LIST", "OFFSCREEN_SAMPLER_PRESET_SAVE", "OFFSCREEN_SAMPLER_PRESET_LOAD", "OFFSCREEN_SAMPLER_PRESET_DELETE", "OFFSCREEN_SAMPLER_PRESET_RENDER",
-      "OFFSCREEN_PAD_LIST", "OFFSCREEN_PAD_DELETE", "OFFSCREEN_PAD_GET", "OFFSCREEN_PAD_STORE", "OFFSCREEN_PAD_RENDER",
+      "OFFSCREEN_PAD_LIST", "OFFSCREEN_PAD_DELETE", "OFFSCREEN_PAD_GET", "OFFSCREEN_PAD_TRIM", "OFFSCREEN_PAD_STORE", "OFFSCREEN_PAD_RENDER",
       "OFFSCREEN_INSTRUMENT_RENDER", "OFFSCREEN_INSTRUMENT_CANCEL", "OFFSCREEN_INSTRUMENT_READ"].includes(message.type)) {
     const operationId = message.operationId;
     if (["OFFSCREEN_INSTRUMENT_CANCEL", "OFFSCREEN_INSTRUMENT_READ"].includes(message.type)) {
@@ -484,7 +569,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       record.promise = promise;
       padRenders.set(operationId, record);
     }
-    promise.then(sendResponse);
+    promise.then(result => {
+      sendResponse(result);
+      if (["OFFSCREEN_PAD_DELETE", "OFFSCREEN_PAD_STORE", "OFFSCREEN_PAD_RENDER",
+        "OFFSCREEN_SAMPLER_PRESET_DELETE", "OFFSCREEN_SAMPLER_PRESET_LOAD"].includes(message.type)) {
+        prunePadSources().catch(console.warn);
+      }
+    });
     return true;
   }
   if (message.type === "OFFSCREEN_WAVEFORM") {

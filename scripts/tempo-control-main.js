@@ -180,6 +180,105 @@
   const instrumentSettings = { gainPercent: 100, pitchSemitones: 0, timePercent: 100 };
   let instrumentTimeCache = null;
   let selectedPadIndex = 0;
+  let padEditor = null;
+  let padEditorIntent = 0;
+  let padEditorZoom = null;
+
+  function editorState() {
+    return padEditor ? { ...padEditor.trim, durationMs: padEditor.durationMs,
+      active: Boolean(padEditor.buffer), available: Boolean(padEditor.buffer) } : loopState;
+  }
+
+  function leavePadEditor() {
+    padEditorIntent++;
+    padEditor = null;
+    padEditorZoom = null;
+    waveformDrag = null;
+    waveformDrawPreview = null;
+    waveformRevision++;
+    renderLoop();
+  }
+
+  async function editPad(index = selectedPadIndex) {
+    if (waveformDrag || drumPads[index]?.busy) return;
+    const intent = ++padEditorIntent;
+    const pad = drumPads[index];
+    if (instrumentMode || instrumentPreparing) exitInstrument();
+    selectedPadIndex = index;
+    padEditorZoom = null;
+    padEditor = { index, trim: {}, durationMs: 0, buffer: null, peaks: [] };
+    waveformRevision++;
+    if (waveformCollapsed) setWaveformCollapsed(false);
+    renderSelectedPadControls();
+    renderLoop();
+    try {
+      if (!await hydrateDrumPads()) throw new Error("Could not restore saved samples.");
+      await pad.trimSave;
+      const version = pad.version;
+      const record = pad.saved ? (await requestPad("get", { index, original: true })).pad : null;
+      const url = record?.dataUrl || new URL(pad.sample, document.documentElement.getAttribute(EXTENSION_DRUM_SAMPLES_ATTRIBUTE)).href;
+      const response = await fetch(url);
+      const buffer = await getDrumAudioContext().decodeAudioData(await response.arrayBuffer());
+      if (intent !== padEditorIntent) return;
+      if (version !== pad.version) { leavePadEditor(); return; }
+      const durationMs = record?.sourceDurationMs || buffer.duration * 1000;
+      const trim = record?.trim || { startMs: 0, endMs: durationMs };
+      const peaks = new Float32Array(Math.min(4096, buffer.length));
+      for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+        const data = buffer.getChannelData(channel);
+        for (let frame = 0; frame < data.length; frame++) {
+          const bin = Math.min(peaks.length - 1, Math.floor(frame / data.length * peaks.length));
+          peaks[bin] = Math.max(peaks[bin], Math.abs(data[frame]));
+        }
+      }
+      padEditor = { index, buffer, durationMs, trim: { ...trim },
+        originalTrim: record?.originalTrim || { startMs: 0, endMs: durationMs },
+        updatedAt: record?.updatedAt, peaks };
+      waveformRevision++;
+      renderLoop();
+    } catch (error) {
+      if (intent !== padEditorIntent) return;
+      leavePadEditor();
+      showDrumError(error?.message || "Could not open this pad.");
+    }
+  }
+
+  async function setPadRange(range) {
+    const editor = padEditor;
+    if (!editor?.buffer || !Number.isFinite(range?.startMs) || !Number.isFinite(range?.endMs) ||
+        range.startMs < 0 || range.endMs > editor.durationMs || range.endMs - range.startMs < 1) return;
+    const pad = drumPads[editor.index];
+    const trim = { startMs: range.startMs, endMs: range.endMs };
+    if (trim.startMs === editor.trim.startMs && trim.endMs === editor.trim.endMs) return;
+    editor.trim = trim;
+    pad.version++;
+    pad.buffer = null;
+    pad.loading = null;
+    // Serialize writes; the next trigger waits, while existing voices keep their buffer.
+    const save = (pad.trimSave || Promise.resolve()).then(async () => {
+      if (!pad.saved) {
+        const blob = await (await fetch(new URL(pad.sample, document.documentElement.getAttribute(EXTENSION_DRUM_SAMPLES_ATTRIBUTE)).href)).blob();
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+        await requestPad("store", { index: editor.index, name: pad.name, mimeType: "audio/wav",
+          base64: dataUrl.split(",")[1], operationId: `pad_${crypto.randomUUID()}` });
+        pad.saved = true;
+        const record = (await requestPad("get", { index: editor.index, original: true })).pad;
+        editor.updatedAt = record.updatedAt;
+      }
+      await requestPad("trim", { index: editor.index, trim, expectedUpdatedAt: editor.updatedAt });
+    });
+    pad.trimSave = save.catch(error => {
+      if (padEditor === editor) leavePadEditor();
+      showDrumError(error?.message || "Could not save pad bounds.");
+    });
+    renderLoop();
+    await pad.trimSave;
+  }
   let samplerPresetBusy = false;
   let samplerPresets = [];
   let samplerPresetListVersion = 0;
@@ -1175,7 +1274,10 @@
   async function playDrum(index, key = `pad:${index}`, released = true) {
     const pad = drumPads[index];
     if (!pad || pad.busy || instrumentMode) return;
-    selectedPadIndex = index;
+    if (!waveformDrag && ![ui?.loopStartTime, ui?.loopEndTime].includes(ui?.root?.activeElement)) {
+      selectedPadIndex = index;
+      if (padEditor && padEditor.index !== index) editPad(index);
+    }
     renderSelectedPadControls();
     const noteRevision = instrumentCutItself ? ++instrumentNoteRevision : instrumentNoteRevision;
     const held = { voice: null, released };
@@ -1188,6 +1290,7 @@
         if (!await hydrateDrumPads()) throw new Error("Could not restore saved samples. Reopen Sampler to retry.");
       }
       if (pad.busy) return;
+      await pad.trimSave;
       const version = pad.version;
       if (!pad.buffer && pad.timePercent !== 100) showDrumError("Preparing sample time…");
       const buffer = pad.buffer || await loadDefaultDrum(pad);
@@ -1248,6 +1351,7 @@
     }
     const pad = drumPads[index];
     const version = ++pad.version;
+    if (padEditor?.index === index) leavePadEditor();
     pad.busy = true;
     updateDrumLabels();
     try {
@@ -1284,6 +1388,7 @@
   async function resetDrumPad(index) {
     const pad = drumPads[index];
     if (!pad?.saved || pad.busy) return;
+    if (padEditor?.index === index) leavePadEditor();
     pad.busy = true;
     pad.version += 1;
     updateDrumLabels();
@@ -1495,6 +1600,7 @@
   readAccessSnapshot();
 
   async function applyPlayerRate(rate, { animate = false } = {}) {
+    if (padEditor) leavePadEditor();
     const intent = { rate };
     rateIntent = intent;
     // Share the in-flight check so continuous input cannot starve playback:
@@ -1574,6 +1680,7 @@
   }
 
   async function applyPlayerPitch(enabled) {
+    if (padEditor) leavePadEditor();
     const intentVersion = playbackIntentVersion;
     const authorization = await authorizePlayerTools("set-preserve-pitch", "preservePitch");
     if (!authorization || intentVersion !== playbackIntentVersion) return;
@@ -1906,15 +2013,17 @@
   }
 
   function loopPercent(value) {
+    const loopState = editorState();
     return Number.isFinite(value) && Number.isFinite(loopState.durationMs) && loopState.durationMs > 0
       ? Math.max(0, Math.min(100, value / loopState.durationMs * 100))
       : 0;
   }
 
   function visibleWaveformWindow() {
+    const loopState = editorState();
     const durationMs = loopState.durationMs;
     if (!Number.isFinite(durationMs) || durationMs <= 0) return null;
-    return globalThis.SCLooperCore?.normalizeZoomWindow?.(waveformZoom, durationMs) || { startMs: 0, endMs: durationMs };
+    return globalThis.SCLooperCore?.normalizeZoomWindow?.(padEditor ? padEditorZoom : waveformZoom, durationMs) || { startMs: 0, endMs: durationMs };
   }
 
   function waveformTime(clientX) {
@@ -1926,6 +2035,7 @@
   }
 
   function drawWaveform() {
+    const loopState = editorState();
     if (!ui?.waveformCanvas || waveformCollapsed || ui.panel.hidden || document.hidden) return;
     const canvas = ui.waveformCanvas;
     const rect = canvas.getBoundingClientRect();
@@ -1946,7 +2056,7 @@
     context.fillRect(0, 0, width, height);
     if (!windowRange) return;
     const durationMs = loopState.durationMs;
-    const samples = waveformSpectrum?.peaks || waveformSamples;
+    const samples = padEditor ? padEditor.peaks : waveformSpectrum?.peaks || waveformSamples;
     const complete = Number.isFinite(displayedRange.startMs) && Number.isFinite(displayedRange.endMs);
     const start = complete ? loopPercentInWindow(displayedRange.startMs, windowRange) : -1;
     const end = complete ? loopPercentInWindow(displayedRange.endMs, windowRange) : -1;
@@ -1954,8 +2064,8 @@
     let maximum = 0;
     for (const sample of samples) maximum = Math.max(maximum, Math.abs(Number(sample) || 0));
     if (!samples.length || !maximum) return;
-    const bands = waveformSpectrum?.bands;
-    const sourceDuration = waveformSpectrum?.durationMs || durationMs;
+    const bands = padEditor ? null : waveformSpectrum?.bands;
+    const sourceDuration = padEditor ? padEditor.buffer?.duration * 1000 : waveformSpectrum?.durationMs || durationMs;
     for (let x = 0; x < width; x += 1) {
       const from = (windowRange.startMs + x / width * (windowRange.endMs - windowRange.startMs)) / sourceDuration * samples.length;
       const to = (windowRange.startMs + (x + 1) / width * (windowRange.endMs - windowRange.startMs)) / sourceDuration * samples.length;
@@ -1978,6 +2088,7 @@
 
   function renderWaveformPlayhead() {
     if (!ui?.waveformPlayhead || waveformCollapsed || ui.panel.hidden || document.hidden) return;
+    if (padEditor) { ui.waveformPlayhead.hidden = true; return; }
     const windowRange = visibleWaveformWindow();
     const position = Number.isFinite(loopState.currentTimeMs) && windowRange
       ? loopPercentInWindow(loopState.currentTimeMs, windowRange) : null;
@@ -2053,6 +2164,7 @@
   }
 
   function commitLoopRender() {
+    const loopState = editorState();
     loopRenderFrame = null;
     if (!ui?.waveformStage) return;
     const duration = Number.isFinite(loopState.durationMs) ? loopState.durationMs : 0;
@@ -2063,7 +2175,7 @@
     const startPercent = loopPercentInWindow(start, windowRange);
     const endPercent = loopPercentInWindow(end, windowRange);
     const presentationKey = JSON.stringify({
-      waveformCollapsed, duration, start: displayedRange.startMs, end: displayedRange.endMs,
+      padIndex: padEditor?.index, waveformCollapsed, duration, start: displayedRange.startMs, end: displayedRange.endMs,
       preview: Boolean(waveformDrawPreview), active: loopState.active, available: loopState.available, windowRange,
       slicePending: Boolean(sliceJob), sliceCommitting: sliceJob?.committing, loopDownloadPending, padRenderPending, saveAllowed: capability("saveLoopPad"),
       instrumentAllowed: capability("loopInstrument"), instrumentMode, instrumentPreparing,
@@ -2132,6 +2244,14 @@
     ui.waveformMiddleLabel.textContent = formatLoopTime(windowRange ? (windowRange.startMs + windowRange.endMs) / 2 : 0);
     ui.waveformEndLabel.textContent = formatLoopTime(windowRange?.endMs || duration);
     }
+    ui.editorTrack.textContent = padEditor ? editorCopy("back") : editorCopy("track");
+    ui.editorPad.textContent = padEditor ? "Pad " + (drumPads[padEditor.index].key.toUpperCase() || padEditor.index + 1) : editorCopy("edit");
+    ui.editorTrack.setAttribute("aria-pressed", String(!padEditor));
+    ui.editorPad.setAttribute("aria-pressed", String(Boolean(padEditor)));
+    ui.editorReset.hidden = !padEditor;
+    ui.editorReset.textContent = editorCopy("reset");
+    for (const button of [ui.setA, ui.setB, ui.headerSetA, ui.headerSetB]) button.disabled = Boolean(padEditor) || !loopState.available;
+    if (padEditor) for (const button of [ui.clearLoop, ui.downloadLoop, ui.separateStems, ui.sliceButton, ui.saveLoopPad, ui.instrumentToggle]) button.disabled = true;
     drawWaveform();
     renderWaveformPlayhead();
   }
@@ -2320,6 +2440,7 @@
   }
 
   async function commitLoopTime(marker) {
+    const loopState = editorState();
     const input = marker === "start" ? ui.loopStartTime : ui.loopEndTime;
     const value = parseLoopTime(input.value);
     const duration = loopState.durationMs;
@@ -2330,13 +2451,14 @@
     }
     const startMs = marker === "start" ? value : loopState.startMs;
     const endMs = marker === "end" ? value : loopState.endMs;
-    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs - startMs < 250) {
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs - startMs < (padEditor ? 1 : 250)) {
       loopFailure = "Loop end must be at least 250 ms after its start.";
       render();
       return;
     }
     const payload = { marker, startMs, endMs, enabled: true, startPlayback: !loopState.active };
-    await applyAuthorizedLoop(payload);
+    if (padEditor) await setPadRange(payload);
+    else await applyAuthorizedLoop(payload);
   }
 
   async function clearLoop() {
@@ -2349,11 +2471,13 @@
 
   async function setWaveformRange(nextRange, marker = null, options = {}) {
     if (!nextRange) return;
+    if (padEditor) { await setPadRange(nextRange); return; }
     const payload = { ...nextRange, marker, enabled: true, startPlayback: !loopState.active };
     await applyAuthorizedLoop(payload, options);
   }
 
   function beginWaveformDrag(event, kind) {
+    const loopState = editorState();
     if (event.pointerType === "mouse" && event.button !== 0) return;
     if (!Number.isFinite(loopState.durationMs)) return;
     event.preventDefault();
@@ -2377,6 +2501,15 @@
     const timeMs = waveformTime(event.clientX);
     if (!core || timeMs === null) return;
     if (waveformDrag.kind === "create" && Math.abs(event.clientX - waveformDrag.startX) < 3) return;
+    if (padEditor) {
+      const { range, kind, anchorMs, startX } = waveformDrag;
+      const next = globalThis.SCSamplerCore.editRange(range, kind, timeMs,
+        kind === "create" ? anchorMs : waveformTime(startX));
+      waveformDrag.moved = true;
+      if (kind === "create") { waveformDrawPreview = next; renderLoop(); }
+      else setPadRange(next);
+      return;
+    }
     let nextRange;
     if (waveformDrag.kind === "create") {
       waveformDrag.moved = true;
@@ -2420,20 +2553,30 @@
   }
 
   function moveWaveformMarkerByKey(event, marker) {
+    const loopState = editorState();
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
     const amount = event.shiftKey ? 1000 : 100;
     const value = loopState[`${marker}Ms`] + (event.key === "ArrowLeft" ? -amount : amount);
+    if (padEditor) { setPadRange(globalThis.SCSamplerCore.editRange(loopState, marker, value)); return; }
     setWaveformRange(globalThis.SCLooperCore?.moveMarker?.(loopState, marker, value), marker);
   }
 
   function handleWaveformWheel(event) {
+    const loopState = editorState();
     if (!Number.isFinite(loopState.durationMs) || !event.deltaY) return;
     const focusMs = waveformTime(event.clientX);
     if (focusMs === null) return;
     event.preventDefault();
-    waveformZoom = globalThis.SCLooperCore?.zoomWindowAt?.(waveformZoom, loopState.durationMs, focusMs, event.deltaY) || null;
+    if (padEditor) padEditorZoom = globalThis.SCLooperCore?.zoomWindowAt?.(padEditorZoom, loopState.durationMs, focusMs, event.deltaY) || null;
+    else waveformZoom = globalThis.SCLooperCore?.zoomWindowAt?.(waveformZoom, loopState.durationMs, focusMs, event.deltaY) || null;
     renderLoop();
+  }
+
+  function editorCopy(key) {
+    const es = (document.documentElement.lang || navigator.language).startsWith("es");
+    return (es ? { track: "Pista", back: "Volver a pista", edit: "Editar pads", reset: "Restaurar l\u00edmites" }
+      : { track: "Track", back: "Back to track", edit: "Edit pads", reset: "Reset bounds" })[key];
   }
 
   const SAMPLER_COPY = {
@@ -2606,6 +2749,7 @@
           pads: drumPads.map(({ key, gainPercent, pitchSemitones, timePercent, envelope }, index) => ({ key, gainPercent, pitchSemitones, timePercent, envelope: { ...envelope },
             ...(piano && index === selectedPadIndex ? { ...instrumentSettings, envelope: { ...instrumentEnvelope } } : {}) })) } } : {}) });
       if (action === "load") {
+        if (padEditor) leavePadEditor();
         const savedInstrument = result.settings.kind === "piano" ? result.settings.instrument : null;
         const restoredBuffer = savedInstrument ? await getDrumAudioContext().decodeAudioData(await (await fetch(savedInstrument.audio)).arrayBuffer()) : null;
         exitInstrument({ message: "" });
@@ -2754,6 +2898,8 @@
         pad.customName = record.name;
       }
       showDrumError(samplerCopy("done"));
+      drumPads.forEach(pad => { pad.busy = false; });
+      await editPad(0);
     } catch (error) {
       if (sliceJob !== job) return;
       requestPad("cancel-slices", { operationId: job.operationId }).catch(() => {});
@@ -3473,15 +3619,15 @@
         .slider::-moz-range-thumb { width: 14px; height: 14px; }
         .limits { inset-inline: 0; padding: 0 6px; font-size: 8px; text-shadow: 0 1px 2px #000; }
         .range-label { top: 50%; padding: 0; border-radius: 0; background: transparent; font-size: 8px; text-shadow: 0 1px 2px #000; transform: translate(-50%, -50%); }
-        .waveform-shell { position: relative; overflow: hidden; height: 130px; border: 1px solid #343434; border-radius: 11px; background: rgba(255,255,255,.025); touch-action: none; transition: height 160ms ease; }
+        .waveform-shell { position: relative; overflow: hidden; height: 186px; border: 1px solid #343434; border-radius: 11px; background: rgba(255,255,255,.025); touch-action: none; transition: height 160ms ease; }
         .waveform-shell.is-collapsed { height: 32px; touch-action: auto; }
-        .waveform-stage { position: absolute; inset: 34px 8px 27px; cursor: crosshair; }
+        .waveform-stage { position: absolute; inset: 64px 8px 54px; cursor: crosshair; }
         .waveform-canvas { display: block; width: 100%; height: 100%; border-radius: 8px; }
         .waveform-playhead { position: absolute; z-index: 4; inset: 0 auto 0 0; width: 1px; background: rgba(255,255,255,.72); pointer-events: none; }
         .waveform-selection { position: absolute; inset: 0 auto 0; border: 0; border-inline: 1px solid #ff741f; background: transparent; cursor: grab; }
         .waveform-marker { position: absolute; z-index: 7; top: -2px; width: 18px; height: 18px; margin-left: -9px; padding: 0; border: 0; border-radius: 5px 5px 3px 3px; color: #fff; background: #ff741f; font-size: 11px; font-weight: 800; line-height: 1; text-transform: lowercase; cursor: ew-resize; box-shadow: 0 2px 7px rgba(255, 116, 31, .28); }
         .waveform-marker::after { content: ""; position: absolute; top: 18px; left: 50%; width: 1px; height: 90px; background: #ff741f; transform: translateX(-50%); }
-        .waveform-times { position: absolute; inset: auto 9px 3px; display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; color: #7e8790; font-size: 10px; font-variant-numeric: tabular-nums; }
+        .waveform-times { position: absolute; inset: auto 9px 28px; display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; color: #7e8790; font-size: 10px; font-variant-numeric: tabular-nums; }
         .waveform-start-label { justify-self: start; }
         .waveform-middle-label { justify-self: center; }
         .waveform-end-label { justify-self: end; }
@@ -3554,7 +3700,11 @@
         }
         .clear-loop, .download-loop, .separate-stems { height: 22px; padding: 0 6px; border-radius: 6px; opacity: .82; }
         .save-loop-pad, .loop-instrument, .slice-loop, .sampler-preset-toggle { width: 22px; height: 22px; }
-        .loop-edit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+        .loop-edit { display: flex; position: absolute; bottom: 4px; left: 8px; right: 8px; }
+        .loop-time { width: 50%; min-width: 0; }
+        .editor-modes { position: absolute; top: 34px; left: 8px; right: 8px; display: flex; gap: 6px; }
+        .editor-modes button { color: #bbb; background: #20252b; border: 1px solid #454545; border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+        .editor-modes button[aria-pressed="true"] { color: #fff; border-color: #f50; }
         ${collapsible.styles}
         .drum-section, .waveform-shell, .effects-shell { transition:height 160ms ease; }
         .drum-section > .tool-section-header .tool-section-heading { padding-right:110px; }
@@ -3680,6 +3830,7 @@
         <section class="waveform-shell" id="scdl-loop-region" role="group" aria-label="Loop Region">
           ${collapsible.header({ title: "Loop Region", bodyId: "scdl-loop-region-body", toggleClass: "waveform-toggle", headerClass: "waveform-header", actionsClass: "waveform-actions", icon: '<svg class="tool-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>', actions: '<div class="waveform-header-setters"><button class="setter header-set-a" type="button" aria-label="Set loop start">Set A</button><button class="setter header-set-b" type="button" aria-label="Set loop end">Set B</button></div><button class="clear-loop" type="button" aria-label="Clear loop"><img class="cross-icon" alt="" aria-hidden="true" /><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button>' })}
           <div class="waveform-body" id="scdl-loop-region-body">
+          <div class="editor-modes"><button type="button" class="editor-track"></button><button type="button" class="editor-pad"></button><button type="button" class="editor-reset" hidden></button></div>
           <div class="waveform-stage">
             <canvas class="waveform-canvas" aria-hidden="true"></canvas>
             <div class="waveform-playhead" aria-hidden="true" hidden></div>
@@ -3894,6 +4045,9 @@
       waveformBody: root.querySelector(".waveform-body"),
       waveformActions: root.querySelector(".waveform-actions"),
       waveformStage: root.querySelector(".waveform-stage"),
+      editorTrack: root.querySelector(".editor-track"),
+      editorPad: root.querySelector(".editor-pad"),
+      editorReset: root.querySelector(".editor-reset"),
       waveformCanvas: root.querySelector(".waveform-canvas"),
       waveformPlayhead: root.querySelector(".waveform-playhead"),
       waveformSelection: root.querySelector(".waveform-selection"),
@@ -4260,7 +4414,11 @@
     ui.waveformCanvas.addEventListener("pointerup", endWaveformDrag);
     ui.waveformCanvas.addEventListener("pointercancel", endWaveformDrag);
     ui.waveformStage.addEventListener("wheel", handleWaveformWheel, { passive: false });
-    ui.waveformStage.addEventListener("dblclick", () => { waveformZoom = null; renderLoop(); });
+    ui.waveformBody.append(root.querySelector(".loop-edit"));
+    ui.editorTrack.addEventListener("click", leavePadEditor);
+    ui.editorPad.addEventListener("click", () => editPad());
+    ui.editorReset.addEventListener("click", () => { if (padEditor) setPadRange(padEditor.originalTrim); });
+    ui.waveformStage.addEventListener("dblclick", () => { if (padEditor) padEditorZoom = null; else waveformZoom = null; renderLoop(); });
     ui.waveformCanvas.addEventListener("click", (event) => {
       if (suppressWaveformClick) {
         suppressWaveformClick = false;
@@ -4268,6 +4426,7 @@
         return;
       }
       const timeMs = waveformTime(event.clientX);
+      if (padEditor) { playDrum(padEditor.index); return; }
       if (timeMs !== null) requestLoop("seek", { timeMs });
     });
     for (const [input, marker] of [[ui.loopStartTime, "start"], [ui.loopEndTime, "end"]]) {

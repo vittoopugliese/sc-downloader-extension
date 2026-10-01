@@ -185,6 +185,7 @@ window.addEventListener?.("message", (event) => {
     "preset-render": "SAMPLER_PRESET_RENDER",
     delete: "DELETE_LOOP_PAD_AUDIO",
     get: "GET_LOOP_PAD_AUDIO",
+    trim: "TRIM_LOOP_PAD_AUDIO",
     store: "STORE_LOOP_PAD_AUDIO",
     render: "RENDER_LOOP_PAD",
     slices: "RENDER_LOOP_SLICES",
@@ -204,7 +205,8 @@ window.addEventListener?.("message", (event) => {
   if (action === "waveform") payload.trackUrl = event.data.trackUrl;
   if (action !== "list") payload.index = index;
   if (action === "delete") payload.operationId = event.data.operationId;
-  if (action === "get") payload.timePercent = event.data.timePercent;
+  if (action === "get") { payload.timePercent = event.data.timePercent; payload.original = event.data.original === true; }
+  if (action === "trim") { payload.trim = event.data.trim; payload.expectedUpdatedAt = event.data.expectedUpdatedAt; }
   if (action === "store") {
     payload.operationId = event.data.operationId;
     payload.name = event.data.name;

@@ -3,6 +3,7 @@ import { MODEL } from './stem-model.mjs';
 
 const es = (globalThis.chrome?.i18n?.getUILanguage() || navigator.language).startsWith('es');
 const words = {
+  playGame: ['Play Lumberjack game', 'Jugar a Lumberjack'], hideGame: ['Close Lumberjack game', 'Cerrar Lumberjack'],
   workspace: ['Your loop, layer by layer.', 'Tu loop, capa por capa.'], selected: ['SELECTED LOOP', 'LOOP SELECCIONADO'],
   extract: ['Unpack your sound.', 'Separá tu sonido.'], listen: ['Find your mix.', 'Encontrá tu mezcla.'], local: ['On-device', 'En tu equipo'],
   lows: ['Lows', 'Graves'], mids: ['Mids', 'Medios'], highs: ['Highs', 'Agudos'],
@@ -174,6 +175,8 @@ function setBusy(value) {
   $('cancel').hidden = !value;
   $('clear-cache').disabled = value;
   $('progress').hidden = !value;
+  $('status').classList.toggle('is-loading', value);
+  if (value) $('waiting-game').hidden = false;
 }
 function audioBuffer(channels) {
   const buffer = new AudioBuffer({ numberOfChannels: 2, length: channels[0].length, sampleRate: SAMPLE_RATE });
@@ -355,6 +358,22 @@ async function cancel() {
   setBusy(false); status(text('cancelled'));
 }
 $('separate').onclick = separate; $('cancel').onclick = cancel;
+$('toggle-game').onclick = () => {
+  const panel = $('game-panel');
+  const open = panel.hidden;
+  if (open) {
+    const frame = document.createElement('iframe');
+    frame.title = 'Lumber Jack Game';
+    frame.src = 'https://tbot.xyz/lumber/';
+    frame.width = '600'; frame.height = '900';
+    panel.replaceChildren(frame);
+  } else {
+    panel.replaceChildren();
+  }
+  panel.hidden = !open;
+  $('toggle-game').setAttribute('aria-expanded', String(open));
+  $('toggle-game').replaceChildren(icon(open ? 'close' : 'play'), document.createTextNode(text(open ? 'hideGame' : 'playGame')));
+};
 $('clear-cache').onclick = async () => {
   try { await caches.delete(MODEL.cache); status(text('cleared')); } catch (error) { status(error.message, true); }
 };

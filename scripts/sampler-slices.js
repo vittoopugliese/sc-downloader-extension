@@ -16,7 +16,7 @@
     const database = await openDatabase();
     // All read/modify/write work stays inside IDB callbacks, with no awaits.
     const transaction = (action) => new Promise((resolve, reject) => {
-      const tx = database.transaction(["operations", "claims", "samples"], "readwrite");
+      const tx = database.transaction(["operations", "claims", "samples", "sources"], "readwrite");
       const operations = tx.objectStore("operations");
       const claims = tx.objectStore("claims");
       const samples = tx.objectStore("samples");
@@ -30,7 +30,7 @@
         }
         const allClaims = claims.getAll();
         allClaims.onsuccess = () => {
-          try { result = action({ operation, operations, claims, samples, allClaims: allClaims.result }); }
+          try { result = action({ operation, operations, claims, samples, sources: tx.objectStore("sources"), allClaims: allClaims.result }); }
           catch (error) { reject(error); tx.abort(); }
         };
       };
@@ -46,6 +46,7 @@
       operation.result = result;
       operation.updatedAt = Date.now();
       delete operation.prepared;
+      delete operation.audio;
       operations.put(operation);
       return result;
     };
@@ -87,7 +88,7 @@
         });
       }
       if (message.type === "OFFSCREEN_SLICES_COMMIT") {
-        return await transaction(({ operation, operations, allClaims, samples }) => {
+        return await transaction(({ operation, operations, allClaims, samples, sources }) => {
           if (!operation) return failure("unknown_operation", "Slice preparation expired.");
           if (operation.result) return operation.result;
           if (!owned(operation, allClaims)) return finish(operation, operations,
@@ -95,6 +96,7 @@
           if (operation.state !== "prepared" || operation.prepared?.length !== 8) {
             return failure("not_prepared", "The eight slices are not ready yet.");
           }
+          sources.put({ id, blob: operation.audio });
           const pads = operation.prepared.map((record) => {
             samples.put(record);
             return { index: record.index, name: record.name, updatedAt: record.updatedAt };
@@ -123,20 +125,24 @@
           if (!(blob instanceof Blob) || blob.size > MAX_BYTES) throw new Error("This loop is too large for the sampler.");
           const slices = SCSamplerCore.sliceWav(await blob.arrayBuffer(), input.trimRange, input.playbackTransform.rate);
           const prepared = slices.map((slice, index) => ({
-            index, kind: "slice", schemaVersion: 1,
+            index, kind: "slice", schemaVersion: 2,
             name: `${String(input.name || "Loop").slice(0, 70)} · ${index + 1}/8`,
-            blob: new Blob([slice.bytes], { type: "audio/wav" }),
+            // The source store owns one immutable rendered Blob for all eight pads.
+            audioId: id,
+            trim: { startMs: slice.startFrame / slice.sampleRate * 1000, endMs: slice.endFrame / slice.sampleRate * 1000 },
+            originalTrim: { startMs: slice.startFrame / slice.sampleRate * 1000, endMs: slice.endFrame / slice.sampleRate * 1000 },
+            sourceDurationMs: slices.at(-1).endFrame / slice.sampleRate * 1000,
             startFrame: slice.startFrame, endFrame: slice.endFrame, sampleRate: slice.sampleRate,
             source: { trackIdentity: input.trackIdentity, generation: input.generation, trimRange: input.trimRange },
             updatedAt: Date.now(),
           }));
-          if (prepared.reduce((sum, record) => sum + record.blob.size, 0) > MAX_BYTES) throw new Error("This loop is too large for the sampler.");
           return await transaction(({ operation, operations, allClaims }) => {
             if (!operation) return failure("unknown_operation", "Slice preparation expired.");
             if (operation.result) return operation.result;
             if (controller.signal.aborted || !owned(operation, allClaims)) return finish(operation, operations,
               failure("obsolete_pad", "Slice preparation cancelled or replaced."));
             operation.prepared = prepared;
+            operation.audio = blob;
             operation.state = "prepared";
             operation.updatedAt = Date.now();
             operations.put(operation);

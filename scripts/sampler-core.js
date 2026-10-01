@@ -8,6 +8,50 @@
   const ROOT_MIDI = 72;
   const PAD_COUNT = 8;
 
+  function editRange(range, kind, timeMs, anchorMs = 0) {
+    const { durationMs } = range;
+    if (!Number.isFinite(durationMs) || durationMs < 1 || !Number.isFinite(timeMs)) return null;
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    let { startMs, endMs } = range;
+    if (kind === "create") {
+      startMs = clamp(Math.min(anchorMs, timeMs), 0, durationMs - 1);
+      endMs = clamp(Math.max(anchorMs, timeMs), startMs + 1, durationMs);
+    } else if (kind === "selection") {
+      const length = endMs - startMs;
+      startMs = clamp(startMs + timeMs - anchorMs, 0, durationMs - length);
+      endMs = startMs + length;
+    } else if (kind === "start") startMs = clamp(timeMs, 0, endMs - 1);
+    else if (kind === "end") endMs = clamp(timeMs, startMs + 1, durationMs);
+    return { startMs, endMs, durationMs };
+  }
+
+  function cropWav(bytes, startMs, endMs) {
+    const input = new DataView(bytes);
+    const sampleRate = input.getUint32(24, true);
+    const blockSize = input.getUint16(32, true);
+    const totalFrames = input.getUint32(40, true) / blockSize;
+    const start = Math.max(0, Math.min(totalFrames - 1, Math.round(startMs * sampleRate / 1000)));
+    const end = Math.max(start + 1, Math.min(totalFrames, Math.round(endMs * sampleRate / 1000)));
+    const length = end - start;
+    const result = new ArrayBuffer(44 + length * blockSize);
+    new Uint8Array(result).set(new Uint8Array(bytes, 0, 44));
+    new Uint8Array(result, 44).set(new Uint8Array(bytes, 44 + start * blockSize, length * blockSize));
+    const output = new DataView(result);
+    output.setUint32(4, result.byteLength - 8, true);
+    output.setUint32(40, length * blockSize, true);
+    const fade = Math.min(Math.round(sampleRate * .003), Math.floor(length / 2));
+    for (let frame = 0; frame < fade; frame++) {
+      const gain = fade > 1 ? frame / (fade - 1) : 0;
+      for (let channel = 0; channel < blockSize / 2; channel++) {
+        for (const at of [44 + frame * blockSize + channel * 2,
+          44 + (length - 1 - frame) * blockSize + channel * 2]) {
+          output.setInt16(at, Math.round(output.getInt16(at, true) * gain), true);
+        }
+      }
+    }
+    return result;
+  }
+
   function sliceRanges(totalFrames) {
     if (!Number.isSafeInteger(totalFrames) || totalFrames < PAD_COUNT) {
       throw new RangeError("The loop is too short for eight slices.");
@@ -105,6 +149,8 @@
 
   globalThis.SCSamplerCore = Object.freeze({
     PAD_COUNT,
+    cropWav,
+    editRange,
     sliceRanges,
     sliceWav,
     ROOT_MIDI,

@@ -106,6 +106,28 @@ const { chromium } = require("playwright");
         check(data.getInt16(44, true) === 0 && data.getInt16(44 + (frames - 1) * channels * 2, true) === 0, "edge fades");
       }
       check(totalFrames === sampleRate, "all selected frames covered once");
+      const full = (await send({ type: "OFFSCREEN_PAD_GET", index: 0, original: true })).pad;
+      check(full.trim.startMs === 0 && full.trim.endMs === 125 && full.sourceDurationMs === 1000, "editor receives source and bounds");
+      const database = await openPadDatabase();
+      const records = await new Promise(resolve => {
+        const tx = database.transaction(["samples", "sources"], "readonly");
+        const pads = tx.objectStore("samples").getAll();
+        const sources = tx.objectStore("sources").getAll();
+        tx.oncomplete = () => resolve({ pads: pads.result, sources: sources.result });
+      });
+      check(records.sources.length === 1 && records.pads.every(pad => !pad.blob && pad.audioId === full.audioId), "one persistent source for eight cuts");
+      check((await send({ type: "OFFSCREEN_PAD_TRIM", index: 0, expectedUpdatedAt: full.updatedAt,
+        trim: { startMs: 50, endMs: 300 } })).success, "pad may extend into the neighboring slice");
+      const extended = (await send({ type: "OFFSCREEN_PAD_GET", index: 0 })).pad;
+      const extendedWav = new DataView(await (await fetch(extended.dataUrl)).arrayBuffer());
+      check(extendedWav.getUint32(40, true) / extendedWav.getUint16(32, true) === sampleRate / 4, "new bounds affect next audio retrieval");
+      check((await send({ type: "OFFSCREEN_PAD_GET", index: 1, original: true })).pad.trim.startMs === 125, "neighbor remains unchanged");
+      check(!(await send({ type: "OFFSCREEN_PAD_TRIM", index: 0, expectedUpdatedAt: full.updatedAt,
+        trim: { startMs: 0, endMs: 1001 } })).success, "cannot extend beyond rendered source");
+      check(!(await send({ type: "OFFSCREEN_PAD_TRIM", index: 0, expectedUpdatedAt: -1,
+        trim: { startMs: 0, endMs: 125 } })).success, "stale editor cannot change replacement audio");
+      check((await send({ type: "OFFSCREEN_PAD_TRIM", index: 0, expectedUpdatedAt: full.updatedAt,
+        trim: full.originalTrim })).success, "original cuts can be restored");
       const saved = JSON.stringify(await list());
       await call("CANCEL", "queued");
       check(!(await begin("queued")).success, "cancel before begin is sticky");
@@ -163,8 +185,9 @@ const { chromium } = require("playwright");
       // Named states retain the rendered slice audio, independently of the live pads.
       const presetId = "preset_processed_slices";
       const settings = { selectedPadIndex: 2, adsrEnabled: true, cutItself: false,
-        pads: [..."asdfghjk"].map(key => ({ key, gainPercent: 100, pitchSemitones: 0,
+        pads: [..."asdfghjk"].map(key => ({ key, gainPercent: 100, pitchSemitones: 0, timePercent: 100,
           envelope: { attack: 4, decay: 100, sustain: 100, release: 100 } })) };
+      settings.kind = "pads";
       const presetRequest = { type: "OFFSCREEN_SAMPLER_PRESET_SAVE", presetId, name: "Processed slices", settings };
       const beforePreset = await Promise.all(Array.from({ length: 8 }, (_, index) =>
         send({ type: "OFFSCREEN_PAD_GET", index }).then(result => result.pad.dataUrl)));

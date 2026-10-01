@@ -65,6 +65,8 @@ function fixture() {
     fetch: async () => ({ arrayBuffer: async () => new ArrayBuffer(0) }),
     SCSamplerCore: { playbackRateForMidi: note => 2 ** ((note - 72) / 12) },
   };
+  scope.waveformDrag = null;
+  scope.padEditor = null;
   vm.createContext(scope);
   for (const name of ['invalidatePendingInstrumentNotes', 'instrumentGainAt', 'scheduleInstrumentEnvelope', 'releaseInstrumentKey', 'cleanupInstrumentVoice', 'releaseInstrumentVoice',
     'stopInstrumentVoice', 'stopAllInstrumentVoices', 'setInstrumentMode', 'setInstrumentAdsrEnabled', 'loopMatchesInstrumentSnapshot',

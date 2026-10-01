@@ -19,6 +19,10 @@
       <div class="actions"><button id="separate" class="primary" disabled><span data-icon="layers"></span><span data-copy="separate">Separate loop</span></button><button id="cancel" hidden><span data-icon="close"></span><span data-copy="cancel">Cancel</span></button><button id="clear-cache"><span data-icon="trash"></span><span data-copy="clearCache">Remove cached model</span></button></div>
       <progress id="progress" max="1" value="0" hidden></progress>
       <p id="status" role="status" aria-live="polite"></p>
+      <div id="waiting-game" hidden>
+        <button id="toggle-game" class="game-toggle" type="button" aria-expanded="false" aria-controls="game-panel"><span data-icon="play"></span><span data-copy="playGame">Play Lumberjack game</span></button>
+        <div id="game-panel" hidden></div>
+      </div>
     </section>
     <section id="audition" hidden aria-label="Listen and compare">
       <div class="section-heading"><span class="step">02</span><h2 data-copy="listen">Find your mix.</h2><span class="studio-label">STEREO / 44.1 kHz</span></div>
