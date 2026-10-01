@@ -4278,7 +4278,7 @@
     ui.separateStems = document.createElement("button");
     ui.separateStems.type = "button";
     ui.separateStems.className = "separate-stems";
-    ui.separateStems.textContent = "Stems";
+    ui.separateStems.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg><span>Stems</span>';
     ui.separateStems.title = "Separate the selected loop into vocals, drums, bass and other (up to 30 seconds)";
     ui.separateStems.setAttribute("aria-label", ui.separateStems.title);
     ui.downloadLoop.before(ui.separateStems);

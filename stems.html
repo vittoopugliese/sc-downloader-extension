@@ -10,11 +10,9 @@
 <body>
   <main>
     <header><div class="brand"><img src="assets/icons/player-toolkit.png" width="42" height="42" alt=""><div>PLAYER TOOLS<small data-copy="workspace">Your loop, layer by layer.</small></div></div><span class="badge" data-copy="experimental">Experimental</span></header>
-    <div class="eyebrow"><span class="status-dot"></span> STEM EXTRACTOR <span class="edition">01 / AUDIO LAB</span></div>
-    <h1 data-copy="title">Hear what's inside your loop.</h1>
-    <div class="source-card"><span class="source-icon" data-icon="music"></span><div><span class="eyebrow" data-copy="selected">SELECTED LOOP</span><p id="track" class="track"></p>
+    <div class="source-card"><div class="source-cover"><img id="artwork" alt="" referrerpolicy="no-referrer" hidden><span id="artwork-fallback" data-icon="music"></span></div><div><span class="eyebrow" data-copy="selected">SELECTED LOOP</span><h1 id="track" class="track"></h1><p id="track-meta" class="muted" hidden></p>
     <p id="range" class="muted"></p></div><span class="source-format">A—B / WAV</span></div>
-    <section class="prepare" aria-label="Separation">
+    <div class="studio-card"><section class="prepare" aria-label="Separation">
       <div class="section-heading"><span class="step">01</span><h2 data-copy="extract">Unpack your sound.</h2><span class="local-tag"><span data-icon="shield"></span><span data-copy="local">On-device</span></span></div>
       <p data-copy="intro">Separate vocals, drums, bass and other instruments locally. Your audio stays in Chrome.</p>
       <p class="muted" data-copy="details">First use downloads a 166 MB model. Processing can take a few minutes and uses substantial memory. Up to 30 seconds, at original speed without effects.</p>
@@ -24,13 +22,14 @@
     </section>
     <section id="audition" hidden aria-label="Listen and compare">
       <div class="section-heading"><span class="step">02</span><h2 data-copy="listen">Find your mix.</h2><span class="studio-label">STEREO / 44.1 kHz</span></div>
-      <div class="transport"><button id="play" class="primary"><span data-icon="play"></span><span data-copy="play">Play</span></button><label><input id="repeat" type="checkbox" checked><span data-copy="repeat">Repeat loop</span></label><span id="time">0:00</span></div>
+      <div class="listen-controls"><div class="transport"><button id="play" class="primary"><span data-icon="play"></span><span data-copy="play">Play</span></button><label><input id="repeat" type="checkbox" checked><span data-copy="repeat">Repeat loop</span></label><span id="time">0:00</span></div>
       <div class="comparison" role="group" aria-label="Compare"><button id="original" aria-pressed="true"><span data-icon="music"></span><span data-copy="original">Original</span></button><button id="mix" aria-pressed="false" disabled><span data-icon="sliders"></span><span data-copy="mix">Stem mix</span></button></div>
-      <div class="wave-heading"><span data-copy="original">Original</span><div class="frequency-key"><span data-copy="lows">Lows</span><span data-copy="mids">Mids</span><span data-copy="highs">Highs</span></div></div>
+      </div><div class="wave-heading"><span data-copy="original">Original</span><div class="frequency-key"><span data-copy="lows">Lows</span><span data-copy="mids">Mids</span><span data-copy="highs">Highs</span></div></div>
       <div id="original-waveform"></div>
       <div id="stems"></div>
       <p id="quality-note" class="muted" hidden data-copy="quality">Some bleed and artifacts are normal. Compare with the original. Downloads are stereo 44.1 kHz float WAV files.</p>
     </section>
+    </div>
     <footer><a href="https://huggingface.co/StemSplitio/htdemucs-onnx" target="_blank" rel="noreferrer">HTDemucs · StemSplit ONNX</a><span data-copy="footer">Audio stays on this device. Keep this tab open to retain your results.</span></footer>
   </main>
   <script src="scripts/spectral-waveform.js"></script>

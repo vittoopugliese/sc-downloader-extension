@@ -247,17 +247,42 @@ function showResults(result) {
       };
       return button;
     });
-    const label = document.createElement('label'); label.textContent = `${text('volume')} ${text(stem)}`;
-    const input = document.createElement('input'); input.type = 'range'; input.min = '0'; input.max = '100'; input.value = '100';
-    input.setAttribute('aria-label', `${text('volume')} ${text(stem)}`);
-    const level = document.createElement('output'); level.textContent = '100%';
-    input.oninput = () => { states[index].gain = Number(input.value) / 100; level.textContent = `${input.value}%`; mode = 'mix'; applyMix(); };
-    label.append(input);
+    const volume = document.createElement('div'); volume.className = 'stem-volume';
+    const caption = document.createElement('span'); caption.textContent = text('volume');
+    const knob = document.createElement('button'); knob.type = 'button'; knob.className = 'pad-knob';
+    knob.setAttribute('role', 'slider'); knob.setAttribute('aria-label', `${text('volume')} ${text(stem)}`);
+    knob.setAttribute('aria-valuemin', '0'); knob.setAttribute('aria-valuemax', '100'); knob.setAttribute('aria-orientation', 'vertical');
+    const level = document.createElement('output');
+    const renderVolume = () => {
+      const value = Math.round(states[index].gain * 100);
+      knob.style.setProperty('--knob-angle', `${-135 + value * 2.7}deg`);
+      knob.setAttribute('aria-valuenow', String(value)); knob.setAttribute('aria-valuetext', `${value}%`);
+      knob.title = `${text('volume')}: ${value}% · ${es ? 'Doble clic para restablecer' : 'Double-click to reset'}`;
+      level.textContent = `${value}%`;
+    };
+    const updateVolume = value => { states[index].gain = Math.round(Math.max(0, Math.min(100, value))) / 100; renderVolume(); mode = 'mix'; applyMix(); };
+    let drag;
+    knob.onpointerdown = event => {
+      if (event.button !== 0) return;
+      drag = { id: event.pointerId, y: event.clientY, value: states[index].gain * 100 };
+      knob.setPointerCapture(event.pointerId); knob.focus(); event.preventDefault();
+    };
+    knob.onpointermove = event => { if (drag?.id === event.pointerId) updateVolume(drag.value + (drag.y - event.clientY) * 100 / 140); };
+    for (const kind of ['pointerup', 'pointercancel', 'lostpointercapture']) knob.addEventListener(kind, () => { drag = null; });
+    knob.ondblclick = () => updateVolume(100);
+    knob.onkeydown = event => {
+      if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault(); event.stopPropagation();
+      updateVolume(event.key === 'Home' ? 0 : event.key === 'End' ? 100 : states[index].gain * 100 +
+        (['ArrowUp', 'ArrowRight'].includes(event.key) ? 1 : -1) * (event.shiftKey ? 10 : 1));
+    };
+    renderVolume(); volume.append(caption, knob, level);
     const link = document.createElement('a'); link.className = 'download';
     const url = URL.createObjectURL(new Blob([encodeWav(outputs[index])], { type: 'audio/wav' })); urls.push(url);
     link.href = url; link.download = `${title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 80)}_${stem}.wav`;
     link.append(icon('download'), document.createTextNode('WAV')); link.setAttribute('aria-label', `${text('download')} ${text(stem)}`);
-    row.append(name, ...controls, label, level, link); $('stems').append(row);
+    const actions = document.createElement('div'); actions.className = 'stem-actions'; actions.append(...controls, link, volume);
+    row.append(name, actions); $('stems').append(row);
     mountWaveform(row, buffers[index], `${text(stem)} · ${text('position')}`);
   });
   outputs = [];
@@ -358,6 +383,19 @@ window.addEventListener('pagehide', () => {
 try {
   const info = await message('STEM_LOOP_INFO');
   title = info.title; $('track').textContent = title;
+  const metadata = [info.artist];
+  if (Number.isFinite(info.durationMs) && info.durationMs > 0) {
+    const seconds = Math.floor(info.durationMs / 1000);
+    metadata.push(`${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
+  }
+  $('track-meta').textContent = metadata.filter(Boolean).join(' · ');
+  $('track-meta').hidden = !$('track-meta').textContent;
+  if (typeof info.artworkUrl === 'string' && /^https:\/\//i.test(info.artworkUrl)) {
+    const artwork = $('artwork');
+    artwork.onload = () => { artwork.hidden = false; $('artwork-fallback').hidden = true; };
+    artwork.onerror = () => { artwork.hidden = true; $('artwork-fallback').hidden = false; };
+    artwork.src = info.artworkUrl;
+  }
   $('range').textContent = `A ${(info.trimRange.startMs / 1000).toFixed(2)} s → B ${(info.trimRange.endMs / 1000).toFixed(2)} s · ${((info.trimRange.endMs - info.trimRange.startMs) / 1000).toFixed(2)} s`;
   initialized = true; setBusy(false); status(text('ready'));
 } catch (error) { status(error.message, true); }

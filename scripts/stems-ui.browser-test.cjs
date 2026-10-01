@@ -25,10 +25,14 @@ const { chromium } = require('playwright');
     browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
     const page = await browser.newPage({ viewport: { width: 1200, height: 1100 }, deviceScaleFactor: 2, locale: 'es-AR' });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
+    await page.route('https://i1.sndcdn.com/stems-fixture.jpg', route => route.fulfill({ path: path.join(root, 'assets/icons/player-toolkit.png'), contentType: 'image/png' }));
     await page.addInitScript(({ dataUrl }) => {
       globalThis.chrome = { runtime: { sendMessage: async ({ type }) => type === 'STEM_LOOP_INFO'
         ? { success: true, title: 'Midnight sessions — selected loop', trimRange: { startMs: 12000, endMs: 15000 } }
         : { success: true, instrument: { dataUrl } } } };
+      const send = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = async request => ({ ...await send(request), ...(request.type === 'STEM_LOOP_INFO'
+        ? { artist: 'Fixture artist', durationMs: 185000, artworkUrl: 'https://i1.sndcdn.com/stems-fixture.jpg' } : {}) });
       globalThis.Worker = class {
         postMessage({ channels }) { this.timer = setTimeout(() => this.onmessage?.({ data: { type: 'complete', seconds: .1,
           outputs: [1, .7, .4, .2].map(gain => channels.map(channel => channel.map(value => value * gain))) } }), 30); }
@@ -36,6 +40,9 @@ const { chromium } = require('playwright');
       };
     }, { dataUrl });
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html?job=fixture`);
+    await page.waitForFunction(() => document.querySelector('#artwork').naturalWidth > 0);
+    assert.equal(await page.locator('#track-meta').textContent(), 'Fixture artist · 3:05');
+    assert.equal(await page.locator('#artwork-fallback').isVisible(), false);
     await page.locator('#separate').click();
     await page.waitForFunction(() => document.querySelectorAll('.stem canvas').length === 4);
     await page.waitForFunction(() => {
@@ -44,6 +51,30 @@ const { chromium } = require('playwright');
     });
     assert.equal(await page.locator('.brand img').evaluate(node => node.complete && node.naturalWidth > 0), true);
     assert.equal(await page.locator('canvas').count(), 5);
+    const checkAlignment = async () => {
+      const original = await page.locator('#original-waveform canvas').boundingBox();
+      for (const canvas of await page.locator('.stem canvas').all()) {
+        const bounds = await canvas.boundingBox();
+        assert.ok(Math.abs(bounds.x - original.x) < 1 && Math.abs(bounds.width - original.width) < 1, 'Stem timelines align with original');
+      }
+      const wav = await page.locator('.download').first().boundingBox();
+      const volume = await page.locator('.pad-knob').first().boundingBox();
+      assert.ok(volume.x >= wav.x + wav.width, 'Volume sits to the right of WAV');
+    };
+    await checkAlignment();
+    const knob = page.locator('.pad-knob').first();
+    await knob.press('Home');
+    assert.equal(await knob.getAttribute('aria-valuenow'), '0');
+    assert.equal(await page.locator('.stem').first().evaluate(row => row.classList.contains('is-silent')), true);
+    await knob.press('ArrowUp');
+    assert.equal(await knob.getAttribute('aria-valuenow'), '1');
+    await knob.dblclick();
+    assert.equal(await knob.getAttribute('aria-valuenow'), '100');
+    const bounds = await knob.boundingBox();
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await page.mouse.down(); await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 + 70); await page.mouse.up();
+    assert.equal(await knob.getAttribute('aria-valuenow'), '50');
+    await knob.dblclick();
     const colors = await page.locator('#original-waveform canvas').evaluate(canvas => [.15, .5, .85].map(x => Array.from(canvas.getContext('2d').getImageData(canvas.width * x, canvas.height / 2, 1, 1).data).slice(0, 3)));
     colors.forEach((rgb, band) => assert.equal(rgb.indexOf(Math.max(...rgb)), band));
     await page.locator('#play').click();
@@ -70,9 +101,13 @@ const { chromium } = require('playwright');
       await page.waitForTimeout(80);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `No overflow at ${width}px`);
       assert.ok(await page.locator('.stem').evaluateAll(rows => rows.every(row => row.scrollWidth <= row.clientWidth)), `Stem controls fit their cards at ${width}px`);
+      await checkAlignment();
       await page.screenshot({ path: path.join(artifacts, `mobile-${width}.png`), fullPage: true });
     }
     assert.deepEqual(errors, []);
+    await page.evaluate(() => document.querySelector('#artwork').dispatchEvent(new Event('error')));
+    assert.equal(await page.locator('#artwork-fallback').isVisible(), true);
+    assert.equal(await page.locator('#artwork').isVisible(), false);
     console.log('Stems UI: spectral colors, five synchronized playheads, play/pause, waveform seek, solo, comparison, WAV download and responsive layout passed.');
   } finally { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

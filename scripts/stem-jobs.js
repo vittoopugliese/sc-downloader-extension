@@ -41,7 +41,9 @@
       }
       const job = await read(request, sender);
       if (request.type === "STEM_LOOP_INFO") {
-        return { success: true, title: job.trackData.title || "SoundCloud loop", trimRange: job.trimRange };
+        return { success: true, title: job.trackData.title || "SoundCloud loop", trimRange: job.trimRange,
+          artist: job.trackData.artist || "", artworkUrl: job.trackData.artworkUrl || job.trackData.artistImageUrl || "",
+          durationMs: job.trackData.durationMs || null };
       }
       if (request.type === "STEM_LOOP_CANCEL") {
         const active = running.get(job.id);
