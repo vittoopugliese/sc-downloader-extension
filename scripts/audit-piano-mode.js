@@ -67,6 +67,8 @@ function fixture() {
   };
   scope.waveformDrag = null;
   scope.padEditor = null;
+  scope.padEditorPending = false;
+  scope.padEditorCache = new Map();
   vm.createContext(scope);
   for (const name of ['invalidatePendingInstrumentNotes', 'instrumentGainAt', 'scheduleInstrumentEnvelope', 'releaseInstrumentKey', 'cleanupInstrumentVoice', 'releaseInstrumentVoice',
     'stopInstrumentVoice', 'stopAllInstrumentVoices', 'setInstrumentMode', 'setInstrumentAdsrEnabled', 'loopMatchesInstrumentSnapshot',

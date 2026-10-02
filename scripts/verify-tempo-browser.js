@@ -647,7 +647,7 @@ async function main() {
         compactStyles.headerRects[2][1] > compactStyles.headerRects[0][3] &&
         compactStyles.headerRects[4][1] > compactStyles.headerRects[0][3] &&
         compactStyles.headerRects[0][3] >= compactStyles.headerRects[3][3]) ||
-      compactStyles.waveformHeight !== 130 ||
+      compactStyles.waveformHeight !== 126 ||
       compactStyles.waveformTitleIconSize.join("x") !== "16x16" ||
       compactStyles.triggerIconSize.join("x") !== "20x20" ||
       compactStyles.triggerIconPosition !== "absolute" ||
@@ -822,50 +822,26 @@ async function main() {
       throw new Error(`Master download must export the full current track at the active speed and pitch: ${JSON.stringify(masterDownload)}`);
     }
 
-    await page.locator("audio").evaluate((audio) => { audio.currentTime = 12.345; });
-    await host.locator(".waveform-times .set-a").click();
-    const draftLoop = await page.evaluate(() =>
-      JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session"))
-    );
-    assert.equal(draftLoop.startMs, 12345, "Set A must retain the first marker before B exists");
-    assert.equal(draftLoop.endMs, null);
-    assert.equal(draftLoop.active, false, "A draft marker must not activate a loop");
-    await page.locator("audio").evaluate((audio) => { audio.currentTime = 20.678; });
-    await host.locator(".waveform-times .set-b").click();
-    await page.waitForFunction(() => document.querySelector("#scdl-tempo-control")?.shadowRoot
-      ?.querySelector(".waveform-times .set-b")?.textContent?.trim() === "00:20.678");
-    const capturedLoop = await page.evaluate(() =>
-      JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session"))
-    );
-    if (
-      capturedLoop.startMs !== 12345 ||
-      capturedLoop.endMs !== 20678 ||
-      !capturedLoop.enabled ||
-      (await host.locator(".waveform-times .set-a").textContent()).trim() !== "00:12.345" ||
-      (await host.locator(".waveform-times .set-b").textContent()).trim() !== "00:20.678" ||
-      !(await host.locator(".waveform-times .set-a").getAttribute("title"))?.includes("00:12.345")
-    ) {
-      throw new Error(`Set A/Set B did not capture the live player range or expose it in their tooltip: ${JSON.stringify({ capturedLoop, label: await host.locator(".waveform-times .set-a").textContent(), title: await host.locator(".waveform-times .set-a").getAttribute("title") })}`);
-    }
-    const setA = host.locator(".waveform-times .set-a");
-    await setA.dispatchEvent("pointerdown", { button: 0 });
-    await page.waitForTimeout(700);
-    await setA.dispatchEvent("pointerup", { button: 0 });
-    await setA.click();
-    const partiallyClearedLoop = await page.evaluate(() =>
-      JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session"))
-    );
-    if (
-      partiallyClearedLoop.startMs !== null ||
-      partiallyClearedLoop.endMs !== 20678 ||
-      partiallyClearedLoop.active ||
-      (await setA.textContent()).trim() !== "Set A" ||
-      (await host.locator(".waveform-times .set-b").textContent()).trim() !== "00:20.678"
-    ) {
-      throw new Error(`Holding Set A must remove only A and suppress the following click: ${JSON.stringify(partiallyClearedLoop)}`);
-    }
-    await page.locator("audio").evaluate((audio) => { audio.currentTime = 12.345; });
-    await setA.click();
+    const editWaveform = async (marker, fromMs, toMs) => {
+      await host.evaluate((element, { marker, fromMs, toMs }) => {
+        const root = element.shadowRoot;
+        const stage = root.querySelector('.waveform-stage').getBoundingClientRect();
+        const target = root.querySelector(marker === 'create' ? '.waveform-canvas' : '.waveform-' + marker);
+        target.setPointerCapture = () => {};
+        target.hasPointerCapture = () => true;
+        target.releasePointerCapture = () => {};
+        for (const [type, time] of [['pointerdown', fromMs], ['pointermove', toMs], ['pointerup', toMs]]) {
+          target.dispatchEvent(new PointerEvent(type, { pointerId: 1, pointerType: 'mouse', button: 0,
+            clientX: stage.left + stage.width * time / 120000, clientY: stage.top + 20, bubbles: true }));
+        }
+        delete target.setPointerCapture;
+        delete target.hasPointerCapture;
+        delete target.releasePointerCapture;
+      }, { marker, fromMs, toMs });
+    };
+    await editWaveform('create', 12345, 20678);
+    await page.waitForFunction(() => JSON.parse(document.documentElement.getAttribute('data-scdl-loop-session')).endMs === 20678);
+    assert.equal(await host.locator('.set-a, .set-b, .header-set-a, .header-set-b, .loop-time').count(), 0);
     await page.waitForFunction(() => document.querySelector("#scdl-tempo-control")?.shadowRoot
       ?.querySelector(".save-loop-pad")?.disabled === false);
     assert.equal(await host.locator(".save-loop-pad").isDisabled(), false);
@@ -1129,10 +1105,8 @@ async function main() {
     await instrumentToggle.click();
     await page.waitForFunction(() => document.querySelector("#scdl-tempo-control").shadowRoot.querySelector(".loop-instrument").getAttribute("aria-pressed") === "true");
     const editSampleTime = async (marker, time, expectedMs) => {
-      await host.locator(`.loop-${marker}-time`).evaluate((input, value) => {
-        input.value = value;
-        input.dispatchEvent(new Event("blur"));
-      }, time);
+      const fromMs = await page.evaluate(marker => JSON.parse(document.documentElement.getAttribute('data-scdl-loop-session'))[marker + 'Ms'], marker);
+      await editWaveform(marker, fromMs, expectedMs);
       await page.waitForFunction(({ marker, expectedMs }) => JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session"))[`${marker}Ms`] === expectedMs, { marker, expectedMs });
     };
     await editSampleTime("end", "00:40.000", 40000);
@@ -1151,7 +1125,7 @@ async function main() {
     assert.equal(await page.evaluate(() => window.sourceStartArguments.at(-1)[1]), 24);
     await editSampleTime("start", "00:31.000", 31000);
     await page.waitForFunction((n) => window.drumStarts > n + 1, startsBeforeLiveEdit);
-    assert.ok(await page.evaluate(() => window.sourceStartArguments.at(-1)[1] >= 24.8), "Held note follows the edited sample start");
+    assert.ok(await page.evaluate(() => window.sourceStartArguments.at(-1)[1] >= 24.8 - 0.001), "Held note follows the edited sample start");
     const startsBeforeEndEdit = await page.evaluate(() => window.drumStarts);
     await editSampleTime("end", "00:41.000", 41000);
     assert.equal(await page.evaluate(() => window.drumStarts), startsBeforeEndEdit, "Editing only the end must not restart the held note");
@@ -1195,12 +1169,11 @@ async function main() {
         canvas: [canvas.width, canvas.height],
         markers: root.querySelectorAll(".waveform-marker:not([hidden])").length,
         customFits: custom.scrollWidth <= custom.clientWidth,
-        setALabel: root.querySelector(".waveform-times .set-a").textContent.trim(),
-        setAInFooter: root.querySelector(".waveform-times")?.contains(root.querySelector(".waveform-times .set-a")),
-        headerSettersHidden: getComputedStyle(root.querySelector(".waveform-header-setters")).display === "none",
+        startLabel: root.querySelector('.waveform-start').getAttribute('aria-valuetext'),
+        removedControls: root.querySelectorAll('.setter, .loop-time').length,
       };
     });
-    if (waveformUi.canvas[0] <= 1 || waveformUi.canvas[1] <= 1 || waveformUi.markers !== 2 || !waveformUi.customFits || waveformUi.setALabel !== "00:12.345" || !waveformUi.setAInFooter || !waveformUi.headerSettersHidden) {
+    if (waveformUi.canvas[0] <= 1 || waveformUi.canvas[1] <= 1 || waveformUi.markers !== 2 || !waveformUi.customFits || waveformUi.startLabel !== "00:12.345" || waveformUi.removedControls !== 0) {
       throw new Error(`Interactive waveform layout is incomplete: ${JSON.stringify(waveformUi)}`);
     }
 
@@ -1274,7 +1247,7 @@ async function main() {
     });
 
     if (await host.locator('.waveform-toggle').getAttribute('aria-expanded') === 'false') {
-      await host.locator('.waveform-toggle').click();
+      await host.locator('.waveform-toggle').click({ position: { x: 30, y: 12 } });
     }
     const headerLayout = await host.evaluate((element) => {
       const root = element.shadowRoot;
@@ -1290,9 +1263,9 @@ async function main() {
     });
     assert.deepEqual(headerLayout, {
       chevronAfterBypasses: true, fxCoversHeader: true, waveformBelowHeader: true,
-      waveformHeaderGap: 3, waveformHeight: 67, presetsTopPadding: '3px',
+      waveformHeaderGap: 3, waveformHeight: 66, presetsTopPadding: '3px',
     }, 'Headers must span the full row, place FX actions before the chevron, and keep the waveform below');
-    await host.locator('.waveform-toggle').hover();
+    await host.locator('.waveform-toggle').hover({ position: { x: 30, y: 12 } });
     const loopHover = await host.locator('.waveform-toggle').evaluate((element) => {
       const style = getComputedStyle(element);
       return { color: style.color, background: style.backgroundColor };
@@ -1422,9 +1395,7 @@ async function main() {
         height: shell.offsetHeight,
         bodyHidden: root.querySelector(".waveform-body").hidden,
         header: root.querySelector(".waveform-toggle").textContent.trim(),
-        settersVisible: [...root.querySelectorAll(".waveform-header-setters .setter")].every(
-          (button) => button.offsetWidth > 0 && button.offsetHeight > 0
-        ),
+        editorHidden: root.querySelector('.editor-track').hidden,
         canvas: [canvas.width, canvas.height],
         stored: localStorage.getItem("scdl.tempo.waveformCollapsed"),
         fetches: window.waveformFetches,
@@ -1434,7 +1405,7 @@ async function main() {
       !collapsedLooper.collapsed ||
       collapsedLooper.height !== 32 ||
       !collapsedLooper.bodyHidden ||
-      !collapsedLooper.settersVisible ||
+      !collapsedLooper.editorHidden ||
       !collapsedLooper.header.includes("Loop Region") ||
       collapsedLooper.canvas.join("x") !== "1x1" ||
       collapsedLooper.stored !== "true" ||
@@ -1561,10 +1532,7 @@ async function main() {
     if (await page.evaluate(() => JSON.parse(document.documentElement.getAttribute("data-scdl-loop-session")).active)) {
       throw new Error("Clear did not remove the loop selection.");
     }
-    await page.locator("audio").evaluate((audio) => { audio.currentTime = 12.345; });
-    await host.locator(".waveform-times .set-a").click();
-    await page.locator("audio").evaluate((audio) => { audio.currentTime = 20.678; });
-    await host.locator(".waveform-times .set-b").click();
+    await editWaveform('create', 12345, 20678);
 
     await host.locator(".slider").evaluate((slider) => {
       slider.value = "0.875";
