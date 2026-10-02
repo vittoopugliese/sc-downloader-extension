@@ -109,7 +109,9 @@ const { chromium } = require('playwright');
         const label = 'Pad ' + pads[i].querySelector('.drum-key').textContent + ' B';
         while (root.querySelector('.waveform-end').getAttribute('aria-label') !== label) await frame();
       }
+      const editorLabelBeforePlayback = root.querySelector('.waveform-end').getAttribute('aria-label');
       const editing = await measure();
+      const editorLabelAfterPlayback = root.querySelector('.waveform-end').getAttribute('aria-label');
       pads[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
       await settle();
       window.holdTrims = true;
@@ -119,25 +121,27 @@ const { chromium } = require('playwright');
       const immediate = await Promise.race([nextHit.then(() => true), new Promise(resolve => setTimeout(() => resolve(false), 250))]);
       const offset = lastStart?.[1];
       // More moves while the first write is in flight must replace the pending
-      // range, and a rapid switch away/back must retain those unsaved bounds.
+      // range. Playing other pads must leave this editor and its bounds pinned.
       for (let i = 0; i < 2; i++) marker.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
       root.querySelector('.waveform-end').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-      if (immediate) { await hit(1); await hit(0); }
+      if (immediate) { await hit(1); await hit(2); await hit(0); }
       const newestOffset = lastStart?.[1];
       const latestEndApplied = lastStops.some(when => Math.abs(when - lastStart[0] - .1) < .002);
       window.holdTrims = false;
       pendingTrims.splice(0).forEach(reply => reply());
       await nextHit;
       await settle();
-      return { normal, editing, trim: { immediate, offset, newestOffset, latestEndApplied,
+      return { normal, editing, editorLabelBeforePlayback, editorLabelAfterPlayback,
+        trim: { immediate, offset, newestOffset, latestEndApplied,
         savedStart: padRecords[0].trim.startMs, savedEnd: padRecords[0].trim.endMs,
         writes: padRequests.filter(request => request.action === 'trim').length } };
     });
-    for (const [mode, result] of Object.entries(metrics)) {
-      if (mode === 'trim') { console.log('trim:', result); continue; }
+    for (const mode of ['normal', 'editing']) {
+      const result = metrics[mode];
       const sorted = [...result.latencies].sort((a, b) => a - b);
       console.log(`${mode}: median=${sorted[16].toFixed(2)}ms p95=${sorted[30].toFixed(2)}ms paints=${result.paintCalls} controls=${result.controlRenders} requests=${result.requests}`);
     }
+    console.log('trim:', metrics.trim);
     assert.deepEqual(errors, []);
     assert.ok(metrics.trim.immediate, 'The very next hit must play the new bounds while saving is still pending');
     assert.equal(metrics.trim.offset, .6, 'The next hit must use the latest start, not an older queued edit');
@@ -146,6 +150,8 @@ const { chromium } = require('playwright');
     assert.equal(metrics.trim.savedEnd, 900);
     assert.ok(metrics.trim.latestEndApplied, 'The next hit must also stop at the unsaved end boundary');
     assert.ok(metrics.trim.writes <= 2, 'Pointer moves must not create a backlog of obsolete writes');
+    assert.equal(metrics.editorLabelAfterPlayback, metrics.editorLabelBeforePlayback,
+      'Normal pad playback must leave the right-click-selected editor pinned');
     assert.equal(metrics.editing.requests, 0, 'Warm pad switching must not request audio or metadata');
     assert.equal(metrics.editing.paintCalls, 0, 'Changing only slice bounds must reuse the painted waveform');
     assert.ok(metrics.editing.controlRenders <= metrics.normal.controlRenders, 'Editing must not duplicate sampler control rendering');

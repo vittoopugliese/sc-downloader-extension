@@ -105,12 +105,26 @@ const { chromium } = require('playwright');
     const previousPlays = await page.evaluate(() => played.length);
     await pad.click();
     await page.waitForFunction(count => played.length > count, previousPlays);
-    // Switch away and back using the pad letters without decoding the original again.
+    // Playback leaves the editor pinned, including after multiple other pads.
     await page.mouse.move(1000, 100);
-    await page.keyboard.press(nextKey.toLowerCase());
+    const pinnedStart = await startMarker.getAttribute('aria-valuenow');
+    const pinnedEnd = await end.getAttribute('aria-valuenow');
+    assert.match(await pad.getAttribute('data-scdl-tooltip'), /Right-click.*looper.*start\/end/);
+    for (let index = 1; index < 8; index++) {
+      const otherPad = host.locator('.drum-pad').nth(index);
+      const plays = await page.evaluate(() => played.length);
+      await otherPad.click();
+      await page.waitForFunction(count => played.length > count, plays);
+      await page.keyboard.press((await otherPad.locator('.drum-key').textContent()).toLowerCase());
+      assert.equal(await end.getAttribute('aria-label'), 'Pad Z B');
+      assert.equal(await startMarker.getAttribute('aria-valuenow'), pinnedStart);
+      assert.equal(await end.getAttribute('aria-valuenow'), pinnedEnd);
+    }
+    // Only right-click switches the editor, reusing the original waveform.
+    await host.locator('.drum-pad').nth(1).click({ button: 'right' });
     await page.waitForFunction(() => document.querySelector('#scdl-tempo-control').shadowRoot.querySelector('.waveform-end').getAttribute('aria-label') !== 'Pad Z B');
     const beforeReturn = await page.evaluate(() => decodeCount);
-    await page.keyboard.press('z');
+    await pad.click({ button: 'right' });
     await page.waitForFunction(() => document.querySelector('#scdl-tempo-control').shadowRoot.querySelector('.waveform-end').getAttribute('aria-label') === 'Pad Z B');
     assert.equal(await page.evaluate(() => decodeCount), beforeReturn);
     // Draw a fresh range solely through the waveform.

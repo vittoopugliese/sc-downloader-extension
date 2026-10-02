@@ -26,6 +26,7 @@ const { chromium } = require('playwright');
     const page = await browser.newPage({ viewport: { width: 1200, height: 1100 }, deviceScaleFactor: 2, locale: 'es-AR' });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.route('https://i1.sndcdn.com/stems-fixture.jpg', route => route.fulfill({ path: path.join(root, 'assets/icons/player-toolkit.png'), contentType: 'image/png' }));
+    await page.route('https://tbot.xyz/lumber/', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Lumberjack fixture</title>' }));
     await page.addInitScript(({ dataUrl }) => {
       globalThis.chrome = { runtime: { sendMessage: async ({ type }) => type === 'STEM_LOOP_INFO'
         ? { success: true, title: 'Midnight sessions — selected loop', trimRange: { startMs: 12000, endMs: 15000 } }
@@ -41,10 +42,26 @@ const { chromium } = require('playwright');
     }, { dataUrl });
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html?job=fixture`);
     await page.waitForFunction(() => document.querySelector('#artwork').naturalWidth > 0);
+    assert.equal(await page.locator('html').getAttribute('lang'), 'es');
+    assert.equal(await page.title(), 'Separador de stems · Player Tools');
+    assert.equal(await page.locator('.prepare').getAttribute('aria-label'), 'Separación');
+    assert.equal(await page.locator('#audition').getAttribute('aria-label'), 'Escuchar y comparar');
+    assert.equal(await page.locator('.comparison').getAttribute('aria-label'), 'Comparar');
+    assert.equal(await page.locator('#clear-cache').textContent(), 'Eliminar modelo de la caché');
     assert.equal(await page.locator('#track-meta').textContent(), 'Fixture artist · 3:05');
     assert.equal(await page.locator('#artwork-fallback').isVisible(), false);
     await page.locator('#separate').click();
     await page.waitForFunction(() => document.querySelectorAll('.stem canvas').length === 4);
+    assert.equal(await page.locator('#toggle-game').textContent(), 'Jugar a Lumberjack');
+    assert.equal(await page.locator('.utility-actions').evaluate(node => [...node.children].map(child => child.id).join(',')), 'clear-cache,toggle-game');
+    const clearCacheBounds = await page.locator('#clear-cache').boundingBox();
+    const gameButtonBounds = await page.locator('#toggle-game').boundingBox();
+    assert.ok(gameButtonBounds.x >= clearCacheBounds.x + clearCacheBounds.width, 'Lumberjack button sits to the right of the cache button');
+    await page.locator('#toggle-game').click();
+    const gameBounds = await page.locator('#game-panel iframe').boundingBox();
+    assert.deepEqual({ width: gameBounds.width, height: gameBounds.height }, { width: 300, height: 450 });
+    assert.equal(await page.locator('#game-panel iframe').getAttribute('title'), 'Juego Lumberjack');
+    await page.locator('#toggle-game').click();
     await page.waitForFunction(() => {
       const canvas = document.querySelector('.stem canvas');
       return canvas.getContext('2d').getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data[1] > 100;
@@ -108,6 +125,31 @@ const { chromium } = require('playwright');
     await page.evaluate(() => document.querySelector('#artwork').dispatchEvent(new Event('error')));
     assert.equal(await page.locator('#artwork-fallback').isVisible(), true);
     assert.equal(await page.locator('#artwork').isVisible(), false);
+    const localeChecks = [
+      ['en-US', 'en', 'Stem Extractor · Player Tools', 'Remove cached model', 'Separation'],
+      ['de-DE', 'de', 'Stem-Extraktor · Player Tools', 'Modell aus Cache entfernen', 'Stem-Trennung'],
+      ['pt-BR', 'pt-BR', 'Separador de stems · Player Tools', 'Remover modelo do cache', 'Separação'],
+      ['ru-RU', 'ru', 'Разделение на стемы · Player Tools', 'Удалить модель из кеша', 'Разделение'],
+      ['fr-FR', 'en', 'Stem Extractor · Player Tools', 'Remove cached model', 'Separation'],
+    ];
+    for (const [browserLocale, documentLocale, localizedTitle, clearCache, separationLabel] of localeChecks) {
+      const context = await browser.newContext({ locale: browserLocale, viewport: { width: 320, height: 844 } });
+      const localizedPage = await context.newPage();
+      const localizedErrors = []; localizedPage.on('pageerror', error => localizedErrors.push(error.message));
+      await localizedPage.addInitScript(() => { globalThis.chrome = { runtime: { sendMessage: async () => ({
+        success: true, title: 'Fixture', trimRange: { startMs: 0, endMs: 3000 },
+      }) } }; });
+      await localizedPage.goto(`http://127.0.0.1:${server.address().port}/stems.html?job=locale-fixture`);
+      await localizedPage.waitForFunction(() => !document.querySelector('#separate').disabled);
+      assert.equal(await localizedPage.locator('html').getAttribute('lang'), documentLocale);
+      assert.equal(await localizedPage.title(), localizedTitle);
+      assert.equal(await localizedPage.locator('#clear-cache').textContent(), clearCache);
+      assert.equal(await localizedPage.locator('.prepare').getAttribute('aria-label'), separationLabel);
+      await localizedPage.locator('#toggle-game').evaluate(node => { node.hidden = false; });
+      assert.ok(await localizedPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${browserLocale} has no horizontal overflow`);
+      assert.deepEqual(localizedErrors, []);
+      await context.close();
+    }
     console.log('Stems UI: spectral colors, five synchronized playheads, play/pause, waveform seek, solo, comparison, WAV download and responsive layout passed.');
   } finally { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

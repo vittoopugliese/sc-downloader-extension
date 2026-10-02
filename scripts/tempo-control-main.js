@@ -602,7 +602,7 @@
       button.querySelector(".drum-key").textContent = pad.key ? pad.key.toUpperCase() : "·";
       button.classList.toggle("is-saving", pad.busy);
       button.setAttribute("aria-label", `${pad.customName || pad.name} drum pad. Key ${pad.key ? pad.key.toUpperCase() : "unassigned"}. Right click to edit sample bounds. Hold left click to remove the saved sample and restore the default. Shift + Enter or Shift + Space to load an audio sample.`);
-      button.title = `${Array.from(pad.customName || pad.name).slice(0, 20).join("")} · hold left click to restore default · Shift + Enter / Space to load`;
+      button.title = `${Array.from(pad.customName || pad.name).slice(0, 20).join("")} · Right-click to open this sample in the looper and edit its start/end · hold left click to restore default · Shift + Enter / Space to load`;
       button.setAttribute("data-scdl-tooltip", button.title);
     });
   }
@@ -1330,7 +1330,6 @@
     if (!pad || pad.busy || instrumentMode) return;
     if (!waveformDrag) {
       selectedPadIndex = index;
-      if (padEditorPending || (padEditor && padEditor.index !== index)) editPad(index);
     }
     renderSelectedPadControls();
     const noteRevision = instrumentCutItself ? ++instrumentNoteRevision : instrumentNoteRevision;

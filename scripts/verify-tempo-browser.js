@@ -378,7 +378,7 @@ async function main() {
     }
     assert.deepEqual(await drumPads.allTextContents(), ["Z", "X", "C", "V", "B", "N", "M", "L"]);
     assert.deepEqual(await drumPads.evaluateAll((pads) => pads.map((pad) => pad.title)),
-      ["Kick", "Clap", "Hat", "Kick 2", "Snare", "Tom", "Clap 2", "Hat 2"].map((name) => `${name} · hold left click to restore default · Shift + Enter / Space to load`));
+      ["Kick", "Clap", "Hat", "Kick 2", "Snare", "Tom", "Clap 2", "Hat 2"].map((name) => `${name} · Right-click to open this sample in the looper and edit its start/end · hold left click to restore default · Shift + Enter / Space to load`));
     const drumPlacement = await host.evaluate((element) => {
       const root = element.shadowRoot;
       const header = root.querySelector(".panel-header").getBoundingClientRect();

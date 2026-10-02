@@ -1,33 +1,114 @@
 import { SAMPLE_RATE, MAX_SECONDS, STEMS, encodeWav } from './stem-audio.mjs';
 import { MODEL } from './stem-model.mjs';
 
-const es = (globalThis.chrome?.i18n?.getUILanguage() || navigator.language).startsWith('es');
-const words = {
-  playGame: ['Play Lumberjack game', 'Jugar a Lumberjack'], hideGame: ['Close Lumberjack game', 'Cerrar Lumberjack'],
-  workspace: ['Your loop, layer by layer.', 'Tu loop, capa por capa.'], selected: ['SELECTED LOOP', 'LOOP SELECCIONADO'],
-  extract: ['Unpack your sound.', 'Separá tu sonido.'], listen: ['Find your mix.', 'Encontrá tu mezcla.'], local: ['On-device', 'En tu equipo'],
-  lows: ['Lows', 'Graves'], mids: ['Mids', 'Medios'], highs: ['Highs', 'Agudos'],
-  experimental: ['Experimental', 'Experimental'], title: ["Hear what's inside your loop.", 'Escuchá qué hay dentro de tu loop.'],
-  intro: ['Separate vocals, drums, bass and other instruments locally. Your audio stays in Chrome.', 'Separá voz, batería, bajo y otros instrumentos localmente. Tu audio se queda en Chrome.'],
-  details: ['First use downloads a 166 MB model. Processing can take a few minutes and uses substantial memory. Up to 30 seconds, at original speed without effects.', 'El primer uso descarga un modelo de 166 MB. El proceso puede tardar unos minutos y consume bastante memoria. Hasta 30 segundos, a velocidad original y sin efectos.'],
-  separate: ['Separate loop', 'Separar loop'], cancel: ['Cancel', 'Cancelar'], clearCache: ['Remove cached model', 'Eliminar modelo de la caché'],
-  play: ['Play', 'Reproducir'], stop: ['Pause', 'Pausar'], repeat: ['Repeat loop', 'Repetir loop'], original: ['Original', 'Original'], mix: ['Stem mix', 'Mezcla de stems'],
-  position: ['Position', 'Posición'], quality: ['Some bleed and artifacts are normal. Compare with the original. Downloads are stereo 44.1 kHz float WAV files.', 'Puede haber filtraciones y artefactos. Compará con el original. Las descargas son WAV estéreo de 44,1 kHz en coma flotante.'],
-  footer: ['Audio stays on this device. Keep this tab open to retain your results.', 'El audio permanece en este equipo. Mantené esta pestaña abierta para conservar los resultados.'],
-  ready: ['Ready. Separate this loop to compare the four stems.', 'Listo. Separá este loop para comparar los cuatro stems.'],
-  preparing: ['Preparing the selected loop…', 'Preparando el loop seleccionado…'], downloading: ['Downloading model', 'Descargando modelo'],
-  cache: ['Reading cached model', 'Leyendo modelo de la caché'], verify: ['Verifying model…', 'Verificando modelo…'], load: ['Loading separation model…', 'Cargando modelo de separación…'],
-  running: ['Separating segment', 'Separando fragmento'], cancelled: ['Cancelled. You can try again.', 'Cancelado. Podés volver a intentarlo.'],
-  cleared: ['Cached model removed.', 'Modelo eliminado de la caché.'], complete: ['Stems ready. Inference time:', 'Stems listos. Tiempo de inferencia:'],
-  drums: ['Drums', 'Batería'], bass: ['Bass', 'Bajo'], other: ['Other', 'Otros'], vocals: ['Vocals', 'Voz'],
-  mute: ['Mute', 'Mute'], solo: ['Solo', 'Solo'], volume: ['Volume', 'Volumen'], download: ['Download', 'Descargar'],
-  another: ['Another tab is separating audio. Wait for it to finish or cancel it first.', 'Otra pestaña está separando audio. Esperá a que termine o cancelala primero.'],
-  failed: ['Separation failed. Retry, or try a shorter loop and close other heavy tabs.', 'No se pudo separar. Reintentá o probá un loop más corto y cerrá otras pestañas pesadas.'],
+const translations = {
+  en: {
+    pageTitle: 'Stem Extractor · Player Tools', workspace: 'Your loop, layer by layer.', experimental: 'Experimental', selected: 'SELECTED LOOP',
+    separationLabel: 'Separation', extract: 'Unpack your sound.', local: 'On-device',
+    intro: 'Separate vocals, drums, bass and other instruments locally. Your audio stays in Chrome.',
+    details: 'First use downloads a 166 MB model. Processing can take a few minutes and uses substantial memory. Up to 30 seconds, at original speed without effects.',
+    separate: 'Separate loop', cancel: 'Cancel', clearCache: 'Remove cached model', playGame: 'Play Lumberjack game', hideGame: 'Close Lumberjack game', gameTitle: 'Lumberjack game',
+    listenCompareLabel: 'Listen and compare', listen: 'Find your mix.', play: 'Play', stop: 'Pause', repeat: 'Repeat loop', comparisonLabel: 'Compare', original: 'Original', mix: 'Stem mix',
+    lows: 'Lows', mids: 'Mids', highs: 'Highs', position: 'Position',
+    quality: 'Some bleed and artifacts are normal. Compare with the original. Downloads are stereo 44.1 kHz float WAV files.',
+    footer: 'Audio stays on this device. Keep this tab open to retain your results.',
+    ready: 'Ready. Separate this loop to compare the four stems.', preparing: 'Preparing the selected loop…', downloading: 'Downloading model',
+    cache: 'Reading cached model', verify: 'Verifying model…', load: 'Loading separation model…', running: 'Separating segment',
+    cancelled: 'Cancelled. You can try again.', cleared: 'Cached model removed.', complete: 'Stems ready. Inference time:',
+    drums: 'Drums', bass: 'Bass', other: 'Other', vocals: 'Vocals', mute: 'Mute', solo: 'Solo', volume: 'Volume', download: 'Download',
+    resetVolume: 'Double-click to reset', another: 'Another tab is separating audio. Wait for it to finish or cancel it first.',
+    failed: 'Separation failed. Retry, or try a shorter loop and close other heavy tabs.', prepareFailed: 'The extension could not prepare this loop.',
+    infoFailed: 'The selected loop could not be loaded.', timeout: 'Separation timed out. Try a shorter loop.', invalidAudio: 'The loop audio is invalid.',
+    tooLong: 'The rendered loop exceeds 30 seconds.', cacheClearFailed: 'The cached model could not be removed.', playbackFailed: 'Audio playback could not start.', loop: 'Loop',
+  },
+  es: {
+    pageTitle: 'Separador de stems · Player Tools', workspace: 'Tu loop, capa por capa.', experimental: 'Experimental', selected: 'LOOP SELECCIONADO',
+    separationLabel: 'Separación', extract: 'Separá tu sonido.', local: 'En tu equipo',
+    intro: 'Separá voz, batería, bajo y otros instrumentos localmente. Tu audio se queda en Chrome.',
+    details: 'El primer uso descarga un modelo de 166 MB. El proceso puede tardar unos minutos y consume bastante memoria. Hasta 30 segundos, a velocidad original y sin efectos.',
+    separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Eliminar modelo de la caché', playGame: 'Jugar a Lumberjack', hideGame: 'Cerrar Lumberjack', gameTitle: 'Juego Lumberjack',
+    listenCompareLabel: 'Escuchar y comparar', listen: 'Encontrá tu mezcla.', play: 'Reproducir', stop: 'Pausar', repeat: 'Repetir loop', comparisonLabel: 'Comparar', original: 'Original', mix: 'Mezcla de stems',
+    lows: 'Graves', mids: 'Medios', highs: 'Agudos', position: 'Posición',
+    quality: 'Puede haber filtraciones y artefactos. Compará con el original. Las descargas son WAV estéreo de 44,1 kHz en coma flotante.',
+    footer: 'El audio permanece en este equipo. Mantené esta pestaña abierta para conservar los resultados.',
+    ready: 'Listo. Separá este loop para comparar los cuatro stems.', preparing: 'Preparando el loop seleccionado…', downloading: 'Descargando modelo',
+    cache: 'Leyendo modelo de la caché', verify: 'Verificando modelo…', load: 'Cargando modelo de separación…', running: 'Separando fragmento',
+    cancelled: 'Cancelado. Podés volver a intentarlo.', cleared: 'Modelo eliminado de la caché.', complete: 'Stems listos. Tiempo de inferencia:',
+    drums: 'Batería', bass: 'Bajo', other: 'Otros', vocals: 'Voz', mute: 'Silenciar', solo: 'Solo', volume: 'Volumen', download: 'Descargar',
+    resetVolume: 'Doble clic para restablecer', another: 'Otra pestaña está separando audio. Esperá a que termine o cancelala primero.',
+    failed: 'No se pudo separar. Reintentá o probá un loop más corto y cerrá otras pestañas pesadas.', prepareFailed: 'La extensión no pudo preparar este loop.',
+    infoFailed: 'No se pudo cargar el loop seleccionado.', timeout: 'La separación tardó demasiado. Probá con un loop más corto.', invalidAudio: 'El audio del loop no es válido.',
+    tooLong: 'El loop procesado supera los 30 segundos.', cacheClearFailed: 'No se pudo eliminar el modelo de la caché.', playbackFailed: 'No se pudo iniciar la reproducción.', loop: 'Loop',
+  },
+  de: {
+    pageTitle: 'Stem-Extraktor · Player Tools', workspace: 'Dein Loop, Spur für Spur.', experimental: 'Experimentell', selected: 'AUSGEWÄHLTER LOOP',
+    separationLabel: 'Stem-Trennung', extract: 'Entfalte deinen Sound.', local: 'Auf diesem Gerät',
+    intro: 'Trenne Gesang, Schlagzeug, Bass und andere Instrumente lokal. Dein Audio bleibt in Chrome.',
+    details: 'Bei der ersten Verwendung wird ein 166-MB-Modell heruntergeladen. Die Verarbeitung kann einige Minuten dauern und benötigt viel Arbeitsspeicher. Bis zu 30 Sekunden, in Originalgeschwindigkeit und ohne Effekte.',
+    separate: 'Loop trennen', cancel: 'Abbrechen', clearCache: 'Modell aus Cache entfernen', playGame: 'Lumberjack spielen', hideGame: 'Lumberjack schließen', gameTitle: 'Lumberjack-Spiel',
+    listenCompareLabel: 'Anhören und vergleichen', listen: 'Finde deinen Mix.', play: 'Abspielen', stop: 'Pausieren', repeat: 'Loop wiederholen', comparisonLabel: 'Vergleichen', original: 'Original', mix: 'Stem-Mix',
+    lows: 'Bässe', mids: 'Mitten', highs: 'Höhen', position: 'Position',
+    quality: 'Übersprechen und Artefakte sind normal. Vergleiche das Ergebnis mit dem Original. Downloads sind Stereo-WAV-Dateien mit 44,1 kHz und Fließkommawerten.',
+    footer: 'Das Audio bleibt auf diesem Gerät. Lass diesen Tab geöffnet, um deine Ergebnisse zu behalten.',
+    ready: 'Bereit. Trenne diesen Loop, um die vier Stems zu vergleichen.', preparing: 'Ausgewählter Loop wird vorbereitet…', downloading: 'Modell wird heruntergeladen',
+    cache: 'Modell wird aus dem Cache gelesen', verify: 'Modell wird überprüft…', load: 'Trennungsmodell wird geladen…', running: 'Segment wird getrennt',
+    cancelled: 'Abgebrochen. Du kannst es erneut versuchen.', cleared: 'Modell aus dem Cache entfernt.', complete: 'Stems sind fertig. Verarbeitungszeit:',
+    drums: 'Schlagzeug', bass: 'Bass', other: 'Andere', vocals: 'Gesang', mute: 'Stumm', solo: 'Solo', volume: 'Lautstärke', download: 'Herunterladen',
+    resetVolume: 'Zum Zurücksetzen doppelklicken', another: 'Ein anderer Tab trennt gerade Audio. Warte, bis er fertig ist, oder brich ihn zuerst ab.',
+    failed: 'Die Trennung ist fehlgeschlagen. Versuche es erneut oder verwende einen kürzeren Loop und schließe andere ressourcenintensive Tabs.', prepareFailed: 'Die Erweiterung konnte diesen Loop nicht vorbereiten.',
+    infoFailed: 'Der ausgewählte Loop konnte nicht geladen werden.', timeout: 'Zeitüberschreitung bei der Trennung. Versuche einen kürzeren Loop.', invalidAudio: 'Das Loop-Audio ist ungültig.',
+    tooLong: 'Der gerenderte Loop ist länger als 30 Sekunden.', cacheClearFailed: 'Das Modell konnte nicht aus dem Cache entfernt werden.', playbackFailed: 'Die Audiowiedergabe konnte nicht gestartet werden.', loop: 'Loop',
+  },
+  'pt-BR': {
+    pageTitle: 'Separador de stems · Player Tools', workspace: 'Seu loop, camada por camada.', experimental: 'Experimental', selected: 'LOOP SELECIONADO',
+    separationLabel: 'Separação', extract: 'Abra seu som.', local: 'Neste dispositivo',
+    intro: 'Separe vocais, bateria, baixo e outros instrumentos localmente. Seu áudio permanece no Chrome.',
+    details: 'No primeiro uso, um modelo de 166 MB será baixado. O processamento pode levar alguns minutos e usar bastante memória. Até 30 segundos, na velocidade original e sem efeitos.',
+    separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Remover modelo do cache', playGame: 'Jogar Lumberjack', hideGame: 'Fechar Lumberjack', gameTitle: 'Jogo Lumberjack',
+    listenCompareLabel: 'Ouvir e comparar', listen: 'Encontre sua mixagem.', play: 'Reproduzir', stop: 'Pausar', repeat: 'Repetir loop', comparisonLabel: 'Comparar', original: 'Original', mix: 'Mixagem de stems',
+    lows: 'Graves', mids: 'Médios', highs: 'Agudos', position: 'Posição',
+    quality: 'Algum vazamento e alguns artefatos são normais. Compare com o original. Os downloads são arquivos WAV estéreo de 44,1 kHz em ponto flutuante.',
+    footer: 'O áudio permanece neste dispositivo. Mantenha esta aba aberta para preservar os resultados.',
+    ready: 'Tudo pronto. Separe este loop para comparar os quatro stems.', preparing: 'Preparando o loop selecionado…', downloading: 'Baixando modelo',
+    cache: 'Lendo modelo do cache', verify: 'Verificando modelo…', load: 'Carregando modelo de separação…', running: 'Separando segmento',
+    cancelled: 'Cancelado. Você pode tentar novamente.', cleared: 'Modelo removido do cache.', complete: 'Stems prontos. Tempo de inferência:',
+    drums: 'Bateria', bass: 'Baixo', other: 'Outros', vocals: 'Vocais', mute: 'Silenciar', solo: 'Solo', volume: 'Volume', download: 'Baixar',
+    resetVolume: 'Clique duas vezes para redefinir', another: 'Outra aba está separando áudio. Aguarde a conclusão ou cancele-a primeiro.',
+    failed: 'Falha na separação. Tente novamente ou use um loop mais curto e feche outras abas pesadas.', prepareFailed: 'A extensão não conseguiu preparar este loop.',
+    infoFailed: 'Não foi possível carregar o loop selecionado.', timeout: 'O tempo da separação se esgotou. Tente um loop mais curto.', invalidAudio: 'O áudio do loop é inválido.',
+    tooLong: 'O loop renderizado excede 30 segundos.', cacheClearFailed: 'Não foi possível remover o modelo do cache.', playbackFailed: 'Não foi possível iniciar a reprodução.', loop: 'Loop',
+  },
+  ru: {
+    pageTitle: 'Разделение на стемы · Player Tools', workspace: 'Ваш луп, слой за слоем.', experimental: 'Экспериментальная функция', selected: 'ВЫБРАННЫЙ ЛУП',
+    separationLabel: 'Разделение', extract: 'Разберите звук на части.', local: 'На этом устройстве',
+    intro: 'Разделяйте вокал, ударные, бас и другие инструменты локально. Аудио остается в Chrome.',
+    details: 'При первом запуске загружается модель размером 166 МБ. Обработка может занять несколько минут и требует много памяти. До 30 секунд, с исходной скоростью и без эффектов.',
+    separate: 'Разделить луп', cancel: 'Отменить', clearCache: 'Удалить модель из кеша', playGame: 'Играть в Lumberjack', hideGame: 'Закрыть Lumberjack', gameTitle: 'Игра Lumberjack',
+    listenCompareLabel: 'Прослушать и сравнить', listen: 'Создайте свой микс.', play: 'Воспроизвести', stop: 'Пауза', repeat: 'Повторять луп', comparisonLabel: 'Сравнить', original: 'Оригинал', mix: 'Микс стемов',
+    lows: 'Низкие', mids: 'Средние', highs: 'Высокие', position: 'Позиция',
+    quality: 'Небольшое проникновение звука и артефакты — это нормально. Сравните с оригиналом. Загружаются стереофайлы WAV 44,1 кГц с плавающей точкой.',
+    footer: 'Аудио остается на этом устройстве. Не закрывайте вкладку, чтобы сохранить результаты.',
+    ready: 'Готово. Разделите этот луп, чтобы сравнить четыре стема.', preparing: 'Подготовка выбранного лупа…', downloading: 'Загрузка модели',
+    cache: 'Чтение модели из кеша', verify: 'Проверка модели…', load: 'Загрузка модели разделения…', running: 'Разделение фрагмента',
+    cancelled: 'Отменено. Можно попробовать еще раз.', cleared: 'Модель удалена из кеша.', complete: 'Стемы готовы. Время обработки:',
+    drums: 'Ударные', bass: 'Бас', other: 'Другое', vocals: 'Вокал', mute: 'Без звука', solo: 'Соло', volume: 'Громкость', download: 'Скачать',
+    resetVolume: 'Дважды щелкните для сброса', another: 'В другой вкладке уже разделяется аудио. Дождитесь завершения или сначала отмените операцию.',
+    failed: 'Не удалось разделить аудио. Повторите попытку либо выберите более короткий луп и закройте другие ресурсоемкие вкладки.', prepareFailed: 'Расширению не удалось подготовить этот луп.',
+    infoFailed: 'Не удалось загрузить выбранный луп.', timeout: 'Время ожидания разделения истекло. Попробуйте более короткий луп.', invalidAudio: 'Аудио лупа недействительно.',
+    tooLong: 'Обработанный луп длиннее 30 секунд.', cacheClearFailed: 'Не удалось удалить модель из кеша.', playbackFailed: 'Не удалось запустить воспроизведение.', loop: 'Луп',
+  },
 };
-const text = key => words[key]?.[es ? 1 : 0] || key;
+const browserLanguage = globalThis.chrome?.i18n?.getUILanguage?.() || navigator.languages?.[0] || navigator.language || 'en';
+const language = browserLanguage.replace('_', '-').toLowerCase();
+const locale = language.startsWith('es') ? 'es' : language.startsWith('de') ? 'de' : language.startsWith('pt') ? 'pt-BR' : language.startsWith('ru') ? 'ru' : 'en';
+const text = key => translations[locale][key] || translations.en[key] || key;
+const formatOneDecimal = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const formatTwoDecimals = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const $ = id => document.getElementById(id);
-document.documentElement.lang = es ? 'es' : 'en';
+document.documentElement.lang = locale;
+document.title = text('pageTitle');
 document.querySelectorAll('[data-copy]').forEach(node => { node.textContent = text(node.dataset.copy); });
+document.querySelectorAll('[data-copy-aria-label]').forEach(node => { node.setAttribute('aria-label', text(node.dataset.copyAriaLabel)); });
 // Local inline icons keep the extension page self-contained.
 const iconPaths = {
   music: '<path d="M9 18V5l12-2v13M9 8l12-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="18" cy="16" rx="3" ry="3"/>',
@@ -55,7 +136,7 @@ const waveforms = new Set();
 function seekTo(value) {
   const resume = playing; pause(); position = Math.max(0, Math.min(original.duration, value));
   updatePlayheads();
-  if (resume) play().catch(error => status(error.message, true));
+  if (resume) play().catch(playbackError);
 }
 function updatePlayheads() {
   if (!original) return;
@@ -160,13 +241,15 @@ document.addEventListener('visibilitychange', () => {
 const jobId = new URL(location.href).searchParams.get('job');
 let original, buffers = [], context, nodes = [], outputs = [], urls = [];
 let mode = 'original', playing = false, position = 0, startedAt = 0;
-let busy = false, revision = 0, worker, rejectWorker, title = 'Loop', initialized = false;
+let busy = false, revision = 0, worker, rejectWorker, title = text('loop'), initialized = false;
 let states = STEMS.map(() => ({ muted: false, solo: false, gain: 1 }));
 
 function status(message, error = false) { $('status').textContent = message; $('status').classList.toggle('error', error); }
+function localizedError(key) { const error = new Error(text(key)); error.localized = true; return error; }
+function playbackError(error) { console.error('[Stems playback]', error); status(text('playbackFailed'), true); }
 async function message(type) {
   const result = await chrome.runtime.sendMessage({ type, jobId });
-  if (!result?.success) throw new Error(result?.error || 'The extension could not prepare this loop.');
+  if (!result?.success) throw localizedError(type === 'STEM_LOOP_INFO' ? 'infoFailed' : 'prepareFailed');
   return result;
 }
 function setBusy(value) {
@@ -176,7 +259,7 @@ function setBusy(value) {
   $('clear-cache').disabled = value;
   $('progress').hidden = !value;
   $('status').classList.toggle('is-loading', value);
-  if (value) $('waiting-game').hidden = false;
+  if (value) $('toggle-game').hidden = false;
 }
 function audioBuffer(channels) {
   const buffer = new AudioBuffer({ numberOfChannels: 2, length: channels[0].length, sampleRate: SAMPLE_RATE });
@@ -260,7 +343,7 @@ function showResults(result) {
       const value = Math.round(states[index].gain * 100);
       knob.style.setProperty('--knob-angle', `${-135 + value * 2.7}deg`);
       knob.setAttribute('aria-valuenow', String(value)); knob.setAttribute('aria-valuetext', `${value}%`);
-      knob.title = `${text('volume')}: ${value}% · ${es ? 'Doble clic para restablecer' : 'Double-click to reset'}`;
+      knob.title = `${text('volume')}: ${value}% · ${text('resetVolume')}`;
       level.textContent = `${value}%`;
     };
     const updateVolume = value => { states[index].gain = Math.round(Math.max(0, Math.min(100, value))) / 100; renderVolume(); mode = 'mix'; applyMix(); };
@@ -290,21 +373,21 @@ function showResults(result) {
   });
   outputs = [];
   $('mix').disabled = false; $('quality-note').hidden = false; mode = 'mix'; applyMix();
-  status(`${text('complete')} ${result.seconds.toFixed(1)} s.`);
+  status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`);
 }
 
 function runWorker(channels) {
   return new Promise((resolve, reject) => {
     worker = new Worker(new URL('./stem-worker.mjs', import.meta.url), { type: 'module' });
     rejectWorker = reject;
-    const timeout = setTimeout(() => reject(new Error('Separation timed out. Try a shorter loop.')), 20 * 60 * 1000);
+    const timeout = setTimeout(() => reject(localizedError('timeout')), 20 * 60 * 1000);
     const finish = (fn, value) => { clearTimeout(timeout); rejectWorker = null; fn(value); };
     rejectWorker = error => finish(reject, error);
-    worker.onerror = event => finish(reject, new Error(event.message || text('failed')));
-    worker.onmessageerror = () => finish(reject, new Error(text('failed')));
+    worker.onerror = () => finish(reject, localizedError('failed'));
+    worker.onmessageerror = () => finish(reject, localizedError('failed'));
     worker.onmessage = ({ data }) => {
       if (data.type === 'complete') return finish(resolve, data);
-      if (data.type === 'error') return finish(reject, new Error(data.message));
+      if (data.type === 'error') return finish(reject, localizedError('failed'));
       if (data.type !== 'progress') return;
       if (data.phase === 'download' || data.phase === 'cache') {
         $('progress').value = data.received / data.total;
@@ -325,17 +408,17 @@ async function separate() {
   setBusy(true); $('progress').removeAttribute('value');
   try {
     await navigator.locks.request('scdl-stem-inference', { ifAvailable: true }, async lock => {
-      if (!lock) throw new Error(text('another'));
+      if (!lock) throw localizedError('another');
       if (!original) {
         status(text('preparing'));
         const result = await message('STEM_LOOP_RENDER');
         if (version !== revision) return;
-        if (!/^data:audio\/[^;,]+;base64,/.test(result.instrument?.dataUrl || '')) throw new Error('Invalid loop audio.');
+        if (!/^data:audio\/[^;,]+;base64,/.test(result.instrument?.dataUrl || '')) throw localizedError('invalidAudio');
         const bytes = await (await fetch(result.instrument.dataUrl)).arrayBuffer();
         const decoder = new OfflineAudioContext(2, 1, SAMPLE_RATE);
         const decoded = await decoder.decodeAudioData(bytes);
         if (version !== revision) return;
-        if (!decoded.length || decoded.duration > MAX_SECONDS + 1 / SAMPLE_RATE) throw new Error('The rendered loop exceeds 30 seconds.');
+        if (!decoded.length || decoded.duration > MAX_SECONDS + 1 / SAMPLE_RATE) throw localizedError('tooLong');
         original = audioBuffer([decoded.getChannelData(0), decoded.getChannelData(Math.min(1, decoded.numberOfChannels - 1))]);
         $('audition').hidden = false;
         mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
@@ -345,7 +428,7 @@ async function separate() {
       if (version === revision) showResults(result);
     });
   } catch (error) {
-    if (version === revision) { console.error('[Stems]', error); status(`${text('failed')} ${error.message}`, true); }
+    if (version === revision) { console.error('[Stems]', error); status(error.localized ? error.message : text('failed'), true); }
   } finally {
     if (version === revision) { worker?.terminate(); worker = null; rejectWorker = null; setBusy(false); }
   }
@@ -363,9 +446,9 @@ $('toggle-game').onclick = () => {
   const open = panel.hidden;
   if (open) {
     const frame = document.createElement('iframe');
-    frame.title = 'Lumber Jack Game';
+    frame.title = text('gameTitle');
     frame.src = 'https://tbot.xyz/lumber/';
-    frame.width = '600'; frame.height = '900';
+    frame.width = '300'; frame.height = '450';
     panel.replaceChildren(frame);
   } else {
     panel.replaceChildren();
@@ -375,12 +458,12 @@ $('toggle-game').onclick = () => {
   $('toggle-game').replaceChildren(icon(open ? 'close' : 'play'), document.createTextNode(text(open ? 'hideGame' : 'playGame')));
 };
 $('clear-cache').onclick = async () => {
-  try { await caches.delete(MODEL.cache); status(text('cleared')); } catch (error) { status(error.message, true); }
+  try { await caches.delete(MODEL.cache); status(text('cleared')); } catch (error) { console.error('[Stems cache]', error); status(text('cacheClearFailed'), true); }
 };
-$('play').onclick = () => { if (playing) pause(); else play().catch(error => status(error.message, true)); };
+$('play').onclick = () => { if (playing) pause(); else play().catch(playbackError); };
 $('original').onclick = () => { mode = 'original'; applyMix(); };
 $('mix').onclick = () => { mode = 'mix'; applyMix(); };
-$('repeat').onchange = () => { const resume = playing; pause(); if (resume) play().catch(error => status(error.message, true)); };
+$('repeat').onchange = () => { const resume = playing; pause(); if (resume) play().catch(playbackError); };
 let animationFrame;
 function animate() {
   updatePlayheads();
@@ -391,7 +474,7 @@ const timeInterval = setInterval(() => {
   if (!original) return;
   const current = Math.max(0, offset());
   if (playing && !$('repeat').checked && current >= original.duration) { pause(); position = 0; }
-  $('time').textContent = `${current.toFixed(1)} / ${original.duration.toFixed(1)} s`;
+  $('time').textContent = `${formatOneDecimal.format(current)} / ${formatOneDecimal.format(original.duration)} s`;
 }, 100);
 window.addEventListener('pagehide', () => {
   cancelAnimationFrame(animationFrame); clearInterval(timeInterval);
@@ -415,6 +498,6 @@ try {
     artwork.onerror = () => { artwork.hidden = true; $('artwork-fallback').hidden = false; };
     artwork.src = info.artworkUrl;
   }
-  $('range').textContent = `A ${(info.trimRange.startMs / 1000).toFixed(2)} s → B ${(info.trimRange.endMs / 1000).toFixed(2)} s · ${((info.trimRange.endMs - info.trimRange.startMs) / 1000).toFixed(2)} s`;
+  $('range').textContent = `A ${formatTwoDecimals.format(info.trimRange.startMs / 1000)} s → B ${formatTwoDecimals.format(info.trimRange.endMs / 1000)} s · ${formatTwoDecimals.format((info.trimRange.endMs - info.trimRange.startMs) / 1000)} s`;
   initialized = true; setBusy(false); status(text('ready'));
-} catch (error) { status(error.message, true); }
+} catch (error) { console.error('[Stems initialization]', error); status(error.localized ? error.message : text('infoFailed'), true); }
