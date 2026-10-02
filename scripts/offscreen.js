@@ -344,7 +344,7 @@ async function handlePadMessage(message) {
     if (message.type.startsWith("OFFSCREEN_SAMPLER_PRESET_")) return await handleSamplerPreset(message);
     if (message.type === "OFFSCREEN_PAD_LIST") {
       const records = await padTransaction("readonly", (store) => store.getAll());
-      return { success: true, pads: records.map(({ index, name, updatedAt }) => ({ index, name, updatedAt })) };
+      return { success: true, pads: records.map(({ index, name, updatedAt, trimRevision = 0 }) => ({ index, name, updatedAt, trimRevision })) };
     }
     if (message.type === "OFFSCREEN_INSTRUMENT_CANCEL") {
       return cancelInstrumentRender(message.operationId);
@@ -446,6 +446,11 @@ async function handlePadMessage(message) {
         get.onsuccess = () => {
           const record = get.result;
           const trim = message.trim;
+          if (record && message.expectedTrimRevision !== undefined &&
+              message.expectedTrimRevision !== (record.trimRevision || 0)) {
+            result = { success: false, error: "The sample bounds changed. Reopen the pad and try again." };
+            return;
+          }
           if (!record || record.updatedAt !== message.expectedUpdatedAt ||
               !Number.isFinite(trim?.startMs) || !Number.isFinite(trim?.endMs) ||
               trim.startMs < 0 || trim.endMs - trim.startMs < 1 ||
@@ -454,9 +459,10 @@ async function handlePadMessage(message) {
             return;
           }
           record.trim = { startMs: trim.startMs, endMs: trim.endMs };
+          record.trimRevision = (record.trimRevision || 0) + 1;
           record.sourceDurationMs = durationMs;
           store.put(record);
-          result = { success: true };
+          result = { success: true, trimRevision: record.trimRevision };
         };
         tx.oncomplete = () => resolve(result);
         tx.onerror = () => reject(tx.error);
@@ -467,6 +473,13 @@ async function handlePadMessage(message) {
       const timePercent = message.timePercent ?? 100;
       if (!Number.isInteger(timePercent) || timePercent < 25 || timePercent > 400) throw new Error("Invalid pad time.");
       const record = await padTransaction("readonly", (store) => store.get(message.index));
+      if (message.expectedUpdatedAt !== undefined && record?.updatedAt !== message.expectedUpdatedAt) {
+        throw new Error("The sample changed. Reopen the pad and try again.");
+      }
+      const metadata = record ? { index: message.index, name: record.name, trim: record.trim, originalTrim: record.originalTrim,
+        sourceDurationMs: record.sourceDurationMs, updatedAt: record.updatedAt, audioId: record.audioId,
+        trimRevision: record.trimRevision || 0 } : null;
+      if (message.metadataOnly) return { success: true, pad: metadata };
       if (!record && timePercent === 100) return { success: true, pad: null };
       let blob = await readPadBlob(record);
       if (blob && record.trim && !message.original) {
@@ -495,8 +508,7 @@ async function handlePadMessage(message) {
         reader.onerror = () => reject(reader.error);
         reader.readAsDataURL(blob);
       });
-      return { success: true, pad: { index: message.index, name: record?.name || "", dataUrl, trim: record?.trim, originalTrim: record?.originalTrim,
-        sourceDurationMs: record?.sourceDurationMs, updatedAt: record?.updatedAt, audioId: record?.audioId } };
+      return { success: true, pad: { index: message.index, name: "", ...metadata, dataUrl } };
     }
     if (message.type === "OFFSCREEN_PAD_STORE") {
       const operationId = message.operationId;

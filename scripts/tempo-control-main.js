@@ -188,10 +188,41 @@
   // Slices share an audioId: decode and analyze their original source only once.
   const padWaveformSources = new Map();
 
-  async function loadPadWaveform(source, url) {
-    if (padWaveformSources.has(source)) return padWaveformSources.get(source);
+  // Account unique PCM allocations across playback and editor caches. Eviction
+  // only drops reusable references; active voices keep their own AudioBuffer.
+  function enforcePadCacheBudget(protectedBuffer = null) {
+    const buffers = new Map();
+    const add = (buffer, lastUsed = 0) => {
+      if (buffer) buffers.set(buffer, Math.max(buffers.get(buffer) || 0, lastUsed));
+    };
+    for (const pad of drumPads) add(pad.buffer, pad.lastUsed);
+    for (const entry of padWaveformSources.values()) add(entry.buffer, entry.lastUsed);
+    for (const editor of padEditorCache.values()) add(editor.buffer, editor.lastUsed);
+    add(padEditor?.buffer, performance.now());
+    const bytes = buffer => buffer.length * buffer.numberOfChannels * 4;
+    let total = [...buffers.keys()].reduce((sum, buffer) => sum + bytes(buffer), 0);
+    for (const [buffer] of [...buffers].sort((a, b) => a[1] - b[1])) {
+      if (total <= 64 * 1024 * 1024 && padWaveformSources.size <= drumPads.length) break;
+      if (buffer === protectedBuffer || buffer === padEditor?.buffer) continue;
+      for (const pad of drumPads) if (pad.buffer === buffer) pad.buffer = null;
+      for (const [source, entry] of padWaveformSources) if (entry.buffer === buffer) padWaveformSources.delete(source);
+      for (const editor of padEditorCache.values()) {
+        if (editor.buffer !== buffer) continue;
+        editor.buffer = null;
+        editor.peaks = null;
+      }
+      total -= bytes(buffer);
+    }
+  }
+
+  async function loadPadWaveform(source, getUrl) {
+    const cached = padWaveformSources.get(source);
+    if (cached) { cached.lastUsed = performance.now(); return cached.promise; }
+    const revision = padCacheRevision;
+    const entry = { buffer: null, lastUsed: performance.now(), promise: null };
     const loading = (async () => {
-      const response = await fetch(url);
+      const response = await fetch(await getUrl());
+      if (!response.ok) throw new Error("Could not load the sample waveform.");
       const buffer = await getDrumAudioContext().decodeAudioData(await response.arrayBuffer());
       const peaks = new Float32Array(Math.min(4096, buffer.length));
       for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
@@ -201,12 +232,16 @@
           peaks[bin] = Math.max(peaks[bin], Math.abs(data[frame]));
         }
       }
+      if (revision === padCacheRevision && padWaveformSources.get(source) === entry && !ui?.panel.hidden) {
+        entry.buffer = buffer;
+        enforcePadCacheBudget(buffer);
+      } else if (padWaveformSources.get(source) === entry) padWaveformSources.delete(source);
       return { buffer, peaks };
     })();
-    padWaveformSources.set(source, loading);
-    if (padWaveformSources.size > drumPads.length) padWaveformSources.delete(padWaveformSources.keys().next().value);
+    entry.promise = loading;
+    padWaveformSources.set(source, entry);
     try { return await loading; }
-    catch (error) { padWaveformSources.delete(source); throw error; }
+    catch (error) { if (padWaveformSources.get(source) === entry) padWaveformSources.delete(source); throw error; }
   }
 
   function showPadEditor(editor) {
@@ -215,6 +250,8 @@
       waveformRevision++;
     }
     padEditor = editor;
+    editor.lastUsed = performance.now();
+    enforcePadCacheBudget(editor.buffer);
     padEditorPending = false;
     const selectionChanged = selectedPadIndex !== editor.index;
     selectedPadIndex = editor.index;
@@ -245,22 +282,33 @@
     const pad = drumPads[index];
     if (instrumentMode || instrumentPreparing) exitInstrument();
     const cached = padEditorCache.get(index);
-    if (cached && cached.version === pad.version) { showPadEditor(cached); return; }
+    // An in-flight local save owns its optimistic bounds. Otherwise refresh
+    // metadata on every opening, including changes made by another tab.
+    if (cached?.buffer && cached.version === pad.version && cached.saving) { showPadEditor(cached); return; }
     // Keep the current waveform visible until the next source is ready.
     padEditorPending = true;
     try {
-      if (!await hydrateDrumPads()) throw new Error("Could not restore saved samples.");
+      if ((padHydration || !padsHydrated) && !await hydrateDrumPads()) throw new Error("Could not restore saved samples.");
       await pad.trimSave;
+      if (intent !== padEditorIntent || ui?.panel.hidden) return;
+      const requestedVersion = pad.version;
+      const record = (await requestPad("get", { index, metadataOnly: true })).pad;
+      if (intent !== padEditorIntent || ui?.panel.hidden) return;
+      if (pad.busy || pad.version !== requestedVersion) { leavePadEditor(); return; }
+      applyPadMetadata(index, record);
+      updateDrumLabels();
       const version = pad.version;
-      const record = pad.saved ? (await requestPad("get", { index, original: true })).pad : null;
-      const url = record?.dataUrl || new URL(pad.sample, document.documentElement.getAttribute(EXTENSION_DRUM_SAMPLES_ATTRIBUTE)).href;
-      const source = record?.audioId || (record ? `pad:${index}:${record.updatedAt}` : url);
-      const { buffer, peaks } = await loadPadWaveform(source, url);
-      if (intent !== padEditorIntent) return;
+      const defaultUrl = () => new URL(pad.sample, document.documentElement.getAttribute(EXTENSION_DRUM_SAMPLES_ATTRIBUTE)).href;
+      const source = record?.audioId || (record ? `pad:${index}:${record.updatedAt}` : defaultUrl());
+      const { buffer, peaks } = await loadPadWaveform(source, async () => record
+        ? (await requestPad("get", { index, original: true, expectedUpdatedAt: record.updatedAt })).pad?.dataUrl
+        : defaultUrl());
+      if (intent !== padEditorIntent || ui?.panel.hidden) return;
       if (version !== pad.version) { leavePadEditor(); return; }
       const durationMs = record?.sourceDurationMs || buffer.duration * 1000;
       const trim = record?.trim || { startMs: 0, endMs: durationMs };
-      const editor = { index, version, buffer, durationMs, trim: { ...trim }, updatedAt: record?.updatedAt, peaks };
+      const editor = { index, version, buffer, durationMs, trim: { ...trim }, updatedAt: record?.updatedAt,
+        trimRevision: record?.trimRevision || 0, peaks };
       padEditorCache.set(index, editor);
       showPadEditor(editor);
     } catch (error) {
@@ -299,14 +347,18 @@
         await requestPad("store", { index: editor.index, name: pad.name, mimeType: "audio/wav",
           base64: dataUrl.split(",")[1], operationId: `pad_${crypto.randomUUID()}` });
         pad.saved = true;
-        const record = (await requestPad("get", { index: editor.index, original: true })).pad;
+        const record = (await requestPad("get", { index: editor.index, metadataOnly: true })).pad;
         editor.updatedAt = record.updatedAt;
+        editor.trimRevision = record.trimRevision || 0;
         pad.updatedAt = record.updatedAt;
       }
       while (editor.pendingTrim) {
         const latest = editor.pendingTrim;
         editor.pendingTrim = null;
-        await requestPad("trim", { index: editor.index, trim: latest, expectedUpdatedAt: editor.updatedAt });
+        const result = await requestPad("trim", { index: editor.index, trim: latest, expectedUpdatedAt: editor.updatedAt,
+          expectedTrimRevision: editor.trimRevision });
+        editor.trimRevision = result.trimRevision ?? editor.trimRevision + 1;
+        pad.trimRevision = editor.trimRevision;
       }
     });
     editor.saving = pad.trimSave = save.catch(error => {
@@ -540,6 +592,22 @@
       action: "cancel-instrument", operationId }, location.origin);
   }
 
+  function applyPadMetadata(index, record) {
+    const pad = drumPads[index];
+    const name = record?.name || "";
+    const trimRevision = record?.trimRevision || 0;
+    if (pad.saved === Boolean(record) && pad.customName === name && pad.updatedAt === record?.updatedAt &&
+        (pad.trimRevision || 0) === trimRevision) return;
+    pad.version++;
+    pad.customName = name;
+    pad.saved = Boolean(record);
+    pad.updatedAt = record?.updatedAt;
+    pad.trimRevision = trimRevision;
+    pad.buffer = null;
+    pad.loading = null;
+    padEditorCache.delete(index);
+  }
+
   function hydrateDrumPads() {
     if (padHydration) return padHydration;
     // MAIN runs at document_start; content.js announces its bridge only after
@@ -551,16 +619,9 @@
         const result = await requestPad("list");
         if (!Array.isArray(result.pads)) throw new Error("Could not restore saved samples.");
         drumPads.forEach((pad, index) => {
-          if (pad.busy || pad.version !== versions[index]) return;
+          if (pad.busy || pad.version !== versions[index] || padEditorCache.get(index)?.saving) return;
           const record = result.pads.find(record => record.index === index);
-          const name = record?.name || "";
-          if (pad.saved === Boolean(record) && pad.customName === name && pad.updatedAt === record?.updatedAt) return;
-          pad.version += 1;
-          pad.customName = name;
-          pad.saved = Boolean(record);
-          pad.updatedAt = record?.updatedAt;
-          pad.buffer = null;
-          pad.loading = null;
+          applyPadMetadata(index, record);
         });
         padsHydrated = true;
         updateDrumLabels();
@@ -789,10 +850,17 @@
 
   function renderSelectedPadControls() {
     if (!ui?.instrumentControls) return;
-    ui.drumButtons.forEach((button, index) => {
-      button.classList.toggle("is-selected", index === selectedPadIndex);
-      button.setAttribute("aria-pressed", String(index === selectedPadIndex));
-    });
+    if (ui.instrumentControls.renderedPadIndex !== selectedPadIndex) {
+      ui.instrumentControls.renderedPadIndex = selectedPadIndex;
+      ui.drumButtons.forEach((button, index) => {
+        button.classList.toggle("is-selected", index === selectedPadIndex);
+        button.setAttribute("aria-pressed", String(index === selectedPadIndex));
+      });
+    }
+    const pad = instrumentMode ? instrumentSettings : drumPads[selectedPadIndex];
+    const key = JSON.stringify([instrumentMode, pad.gainPercent, pad.pitchSemitones, pad.timePercent, selectedEnvelope()]);
+    if (ui.instrumentControls.renderedSettings === key) return;
+    ui.instrumentControls.renderedSettings = key;
     for (const knob of ui.instrumentControls.querySelectorAll("button")) knob.renderControl?.();
     renderInstrumentEnvelopeGraph();
   }
@@ -815,6 +883,7 @@
       const update = (value) => {
         const envelope = selectedEnvelope();
         envelope[name] = Math.round(Math.max(0, Math.min(maximum, value)));
+        ui.instrumentControls.renderedSettings = null;
         render();
         renderInstrumentEnvelopeGraph();
         if (!instrumentAdsrEnabled) return;
@@ -984,6 +1053,7 @@
       return;
     }
     if (!loopState.active || padRenderPending) return;
+    if (padEditor || padEditorPending) leavePadEditor();
     const intentVersion = ++instrumentIntentVersion;
     instrumentPreparing = true;
     setInstrumentMode(false, { message: "Preparing loop instrument…" });
@@ -1189,19 +1259,13 @@
   }
 
   function cachePadBuffer(pad, buffer) {
-    // Bound reusable PCM per tab. Eviction never disconnects a sounding voice.
     const bytes = value => value ? value.length * value.numberOfChannels * 4 : 0;
     const budget = 64 * 1024 * 1024;
     pad.buffer = null;
-    let total = bytes(buffer) + drumPads.reduce((sum, item) => sum + bytes(item.buffer), 0);
-    for (const other of drumPads.filter(item => item !== pad && item.buffer)
-      .sort((a, b) => (a.lastUsed || 0) - (b.lastUsed || 0))) {
-      if (total <= budget) break;
-      total -= bytes(other.buffer);
-      other.buffer = null;
-    }
     pad.lastUsed = performance.now();
-    if (bytes(buffer) <= budget) pad.buffer = buffer;
+    const editorBytes = padEditor?.buffer === buffer ? 0 : bytes(padEditor?.buffer);
+    if (bytes(buffer) + editorBytes <= budget) pad.buffer = buffer;
+    enforcePadCacheBudget(pad.buffer);
   }
 
   async function loadDefaultDrum(pad) {
@@ -1235,6 +1299,7 @@
     const next = Math.round(Math.max(limits[name][0], Math.min(limits[name][1], value)));
     if (pad[name] === next) return;
     pad[name] = next;
+    if (ui?.instrumentControls) ui.instrumentControls.renderedSettings = null;
     if (name === "timePercent") {
       if (instrumentMode) {
         instrumentTimeCache = null;
@@ -1344,7 +1409,7 @@
       }
       if (pad.busy) return;
       let editor = padEditorCache.get(index);
-      if (editor?.version !== pad.version || pad.timePercent !== 100) editor = null;
+      if (!editor?.buffer || editor.version !== pad.version || pad.timePercent !== 100) editor = null;
       if (!editor) await pad.trimSave;
       const version = pad.version;
       if (!pad.buffer && pad.timePercent !== 100) showDrumError("Preparing sample time…");
@@ -1352,6 +1417,7 @@
       const offset = editor ? editor.trim.startMs / 1000 : 0;
       const end = editor ? editor.trim.endMs / 1000 : buffer.duration;
       pad.lastUsed = performance.now();
+      if (editor) editor.lastUsed = pad.lastUsed;
       if (noteRevision !== instrumentNoteRevision || instrumentKeys.get(key) !== held ||
           pad.version !== version || pad.busy || instrumentMode || ui?.panel.hidden || document.hidden) return;
       if (instrumentCutItself) {
@@ -1412,7 +1478,7 @@
     }
     const pad = drumPads[index];
     const version = ++pad.version;
-    if (padEditor?.index === index) leavePadEditor();
+    if (padEditorPending || padEditor?.index === index) leavePadEditor();
     pad.busy = true;
     updateDrumLabels();
     try {
@@ -1450,7 +1516,7 @@
   async function resetDrumPad(index) {
     const pad = drumPads[index];
     if (!pad?.saved || pad.busy) return;
-    if (padEditor?.index === index) leavePadEditor();
+    if (padEditorPending || padEditor?.index === index) leavePadEditor();
     pad.busy = true;
     pad.version += 1;
     updateDrumLabels();
@@ -1663,7 +1729,7 @@
   readAccessSnapshot();
 
   async function applyPlayerRate(rate, { animate = false } = {}) {
-    if (padEditor) leavePadEditor();
+    if (padEditor || padEditorPending) leavePadEditor();
     const intent = { rate };
     rateIntent = intent;
     // Share the in-flight check so continuous input cannot starve playback:
@@ -1743,7 +1809,7 @@
   }
 
   async function applyPlayerPitch(enabled) {
-    if (padEditor) leavePadEditor();
+    if (padEditor || padEditorPending) leavePadEditor();
     const intentVersion = playbackIntentVersion;
     const authorization = await authorizePlayerTools("set-preserve-pitch", "preservePitch");
     if (!authorization || intentVersion !== playbackIntentVersion) return;
@@ -2674,6 +2740,7 @@
     const name = ui.samplerPresetName.value.trim();
     if (action === "save" && !name) { ui.samplerPresetName.reportValidity(); return; }
     samplerPresetBusy = true;
+    if (action === "load" && (padEditor || padEditorPending)) leavePadEditor();
     samplerPresetListVersion++;
     if (action !== "delete") {
       cancelLoopPadSelection();
@@ -2694,7 +2761,7 @@
           pads: drumPads.map(({ key, gainPercent, pitchSemitones, timePercent, envelope }, index) => ({ key, gainPercent, pitchSemitones, timePercent, envelope: { ...envelope },
             ...(piano && index === selectedPadIndex ? { ...instrumentSettings, envelope: { ...instrumentEnvelope } } : {}) })) } } : {}) });
       if (action === "load") {
-        if (padEditor) leavePadEditor();
+        if (padEditor || padEditorPending) leavePadEditor();
         const savedInstrument = result.settings.kind === "piano" ? result.settings.instrument : null;
         const restoredBuffer = savedInstrument ? await getDrumAudioContext().decodeAudioData(await (await fetch(savedInstrument.audio)).arrayBuffer()) : null;
         exitInstrument({ message: "" });
@@ -2810,6 +2877,7 @@
     const snapshot = sliceConfirmation;
     closeSliceConfirmation();
     if (!snapshot || !sliceIsCurrent(snapshot) || padRenderPending || drumPads.some(pad => pad.busy)) return;
+    if (padEditor || padEditorPending) leavePadEditor();
     cancelLoopPadSelection();
     exitInstrument();
     setSamplerCollapsed(false);
@@ -3870,7 +3938,7 @@
   });
 
   function closePanel() {
-    if (padEditor) leavePadEditor();
+    if (padEditor || padEditorPending) leavePadEditor();
     closeSamplerPresets();
     cancelSlices();
     clearHoverTimers();

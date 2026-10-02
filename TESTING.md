@@ -30,6 +30,8 @@ npm run test:e2e:popup
 npm run test:e2e:tempo
 npm run test:e2e:sampler-time
 npm run test:e2e:sampler-persistence
+npm run test:e2e:pad-editor
+npm run test:e2e:slices
 npm run test:e2e:eq
 npm run test:feedback
 ```
@@ -43,6 +45,13 @@ sampler message bridge and packaged Signalsmith engine. It measures duration
 and stereo pitch at 25–400%, checks default and uploaded samples, independent
 PITCH, cache reuse, reset, obsolete renders and invalid input. Sampler persistence
 also verifies that named presets restore each pad's TIME setting.
+
+`test:e2e:pad-editor` covers right-click editing, immediate playback of changed
+bounds, reload persistence, cancellation during loading, external trim revisions,
+shared source transfers, control updates and the shared 64 MiB PCM cache budget.
+Its timing measurements describe audio scheduling, not audible latency or total
+browser memory. `test:e2e:slices` also verifies metadata-only reads and concurrent
+trim rejection against the real offscreen handler and IndexedDB.
 
 `test:e2e:eq` measures the live parametric EQ with a generated tone in the
 owned and shared player graphs, and checks the spectrum, editor controls,

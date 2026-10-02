@@ -205,8 +205,17 @@ window.addEventListener?.("message", (event) => {
   if (action === "waveform") payload.trackUrl = event.data.trackUrl;
   if (action !== "list") payload.index = index;
   if (action === "delete") payload.operationId = event.data.operationId;
-  if (action === "get") { payload.timePercent = event.data.timePercent; payload.original = event.data.original === true; }
-  if (action === "trim") { payload.trim = event.data.trim; payload.expectedUpdatedAt = event.data.expectedUpdatedAt; }
+  if (action === "get") {
+    payload.timePercent = event.data.timePercent;
+    payload.original = event.data.original === true;
+    payload.metadataOnly = event.data.metadataOnly === true;
+    payload.expectedUpdatedAt = event.data.expectedUpdatedAt;
+  }
+  if (action === "trim") {
+    payload.trim = event.data.trim;
+    payload.expectedUpdatedAt = event.data.expectedUpdatedAt;
+    payload.expectedTrimRevision = event.data.expectedTrimRevision;
+  }
   if (action === "store") {
     payload.operationId = event.data.operationId;
     payload.name = event.data.name;

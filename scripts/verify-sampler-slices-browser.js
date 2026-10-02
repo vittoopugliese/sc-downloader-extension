@@ -107,6 +107,11 @@ const { chromium } = require("playwright");
       }
       check(totalFrames === sampleRate, "all selected frames covered once");
       const full = (await send({ type: "OFFSCREEN_PAD_GET", index: 0, original: true })).pad;
+      const metadata = (await send({ type: "OFFSCREEN_PAD_GET", index: 0, metadataOnly: true })).pad;
+      check(!("dataUrl" in metadata) && metadata.audioId === full.audioId && metadata.trimRevision === 0,
+        "metadata reads do not transfer the source audio");
+      check(!(await send({ type: "OFFSCREEN_PAD_GET", index: 0, original: true, expectedUpdatedAt: -1 })).success,
+        "an audio replacement between metadata and source reads is rejected");
       check(full.trim.startMs === 0 && full.trim.endMs === 125 && full.sourceDurationMs === 1000, "editor receives source and bounds");
       const database = await openPadDatabase();
       const records = await new Promise(resolve => {
@@ -117,7 +122,12 @@ const { chromium } = require("playwright");
       });
       check(records.sources.length === 1 && records.pads.every(pad => !pad.blob && pad.audioId === full.audioId), "one persistent source for eight cuts");
       check((await send({ type: "OFFSCREEN_PAD_TRIM", index: 0, expectedUpdatedAt: full.updatedAt,
-        trim: { startMs: 50, endMs: 300 } })).success, "pad may extend into the neighboring slice");
+        expectedTrimRevision: 0, trim: { startMs: 50, endMs: 300 } })).success, "pad may extend into the neighboring slice");
+      check(!(await send({ type: "OFFSCREEN_PAD_TRIM", index: 0, expectedUpdatedAt: full.updatedAt,
+        expectedTrimRevision: 0, trim: { startMs: 0, endMs: 125 } })).success, "concurrent trim cannot overwrite newer bounds");
+      const revised = (await send({ type: "OFFSCREEN_PAD_GET", index: 0, metadataOnly: true })).pad;
+      check(revised.trimRevision === 1 && revised.trim.startMs === 50, "successful trim advances its own revision");
+      check((await list()).find(pad => pad.index === 0).trimRevision === 1, "hydration sees external trim revisions");
       const extended = (await send({ type: "OFFSCREEN_PAD_GET", index: 0 })).pad;
       const extendedWav = new DataView(await (await fetch(extended.dataUrl)).arrayBuffer());
       check(extendedWav.getUint32(40, true) / extendedWav.getUint16(32, true) === sampleRate / 4, "new bounds affect next audio retrieval");

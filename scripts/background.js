@@ -854,9 +854,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const offscreenRequest = request.type === "GET_LOOP_PAD_LIST"
       ? { type: "OFFSCREEN_PAD_LIST" }
       : request.type === "GET_LOOP_PAD_AUDIO"
-        ? { type: "OFFSCREEN_PAD_GET", index, timePercent: request.timePercent, original: request.original === true }
+        ? { type: "OFFSCREEN_PAD_GET", index, timePercent: request.timePercent, original: request.original === true,
+          metadataOnly: request.metadataOnly === true, expectedUpdatedAt: request.expectedUpdatedAt }
         : request.type === "TRIM_LOOP_PAD_AUDIO"
-          ? { type: "OFFSCREEN_PAD_TRIM", index, trim: request.trim, expectedUpdatedAt: request.expectedUpdatedAt }
+          ? { type: "OFFSCREEN_PAD_TRIM", index, trim: request.trim, expectedUpdatedAt: request.expectedUpdatedAt,
+            expectedTrimRevision: request.expectedTrimRevision }
         : request.type === "DELETE_LOOP_PAD_AUDIO"
           ? { type: "OFFSCREEN_PAD_DELETE", index, operationId: request.operationId }
         : { type: "OFFSCREEN_PAD_STORE", index, name: request.name, mimeType: request.mimeType, base64: request.base64, operationId: request.operationId };

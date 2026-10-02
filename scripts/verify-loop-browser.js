@@ -38,6 +38,25 @@ async function waitForFile(directory, timeoutMs = 30000) {
   throw new Error("No completed loop WAV appeared in Downloads before timeout");
 }
 
+async function installFixtureFetch(worker, fixtureUrl) {
+  await worker.evaluate((fixtureUrl) => {
+    const originalFetch = globalThis.loopFixtureFetch || fetch;
+    globalThis.loopFixtureFetch = originalFetch;
+    globalThis.fetch = (input, options) => {
+      if (String(input).endsWith("/download-policy")) {
+        return Promise.resolve(new Response(JSON.stringify({ allDownloadsActivated: true })));
+      }
+      if (String(input).includes("/media/loop-regression")) {
+        return Promise.resolve(new Response(JSON.stringify({ url: fixtureUrl })));
+      }
+      if (String(input).startsWith("https://api-v2.soundcloud.com/")) {
+        throw new Error(`Unexpected SoundCloud request in loop fixture: ${new URL(input).pathname}`);
+      }
+      return originalFetch(input, options);
+    };
+  }, fixtureUrl);
+}
+
 (async () => {
   const root = path.resolve(__dirname, "..");
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), "scdl-loop-verify-"));
@@ -196,19 +215,15 @@ async function waitForFile(directory, timeoutMs = 30000) {
     );
     // Keep the Blob owner alive so the offscreen extension document can fetch
     // it without touching the public network.
+    // The popup reads and caches download eligibility as soon as it opens.
+    await installFixtureFetch(worker, null);
     const entitlementPage = await context.newPage();
     await entitlementPage.goto(`chrome-extension://${extensionId}/popup.html`);
     const fixtureUrl = await entitlementPage.evaluate((wavBase64) => {
       const bytes = Uint8Array.from(atob(wavBase64), (character) => character.charCodeAt(0));
       return URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
     }, wav.toString("base64"));
-    await worker.evaluate((fixtureUrl) => {
-      const originalFetch = fetch;
-      globalThis.fetch = (input, options) =>
-        String(input).includes("/media/loop-regression")
-          ? Promise.resolve(new Response(JSON.stringify({ url: fixtureUrl })))
-          : originalFetch(input, options);
-    }, fixtureUrl);
+    await installFixtureFetch(worker, fixtureUrl);
 
     // This browser-only fixture supplies an authority inside the isolated test
     // worker. No credential, message or bypass is shipped in the extension.
@@ -674,6 +689,9 @@ async function waitForFile(directory, timeoutMs = 30000) {
     }
 
     const downloadButton = page.locator("[data-scdl-loop-download]");
+    // A restarted MV3 worker also loses its in-memory network fixture. Restore
+    // it alongside the test entitlement so no fixture request hits the real API.
+    await installFixtureFetch(worker, fixtureUrl);
     // Export is a Pro capability; the access-routing suite separately asserts
     // that Free is rejected before any expensive audio work begins. A Manifest
     // V3 worker may restart during this long interaction test, so reinstall the

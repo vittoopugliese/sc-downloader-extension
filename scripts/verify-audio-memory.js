@@ -3,12 +3,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, 'tempo-control-main.js'), 'utf8');
-const start = source.indexOf('  function cachePadBuffer(');
-const end = source.indexOf('\n  }', start) + 4;
 const pads = Array.from({ length: 8 }, () => ({ buffer: null }));
 let now = 0;
-const scope = vm.createContext({ drumPads: pads, performance: { now: () => ++now } });
-vm.runInContext(source.slice(start, end), scope);
+const scope = vm.createContext({ drumPads: pads, padEditor: null, padEditorCache: new Map(),
+  padWaveformSources: new Map(), performance: { now: () => ++now } });
+for (const name of ['enforcePadCacheBudget', 'cachePadBuffer']) {
+  const start = source.indexOf(`  function ${name}(`);
+  const end = source.indexOf('\n  }', start) + 4;
+  vm.runInContext(source.slice(start, end), scope);
+}
 const buffer = mib => ({ length: mib * 1024 * 1024 / 8, numberOfChannels: 2 });
 const firstVoice = buffer(44);
 scope.cachePadBuffer(pads[0], firstVoice);
@@ -23,6 +26,16 @@ assert.ok(pads[3].buffer, 'Recently used audio survives LRU eviction');
 assert.equal(pads[4].buffer, null, 'Oldest cached audio is evicted first');
 scope.cachePadBuffer(pads[0], buffer(65));
 assert.equal(pads[0].buffer, null, 'A single oversized buffer is not retained');
+const original = buffer(12);
+scope.padEditor = { buffer: original };
+scope.padEditorCache.set(0, scope.padEditor);
+scope.padWaveformSources.set('shared', { buffer: original, lastUsed: ++now });
+scope.cachePadBuffer(pads[0], buffer(60));
+assert.equal(pads[0].buffer, null, 'A stretched sample must also leave room for the visible editor');
+for (const pad of pads) scope.cachePadBuffer(pad, buffer(12));
+const unique = new Set([original, ...pads.map(pad => pad.buffer)].filter(Boolean));
+assert.ok([...unique].reduce((sum, value) => sum + value.length * 8, 0) <= 64 * 1024 * 1024);
+assert.equal(scope.padEditor.buffer, original, 'Eviction preserves the visible editor');
 console.log('Sampler PCM cache: aggregate byte budget, LRU and active-buffer preservation passed.');
 
 (async () => {
