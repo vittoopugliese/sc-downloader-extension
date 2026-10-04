@@ -201,9 +201,31 @@ const { chromium } = require('playwright');
     await savedPage.locator('#play').click();
     await savedPage.waitForFunction(() => document.querySelector('#play svg path')?.getAttribute('d') === 'M8 4v16M16 4v16');
     await savedPage.close();
+    // Import through the actual MV3 file input and run the same pinned model,
+    // without any SoundCloud job or background rendering.
+    const localPage = await context.newPage();
+    localPage.on('pageerror', error => errors.push(error.message));
+    await localPage.goto(`chrome-extension://${new URL(background.url()).host}/stems.html`);
+    await localPage.locator('#import-audio:not(:disabled)').waitFor();
+    await localPage.locator('#audio-file').setInputFiles({ name: 'Local fixture.wav', mimeType: 'audio/wav', buffer: wav });
+    await localPage.locator('#import-dialog').waitFor();
+    await localPage.locator('#import-confirm').click();
+    await localPage.locator('#separate').click();
+    await localPage.waitForFunction(() => document.querySelectorAll('.stem').length === 4 || document.getElementById('status').classList.contains('error'), null, { timeout: 900000 });
+    assert.equal(await localPage.locator('.stem').count(), 4, await localPage.locator('#status').textContent());
+    await localPage.locator('#save-locally').click();
+    await localPage.locator('#save-confirm').click();
+    await localPage.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
+    const localId = await localPage.locator('#stem-presets').inputValue();
+    await localPage.reload();
+    await localPage.locator('#stem-presets:not(:disabled)').waitFor();
+    await localPage.locator('#stem-presets').selectOption(localId);
+    await localPage.locator('.stem').first().waitFor();
+    assert.equal(await localPage.locator('#track').textContent(), 'Local fixture');
+    await localPage.close();
     assert.deepEqual(errors, []);
     fs.writeFileSync(path.join(artifacts, 'verification.json'), JSON.stringify({ completed, actualFrames, trimError, stats, errors }, null, 2));
     console.log(JSON.stringify({ completed, actualFrames, trimError, stats }, null, 2));
-    console.log('Stems MV3: selected-loop bridge, pinned model SHA-256, real WASM inference, four WAVs, playback controls, cancellation and responsive layout passed.');
+    console.log('Stems MV3: selected-loop bridge, local file import/preset, pinned model SHA-256, real WASM inference, four WAVs, playback controls, cancellation and responsive layout passed.');
   } finally { clearInterval(heartbeat); await context.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

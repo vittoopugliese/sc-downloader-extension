@@ -153,3 +153,11 @@ are separate external evidence confirmed by the project owner. Refund/restore/se
 scenarios, Live, the current complete `test:release-local` gate and exact production
 ZIP remain in the [release checklist](docs/planning-20260915/10-CIERRE-RELEASE-Y-FREE-PRO-20260921.md).
 Do not promote the diagnostic ZIP from September 23 to a current release candidate.
+
+## Audio local en Stems
+
+- `npm.cmd run test:e2e:stem-local-audio`: selector de archivos, decodificación,
+  recorte a 30 s, mono/estéreo, presets, velocidad/Keep Tone y recuperación sin
+  inferencia; capturas en `test-results/stem-local-audio/`.
+- `npm.cmd run test:e2e:stems`: incluye importación local, separación con modelo
+  real y reapertura del preset bajo CSP de la extensión MV3.

@@ -35,7 +35,8 @@
     "test:feedback": "node --test services/uninstall-feedback/test/validation.test.mjs",
     "test:player-tools": "node scripts/verify-player-tools-policy.js && node scripts/verify-player-tools-access.js && node scripts/verify-player-tools-client.js && node scripts/verify-player-tools-commerce.js && npm --prefix services/player-tools-license test",
     "package:extension": "node scripts/package-extension.js",
-    "test:e2e:stem-presets": "node scripts/stem-presets.browser-test.cjs"
+    "test:e2e:stem-presets": "node scripts/stem-presets.browser-test.cjs",
+    "test:e2e:stem-local-audio": "node scripts/stem-local-audio.browser-test.cjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

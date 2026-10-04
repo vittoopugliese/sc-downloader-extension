@@ -245,10 +245,68 @@ let mode = 'original', playing = false, position = 0, startedAt = 0;
 let busy = false, revision = 0, worker, rejectWorker, title = text('loop'), initialized = false;
 let states = STEMS.map(() => ({ muted: false, solo: false, gain: 1 }));
 let info = null, wavs = [], rate = 1, keepTone = false, toneNode, toneReady, playbackRevision = 0, toneLatency = 0, libraryOperating = false;
-let libraryUI;
+let libraryUI, importReady = false;
+const localCopy = ({
+  es: ['Cargar audio del equipo', 'Elegí un archivo y un fragmento de hasta 30 segundos.', 'Cargar fragmento', 'Nombre', 'Inicio (s)', 'Fin (s)', 'Cancelar', 'Leyendo audio…', 'No se pudo leer el audio. Probá otro archivo o un formato compatible con Chrome.', 'Elegí un rango válido de hasta 30 segundos dentro del archivo.', 'Elegí un audio del equipo o una separación guardada.'],
+  en: ['Load audio from computer', 'Choose a file and a segment up to 30 seconds.', 'Load segment', 'Name', 'Start (s)', 'End (s)', 'Cancel', 'Reading audio…', 'Could not read audio. Try another file or a format supported by Chrome.', 'Choose a valid range up to 30 seconds within the file.', 'Choose local audio or a saved separation.'],
+  de: ['Audio vom Computer laden', 'Datei und einen Ausschnitt von bis zu 30 Sekunden auswählen.', 'Ausschnitt laden', 'Name', 'Start (s)', 'Ende (s)', 'Abbrechen', 'Audio wird gelesen…', 'Audio konnte nicht gelesen werden. Versuche eine andere Datei oder ein von Chrome unterstütztes Format.', 'Wähle einen gültigen Bereich von bis zu 30 Sekunden innerhalb der Datei.', 'Wähle lokales Audio oder eine gespeicherte Trennung.'],
+  'pt-BR': ['Carregar áudio do computador', 'Escolha um arquivo e um trecho de até 30 segundos.', 'Carregar trecho', 'Nome', 'Início (s)', 'Fim (s)', 'Cancelar', 'Lendo áudio…', 'Não foi possível ler o áudio. Tente outro arquivo ou formato compatível com o Chrome.', 'Escolha um intervalo válido de até 30 segundos dentro do arquivo.', 'Escolha um áudio local ou uma separação salva.'],
+  ru: ['Загрузить аудио с компьютера', 'Выберите файл и фрагмент до 30 секунд.', 'Загрузить фрагмент', 'Название', 'Начало (с)', 'Конец (с)', 'Отмена', 'Чтение аудио…', 'Не удалось прочитать аудио. Попробуйте другой файл или формат, поддерживаемый Chrome.', 'Выберите допустимый фрагмент до 30 секунд в пределах файла.', 'Выберите локальное аудио или сохранённое разделение.'],
+})[locale] || [];
+for (const [id, index] of Object.entries({ 'import-audio': 0, 'import-hint': 1, 'import-title': 2, 'import-confirm': 2,
+  'import-name-label': 3, 'import-start-label': 4, 'import-end-label': 5, 'import-cancel': 6, 'import-range-hint': 1 })) $(id).textContent = localCopy[index];
+let importDraft = null;
+$('import-hint').textContent += ' · ≤256 MiB';
+$('import-audio').onclick = () => $('audio-file').click();
+$('audio-file').onchange = async event => {
+  const file = event.target.files[0]; event.target.value = '';
+  if (!file || busy || libraryOperating) return;
+  setBusy(true, false); $('cancel').hidden = true; status(localCopy[7]);
+  try {
+    if (!file.size || file.size > 256 * 1024 * 1024) throw new Error('Invalid file size (maximum 256 MiB)');
+    const decoded = await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(await file.arrayBuffer());
+    if (!decoded.length) throw new Error('Empty audio');
+    // Hide sub-millisecond resampling differences in the editable range.
+    const duration = Math.round(decoded.duration * 1000) / 1000 || decoded.duration;
+    importDraft = { file, decoded, duration };
+    $('import-name').value = file.name.replace(/\.[^.]+$/, '').slice(0, 160) || file.name;
+    $('import-file-info').textContent = `${file.name} · ${formatTwoDecimals.format(decoded.duration)} s · ${decoded.numberOfChannels} ch · ${(file.size / 1024 / 1024).toFixed(2)} MiB`;
+    $('import-start').value = '0'; $('import-end').value = String(Math.min(MAX_SECONDS, duration));
+    $('import-start').max = $('import-end').max = String(duration);
+    $('import-error').textContent = '';
+    $('import-dialog').showModal();
+    status(original || initialized ? text('ready') : localCopy[10]);
+  } catch (error) { console.error('[Stems import]', error); importDraft = null; setBusy(false); status(localCopy[8], true); }
+};
+$('import-cancel').onclick = () => $('import-dialog').close();
+$('import-dialog').addEventListener('close', () => { importDraft = null; setBusy(false); });
+$('import-form').onsubmit = event => {
+  event.preventDefault();
+  if (!importDraft) return;
+  const { file, decoded, duration } = importDraft;
+  const start = Number($('import-start').value), end = Number($('import-end').value);
+  const first = Math.round(start * SAMPLE_RATE), last = Math.min(decoded.length, Math.round(end * SAMPLE_RATE));
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end > duration || end <= start ||
+      end - start > MAX_SECONDS || last <= first || last - first > MAX_SECONDS * SAMPLE_RATE) {
+    $('import-error').textContent = localCopy[9]; return;
+  }
+  const channels = [0, Math.min(1, decoded.numberOfChannels - 1)].map(channel => decoded.getChannelData(channel).slice(first, last));
+  if (channels.some(channel => !channel.every(Number.isFinite))) { $('import-error').textContent = localCopy[8]; return; }
+  const next = audioBuffer(channels);
+  disposeResults();
+  for (const view of waveforms) view.dispose();
+  original = next; wavs = []; position = 0; rate = 1; keepTone = false; $('repeat').checked = true; renderTempo();
+  renderInfo({ title: $('import-name').value.trim() || file.name, artist: '', artworkUrl: '', durationMs: decoded.duration * 1000,
+    trimRange: { startMs: first / SAMPLE_RATE * 1000, endMs: last / SAMPLE_RATE * 1000 },
+    localFile: { name: file.name, type: file.type, size: file.size, lastModified: file.lastModified, channels: decoded.numberOfChannels } });
+  initialized = true; libraryUI.newExtraction();
+  $('audition').hidden = false;
+  mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
+  $('import-dialog').close(); status(text('ready'));
+};
 const settings = () => ({ states: structuredClone(states), rate, keepTone, mode, repeat: $('repeat').checked });
 libraryUI = mountStemLibrary({ locale, report: status,
-  onOperation(value) { libraryOperating = value; $('separate').disabled = value || busy || !initialized; $('cancel').disabled = value; },
+  onOperation(value) { libraryOperating = value; $('separate').disabled = value || busy || !initialized; $('cancel').disabled = value; $('import-audio').disabled = value || busy || !importReady; },
   snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : null }),
   restore: async ({ record, blobs }) => {
     // Decode/validate before replacing the current session. Missing/corrupt files
@@ -270,6 +328,7 @@ libraryUI = mountStemLibrary({ locale, report: status,
     mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
     showResults({ outputs: decoded.slice(1).map(buffer => [buffer.getChannelData(0), buffer.getChannelData(1)]), seconds: 0 }, record.settings);
     wavs = blobs;
+    initialized = true;
   },
 });
 
@@ -329,7 +388,7 @@ async function message(type) {
   if (!result?.success) throw localizedError(type === 'STEM_LOOP_INFO' ? 'infoFailed' : 'prepareFailed');
   return result;
 }
-function setBusy(value) {
+function setBusy(value, revealGame = true) {
   busy = value;
   $('separate').disabled = value || libraryOperating || !initialized;
   $('cancel').hidden = !value;
@@ -337,7 +396,7 @@ function setBusy(value) {
   $('progress').hidden = !value;
   $('status').classList.toggle('is-loading', value);
   libraryUI?.setBusy(value);
-  if (value) $('toggle-game').hidden = false;
+  if (value && revealGame) $('toggle-game').hidden = false;
 }
 function audioBuffer(channels) {
   const buffer = new AudioBuffer({ numberOfChannels: 2, length: channels[0].length, sampleRate: SAMPLE_RATE });
@@ -529,7 +588,7 @@ async function cancel() {
   revision++;
   rejectWorker?.(new DOMException('Cancelled', 'AbortError')); rejectWorker = null;
   worker?.terminate(); worker = null;
-  await message('STEM_LOOP_CANCEL').catch(() => {});
+  if (jobId && !info?.localFile) await message('STEM_LOOP_CANCEL').catch(() => {});
   setBusy(false); status(text('cancelled'));
 }
 $('separate').onclick = separate; $('cancel').onclick = cancel;
@@ -579,8 +638,9 @@ function renderInfo(value) {
   info = value;
   title = info.title; $('track').textContent = title;
   const metadata = [info.artist];
+  if (info.localFile) metadata.push(info.localFile.name, `${info.localFile.channels} ch`);
   if (Number.isFinite(info.durationMs) && info.durationMs > 0) {
-    const seconds = Math.floor(info.durationMs / 1000);
+    const seconds = Math.round(info.durationMs / 1000);
     metadata.push(`${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
   }
   $('track-meta').textContent = metadata.filter(Boolean).join(' · ');
@@ -602,5 +662,6 @@ document.querySelector('footer [data-copy="footer"]').textContent = ({
 })[locale] || 'Audio stays on your device. Enable Save locally to keep this separation.';
 try {
   if (jobId) { renderInfo(await message('STEM_LOOP_INFO')); initialized = true; }
-  setBusy(false); status(jobId ? text('ready') : (locale === 'es' ? 'Elegí una separación guardada.' : 'Choose a saved separation.'));
+  setBusy(false); status(jobId ? text('ready') : localCopy[10]);
 } catch (error) { console.error('[Stems initialization]', error); status(error.localized ? error.message : text('infoFailed'), true); }
+finally { importReady = true; setBusy(false); }
