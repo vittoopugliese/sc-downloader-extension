@@ -126,6 +126,42 @@ h1{letter-spacing:-1.4px;margin-bottom:22px}
 }
 
 .waveform:focus-visible{outline:2px solid var(--orange);outline-offset:4px}
+.header-library{display:grid;justify-items:end;gap:5px;max-width:48%;min-width:0}
+.header-library label,.header-library small{font-size:10px;color:var(--muted)}
+.preset-toolbar{display:flex;gap:5px;max-width:100%;min-width:0}
+.preset-toolbar select{min-width:0;width:230px;border:1px solid #484848;border-radius:6px;background:#242424;color:var(--ink);padding:6px;font-size:11px}
+.preset-toolbar button{padding:5px;flex-shrink:0}
+.preset-toolbar img{width:15px;height:15px}
+#preset-folder img{filter:brightness(0) invert(1)}
+#preset-folder.has-custom-folder{border-color:var(--orange);background:#42291d}
+.source-save{margin-left:auto;display:grid;justify-items:end;gap:12px;flex-shrink:0}
+.save-switch{display:flex;gap:7px;align-items:center;font-size:11px;cursor:pointer;position:relative}
+.save-switch input{position:absolute;z-index:1;opacity:0;width:32px;height:18px;margin:0;cursor:pointer}
+.switch-track{width:32px;height:18px;border-radius:20px;background:#555;position:relative;border:1px solid #777}
+.switch-track::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:transform .15s}
+.save-switch input:checked+.switch-track{background:var(--orange);border-color:var(--orange)}
+.save-switch input:checked+.switch-track::after{transform:translateX(14px)}
+.save-switch input:focus-visible+.switch-track{outline:2px solid var(--orange);outline-offset:3px}
+.save-switch input:disabled~span{opacity:.45}
+#save-dialog{max-width:min(440px,calc(100vw - 32px));padding:20px;background:#242424;color:var(--ink);border:1px solid #555;border-radius:10px;box-shadow:0 12px 40px #0008}
+#save-dialog::backdrop{background:#0009}
+#save-dialog h3{margin:0 0 12px;font-size:16px}
+#save-dialog p{font-size:12px;line-height:1.6}
+#save-name-label{font-size:11px;display:block}
+#save-name{width:100%;padding:8px;border:1px solid #555;border-radius:5px;background:#191919;color:var(--ink)}
+.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.stem-tempo{display:flex;align-items:center;gap:10px;margin:4px 11px 16px}
+.stem-tempo .slider-wrap{position:relative;flex:1;min-width:80px;height:26px;border:1px solid #30373e;border-radius:7px;background:#ffffff06}
+.stem-tempo .slider{appearance:none;display:block;width:100%;height:24px;margin:0;border:0;border-radius:6px;background:linear-gradient(to right,#f50 var(--range-fill,31%),#3b3b3b var(--range-fill,31%)) center/100% 9px no-repeat}
+.stem-tempo .slider::-webkit-slider-runnable-track{height:9px;background:transparent;border-radius:999px}
+.stem-tempo .slider::-webkit-slider-thumb{appearance:none;width:14px;height:14px;margin-top:-2.5px;border:2px solid white;border-radius:50%;background:#f50;box-shadow:0 0 0 2px white}
+.stem-tempo .limits{position:absolute;inset:50% 0 auto;display:flex;justify-content:space-between;padding:0 6px;transform:translateY(-50%);font-size:8px;pointer-events:none;text-shadow:0 1px 2px #000}
+.stem-tempo .range-label{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:8px;pointer-events:none;text-shadow:0 1px 2px #000;white-space:nowrap}
+.keep-tone{font-size:10px;white-space:nowrap;display:flex;align-items:center;gap:4px}
+#stem-rate-number{width:65px;background:transparent;border:0;border-bottom:1px solid #f50;color:var(--ink);font:12px ui-monospace,monospace}
+#stem-rate-reset{padding:2px 6px;font-size:17px}
+select:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+@media(max-width:600px){header{align-items:flex-start;flex-wrap:wrap}.header-library{max-width:100%;width:100%;justify-items:start}.preset-toolbar{width:100%}.preset-toolbar select{flex:1}.source-card{flex-wrap:wrap}.source-save{width:100%;display:flex;justify-content:flex-end}.stem-tempo{flex-wrap:wrap;margin-inline:0}.stem-tempo .slider-wrap{flex-basis:100%}}
 #original-waveform{margin-bottom:20px}
 
 /* Compact PlayerTools workspace. */

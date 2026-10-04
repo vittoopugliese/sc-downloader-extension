@@ -38,6 +38,7 @@ test('the shipping allow-list contains the analyzer and every local runtime depe
   const list = packaging.match(/\$packageItems = @\(([\s\S]*?)\n\s*\)/)[1];
   const items = [...list.matchAll(/"([^"]+)"/g)].map(match => match[1]);
   const required = ['stems.html', 'assets/stems.css', 'scripts/stems-page.mjs', 'scripts/stem-audio.mjs',
+    'scripts/stem-presets.mjs', 'scripts/stem-library-ui.mjs', 'scripts/stem-tone-processor.mjs',
     'scripts/stem-model.mjs', 'scripts/stem-worker.mjs', 'scripts/stem-jobs.js',
     'scripts/vendor/onnxruntime/ort.wasm.min.mjs', 'scripts/vendor/onnxruntime/ort-wasm-simd-threaded.mjs',
     'scripts/vendor/onnxruntime/ort-wasm-simd-threaded.wasm', 'scripts/vendor/onnxruntime/LICENSE'];

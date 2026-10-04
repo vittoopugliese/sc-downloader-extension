@@ -1,5 +1,6 @@
 import { SAMPLE_RATE, MAX_SECONDS, STEMS, encodeWav } from './stem-audio.mjs';
 import { MODEL } from './stem-model.mjs';
+import { mountStemLibrary } from './stem-library-ui.mjs';
 
 const translations = {
   en: {
@@ -243,6 +244,82 @@ let original, buffers = [], context, nodes = [], outputs = [], urls = [];
 let mode = 'original', playing = false, position = 0, startedAt = 0;
 let busy = false, revision = 0, worker, rejectWorker, title = text('loop'), initialized = false;
 let states = STEMS.map(() => ({ muted: false, solo: false, gain: 1 }));
+let info = null, wavs = [], rate = 1, keepTone = false, toneNode, toneReady, playbackRevision = 0, toneLatency = 0, libraryOperating = false;
+let libraryUI;
+const settings = () => ({ states: structuredClone(states), rate, keepTone, mode, repeat: $('repeat').checked });
+libraryUI = mountStemLibrary({ locale, report: status,
+  onOperation(value) { libraryOperating = value; $('separate').disabled = value || busy || !initialized; $('cancel').disabled = value; },
+  snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : null }),
+  restore: async ({ record, blobs }) => {
+    // Decode/validate before replacing the current session. Missing/corrupt files
+    // leave the current separation intact.
+    const decoder = new OfflineAudioContext(2, 1, SAMPLE_RATE);
+    const decoded = [];
+    for (const blob of blobs) {
+      const buffer = await decoder.decodeAudioData(await blob.arrayBuffer());
+      if (buffer.numberOfChannels !== 2 || !buffer.length || buffer.duration > MAX_SECONDS + 1 / SAMPLE_RATE ||
+          (decoded.length && buffer.length !== decoded[0].length)) throw new Error('Invalid preset WAV');
+      for (let channel = 0; channel < 2; channel++) if (!buffer.getChannelData(channel).every(Number.isFinite)) throw new Error('Invalid PCM');
+      decoded.push(buffer);
+    }
+    disposeResults();
+    for (const view of waveforms) view.dispose();
+    original = decoded[0];
+    renderInfo(record.info);
+    $('audition').hidden = false;
+    mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
+    showResults({ outputs: decoded.slice(1).map(buffer => [buffer.getChannelData(0), buffer.getChannelData(1)]), seconds: 0 }, record.settings);
+    wavs = blobs;
+  },
+});
+
+function renderTempo() {
+  $('stem-rate').value = rate;
+  $('stem-rate').style.setProperty('--range-fill', `${(rate - .1) / 2.9 * 100}%`);
+  $('stem-rate-number').value = rate;
+  $('stem-keep-tone').checked = keepTone;
+}
+function changeTempo(value = rate, preserve = keepTone) {
+  const next = Number(value);
+  if (!Number.isFinite(next)) { renderTempo(); return; }
+  const current = offset();
+  rate = Math.round(Math.max(.1, Math.min(3, next)) * 10000) / 10000;
+  keepTone = preserve;
+  if (playing) {
+    position = current; startedAt = context.currentTime;
+    nodes.forEach(({ source }) => source.playbackRate.setValueAtTime(rate, context.currentTime));
+  }
+  toneNode?.port.postMessage({ rate, keepTone });
+  renderTempo(); libraryUI.changed();
+}
+$('stem-rate').oninput = event => changeTempo(event.target.value);
+$('stem-rate-number').onchange = event => changeTempo(event.target.value);
+$('stem-rate').ondblclick = () => changeTempo(1);
+$('stem-keep-tone').onchange = event => changeTempo(rate, event.target.checked);
+$('stem-rate-reset').onclick = () => changeTempo(1, false);
+renderTempo();
+
+async function prepareTone() {
+  if (!toneReady) toneReady = (async () => {
+    await context.audioWorklet.addModule(new URL('./stem-tone-processor.mjs', import.meta.url));
+    const node = new AudioWorkletNode(context, 'scdl-stem-tone', { outputChannelCount: [2], channelCount: 2 });
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Tone processor timeout')), 15000);
+      node.port.onmessage = ({ data }) => {
+        clearTimeout(timer);
+        if (data.type === 'ready') { toneLatency = data.latency; resolve(); } else reject(new Error(data.message));
+      };
+      node.onprocessorerror = () => { clearTimeout(timer); reject(new Error('Tone processor failed')); };
+    }).catch(error => { node.port.postMessage({ type: 'dispose' }); node.disconnect(); throw error; });
+    toneNode = node;
+    node.onprocessorerror = () => {
+      pause(); node.disconnect(); toneNode = null; toneReady = null;
+      playbackError(new Error('Tone processor failed'));
+    };
+    toneNode.connect(context.destination);
+  })().catch(error => { toneReady = null; throw error; });
+  await toneReady;
+}
 
 function status(message, error = false) { $('status').textContent = message; $('status').classList.toggle('error', error); }
 function localizedError(key) { const error = new Error(text(key)); error.localized = true; return error; }
@@ -254,11 +331,12 @@ async function message(type) {
 }
 function setBusy(value) {
   busy = value;
-  $('separate').disabled = value || !initialized;
+  $('separate').disabled = value || libraryOperating || !initialized;
   $('cancel').hidden = !value;
   $('clear-cache').disabled = value;
   $('progress').hidden = !value;
   $('status').classList.toggle('is-loading', value);
+  libraryUI?.setBusy(value);
   if (value) $('toggle-game').hidden = false;
 }
 function audioBuffer(channels) {
@@ -268,13 +346,15 @@ function audioBuffer(channels) {
 }
 function offset() {
   if (!playing) return position;
-  const value = Math.max(0, position + context.currentTime - startedAt);
+  const value = Math.max(0, position + Math.max(0, context.currentTime - startedAt) * rate);
   return $('repeat').checked ? value % original.duration : Math.min(value, original.duration);
 }
 function pause() {
+  playbackRevision++;
   position = offset(); playing = false;
   for (const { source, gain } of nodes) { source.stop(); source.disconnect(); gain.disconnect(); }
   nodes = [];
+  toneNode?.port.postMessage({ rate, keepTone, reset: true });
   playLabel(false); updatePlayheads();
 }
 function applyMix() {
@@ -294,18 +374,21 @@ function applyMix() {
 }
 async function play() {
   if (!original || playing) return;
+  const version = ++playbackRevision;
   context ||= new AudioContext({ sampleRate: SAMPLE_RATE });
   await context.resume();
-  if (playing) return;
+  await prepareTone();
+  if (playing || version !== playbackRevision) return;
   if (position >= original.duration) position = 0;
   startedAt = context.currentTime + 0.03;
   nodes = [original, ...buffers].map(buffer => {
     const source = context.createBufferSource(), gain = context.createGain();
-    source.buffer = buffer; source.loop = $('repeat').checked;
-    gain.gain.value = 0; source.connect(gain).connect(context.destination);
+    source.buffer = buffer; source.loop = $('repeat').checked; source.playbackRate.value = rate;
+    gain.gain.value = 0; source.connect(gain).connect(toneNode);
     source.start(startedAt, position);
     return { source, gain };
   });
+  toneNode.port.postMessage({ rate, keepTone, reset: true });
   playing = true; applyMix(); playLabel(true);
 }
 function disposeResults() {
@@ -315,21 +398,28 @@ function disposeResults() {
   $('stems').replaceChildren(); $('mix').disabled = true; $('quality-note').hidden = true;
   mode = 'original'; applyMix();
 }
-function showResults(result) {
+function showResults(result, saved = null) {
   disposeResults(); position = 0;
   outputs = result.outputs;
   buffers = outputs.map(audioBuffer);
-  states = STEMS.map(() => ({ muted: false, solo: false, gain: 1 }));
+  states = STEMS.map((_, index) => ({ muted: !!saved?.states?.[index]?.muted, solo: !!saved?.states?.[index]?.solo,
+    gain: Number.isFinite(saved?.states?.[index]?.gain) ? Math.max(0, Math.min(1, saved.states[index].gain)) : 1 }));
+  rate = Number.isFinite(saved?.rate) ? Math.max(.1, Math.min(3, saved.rate)) : 1;
+  keepTone = !!saved?.keepTone;
+  $('repeat').checked = saved?.repeat !== false;
+  renderTempo();
+  wavs = [new Blob([encodeWav([original.getChannelData(0), original.getChannelData(1)])], { type: 'audio/wav' })];
   STEMS.forEach((stem, index) => {
     const row = document.createElement('div'); row.className = 'stem';
     const name = document.createElement('h2'); name.append(icon(stem), document.createTextNode(text(stem)));
     const controls = ['mute', 'solo'].map(kind => {
       const button = document.createElement('button'); button.type = 'button'; button.textContent = text(kind);
-      button.setAttribute('aria-label', `${text(kind)} ${text(stem)}`); button.setAttribute('aria-pressed', 'false');
+      button.setAttribute('aria-label', `${text(kind)} ${text(stem)}`); button.setAttribute('aria-pressed', String(states[index][kind === 'mute' ? 'muted' : 'solo']));
       button.onclick = () => {
         const key = kind === 'mute' ? 'muted' : 'solo';
         states[index][key] = !states[index][key];
         button.setAttribute('aria-pressed', String(states[index][key])); mode = 'mix'; applyMix();
+        libraryUI.changed();
       };
       return button;
     });
@@ -346,7 +436,7 @@ function showResults(result) {
       knob.title = `${text('volume')}: ${value}% · ${text('resetVolume')}`;
       level.textContent = `${value}%`;
     };
-    const updateVolume = value => { states[index].gain = Math.round(Math.max(0, Math.min(100, value))) / 100; renderVolume(); mode = 'mix'; applyMix(); };
+    const updateVolume = value => { states[index].gain = Math.round(Math.max(0, Math.min(100, value))) / 100; renderVolume(); mode = 'mix'; applyMix(); libraryUI.changed(); };
     let drag;
     knob.onpointerdown = event => {
       if (event.button !== 0) return;
@@ -364,7 +454,8 @@ function showResults(result) {
     };
     renderVolume(); volume.append(caption, knob, level);
     const link = document.createElement('a'); link.className = 'download';
-    const url = URL.createObjectURL(new Blob([encodeWav(outputs[index])], { type: 'audio/wav' })); urls.push(url);
+    const wav = new Blob([encodeWav(outputs[index])], { type: 'audio/wav' }); wavs.push(wav);
+    const url = URL.createObjectURL(wav); urls.push(url);
     link.href = url; link.download = `${title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 80)}_${stem}.wav`;
     link.append(icon('download'), document.createTextNode('WAV')); link.setAttribute('aria-label', `${text('download')} ${text(stem)}`);
     const actions = document.createElement('div'); actions.className = 'stem-actions'; actions.append(...controls, link, volume);
@@ -372,7 +463,7 @@ function showResults(result) {
     mountWaveform(row, buffers[index], `${text(stem)} · ${text('position')}`);
   });
   outputs = [];
-  $('mix').disabled = false; $('quality-note').hidden = false; mode = 'mix'; applyMix();
+  $('mix').disabled = false; $('quality-note').hidden = false; mode = saved?.mode === 'original' ? 'original' : 'mix'; applyMix();
   status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`);
 }
 
@@ -403,7 +494,8 @@ function runWorker(channels) {
   });
 }
 async function separate() {
-  if (busy) return;
+  if (busy || libraryOperating) return;
+  if (buffers.length) libraryUI.newExtraction();
   const version = ++revision;
   setBusy(true); $('progress').removeAttribute('value');
   try {
@@ -425,7 +517,7 @@ async function separate() {
       }
       if (version !== revision) return;
       const result = await runWorker([original.getChannelData(0).slice(), original.getChannelData(1).slice()]);
-      if (version === revision) showResults(result);
+      if (version === revision) { showResults(result); await libraryUI.completed(); }
     });
   } catch (error) {
     if (version === revision) { console.error('[Stems]', error); status(error.localized ? error.message : text('failed'), true); }
@@ -461,9 +553,9 @@ $('clear-cache').onclick = async () => {
   try { await caches.delete(MODEL.cache); status(text('cleared')); } catch (error) { console.error('[Stems cache]', error); status(text('cacheClearFailed'), true); }
 };
 $('play').onclick = () => { if (playing) pause(); else play().catch(playbackError); };
-$('original').onclick = () => { mode = 'original'; applyMix(); };
-$('mix').onclick = () => { mode = 'mix'; applyMix(); };
-$('repeat').onchange = () => { const resume = playing; pause(); if (resume) play().catch(playbackError); };
+$('original').onclick = () => { mode = 'original'; applyMix(); libraryUI.changed(); };
+$('mix').onclick = () => { mode = 'mix'; applyMix(); libraryUI.changed(); };
+$('repeat').onchange = () => { const resume = playing; pause(); if (resume) play().catch(playbackError); libraryUI.changed(); };
 let animationFrame;
 function animate() {
   updatePlayheads();
@@ -473,17 +565,18 @@ animate();
 const timeInterval = setInterval(() => {
   if (!original) return;
   const current = Math.max(0, offset());
-  if (playing && !$('repeat').checked && current >= original.duration) { pause(); position = 0; }
+  const drained = position + (context?.currentTime - startedAt - (keepTone && rate !== 1 ? toneLatency : 0)) * rate >= original.duration;
+  if (playing && !$('repeat').checked && drained) { pause(); position = 0; }
   $('time').textContent = `${formatOneDecimal.format(current)} / ${formatOneDecimal.format(original.duration)} s`;
 }, 100);
 window.addEventListener('pagehide', () => {
   cancelAnimationFrame(animationFrame); clearInterval(timeInterval);
   for (const view of waveforms) view.dispose();
-  worker?.terminate(); pause(); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
-  chrome.runtime.sendMessage({ type: 'STEM_LOOP_CANCEL', jobId }).catch(() => {});
+  worker?.terminate(); pause(); toneNode?.port.postMessage({ type: 'dispose' }); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
+  if (jobId) chrome.runtime.sendMessage({ type: 'STEM_LOOP_CANCEL', jobId }).catch(() => {});
 });
-try {
-  const info = await message('STEM_LOOP_INFO');
+function renderInfo(value) {
+  info = value;
   title = info.title; $('track').textContent = title;
   const metadata = [info.artist];
   if (Number.isFinite(info.durationMs) && info.durationMs > 0) {
@@ -492,6 +585,7 @@ try {
   }
   $('track-meta').textContent = metadata.filter(Boolean).join(' · ');
   $('track-meta').hidden = !$('track-meta').textContent;
+  $('artwork').hidden = true; $('artwork-fallback').hidden = false; $('artwork').removeAttribute('src');
   if (typeof info.artworkUrl === 'string' && /^https:\/\//i.test(info.artworkUrl)) {
     const artwork = $('artwork');
     artwork.onload = () => { artwork.hidden = false; $('artwork-fallback').hidden = true; };
@@ -499,5 +593,14 @@ try {
     artwork.src = info.artworkUrl;
   }
   $('range').textContent = `A ${formatTwoDecimals.format(info.trimRange.startMs / 1000)} s → B ${formatTwoDecimals.format(info.trimRange.endMs / 1000)} s · ${formatTwoDecimals.format((info.trimRange.endMs - info.trimRange.startMs) / 1000)} s`;
-  initialized = true; setBusy(false); status(text('ready'));
+}
+document.querySelector('footer [data-copy="footer"]').textContent = ({
+  es: 'El audio permanece en tu equipo. Activá Guardar localmente para conservar la separación.',
+  de: 'Audio bleibt auf deinem Gerät. Aktiviere „Lokal speichern“, um die Trennung zu behalten.',
+  'pt-BR': 'O áudio fica no seu dispositivo. Ative Salvar localmente para manter a separação.',
+  ru: 'Аудио остаётся на этом устройстве. Включите «Сохранить локально», чтобы сохранить разделение.',
+})[locale] || 'Audio stays on your device. Enable Save locally to keep this separation.';
+try {
+  if (jobId) { renderInfo(await message('STEM_LOOP_INFO')); initialized = true; }
+  setBusy(false); status(jobId ? text('ready') : (locale === 'es' ? 'Elegí una separación guardada.' : 'Choose a saved separation.'));
 } catch (error) { console.error('[Stems initialization]', error); status(error.localized ? error.message : text('infoFailed'), true); }

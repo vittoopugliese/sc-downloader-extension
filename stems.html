@@ -9,9 +9,9 @@
 </head>
 <body>
   <main>
-    <header><div class="brand"><img src="assets/icons/player-toolkit.png" width="42" height="42" alt=""><div>PLAYER TOOLS<small data-copy="workspace">Your loop, layer by layer.</small></div></div><span class="badge" data-copy="experimental">Experimental</span></header>
+    <header><div class="brand"><img src="assets/icons/player-toolkit.png" width="42" height="42" alt=""><div>PLAYER TOOLS<small data-copy="workspace">Your loop, layer by layer.</small></div></div><div class="header-library"><span class="badge" data-copy="experimental">Experimental</span><label id="preset-label" for="stem-presets">Saved separations</label><div class="preset-toolbar"><select id="stem-presets" disabled></select><button id="preset-folder" type="button" disabled><img src="assets/icons/folder-icon.svg" alt=""></button><button id="preset-reset" type="button" hidden><img src="assets/icons/cross.svg" alt=""></button></div><small id="preset-destination"></small><button id="preset-reconnect" type="button" hidden></button></div></header>
     <div class="source-card"><div class="source-cover"><img id="artwork" alt="" referrerpolicy="no-referrer" hidden><span id="artwork-fallback" data-icon="music"></span></div><div><span class="eyebrow" data-copy="selected">SELECTED LOOP</span><h1 id="track" class="track"></h1><p id="track-meta" class="muted" hidden></p>
-    <p id="range" class="muted"></p></div><span class="source-format">A—B / WAV</span></div>
+    <p id="range" class="muted"></p></div><div class="source-save"><span class="source-format">A&ndash;B / WAV</span><label class="save-switch"><input id="save-locally" type="checkbox" role="switch" disabled><span class="switch-track" aria-hidden="true"></span><span id="save-label">Save locally</span></label></div></div>
     <div class="studio-card"><section class="prepare" aria-label="Separation" data-copy-aria-label="separationLabel">
       <div class="section-heading"><span class="step">01</span><h2 data-copy="extract">Unpack your sound.</h2><span class="local-tag"><span data-icon="shield"></span><span data-copy="local">On-device</span></span></div>
       <p data-copy="intro">Separate vocals, drums, bass and other instruments locally. Your audio stays in Chrome.</p>
@@ -26,13 +26,14 @@
       <div class="listen-controls"><div class="transport"><button id="play" class="primary"><span data-icon="play"></span><span data-copy="play">Play</span></button><label><input id="repeat" type="checkbox" checked><span data-copy="repeat">Repeat loop</span></label><span id="time">0:00</span></div>
       <div class="comparison" role="group" aria-label="Compare" data-copy-aria-label="comparisonLabel"><button id="original" aria-pressed="true"><span data-icon="music"></span><span data-copy="original">Original</span></button><button id="mix" aria-pressed="false" disabled><span data-icon="sliders"></span><span data-copy="mix">Stem mix</span></button></div>
       </div><div class="wave-heading"><span data-copy="original">Original</span><div class="frequency-key"><span data-copy="lows">Lows</span><span data-copy="mids">Mids</span><span data-copy="highs">Highs</span></div></div>
-      <div id="original-waveform"></div>
+      <div class="stem-tempo" role="group" aria-label="Tone &amp; Velocity"><div class="slider-wrap"><div class="limits" aria-hidden="true"><span>0.1x</span><span>3x</span></div><span class="range-label" aria-hidden="true">Tone &amp; Velocity</span><input id="stem-rate" class="slider" type="range" min="0.1" max="3" step="0.0125" value="1" aria-label="Playback speed"></div><label class="keep-tone"><input id="stem-keep-tone" type="checkbox">Keep Tone</label><input id="stem-rate-number" type="number" min="0.1" max="3" step="0.0125" value="1" aria-label="Playback speed multiplier"><button id="stem-rate-reset" type="button" aria-label="Reset speed and tone" title="Reset speed and tone">&#8634;</button></div><div id="original-waveform"></div>
       <div id="stems"></div>
       <p id="quality-note" class="muted" hidden data-copy="quality">Some bleed and artifacts are normal. Compare with the original. Downloads are stereo 44.1 kHz float WAV files.</p>
     </section>
     </div>
     <footer><a href="https://huggingface.co/StemSplitio/htdemucs-onnx" target="_blank" rel="noreferrer">HTDemucs · StemSplit ONNX</a><span data-copy="footer">Audio stays on this device. Keep this tab open to retain your results.</span></footer>
   </main>
+  <dialog id="save-dialog" aria-labelledby="save-title" aria-describedby="save-description"><h3 id="save-title"></h3><p id="save-description"></p><label id="save-name-label" for="save-name"></label><input id="save-name" maxlength="160"><p id="save-destination" class="muted"></p><div class="dialog-actions"><button id="save-cancel" type="button" autofocus></button><button id="save-confirm" class="primary" type="button"></button></div></dialog>
   <script src="scripts/spectral-waveform.js"></script>
   <script type="module" src="scripts/stems-page.mjs"></script>
 </body>

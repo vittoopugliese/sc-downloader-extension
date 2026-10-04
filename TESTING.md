@@ -32,6 +32,9 @@ npm run test:e2e:sampler-time
 npm run test:e2e:sampler-persistence
 npm run test:e2e:pad-editor
 npm run test:e2e:slices
+npm run test:e2e:stems-ui
+npm run test:e2e:stem-presets
+npm run test:e2e:stems
 npm run test:e2e:eq
 npm run test:feedback
 ```
@@ -58,6 +61,15 @@ owned and shared player graphs, and checks the spectrum, editor controls,
 bypass, Pro revocation and player replacement. `test:e2e:tempo` also checks
 that EQ points and bypass survive a page reload. These fixtures do not replace
 a manual check with a real SoundCloud session.
+
+`test:e2e:stem-presets` exercises real IndexedDB and filesystem handles (OPFS
+stands in for the OS folder picker), atomic WAV saves, metadata-only autosave,
+reload without inference, folder/reset, incomplete and corrupt presets, and
+responsive layout. It measures a real Signalsmith AudioWorklet with a 440 Hz
+tone at 0.1–3x, with and without Keep Tone. It uses a persistent Chromium profile:
+the Windows incognito build crashes when restoring OPFS handles from IndexedDB.
+`test:e2e:stems` additionally saves real model outputs and restores/plays them
+from another extension page, under MV3 CSP, without an active job or re-inference.
 
 `test:feedback` covers the local validation, Turnstile gate, duplicate handling,
 rate limit and retention cleanup for the optional uninstall-feedback Worker. It

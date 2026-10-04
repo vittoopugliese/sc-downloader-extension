@@ -2,6 +2,11 @@
 
 Fecha: 2026-10-01. Documento de continuidad; no autoriza implementar las fases futuras.
 
+Actualización 2026-10-04: el usuario autorizó presets locales, carpeta/reset y
+Tone & Velocity global con Keep Tone. Implementación y validación en
+[stem-presets.md](stem-presets.md). Esto reemplaza la exclusión de persistencia
+de resultados al final de este documento. Pitch independiente sigue aplazado.
+
 ## Alcance aprobado ahora
 
 Embellecer la página existente: eliminar el encabezado promocional grande, mostrar portada y metadatos del track, unificar preparación y escucha en una tarjeta, compactar controles y tarjetas de stems, agrupar Mute/Solo/WAV a la derecha y reemplazar el slider de volumen por un knob visualmente igual al de PlayerTools, junto a la waveform. Agregar el ícono de capas al botón Stems del looper.
