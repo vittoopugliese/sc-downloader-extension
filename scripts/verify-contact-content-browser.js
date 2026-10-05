@@ -24,6 +24,7 @@ const content = {
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
     await page.setContent(html);
     await page.evaluate((remote) => {
+      document.body.classList.remove("policy-pending");
       document.getElementById("loadingOverlay").classList.add("is-hidden");
       document.body.classList.add("help-mode");
       document.getElementById("helpPanel").classList.add("is-visible");

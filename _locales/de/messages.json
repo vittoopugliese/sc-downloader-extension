@@ -614,5 +614,26 @@
   },
   "sampler_selectPad": {
     "message": "Wähle eines der acht Pads. Escape zum Abbrechen."
+  },
+  "help_player_tools_title": {
+    "message": "Player Tools"
+  },
+  "help_likes_intro": {
+    "message": "Erkunde deine SoundCloud-Likes mit Likes Explorer."
+  },
+  "help_likes_open_title": {
+    "message": "Likes Explorer öffnen"
+  },
+  "help_likes_open": {
+    "message": "Öffne deine Likes auf SoundCloud und durchsuche deine Sammlung mit Likes Explorer. Du kannst ihn auch direkt über die Schaltfläche unten öffnen."
+  },
+  "help_permitted_title": {
+    "message": "Vom Publisher erlaubte Downloads"
+  },
+  "help_permitted_body": {
+    "message": "Verwende die Download-Schaltflächen auf SoundCloud. Downloads sind nur möglich, wenn der Publisher sie für den Track freigegeben hat. Ohne bestätigte Freigabe startet kein Download."
+  },
+  "help_player_tools_intro": {
+    "message": "Starte einen Track auf SoundCloud und öffne das Tachometer neben den Player-Steuerelementen. Passe Tempo und Keep Tone an oder wiederhole mit Looper einen A–B-Bereich. Die Bedienung erfolgt direkt auf SoundCloud."
   }
 }

@@ -1398,10 +1398,18 @@
         a:visited { text-decoration: none; }
         a:hover { text-decoration: none; }
         a:active { text-decoration: none; }
+        body.policy-pending .container { visibility: hidden; }
+        body.help-only .container > :not(#helpPanel):not(#commercePanel) { display: none !important; }
+        body.help-only #helpBackBtn,
+        body.help-only #downloadsHelp > :not(.help-copy):not(.permitted-downloads-guide) { display: none; }
+        .permitted-downloads-guide { display: none; }
+        body.help-only .permitted-downloads-guide { display: block; }
+        .help-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .help-tabs button { white-space: normal; padding: 0 5px; }
     </style>
 </head>
 
-<body class="offers-pending">
+<body class="offers-pending policy-pending">
     <div id="loadingOverlay">
         <div class="spinner-ring">
             <img src="./assets/icon128.png" class="spinner-logo" alt="Loading" draggable="false">
@@ -1544,13 +1552,15 @@
         <section id="helpPanel" aria-labelledby="helpTitle" aria-modal="true" role="dialog">
             <div class="help-header"><button id="helpBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button><h2 id="helpTitle" data-i18n="help_title">How it works</h2></div>
             <div class="help-tabs" role="tablist" aria-label="Help topics">
-                <button id="downloadsTab" type="button" role="tab" aria-selected="true" aria-controls="downloadsHelp" data-help-tab="downloadsHelp" data-i18n="download" data-i18n-title="download" title="Download">Download</button>
-                <button id="speedTab" type="button" role="tab" aria-selected="false" aria-controls="speedHelp" tabindex="-1" data-help-tab="speedHelp" data-i18n="help_speed_title" data-i18n-title="help_speed_title" title="Speed">Speed</button>
+                <button id="speedTab" type="button" role="tab" aria-selected="false" aria-controls="speedHelp" tabindex="-1" data-help-tab="speedHelp" data-i18n="help_player_tools_title" data-i18n-title="help_player_tools_title" title="Speed">Speed</button>
                 <button id="looperTab" type="button" role="tab" aria-selected="false" aria-controls="looperPanel" tabindex="-1" data-help-tab="looperPanel" data-i18n="help_looper_title" title="Looper">Looper</button>
+                <button id="likesHelpTab" title="Likes Explorer" type="button" role="tab" aria-selected="false" aria-controls="likesHelp" tabindex="-1" data-help-tab="likesHelp">Likes Explorer</button>
+                <button id="downloadsTab" type="button" role="tab" aria-selected="true" aria-controls="downloadsHelp" data-help-tab="downloadsHelp" data-i18n="download" data-i18n-title="download" title="Download">Download</button>
                 <button id="supportTab" type="button" role="tab" aria-selected="false" aria-controls="supportHelp" tabindex="-1" data-help-tab="supportHelp" data-i18n="contact" data-i18n-title="contact" title="Contact">Contact</button>
             </div>
             <div class="help-content">
             <section id="downloadsHelp" role="tabpanel" aria-labelledby="downloadsTab">
+            <div class="help-section permitted-downloads-guide"><h3 data-i18n="help_permitted_title"></h3><p data-i18n="help_permitted_body"></p></div>
             <p class="help-copy" data-i18n="help_intro">Download tracks you own or have permission to download.</p>
             <div class="help-section"><h3 data-i18n="help_getting_started_title">Download from SoundCloud</h3><p data-i18n="help_getting_started">Open a track, playlist, Likes, or a user's Tracks page. Use the Download button here or the download button on the SoundCloud page.</p></div>
             <div class="help-section"><h3 data-i18n="help_collection_title">Choose a collection</h3><p data-i18n="help_collection">For playlists, Likes, and user tracks, enter an amount, choose All, or use Select for individual tracks. Downloads keep running if you close this popup.</p></div>
@@ -1558,7 +1568,13 @@
             <div class="help-section"><h3 data-i18n="help_format_title">Formats and quality</h3><p data-i18n="help_format">Auto selects the available stream. Original is available only when the artist has enabled an original download. Source quality varies by track.</p></div>
             <div class="help-section"><h3 data-i18n="help_progress_title">Progress and errors</h3><p data-i18n="help_progress">The status shows progress and saved files. If a track cannot be read or saved, retry after reloading SoundCloud or choosing the folder again.</p></div>
         </section>
+        <section id="likesHelp" role="tabpanel" aria-labelledby="likesHelpTab" hidden>
+            <p class="help-copy" data-i18n="help_likes_intro"></p>
+            <div class="help-section"><h3 data-i18n="help_likes_open_title"></h3><p data-i18n="help_likes_open"></p></div>
+            <a class="popup-control-btn help-link" href="https://soundcloud.com/you/likes#scdl-explore" target="_blank" rel="noopener noreferrer" data-i18n="help_likes_open_title"></a>
+        </section>
         <section id="speedHelp" role="tabpanel" aria-labelledby="speedTab" hidden>
+            <p class="help-copy" data-i18n="help_player_tools_intro"></p>
             <p class="help-copy" data-i18n="help_speed_intro">The speed selector controls SoundCloud playback from 0.1x to 4x and shows the active speed beside the player controls.</p>
             <div class="help-section"><h3 data-i18n="help_speed_open_title">Open the selector</h3><p data-i18n="help_speed_open">Press the speedometer in the player controls. Use the white download icon inside the panel to download the entire current track at the effective speed and Keep Tone setting. The orange WAV button exports only the selected A-B range.</p></div>
             <div class="help-section"><h3 data-i18n="help_speed_presets_title">Quick speeds</h3><p data-i18n="help_speed_presets">Choose one of the six quick speeds. The two X buttons are custom presets: hold one to save the slider's current speed, then click it whenever you want to restore that exact value. Custom presets stay saved between SoundCloud sessions.</p></div>

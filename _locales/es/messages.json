@@ -749,5 +749,26 @@
   },
   "sampler_selectPad": {
     "message": "Elegí uno de los ocho pads. Escape para cancelar."
+  },
+  "help_player_tools_title": {
+    "message": "Player Tools"
+  },
+  "help_likes_intro": {
+    "message": "Explorá tus likes de SoundCloud con Likes Explorer."
+  },
+  "help_likes_open_title": {
+    "message": "Abrir Likes Explorer"
+  },
+  "help_likes_open": {
+    "message": "Abrí tu página de Likes en SoundCloud y usá Likes Explorer para explorar tu colección. También podés abrirlo directamente con el botón de abajo."
+  },
+  "help_permitted_title": {
+    "message": "Descargas habilitadas por el publisher"
+  },
+  "help_permitted_body": {
+    "message": "Usá los botones de descarga en SoundCloud. Solo se pueden descargar tracks cuyo publisher haya habilitado la descarga. Si no se puede confirmar el permiso, la descarga no se inicia."
+  },
+  "help_player_tools_intro": {
+    "message": "Reproducí un track en SoundCloud y abrí el velocímetro junto a los controles del player. Ajustá la velocidad y Keep Tone, o usá Looper para repetir un rango A–B. Los controles se usan directamente en SoundCloud."
   }
 }

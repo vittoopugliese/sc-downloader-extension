@@ -2,7 +2,7 @@
 (function (root) {
   "use strict";
   function create({ request = fetch, apiBaseUrl, storage, timeoutMs = 5000,
-    cacheTtlMs = 7 * 24 * 60 * 60 * 1000, restrictedCacheTtlMs = 5 * 60 * 1000, now = Date.now }) {
+    cacheTtlMs = 5 * 60 * 1000, restrictedCacheTtlMs = 5 * 60 * 1000, now = Date.now }) {
     const storageKey = `scdl.downloadPolicy.v1:${apiBaseUrl}`;
     let pending = null;
     let cached = null;

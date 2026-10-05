@@ -29,6 +29,7 @@ const iconDataUrls = Object.fromEntries(
     const html = fs.readFileSync(path.resolve(__dirname, "..", "popup.html"), "utf8")
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
     await page.setContent(html);
+    await page.evaluate(() => document.body.classList.remove("policy-pending"));
     await page.addScriptTag({ path: path.join(__dirname, "fast-tooltips.js") });
     await page.evaluate(({ logoUrl, playerToolsUrl, likesExplorerUrl, icons }) => {
       document.body.classList.remove("offers-pending");
@@ -290,7 +291,7 @@ const iconDataUrls = Object.fromEntries(
       helpPanel.classList.add("is-visible");
       window.eval(selectTab);
     }, selectTab);
-    for (const id of ["downloadsTab", "speedTab", "looperTab", "supportTab"]) {
+    for (const id of ["downloadsTab", "speedTab", "looperTab", "likesHelpTab", "supportTab"]) {
       await page.evaluate((id) => selectHelpTab(document.getElementById(id)), id);
       await page.waitForTimeout(180);
       assert.equal(await page.locator('#helpPanel [role="tabpanel"]:visible').count(), 1);

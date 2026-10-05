@@ -15,6 +15,7 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || 'playwright');
       for (const plan of ['pro', 'free']) {
         const page = await browser.newPage();
         await page.setContent(html);
+    await page.evaluate(() => document.body.classList.remove("policy-pending"));
         await page.evaluate((restricted) => {
           document.body.classList.toggle('restricted-downloads', restricted);
           document.getElementById('loadingOverlay').classList.add('is-hidden');

@@ -614,5 +614,26 @@
   },
   "sampler_selectPad": {
     "message": "Выберите один из восьми пэдов. Escape для отмены."
+  },
+  "help_player_tools_title": {
+    "message": "Player Tools"
+  },
+  "help_likes_intro": {
+    "message": "Просматривайте понравившиеся треки SoundCloud в Likes Explorer."
+  },
+  "help_likes_open_title": {
+    "message": "Открыть Likes Explorer"
+  },
+  "help_likes_open": {
+    "message": "Откройте страницу понравившихся треков в SoundCloud и просматривайте коллекцию в Likes Explorer. Его также можно открыть кнопкой ниже."
+  },
+  "help_permitted_title": {
+    "message": "Скачивание с разрешения издателя"
+  },
+  "help_permitted_body": {
+    "message": "Используйте кнопки скачивания в SoundCloud. Скачивать можно только треки, для которых издатель разрешил скачивание. Без подтверждения разрешения скачивание не начнётся."
+  },
+  "help_player_tools_intro": {
+    "message": "Включите трек в SoundCloud и откройте спидометр рядом с кнопками плеера. Настройте скорость и Keep Tone или повторяйте отрезок A–B с помощью Looper. Управление доступно прямо в SoundCloud."
   }
 }

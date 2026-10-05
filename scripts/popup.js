@@ -121,6 +121,7 @@ let currentFormatPreference = SCStreamSelector.DEFAULT_PREFERENCE;
 let currentDownloadDestination = null;
 let helpReturnFocus = null;
 let helpSelectionScrollTop = 0;
+let helpOnly = true;
 const popupDownloadIntent = SCDownloadIntent.create(chrome.runtime);
 
 function announceDownloadStatus(message) {
@@ -135,10 +136,11 @@ function openHelp() {
   helpSelectionScrollTop = selectionViewport.scrollTop;
   helpPanel.classList.add("is-visible");
   document.body.classList.add("help-mode");
-  helpBackBtn.focus();
+  (helpOnly ? helpPanel.querySelector('[aria-selected="true"]') : helpBackBtn)?.focus();
 }
 
 function closeHelp() {
+  if (helpOnly) return;
   if (!helpPanel.classList.contains("is-visible")) return;
   helpPanel.classList.remove("is-visible");
   document.body.classList.remove("help-mode");
@@ -151,6 +153,7 @@ function closeHelp() {
 }
 
 function trapHelpFocus(event) {
+  if (document.body.classList.contains("commerce-mode")) return;
   if (event.key !== "Tab" || !helpPanel.classList.contains("is-visible")) return;
   const focusable = [...helpPanel.querySelectorAll(
     'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
@@ -233,8 +236,18 @@ function trapPanelFocus(event, panel) {
 
 document.addEventListener("DOMContentLoaded", async () => {
   SCDLI18n.localizeDocument();
-  loadDownloadPolicyNotice();
-  await loadDownloadDestination();
+  helpOnly = await loadDownloadPolicyNotice();
+  document.body.classList.toggle("help-only", helpOnly);
+  helpBackBtn.hidden = helpOnly;
+  if (helpOnly) {
+    helpPanel.setAttribute("role", "region");
+    helpPanel.removeAttribute("aria-modal");
+    selectHelpTab(document.getElementById("speedTab"));
+    openHelp();
+    loadingOverlay.classList.add("is-hidden");
+  }
+  document.body.classList.remove("policy-pending");
+  if (helpOnly) helpPanel.querySelector('[aria-selected="true"]')?.focus();
 
   helpBtn.addEventListener("click", openHelp);
   helpBackBtn.addEventListener("click", closeHelp);
@@ -261,6 +274,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     trapHelpFocus(event);
   });
+
+  syncPlayerToolsOffer();
+  if (helpOnly) return;
+  await loadDownloadDestination();
 
   const retryTrack = () => {
     hasRenderedTrack = false;
@@ -522,14 +539,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 async function loadDownloadPolicyNotice() {
   const notice = document.getElementById("downloadPolicyNotice");
-  if (!notice) return;
   let restricted = true;
   try {
     const response = await chrome.runtime.sendMessage({ type: "GET_DOWNLOAD_POLICY" });
     restricted = response?.policy?.allDownloadsActivated !== true;
   } catch { /* Match the downloader's restricted fallback. */ }
-  notice.classList.toggle("is-hidden", !restricted);
+  notice?.classList.toggle("is-hidden", !restricted);
   document.body.classList.toggle("restricted-downloads", restricted);
+  return restricted;
 }
 
 function isSoundCloudPage(url) {
@@ -1690,7 +1707,6 @@ commerceRestoreBtn.addEventListener("click", async () => {
   finally { commerceRestoreBtn.disabled = false; }
 });
 
-syncPlayerToolsOffer();
 chrome.storage?.onChanged?.addListener((changes, area) => {
   if (area !== "local" || !changes["scdl.playerTools.access.v1"]) return;
   clearTimeout(playerToolsOfferTimer);

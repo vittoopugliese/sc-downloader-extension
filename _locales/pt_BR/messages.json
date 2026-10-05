@@ -614,5 +614,26 @@
   },
   "sampler_selectPad": {
     "message": "Escolha um dos oito pads. Escape para cancelar."
+  },
+  "help_player_tools_title": {
+    "message": "Player Tools"
+  },
+  "help_likes_intro": {
+    "message": "Explore suas curtidas do SoundCloud com o Likes Explorer."
+  },
+  "help_likes_open_title": {
+    "message": "Abrir Likes Explorer"
+  },
+  "help_likes_open": {
+    "message": "Abra sua página de curtidas no SoundCloud e use o Likes Explorer para explorar sua coleção. Você também pode abri-lo diretamente pelo botão abaixo."
+  },
+  "help_permitted_title": {
+    "message": "Downloads habilitados pelo publisher"
+  },
+  "help_permitted_body": {
+    "message": "Use os botões de download no SoundCloud. Só é possível baixar faixas cujo publisher tenha habilitado o download. Se a permissão não puder ser confirmada, o download não será iniciado."
+  },
+  "help_player_tools_intro": {
+    "message": "Reproduza uma faixa no SoundCloud e abra o velocímetro ao lado dos controles do player. Ajuste a velocidade e o Keep Tone ou use o Looper para repetir um trecho A–B. Os controles funcionam diretamente no SoundCloud."
   }
 }
