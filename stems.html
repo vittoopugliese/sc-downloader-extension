@@ -36,6 +36,8 @@
   </main>
   <dialog id="save-dialog" aria-labelledby="save-title" aria-describedby="save-description"><h3 id="save-title"></h3><p id="save-description"></p><label id="save-name-label" for="save-name"></label><input id="save-name" maxlength="160"><p id="save-destination" class="muted"></p><div class="dialog-actions"><button id="save-cancel" type="button" autofocus></button><button id="save-confirm" class="primary" type="button"></button></div></dialog>
   <dialog id="import-dialog" aria-labelledby="import-title"><form id="import-form"><h3 id="import-title"></h3><p id="import-file-info" class="muted"></p><label id="import-name-label" for="import-name"></label><input id="import-name" maxlength="160" required><div class="import-range"><label><span id="import-start-label"></span><input id="import-start" type="number" min="0" step="any" required></label><label><span id="import-end-label"></span><input id="import-end" type="number" min="0" step="any" required></label></div><p id="import-range-hint" class="muted"></p><p id="import-error" role="alert"></p><div class="dialog-actions"><button id="import-cancel" type="button"></button><button id="import-confirm" type="submit" class="primary"></button></div></form></dialog>
+  <script src="scripts/looper-core.js"></script>
+  <script src="scripts/sampler-core.js"></script>
   <script src="scripts/spectral-waveform.js"></script>
   <script type="module" src="scripts/stems-page.mjs"></script>
 </body>

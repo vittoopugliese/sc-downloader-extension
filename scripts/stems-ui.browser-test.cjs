@@ -16,7 +16,7 @@ const { chromium } = require('playwright');
   const server = http.createServer((req, res) => {
     const file = path.join(root, new URL(req.url, 'http://localhost').pathname);
     if (!file.startsWith(root + path.sep) || !fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
-    res.setHeader('Content-Type', file.endsWith('.mjs') || file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.png') ? 'image/png' : 'text/html');
+    res.setHeader('Content-Type', file.endsWith('.mjs') || file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.png') ? 'image/png' : file.endsWith('.svg') ? 'image/svg+xml' : 'text/html');
     fs.createReadStream(file).pipe(res);
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -28,6 +28,14 @@ const { chromium } = require('playwright');
     await page.route('https://i1.sndcdn.com/stems-fixture.jpg', route => route.fulfill({ path: path.join(root, 'assets/icons/player-toolkit.png'), contentType: 'image/png' }));
     await page.route('https://tbot.xyz/lumber/', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Lumberjack fixture</title>' }));
     await page.addInitScript(({ dataUrl }) => {
+      globalThis.stemTestSources = [];
+      const createSource = AudioContext.prototype.createBufferSource;
+      AudioContext.prototype.createBufferSource = function () {
+        const source = createSource.call(this);
+        const start = source.start.bind(source);
+        source.start = (...args) => { source.testStart = args; start(...args); };
+        globalThis.stemTestSources.push(source); return source;
+      };
       globalThis.chrome = { runtime: { sendMessage: async ({ type }) => type === 'STEM_LOOP_INFO'
         ? { success: true, title: 'Midnight sessions — selected loop', trimRange: { startMs: 12000, endMs: 15000 } }
         : { success: true, instrument: { dataUrl } } } };
@@ -121,13 +129,99 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('.waveform-playhead').first().getAttribute('style'), stopped);
     await page.locator('#original-waveform canvas').click({ position: { x: 450, y: 30 } });
     assert.ok(parseFloat(await page.locator('.waveform-playhead').first().evaluate(node => node.style.left)) > 45);
-    await page.locator('.stem button').nth(1).click();
+    await page.locator('.stem-enable').first().click();
+    assert.equal(await page.locator('.stem.is-silent').count(), 1);
+    await page.locator('.stem-enable').first().click({ button: 'right' });
+    assert.deepEqual(await page.locator('.stem-enable').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-checked'))), ['true', 'false', 'false', 'false']);
     assert.equal(await page.locator('.stem.is-silent').count(), 3);
+    await page.locator('.stem-enable').nth(1).click({ button: 'right' });
+    assert.deepEqual(await page.locator('.stem-enable').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-checked'))), ['false', 'true', 'false', 'false']);
+    // Ordinary clicks can add tracks back to the mix after isolating one.
+    await page.locator('.stem-enable').nth(2).click();
+    await page.locator('.stem-enable').nth(3).click();
+    assert.equal(await page.locator('.stem.is-silent').count(), 1);
     await page.locator('#original').click();
     assert.equal(await page.locator('.stem.is-silent').count(), 4);
     await page.locator('#mix').click();
     const download = page.waitForEvent('download'); await page.locator('.download').first().click();
     assert.match((await download).suggestedFilename(), /_drums.wav$/);
+    assert.equal(await page.locator('.stem-sampler-toggle').count(), 1);
+    assert.equal(await page.locator('.stem-mute').count(), 0);
+    for (const row of await page.locator('.stem[data-stem=drums]').all()) {
+      const toggle = row.locator('.stem-sampler-toggle');
+      await toggle.click();
+      assert.equal(await row.locator('.drum-pad:visible').count(), 8);
+      assert.equal(await row.locator('.drum-key').allTextContents().then(keys => keys.join('')), 'ASDFGHJK');
+      await row.locator('.drum-pad').first().click();
+      await toggle.click(); await toggle.click();
+      assert.equal(await row.locator('.drum-pad.is-selected').count(), 1);
+    }
+    assert.equal(await page.locator('.download').first().textContent(), '');
+    assert.match(await page.locator('.download').first().getAttribute('title'), /WAV/);
+    assert.equal(await page.locator('.stem-solo').first().getAttribute('aria-checked'), 'false');
+    const waveform = await page.locator('#original-waveform .waveform').boundingBox();
+    await page.mouse.move(waveform.x + waveform.width * .25, waveform.y + 35);
+    await page.mouse.down();
+    await page.mouse.move(waveform.x + waveform.width * .6, waveform.y + 35, { steps: 8 });
+    await page.mouse.up();
+    const ranges = await page.locator('.stem-loop-selection').evaluateAll(nodes => nodes.map(node => [node.style.left, node.style.width]));
+    assert.equal(ranges.length, 5); assert.ok(ranges.every(range => JSON.stringify(range) === JSON.stringify(ranges[0])));
+    await page.locator('#play').click();
+    const sources = await page.evaluate(() => stemTestSources.slice(-5).map(source => [source.loop, source.loopStart, source.loopEnd]));
+    assert.equal(sources.length, 5);
+    for (const [repeat, start, end] of sources) { assert.equal(repeat, true); assert.ok(Math.abs(start - .75) < .02); assert.ok(Math.abs(end - 1.8) < .02); }
+    await page.waitForTimeout(1500);
+    const loopPosition = parseFloat(await page.locator('.waveform-playhead').first().evaluate(node => node.style.left));
+    assert.ok(loopPosition >= 24 && loopPosition < 61, 'Playback wraps inside A-B');
+    await page.locator('#play').click();
+    await page.locator('.stem-loop-end').last().press('ArrowLeft');
+    assert.ok(await page.locator('.stem-loop-end').evaluateAll(nodes => nodes.every(node => Number(node.getAttribute('aria-valuenow')) < 1.75)));
+    await page.locator('#original-waveform canvas').dblclick({ position: { x: 30, y: 40 } });
+    assert.equal(await page.locator('.stem-loop-selection:visible').count(), 0);
+    await page.locator('.stem-enable').first().click();
+    const drums = page.locator('.stem[data-stem=drums]');
+    const drumWave = drums.locator('.waveform');
+    const drumBounds = await drumWave.boundingBox();
+    for (let i = 0; i < 8; i++) {
+      await drums.locator('.drum-pad').nth(i).click();
+      await drumWave.click({ position: { x: drumBounds.width * (.1 + i * .1), y: 40 } });
+    }
+    assert.equal(await drums.locator('.stem-pad-marker:visible').count(), 8);
+    assert.equal(await page.locator('.stem-loop-selection:visible').count(), 0, 'Pad clicks do not create loops');
+    const starts = await drums.locator('.stem-pad-marker').evaluateAll(nodes => nodes.map(node => Number(node.dataset.start)));
+    for (let i = 0; i < 8; i++) assert.ok(Math.abs(starts[i] - (.3 + i * .3)) < .02);
+    await page.keyboard.press('a');
+    await page.waitForTimeout(30);
+    const sample = await page.evaluate(() => stemTestSources.at(-1).testStart);
+    assert.ok(Math.abs(sample[1] - starts[0]) < .001);
+    assert.ok(Math.abs(sample[2] - (starts[1] - starts[0])) < .001, 'Pad stops at next marker');
+    await page.keyboard.press('k'); await page.waitForTimeout(30);
+    const lastSample = await page.evaluate(() => stemTestSources.at(-1).testStart);
+    assert.ok(Math.abs(lastSample[2] - (3 - starts[7])) < .001, 'Last pad plays to the end');
+    await drumWave.hover(); await page.mouse.wheel(0, -100); await page.waitForTimeout(100);
+    const windows = await page.locator('.waveform').evaluateAll(nodes => nodes.map(node => [Number(node.dataset.viewportStart), Number(node.dataset.viewportEnd)]));
+    assert.ok(windows.every(window => JSON.stringify(window) === JSON.stringify(windows[0])));
+    assert.ok(windows[0][1] - windows[0][0] < 3000, 'All five waveforms zoom together');
+    await drums.locator('.drum-pad').first().click();
+    await drumWave.click({ position: { x: drumBounds.width * .4, y: 40 } });
+    const moved = Number(await drums.locator('.stem-pad-marker').first().getAttribute('data-start'));
+    assert.ok(Math.abs(moved * 1000 - (windows[0][0] + .4 * (windows[0][1] - windows[0][0]))) < 10, 'Assignment uses the zoomed timeline');
+    await drumWave.hover(); await page.keyboard.down('Shift'); await page.mouse.wheel(0, 100); await page.keyboard.up('Shift'); await page.waitForTimeout(100);
+    assert.ok(Number(await drumWave.getAttribute('data-viewport-start')) > windows[0][0]);
+    await page.locator('.stem-zoom-tools button').last().click();
+    assert.equal(Number(await drumWave.getAttribute('data-viewport-start')), 0);
+    await drums.locator('.drum-pad').first().click();
+    await page.keyboard.press('Escape');
+    assert.equal(await drumWave.evaluate(node => node.classList.contains('is-placing-pad')), false);
+    await drums.locator('.drum-pad').first().click();
+    const beforeDrag = await drums.locator('.stem-pad-marker').first().getAttribute('data-start');
+    const dragBounds = await drumWave.boundingBox();
+    await page.mouse.move(dragBounds.x + dragBounds.width * .2, dragBounds.y + 40);
+    await page.mouse.down(); await page.mouse.move(dragBounds.x + dragBounds.width * .7, dragBounds.y + 40, { steps: 6 }); await page.mouse.up();
+    assert.equal(await drums.locator('.stem-pad-marker').first().getAttribute('data-start'), beforeDrag, 'Dragging while armed changes the loop, not the pad');
+    assert.equal(await page.locator('.stem-loop-selection:visible').count(), 5);
+    await page.keyboard.press('Escape');
+    await page.locator('#original-waveform .waveform').dblclick({ position: { x: 10, y: 40 } });
     const artifacts = path.join(root, 'test-results/stems-ui'); fs.mkdirSync(artifacts, { recursive: true });
     await page.screenshot({ path: path.join(artifacts, 'desktop.png'), fullPage: true });
     for (const width of [390, 320]) {
@@ -167,6 +261,6 @@ const { chromium } = require('playwright');
       assert.deepEqual(localizedErrors, []);
       await context.close();
     }
-    console.log('Stems UI: spectral colors, five synchronized playheads, play/pause, waveform seek, solo, comparison, WAV download and responsive layout passed.');
+    console.log('Stems UI: spectral colors, five synchronized playheads, play/pause, waveform seek, mute, drum slice assignment/playback, shared zoom/pan, loop gestures, WAV download and responsive layout passed.');
   } finally { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

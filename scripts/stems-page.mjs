@@ -1,3 +1,5 @@
+import { mountDrumSampler } from './stem-sampler.mjs';
+import { createStemLoop } from './stem-loop.mjs';
 import { SAMPLE_RATE, MAX_SECONDS, STEMS, encodeWav } from './stem-audio.mjs';
 import { MODEL } from './stem-model.mjs';
 import { mountStemLibrary } from './stem-library-ui.mjs';
@@ -133,7 +135,34 @@ function icon(name) {
 }
 document.querySelectorAll('[data-icon]').forEach(node => node.replaceChildren(icon(node.dataset.icon)));
 function playLabel(active) { $('play').replaceChildren(icon(active ? 'pause' : 'play'), document.createTextNode(text(active ? 'stop' : 'play'))); }
+const padStyle = document.createElement('style');
+padStyle.textContent = globalThis.SCSamplerCore.PAD_STYLES;
+document.head.append(padStyle);
 const waveforms = new Set();
+let drumSampler = null;
+const stemLoop = createStemLoop({ viewportChanged() {
+  for (const view of waveforms) view.draw();
+  updatePlayheads(); drumSampler?.render();
+}, duration: () => original?.duration || 0, changed(previous) {
+  const current = offset(previous);
+  const { startMs, endMs } = stemLoop.range();
+  for (const { source } of nodes) { source.loopStart = startMs / 1000; source.loopEnd = endMs / 1000; }
+  position = current;
+  if (playing) startedAt = Math.max(startedAt, context.currentTime);
+  if ($('repeat').checked && (current < startMs / 1000 || current >= endMs / 1000)) seekTo(startMs / 1000);
+} });
+const zoomTools = document.createElement('div'); zoomTools.className = 'stem-zoom-tools';
+for (const [label, title, action] of [
+  ['−', 'Zoom −', () => stemLoop.zoomAt(offset() * 1000, 1)],
+  ['+', 'Zoom +', () => stemLoop.zoomAt(offset() * 1000, -1)],
+  ['↔', locale === 'es' ? 'Ver todo el audio' : 'Show all audio', () => stemLoop.resetZoom()],
+]) {
+  const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
+  button.title = title; button.setAttribute('aria-label', title); button.onclick = action; zoomTools.append(button);
+}
+const zoomHint = document.createElement('span');
+zoomHint.textContent = locale === 'es' ? 'Rueda: zoom · Shift + rueda: desplazar' : 'Wheel: zoom · Shift + wheel: pan';
+zoomTools.append(zoomHint); $('original-waveform').before(zoomTools);
 function seekTo(value) {
   const resume = playing; pause(); position = Math.max(0, Math.min(original.duration, value));
   updatePlayheads();
@@ -141,9 +170,10 @@ function seekTo(value) {
 }
 function updatePlayheads() {
   if (!original) return;
-  const percent = Math.max(0, offset()) / original.duration * 100;
+  const percent = stemLoop.percent(Math.max(0, offset()) * 1000);
   for (const view of waveforms) {
-    view.playhead.style.left = `${Math.min(100, percent)}%`;
+    view.playhead.style.left = `${percent}%`;
+    view.playhead.hidden = percent < 0 || percent > 100;
     view.element.setAttribute('aria-valuenow', offset().toFixed(1));
   }
 }
@@ -161,19 +191,15 @@ function mountWaveform(parent, buffer, label) {
   const canvas = document.createElement('canvas'); canvas.setAttribute('role', 'img'); canvas.setAttribute('aria-label', label);
   const playhead = document.createElement('span'); playhead.className = 'waveform-playhead'; playhead.setAttribute('aria-hidden', 'true');
   element.append(canvas, playhead); parent.append(element);
-  element.addEventListener('pointerdown', event => {
-    if (event.button !== 0) return;
-    const rect = element.getBoundingClientRect();
-    seekTo((event.clientX - rect.left) / rect.width * original.duration);
-  });
+  const disposeLoop = stemLoop.mount(element, seekTo, seconds => parent.dataset.stem === 'drums' && drumSampler?.place(seconds));
   const controller = new AbortController();
-  const view = { element, playhead, draw: () => drawWaveform(), dispose() { controller.abort(); observer.disconnect(); waveforms.delete(view); element.remove(); } };
+  const view = { element, playhead, draw: () => drawWaveform(), dispose() { disposeLoop(); controller.abort(); observer.disconnect(); waveforms.delete(view); element.remove(); } };
   waveforms.add(view);
   const ui = { waveformCanvas: canvas, panel: $('audition') };
   const waveformCollapsed = false, waveformSamples = [], waveformDrawPreview = null;
   let waveformSpectrum, waveformStaticKey = '', waveformRevision = 0;
   const loopState = { durationMs: buffer.duration * 1000 };
-  const visibleWaveformWindow = () => ({ startMs: 0, endMs: loopState.durationMs });
+  const visibleWaveformWindow = () => stemLoop.viewport();
   const loopPercentInWindow = (time, range) => (time - range.startMs) / (range.endMs - range.startMs) * 100;
   // Copied from tempo-control-main.js: same physical-pixel peak aggregation,
   // RGB energy mapping and normalization as the Player Tools looper.
@@ -208,6 +234,9 @@ function mountWaveform(parent, buffer, label) {
     if (!samples.length || !maximum) return;
     const bands = waveformSpectrum?.bands;
     const sourceDuration = waveformSpectrum?.durationMs || durationMs;
+    const windowSpan = windowRange.endMs - windowRange.startMs;
+    const detailChannels = windowSpan < durationMs
+      ? Array.from({ length: buffer.numberOfChannels }, (_, i) => buffer.getChannelData(i)) : null;
     for (let x = 0; x < width; x += 1) {
       const from = (windowRange.startMs + x / width * (windowRange.endMs - windowRange.startMs)) / sourceDuration * samples.length;
       const to = (windowRange.startMs + (x + 1) / width * (windowRange.endMs - windowRange.startMs)) / sourceDuration * samples.length;
@@ -215,6 +244,14 @@ function mountWaveform(parent, buffer, label) {
       for (let i = Math.max(0, Math.floor(from)); i < Math.min(samples.length, Math.max(Math.floor(from) + 1, Math.ceil(to))); i += 1) {
         peak = Math.max(peak, Math.abs(Number(samples[i]) || 0));
         if (bands) { low += bands[i * 3]; mid += bands[i * 3 + 1]; high += bands[i * 3 + 2]; }
+      }
+      if (detailChannels) {
+        // Read the original PCM at zoomed resolution so transient boundaries
+        // remain precise instead of enlarging the overview's 5 ms bins.
+        const first = Math.max(0, Math.floor((windowRange.startMs + x / width * windowSpan) * buffer.sampleRate / 1000));
+        const last = Math.min(buffer.length, Math.max(first + 1, Math.ceil((windowRange.startMs + (x + 1) / width * windowSpan) * buffer.sampleRate / 1000)));
+        peak = 0;
+        for (const channel of detailChannels) for (let i = first; i < last; i++) peak = Math.max(peak, Math.abs(channel[i]));
       }
       const energy = Math.max(low, mid, high);
       context.fillStyle = bands && energy > 0
@@ -304,7 +341,7 @@ $('import-form').onsubmit = event => {
   mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
   $('import-dialog').close(); status(text('ready'));
 };
-const settings = () => ({ states: structuredClone(states), rate, keepTone, mode, repeat: $('repeat').checked });
+const settings = () => ({ drumStarts: drumSampler?.snapshot(), states: structuredClone(states), rate, keepTone, mode, repeat: $('repeat').checked });
 libraryUI = mountStemLibrary({ locale, report: status,
   onOperation(value) { libraryOperating = value; $('separate').disabled = value || busy || !initialized; $('cancel').disabled = value; $('import-audio').disabled = value || busy || !importReady; },
   snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : null }),
@@ -411,10 +448,12 @@ function audioBuffer(channels) {
   channels.forEach((channel, i) => buffer.copyToChannel(channel, i));
   return buffer;
 }
-function offset() {
+function offset(loopRange = stemLoop.range()) {
   if (!playing) return position;
   const value = Math.max(0, position + Math.max(0, context.currentTime - startedAt) * rate);
-  return $('repeat').checked ? value % original.duration : Math.min(value, original.duration);
+  const { startMs, endMs } = loopRange;
+  const start = startMs / 1000, end = endMs / 1000;
+  return $('repeat').checked && value >= end ? start + (value - end) % (end - start) : Math.min(value, original.duration);
 }
 function pause() {
   playbackRevision++;
@@ -425,6 +464,7 @@ function pause() {
   playLabel(false); updatePlayheads();
 }
 function applyMix() {
+  drumSampler?.updateGain();
   const solo = states.some(state => state.solo);
   nodes.forEach(({ gain }, index) => {
     const state = states[index - 1];
@@ -434,6 +474,7 @@ function applyMix() {
   });
   document.querySelectorAll('.stem').forEach((row, index) => {
     const state = states[index];
+    row.querySelector('.stem-enable').setAttribute('aria-checked', String(!state.muted));
     row.classList.toggle('is-silent', mode === 'original' || state.muted || (solo && !state.solo) || state.gain === 0);
   });
   $('original').setAttribute('aria-pressed', String(mode === 'original'));
@@ -446,11 +487,13 @@ async function play() {
   await context.resume();
   await prepareTone();
   if (playing || version !== playbackRevision) return;
-  if (position >= original.duration) position = 0;
+  const { startMs, endMs } = stemLoop.range();
+  if ($('repeat').checked && (position < startMs / 1000 || position >= endMs / 1000)) position = startMs / 1000;
+  else if (position >= original.duration) position = 0;
   startedAt = context.currentTime + 0.03;
   nodes = [original, ...buffers].map(buffer => {
     const source = context.createBufferSource(), gain = context.createGain();
-    source.buffer = buffer; source.loop = $('repeat').checked; source.playbackRate.value = rate;
+    source.buffer = buffer; source.loopStart = startMs / 1000; source.loopEnd = endMs / 1000; source.loop = $('repeat').checked; source.playbackRate.value = rate;
     gain.gain.value = 0; source.connect(gain).connect(toneNode);
     source.start(startedAt, position);
     return { source, gain };
@@ -459,7 +502,7 @@ async function play() {
   playing = true; applyMix(); playLabel(true);
 }
 function disposeResults() {
-  pause(); buffers = []; outputs = [];
+  pause(); drumSampler?.dispose(); drumSampler = null; stemLoop.reset(); buffers = []; outputs = [];
   urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
   for (const view of waveforms) if ($('stems').contains(view.element)) view.dispose();
   $('stems').replaceChildren(); $('mix').disabled = true; $('quality-note').hidden = true;
@@ -469,7 +512,7 @@ function showResults(result, saved = null) {
   disposeResults(); position = 0;
   outputs = result.outputs;
   buffers = outputs.map(audioBuffer);
-  states = STEMS.map((_, index) => ({ muted: !!saved?.states?.[index]?.muted, solo: !!saved?.states?.[index]?.solo,
+  states = STEMS.map((_, index) => ({ muted: !!saved?.states?.[index]?.muted, solo: false,
     gain: Number.isFinite(saved?.states?.[index]?.gain) ? Math.max(0, Math.min(1, saved.states[index].gain)) : 1 }));
   rate = Number.isFinite(saved?.rate) ? Math.max(.1, Math.min(3, saved.rate)) : 1;
   keepTone = !!saved?.keepTone;
@@ -477,19 +520,24 @@ function showResults(result, saved = null) {
   renderTempo();
   wavs = [new Blob([encodeWav([original.getChannelData(0), original.getChannelData(1)])], { type: 'audio/wav' })];
   STEMS.forEach((stem, index) => {
-    const row = document.createElement('div'); row.className = 'stem';
+    const row = document.createElement('div'); row.className = 'stem'; row.dataset.stem = stem;
     const name = document.createElement('h2'); name.append(icon(stem), document.createTextNode(text(stem)));
-    const controls = ['mute', 'solo'].map(kind => {
-      const button = document.createElement('button'); button.type = 'button'; button.textContent = text(kind);
-      button.setAttribute('aria-label', `${text(kind)} ${text(stem)}`); button.setAttribute('aria-pressed', String(states[index][kind === 'mute' ? 'muted' : 'solo']));
-      button.onclick = () => {
-        const key = kind === 'mute' ? 'muted' : 'solo';
-        states[index][key] = !states[index][key];
-        button.setAttribute('aria-pressed', String(states[index][key])); mode = 'mix'; applyMix();
-        libraryUI.changed();
-      };
-      return button;
-    });
+    const enabled = document.createElement('button'); enabled.type = 'button'; enabled.className = 'stem-enable stem-solo';
+    enabled.setAttribute('role', 'switch');
+    enabled.setAttribute('aria-label', (locale === 'es' ? 'Activar ' : 'Enable ') + text(stem));
+    enabled.title = (locale === 'es' ? 'Activar/desactivar ' : 'Enable/disable ') + text(stem) +
+      (locale === 'es' ? ' · Clic derecho: escuchar solo esta pista' : ' · Right-click: hear only this track');
+    enabled.setAttribute('aria-checked', String(!states[index].muted));
+    enabled.onclick = () => {
+      states[index].muted = !states[index].muted; states.forEach(state => { state.solo = false; });
+      mode = 'mix'; applyMix(); libraryUI.changed();
+    };
+    enabled.oncontextmenu = event => {
+      event.preventDefault();
+      states.forEach((state, other) => { state.muted = other !== index; state.solo = false; });
+      mode = 'mix'; applyMix(); libraryUI.changed();
+    };
+    const controls = [enabled];
     const volume = document.createElement('div'); volume.className = 'stem-volume';
     const caption = document.createElement('span'); caption.textContent = text('volume');
     const knob = document.createElement('button'); knob.type = 'button'; knob.className = 'pad-knob';
@@ -524,10 +572,14 @@ function showResults(result, saved = null) {
     const wav = new Blob([encodeWav(outputs[index])], { type: 'audio/wav' }); wavs.push(wav);
     const url = URL.createObjectURL(wav); urls.push(url);
     link.href = url; link.download = `${title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 80)}_${stem}.wav`;
-    link.append(icon('download'), document.createTextNode('WAV')); link.setAttribute('aria-label', `${text('download')} ${text(stem)}`);
+    link.append(icon('download')); link.title = text('download') + ' WAV - ' + text(stem); link.setAttribute('aria-label', `${text('download')} ${text(stem)}`);
     const actions = document.createElement('div'); actions.className = 'stem-actions'; actions.append(...controls, link, volume);
     row.append(name, actions); $('stems').append(row);
     mountWaveform(row, buffers[index], `${text(stem)} · ${text('position')}`);
+    if (stem === 'drums') drumSampler = mountDrumSampler({ row, actions, waveform: row.querySelector('.waveform'),
+      buffer: buffers[index], timeline: stemLoop, audioContext: () => context ||= new AudioContext({ sampleRate: SAMPLE_RATE }),
+      level: () => states[index].muted ? 0 : states[index].gain, changed: () => libraryUI.changed(),
+      saved: saved?.drumStarts, locale, report: playbackError });
   });
   outputs = [];
   $('mix').disabled = false; $('quality-note').hidden = false; mode = saved?.mode === 'original' ? 'original' : 'mix'; applyMix();
@@ -639,7 +691,7 @@ const timeInterval = setInterval(() => {
 window.addEventListener('pagehide', () => {
   cancelAnimationFrame(animationFrame); clearInterval(timeInterval);
   for (const view of waveforms) view.dispose();
-  worker?.terminate(); pause(); toneNode?.port.postMessage({ type: 'dispose' }); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
+  drumSampler?.dispose(); worker?.terminate(); pause(); toneNode?.port.postMessage({ type: 'dispose' }); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
   if (jobId) chrome.runtime.sendMessage({ type: 'STEM_LOOP_CANCEL', jobId }).catch(() => {});
 });
 function renderInfo(value) {

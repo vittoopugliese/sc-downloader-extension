@@ -3576,19 +3576,7 @@
         .sampler-preset-status:empty { display:none; }
         .sampler-body { padding: 6px 7px; }
         .drum-section.is-instrument .sampler-body { display: none; }
-        .drum-pads { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
-        .drum-pad { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100%; height: 28px; padding: 3px 6px; border: 1px solid #4a4a4a; border-radius: 8px; color: #fff; background: #292929; font: inherit; cursor: pointer; user-select: none; touch-action: manipulation; transition: transform 90ms ease, background-color 90ms ease, border-color 90ms ease; }
-        .drum-slot:nth-child(2) .drum-pad { background: #383838; }
-        .drum-slot:nth-child(3) .drum-pad { background: #464646; }
-        .drum-slot:nth-child(4) .drum-pad { background: #343434; }
-        .drum-pad:hover, .drum-pad.is-holding { border-color: #ff7b38; }
-        .drum-pad.is-active { transform: scale(.95); border-color: #ff5500; background: #713516 !important; }
-        .drum-section.is-selecting .drum-pad { border-color: #ff7b38; box-shadow: 0 0 0 1px rgba(255, 123, 56, .25); }
-        .drum-pad.is-saving { opacity: .55; cursor: progress; }
-        .drum-pad:focus-visible { outline: 2px solid #ff5500; outline-offset: 2px; }
-        .drum-key { flex: 0 0 auto; font-size: 14px; font-weight: 800; line-height: 1; }
-        .drum-slot { position: relative; }
-        .drum-pad.is-selected { border-color: #ff8a4c; background: #f77620 !important; }
+        ${globalThis.SCSamplerCore.PAD_STYLES}
         .pad-control { display: grid; justify-items: center; gap: 3px; min-width: 0; font-size: 8px; color: #aaa; }
         .pad-control output { font-size: 8px; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .pad-knob { position: relative; width: 28px; height: 28px; padding: 0; border: 1px solid #555; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #484848, #222); cursor: ns-resize; touch-action: none; }

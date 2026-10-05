@@ -55,6 +55,8 @@ $packageItems = @(
     "scripts/stems-page.mjs",
     "scripts/stem-presets.mjs",
     "scripts/stem-library-ui.mjs",
+    "scripts/stem-loop.mjs",
+    "scripts/stem-sampler.mjs",
     "scripts/stem-tone-processor.mjs",
     "scripts/vendor/onnxruntime",
     "scripts/content.js",
