@@ -13,7 +13,7 @@ No es el extractor de FL Studio reconstruido. La ingeniería inversa del binario
 ## Alcance y decisiones
 
 - Botón **Stems** junto a WAV en Player Tools → Loop Region.
-- Selección A–B capturada al pulsarlo. Hasta 30 segundos a velocidad original, sin efectos: primero se evalúa separación, no transformaciones de tempo/pitch/FX.
+- Selección A–B capturada al pulsarlo. Hasta 2 minutos a velocidad original, sin efectos: primero se evalúa separación, no transformaciones de tempo/pitch/FX. Para separar, la extensión solicita la variante HLS de SoundCloud cuando está disponible y descarga sólo los segmentos que cubren A–B; no decodifica los 20–30 minutos restantes. Si la pista no ofrece HLS, el navegador puede necesitar descargar el stream progresivo completo y aplicar el límite de memoria.
 - Pestaña propia de la extensión, procesamiento en un worker local y permiso de exportación existente (`export-loop`). El checkout actual tiene `FREE_PRO_ENABLED = true`; no se cambió la política.
 - Cuatro fuentes: batería, bajo, otros y voz; mezcla sincronizada, mute, solo, volumen, comparación con original, posición y reproducción repetida.
 - Descarga individual WAV estéreo 44,1 kHz / 32-bit float para no recortar el margen de amplitud de cada stem.
@@ -84,7 +84,7 @@ Artefactos en `test-results/stems/` (ignorados por Git): modelo de prueba, `inpu
 ## Cómo probarlo ahora
 
 1. En `chrome://extensions`, recargar la extensión que apunta a este workspace y recargar la pestaña de SoundCloud.
-2. Abrir Player Tools → Loop Region y seleccionar A–B de hasta 30 segundos.
+2. Abrir Player Tools → Loop Region y seleccionar A–B de hasta 2 minutos.
 3. Pulsar **Stems**; en la pestaña nueva pulsar **Separar loop**.
 4. Esperar la descarga inicial de 166 MB y el procesamiento. Comparar **Original** con **Mezcla de stems**, escuchar con **Solo/Mute** y descargar los WAV.
 5. Mantener abierta la pestaña hasta descargar lo necesario. Para otra selección, volver a SoundCloud y abrir Stems de nuevo.
@@ -93,7 +93,7 @@ Artefactos en `test-results/stems/` (ignorados por Git): modelo de prueba, `inpu
 
 - Audición con loops reales de SoundCloud: voz, batería compleja, bajos distorsionados y música densa. Comparar mismas selecciones contra FL Studio; aún no existe medición de equivalencia.
 - Medir memoria máxima y rendimiento en distintos equipos. La verificación real usó CPU/WASM de un hilo; WebGPU y multihilo no están implementados ni prometidos.
-- Probar inferencia real de un loop largo de 30 s (varios segmentos); el solapamiento ya está probado numéricamente, pero el ensayo con pesos reales fue de un segmento.
+- Probar inferencia real de un loop largo de 120 s (varios segmentos); el solapamiento ya está probado numéricamente, pero el ensayo con pesos reales fue de un segmento.
 - Evaluar contexto antes/después de A–B para mejorar bordes de loops muy cortos; hoy el modelo sólo recibe la selección con padding.
 - Valorar guardar stems en pads del sampler o persistir sesiones, si el usuario lo pide. Hoy hay escucha y descarga individual; no hay envío directo al sampler, ZIP ni persistencia de resultados.
 - Para tienda: ejecutar el empaquetado completo con su configuración de release y probar el ZIP. Se validó la lista de assets y se amplió el smoke check, pero no se generó ni publicó un build de tienda.

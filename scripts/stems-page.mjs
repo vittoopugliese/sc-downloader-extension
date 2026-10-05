@@ -7,7 +7,7 @@ const translations = {
     pageTitle: 'Stem Extractor · Player Tools', workspace: 'Your loop, layer by layer.', experimental: 'Experimental', selected: 'SELECTED LOOP',
     separationLabel: 'Separation', extract: 'Unpack your sound.', local: 'On-device',
     intro: 'Separate vocals, drums, bass and other instruments locally. Your audio stays in Chrome.',
-    details: 'First use downloads a 166 MB model. Processing can take a few minutes and uses substantial memory. Up to 30 seconds, at original speed without effects.',
+    details: 'First use downloads a 166 MB model. Processing can take a few minutes and uses substantial memory. Up to 2 minutes, at original speed without effects.',
     separate: 'Separate loop', cancel: 'Cancel', clearCache: 'Remove cached model', playGame: 'Play Lumberjack game', hideGame: 'Close Lumberjack game', gameTitle: 'Lumberjack game',
     listenCompareLabel: 'Listen and compare', listen: 'Find your mix.', play: 'Play', stop: 'Pause', repeat: 'Repeat loop', comparisonLabel: 'Compare', original: 'Original', mix: 'Stem mix',
     lows: 'Lows', mids: 'Mids', highs: 'Highs', position: 'Position',
@@ -20,13 +20,13 @@ const translations = {
     resetVolume: 'Double-click to reset', another: 'Another tab is separating audio. Wait for it to finish or cancel it first.',
     failed: 'Separation failed. Retry, or try a shorter loop and close other heavy tabs.', prepareFailed: 'The extension could not prepare this loop.',
     infoFailed: 'The selected loop could not be loaded.', timeout: 'Separation timed out. Try a shorter loop.', invalidAudio: 'The loop audio is invalid.',
-    tooLong: 'The rendered loop exceeds 30 seconds.', cacheClearFailed: 'The cached model could not be removed.', playbackFailed: 'Audio playback could not start.', loop: 'Loop',
+    tooLong: 'The rendered loop exceeds 2 minutes.', cacheClearFailed: 'The cached model could not be removed.', playbackFailed: 'Audio playback could not start.', loop: 'Loop',
   },
   es: {
     pageTitle: 'Separador de stems · Player Tools', workspace: 'Tu loop, capa por capa.', experimental: 'Experimental', selected: 'LOOP SELECCIONADO',
     separationLabel: 'Separación', extract: 'Separá tu sonido.', local: 'En tu equipo',
     intro: 'Separá voz, batería, bajo y otros instrumentos localmente. Tu audio se queda en Chrome.',
-    details: 'El primer uso descarga un modelo de 166 MB. El proceso puede tardar unos minutos y consume bastante memoria. Hasta 30 segundos, a velocidad original y sin efectos.',
+    details: 'El primer uso descarga un modelo de 166 MB. El proceso puede tardar unos minutos y consume bastante memoria. Hasta 2 minutos, a velocidad original y sin efectos.',
     separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Eliminar modelo de la caché', playGame: 'Jugar a Lumberjack', hideGame: 'Cerrar Lumberjack', gameTitle: 'Juego Lumberjack',
     listenCompareLabel: 'Escuchar y comparar', listen: 'Encontrá tu mezcla.', play: 'Reproducir', stop: 'Pausar', repeat: 'Repetir loop', comparisonLabel: 'Comparar', original: 'Original', mix: 'Mezcla de stems',
     lows: 'Graves', mids: 'Medios', highs: 'Agudos', position: 'Posición',
@@ -39,13 +39,13 @@ const translations = {
     resetVolume: 'Doble clic para restablecer', another: 'Otra pestaña está separando audio. Esperá a que termine o cancelala primero.',
     failed: 'No se pudo separar. Reintentá o probá un loop más corto y cerrá otras pestañas pesadas.', prepareFailed: 'La extensión no pudo preparar este loop.',
     infoFailed: 'No se pudo cargar el loop seleccionado.', timeout: 'La separación tardó demasiado. Probá con un loop más corto.', invalidAudio: 'El audio del loop no es válido.',
-    tooLong: 'El loop procesado supera los 30 segundos.', cacheClearFailed: 'No se pudo eliminar el modelo de la caché.', playbackFailed: 'No se pudo iniciar la reproducción.', loop: 'Loop',
+    tooLong: 'El loop procesado supera los 2 minutos.', cacheClearFailed: 'No se pudo eliminar el modelo de la caché.', playbackFailed: 'No se pudo iniciar la reproducción.', loop: 'Loop',
   },
   de: {
     pageTitle: 'Stem-Extraktor · Player Tools', workspace: 'Dein Loop, Spur für Spur.', experimental: 'Experimentell', selected: 'AUSGEWÄHLTER LOOP',
     separationLabel: 'Stem-Trennung', extract: 'Entfalte deinen Sound.', local: 'Auf diesem Gerät',
     intro: 'Trenne Gesang, Schlagzeug, Bass und andere Instrumente lokal. Dein Audio bleibt in Chrome.',
-    details: 'Bei der ersten Verwendung wird ein 166-MB-Modell heruntergeladen. Die Verarbeitung kann einige Minuten dauern und benötigt viel Arbeitsspeicher. Bis zu 30 Sekunden, in Originalgeschwindigkeit und ohne Effekte.',
+    details: 'Bei der ersten Verwendung wird ein 166-MB-Modell heruntergeladen. Die Verarbeitung kann einige Minuten dauern und benötigt viel Arbeitsspeicher. Bis zu 2 Minuten, in Originalgeschwindigkeit und ohne Effekte.',
     separate: 'Loop trennen', cancel: 'Abbrechen', clearCache: 'Modell aus Cache entfernen', playGame: 'Lumberjack spielen', hideGame: 'Lumberjack schließen', gameTitle: 'Lumberjack-Spiel',
     listenCompareLabel: 'Anhören und vergleichen', listen: 'Finde deinen Mix.', play: 'Abspielen', stop: 'Pausieren', repeat: 'Loop wiederholen', comparisonLabel: 'Vergleichen', original: 'Original', mix: 'Stem-Mix',
     lows: 'Bässe', mids: 'Mitten', highs: 'Höhen', position: 'Position',
@@ -58,13 +58,13 @@ const translations = {
     resetVolume: 'Zum Zurücksetzen doppelklicken', another: 'Ein anderer Tab trennt gerade Audio. Warte, bis er fertig ist, oder brich ihn zuerst ab.',
     failed: 'Die Trennung ist fehlgeschlagen. Versuche es erneut oder verwende einen kürzeren Loop und schließe andere ressourcenintensive Tabs.', prepareFailed: 'Die Erweiterung konnte diesen Loop nicht vorbereiten.',
     infoFailed: 'Der ausgewählte Loop konnte nicht geladen werden.', timeout: 'Zeitüberschreitung bei der Trennung. Versuche einen kürzeren Loop.', invalidAudio: 'Das Loop-Audio ist ungültig.',
-    tooLong: 'Der gerenderte Loop ist länger als 30 Sekunden.', cacheClearFailed: 'Das Modell konnte nicht aus dem Cache entfernt werden.', playbackFailed: 'Die Audiowiedergabe konnte nicht gestartet werden.', loop: 'Loop',
+    tooLong: 'Der gerenderte Loop ist länger als 2 Minuten.', cacheClearFailed: 'Das Modell konnte nicht aus dem Cache entfernt werden.', playbackFailed: 'Die Audiowiedergabe konnte nicht gestartet werden.', loop: 'Loop',
   },
   'pt-BR': {
     pageTitle: 'Separador de stems · Player Tools', workspace: 'Seu loop, camada por camada.', experimental: 'Experimental', selected: 'LOOP SELECIONADO',
     separationLabel: 'Separação', extract: 'Abra seu som.', local: 'Neste dispositivo',
     intro: 'Separe vocais, bateria, baixo e outros instrumentos localmente. Seu áudio permanece no Chrome.',
-    details: 'No primeiro uso, um modelo de 166 MB será baixado. O processamento pode levar alguns minutos e usar bastante memória. Até 30 segundos, na velocidade original e sem efeitos.',
+    details: 'No primeiro uso, um modelo de 166 MB será baixado. O processamento pode levar alguns minutos e usar bastante memória. Até 2 minutos, na velocidade original e sem efeitos.',
     separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Remover modelo do cache', playGame: 'Jogar Lumberjack', hideGame: 'Fechar Lumberjack', gameTitle: 'Jogo Lumberjack',
     listenCompareLabel: 'Ouvir e comparar', listen: 'Encontre sua mixagem.', play: 'Reproduzir', stop: 'Pausar', repeat: 'Repetir loop', comparisonLabel: 'Comparar', original: 'Original', mix: 'Mixagem de stems',
     lows: 'Graves', mids: 'Médios', highs: 'Agudos', position: 'Posição',
@@ -77,13 +77,13 @@ const translations = {
     resetVolume: 'Clique duas vezes para redefinir', another: 'Outra aba está separando áudio. Aguarde a conclusão ou cancele-a primeiro.',
     failed: 'Falha na separação. Tente novamente ou use um loop mais curto e feche outras abas pesadas.', prepareFailed: 'A extensão não conseguiu preparar este loop.',
     infoFailed: 'Não foi possível carregar o loop selecionado.', timeout: 'O tempo da separação se esgotou. Tente um loop mais curto.', invalidAudio: 'O áudio do loop é inválido.',
-    tooLong: 'O loop renderizado excede 30 segundos.', cacheClearFailed: 'Não foi possível remover o modelo do cache.', playbackFailed: 'Não foi possível iniciar a reprodução.', loop: 'Loop',
+    tooLong: 'O loop renderizado excede 2 minutos.', cacheClearFailed: 'Não foi possível remover o modelo do cache.', playbackFailed: 'Não foi possível iniciar a reprodução.', loop: 'Loop',
   },
   ru: {
     pageTitle: 'Разделение на стемы · Player Tools', workspace: 'Ваш луп, слой за слоем.', experimental: 'Экспериментальная функция', selected: 'ВЫБРАННЫЙ ЛУП',
     separationLabel: 'Разделение', extract: 'Разберите звук на части.', local: 'На этом устройстве',
     intro: 'Разделяйте вокал, ударные, бас и другие инструменты локально. Аудио остается в Chrome.',
-    details: 'При первом запуске загружается модель размером 166 МБ. Обработка может занять несколько минут и требует много памяти. До 30 секунд, с исходной скоростью и без эффектов.',
+    details: 'При первом запуске загружается модель размером 166 МБ. Обработка может занять несколько минут и требует много памяти. До 2 минут, с исходной скоростью и без эффектов.',
     separate: 'Разделить луп', cancel: 'Отменить', clearCache: 'Удалить модель из кеша', playGame: 'Играть в Lumberjack', hideGame: 'Закрыть Lumberjack', gameTitle: 'Игра Lumberjack',
     listenCompareLabel: 'Прослушать и сравнить', listen: 'Создайте свой микс.', play: 'Воспроизвести', stop: 'Пауза', repeat: 'Повторять луп', comparisonLabel: 'Сравнить', original: 'Оригинал', mix: 'Микс стемов',
     lows: 'Низкие', mids: 'Средние', highs: 'Высокие', position: 'Позиция',
@@ -96,7 +96,7 @@ const translations = {
     resetVolume: 'Дважды щелкните для сброса', another: 'В другой вкладке уже разделяется аудио. Дождитесь завершения или сначала отмените операцию.',
     failed: 'Не удалось разделить аудио. Повторите попытку либо выберите более короткий луп и закройте другие ресурсоемкие вкладки.', prepareFailed: 'Расширению не удалось подготовить этот луп.',
     infoFailed: 'Не удалось загрузить выбранный луп.', timeout: 'Время ожидания разделения истекло. Попробуйте более короткий луп.', invalidAudio: 'Аудио лупа недействительно.',
-    tooLong: 'Обработанный луп длиннее 30 секунд.', cacheClearFailed: 'Не удалось удалить модель из кеша.', playbackFailed: 'Не удалось запустить воспроизведение.', loop: 'Луп',
+    tooLong: 'Обработанный луп длиннее 2 минут.', cacheClearFailed: 'Не удалось удалить модель из кеша.', playbackFailed: 'Не удалось запустить воспроизведение.', loop: 'Луп',
   },
 };
 const browserLanguage = globalThis.chrome?.i18n?.getUILanguage?.() || navigator.languages?.[0] || navigator.language || 'en';
@@ -247,11 +247,11 @@ let states = STEMS.map(() => ({ muted: false, solo: false, gain: 1 }));
 let info = null, wavs = [], rate = 1, keepTone = false, toneNode, toneReady, playbackRevision = 0, toneLatency = 0, libraryOperating = false;
 let libraryUI, importReady = false;
 const localCopy = ({
-  es: ['Cargar audio del equipo', 'Elegí un archivo y un fragmento de hasta 30 segundos.', 'Cargar fragmento', 'Nombre', 'Inicio (s)', 'Fin (s)', 'Cancelar', 'Leyendo audio…', 'No se pudo leer el audio. Probá otro archivo o un formato compatible con Chrome.', 'Elegí un rango válido de hasta 30 segundos dentro del archivo.', 'Elegí un audio del equipo o una separación guardada.'],
-  en: ['Load audio from computer', 'Choose a file and a segment up to 30 seconds.', 'Load segment', 'Name', 'Start (s)', 'End (s)', 'Cancel', 'Reading audio…', 'Could not read audio. Try another file or a format supported by Chrome.', 'Choose a valid range up to 30 seconds within the file.', 'Choose local audio or a saved separation.'],
-  de: ['Audio vom Computer laden', 'Datei und einen Ausschnitt von bis zu 30 Sekunden auswählen.', 'Ausschnitt laden', 'Name', 'Start (s)', 'Ende (s)', 'Abbrechen', 'Audio wird gelesen…', 'Audio konnte nicht gelesen werden. Versuche eine andere Datei oder ein von Chrome unterstütztes Format.', 'Wähle einen gültigen Bereich von bis zu 30 Sekunden innerhalb der Datei.', 'Wähle lokales Audio oder eine gespeicherte Trennung.'],
-  'pt-BR': ['Carregar áudio do computador', 'Escolha um arquivo e um trecho de até 30 segundos.', 'Carregar trecho', 'Nome', 'Início (s)', 'Fim (s)', 'Cancelar', 'Lendo áudio…', 'Não foi possível ler o áudio. Tente outro arquivo ou formato compatível com o Chrome.', 'Escolha um intervalo válido de até 30 segundos dentro do arquivo.', 'Escolha um áudio local ou uma separação salva.'],
-  ru: ['Загрузить аудио с компьютера', 'Выберите файл и фрагмент до 30 секунд.', 'Загрузить фрагмент', 'Название', 'Начало (с)', 'Конец (с)', 'Отмена', 'Чтение аудио…', 'Не удалось прочитать аудио. Попробуйте другой файл или формат, поддерживаемый Chrome.', 'Выберите допустимый фрагмент до 30 секунд в пределах файла.', 'Выберите локальное аудио или сохранённое разделение.'],
+  es: ['Cargar audio del equipo', 'Elegí un archivo y un fragmento de hasta 2 minutos.', 'Cargar fragmento', 'Nombre', 'Inicio (s)', 'Fin (s)', 'Cancelar', 'Leyendo audio…', 'No se pudo leer el audio. Probá otro archivo o un formato compatible con Chrome.', 'Elegí un rango válido de hasta 2 minutos dentro del archivo.', 'Elegí un audio del equipo o una separación guardada.'],
+  en: ['Load audio from computer', 'Choose a file and a segment up to 2 minutes.', 'Load segment', 'Name', 'Start (s)', 'End (s)', 'Cancel', 'Reading audio…', 'Could not read audio. Try another file or a format supported by Chrome.', 'Choose a valid range up to 2 minutes within the file.', 'Choose local audio or a saved separation.'],
+  de: ['Audio vom Computer laden', 'Datei und einen Ausschnitt von bis zu 2 Minuten auswählen.', 'Ausschnitt laden', 'Name', 'Start (s)', 'Ende (s)', 'Abbrechen', 'Audio wird gelesen…', 'Audio konnte nicht gelesen werden. Versuche eine andere Datei oder ein von Chrome unterstütztes Format.', 'Wähle einen gültigen Bereich von bis zu 2 Minuten innerhalb der Datei.', 'Wähle lokales Audio oder eine gespeicherte Trennung.'],
+  'pt-BR': ['Carregar áudio do computador', 'Escolha um arquivo e um trecho de até 2 minutos.', 'Carregar trecho', 'Nome', 'Início (s)', 'Fim (s)', 'Cancelar', 'Lendo áudio…', 'Não foi possível ler o áudio. Tente outro arquivo ou formato compatível com o Chrome.', 'Escolha um intervalo válido de até 2 minutos dentro do arquivo.', 'Escolha um áudio local ou uma separação salva.'],
+  ru: ['Загрузить аудио с компьютера', 'Выберите файл и фрагмент до 2 минут.', 'Загрузить фрагмент', 'Название', 'Начало (с)', 'Конец (с)', 'Отмена', 'Чтение аудио…', 'Не удалось прочитать аудио. Попробуйте другой файл или формат, поддерживаемый Chrome.', 'Выберите допустимый фрагмент до 2 минут в пределах файла.', 'Выберите локальное аудио или сохранённое разделение.'],
 })[locale] || [];
 for (const [id, index] of Object.entries({ 'import-audio': 0, 'import-hint': 1, 'import-title': 2, 'import-confirm': 2,
   'import-name-label': 3, 'import-start-label': 4, 'import-end-label': 5, 'import-cancel': 6, 'import-range-hint': 1 })) $(id).textContent = localCopy[index];
@@ -385,7 +385,15 @@ function localizedError(key) { const error = new Error(text(key)); error.localiz
 function playbackError(error) { console.error('[Stems playback]', error); status(text('playbackFailed'), true); }
 async function message(type) {
   const result = await chrome.runtime.sendMessage({ type, jobId });
-  if (!result?.success) throw localizedError(type === 'STEM_LOOP_INFO' ? 'infoFailed' : 'prepareFailed');
+  if (!result?.success) {
+    const error = localizedError(type === 'STEM_LOOP_INFO' ? 'infoFailed' : 'prepareFailed');
+    // Keep the preparation failure actionable, without exposing signed media URLs.
+    const detail = typeof result?.error === 'string'
+      ? result.error.replace(/https?:\/\/[^\s]+/gi, '[URL]').slice(0, 400) : '';
+    if (detail) error.message += ` ${detail}`;
+    else if (Number.isInteger(result?.status)) error.message += ` HTTP ${result.status}.`;
+    throw error;
+  }
   return result;
 }
 function setBusy(value, revealGame = true) {

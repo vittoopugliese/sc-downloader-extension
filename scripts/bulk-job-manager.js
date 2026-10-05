@@ -1278,6 +1278,9 @@ const BulkJobManager = {
         for (let attempt = 0; attempt < 2; attempt += 1) {
           throwIfInstrumentCancelled(operationId);
           const resolved = await SCDownloadSource.resolveForPlayback(trackData, "auto", {
+            // A bounded instrument (including Stems) needs only A–B. Full-track
+            // piano instruments retain their existing source selection.
+            preferHls: Boolean(trimRange) && !fullTrack,
             forceRefresh: attempt > 0,
             reason: attempt > 0 ? "expired_media" : "initial",
             attempt,

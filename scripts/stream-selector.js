@@ -15,8 +15,9 @@ const SCStreamSelector = (() => {
   ]);
   const VALID_PREFERENCES = new Set(Object.values(PREFERENCE));
   const FORMAT_MATCHERS = Object.freeze({
+    // audio/mpegurl describes a playlist, not MP3 audio (e.g. abr_sq).
     [PREFERENCE.MP3]: (preset, mime) =>
-      preset.startsWith("mp3") || mime.includes("audio/mpeg"),
+      preset.startsWith("mp3") || mime.split(";", 1)[0].trim().toLowerCase() === "audio/mpeg",
     [PREFERENCE.M4A]: (preset, mime) =>
       preset.startsWith("aac") || mime.includes("mp4"),
     [PREFERENCE.OPUS]: (preset, mime) =>
@@ -107,9 +108,14 @@ const SCStreamSelector = (() => {
       : null;
   }
 
-  function extractStreamInfo(data, preference = DEFAULT_PREFERENCE) {
+  function extractStreamInfo(data, preference = DEFAULT_PREFERENCE, { preferHls = false } = {}) {
     const values = candidates(data);
     if (!values.length) return null;
+    if (preferHls) {
+      const hls = values.filter(value => value.format?.protocol === "hls");
+      const selected = selectFormat(hls, PREFERENCE.MP3) || selectFormat(hls, PREFERENCE.M4A) || hls[0];
+      if (selected) return streamInfo(selected);
+    }
     const normalized = normalizePreference(preference);
     if (TRANSCODE_PREFERENCES.includes(normalized)) {
       return streamInfo(selectFormat(values, normalized));

@@ -67,14 +67,24 @@ const { chromium } = require('playwright');
     const fixtureUrl = await fixture.evaluate(base64 => URL.createObjectURL(new Blob([
       Uint8Array.from(atob(base64), character => character.charCodeAt(0)),
     ], { type: 'audio/wav' })), fullAudio.toString('base64'));
-    await background.evaluate(fixtureUrl => {
+    const playlistUrl = await fixture.evaluate(audioUrl => URL.createObjectURL(new Blob([
+      '#EXTM3U\n' + Array.from({ length: 167 }, () => `#EXTINF:9,\n${audioUrl}`).join('\n') + '\n#EXT-X-ENDLIST',
+    ], { type: 'application/vnd.apple.mpegurl' })), fixtureUrl);
+    await background.evaluate(playlistUrl => {
       // Substitute SoundCloud metadata/network only. The renderer remains real:
-      // resolve progressive media, offscreen decode, A-B trim and PCM transfer.
-      requestTopFrameLoopTrack = async () => ({ title: 'Drums + bass + chord', artist: 'Fixture', id: 444, durationMs: 9000,
+      // refresh progressive metadata to HLS, bounded offscreen decode, A-B trim.
+      requestTopFrameLoopTrack = async () => ({ title: 'Drums + bass + chord', artist: 'Fixture', id: 444, durationMs: 1503000,
         streamUrl: 'https://api-v2.soundcloud.com/media/stem-test', streamProtocol: 'progressive', clientId: 'fixture-client' });
       const originalFetch = fetch;
-      globalThis.fetch = (input, options) => String(input).includes('/media/stem-test')
-        ? Promise.resolve(new Response(JSON.stringify({ url: fixtureUrl }))) : originalFetch(input, options);
+      globalThis.fetch = (input, options) => {
+        if (new URL(input).pathname === '/tracks') return Promise.resolve(Response.json([{
+          id: 444, title: 'Drums + bass + chord', duration: 1503000, user: { username: 'Fixture' },
+          media: { transcodings: [{ url: 'https://api-v2.soundcloud.com/media/stem-test',
+            preset: 'mp3_0_1', format: { protocol: 'hls', mime_type: 'audio/mpeg' } }] },
+        }]));
+        return String(input).includes('/media/stem-test')
+          ? Promise.resolve(Response.json({ url: playlistUrl })) : originalFetch(input, options);
+      };
       const render = BulkJobManager.renderLoopInstrument.bind(BulkJobManager);
       BulkJobManager.renderLoopInstrument = async (...args) => {
         globalThis.stemRenderArgs = args;
@@ -82,7 +92,7 @@ const { chromium } = require('playwright');
         globalThis.stemRenderedAudio = result.instrument.dataUrl;
         return result;
       };
-    }, fixtureUrl);
+    }, playlistUrl);
     const source = await context.newPage();
     await source.goto('https://soundcloud.com/artist/stem-test');
     await source.waitForFunction(() => document.documentElement.getAttribute('data-scdl-extension-record-worklet-url'));

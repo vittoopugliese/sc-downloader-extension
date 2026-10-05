@@ -11,12 +11,12 @@ const { chromium } = require('playwright');
   const artifacts = path.join(root, 'test-results/stem-local-audio');
   fs.mkdirSync(artifacts, { recursive: true });
   // Mono 48 kHz: proves browser decoding, stereo conversion and 44.1 kHz resampling.
-  const samples = 48000 * 35, wav = Buffer.alloc(44 + samples * 2);
+  const samples = 48000 * 125, wav = Buffer.alloc(44 + samples * 2);
   wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);
   wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
   wav.writeUInt32LE(48000, 24); wav.writeUInt32LE(96000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34);
   wav.write('data', 36); wav.writeUInt32LE(samples * 2, 40);
-  for (let i = 0; i < samples; i++) wav.writeInt16LE(Math.round(Math.sin(i * 2 * Math.PI * 440 / 48000) * (i < 48000 * 32 ? 3000 : 9000)), 44 + i * 2);
+  for (let i = 0; i < samples; i++) wav.writeInt16LE(Math.round(Math.sin(i * 2 * Math.PI * 440 / 48000) * (i < 48000 * 122 ? 3000 : 9000)), 44 + i * 2);
   const server = http.createServer((req, res) => {
     const file = path.join(root, new URL(req.url, 'http://localhost').pathname);
     if (!file.startsWith(root + path.sep) || !fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
@@ -47,25 +47,25 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('#separate').isDisabled(), true);
     const upload = () => page.locator('#audio-file').setInputFiles({ name: 'My recording.wav', mimeType: 'audio/wav', buffer: wav });
     await upload(); await page.locator('#import-dialog').waitFor();
-    assert.equal(await page.locator('#import-end').inputValue(), '30');
-    await page.locator('#import-end').fill('34'); await page.locator('#import-confirm').click();
-    assert.match(await page.locator('#import-error').textContent(), /30 segundos/);
-    await page.locator('#import-start').fill('32');
+    assert.equal(await page.locator('#import-end').inputValue(), '120');
+    await page.locator('#import-end').fill('124'); await page.locator('#import-confirm').click();
+    assert.match(await page.locator('#import-error').textContent(), /2 minutos/);
+    await page.locator('#import-start').fill('122');
     await page.locator('#import-end').fill(await page.locator('#import-end').getAttribute('max'));
     await page.locator('#import-name').fill('Mi grabación');
     await page.screenshot({ path: path.join(artifacts, 'import-desktop.png') });
     await page.locator('#import-confirm').click();
     await page.locator('#import-dialog').waitFor({ state: 'hidden' });
     assert.equal(await page.locator('#track').textContent(), 'Mi grabación');
-    assert.match(await page.locator('#track-meta').textContent(), /My recording.wav.*1 ch.*0:35/);
-    assert.match(await page.locator('#range').textContent(), /32,00.*35,00.*3,00/);
+    assert.match(await page.locator('#track-meta').textContent(), /My recording.wav.*1 ch.*2:05/);
+    assert.match(await page.locator('#range').textContent(), /122,00.*125,00.*3,00/);
     await page.locator('#save-locally').click(); await page.locator('#save-confirm').click();
     await page.locator('#separate:not(:disabled)').waitFor(); await page.locator('#separate').click();
     await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
     const id = await page.locator('#stem-presets').inputValue();
     const summary = await page.evaluate(() => inputSummary);
     assert.ok(Math.abs(summary.length - 44100 * 3) <= 1); assert.equal(summary.stereo, 2); assert.equal(summary.identical, true);
-    assert.ok(summary.peak > .26 && summary.peak < .3, 'Selected the loud ending, not the first 30 seconds');
+    assert.ok(summary.peak > .26 && summary.peak < .3, 'Selected the loud ending, not the first 120 seconds');
     await page.locator('#stem-rate-number').fill('0.5'); await page.locator('#stem-rate-number').press('Tab');
     await page.locator('#stem-keep-tone').check();
     await page.waitForFunction(async id => {

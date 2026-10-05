@@ -1,13 +1,13 @@
 export const SAMPLE_RATE = 44100;
 export const SEGMENT_FRAMES = 343980;
-export const MAX_SECONDS = 30;
+export const MAX_SECONDS = 120;
 export const STEMS = Object.freeze(['drums', 'bass', 'other', 'vocals']);
 
 export function validateAudio(channels) {
   const frames = channels?.[0]?.length;
   if (!Array.isArray(channels) || channels.length !== 2 || !frames || frames > SAMPLE_RATE * MAX_SECONDS ||
       channels.some(channel => !(channel instanceof Float32Array) || channel.length !== frames)) {
-    throw new Error('Expected a stereo loop of up to 30 seconds at 44.1 kHz.');
+    throw new Error('Expected a stereo loop of up to 2 minutes at 44.1 kHz.');
   }
   for (const channel of channels) for (const value of channel) {
     if (!Number.isFinite(value)) throw new Error('Audio contains invalid samples.');

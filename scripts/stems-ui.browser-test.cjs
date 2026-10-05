@@ -50,6 +50,23 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('#clear-cache').textContent(), 'Eliminar modelo de la caché');
     assert.equal(await page.locator('#track-meta').textContent(), 'Fixture artist · 3:05');
     assert.equal(await page.locator('#artwork-fallback').isVisible(), false);
+    await page.evaluate(() => {
+      const send = chrome.runtime.sendMessage;
+      let fail = true;
+      chrome.runtime.sendMessage = request => {
+        if (request.type === 'STEM_LOOP_RENDER' && fail) {
+          fail = false;
+          return Promise.resolve({ success: false, code: 'not_found', status: 404,
+            error: 'Stream link expired (404). https://media.test/audio?token=secret' });
+        }
+        return send(request);
+      };
+    });
+    await page.locator('#separate').click();
+    await page.waitForFunction(() => document.querySelector('#status').classList.contains('error'));
+    const preparationError = await page.locator('#status').textContent();
+    assert.match(preparationError, /Stream link expired \(404\)/, 'Preparation errors retain the backend reason');
+    assert.doesNotMatch(preparationError, /media\.test|token=secret/, 'Signed media URLs are not displayed');
     await page.locator('#separate').click();
     await page.waitForFunction(() => document.querySelectorAll('.stem canvas').length === 4);
     assert.equal(await page.locator('#toggle-game').textContent(), 'Jugar a Lumberjack');

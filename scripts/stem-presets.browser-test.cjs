@@ -7,7 +7,7 @@ const { chromium } = require('playwright');
 (async () => {
   const root = path.resolve(__dirname, '..');
   const { encodeWav } = await import('./stem-audio.mjs');
-  const pcm = [0, 1].map(() => Float32Array.from({ length: 44100 * 3 }, (_, i) => .25 * Math.sin(2 * Math.PI * 440 * i / 44100)));
+  const pcm = [0, 1].map(() => Float32Array.from({ length: 44100 * 120 }, (_, i) => .25 * Math.sin(2 * Math.PI * 440 * i / 44100)));
   const dataUrl = `data:audio/wav;base64,${Buffer.from(encodeWav(pcm)).toString('base64')}`;
   const server = http.createServer((req, res) => {
     const file = path.join(root, new URL(req.url, 'http://localhost').pathname);
@@ -21,7 +21,7 @@ const { chromium } = require('playwright');
     await context.addInitScript(({ dataUrl }) => {
       window.inferences = 0;
       window.chrome = { runtime: { sendMessage: async ({ type }) => type === 'STEM_LOOP_INFO'
-        ? { success: true, title: 'Saved 440 Hz loop', artist: 'Test artist', trimRange: { startMs: 2000, endMs: 5000 } }
+        ? { success: true, title: 'Saved 440 Hz loop', artist: 'Test artist', trimRange: { startMs: 2000, endMs: 122000 } }
         : { success: true, instrument: { dataUrl } } } };
       window.Worker = class {
         postMessage({ channels }) {

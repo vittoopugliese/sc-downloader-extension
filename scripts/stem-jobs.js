@@ -18,9 +18,9 @@
           throw new Error("Select a loop on SoundCloud first.");
         }
         const { startMs, endMs } = request.trimRange || {};
-        if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs < 0 || endMs <= startMs || endMs - startMs > 30000 ||
+        if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs < 0 || endMs <= startMs || endMs - startMs > 120000 ||
             !/^https:\/\/soundcloud\.com\/[^/]+\/[^/?#]+$/.test(request.trackUrl || "")) {
-          throw new Error("Select a loop between 0 and 30 seconds long.");
+          throw new Error("Select a loop longer than 0 and up to 2 minutes.");
         }
         if (!(await authorize(sender)).allowed) throw new Error("Player Tools Pro is required to export loop stems.");
         const trackData = await resolveTrack({ trackUrl: request.trackUrl }, sender);

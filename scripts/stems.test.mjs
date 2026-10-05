@@ -19,7 +19,7 @@ test('overlap/cropping preserves endpoints, stereo alignment and amplitude for s
 });
 test('invalid input and model output fail explicitly', async () => {
   assert.throws(() => validateAudio([new Float32Array([NaN]), new Float32Array(1)]), /invalid samples/);
-  assert.throws(() => validateAudio([new Float32Array(1323001), new Float32Array(1323001)]), /30 seconds/);
+  assert.throws(() => validateAudio([new Float32Array(5292001), new Float32Array(5292001)]), /2 minutes/);
   await assert.rejects(separateAudio([new Float32Array(2), new Float32Array(2)], async () => new Float32Array(1), undefined, 8), /shape/);
   await assert.rejects(separateAudio([new Float32Array(2), new Float32Array(2)], async () => new Float32Array(64).fill(Infinity), undefined, 8), /invalid audio/);
 });
@@ -67,7 +67,7 @@ function jobsFixture() {
 test('loop jobs enforce source/ownership/length and preserve the selected range without effects', async () => {
   const f = jobsFixture();
   await assert.rejects(f.jobs.handle(f.open, { ...f.source, url: 'https://evil.example/' }), /SoundCloud/);
-  await assert.rejects(f.jobs.handle({ ...f.open, trimRange: { startMs: 0, endMs: 30001 } }, f.source), /30 seconds/);
+  await assert.rejects(f.jobs.handle({ ...f.open, trimRange: { startMs: 0, endMs: 120001 } }, f.source), /2 minutes/);
   f.permitted = false;
   await assert.rejects(f.jobs.handle(f.open, f.source), /Pro/);
   assert.equal(f.created.length, 0);
@@ -87,4 +87,29 @@ test('loop jobs enforce source/ownership/length and preserve the selected range 
   assert.match(f.cancelled[0], /^instrument_stems_/);
   await f.jobs.removeTab(23);
   assert.equal(Object.keys(f.storage).length, 0);
+});
+
+test('two minute audio and selected loop sessions are accepted at the boundary', async () => {
+ assert.equal(validateAudio([new Float32Array(5292000), new Float32Array(5292000)]), 5292000);
+ const f = jobsFixture();
+ await f.jobs.handle({ ...f.open, trimRange: { startMs: 1205000, endMs: 1325000 } }, f.source);
+ assert.deepEqual(Object.values(f.storage)[0].trimRange, { startMs: 1205000, endMs: 1325000 });
+});
+
+test('two minute separation keeps bounded model inputs and complete output endpoints', async () => {
+  const frames = 44100 * 120;
+  const channels = [new Float32Array(frames).fill(.2), new Float32Array(frames).fill(-.1)];
+  let calls = 0;
+  const outputs = await separateAudio(channels, async input => {
+    calls++;
+    assert.equal(input.length, 343980 * 2);
+    const result = new Float32Array(input.length * 4);
+    for (let stem = 0; stem < 4; stem++) result.set(input, stem * input.length);
+    return result;
+  });
+  assert.ok(calls > 1);
+  for (const stem of outputs) for (let c = 0; c < 2; c++) {
+    assert.equal(stem[c].length, frames);
+    for (const index of [0, 343980, frames - 1]) assert.ok(Math.abs(stem[c][index] - channels[c][index]) < 1e-6);
+  }
 });

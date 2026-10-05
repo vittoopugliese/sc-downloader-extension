@@ -131,7 +131,7 @@ const SCDownloadSource = (() => {
       return resolveStream(track);
     }
 
-    async function refresh(trackId, clientId, formatPreference = "auto") {
+    async function refresh(trackId, clientId, formatPreference = "auto", options = {}) {
       return tryAuthenticated(clientId, [401, 403, 404], async (attempt) => {
         const url = new URL("https://api-v2.soundcloud.com/tracks");
         url.searchParams.set("ids", String(trackId));
@@ -142,6 +142,7 @@ const SCDownloadSource = (() => {
           clientId: attempt.clientId || clientId,
           pageUrl: tracks[0].permalink_url || null,
           formatPreference,
+          preferHls: options.preferHls === true,
           downloadEligibilityCheckedAt: now(),
         });
       });
@@ -159,15 +160,16 @@ const SCDownloadSource = (() => {
       const unrestricted = !enforceDownloadPolicy || await allDownloadsActivated();
       const canReuseEligibilitySnapshot = options.reuseEligibilitySnapshot === true &&
         Number.isFinite(track?.downloadEligibilityCheckedAt);
-      if (options.forceRefresh || (!unrestricted && !canReuseEligibilitySnapshot)) {
+      const requiresPreferredProtocol = options.preferHls === true && track?.streamProtocol !== "hls";
+      if (options.forceRefresh || requiresPreferredProtocol || (!unrestricted && !canReuseEligibilitySnapshot)) {
         if (!track?.id || (unrestricted && !track.clientId)) {
           throw createError("Track metadata cannot be refreshed.", "source_unavailable");
         }
-        track = await refresh(track.id, track.clientId, formatPreference);
+        track = await refresh(track.id, track.clientId, formatPreference, options);
       }
       if (!unrestricted) requireOriginalAvailable(track);
       if (
-        SCStreamSelector.shouldPreferOriginal(track, formatPreference)
+        !options.preferHls && SCStreamSelector.shouldPreferOriginal(track, formatPreference)
       ) {
         try {
           const original = await resolveOriginal(track.id, track.clientId);
@@ -190,7 +192,7 @@ const SCDownloadSource = (() => {
         return { streamUrl: stream.url, trackData: track };
       } catch (error) {
         if (!track.id || !track.clientId || !shouldRefresh(error)) throw error;
-        track = { ...track, ...(await refresh(track.id, track.clientId, formatPreference)) };
+        track = { ...track, ...(await refresh(track.id, track.clientId, formatPreference, options)) };
         if (!unrestricted) requireOriginalAvailable(track);
         const stream = await resolveStream(track);
         return { streamUrl: stream.url, trackData: track };

@@ -308,6 +308,8 @@ const SCDownload = (() => {
     const lines = playlistText.split("\n").map((line) => line.trim());
     let initSegmentUrl = null;
     const segmentUrls = [];
+    const segmentDurations = [];
+    let pendingDuration = null;
 
     for (const line of lines) {
       if (/^#EXT-X-(KEY|SESSION-KEY|BYTERANGE|I-FRAMES-ONLY):?/.test(line) ||
@@ -324,12 +326,19 @@ const SCDownload = (() => {
         continue;
       }
 
+      if (line.startsWith("#EXTINF:")) {
+        pendingDuration = Number.parseFloat(line.slice(8).split(",", 1)[0]);
+        continue;
+      }
+
       if (line && !line.startsWith("#")) {
         segmentUrls.push(resolvePlaylistUrl(baseUrl, line));
+        segmentDurations.push(Number.isFinite(pendingDuration) ? pendingDuration : 0);
+        pendingDuration = null;
       }
     }
 
-    return { initSegmentUrl, segmentUrls };
+    return { initSegmentUrl, segmentUrls, segmentDurations };
   }
 
   async function fetchTextOrThrow(url, label, signal) {
@@ -582,7 +591,7 @@ const SCDownload = (() => {
         signal,
       });
       throwIfAborted(signal);
-      const finished = sampleEffects
+      const finished = hasSampleEffects(sampleEffects)
         ? await globalThis.SCTempoEffects.renderSample(rendered, sampleEffects, signal)
         : rendered;
       onProgress?.("Encoding WAV...");
@@ -774,9 +783,12 @@ const SCDownload = (() => {
     }
     if (spectral) checkDecodeBudget(trackData, null, 48000);
     const normalizedTrimRange = normalizeTrimRange(trimRange);
-    if (normalizedTrimRange || hasPlaybackTransform(playbackTransform) || hasSampleEffects(sampleEffects)) checkDecodeBudget(trackData);
     const isHlsStream =
       trackData.streamProtocol === "hls" || streamUrl.includes(".m3u8");
+    if ((!isHlsStream || !normalizedTrimRange) &&
+        (normalizedTrimRange || hasPlaybackTransform(playbackTransform) || hasSampleEffects(sampleEffects))) {
+      checkDecodeBudget(trackData);
+    }
     const isDirectDownload =
       trackData.isOriginalDownload ||
       trackData.streamProtocol === "progressive" ||
@@ -814,7 +826,7 @@ const SCDownload = (() => {
     if (isHlsStream) {
       onProgress?.("Loading playlist...");
       const { baseUrl, playlistText } = await resolveMediaPlaylist(streamUrl, signal);
-      const { initSegmentUrl, segmentUrls } = parseHlsPlaylist(
+      const { initSegmentUrl, segmentUrls, segmentDurations } = parseHlsPlaylist(
         baseUrl,
         playlistText
       );
@@ -823,9 +835,37 @@ const SCDownload = (() => {
         throw new Error("HLS playlist did not contain any media segments.");
       }
 
+      let selectedUrls = segmentUrls;
+      let selectedTrimRange = normalizedTrimRange;
+      let selectedTrackData = trackData;
+      if (normalizedTrimRange) {
+        if (!segmentDurations.every(duration => Number.isFinite(duration) && duration > 0)) {
+          throw new Error("The playlist is missing segment durations needed to prepare the selected loop.");
+        }
+        const requestedStart = normalizedTrimRange.startMs / 1000;
+        const prefix = [0];
+        for (const duration of segmentDurations) prefix.push(prefix[prefix.length - 1] + duration);
+        if (requestedStart >= prefix[prefix.length - 1] || normalizedTrimRange.endMs / 1000 > prefix[prefix.length - 1] + 0.001) {
+          throw new Error("The selected loop range is outside the available audio.");
+        }
+        const first = Math.max(0, Math.min(segmentDurations.length - 1,
+          prefix.findIndex((value, index) => index > 0 && value > requestedStart) - 1));
+        let cursor = prefix[first];
+        let last = first;
+        while (last < segmentDurations.length && cursor < normalizedTrimRange.endMs / 1000) {
+          cursor += segmentDurations[last++];
+        }
+        selectedUrls = segmentUrls.slice(first, Math.max(first + 1, last));
+        selectedTrimRange = {
+          startMs: Math.max(0, normalizedTrimRange.startMs - prefix[first] * 1000),
+          endMs: normalizedTrimRange.endMs - prefix[first] * 1000,
+        };
+        selectedTrackData = { ...trackData, durationMs: (cursor - prefix[first]) * 1000 };
+        checkDecodeBudget(selectedTrackData);
+      }
       const downloadUrls = initSegmentUrl
-        ? [initSegmentUrl, ...segmentUrls]
-        : segmentUrls;
+        ? [initSegmentUrl, ...selectedUrls]
+        : selectedUrls;
 
       onProgress?.(`Downloading 0/${downloadUrls.length} parts...`);
 
@@ -853,9 +893,9 @@ const SCDownload = (() => {
       }
       if (normalizedTrimRange) {
         return finalizeLoopBlob(
-          trackData,
+          selectedTrackData,
           combined,
-          normalizedTrimRange,
+          selectedTrimRange,
           playbackTransform,
           onProgress,
           signal,

@@ -157,7 +157,23 @@ Do not promote the diagnostic ZIP from September 23 to a current release candida
 ## Audio local en Stems
 
 - `npm.cmd run test:e2e:stem-local-audio`: selector de archivos, decodificación,
-  recorte a 30 s, mono/estéreo, presets, velocidad/Keep Tone y recuperación sin
+  recorte de hasta 120 s, mono/estéreo, presets, velocidad/Keep Tone y recuperación sin
   inferencia; capturas en `test-results/stem-local-audio/`.
 - `npm.cmd run test:e2e:stems`: incluye importación local, separación con modelo
   real y reapertura del preset bajo CSP de la extensión MV3.
+
+La regresión `verify-stem-loop-preparation.js` simula una pista HLS de 25 minutos
+y confirma que loops de 20 y 120 segundos sólo descarga/decodifica los segmentos
+seleccionados. `npm.cmd test` la ejecuta junto con las verificaciones locales.
+
+La regresión incluye una variante `abr_sq` con MIME `audio/mpegurl` que devuelve
+404 antes del MP3 HLS válido: el selector debe distinguir playlists de MP3.
+`test:e2e:stems-ui` verifica que un error de preparación muestre el motivo y permita
+reintentar, sin exponer URLs firmadas.
+
+Diagnóstico opcional con red y decodificación real de Chrome:
+`node scripts/inspect-live-stem-preparation.cjs`. Requiere `SC_CLIENT_ID` y
+`SC_TRACK_ID`; acepta `SC_START_MS` (por defecto 1205000) y `SC_LOOP_SECONDS`
+(por defecto 20). No usa cookies ni guarda audio, tokens o URLs. El 2026-10-05,
+la pista 2137202109 reprodujo el 404 antes del arreglo y preparó correctamente
+loops de 20 y 120 segundos después de distinguir los MIME.

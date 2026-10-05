@@ -1,3 +1,4 @@
+import { MAX_SECONDS, SAMPLE_RATE } from './stem-audio.mjs';
 // A library is either IndexedDB or a user-selected directory. Audio is immutable;
 // small settings writes never re-encode or copy the WAVs.
 const AUDIO = ['original', 'drums', 'bass', 'other', 'vocals'];
@@ -28,7 +29,7 @@ function validate(record) {
       typeof record.info?.title !== 'string' || !Number.isFinite(record.createdAt) ||
       !Number.isFinite(record.info.trimRange?.startMs) || !Number.isFinite(record.info.trimRange?.endMs) ||
       record.info.trimRange.startMs < 0 || record.info.trimRange.endMs <= record.info.trimRange.startMs ||
-      record.info.trimRange.endMs - record.info.trimRange.startMs > 30001) throw new Error('Invalid stem preset');
+      record.info.trimRange.endMs - record.info.trimRange.startMs > MAX_SECONDS * 1000 + 1) throw new Error('Invalid stem preset');
   return record;
 }
 async function write(directory, name, contents) {
@@ -111,7 +112,8 @@ export class StemPresets {
       blobs = await Promise.all(AUDIO.map(async name => (await directory.getFileHandle(`${name}.wav`)).getFile()));
     }
     validate(record);
-    if (record.id !== id || blobs?.length !== 5 || blobs.some(blob => !(blob instanceof Blob) || blob.size > 11 * 1024 * 1024 || blob.size < 44)) throw new Error('Invalid preset audio');
+    const maxWavBytes = 44 + MAX_SECONDS * SAMPLE_RATE * 2 * 4;
+    if (record.id !== id || blobs?.length !== 5 || blobs.some(blob => !(blob instanceof Blob) || blob.size > maxWavBytes || blob.size < 44)) throw new Error('Invalid preset audio');
     return { record, blobs };
   }
   async update(id, settings) {

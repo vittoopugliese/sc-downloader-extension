@@ -19,7 +19,7 @@ const SCDownloadTrack = (() => {
     const formatPreference = selector.normalizePreference
       ? selector.normalizePreference(context.formatPreference)
       : context.formatPreference || "auto";
-    const stream = selector.extractStreamInfo(rawTrack, formatPreference);
+    const stream = selector.extractStreamInfo(rawTrack, formatPreference, { preferHls: context.preferHls });
     const artworkUrl = normalizeArtwork(rawTrack.artwork_url);
 
     return {
