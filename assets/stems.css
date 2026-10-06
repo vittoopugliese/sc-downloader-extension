@@ -53,6 +53,16 @@ button.game-toggle:hover{background:linear-gradient(135deg,#ff833d,#e64d00);bord
 #game-panel iframe{display:block;width:100%;max-width:300px;height:auto;aspect-ratio:2/3;margin:auto;border:0;border-radius:8px;background:#111}
 @media(prefers-reduced-motion:reduce){#status.is-loading::before{animation:none}}
 #audition{padding:24px;background:#202020;border:1px solid #3b3b3b;border-radius:12px}
+#mix-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start;margin-top:20px}
+#mix-tools>section{min-width:0;margin:0;overflow:hidden}
+#mix-tools .tool-section-toggle{justify-content:flex-start;border-radius:0;letter-spacing:normal}
+@media(max-width:760px){#mix-tools{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:420px){
+  #mix-tools .tool-section-header{min-height:62px}
+  #mix-tools .tool-section-actions{top:33px;right:9px}
+  #mix-tools .tool-section-toggle{padding-right:25px}
+  #mix-tools .peq .tool-section-heading{padding-right:0}
+}
 .studio-label{margin-left:auto;font:9px ui-monospace,monospace;color:var(--muted)}
 .transport{display:flex;align-items:center;gap:20px}
 .transport label{display:flex;align-items:center;gap:6px;font-size:12px}

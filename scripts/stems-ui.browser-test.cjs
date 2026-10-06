@@ -92,7 +92,8 @@ const { chromium } = require('playwright');
       return canvas.getContext('2d').getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data[1] > 100;
     });
     assert.equal(await page.locator('.brand img').evaluate(node => node.complete && node.naturalWidth > 0), true);
-    assert.equal(await page.locator('canvas').count(), 5);
+    assert.equal(await page.locator('#original-waveform canvas, .stem canvas').count(), 5);
+    assert.equal(await page.locator('#mix-tools canvas').count(), 2);
     const checkAlignment = async () => {
       const original = await page.locator('#original-waveform canvas').boundingBox();
       for (const canvas of await page.locator('.stem canvas').all()) {
@@ -127,6 +128,22 @@ const { chromium } = require('playwright');
     const stopped = await page.locator('.waveform-playhead').first().getAttribute('style');
     await page.waitForTimeout(150);
     assert.equal(await page.locator('.waveform-playhead').first().getAttribute('style'), stopped);
+    assert.equal(await page.locator('#repeat').count(), 0, 'Repeat is always enabled and has no toggle');
+    await page.locator('#play').press('Space');
+    await page.waitForTimeout(3200);
+    assert.match(await page.locator('#play').textContent(), /Pausar/, 'The full sample keeps playing past its end');
+    assert.ok(await page.evaluate(() => stemTestSources.slice(-5).every(source => source.loop && source.loopStart === 0 && source.loopEnd === 3)));
+    await page.locator('#play').dispatchEvent('keydown', { code: 'Space', key: ' ', repeat: true });
+    assert.match(await page.locator('#play').textContent(), /Pausar/, 'Holding Space does not toggle repeatedly');
+    await page.evaluate(() => {
+      const input = document.createElement('input'); input.id = 'shortcut-text-fixture'; document.body.append(input); input.focus();
+    });
+    await page.keyboard.press('Space');
+    assert.equal(await page.locator('#shortcut-text-fixture').inputValue(), ' ');
+    assert.match(await page.locator('#play').textContent(), /Pausar/, 'Typing does not pause audio');
+    await page.locator('#shortcut-text-fixture').evaluate(input => input.remove());
+    await page.keyboard.press('Space');
+    assert.match(await page.locator('#play').textContent(), /Reproducir/);
     await page.locator('#original-waveform canvas').click({ position: { x: 450, y: 30 } });
     assert.ok(parseFloat(await page.locator('.waveform-playhead').first().evaluate(node => node.style.left)) > 45);
     await page.locator('.stem-enable').first().click();
@@ -173,7 +190,8 @@ const { chromium } = require('playwright');
     await page.waitForTimeout(1500);
     const loopPosition = parseFloat(await page.locator('.waveform-playhead').first().evaluate(node => node.style.left));
     assert.ok(loopPosition >= 24 && loopPosition < 61, 'Playback wraps inside A-B');
-    await page.locator('#play').click();
+    await page.locator('#play').press('Space');
+    assert.match(await page.locator('#play').textContent(), /Reproducir/, 'Space pauses the selected loop');
     await page.locator('.stem-loop-end').last().press('ArrowLeft');
     assert.ok(await page.locator('.stem-loop-end').evaluateAll(nodes => nodes.every(node => Number(node.getAttribute('aria-valuenow')) < 1.75)));
     await page.locator('#original-waveform canvas').dblclick({ position: { x: 30, y: 40 } });
@@ -223,12 +241,60 @@ const { chromium } = require('playwright');
     await page.keyboard.press('Escape');
     await page.locator('#original-waveform .waveform').dblclick({ position: { x: 10, y: 40 } });
     const artifacts = path.join(root, 'test-results/stems-ui'); fs.mkdirSync(artifacts, { recursive: true });
+    const eqBounds = await page.locator('.peq').boundingBox();
+    const recorderBounds = await page.locator('.record-section').boundingBox();
+    assert.equal(eqBounds.y, recorderBounds.y, 'EQ and recorder sit side by side');
+    assert.ok(Math.abs(eqBounds.width - recorderBounds.width) < 1, 'Both cards have equal width');
+    // Record the audible mix through the real worklet and inspect downloaded PCM.
+    // Isolate the quiet vocal stem to avoid clipping, then compare all-OFF and EQ.
+    await page.locator('.stem-enable').last().click({ button: 'right' });
+    await page.locator('#stem-rate-reset').click();
+    if (await page.locator('#play').textContent().then(value => value.includes('Pausar'))) await page.locator('#play').click();
+    await page.locator('#play').click();
+    async function captureRms() {
+      await page.locator('.record-start').click();
+      await page.waitForFunction(() => document.querySelector('.record-section').dataset.recording === 'true');
+      await page.waitForTimeout(3300);
+      await page.locator('.record-stop').click();
+      await page.waitForFunction(() => !document.querySelector('.record-download').disabled);
+      const downloadEvent = page.waitForEvent('download');
+      await page.locator('.record-download').click();
+      const wav = fs.readFileSync(await (await downloadEvent).path());
+      assert.equal(wav.toString('ascii', 0, 4), 'RIFF');
+      assert.equal(wav.readUInt32LE(24), 48000);
+      // Trim tap setup and stop transients.
+      let sum = 0, samples = 0;
+      for (let i = 44 + 48000 * 4 / 4; i < wav.length - 48000 * 4 / 4; i += 2) {
+        sum += (wav.readInt16LE(i) / 32768) ** 2; samples++;
+      }
+      assert.ok(samples > 48000, 'Recorder exports a complete take');
+      return Math.sqrt(sum / samples);
+    }
+    const dryRms = await captureRms();
+    assert.ok(dryRms > .025 && dryRms < .08, `Only the enabled vocal stem is captured: ${dryRms}`);
+    await page.locator('.stem-enable').last().click();
+    await page.waitForTimeout(200);
+    const mutedRms = await captureRms();
+    assert.ok(mutedRms < .0001, `Disabled stems are silent in the WAV: ${mutedRms}`);
+    await page.locator('.stem-enable').last().click();
+    // A low-pass near the left edge rejects the fixture's mid/high tones.
+    const eqStage = await page.locator('.peq-stage').boundingBox();
+    await page.locator('.peq-canvas').dblclick({ position: { x: eqStage.width - 15, y: 70 } });
+    const cutoff = page.locator('.peq-point');
+    await cutoff.focus();
+    for (let i = 0; i < 65; i++) await page.keyboard.press('ArrowLeft');
+    await page.waitForTimeout(200);
+    const filteredRms = await captureRms();
+    assert.ok(filteredRms < dryRms * .8, `Recorder captures post-EQ audio: ${filteredRms} < ${dryRms}`);
+    await page.locator('#play').click();
     await page.screenshot({ path: path.join(artifacts, 'desktop.png'), fullPage: true });
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 844 });
       await page.waitForTimeout(80);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `No overflow at ${width}px`);
       assert.ok(await page.locator('.stem').evaluateAll(rows => rows.every(row => row.scrollWidth <= row.clientWidth)), `Stem controls fit their cards at ${width}px`);
+      const eq = await page.locator('.peq').boundingBox(), recorder = await page.locator('.record-section').boundingBox();
+      assert.ok(recorder.y >= eq.y + eq.height, `EQ and recorder stack at ${width}px`);
       await checkAlignment();
       await page.screenshot({ path: path.join(artifacts, `mobile-${width}.png`), fullPage: true });
     }

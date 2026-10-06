@@ -24,11 +24,12 @@
     </section>
     <section id="audition" hidden aria-label="Listen and compare" data-copy-aria-label="listenCompareLabel">
       <div class="section-heading"><span class="step">02</span><h2 data-copy="listen">Find your mix.</h2><span class="studio-label">STEREO / 44.1 kHz</span></div>
-      <div class="listen-controls"><div class="transport"><button id="play" class="primary"><span data-icon="play"></span><span data-copy="play">Play</span></button><label><input id="repeat" type="checkbox" checked><span data-copy="repeat">Repeat loop</span></label><span id="time">0:00</span></div>
+      <div class="listen-controls"><div class="transport"><button id="play" class="primary"><span data-icon="play"></span><span data-copy="play">Play</span></button><span id="time">0:00</span></div>
       <div class="comparison" role="group" aria-label="Compare" data-copy-aria-label="comparisonLabel"><button id="original" aria-pressed="true"><span data-icon="music"></span><span data-copy="original">Original</span></button><button id="mix" aria-pressed="false" disabled><span data-icon="sliders"></span><span data-copy="mix">Stem mix</span></button></div>
       </div><div class="wave-heading"><span data-copy="original">Original</span><div class="frequency-key"><span data-copy="lows">Lows</span><span data-copy="mids">Mids</span><span data-copy="highs">Highs</span></div></div>
       <div class="stem-tempo" role="group" aria-label="Tone &amp; Velocity"><div class="slider-wrap"><div class="limits" aria-hidden="true"><span>0.1x</span><span>3x</span></div><span class="range-label" aria-hidden="true">Tone &amp; Velocity</span><input id="stem-rate" class="slider" type="range" min="0.1" max="3" step="0.0125" value="1" aria-label="Playback speed"></div><label class="keep-tone"><input id="stem-keep-tone" type="checkbox">Keep Tone</label><input id="stem-rate-number" type="number" min="0.1" max="3" step="0.0125" value="1" aria-label="Playback speed multiplier"><button id="stem-rate-reset" type="button" aria-label="Reset speed and tone" title="Reset speed and tone">&#8634;</button></div><div id="original-waveform"></div>
       <div id="stems"></div>
+      <div id="mix-tools" aria-label="EQ and recorder"></div>
       <p id="quality-note" class="muted" hidden data-copy="quality">Some bleed and artifacts are normal. Compare with the original. Downloads are stereo 44.1 kHz float WAV files.</p>
     </section>
     </div>
@@ -39,6 +40,11 @@
   <script src="scripts/looper-core.js"></script>
   <script src="scripts/sampler-core.js"></script>
   <script src="scripts/spectral-waveform.js"></script>
+  <script src="scripts/parametric-eq.js"></script>
+  <script src="scripts/player-tools-collapsible.js"></script>
+  <script src="scripts/parametric-eq-ui.js"></script>
+  <script src="scripts/record-core.js"></script>
+  <script src="scripts/record-ui.js"></script>
   <script type="module" src="scripts/stems-page.mjs"></script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   const HEART_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17.2C22 19.85 19.85 22 17.2 22C15.78 22 14.51 21.38 13.63 20.4C12.87 19.55 12.4 18.43 12.4 17.2C12.4 14.55 14.55 12.4 17.2 12.4C18.57 12.4 19.81 12.98 20.69 13.91C20.68 13.91 20.68 13.91 20.69 13.92C21.5 14.78 22 15.93 22 17.2Z"/><path d="M18.48 18.54L15.95 16M18.45 16.03L15.92 18.57"/><path d="M22 8.69C22 10.66 21.49 12.4 20.69 13.91C19.81 12.98 18.57 12.4 17.2 12.4C14.55 12.4 12.4 14.55 12.4 17.2C12.4 18.43 12.87 19.55 13.63 20.4C13.26 20.57 12.92 20.71 12.62 20.81C12.28 20.93 11.72 20.93 11.38 20.81C8.48 19.82 2 15.69 2 8.69C2 5.6 4.49 3.09998 7.56 3.09998C9.37 3.09998 10.99 3.98002 12 5.33002C13.01 3.98002 14.63 3.09998 16.44 3.09998C19.51 3.09998 22 5.6 22 8.69Z"/></svg>`;
-  function mount({ container, effects, authorize, isAllowed, onChange, onCollapsedChange }) {
+  function mount({ container, effects, authorize, isAllowed, onChange, onCollapsedChange, iconUrl, resetIconUrl, pro = true }) {
     const api = globalThis.SCParametricEQ;
     const collapsible = globalThis.SCPlayerToolsCollapsible;
     const section = document.createElement("section");
@@ -47,14 +47,15 @@
         <div class="peq-stage"><canvas class="peq-canvas" aria-label="Equalizer response and live frequency spectrum. Double click near the left or right edge for a high-pass or low-pass cutoff. Drag to edit; scroll on a point to adjust Q; double click a point to delete it."></canvas><p class="peq-message" role="status" aria-live="polite" hidden></p></div>
       </div>`;
     container.append(section);
+    section.querySelector('.peq-pro').hidden = !pro;
     const find = (name) => section.querySelector(`.peq-${name}`);
     const canvas = find("canvas");
     const stage = find("stage");
     const ctx = canvas.getContext("2d");
     const syncIcon = () => {
-      const url = document.documentElement.getAttribute("data-scdl-extension-eq-url");
+      const url = iconUrl || document.documentElement.getAttribute("data-scdl-extension-eq-url");
       if (url) find("icon").src = url;
-      const crossUrl = document.documentElement.getAttribute("data-scdl-extension-cross-url");
+      const crossUrl = resetIconUrl || document.documentElement.getAttribute("data-scdl-extension-cross-url");
       if (crossUrl) find("cross-icon").src = crossUrl;
     };
     syncIcon();
@@ -325,6 +326,15 @@
         selected = -1;
         message("");
         render();
+      },
+      dispose() {
+        operationVersion += 1; dirty = false; visible = false;
+        if (frame !== null) cancelAnimationFrame(frame);
+        observer.disconnect();
+        document.removeEventListener("visibilitychange", schedule);
+        document.removeEventListener("scdl:extension-assets-ready", syncIcon);
+        previewGraph?.dispose();
+        section.remove();
       },
     };
   }

@@ -1,4 +1,5 @@
 import { mountDrumSampler } from './stem-sampler.mjs';
+import { createEqualizedOutput } from './local-audio-output.mjs';
 import { createStemLoop } from './stem-loop.mjs';
 import { SAMPLE_RATE, MAX_SECONDS, STEMS, encodeWav } from './stem-audio.mjs';
 import { MODEL } from './stem-model.mjs';
@@ -11,9 +12,9 @@ const translations = {
     intro: 'Separate vocals, drums, bass and other instruments locally. Your audio stays in Chrome.',
     details: 'First use downloads a 166 MB model. Processing can take a few minutes and uses substantial memory. Up to 2 minutes, at original speed without effects.',
     separate: 'Separate loop', cancel: 'Cancel', clearCache: 'Remove cached model', playGame: 'Play Lumberjack game', hideGame: 'Close Lumberjack game', gameTitle: 'Lumberjack game',
-    listenCompareLabel: 'Listen and compare', listen: 'Find your mix.', play: 'Play', stop: 'Pause', repeat: 'Repeat loop', comparisonLabel: 'Compare', original: 'Original', mix: 'Stem mix',
+    listenCompareLabel: 'Listen and compare', listen: 'Find your mix.', play: 'Play', stop: 'Pause', comparisonLabel: 'Compare', original: 'Original', mix: 'Stem mix',
     lows: 'Lows', mids: 'Mids', highs: 'Highs', position: 'Position',
-    quality: 'Some bleed and artifacts are normal. Compare with the original. Downloads are stereo 44.1 kHz float WAV files.',
+    quality: 'Some bleed and artifacts are normal. Compare with the original. Stems: stereo 44.1 kHz float WAV. Recorder: stereo 48 kHz PCM16 WAV.',
     footer: 'Audio stays on this device. Keep this tab open to retain your results.',
     ready: 'Ready. Separate this loop to compare the four stems.', preparing: 'Preparing the selected loop…', downloading: 'Downloading model',
     cache: 'Reading cached model', verify: 'Verifying model…', load: 'Loading separation model…', running: 'Separating segment',
@@ -30,9 +31,9 @@ const translations = {
     intro: 'Separá voz, batería, bajo y otros instrumentos localmente. Tu audio se queda en Chrome.',
     details: 'El primer uso descarga un modelo de 166 MB. El proceso puede tardar unos minutos y consume bastante memoria. Hasta 2 minutos, a velocidad original y sin efectos.',
     separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Eliminar modelo de la caché', playGame: 'Jugar a Lumberjack', hideGame: 'Cerrar Lumberjack', gameTitle: 'Juego Lumberjack',
-    listenCompareLabel: 'Escuchar y comparar', listen: 'Encontrá tu mezcla.', play: 'Reproducir', stop: 'Pausar', repeat: 'Repetir loop', comparisonLabel: 'Comparar', original: 'Original', mix: 'Mezcla de stems',
+    listenCompareLabel: 'Escuchar y comparar', listen: 'Encontrá tu mezcla.', play: 'Reproducir', stop: 'Pausar', comparisonLabel: 'Comparar', original: 'Original', mix: 'Mezcla de stems',
     lows: 'Graves', mids: 'Medios', highs: 'Agudos', position: 'Posición',
-    quality: 'Puede haber filtraciones y artefactos. Compará con el original. Las descargas son WAV estéreo de 44,1 kHz en coma flotante.',
+    quality: 'Puede haber filtraciones y artefactos. Compará con el original. Stems: WAV estéreo de 44,1 kHz en coma flotante. Recorder: WAV estéreo de 48 kHz PCM16.',
     footer: 'El audio permanece en este equipo. Mantené esta pestaña abierta para conservar los resultados.',
     ready: 'Listo. Separá este loop para comparar los cuatro stems.', preparing: 'Preparando el loop seleccionado…', downloading: 'Descargando modelo',
     cache: 'Leyendo modelo de la caché', verify: 'Verificando modelo…', load: 'Cargando modelo de separación…', running: 'Separando fragmento',
@@ -49,9 +50,9 @@ const translations = {
     intro: 'Trenne Gesang, Schlagzeug, Bass und andere Instrumente lokal. Dein Audio bleibt in Chrome.',
     details: 'Bei der ersten Verwendung wird ein 166-MB-Modell heruntergeladen. Die Verarbeitung kann einige Minuten dauern und benötigt viel Arbeitsspeicher. Bis zu 2 Minuten, in Originalgeschwindigkeit und ohne Effekte.',
     separate: 'Loop trennen', cancel: 'Abbrechen', clearCache: 'Modell aus Cache entfernen', playGame: 'Lumberjack spielen', hideGame: 'Lumberjack schließen', gameTitle: 'Lumberjack-Spiel',
-    listenCompareLabel: 'Anhören und vergleichen', listen: 'Finde deinen Mix.', play: 'Abspielen', stop: 'Pausieren', repeat: 'Loop wiederholen', comparisonLabel: 'Vergleichen', original: 'Original', mix: 'Stem-Mix',
+    listenCompareLabel: 'Anhören und vergleichen', listen: 'Finde deinen Mix.', play: 'Abspielen', stop: 'Pausieren', comparisonLabel: 'Vergleichen', original: 'Original', mix: 'Stem-Mix',
     lows: 'Bässe', mids: 'Mitten', highs: 'Höhen', position: 'Position',
-    quality: 'Übersprechen und Artefakte sind normal. Vergleiche das Ergebnis mit dem Original. Downloads sind Stereo-WAV-Dateien mit 44,1 kHz und Fließkommawerten.',
+    quality: 'Übersprechen und Artefakte sind normal. Vergleiche das Ergebnis mit dem Original. Stems: Stereo-WAV mit 44,1 kHz und Fließkommawerten. Recorder: Stereo-WAV mit 48 kHz PCM16.',
     footer: 'Das Audio bleibt auf diesem Gerät. Lass diesen Tab geöffnet, um deine Ergebnisse zu behalten.',
     ready: 'Bereit. Trenne diesen Loop, um die vier Stems zu vergleichen.', preparing: 'Ausgewählter Loop wird vorbereitet…', downloading: 'Modell wird heruntergeladen',
     cache: 'Modell wird aus dem Cache gelesen', verify: 'Modell wird überprüft…', load: 'Trennungsmodell wird geladen…', running: 'Segment wird getrennt',
@@ -68,9 +69,9 @@ const translations = {
     intro: 'Separe vocais, bateria, baixo e outros instrumentos localmente. Seu áudio permanece no Chrome.',
     details: 'No primeiro uso, um modelo de 166 MB será baixado. O processamento pode levar alguns minutos e usar bastante memória. Até 2 minutos, na velocidade original e sem efeitos.',
     separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Remover modelo do cache', playGame: 'Jogar Lumberjack', hideGame: 'Fechar Lumberjack', gameTitle: 'Jogo Lumberjack',
-    listenCompareLabel: 'Ouvir e comparar', listen: 'Encontre sua mixagem.', play: 'Reproduzir', stop: 'Pausar', repeat: 'Repetir loop', comparisonLabel: 'Comparar', original: 'Original', mix: 'Mixagem de stems',
+    listenCompareLabel: 'Ouvir e comparar', listen: 'Encontre sua mixagem.', play: 'Reproduzir', stop: 'Pausar', comparisonLabel: 'Comparar', original: 'Original', mix: 'Mixagem de stems',
     lows: 'Graves', mids: 'Médios', highs: 'Agudos', position: 'Posição',
-    quality: 'Algum vazamento e alguns artefatos são normais. Compare com o original. Os downloads são arquivos WAV estéreo de 44,1 kHz em ponto flutuante.',
+    quality: 'Algum vazamento e alguns artefatos são normais. Compare com o original. Stems: WAV estéreo de 44,1 kHz em ponto flutuante. Recorder: WAV estéreo de 48 kHz PCM16.',
     footer: 'O áudio permanece neste dispositivo. Mantenha esta aba aberta para preservar os resultados.',
     ready: 'Tudo pronto. Separe este loop para comparar os quatro stems.', preparing: 'Preparando o loop selecionado…', downloading: 'Baixando modelo',
     cache: 'Lendo modelo do cache', verify: 'Verificando modelo…', load: 'Carregando modelo de separação…', running: 'Separando segmento',
@@ -87,9 +88,9 @@ const translations = {
     intro: 'Разделяйте вокал, ударные, бас и другие инструменты локально. Аудио остается в Chrome.',
     details: 'При первом запуске загружается модель размером 166 МБ. Обработка может занять несколько минут и требует много памяти. До 2 минут, с исходной скоростью и без эффектов.',
     separate: 'Разделить луп', cancel: 'Отменить', clearCache: 'Удалить модель из кеша', playGame: 'Играть в Lumberjack', hideGame: 'Закрыть Lumberjack', gameTitle: 'Игра Lumberjack',
-    listenCompareLabel: 'Прослушать и сравнить', listen: 'Создайте свой микс.', play: 'Воспроизвести', stop: 'Пауза', repeat: 'Повторять луп', comparisonLabel: 'Сравнить', original: 'Оригинал', mix: 'Микс стемов',
+    listenCompareLabel: 'Прослушать и сравнить', listen: 'Создайте свой микс.', play: 'Воспроизвести', stop: 'Пауза', comparisonLabel: 'Сравнить', original: 'Оригинал', mix: 'Микс стемов',
     lows: 'Низкие', mids: 'Средние', highs: 'Высокие', position: 'Позиция',
-    quality: 'Небольшое проникновение звука и артефакты — это нормально. Сравните с оригиналом. Загружаются стереофайлы WAV 44,1 кГц с плавающей точкой.',
+    quality: 'Небольшое проникновение звука и артефакты — это нормально. Сравните с оригиналом. Стемы: стерео WAV 44,1 кГц с плавающей точкой. Recorder: стерео WAV 48 кГц PCM16.',
     footer: 'Аудио остается на этом устройстве. Не закрывайте вкладку, чтобы сохранить результаты.',
     ready: 'Готово. Разделите этот луп, чтобы сравнить четыре стема.', preparing: 'Подготовка выбранного лупа…', downloading: 'Загрузка модели',
     cache: 'Чтение модели из кеша', verify: 'Проверка модели…', load: 'Загрузка модели разделения…', running: 'Разделение фрагмента',
@@ -149,7 +150,7 @@ const stemLoop = createStemLoop({ viewportChanged() {
   for (const { source } of nodes) { source.loopStart = startMs / 1000; source.loopEnd = endMs / 1000; }
   position = current;
   if (playing) startedAt = Math.max(startedAt, context.currentTime);
-  if ($('repeat').checked && (current < startMs / 1000 || current >= endMs / 1000)) seekTo(startMs / 1000);
+  if ((current < startMs / 1000 || current >= endMs / 1000)) seekTo(startMs / 1000);
 } });
 const zoomTools = document.createElement('div'); zoomTools.className = 'stem-zoom-tools';
 for (const [label, title, action] of [
@@ -283,6 +284,25 @@ let busy = false, revision = 0, worker, rejectWorker, title = text('loop'), init
 let states = STEMS.map(() => ({ muted: false, solo: false, gain: 1 }));
 let info = null, wavs = [], rate = 1, keepTone = false, toneNode, toneReady, playbackRevision = 0, toneLatency = 0, libraryOperating = false;
 let libraryUI, importReady = false;
+const mixOutput = createEqualizedOutput({ audioContext: () => context ||= new AudioContext({ sampleRate: SAMPLE_RATE }) });
+const equalizerUI = globalThis.SCParametricEQUI.mount({
+  container: $('mix-tools'), effects: mixOutput, isAllowed: () => true, authorize: async () => true,
+  onChange: () => libraryUI?.changed(), pro: false,
+  iconUrl: new URL('../assets/icons/eq.svg', import.meta.url).href,
+  resetIconUrl: new URL('../assets/icons/cross.svg', import.meta.url).href,
+});
+const recorderUI = globalThis.SCRecordUI.mount({
+  container: $('mix-tools'), effects: mixOutput,
+  moduleUrl: new URL('./record-processor.js', import.meta.url).href,
+  iconUrl: new URL('../assets/icons/record.svg', import.meta.url).href,
+});
+equalizerUI.setCollapsed(false);
+recorderUI.setCollapsed(false);
+function revealAudition() {
+  $('audition').hidden = false;
+  equalizerUI.setVisible(true);
+  recorderUI.setVisible(true);
+}
 const localCopy = ({
   es: ['Cargar audio del equipo', 'Elegí un archivo y un fragmento de hasta 2 minutos.', 'Cargar fragmento', 'Nombre', 'Inicio (s)', 'Fin (s)', 'Cancelar', 'Leyendo audio…', 'No se pudo leer el audio. Probá otro archivo o un formato compatible con Chrome.', 'Elegí un rango válido de hasta 2 minutos dentro del archivo.', 'Elegí un audio del equipo o una separación guardada.'],
   en: ['Load audio from computer', 'Choose a file and a segment up to 2 minutes.', 'Load segment', 'Name', 'Start (s)', 'End (s)', 'Cancel', 'Reading audio…', 'Could not read audio. Try another file or a format supported by Chrome.', 'Choose a valid range up to 2 minutes within the file.', 'Choose local audio or a saved separation.'],
@@ -332,16 +352,16 @@ $('import-form').onsubmit = event => {
   const next = audioBuffer(channels);
   disposeResults();
   for (const view of waveforms) view.dispose();
-  original = next; wavs = []; position = 0; rate = 1; keepTone = false; $('repeat').checked = true; renderTempo();
+  original = next; wavs = []; position = 0; rate = 1; keepTone = false; renderTempo();
   renderInfo({ title: $('import-name').value.trim() || file.name, artist: '', artworkUrl: '', durationMs: decoded.duration * 1000,
     trimRange: { startMs: first / SAMPLE_RATE * 1000, endMs: last / SAMPLE_RATE * 1000 },
     localFile: { name: file.name, type: file.type, size: file.size, lastModified: file.lastModified, channels: decoded.numberOfChannels } });
   initialized = true; libraryUI.newExtraction();
-  $('audition').hidden = false;
+  revealAudition();
   mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
   $('import-dialog').close(); status(text('ready'));
 };
-const settings = () => ({ drumStarts: drumSampler?.snapshot(), states: structuredClone(states), rate, keepTone, mode, repeat: $('repeat').checked });
+const settings = () => ({ drumStarts: drumSampler?.snapshot(), states: structuredClone(states), rate, keepTone, mode, eq: mixOutput.snapshot().eq });
 libraryUI = mountStemLibrary({ locale, report: status,
   onOperation(value) { libraryOperating = value; $('separate').disabled = value || busy || !initialized; $('cancel').disabled = value; $('import-audio').disabled = value || busy || !importReady; },
   snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : null }),
@@ -361,7 +381,7 @@ libraryUI = mountStemLibrary({ locale, report: status,
     for (const view of waveforms) view.dispose();
     original = decoded[0];
     renderInfo(record.info);
-    $('audition').hidden = false;
+    revealAudition();
     mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
     showResults({ outputs: decoded.slice(1).map(buffer => [buffer.getChannelData(0), buffer.getChannelData(1)]), seconds: 0 }, record.settings);
     wavs = blobs;
@@ -412,7 +432,7 @@ async function prepareTone() {
       pause(); node.disconnect(); toneNode = null; toneReady = null;
       playbackError(new Error('Tone processor failed'));
     };
-    toneNode.connect(context.destination);
+    toneNode.connect(mixOutput.input());
   })().catch(error => { toneReady = null; throw error; });
   await toneReady;
 }
@@ -453,7 +473,7 @@ function offset(loopRange = stemLoop.range()) {
   const value = Math.max(0, position + Math.max(0, context.currentTime - startedAt) * rate);
   const { startMs, endMs } = loopRange;
   const start = startMs / 1000, end = endMs / 1000;
-  return $('repeat').checked && value >= end ? start + (value - end) % (end - start) : Math.min(value, original.duration);
+  return value >= end ? start + (value - end) % (end - start) : Math.min(value, original.duration);
 }
 function pause() {
   playbackRevision++;
@@ -488,12 +508,12 @@ async function play() {
   await prepareTone();
   if (playing || version !== playbackRevision) return;
   const { startMs, endMs } = stemLoop.range();
-  if ($('repeat').checked && (position < startMs / 1000 || position >= endMs / 1000)) position = startMs / 1000;
+  if ((position < startMs / 1000 || position >= endMs / 1000)) position = startMs / 1000;
   else if (position >= original.duration) position = 0;
   startedAt = context.currentTime + 0.03;
   nodes = [original, ...buffers].map(buffer => {
     const source = context.createBufferSource(), gain = context.createGain();
-    source.buffer = buffer; source.loopStart = startMs / 1000; source.loopEnd = endMs / 1000; source.loop = $('repeat').checked; source.playbackRate.value = rate;
+    source.buffer = buffer; source.loopStart = startMs / 1000; source.loopEnd = endMs / 1000; source.loop = true; source.playbackRate.value = rate;
     gain.gain.value = 0; source.connect(gain).connect(toneNode);
     source.start(startedAt, position);
     return { source, gain };
@@ -502,6 +522,7 @@ async function play() {
   playing = true; applyMix(); playLabel(true);
 }
 function disposeResults() {
+  mixOutput.setEqualizer(null); equalizerUI.reset();
   pause(); drumSampler?.dispose(); drumSampler = null; stemLoop.reset(); buffers = []; outputs = [];
   urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
   for (const view of waveforms) if ($('stems').contains(view.element)) view.dispose();
@@ -510,13 +531,13 @@ function disposeResults() {
 }
 function showResults(result, saved = null) {
   disposeResults(); position = 0;
+  mixOutput.setEqualizer(globalThis.SCParametricEQ.normalize(saved?.eq)); equalizerUI.reset();
   outputs = result.outputs;
   buffers = outputs.map(audioBuffer);
   states = STEMS.map((_, index) => ({ muted: !!saved?.states?.[index]?.muted, solo: false,
     gain: Number.isFinite(saved?.states?.[index]?.gain) ? Math.max(0, Math.min(1, saved.states[index].gain)) : 1 }));
   rate = Number.isFinite(saved?.rate) ? Math.max(.1, Math.min(3, saved.rate)) : 1;
   keepTone = !!saved?.keepTone;
-  $('repeat').checked = saved?.repeat !== false;
   renderTempo();
   wavs = [new Blob([encodeWav([original.getChannelData(0), original.getChannelData(1)])], { type: 'audio/wav' })];
   STEMS.forEach((stem, index) => {
@@ -577,7 +598,7 @@ function showResults(result, saved = null) {
     row.append(name, actions); $('stems').append(row);
     mountWaveform(row, buffers[index], `${text(stem)} · ${text('position')}`);
     if (stem === 'drums') drumSampler = mountDrumSampler({ row, actions, waveform: row.querySelector('.waveform'),
-      buffer: buffers[index], timeline: stemLoop, audioContext: () => context ||= new AudioContext({ sampleRate: SAMPLE_RATE }),
+      buffer: buffers[index], timeline: stemLoop, audioContext: () => mixOutput.getPlaybackContext(), output: () => mixOutput.input(),
       level: () => states[index].muted ? 0 : states[index].gain, changed: () => libraryUI.changed(),
       saved: saved?.drumStarts, locale, report: playbackError });
   });
@@ -631,7 +652,7 @@ async function separate() {
         if (version !== revision) return;
         if (!decoded.length || decoded.duration > MAX_SECONDS + 1 / SAMPLE_RATE) throw localizedError('tooLong');
         original = audioBuffer([decoded.getChannelData(0), decoded.getChannelData(Math.min(1, decoded.numberOfChannels - 1))]);
-        $('audition').hidden = false;
+        revealAudition();
         mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
       }
       if (version !== revision) return;
@@ -671,10 +692,19 @@ $('toggle-game').onclick = () => {
 $('clear-cache').onclick = async () => {
   try { await caches.delete(MODEL.cache); status(text('cleared')); } catch (error) { console.error('[Stems cache]', error); status(text('cacheClearFailed'), true); }
 };
-$('play').onclick = () => { if (playing) pause(); else play().catch(playbackError); };
+function togglePlayback() { if (playing) pause(); else play().catch(playbackError); }
+$('play').onclick = togglePlayback;
+$('play').setAttribute('aria-keyshortcuts', 'Space');
+document.addEventListener('keydown', event => {
+  if (event.code !== 'Space' || event.defaultPrevented || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+  const target = event.target;
+  if (target instanceof Element && (target.isContentEditable || target.closest('input, textarea, select, a, [role="textbox"]') ||
+      (target.closest('button') && target.closest('button').id !== 'play'))) return;
+  event.preventDefault();
+  if (!event.repeat && !$('play').disabled) togglePlayback();
+});
 $('original').onclick = () => { mode = 'original'; applyMix(); libraryUI.changed(); };
 $('mix').onclick = () => { mode = 'mix'; applyMix(); libraryUI.changed(); };
-$('repeat').onchange = () => { const resume = playing; pause(); if (resume) play().catch(playbackError); libraryUI.changed(); };
 let animationFrame;
 function animate() {
   updatePlayheads();
@@ -684,11 +714,10 @@ animate();
 const timeInterval = setInterval(() => {
   if (!original) return;
   const current = Math.max(0, offset());
-  const drained = position + (context?.currentTime - startedAt - (keepTone && rate !== 1 ? toneLatency : 0)) * rate >= original.duration;
-  if (playing && !$('repeat').checked && drained) { pause(); position = 0; }
   $('time').textContent = `${formatOneDecimal.format(current)} / ${formatOneDecimal.format(original.duration)} s`;
 }, 100);
 window.addEventListener('pagehide', () => {
+  equalizerUI.dispose(); recorderUI.dispose(); mixOutput.dispose();
   cancelAnimationFrame(animationFrame); clearInterval(timeInterval);
   for (const view of waveforms) view.dispose();
   drumSampler?.dispose(); worker?.terminate(); pause(); toneNode?.port.postMessage({ type: 'dispose' }); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));

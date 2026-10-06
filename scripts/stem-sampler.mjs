@@ -1,7 +1,7 @@
 const KEYS = 'ASDFGHJK';
 
 // The drum stem owns one buffer; pads are just sample offsets into that buffer.
-export function mountDrumSampler({ row, actions, waveform, buffer, timeline, audioContext, level, changed, saved, locale, report }) {
+export function mountDrumSampler({ row, actions, waveform, buffer, timeline, audioContext, output, level, changed, saved, locale, report }) {
   const es = locale === 'es';
   const starts = Array.from({ length: 8 }, (_, i) => Number.isFinite(saved?.[i]) && saved[i] >= 0 && saved[i] < buffer.duration ? saved[i] : null);
   const controller = new AbortController(), options = { signal: controller.signal };
@@ -50,7 +50,7 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
       const envelope = context.createGain();
       envelope.gain.setValueAtTime(0, now); envelope.gain.linearRampToValueAtTime(1, now + fade);
       envelope.gain.setValueAtTime(1, now + length - fade); envelope.gain.linearRampToValueAtTime(0, now + length);
-      gain.gain.value = level(); source.connect(envelope).connect(gain).connect(context.destination);
+      gain.gain.value = level(); source.connect(envelope).connect(gain).connect(output());
       const voice = { source, gain }; voices.set(i, voice); buttons[i].classList.add('is-active');
       source.onended = () => { envelope.disconnect(); source.disconnect(); gain.disconnect();
         if (voices.get(i) === voice) { voices.delete(i); buttons[i].classList.remove('is-active'); } };

@@ -250,7 +250,7 @@ const { chromium } = require("playwright");
     assert.equal(await host.locator(".record-section").evaluate(section => section.scrollWidth <= section.clientWidth), true, "Record must fit narrow layouts");
     await integrated.setViewportSize({ width: 1100, height: 1000 });
     for (const toggle of await host.locator(".tool-section-toggle").all()) {
-      if (await toggle.getAttribute("aria-expanded") === "true") await toggle.click();
+      if (await toggle.getAttribute("aria-expanded") === "true") await toggle.click({ position: { x: 60, y: 12 } });
     }
     const columnIds = () => host.evaluate(element => [...element.shadowRoot.querySelectorAll(".controls-column")]
       .map(column => [...column.children].map(section => section.id)));

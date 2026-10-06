@@ -1,7 +1,7 @@
 /* Edison-inspired time-domain monitor and sample transport. */
 (() => {
   "use strict";
-  function mount({ container, effects, onCollapsedChange }) {
+  function mount({ container, effects, onCollapsedChange, moduleUrl, iconUrl }) {
     const collapsible = globalThis.SCPlayerToolsCollapsible;
     const section = document.createElement("section");
     section.className = "record-section"; section.id = "scdl-record"; section.setAttribute("aria-label", "Record");
@@ -52,7 +52,7 @@
     let zoom = 1, scroll = 0, lastState = "idle";
     let pan = null;
     const live = new Float32Array(2048);
-    const recorder = globalThis.SCRecord.create({ effects, onChange: render });
+    const recorder = globalThis.SCRecord.create({ effects, onChange: render, moduleUrl });
     const time = seconds => {
       const ms = Math.round(seconds * 1000);
       return `${String(Math.floor(ms / 60000)).padStart(2, "0")}:${((ms % 60000) / 1000).toFixed(3).padStart(6, "0")}`;
@@ -69,7 +69,7 @@
     }
     const report = error => notice(error.message || "Could not record audio.");
     const syncIcon = () => {
-      const url = document.documentElement.getAttribute("data-scdl-extension-record-url");
+      const url = iconUrl || document.documentElement.getAttribute("data-scdl-extension-record-url");
       if (url) find("icon").src = url;
     };
     syncIcon(); document.addEventListener("scdl:extension-assets-ready", syncIcon);
@@ -293,8 +293,17 @@
       Promise.resolve(recorder.seek(seconds)).catch(report);
     });
     const resize = new ResizeObserver(paint); resize.observe(canvas);
-    const dispose = () => { cancelHold(); if (frame !== null) cancelAnimationFrame(frame); resize.disconnect(); document.removeEventListener("scdl:extension-assets-ready", syncIcon); recorder.dispose(); };
-    window.addEventListener("pagehide", event => { if (!event.persisted) dispose(); });
+    let disposed = false;
+    const onPageHide = event => { if (!event.persisted) dispose(); };
+    const dispose = () => {
+      if (disposed) return;
+      disposed = true; visible = false;
+      cancelHold(); if (frame !== null) cancelAnimationFrame(frame); resize.disconnect();
+      document.removeEventListener("scdl:extension-assets-ready", syncIcon);
+      window.removeEventListener("pagehide", onPageHide);
+      recorder.dispose(); section.remove();
+    };
+    window.addEventListener("pagehide", onPageHide);
     render();
     return Object.freeze({ setVisible(value) { if (visible === value) return; visible = value; updateVisibility(); },
       isCollapsed: disclosure.isCollapsed,

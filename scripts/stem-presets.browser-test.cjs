@@ -68,11 +68,12 @@ const { chromium } = require('playwright');
     await page.locator('#stem-rate-number').fill('0.5');
     await page.locator('#stem-rate-number').press('Tab');
     await page.locator('#stem-keep-tone').check();
-    await page.locator('#repeat').uncheck();
+    await page.locator('.peq-add').click();
+    await page.locator('.peq-clip').click();
     await page.waitForFunction(async () => {
       const { StemPresets } = await import('./scripts/stem-presets.mjs');
       const record = (await (await StemPresets.current()).list())[0];
-      return record.settings.rate === .5 && record.settings.keepTone && record.settings.states[0].muted && record.settings.drumStarts?.[0] > 0 && !record.settings.repeat;
+      return record.settings.rate === .5 && record.settings.keepTone && record.settings.states[0].muted && record.settings.drumStarts?.[0] > 0 && record.settings.eq?.bands.length === 1 && record.settings.eq.hardClip;
     });
     await page.goto(url.replace('?job=test', ''));
     await page.waitForFunction(() => document.querySelector('#stem-presets').options.length === 2);
@@ -87,7 +88,9 @@ const { chromium } = require('playwright');
     assert.equal(Number(await page.locator('.stem-pad-marker').first().getAttribute('data-start')), savedStart);
     assert.equal(await page.locator('#stem-rate-number').inputValue(), '0.5');
     assert.equal(await page.locator('#stem-keep-tone').isChecked(), true);
-    assert.equal(await page.locator('#repeat').isChecked(), false);
+    assert.equal(await page.locator('#repeat').count(), 0);
+    assert.equal(await page.locator('.peq-point').count(), 1);
+    assert.equal(await page.locator('.peq-clip').getAttribute('aria-pressed'), 'true');
     // Turning off never deletes a saved separation.
     await page.locator('#save-locally').uncheck();
     await page.locator('#stem-rate-reset').click();
@@ -149,12 +152,13 @@ const { chromium } = require('playwright');
     await page.locator('#stem-presets:not(:disabled)').waitFor();
     await page.locator('#stem-presets').selectOption(id);
     await page.locator('#save-locally:checked').waitFor();
-    await page.locator('#repeat').check();
+    await page.locator('.peq-reset').click();
     await page.locator('#original').click();
     await page.evaluate(() => {
       const connect = AudioNode.prototype.connect;
       AudioNode.prototype.connect = function (destination, ...args) {
-        if (destination instanceof AudioDestinationNode && this instanceof AudioWorkletNode) {
+        // The tone output now feeds the EQ input rather than the speakers.
+        if (this instanceof AudioWorkletNode && this.context.sampleRate === 44100) {
           window.analyser = this.context.createAnalyser(); analyser.fftSize = 16384; analyser.smoothingTimeConstant = 0;
           connect.call(this, analyser);
         }

@@ -71,11 +71,12 @@
     clean.connect(routedOutput);
     clipped.connect(routedOutput);
     const analyser = analyse ? context.createAnalyser() : null;
+    let meterInput = null;
     if (analyser) {
       analyser.fftSize = 16384;
       analyser.smoothingTimeConstant = 0.55;
       // Keep the meter attached if the site disconnects and reconnects its source.
-      const meterInput = context.createGain();
+      meterInput = context.createGain();
       clean.connect(meterInput);
       clipped.connect(meterInput);
       meterInput.connect(analyser);
@@ -116,7 +117,10 @@
       }
       return result;
     }
-    return { input, output: routedOutput, apply, readSpectrum, response };
+    function dispose() {
+      for (const node of [input, ...filters, clean, clipped, clipDrive, hardClipper, routedOutput, meterInput, analyser]) node?.disconnect();
+    }
+    return { input, output: routedOutput, apply, readSpectrum, response, dispose };
   }
 
   globalThis.SCParametricEQ = Object.freeze({ MAX_BANDS, MAX_GAIN_DB, normalize, validate, isActive, createGraph });
