@@ -1,4 +1,6 @@
 {
+  "player_tools_offer_detail": { "message": "Темп, лупы и эффекты" },
+  "free_downloads_forever": { "message": "Скачивание бесплатно навсегда" },
   "sampler_presets": { "message": "Сохранённые состояния семплера" },
   "sampler_saveState": { "message": "Сохранить состояние" },
   "sampler_stateName": { "message": "Название состояния" },
@@ -550,7 +552,7 @@
     "message": "$1 days remaining in your Player Tools trial"
   },
   "player_tools_trial_last_day": {
-    "message": "Last day of your Player Tools trial"
+    "message": "Последний день пробного периода Player Tools"
   },
   "player_tools_trial_expired": { "message": "Пробный период закончился. Reverb и Echo остаются бесплатными; премиум-эффекты, EQ, Likes Explorer и функции петель/пианино сэмплера требуют Pro." },
   "player_tools_trial_unavailable": { "message": "Не удалось подтвердить бесплатный пробный период. Повторите попытку." },
@@ -571,7 +573,7 @@
   "player_tools_restore_working": { "message": "Проверяем покупку…" },
   "player_tools_restore_success": { "message": "Pro активирован. Player Tools разблокирован." },
   "player_tools_restore_error": { "message": "Не удалось восстановить покупку. Проверьте данные или обратитесь в поддержку." },
-  "email": { "message": "Email" },
+  "email": { "message": "Эл. почта" },
   "close": { "message": "Закрыть" },
   "sampler_slice": {
     "message": "Разделить выбранный луп на 8 пэдов"

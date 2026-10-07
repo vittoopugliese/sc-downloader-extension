@@ -2,13 +2,13 @@ const KEYS = 'ASDFGHJK';
 
 // The drum stem owns one buffer; pads are just sample offsets into that buffer.
 export function mountDrumSampler({ row, actions, waveform, buffer, timeline, audioContext, output, level, changed, saved, locale, report }) {
-  const es = locale === 'es';
+  const pt = globalThis.SCPlayerToolsText.t;
   const starts = Array.from({ length: 8 }, (_, i) => Number.isFinite(saved?.[i]) && saved[i] >= 0 && saved[i] < buffer.duration ? saved[i] : null);
   const controller = new AbortController(), options = { signal: controller.signal };
   let selected = null, armed = null, disposed = false;
   const voices = new Map(), revisions = Array(8).fill(0);
   const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'stem-sampler-toggle';
-  toggle.title = 'Sampler'; toggle.setAttribute('aria-label', 'Sampler');
+  toggle.title = pt('Sampler'); toggle.setAttribute('aria-label', pt('Sampler'));
   toggle.setAttribute('aria-controls', 'pads-drums'); toggle.setAttribute('aria-expanded', 'false');
   toggle.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
   actions.insertBefore(toggle, actions.querySelector('.download'));
@@ -18,13 +18,13 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
   const markers = [], buttons = [];
   function render() {
     hint.textContent = armed === null
-      ? (es ? 'Clic en un pad para fijar su inicio. A S D F G H J K para tocar. Arrastrá para el loop.' : 'Click a pad to set its start. A S D F G H J K to play. Drag for the loop.')
-      : (es ? `Pad ${KEYS[armed]}: clic en la waveform de batería para fijar el inicio. Esc cancela.` : `Pad ${KEYS[armed]}: click the drum waveform to set its start. Esc cancels.`);
+      ? pt('Click a pad to set its start. A S D F G H J K to play. Drag for the loop.')
+      : pt('Pad $1: click the drum waveform to set its start. Esc cancels.', KEYS[armed]);
     waveform.classList.toggle('is-placing-pad', armed !== null);
     buttons.forEach((button, i) => {
       button.classList.toggle('is-selected', selected === i); button.classList.toggle('is-assigned', starts[i] !== null);
       button.setAttribute('aria-pressed', String(selected === i));
-      button.title = `${KEYS[i]}: ${starts[i] === null ? (es ? 'Sin asignar' : 'Unassigned') : starts[i].toFixed(3) + ' s'}`;
+      button.title = `${KEYS[i]}: ${starts[i] === null ? pt('Unassigned') : starts[i].toLocaleString(locale, { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' s'}`;
       const x = starts[i] === null ? -1 : timeline.percent(starts[i] * 1000);
       markers[i].hidden = panel.hidden || x < 0 || x > 100;
       markers[i].style.left = `${x}%`; markers[i].dataset.start = String(starts[i]);
@@ -60,7 +60,7 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
   for (const [i, key] of [...KEYS].entries()) {
     const slot = document.createElement('div'); slot.className = 'drum-slot';
     const button = document.createElement('button'); button.type = 'button'; button.className = 'drum-pad';
-    button.innerHTML = `<span class="drum-key">${key}</span>`; button.setAttribute('aria-label', `Drums ${key}`);
+    button.innerHTML = `<span class="drum-key">${key}</span>`; button.setAttribute('aria-label', `${pt('Drums')} ${key}`);
     button.onclick = () => { selected = i; armed = i; render(); trigger(i); };
     const marker = document.createElement('span'); marker.className = 'stem-pad-marker'; marker.textContent = key;
     marker.setAttribute('aria-hidden', 'true'); waveform.append(marker); markers.push(marker);

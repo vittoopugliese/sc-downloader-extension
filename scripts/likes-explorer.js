@@ -149,7 +149,7 @@
     const open = button(text('open')+' ↗',()=>openTrack(item),'accent'); open.title = text('openHint'); actions.append(open);
     const locateButton = button('',()=>locate(item),'small locate-action');
     const locateIcon = el('img','locate-icon'); locateIcon.src = TELEPORT_ICON_URL; locateIcon.alt = '';
-    locateButton.append(locateIcon); locateButton.title = 'Teleport to selected track'; locateButton.setAttribute('aria-label','Teleport to selected track'); actions.append(locateButton);
+    locateButton.append(locateIcon); locateButton.title = text('locate'); locateButton.setAttribute('aria-label',text('locate')); actions.append(locateButton);
     detail.append(status, actions);
     render().catch(showError);
   }

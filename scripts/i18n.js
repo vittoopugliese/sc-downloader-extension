@@ -15,6 +15,10 @@
   }
 
   function localizeDocument(root = document) {
+    if (root === document) {
+      const language = (globalThis.chrome?.i18n?.getUILanguage?.() || "en").replace("_", "-").toLowerCase().split("-")[0];
+      document.documentElement.lang = language === "pt" ? "pt-BR" : ["en", "es", "de", "ru"].includes(language) ? language : "en";
+    }
     root.querySelectorAll("[data-i18n]").forEach((element) => {
       element.textContent = t(element.dataset.i18n);
     });

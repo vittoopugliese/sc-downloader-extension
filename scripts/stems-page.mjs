@@ -7,7 +7,7 @@ import { mountStemLibrary } from './stem-library-ui.mjs';
 
 const translations = {
   en: {
-    pageTitle: 'Stem Extractor · Player Tools', workspace: 'Your loop, layer by layer.', experimental: 'Experimental', selected: 'SELECTED LOOP',
+    pageTitle: 'Stem Extractor · Player Tools', workspace: 'Separate. Mix. Make it yours.', experimental: 'Experimental', selected: 'SELECTED LOOP',
     separationLabel: 'Separation', extract: 'Unpack your sound.', local: 'On-device',
     intro: 'Separate vocals, drums, bass and other instruments locally. Your audio stays in Chrome.',
     details: 'First use downloads a 166 MB model. Processing can take a few minutes and uses substantial memory. Up to 2 minutes, at original speed without effects.',
@@ -26,7 +26,7 @@ const translations = {
     tooLong: 'The rendered loop exceeds 2 minutes.', cacheClearFailed: 'The cached model could not be removed.', playbackFailed: 'Audio playback could not start.', loop: 'Loop',
   },
   es: {
-    pageTitle: 'Separador de stems · Player Tools', workspace: 'Tu loop, capa por capa.', experimental: 'Experimental', selected: 'LOOP SELECCIONADO',
+    pageTitle: 'Separador de stems · Player Tools', workspace: 'Separá. Mezclá. Hacelo tuyo.', experimental: 'Experimental', selected: 'LOOP SELECCIONADO',
     separationLabel: 'Separación', extract: 'Separá tu sonido.', local: 'En tu equipo',
     intro: 'Separá voz, batería, bajo y otros instrumentos localmente. Tu audio se queda en Chrome.',
     details: 'El primer uso descarga un modelo de 166 MB. El proceso puede tardar unos minutos y consume bastante memoria. Hasta 2 minutos, a velocidad original y sin efectos.',
@@ -45,7 +45,7 @@ const translations = {
     tooLong: 'El loop procesado supera los 2 minutos.', cacheClearFailed: 'No se pudo eliminar el modelo de la caché.', playbackFailed: 'No se pudo iniciar la reproducción.', loop: 'Loop',
   },
   de: {
-    pageTitle: 'Stem-Extraktor · Player Tools', workspace: 'Dein Loop, Spur für Spur.', experimental: 'Experimentell', selected: 'AUSGEWÄHLTER LOOP',
+    pageTitle: 'Stem-Extraktor · Player Tools', workspace: 'Trennen. Mischen. Deinen Sound finden.', experimental: 'Experimentell', selected: 'AUSGEWÄHLTER LOOP',
     separationLabel: 'Stem-Trennung', extract: 'Entfalte deinen Sound.', local: 'Auf diesem Gerät',
     intro: 'Trenne Gesang, Schlagzeug, Bass und andere Instrumente lokal. Dein Audio bleibt in Chrome.',
     details: 'Bei der ersten Verwendung wird ein 166-MB-Modell heruntergeladen. Die Verarbeitung kann einige Minuten dauern und benötigt viel Arbeitsspeicher. Bis zu 2 Minuten, in Originalgeschwindigkeit und ohne Effekte.',
@@ -64,7 +64,7 @@ const translations = {
     tooLong: 'Der gerenderte Loop ist länger als 2 Minuten.', cacheClearFailed: 'Das Modell konnte nicht aus dem Cache entfernt werden.', playbackFailed: 'Die Audiowiedergabe konnte nicht gestartet werden.', loop: 'Loop',
   },
   'pt-BR': {
-    pageTitle: 'Separador de stems · Player Tools', workspace: 'Seu loop, camada por camada.', experimental: 'Experimental', selected: 'LOOP SELECIONADO',
+    pageTitle: 'Separador de stems · Player Tools', workspace: 'Separe. Misture. Crie seu som.', experimental: 'Experimental', selected: 'LOOP SELECIONADO',
     separationLabel: 'Separação', extract: 'Abra seu som.', local: 'Neste dispositivo',
     intro: 'Separe vocais, bateria, baixo e outros instrumentos localmente. Seu áudio permanece no Chrome.',
     details: 'No primeiro uso, um modelo de 166 MB será baixado. O processamento pode levar alguns minutos e usar bastante memória. Até 2 minutos, na velocidade original e sem efeitos.',
@@ -83,7 +83,7 @@ const translations = {
     tooLong: 'O loop renderizado excede 2 minutos.', cacheClearFailed: 'Não foi possível remover o modelo do cache.', playbackFailed: 'Não foi possível iniciar a reprodução.', loop: 'Loop',
   },
   ru: {
-    pageTitle: 'Разделение на стемы · Player Tools', workspace: 'Ваш луп, слой за слоем.', experimental: 'Экспериментальная функция', selected: 'ВЫБРАННЫЙ ЛУП',
+    pageTitle: 'Разделение на стемы · Player Tools', workspace: 'Разделяйте. Микшируйте. Создавайте своё.', experimental: 'Экспериментальная функция', selected: 'ВЫБРАННЫЙ ЛУП',
     separationLabel: 'Разделение', extract: 'Разберите звук на части.', local: 'На этом устройстве',
     intro: 'Разделяйте вокал, ударные, бас и другие инструменты локально. Аудио остается в Chrome.',
     details: 'При первом запуске загружается модель размером 166 МБ. Обработка может занять несколько минут и требует много памяти. До 2 минут, с исходной скоростью и без эффектов.',
@@ -106,11 +106,13 @@ const browserLanguage = globalThis.chrome?.i18n?.getUILanguage?.() || navigator.
 const language = browserLanguage.replace('_', '-').toLowerCase();
 const locale = language.startsWith('es') ? 'es' : language.startsWith('de') ? 'de' : language.startsWith('pt') ? 'pt-BR' : language.startsWith('ru') ? 'ru' : 'en';
 const text = key => translations[locale][key] || translations.en[key] || key;
+const pt = globalThis.SCPlayerToolsText.t;
 const formatOneDecimal = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const formatTwoDecimals = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const $ = id => document.getElementById(id);
 document.documentElement.lang = locale;
 document.title = text('pageTitle');
+globalThis.SCPlayerToolsText.localize(document.querySelector('main'));
 document.querySelectorAll('[data-copy]').forEach(node => { node.textContent = text(node.dataset.copy); });
 document.querySelectorAll('[data-copy-aria-label]').forEach(node => { node.setAttribute('aria-label', text(node.dataset.copyAriaLabel)); });
 // Local inline icons keep the extension page self-contained.
@@ -127,6 +129,7 @@ const iconPaths = {
   bass: '<path d="M5 12v2m4-7v12m4-16v18m4-15v12m4-9v6"/>',
   other: '<path d="M3 4h18v16H3zM7 4v9h3V4m4 0v9h3V4M9 13v7m6-7v7"/>',
   vocals: '<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/>',
+  upload: '<path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/>',
 };
 function icon(name) {
   const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -154,15 +157,15 @@ const stemLoop = createStemLoop({ viewportChanged() {
 } });
 const zoomTools = document.createElement('div'); zoomTools.className = 'stem-zoom-tools';
 for (const [label, title, action] of [
-  ['−', 'Zoom −', () => stemLoop.zoomAt(offset() * 1000, 1)],
-  ['+', 'Zoom +', () => stemLoop.zoomAt(offset() * 1000, -1)],
-  ['↔', locale === 'es' ? 'Ver todo el audio' : 'Show all audio', () => stemLoop.resetZoom()],
+  ['−', pt('Zoom out'), () => stemLoop.zoomAt(offset() * 1000, 1)],
+  ['+', pt('Zoom in'), () => stemLoop.zoomAt(offset() * 1000, -1)],
+  ['↔', pt('Show all audio'), () => stemLoop.resetZoom()],
 ]) {
   const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
   button.title = title; button.setAttribute('aria-label', title); button.onclick = action; zoomTools.append(button);
 }
 const zoomHint = document.createElement('span');
-zoomHint.textContent = locale === 'es' ? 'Rueda: zoom · Shift + rueda: desplazar' : 'Wheel: zoom · Shift + wheel: pan';
+zoomHint.textContent = pt('Wheel: zoom · Shift + wheel: pan');
 zoomTools.append(zoomHint); $('original-waveform').before(zoomTools);
 function seekTo(value) {
   const resume = playing; pause(); position = Math.max(0, Math.min(original.duration, value));
@@ -310,7 +313,7 @@ const localCopy = ({
   'pt-BR': ['Carregar áudio do computador', 'Escolha um arquivo e um trecho de até 2 minutos.', 'Carregar trecho', 'Nome', 'Início (s)', 'Fim (s)', 'Cancelar', 'Lendo áudio…', 'Não foi possível ler o áudio. Tente outro arquivo ou formato compatível com o Chrome.', 'Escolha um intervalo válido de até 2 minutos dentro do arquivo.', 'Escolha um áudio local ou uma separação salva.'],
   ru: ['Загрузить аудио с компьютера', 'Выберите файл и фрагмент до 2 минут.', 'Загрузить фрагмент', 'Название', 'Начало (с)', 'Конец (с)', 'Отмена', 'Чтение аудио…', 'Не удалось прочитать аудио. Попробуйте другой файл или формат, поддерживаемый Chrome.', 'Выберите допустимый фрагмент до 2 минут в пределах файла.', 'Выберите локальное аудио или сохранённое разделение.'],
 })[locale] || [];
-for (const [id, index] of Object.entries({ 'import-audio': 0, 'import-hint': 1, 'import-title': 2, 'import-confirm': 2,
+for (const [id, index] of Object.entries({ 'import-audio-label': 0, 'import-hint': 1, 'import-title': 2, 'import-confirm': 2,
   'import-name-label': 3, 'import-start-label': 4, 'import-end-label': 5, 'import-cancel': 6, 'import-range-hint': 1 })) $(id).textContent = localCopy[index];
 let importDraft = null;
 $('import-hint').textContent += ' · ≤256 MiB';
@@ -545,9 +548,8 @@ function showResults(result, saved = null) {
     const name = document.createElement('h2'); name.append(icon(stem), document.createTextNode(text(stem)));
     const enabled = document.createElement('button'); enabled.type = 'button'; enabled.className = 'stem-enable stem-solo';
     enabled.setAttribute('role', 'switch');
-    enabled.setAttribute('aria-label', (locale === 'es' ? 'Activar ' : 'Enable ') + text(stem));
-    enabled.title = (locale === 'es' ? 'Activar/desactivar ' : 'Enable/disable ') + text(stem) +
-      (locale === 'es' ? ' · Clic derecho: escuchar solo esta pista' : ' · Right-click: hear only this track');
+    enabled.setAttribute('aria-label', pt('Enable $1', text(stem)));
+    enabled.title = pt('Enable/disable $1 · Right-click: hear only this track', text(stem));
     enabled.setAttribute('aria-checked', String(!states[index].muted));
     enabled.onclick = () => {
       states[index].muted = !states[index].muted; states.forEach(state => { state.solo = false; });

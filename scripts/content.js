@@ -41,6 +41,7 @@ if (window.top === window) {
 }
 
 function exposeTempoControlAssets() {
+  document.documentElement?.setAttribute?.("data-scdl-ui-language", chrome.i18n?.getUILanguage?.() || globalThis.navigator?.language || "en");
   document.documentElement?.setAttribute?.("data-scdl-sampler-copy", JSON.stringify({
     slice: t("sampler_slice"),
     title: t("sampler_title"),

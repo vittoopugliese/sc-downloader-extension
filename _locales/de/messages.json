@@ -1,4 +1,6 @@
 {
+  "player_tools_offer_detail": { "message": "Tempo, Loops & Effekte" },
+  "free_downloads_forever": { "message": "Downloads bleiben kostenlos" },
   "sampler_presets": { "message": "Gespeicherte Sampler-Zustände" },
   "sampler_saveState": { "message": "Zustand speichern" },
   "sampler_stateName": { "message": "Name des Zustands" },
@@ -336,7 +338,7 @@
     "message": "$1 bis $2"
   },
   "track": {
-    "message": "Track"
+    "message": "Titel"
   },
   "folder": {
     "message": "Ordner"

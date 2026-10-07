@@ -62,6 +62,8 @@ async function verifyLoading() {
     }),
     renderLoop() {},
   });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, 'player-tools-i18n.js'), 'utf8'), scope);
+  scope.pt = scope.SCPlayerToolsText.t;
   vm.runInContext(`
     let waveformCollapsed = false, waveformSamples = [], waveformSpectrum = null;
     let waveformTrackUrl = null, waveformSourceUrl = null, waveformZoom = null;

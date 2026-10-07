@@ -5,6 +5,7 @@
  */
 (() => {
   "use strict";
+  const pt = (source, ...values) => globalThis.SCPlayerToolsText?.t(source, ...values) ?? source.replace(/\$(\d+)/g, (match, index) => values[index - 1] ?? match);
 
   const INSTALLED_FLAG = "__scdlTempoControlInstalled";
   const HOST_ID = "scdl-tempo-control";
@@ -222,7 +223,7 @@
     const entry = { buffer: null, lastUsed: performance.now(), promise: null };
     const loading = (async () => {
       const response = await fetch(await getUrl());
-      if (!response.ok) throw new Error("Could not load the sample waveform.");
+      if (!response.ok) throw new Error(pt("Could not load the sample waveform."));
       const buffer = await getDrumAudioContext().decodeAudioData(await response.arrayBuffer());
       const peaks = new Float32Array(Math.min(4096, buffer.length));
       for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
@@ -288,7 +289,7 @@
     // Keep the current waveform visible until the next source is ready.
     padEditorPending = true;
     try {
-      if ((padHydration || !padsHydrated) && !await hydrateDrumPads()) throw new Error("Could not restore saved samples.");
+      if ((padHydration || !padsHydrated) && !await hydrateDrumPads()) throw new Error(pt("Could not restore saved samples."));
       await pad.trimSave;
       if (intent !== padEditorIntent || ui?.panel.hidden) return;
       const requestedVersion = pad.version;
@@ -314,7 +315,7 @@
     } catch (error) {
       if (intent !== padEditorIntent) return;
       leavePadEditor();
-      showDrumError(error?.message || "Could not open this pad.");
+      showDrumError(error?.message || pt("Could not open this pad."));
     }
   }
 
@@ -365,7 +366,7 @@
       editor.pendingTrim = null;
       padEditorCache.delete(editor.index);
       if (padEditor === editor) leavePadEditor();
-      showDrumError(error?.message || "Could not save pad bounds.");
+      showDrumError(error?.message || pt("Could not save pad bounds."));
     }).finally(() => { editor.saving = null; });
     await pad.trimSave;
   }
@@ -537,10 +538,10 @@
         if (offset !== request.byteLength || !Number.isSafeInteger(byteLength) || byteLength <= 0 ||
             byteLength > 1024 * 1024 || offset + byteLength > 128 * 1024 * 1024 ||
             typeof dataUrl !== "string" || dataUrl.length > 1500000 || !/^data:[^,]*;base64,/.test(dataUrl)) {
-          throw new Error("Invalid instrument audio chunk.");
+          throw new Error(pt("Invalid instrument audio chunk."));
         }
         const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
-        if (binary.length !== byteLength) throw new Error("Incomplete instrument audio chunk.");
+        if (binary.length !== byteLength) throw new Error(pt("Incomplete instrument audio chunk."));
         request.chunks.push(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
         request.byteLength += byteLength;
       } catch (error) { request.transferError = error; }
@@ -553,11 +554,11 @@
     if (request.transferError) request.reject(request.transferError);
     else if (event.data.result?.success && event.data.result.instrument?.fullTrack) {
       if (request.byteLength !== event.data.result.instrument.byteLength || !request.byteLength) {
-        request.reject(new Error("The instrument audio transfer was incomplete."));
+        request.reject(new Error(pt("The instrument audio transfer was incomplete.")));
       } else request.resolve({ ...event.data.result, audioBlob: new Blob(request.chunks, { type: event.data.result.instrument.mimeType }) });
     }
     else if (event.data.result?.success) request.resolve(event.data.result);
-    else request.reject(new Error(event.data.result?.error || "Could not prepare this pad."));
+    else request.reject(new Error(event.data.result?.error || pt("Could not prepare this pad.")));
   });
 
   function requestPad(action, payload = {}) {
@@ -569,7 +570,7 @@
           window.postMessage({ source: "scdl-pad-main", id: `cancel_${id}`,
             action: action === "slices" ? "cancel-slices" : "cancel-instrument", operationId: payload.operationId }, location.origin);
         }
-        reject(new Error("The pad request timed out."));
+        reject(new Error(pt("The pad request timed out.")));
       }, action === "list" ? 10000 : action === "waveform" ? 660000 : 120000);
       padRequests.set(id, { resolve, reject, timeout, action, operationId: payload.operationId || null, chunks: [], byteLength: 0 });
       window.postMessage({ source: "scdl-pad-main", id, action, ...payload }, location.origin);
@@ -584,7 +585,7 @@
       if (request.action !== "instrument" || request.operationId !== operationId) continue;
       padRequests.delete(id);
       clearTimeout(request.timeout);
-      const error = new Error("Instrument preparation cancelled.");
+      const error = new Error(pt("Instrument preparation cancelled."));
       error.name = "AbortError";
       request.reject(error);
     }
@@ -617,7 +618,7 @@
     padHydration = (async () => {
       try {
         const result = await requestPad("list");
-        if (!Array.isArray(result.pads)) throw new Error("Could not restore saved samples.");
+        if (!Array.isArray(result.pads)) throw new Error(pt("Could not restore saved samples."));
         drumPads.forEach((pad, index) => {
           if (pad.busy || pad.version !== versions[index] || padEditorCache.get(index)?.saving) return;
           const record = result.pads.find(record => record.index === index);
@@ -625,11 +626,11 @@
         });
         padsHydrated = true;
         updateDrumLabels();
-        if (ui?.drumMessage.textContent === "Could not restore saved samples. Reopen Sampler to retry.") showDrumError("");
+        if (ui?.drumMessage.textContent === pt("Could not restore saved samples. Reopen Sampler to retry.")) showDrumError("");
         if (ui && !ui.panel.hidden) positionPanel();
         return true;
       } catch (error) {
-        if (ui && !ui.panel.hidden) showDrumError("Could not restore saved samples. Reopen Sampler to retry.");
+        if (ui && !ui.panel.hidden) showDrumError(pt("Could not restore saved samples. Reopen Sampler to retry."));
         console.warn("[SC Downloader Pads]", error);
         return false;
       } finally { padHydration = null; }
@@ -637,7 +638,12 @@
     return padHydration;
   }
 
-  document.addEventListener(EXTENSION_ASSETS_EVENT, () => { if (ui) { hydrateDrumPads(); renderSamplerPresetCopy(); } });
+  document.addEventListener(EXTENSION_ASSETS_EVENT, () => {
+    if (!ui) return;
+    ui.host.lang = globalThis.SCPlayerToolsText?.locale() || "en";
+    globalThis.SCPlayerToolsText?.refresh(ui.root);
+    hydrateDrumPads(); renderSamplerPresetCopy(); render();
+  });
 
   function schedulePadCacheRelease() {
     clearTimeout(padCacheTimer);
@@ -662,8 +668,8 @@
       const button = ui.drumButtons[index];
       button.querySelector(".drum-key").textContent = pad.key ? pad.key.toUpperCase() : "·";
       button.classList.toggle("is-saving", pad.busy);
-      button.setAttribute("aria-label", `${pad.customName || pad.name} drum pad. Key ${pad.key ? pad.key.toUpperCase() : "unassigned"}. Right click to edit sample bounds. Hold left click to remove the saved sample and restore the default. Shift + Enter or Shift + Space to load an audio sample.`);
-      button.title = `${Array.from(pad.customName || pad.name).slice(0, 20).join("")} · Right-click to open this sample in the looper and edit its start/end · hold left click to restore default · Shift + Enter / Space to load`;
+      button.setAttribute("aria-label", pt("$1 drum pad. Key $2. Right click to edit sample bounds. Hold left click to remove the saved sample and restore the default. Shift + Enter or Shift + Space to load an audio sample.", pad.customName || pt(pad.name), pad.key ? pad.key.toUpperCase() : pt("Unassigned")));
+      button.title = pt("$1 · Right-click to open this sample in the looper and edit its start/end · hold left click to restore default · Shift + Enter / Space to load", Array.from(pad.customName || pt(pad.name)).slice(0, 20).join(""));
       button.setAttribute("data-scdl-tooltip", button.title);
     });
   }
@@ -672,7 +678,7 @@
     if (!ui) return;
     ui.drumMessage.removeAttribute("data-scdl-tooltip");
     ui.drumMessage.removeAttribute("tabindex");
-    ui.drumMessage.textContent = message;
+    ui.drumMessage.textContent = pt(message);
     ui.drumMessage.hidden = !message;
     ui.drumStatus.hidden = !message && !ui.playingNote.textContent;
   }
@@ -693,7 +699,7 @@
     try { copy = JSON.parse(document.documentElement.getAttribute("data-scdl-piano-copy") || "{}"); } catch {}
     const octave = instrumentOctave >= 0 ? `+${instrumentOctave}` : String(instrumentOctave);
     const status = typeof copy.status === "string" && copy.status !== "piano_mode_status"
-      ? copy.status : "Piano mode on · ← → octave ({octave})";
+      ? copy.status : pt("Piano mode on · ← → octave ({octave})");
     showDrumError(status.replace("{octave}", octave));
     if (typeof copy.help === "string" && copy.help !== "piano_mode_help") {
       ui.drumMessage.setAttribute("data-scdl-tooltip", copy.help);
@@ -956,7 +962,7 @@
     graph.querySelector(".envelope-fill").setAttribute("d", `${line} Z`);
     graph.querySelector(".envelope-keyup").setAttribute("x1", s);
     graph.querySelector(".envelope-keyup").setAttribute("x2", s);
-    graph.setAttribute("aria-label", `ADSR: attack ${attack} ms, decay ${decay} ms, sustain ${sustain}%, release ${release} ms. Dashed line: key release.`);
+    graph.setAttribute("aria-label", pt("ADSR: attack $1 ms, decay $2 ms, sustain $3%, release $4 ms. Dashed line: key release.", attack, decay, sustain, release));
   }
 
   function stopAllInstrumentVoices(releaseMs = 8) {
@@ -1056,7 +1062,7 @@
     if (padEditor || padEditorPending) leavePadEditor();
     const intentVersion = ++instrumentIntentVersion;
     instrumentPreparing = true;
-    setInstrumentMode(false, { message: "Preparing loop instrument…" });
+    setInstrumentMode(false, { message: pt("Preparing loop instrument…") });
     const authorized = await authorizePlayerTools("play-loop-instrument", "loopInstrument");
     if (intentVersion !== instrumentIntentVersion || ui?.panel.hidden || document.hidden) return;
     if (!authorized || !capability("loopInstrument") || !loopState.active || padRenderPending) {
@@ -1075,7 +1081,7 @@
     const duration = descriptor.trimRange.durationMs;
     if (!Number.isFinite(duration) || duration <= 0) {
       instrumentPreparing = false;
-      showDrumError("The track duration is not available yet.");
+      showDrumError(pt("The track duration is not available yet."));
       renderLoop();
       return;
     }
@@ -1096,15 +1102,15 @@
         name: `Instrument ${(descriptor.trimRange.startMs / 1000).toFixed(1)}–${(descriptor.trimRange.endMs / 1000).toFixed(1)}s`,
       });
       if (intentVersion !== instrumentIntentVersion || !loopMatchesInstrumentSnapshot(descriptor)) return;
-      if (!result.audioBlob) throw new Error("The prepared instrument audio is unavailable.");
+      if (!result.audioBlob) throw new Error(pt("The prepared instrument audio is unavailable."));
       const context = getDrumAudioContext();
       const expectedSeconds = duration / 1000 / descriptor.playbackTransform.rate;
       if (expectedSeconds * context.sampleRate * 2 * 4 > 256 * 1024 * 1024) {
-        throw new Error("This track is too large to keep in sampler memory at this speed.");
+        throw new Error(pt("This track is too large to keep in sampler memory at this speed."));
       }
       const buffer = await context.decodeAudioData(await result.audioBlob.arrayBuffer());
       if (buffer.length * buffer.numberOfChannels * 4 > 256 * 1024 * 1024) {
-        throw new Error("This track is too large to keep in sampler memory.");
+        throw new Error(pt("This track is too large to keep in sampler memory."));
       }
       if (intentVersion !== instrumentIntentVersion || !loopMatchesInstrumentSnapshot(descriptor)) return;
       instrumentBuffer = buffer;
@@ -1117,7 +1123,7 @@
       instrumentPreparing = false;
       instrumentOperationId = null;
       instrumentSnapshot = null;
-      setInstrumentMode(false, { clearBuffer: true, message: error?.message || "Could not prepare this loop instrument." });
+      setInstrumentMode(false, { clearBuffer: true, message: error?.message || pt("Could not prepare this loop instrument.") });
     }
   }
 
@@ -1254,7 +1260,7 @@
       }
     } catch (error) {
       if (noteRevision !== instrumentNoteRevision) return;
-      showDrumError(error?.message || "Could not play the loop instrument.");
+      showDrumError(error?.message || pt("Could not play the loop instrument."));
     }
   }
 
@@ -1271,18 +1277,18 @@
   async function loadDefaultDrum(pad) {
     if (pad.buffer) return pad.buffer;
     if (pad.loading) return pad.loading;
-    if (!pad.sample && !pad.saved) throw new Error("Hold this pad to load a sample, or assign a loop to it.");
+    if (!pad.sample && !pad.saved) throw new Error(pt("Hold this pad to load a sample, or assign a loop to it."));
     const base = document.documentElement.getAttribute(EXTENSION_DRUM_SAMPLES_ATTRIBUTE);
-    if (!base && !pad.saved) throw new Error("The drum samples are not ready yet.");
+    if (!base && !pad.saved) throw new Error(pt("The drum samples are not ready yet."));
     const version = pad.version;
     const cacheRevision = padCacheRevision;
     const loading = (async () => {
       const url = pad.saved || pad.timePercent !== 100
         ? (await requestPad("get", { index: drumPads.indexOf(pad), timePercent: pad.timePercent })).pad?.dataUrl
         : new URL(pad.sample, base).href;
-      if (!url) throw new Error("The saved sample is unavailable.");
+      if (!url) throw new Error(pt("The saved sample is unavailable."));
       const response = await fetch(url);
-      if (!response.ok) throw new Error(`Could not load ${pad.name}.`);
+      if (!response.ok) throw new Error(pt("Could not load $1.", pt(pad.name)));
       const buffer = await getDrumAudioContext().decodeAudioData(await response.arrayBuffer());
       if (pad.version === version && padCacheRevision === cacheRevision) cachePadBuffer(pad, buffer);
       return buffer;
@@ -1343,12 +1349,12 @@
       const maximum = gain ? 154 : time ? 400 : 12;
       const render = () => {
         const value = selected()[name];
-        knob.setAttribute("aria-label", `${instrumentMode ? "Keyboard" : "Selected pad"} ${gain ? "gain" : time ? "time" : "pitch"}`);
+        knob.setAttribute("aria-label", `${instrumentMode ? pt("Keyboard") : pt("Selected pad")} ${pt(gain ? "Gain" : time ? "Time" : "Pitch")}`);
         const label = gain || time ? `${value}%` : `${value > 0 ? "+" : ""}${value} st`;
         knob.style.setProperty("--knob-angle", `${-135 + (value - minimum) / (maximum - minimum) * 270}deg`);
         knob.setAttribute("aria-valuenow", String(value));
         knob.setAttribute("aria-valuetext", label);
-        knob.title = `${gain ? "Gain" : time ? "Time (duration, keeps tone; next hit)" : "Pitch"}: ${label} · Double-click to reset`;
+        knob.title = `${gain ? pt("Gain") : time ? pt("Time (duration, keeps tone; next hit)") : pt("Pitch")}: ${label} · ${pt("Double-click to reset")}`;
         knob.nextElementSibling.textContent = label;
       };
       const update = value => { updatePadControl(selectedPadIndex, name, value); render(); };
@@ -1405,14 +1411,14 @@
       const context = getDrumAudioContext();
       if (context.state !== "running") await context.resume();
       if (padHydration || !padsHydrated) {
-        if (!await hydrateDrumPads()) throw new Error("Could not restore saved samples. Reopen Sampler to retry.");
+        if (!await hydrateDrumPads()) throw new Error(pt("Could not restore saved samples. Reopen Sampler to retry."));
       }
       if (pad.busy) return;
       let editor = padEditorCache.get(index);
       if (!editor?.buffer || editor.version !== pad.version || pad.timePercent !== 100) editor = null;
       if (!editor) await pad.trimSave;
       const version = pad.version;
-      if (!pad.buffer && pad.timePercent !== 100) showDrumError("Preparing sample time…");
+      if (!pad.buffer && pad.timePercent !== 100) showDrumError(pt("Preparing sample time…"));
       const buffer = editor?.buffer || pad.buffer || await loadDefaultDrum(pad);
       const offset = editor ? editor.trim.startMs / 1000 : 0;
       const end = editor ? editor.trim.endMs / 1000 : buffer.duration;
@@ -1463,7 +1469,7 @@
       setTimeout(() => ui?.drumButtons[index].classList.remove("is-active"), 140);
       showDrumError("");
     } catch (error) {
-      if (noteRevision === instrumentNoteRevision) showDrumError(error?.message || "Could not play this sample.");
+      if (noteRevision === instrumentNoteRevision) showDrumError(error?.message || pt("Could not play this sample."));
     } finally {
       if (!held.voice && instrumentKeys.get(key) === held) instrumentKeys.delete(key);
     }
@@ -1473,7 +1479,7 @@
     if (!file) return;
     if (drumPads[index]?.busy) return;
     if (!file.type.startsWith("audio/") && !/\.(wav|mp3|ogg|m4a|flac|aac)$/i.test(file.name)) {
-      showDrumError("Choose an audio file for this pad.");
+      showDrumError(pt("Choose an audio file for this pad."));
       return;
     }
     const pad = drumPads[index];
@@ -1482,12 +1488,12 @@
     pad.busy = true;
     updateDrumLabels();
     try {
-      if (file.size > 12 * 1024 * 1024) throw new Error("This sample is too large for a pad.");
+      if (file.size > 12 * 1024 * 1024) throw new Error(pt("This sample is too large for a pad."));
       const bytes = await file.arrayBuffer();
       const buffer = await getDrumAudioContext().decodeAudioData(bytes.slice(0));
       const pcmBytes = buffer.length * buffer.numberOfChannels * 4;
       if (buffer.duration > 30 || pcmBytes > 16 * 1024 * 1024) {
-        throw new Error("Samples must be 30 seconds or shorter and fit the pad memory limit.");
+        throw new Error(pt("Samples must be 30 seconds or shorter and fit the pad memory limit."));
       }
       const base64 = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -1506,7 +1512,7 @@
       updateDrumLabels();
       showDrumError("");
     } catch (error) {
-      showDrumError(error?.message || "Could not read that audio sample.");
+      showDrumError(error?.message || pt("Could not read that audio sample."));
     } finally {
       pad.busy = false;
       updateDrumLabels();
@@ -1528,9 +1534,9 @@
       pad.updatedAt = undefined;
       pad.buffer = null;
       pad.loading = null;
-      showDrumError("Default sample restored.");
+      showDrumError(pt("Default sample restored."));
     } catch (error) {
-      showDrumError(error?.message || "Could not remove the saved sample.");
+      showDrumError(error?.message || pt("Could not remove the saved sample."));
     } finally {
       pad.busy = false;
       updateDrumLabels();
@@ -1695,10 +1701,10 @@
   }
 
   function accessMessage(code) {
-    if (code === "trial-expired") return "Your 7-day Player Tools trial has ended. Player Tools Pro is required to keep using this feature.";
-    if (code === "trial-exhausted" || code === "pro-required") return "Player Tools Pro is required to keep using this feature.";
-    if (code === "stale-generation") return "The track changed. Please set the loop again.";
-    return "Player Tools access could not be confirmed. Please retry.";
+    if (code === "trial-expired") return pt("Your 7-day Player Tools trial has ended. Player Tools Pro is required to keep using this feature.");
+    if (code === "trial-exhausted" || code === "pro-required") return pt("Player Tools Pro is required to keep using this feature.");
+    if (code === "stale-generation") return pt("The track changed. Please set the loop again.");
+    return pt("Player Tools access could not be confirmed. Please retry.");
   }
 
   async function authorizePlayerTools(operation, capabilityName, payload, options) {
@@ -1780,7 +1786,7 @@
       loopFailure = "";
       animateNextRateChange = true;
       const state = attempt("Playback rate", () => controller.setRate(DEFAULTS.rate));
-      attempt("Pitch", () => controller.setPreservePitch(DEFAULTS.preservePitch));
+      attempt(pt("Pitch"), () => controller.setPreservePitch(DEFAULTS.preservePitch));
       attempt("Bypass", () => controller.setBypassed(false));
       if (state) attempt("Stored rate", () => writeSetting(RATE_STORAGE, state.rate));
       attempt("Stored pitch", () => writeSetting(PITCH_STORAGE, DEFAULTS.preservePitch));
@@ -1801,7 +1807,7 @@
       if (generation !== resetGeneration) return;
       attempt("Loop bypass", () => requestLoop("set-global-bypass", { bypassed: false }));
       attempt("Loop state", readLoopState);
-      if (resetErrors.length) effectsFailure = `Could not fully reset Player Tools. ${resetErrors.join("; ")}`;
+      if (resetErrors.length) effectsFailure = pt("Could not fully reset Player Tools. $1", resetErrors.join("; "));
     } finally {
       if (generation === resetGeneration) resetInProgress = false;
       render();
@@ -1832,7 +1838,7 @@
     onChange: render,
     onError(error) {
       playbackFailure =
-        "Could not change playback speed. Reload SoundCloud and retry.";
+        pt("Could not change playback speed. Reload SoundCloud and retry.");
       console.warn("[SC Downloader Tempo]", error);
       render();
     },
@@ -1883,7 +1889,7 @@
     if (!authorization || !effectAllowed(name) || intentVersion !== effectIntentVersion) return null;
     const state = change();
     effectsFailure = state?.available && !state.initialized
-      ? "Play a track to activate FX."
+      ? pt("Play a track to activate FX.")
       : "";
     render();
     return state;
@@ -1904,7 +1910,7 @@
         };
       } catch (error) {
         effectsController.setDelayFreeze(false);
-        effectsFailure = "Could not pause playback for Echo Freeze.";
+        effectsFailure = pt("Could not pause playback for Echo Freeze.");
         console.warn("[SC Downloader Effects]", error);
       }
     }
@@ -1925,13 +1931,13 @@
     try {
       Promise.resolve(playback.audio.play()).catch((error) => {
         if (revision !== echoFreezeRevision || effectsController?.isDelayFrozen?.()) return;
-        playbackFailure = "Echo Freeze ended, but playback could not resume. Press play to continue.";
+        playbackFailure = pt("Echo Freeze ended, but playback could not resume. Press play to continue.");
         console.warn("[SC Downloader Effects]", error);
         render();
       });
     } catch (error) {
       if (revision !== echoFreezeRevision || effectsController?.isDelayFrozen?.()) return;
-      playbackFailure = "Echo Freeze ended, but playback could not resume. Press play to continue.";
+      playbackFailure = pt("Echo Freeze ended, but playback could not resume. Press play to continue.");
       console.warn("[SC Downloader Effects]", error);
       render();
     }
@@ -1943,7 +1949,7 @@
       storageFailure = "";
       return true;
     } catch {
-      storageFailure = "Could not save this playback setting.";
+      storageFailure = pt("Could not save this playback setting.");
       render();
       return false;
     }
@@ -2069,10 +2075,10 @@
   function setLoopFailure(response) {
     const error = response?.error;
     loopFailure = error === "waiting-metadata" || error === "waiting-track"
-      ? "Loop is waiting for the current track metadata."
+      ? pt("Loop is waiting for the current track metadata.")
       : error === "stale-generation"
-        ? "The track changed. Please set the loop again."
-        : error ? "Could not update the loop. Please retry." : "";
+        ? pt("The track changed. Please set the loop again.")
+        : error ? pt("Could not update the loop. Please retry.") : "";
     render();
   }
 
@@ -2255,7 +2261,7 @@
 
   async function loadSpectralWaveform(trackUrl, loadId) {
     if (!trackUrl) return;
-    ui.waveformCanvas.title = 'Analyzing audio frequencies...';
+    ui.waveformCanvas.title = pt('Analyzing audio frequencies...');
     let analysis;
     try {
       if (waveformAnalysisCache?.trackUrl !== trackUrl) {
@@ -2272,11 +2278,11 @@
           !data.bands.every(value => Number.isFinite(value) && value >= 0)) throw new Error('Invalid waveform');
       waveformSpectrum = data;
       waveformRevision += 1;
-      ui.waveformCanvas.title = 'Red: bass | Green: mids | Blue: treble';
+      ui.waveformCanvas.title = pt('Red: bass | Green: mids | Blue: treble');
       renderLoop();
     } catch {
       if (waveformAnalysisCache === analysis) waveformAnalysisCache = null;
-      if (loadId === waveformLoadId) ui.waveformCanvas.title = 'Amplitude waveform | Frequency analysis unavailable';
+      if (loadId === waveformLoadId) ui.waveformCanvas.title = pt('Amplitude waveform | Frequency analysis unavailable');
     }
   }
 
@@ -2324,7 +2330,7 @@
     ui.sliceButton.setAttribute("aria-label", ui.sliceButton.title);
     ui.sliceButton.setAttribute("aria-busy", String(Boolean(sliceJob)));
     ui.saveLoopPad.disabled = !capability("saveLoopPad") || !loopState.active || padRenderPending;
-    ui.saveLoopPad.title = capability("saveLoopPad") ? "Save loop to a pad" : "Player Tools Pro required";
+    ui.saveLoopPad.title = capability("saveLoopPad") ? pt("Save loop to a pad") : pt("Player Tools Pro required");
     ui.instrumentToggle.disabled = !capability("loopInstrument") || (!loopState.active && !instrumentMode) || padRenderPending;
     ui.instrumentControls.hidden = false;
     ui.instrumentCutLabel.hidden = false;
@@ -2334,12 +2340,12 @@
     ui.instrumentToggle.setAttribute("aria-pressed", String(instrumentMode));
     ui.instrumentToggle.classList.toggle("is-preparing", instrumentPreparing);
     ui.instrumentToggle.setAttribute("aria-label", instrumentPreparing
-      ? "Cancel loop instrument preparation"
-      : instrumentMode ? "Disable piano mode" : "Play selected loop in piano mode");
+      ? pt("Cancel loop instrument preparation")
+      : instrumentMode ? pt("Disable piano mode") : pt("Play selected loop in piano mode"));
     ui.instrumentToggle.title = instrumentPreparing
-      ? "Preparing loop instrument…"
-      : instrumentMode ? "Disable piano mode" : "Play selected loop in piano mode";
-    if (!capability("loopInstrument")) ui.instrumentToggle.title = "Player Tools Pro required";
+      ? pt("Preparing loop instrument…")
+      : instrumentMode ? pt("Disable piano mode") : pt("Play selected loop in piano mode");
+    if (!capability("loopInstrument")) ui.instrumentToggle.title = pt("Player Tools Pro required");
     ui.waveformStartLabel.textContent = formatLoopTime(windowRange?.startMs || 0);
     ui.waveformMiddleLabel.textContent = formatLoopTime(windowRange ? (windowRange.startMs + windowRange.endMs) / 2 : 0);
     ui.waveformEndLabel.textContent = formatLoopTime(windowRange?.endMs || duration);
@@ -2411,12 +2417,12 @@
     if (!ui?.visibilityButton) return;
     const allCollapsed = areAllControlsCollapsed();
     const action = controlsHidden
-      ? { label: "Show all controls in two columns", icon: "expand", state: "hidden" }
+      ? { label: pt("Show all controls in two columns"), icon: "expand", state: "hidden" }
       : controlsGrid
-        ? { label: "Show controls in one column", icon: "grid", state: "grid" }
+        ? { label: pt("Show controls in one column"), icon: "grid", state: "grid" }
         : allCollapsed
-        ? { label: "Hide all controls", icon: "up", state: "collapsed" }
-        : { label: "Collapse all controls", icon: "down", state: "normal" };
+        ? { label: pt("Hide all controls"), icon: "up", state: "collapsed" }
+        : { label: pt("Collapse all controls"), icon: "down", state: "normal" };
     ui.panel.classList.toggle("controls-hidden", controlsHidden);
     ui.panel.classList.toggle("controls-grid", controlsGrid && !controlsHidden);
     ui.controlsHiddenMessage.hidden = !controlsHidden;
@@ -2584,9 +2590,7 @@
   }
 
   function editorCopy(key) {
-    const es = (document.documentElement.lang || navigator.language).startsWith("es");
-    return (es ? { track: "Pista", back: "Volver a pista" }
-      : { track: "Track", back: "Back to track" })[key];
+    return { track: pt("Track"), back: pt("Back to track") }[key];
   }
 
   const SAMPLER_COPY = {
@@ -2611,7 +2615,7 @@
   function samplerCopy(key) {
     let copy = {};
     try { copy = JSON.parse(document.documentElement.getAttribute("data-scdl-sampler-copy") || "{}"); } catch {}
-    return typeof copy[key] === "string" && copy[key] !== `sampler_${key}` ? copy[key] : SAMPLER_COPY[key];
+    return typeof copy[key] === "string" && copy[key] !== `sampler_${key}` ? copy[key] : pt(SAMPLER_COPY[key]);
   }
 
   function closeSamplerPresets() {
@@ -2621,12 +2625,12 @@
   }
 
   async function encodeInstrumentAudio(buffer, range) {
-    if (!buffer || !range) throw new Error("No instrument sample selected.");
+    if (!buffer || !range) throw new Error(pt("No instrument sample selected."));
     const start = Math.max(0, Math.floor(range.start * buffer.sampleRate));
     const frames = Math.min(buffer.length, Math.floor(range.end * buffer.sampleRate)) - start;
     const channels = buffer.numberOfChannels;
     const size = frames * channels * 2;
-    if (frames <= 0 || size > 32 * 1024 * 1024) throw new Error("Instrument samples must be smaller than 32 MB.");
+    if (frames <= 0 || size > 32 * 1024 * 1024) throw new Error(pt("Instrument samples must be smaller than 32 MB."));
     const wav = new ArrayBuffer(44 + size);
     const view = new DataView(wav);
     const label = (offset, text) => [...text].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
@@ -2656,7 +2660,7 @@
     ui.samplerPresetMenu.setAttribute("aria-label", samplerCopy("presets"));
     ui.samplerPresetName.placeholder = samplerCopy("stateName");
     ui.samplerPresetName.setAttribute("aria-label", samplerCopy("stateName"));
-    ui.samplerPresetSave.textContent = `+ ${samplerCopy("saveState")} · ${instrumentMode ? "Piano" : "8 pads"}`;
+    ui.samplerPresetSave.textContent = `+ ${samplerCopy("saveState")} · ${instrumentMode ? pt("Piano") : pt("8 pads")}`;
   }
 
   function renderSamplerPresetBusy() {
@@ -2680,7 +2684,7 @@
       const kind = document.createElement("span");
       kind.className = "sampler-preset-kind";
       kind.textContent = preset.kind === "piano" ? "♫" : "▦";
-      kind.title = preset.kind === "piano" ? "Piano · 1 sample" : "8 pads";
+      kind.title = preset.kind === "piano" ? pt("Piano · 1 sample") : pt("8 pads");
       kind.setAttribute("aria-label", kind.title);
       const load = document.createElement("button");
       load.type = "button";
@@ -2947,7 +2951,7 @@
     const state = controller.snapshot();
     const duration = (loopState.endMs - loopState.startMs) / state.effectiveRate;
     if (duration > 30000) {
-      showDrumError("Pad samples can be up to 30 seconds long. Shorten the loop or increase its speed.");
+      showDrumError(pt("Pad samples can be up to 30 seconds long. Shorten the loop or increase its speed."));
       return;
     }
     selectingLoopPad = {
@@ -2974,7 +2978,7 @@
     padRenderPending = true;
     updateDrumLabels();
     renderLoop();
-    showDrumError(`Preparing loop for pad ${index + 1}…`);
+    showDrumError(pt("Preparing loop for pad $1…", index + 1));
     try {
       const operationId = `pad_${crypto.randomUUID()}`;
       const result = await requestPad("render", { index, operationId, ...sample });
@@ -2983,9 +2987,9 @@
       pad.loading = null;
       pad.saved = true;
       pad.customName = result.pad?.name || sample.name;
-      showDrumError(`Loop saved to pad ${index + 1}.`);
+      showDrumError(pt("Loop saved to pad $1.", index + 1));
     } catch (error) {
-      showDrumError(error?.message || "Could not save this loop to a pad.");
+      showDrumError(error?.message || pt("Could not save this loop to a pad."));
     } finally {
       pad.busy = false;
       padRenderPending = false;
@@ -3022,7 +3026,7 @@
         resolve(result);
       };
       const timeout = setTimeout(
-        () => finish({ success: false, error: "Download request timed out." }),
+        () => finish({ success: false, error: pt("Download request timed out.") }),
         DOWNLOAD_REQUEST_TIMEOUT_MS
       );
       const listener = (event) => {
@@ -3032,7 +3036,7 @@
       try {
         request();
       } catch (error) {
-        finish({ success: false, error: error?.message || "Could not start download request." });
+        finish({ success: false, error: error?.message || pt("Could not start download request.") });
       }
     });
   }
@@ -3040,7 +3044,7 @@
   async function separateLoopStems() {
     if (!loopState.active || ui.separateStems.dataset.pending === "true") return;
     if (loopState.endMs - loopState.startMs > 30000) {
-      showDownloadStatus("Stem separation supports loops up to 30 seconds. Shorten the selected loop first.");
+      showDownloadStatus(pt("Stem separation supports loops up to 30 seconds. Shorten the selected loop first."));
       return;
     }
     const snapshot = { trackUrl: String(loopState.trackIdentity || "").replace(/^permalink:/, ""),
@@ -3053,19 +3057,19 @@
         const audio = controller.getActiveAudio?.();
         if (audio && !audio.paused) audio.pause();
       }
-      showDownloadStatus("Loop opened in Stems. Separation uses the original speed without effects.", { dismissAfter: 6000 });
-    } catch (error) { showDownloadStatus(error.message || "Could not open stem separation."); }
+      showDownloadStatus(pt("Loop opened in Stems. Separation uses the original speed without effects."), { dismissAfter: 6000 });
+    } catch (error) { showDownloadStatus(error.message || pt("Could not open stem separation.")); }
     finally { ui.separateStems.dataset.pending = "false"; renderLoop(); }
   }
 
   async function downloadLoopFromPlayer() {
     if (!loopState.active || !Number.isFinite(loopState.startMs) || !Number.isFinite(loopState.endMs)) {
-      showDownloadStatus("Set both loop markers before downloading.");
+      showDownloadStatus(pt("Set both loop markers before downloading."));
       return;
     }
     const id = `loop-export-${Date.now()}`;
     loopDownloadPending = true;
-    showDownloadStatus("Preparing loop download…");
+    showDownloadStatus(pt("Preparing loop download…"));
     const result = await waitForDownloadResult(LOOP_EXPORT_RESULT_EVENT, id, () => {
       document.documentElement.setAttribute(LOOP_EXPORT_ATTRIBUTE, JSON.stringify({
         id,
@@ -3079,14 +3083,14 @@
     });
     document.documentElement.removeAttribute(LOOP_EXPORT_ATTRIBUTE);
     loopDownloadPending = false;
-    showDownloadStatus(result?.success ? "Loop download started." : (result?.error || "Could not start loop download."));
+    showDownloadStatus(result?.success ? pt("Loop download started.") : (result?.error || pt("Could not start loop download.")));
   }
 
   async function downloadCurrentTrack() {
     if (trackDownloadPending) return;
     const id = `track-export-${Date.now()}`;
     trackDownloadPending = true;
-    showDownloadStatus("Preparing track download…");
+    showDownloadStatus(pt("Preparing track download…"));
     const result = await waitForDownloadResult(TRACK_EXPORT_RESULT_EVENT, id, () => {
       const state = controller.snapshot();
       document.documentElement.setAttribute(TRACK_EXPORT_ATTRIBUTE, JSON.stringify({
@@ -3099,7 +3103,7 @@
     document.documentElement.removeAttribute(TRACK_EXPORT_ATTRIBUTE);
     trackDownloadPending = false;
     showDownloadStatus(
-      result?.success ? "Track download started." : (result?.error || "Could not start track download."),
+      result?.success ? pt("Track download started.") : (result?.error || pt("Could not start track download.")),
       { dismissAfter: result?.success ? DOWNLOAD_STATUS_DURATION_MS : null }
     );
   }
@@ -3114,10 +3118,10 @@
 
   function template() {
     const envelopeHelp = {
-      attack: "Time for the sound to reach full volume.",
-      decay: "Time for the sound to fall from full volume to the sustain level.",
-      sustain: "Volume held while the key is pressed.",
-      release: "Time for the sound to fade out after you release the key.",
+      attack: pt("Time for the sound to reach full volume."),
+      decay: pt("Time for the sound to fall from full volume to the sustain level."),
+      sustain: pt("Volume held while the key is pressed."),
+      release: pt("Time for the sound to fade out after you release the key."),
     };
     return `
       <style>
@@ -3651,7 +3655,7 @@
         .effects-preset:hover, .effects-preset[aria-pressed="true"] { border-color: #ff6a1a; color: #fff; background: #462619; }
         .effect-knob-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; padding-bottom: 5px; }
         .effect-knob-grid > .effect-group-title { grid-column: span 2; text-align: center; }
-        .effect-row { display: grid; justify-items: center; align-content: start; gap: 5px; min-width: 0; }
+        .effect-row { display: grid; grid-template-rows: minmax(22px, auto) 28px auto; justify-items: center; align-content: start; gap: 5px; min-width: 0; }
         .effect-label { color: #d5d8db; font-size: 9px; font-weight: 500; line-height: 1.2; max-width: 100%; overflow-wrap: anywhere; text-align: center; }
         .fx-knob { position: relative; box-sizing: border-box; width: 28px; height: 28px; border: 1px solid #555; border-radius: 50%; background: radial-gradient(ellipse at 35% 40%, rgb(255 125 45 / var(--knob-glow, 0)), transparent 95%), radial-gradient(circle at 35% 30%, #393939, #202020); box-shadow: 0 0 7px rgb(255 125 45 / var(--knob-halo, 0)); }
         .fx-knob::before { content: ""; position: absolute; inset: -1px; border-radius: 50%; background: conic-gradient(from 225deg, #ffd09a 0deg, #ff984f var(--knob-sweep, 0deg), transparent var(--knob-sweep, 0deg)); mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px)); pointer-events: none; }
@@ -3790,7 +3794,7 @@
             />
           </div>
           <div class="presets" role="group" aria-label="Quick playback speeds">
-            ${customRates.map((rate, index) => `<button class="preset custom-preset" type="button" data-custom-index="${index}" data-saved="true" aria-pressed="false" title="Saved speed ${formatRate(rate)}. Hold to replace">${formatRate(rate)}</button>`).join("")}
+            ${customRates.map((rate, index) => `<button class="preset custom-preset" type="button" data-custom-index="${index}" data-saved="true" aria-pressed="false" title="${pt("Saved speed $1. Hold to replace", formatRate(rate))}">${formatRate(rate)}</button>`).join("")}
           </div>
           <label class="pitch-label" data-scdl-tooltip="Keep tone: change playback speed without changing the pitch."><input class="pitch-toggle" type="checkbox" aria-label="Keep tone" /></label>
         <div class="speed-status">
@@ -3800,7 +3804,7 @@
         </div>
         </div>
         <section class="drum-section is-collapsed" id="scdl-sampler" aria-label="Sampler">
-          ${collapsible.header({ title: "Sampler", bodyId: "scdl-sampler-pads", expanded: false, toggleClass: "sampler-toggle", actionsClass: "sampler-actions", icon: '<img class="tool-section-icon sampler-icon" alt="" aria-hidden="true" />', actions: '<button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button><button class="loop-instrument" type="button" aria-label="Play selected loop in piano mode" aria-pressed="false" title="Play selected loop in piano mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM7 5v8M12 5v8M17 5v8M5 13h4M10 13h4M15 13h4"/></svg></button><button class="slice-loop" type="button" aria-label="Slice selected loop into 8 pads"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM6 5v14M9 5v14M12 5v14M15 5v14M18 5v14"/></svg></button><button class="sampler-preset-toggle" type="button" aria-expanded="false" aria-haspopup="dialog" aria-controls="scdl-sampler-presets"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l4 4v14H3V3zM7 3v6h10V3M7 21v-8h10v8"/></svg></button>' })}
+          ${collapsible.header({ title: pt("Sampler"), bodyId: "scdl-sampler-pads", expanded: false, toggleClass: "sampler-toggle", actionsClass: "sampler-actions", icon: '<img class="tool-section-icon sampler-icon" alt="" aria-hidden="true" />', actions: '<button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button><button class="loop-instrument" type="button" aria-label="Play selected loop in piano mode" aria-pressed="false" title="Play selected loop in piano mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM7 5v8M12 5v8M17 5v8M5 13h4M10 13h4M15 13h4"/></svg></button><button class="slice-loop" type="button" aria-label="Slice selected loop into 8 pads"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM6 5v14M9 5v14M12 5v14M15 5v14M18 5v14"/></svg></button><button class="sampler-preset-toggle" type="button" aria-expanded="false" aria-haspopup="dialog" aria-controls="scdl-sampler-presets"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l4 4v14H3V3zM7 3v6h10V3M7 21v-8h10v8"/></svg></button>' })}
           <dialog class="slice-dialog" aria-labelledby="slice-title" aria-describedby="slice-description"><h3 id="slice-title"></h3><p id="slice-description"></p><div><button class="slice-cancel" type="button" autofocus></button><button class="slice-replace" type="button"></button></div></dialog>
           <div class="sampler-preset-menu" id="scdl-sampler-presets" popover="manual" role="dialog" aria-label="Saved sampler states">
             <div class="sampler-preset-list"></div>
@@ -3809,21 +3813,21 @@
           </div>
           <div class="sampler-body" id="scdl-sampler-pads">
             <div class="drum-pads">
-              ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="Load sample for ${pad.name}" /></div>`).join("")}
+              ${drumPads.map((pad, index) => `<div class="drum-slot"><button class="drum-pad" type="button" data-drum-index="${index}"><span class="drum-key">${pad.key.toUpperCase()}</span></button><input class="drum-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a" tabindex="-1" aria-label="${pt("Load sample for $1", pt(pad.name))}" /></div>`).join("")}
             </div>
           </div>
           <p class="drum-status" role="status" aria-live="polite" hidden><span class="drum-message"></span><span class="drum-note-controls" aria-live="off"><span class="playing-note"></span></span></p>
           <div class="instrument-controls" role="group" aria-label="Sample envelope" hidden>
             <div class="instrument-envelope">
-              ${[["gainPercent", "GAIN", 0, 154], ["pitchSemitones", "PITCH", -12, 12], ["timePercent", "TIME", 25, 400]].map(([name, label, min, max]) => `<div class="pad-control"><span>${label}</span><button class="pad-knob" type="button" role="slider" data-pad-control="${name}" aria-label="Selected pad ${label.toLowerCase()}" aria-valuemin="${min}" aria-valuemax="${max}" aria-orientation="vertical"></button><output></output></div>`).join("")}
-              ${["attack", "decay", "sustain", "release"].map((name) => `<div class="envelope-control"><span>${name[0].toUpperCase()}</span><button class="envelope-knob" type="button" role="slider" data-envelope="${name}" aria-label="${name[0].toUpperCase() + name.slice(1)}" aria-valuemin="0" aria-valuemax="${name === "sustain" ? 100 : 5000}" aria-orientation="vertical" data-scdl-tooltip="${name[0].toUpperCase() + name.slice(1)}: ${envelopeHelp[name]}"></button><output></output></div>`).join("")}
+              ${[["gainPercent", pt("GAIN"), 0, 154], ["pitchSemitones", pt("PITCH"), -12, 12], ["timePercent", pt("TIME"), 25, 400]].map(([name, label, min, max]) => `<div class="pad-control"><span>${label}</span><button class="pad-knob" type="button" role="slider" data-pad-control="${name}" aria-label="${pt("Selected pad")} ${label.toLowerCase()}" aria-valuemin="${min}" aria-valuemax="${max}" aria-orientation="vertical"></button><output></output></div>`).join("")}
+              ${["attack", "decay", "sustain", "release"].map((name) => `<div class="envelope-control"><span>${name[0].toUpperCase()}</span><button class="envelope-knob" type="button" role="slider" data-envelope="${name}" aria-label="${pt(name[0].toUpperCase() + name.slice(1))}" aria-valuemin="0" aria-valuemax="${name === "sustain" ? 100 : 5000}" aria-orientation="vertical" data-scdl-tooltip="${pt(name[0].toUpperCase() + name.slice(1))}: ${envelopeHelp[name]}"></button><output></output></div>`).join("")}
               <svg class="envelope-graph" viewBox="0 0 110 52" role="img" aria-label="ADSR envelope" data-scdl-tooltip="ADSR: how the volume changes over time. The dashed line marks when you release the key."><path class="envelope-axis" d="M5 5 V43 H105"/><path class="envelope-fill"/><line class="envelope-keyup" y1="5" y2="45"/><path class="envelope-curve"/></svg>
               <div class="instrument-toggles"><label class="instrument-cut-label" title="Cut itself" data-scdl-tooltip="Cut itself" hidden><input class="instrument-cut-itself" type="checkbox" aria-label="Cut itself" checked /></label><label class="instrument-adsr-label" title="ADSR" data-scdl-tooltip="ADSR" hidden><input class="instrument-adsr-toggle" type="checkbox" aria-label="ADSR" /></label></div>
             </div>
           </div>
         </section>
         <section class="waveform-shell" id="scdl-loop-region" role="group" aria-label="Loop Region">
-          ${collapsible.header({ title: "Loop Region", bodyId: "scdl-loop-region-body", toggleClass: "waveform-toggle", headerClass: "waveform-header", actionsClass: "waveform-actions", icon: '<svg class="tool-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>', actions: '<button class="editor-track" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-6m6 0V1M4 17h6m-6 0v6M20 7a9 9 0 0 0-15-3M4 17a9 9 0 0 0 15 3"/></svg></button><button class="clear-loop" type="button" aria-label="Clear loop"><img class="cross-icon" alt="" aria-hidden="true" /><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button>' })}
+          ${collapsible.header({ title: pt("Loop Region"), bodyId: "scdl-loop-region-body", toggleClass: "waveform-toggle", headerClass: "waveform-header", actionsClass: "waveform-actions", icon: '<svg class="tool-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>', actions: '<button class="editor-track" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-6m6 0V1M4 17h6m-6 0v6M20 7a9 9 0 0 0-15-3M4 17a9 9 0 0 0 15 3"/></svg></button><button class="clear-loop" type="button" aria-label="Clear loop"><img class="cross-icon" alt="" aria-hidden="true" /><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button>' })}
           <div class="waveform-body" id="scdl-loop-region-body">
           <div class="waveform-stage">
             <canvas class="waveform-canvas" aria-hidden="true"></canvas>
@@ -3972,6 +3976,7 @@
   function createUi() {
     const host = document.createElement("span");
     host.id = HOST_ID;
+    host.lang = globalThis.SCPlayerToolsText?.locale() || "en";
     host.style.cssText = [
       "display:flex",
       "align-items:center",
@@ -3982,6 +3987,7 @@
 
     const root = host.attachShadow({ mode: "open" });
     root.innerHTML = template();
+    globalThis.SCPlayerToolsText?.localize(root);
     ui = {
       host,
       root,
@@ -4415,7 +4421,7 @@
     ui.separateStems.type = "button";
     ui.separateStems.className = "separate-stems";
     ui.separateStems.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg><span>Stems</span>';
-    ui.separateStems.title = "Separate the selected loop into vocals, drums, bass and other (up to 30 seconds)";
+    ui.separateStems.title = pt("Separate the selected loop into vocals, drums, bass and other (up to 30 seconds)");
     ui.separateStems.setAttribute("aria-label", ui.separateStems.title);
     ui.downloadLoop.before(ui.separateStems);
     ui.separateStems.addEventListener("click", separateLoopStems);
@@ -4495,9 +4501,9 @@
     }
     if (!capability("loopInstrument") && (instrumentMode || instrumentPreparing || instrumentBuffer)) disableInstrument();
     if (!capability("saveLoopPad") && selectingLoopPad) cancelLoopPadSelection();
-    ui.planBadgeLabel.textContent = isPro ? "PRO" : "FREE";
+    ui.planBadgeLabel.textContent = isPro ? "PRO" : pt("FREE");
     ui.planBadge.classList.toggle("is-pro", isPro);
-    ui.planBadge.setAttribute("aria-label", isPro ? "Player Tools Pro active" : "Player Tools Free plan");
+    ui.planBadge.setAttribute("aria-label", isPro ? pt("Player Tools Pro active") : pt("Player Tools Free plan"));
     if (!playbackAllowed && !accessLocked) {
       accessLocked = true;
       controller.setRate(DEFAULTS.rate);
@@ -4514,7 +4520,7 @@
     const triggerText = formatTriggerRate(state.effectiveRate);
     const animateRate = animateNextRateChange;
     animateNextRateChange = false;
-    ui.trigger.setAttribute("aria-label", `Playback speed ${triggerText}`);
+    ui.trigger.setAttribute("aria-label", pt("Playback speed $1", triggerText));
     // Keep the thumb under the pointer while access is checked asynchronously.
     ui.slider.value = String(playbackAllowed && rateIntent ? rateIntent.rate : state.rate);
     ui.current.disabled = !playbackAllowed;
@@ -4524,15 +4530,15 @@
     ui.current.classList.toggle("is-bypassed", state.bypassed);
     ui.triggerRate.classList.toggle("is-bypassed", state.bypassed);
     ui.bypass.title = state.bypassed
-      ? "Bypass on — restore all Player Tools"
-      : "Bypass all Player Tools";
+      ? pt("Bypass on — restore all Player Tools")
+      : pt("Bypass all Player Tools");
     ui.bypass.setAttribute("aria-label", ui.bypass.title);
     ui.detachButton.setAttribute("aria-pressed", String(panelDetached));
     ui.detachButton.setAttribute(
       "aria-label",
       panelDetached
-        ? "Close panel when clicking outside"
-        : "Keep panel open when clicking outside"
+        ? pt("Close panel when clicking outside")
+        : pt("Keep panel open when clicking outside")
     );
     ui.detachButton.title = ui.detachButton.getAttribute("aria-label");
     ui.downloadTrackButton.disabled = trackDownloadPending;
@@ -4563,8 +4569,8 @@
       button.dataset.saved = String(Number.isFinite(value));
       button.textContent = Number.isFinite(value) ? formatRate(value) : "X";
       button.title = Number.isFinite(value)
-        ? `Saved speed ${formatRate(value)}. Hold to replace`
-        : "Hold to save the current speed";
+        ? pt("Saved speed $1. Hold to replace", formatRate(value))
+        : pt("Hold to save the current speed");
     });
     syncRange(ui.slider);
     ui.pitchToggle.checked = state.preservePitch;
@@ -4582,7 +4588,7 @@
     const accessNotice = !playbackAllowed && accessSnapshot?.state !== "trial_not_started" && accessSnapshot?.state !== "loading"
       ? accessMessage(accessSnapshot?.code || "trial-exhausted") : "";
     const message = loopFailure || playbackFailure || accessNotice || storageFailure || effectsFailure;
-    ui.status.textContent = message;
+    ui.status.textContent = pt(message);
     ui.status.hidden = !message;
     renderLoop();
     renderEffects();
@@ -4635,7 +4641,7 @@
       const name = control.classList.contains("effect-slider") ? control.id.replace("scdl-effect-", "") : null;
       const label = root.querySelector(`label[for="${control.id}"]`)?.textContent || control.getAttribute("aria-label");
       control.removeAttribute("title");
-      control.setAttribute("data-scdl-tooltip", `${label}: drag vertically · Shift for fine adjustment${name ? " · Hold to open options (Enter / Space)" : ""}`);
+      control.setAttribute("data-scdl-tooltip", pt("$1: drag vertically · Shift for fine adjustment", label) + (name ? pt(" · Hold to open options (Enter / Space)") : ""));
       if (name) {
         control.dataset.effectSettings = name;
         const panel = root.querySelector(`[data-effect-settings-panel="${name}"]`);
@@ -4712,10 +4718,9 @@
       const enabled = state[name] > 0;
       bypass.disabled = !state.available || !effectAllowed(name) || accessActionPending;
       bypass.setAttribute("aria-pressed", String(enabled));
-      bypass.setAttribute("aria-label", `${enabled ? "Disable" : "Enable"} ${name}`);
-      bypass.title = enabled
-        ? `Disable ${name} (${state[name]}% wet)`
-        : `Enable ${name} (${effectWetMemory[name] || DEFAULT_EFFECT_TOGGLE_WET}% wet)`;
+      const effectName = pt(({ reverb: "Reverb", delay: "Echo", flanger: "Flanger", phaser: "Phaser", saturation: "Saturation", bitcrusher: "Bitcrusher" })[name]);
+      bypass.title = pt(enabled ? "Disable $1 ($2% wet)" : "Enable $1 ($2% wet)", effectName, enabled ? state[name] : effectWetMemory[name] || DEFAULT_EFFECT_TOGGLE_WET);
+      bypass.setAttribute("aria-label", bypass.title);
       syncRange(slider);
       syncEffectKnob(slider);
     }
@@ -4740,7 +4745,7 @@
     const frozen = effectsController.isDelayFrozen?.() === true;
     ui.effectFreeze.disabled = !state.available || !capability("freeEffects") || accessActionPending || state.delay === 0;
     ui.effectFreeze.setAttribute("aria-pressed", String(frozen));
-    ui.effectFreeze.textContent = frozen ? "Frozen — release" : "Hold to Freeze";
+    ui.effectFreeze.textContent = frozen ? pt("Frozen — release") : pt("Hold to Freeze");
     ui.effectsShell.classList.toggle("is-collapsed", effectsCollapsed);
     ui.effectsToggle.setAttribute("aria-expanded", String(!effectsCollapsed));
   }

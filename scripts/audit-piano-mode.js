@@ -70,6 +70,8 @@ function fixture() {
   scope.padEditorPending = false;
   scope.padEditorCache = new Map();
   vm.createContext(scope);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, 'player-tools-i18n.js'), 'utf8'), scope);
+  scope.pt = scope.SCPlayerToolsText.t;
   for (const name of ['invalidatePendingInstrumentNotes', 'instrumentGainAt', 'scheduleInstrumentEnvelope', 'releaseInstrumentKey', 'cleanupInstrumentVoice', 'releaseInstrumentVoice',
     'stopInstrumentVoice', 'stopAllInstrumentVoices', 'setInstrumentMode', 'setInstrumentAdsrEnabled', 'loopMatchesInstrumentSnapshot',
     'normalizedInstrumentNumber', 'buildInstrumentDescriptor', 'disableInstrument', 'exitInstrument',

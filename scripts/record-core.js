@@ -1,6 +1,7 @@
 /* Post-EQ stereo recorder. A separate context mixes/resamples output taps. */
 (() => {
   "use strict";
+  const pt = (source, ...values) => globalThis.SCPlayerToolsText?.t(source, ...values) ?? source.replace(/\$(\d+)/g, (match, index) => values[index - 1] ?? match);
   const MAX_SECONDS = 300;
   function encodeWav(chunks, frames, sampleRate) {
     const bytes = new ArrayBuffer(44 + frames * 4);
@@ -44,17 +45,17 @@
       taps.set(sourceContext, { output, destination, source });
     }
     async function prepare() {
-      if (disposed) throw new Error("Recorder has been closed.");
+      if (disposed) throw new Error(pt("Recorder has been closed."));
       if (!initialization) initialization = (async () => {
         const url = moduleUrl || document.documentElement.getAttribute("data-scdl-extension-record-worklet-url");
-        if (!url) throw new Error("Reload SoundCloud to enable Record.");
+        if (!url) throw new Error(pt("Reload SoundCloud to enable Record."));
         context = new AudioContext({ sampleRate: 48000 });
         input = context.createGain();
         input.channelCount = 2; input.channelCountMode = "explicit";
         analyser = context.createAnalyser(); analyser.fftSize = 2048;
         input.connect(analyser);
         await context.audioWorklet.addModule(url);
-        if (disposed) throw new Error("Recorder has been closed.");
+        if (disposed) throw new Error(pt("Recorder has been closed."));
         processor = new AudioWorkletNode(context, "scdl-record", { channelCount: 2, channelCountMode: "explicit", outputChannelCount: [2] });
         input.connect(processor); processor.connect(context.destination);
         processor.port.onmessage = ({ data }) => {
@@ -75,7 +76,7 @@
             }
           }
           if (data.stopped && (state === "recording" || state === "stopping")) {
-            if (data.limitReached) message = "5-minute limit reached. Your sample is ready.";
+            if (data.limitReached) message = pt("5-minute limit reached. Your sample is ready.");
             state = frames ? "ready" : "idle"; stopped?.(); stopped = null; notify();
           }
         };
@@ -106,7 +107,7 @@
         await prepare();
         const playback = effects.getPlaybackContext();
         await playback.resume();
-        if (!effects.snapshot().available) throw new Error(effects.snapshot().reason || "This player cannot be recorded.");
+        if (!effects.snapshot().available) throw new Error(effects.snapshot().reason || pt("This player cannot be recorded."));
         chunks = []; frames = 0; peaks = []; buffer = null; previewOffset = 0;
         state = "recording"; processor.port.postMessage("start"); notify();
       } catch (error) { state = previousState; message = error.message; notify(); throw error; }
@@ -177,7 +178,7 @@
       peaks: () => peaks,
       sampleAt(index, channel) { return chunks[Math.floor(index / 2048)]?.[channel]?.[index % 2048] || 0; },
       readLive(samples) { if (analyser) analyser.getFloatTimeDomainData(samples); else samples.fill(0); },
-      exportWav() { if (!frames || ["recording", "stopping"].includes(state)) throw new Error("Stop recording before downloading."); return encodeWav(chunks, frames, context.sampleRate); },
+      exportWav() { if (!frames || ["recording", "stopping"].includes(state)) throw new Error(pt("Stop recording before downloading.")); return encodeWav(chunks, frames, context.sampleRate); },
     });
   }
   globalThis.SCRecord = Object.freeze({ create, encodeWav, MAX_SECONDS });

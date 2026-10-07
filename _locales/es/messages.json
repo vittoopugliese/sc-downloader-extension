@@ -1,4 +1,6 @@
 {
+  "player_tools_offer_detail": { "message": "Velocidad, loops y efectos" },
+  "free_downloads_forever": { "message": "Descargas gratis para siempre" },
   "sampler_presets": { "message": "Estados guardados del sampler" },
   "sampler_saveState": { "message": "Guardar estado" },
   "sampler_stateName": { "message": "Nombre del estado" },
@@ -120,7 +122,7 @@
     "message": "Elegir"
   },
   "tracks": {
-    "message": "$1 tracks",
+    "message": "$1 pistas",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -359,7 +361,7 @@
     }
   },
   "track": {
-    "message": "Track"
+    "message": "Pista"
   },
   "folder": {
     "message": "Carpeta"
@@ -706,7 +708,7 @@
   "player_tools_restore_working": { "message": "Comprobando tu compra…" },
   "player_tools_restore_success": { "message": "Pro activado. Tus controles de Player Tools ya estan desbloqueados." },
   "player_tools_restore_error": { "message": "No se pudo recuperar la compra. Revisa los datos o contacta a soporte." },
-  "email": { "message": "Email" },
+  "email": { "message": "Correo electrónico" },
   "close": { "message": "Cerrar" },
   "sampler_slice": {
     "message": "Dividir el loop seleccionado en 8 pads"

@@ -1,10 +1,11 @@
 /* Edison-inspired time-domain monitor and sample transport. */
 (() => {
   "use strict";
+  const pt = (source, ...values) => globalThis.SCPlayerToolsText?.t(source, ...values) ?? source.replace(/\$(\d+)/g, (match, index) => values[index - 1] ?? match);
   function mount({ container, effects, onCollapsedChange, moduleUrl, iconUrl }) {
     const collapsible = globalThis.SCPlayerToolsCollapsible;
     const section = document.createElement("section");
-    section.className = "record-section"; section.id = "scdl-record"; section.setAttribute("aria-label", "Record");
+    section.className = "record-section"; section.id = "scdl-record"; section.setAttribute("aria-label", pt("Record"));
     section.innerHTML = `<style>
       ${collapsible.styles}
       .record-section { overflow:hidden; border:1px solid #343434; border-radius:11px; background:#151515; color:#eee; }
@@ -33,7 +34,7 @@
       .record-empty[hidden] { display:none; }
       .record-notice { position:absolute; inset:auto 5px 5px; margin:0; padding:4px 6px; border-radius:3px; color:#eee; background:#20282bee; font:10px/1.4 system-ui,sans-serif; pointer-events:none; }
     </style>
-    ${collapsible.header({ title: "Record", bodyId: "scdl-record-body", expanded: false, toggleClass: "record-toggle", icon: '<img class="tool-section-icon record-icon" alt="" aria-hidden="true" />', actionsClass: "record-toolbar", actions: `
+    ${collapsible.header({ title: pt("Record"), bodyId: "scdl-record-body", expanded: false, toggleClass: "record-toggle", icon: '<img class="tool-section-icon record-icon" alt="" aria-hidden="true" />', actionsClass: "record-toolbar", actions: `
         <span class="record-status" hidden><span class="record-dot" aria-hidden="true"></span><output class="record-time" aria-label="Recording duration">00:00.000</output></span>
         <button type="button" class="record-start" aria-label="Start recording" aria-pressed="false"><span class="record-dot" aria-hidden="true"></span>Rec</button>
         <button type="button" class="record-stop" aria-label="Stop recording or playback; hold to clear" data-scdl-tooltip="Stop · Hold to clear" disabled>■</button>
@@ -45,6 +46,7 @@
         <div class="record-empty">Record your mix<br>Track · pads · FX · EQ</div>
       </div>
     </div>`;
+    globalThis.SCPlayerToolsText?.localize(section);
     container.append(section);
     const find = name => section.querySelector(`.record-${name}`);
     const canvas = find("canvas"), painter = canvas.getContext("2d");
@@ -65,10 +67,11 @@
         element.setAttribute("role", "status"); element.setAttribute("aria-live", "polite");
         find("stage").append(element);
       }
-      element.textContent = text;
+      element.textContent = pt(text);
     }
-    const report = error => notice(error.message || "Could not record audio.");
+    const report = error => notice(error.message || pt("Could not record audio."));
     const syncIcon = () => {
+      globalThis.SCPlayerToolsText?.refresh(section);
       const url = iconUrl || document.documentElement.getAttribute("data-scdl-extension-record-url");
       if (url) find("icon").src = url;
     };
@@ -82,11 +85,11 @@
       section.dataset.recording = String(capturing);
       find("start").disabled = busy;
       find("start").setAttribute("aria-pressed", String(capturing));
-      find("start").title = state.frames ? "Start a new take (replaces this sample)" : "Record the final mix";
+      find("start").title = state.frames ? pt("Start a new take (replaces this sample)") : pt("Record the final mix");
       find("stop").disabled = state.state === "preparing" || (!capturing && !state.frames);
       find("play").disabled = busy || !state.frames;
       find("play").textContent = state.state === "playing" ? "Ⅱ" : "▶";
-      find("play").setAttribute("aria-label", state.state === "playing" ? "Pause recorded sample" : "Play recorded sample");
+      find("play").setAttribute("aria-label", state.state === "playing" ? pt("Pause recorded sample") : pt("Play recorded sample"));
       find("download").disabled = busy || !state.frames;
       canvas.setAttribute("aria-valuemax", String(state.duration));
       if (busy) cancelPan();
@@ -122,7 +125,7 @@
       painter.fillStyle = "#acbcb9"; painter.font = "8px ui-monospace,monospace";
       for (let i = 0; i < 4; i++) {
         const x = i * width / 4;
-        painter.fillText(state.frames ? `${(range.start + range.span * i / 4).toFixed(2)}s` : "LIVE", x + 4, 11);
+        painter.fillText(state.frames ? `${(range.start + range.span * i / 4).toFixed(2)}s` : pt("LIVE"), x + 4, 11);
         painter.fillStyle = "#a1b4af18"; painter.fillRect(x, 16, 1, height - 16); painter.fillStyle = "#acbcb9";
       }
       painter.strokeStyle = "#d1e6df"; painter.lineWidth = 1;

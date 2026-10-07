@@ -202,7 +202,7 @@ const { chromium } = require('playwright');
         openSingleLine:open.scrollHeight<=open.clientHeight,
       };
     });
-    assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['Abrir ↗',''],detailOrder:['cover','detail-copy','status','detail-actions'],oneLine:true,locateTitle:'Teleport to selected track',locateIcon:true,openSingleLine:true});
+    assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['Abrir ↗',''],detailOrder:['cover','detail-copy','status','detail-actions'],oneLine:true,locateTitle:'Localizar en SoundCloud',locateIcon:true,openSingleLine:true});
     const teleportButton=page.locator('#scdl-likes-explorer .locate-action');
     await page.mouse.move(0,0);
     await teleportButton.hover(); await page.waitForTimeout(400);
@@ -210,7 +210,7 @@ const { chromium } = require('playwright');
       const tooltip=document.querySelector('#scdl-fast-tooltip');
       return {text:tooltip.textContent,visible:tooltip.style.visibility,titleRemoved:!button.hasAttribute('title')};
     });
-    assert.deepEqual(teleportTooltip,{text:'Teleport to selected track',visible:'visible',titleRemoved:true});
+    assert.deepEqual(teleportTooltip,{text:'Localizar en SoundCloud',visible:'visible',titleRemoved:true});
     await teleportButton.click();
     const teleportOverlay=page.locator('#scdl-likes-explorer .teleport-overlay');
     await teleportOverlay.waitFor({state:'visible'});
@@ -295,7 +295,8 @@ const { chromium } = require('playwright');
     console.log('Worker jobs: account change during fetch blocks commit; resume, sender/owner checks, Pro denial and Free deletion passed.');
     const popup=await context.newPage();await popup.setViewportSize({width:426,height:760});
     await popup.goto(`chrome-extension://${new URL(worker.url()).host}/popup.html`);
-    const entry=popup.locator('#likesExplorerBtn');
+    await popup.locator('#likesHelpTab').click();
+    const entry=popup.locator('#likesHelp a[href="https://soundcloud.com/you/likes#scdl-explore"]');
     await entry.waitFor();assert.equal(await entry.isVisible(),true);
     console.log('Real extension popup exposes the Likes Explorer entry.');
   }finally{await context.close();fs.rmSync(profile,{recursive:true,force:true});}

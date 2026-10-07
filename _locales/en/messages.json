@@ -1,4 +1,6 @@
 {
+  "player_tools_offer_detail": { "message": "Tempo, loops & FX" },
+  "free_downloads_forever": { "message": "Free downloads forever" },
   "sampler_presets": { "message": "Saved sampler states" },
   "sampler_saveState": { "message": "Save state" },
   "sampler_stateName": { "message": "State name" },

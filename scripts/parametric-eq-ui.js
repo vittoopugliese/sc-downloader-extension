@@ -1,6 +1,7 @@
 /* Canvas spectrum with keyboard-accessible parametric EQ controls. */
 (() => {
   "use strict";
+  const pt = (source, ...values) => globalThis.SCPlayerToolsText?.t(source, ...values) ?? source.replace(/\$(\d+)/g, (match, index) => values[index - 1] ?? match);
   const HEART_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17.2C22 19.85 19.85 22 17.2 22C15.78 22 14.51 21.38 13.63 20.4C12.87 19.55 12.4 18.43 12.4 17.2C12.4 14.55 14.55 12.4 17.2 12.4C18.57 12.4 19.81 12.98 20.69 13.91C20.68 13.91 20.68 13.91 20.69 13.92C21.5 14.78 22 15.93 22 17.2Z"/><path d="M18.48 18.54L15.95 16M18.45 16.03L15.92 18.57"/><path d="M22 8.69C22 10.66 21.49 12.4 20.69 13.91C19.81 12.98 18.57 12.4 17.2 12.4C14.55 12.4 12.4 14.55 12.4 17.2C12.4 18.43 12.87 19.55 13.63 20.4C13.26 20.57 12.92 20.71 12.62 20.81C12.28 20.93 11.72 20.93 11.38 20.81C8.48 19.82 2 15.69 2 8.69C2 5.6 4.49 3.09998 7.56 3.09998C9.37 3.09998 10.99 3.98002 12 5.33002C13.01 3.98002 14.63 3.09998 16.44 3.09998C19.51 3.09998 22 5.6 22 8.69Z"/></svg>`;
   function mount({ container, effects, authorize, isAllowed, onChange, onCollapsedChange, iconUrl, resetIconUrl, pro = true }) {
     const api = globalThis.SCParametricEQ;
@@ -8,7 +9,7 @@
     const section = document.createElement("section");
     section.className = "peq";
     section.id = "scdl-parametric-eq";
-    section.setAttribute("aria-label", "Parametric EQ");
+    section.setAttribute("aria-label", pt("Parametric EQ"));
     const bodyId = "scdl-parametric-eq-body";
     section.innerHTML = `
       <style>
@@ -42,10 +43,11 @@
         .peq .peq-point[aria-pressed="true"] { background:#ff9c5b; color:#111; box-shadow:0 0 0 3px #ff7b3838; }
         .peq-message { position:absolute; z-index:2; top:4px; left:28px; right:6px; margin:0; padding:2px 4px; border-radius:3px; color:#ffb68b; background:#17100be8; font-size:9px; line-height:1.4; pointer-events:none; }
       </style>
-      ${collapsible.header({ title: "Parametric EQ", bodyId, expanded: true, toggleClass: "peq-toggle", icon: '<img class="tool-section-icon peq-icon" alt="" aria-hidden="true" />', actions: `<button type="button" class="peq-bypass peq-header-bypass" aria-pressed="false" aria-label="Bypass EQ" title="Bypass EQ only">${HEART_ICON}</button><button type="button" class="peq-add peq-header-control" aria-label="Add EQ point" title="Add a parametric EQ point"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button><button type="button" class="peq-clip peq-header-control" aria-pressed="false" aria-label="Enable hard clip" title="Enable hard clipping after EQ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 17h4V7h12v10h4" /></svg></button><button type="button" class="peq-reset peq-header-control" aria-label="Reset EQ" title="Reset all EQ points and clipping"><img class="peq-cross-icon" alt="" aria-hidden="true" /></button><span class="peq-pro">PRO</span>` })}
+      ${collapsible.header({ title: pt("Parametric EQ"), bodyId, expanded: true, toggleClass: "peq-toggle", icon: '<img class="tool-section-icon peq-icon" alt="" aria-hidden="true" />', actions: `<button type="button" class="peq-bypass peq-header-bypass" aria-pressed="false" aria-label="Bypass EQ" title="Bypass EQ only">${HEART_ICON}</button><button type="button" class="peq-add peq-header-control" aria-label="Add EQ point" title="Add a parametric EQ point"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button><button type="button" class="peq-clip peq-header-control" aria-pressed="false" aria-label="Enable hard clip" title="Enable hard clipping after EQ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 17h4V7h12v10h4" /></svg></button><button type="button" class="peq-reset peq-header-control" aria-label="Reset EQ" title="Reset all EQ points and clipping"><img class="peq-cross-icon" alt="" aria-hidden="true" /></button><span class="peq-pro">PRO</span>` })}
       <div class="peq-body" id="${bodyId}">
         <div class="peq-stage"><canvas class="peq-canvas" aria-label="Equalizer response and live frequency spectrum. Double click near the left or right edge for a high-pass or low-pass cutoff. Drag to edit; scroll on a point to adjust Q; double click a point to delete it."></canvas><p class="peq-message" role="status" aria-live="polite" hidden></p></div>
       </div>`;
+    globalThis.SCPlayerToolsText?.localize(section);
     container.append(section);
     section.querySelector('.peq-pro').hidden = !pro;
     const find = (name) => section.querySelector(`.peq-${name}`);
@@ -53,6 +55,7 @@
     const stage = find("stage");
     const ctx = canvas.getContext("2d");
     const syncIcon = () => {
+      globalThis.SCPlayerToolsText?.refresh(section);
       const url = iconUrl || document.documentElement.getAttribute("data-scdl-extension-eq-url");
       if (url) find("icon").src = url;
       const crossUrl = resetIconUrl || document.documentElement.getAttribute("data-scdl-extension-cross-url");
@@ -75,7 +78,7 @@
     let operationVersion = 0;
     let collapseController = null;
     const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
-    const message = (text) => { find("message").textContent = text; find("message").hidden = !text; };
+    const message = (text) => { find("message").textContent = pt(text); find("message").hidden = !text; };
     const geometry = () => ({ width: stage.clientWidth, height: stage.clientHeight, left: 27, right: Math.max(28, stage.clientWidth - 12), top: 12, bottom: stage.clientHeight - 22 });
     const xFor = (hz, g) => g.left + Math.log(hz / 20) / Math.log(1000) * (g.right - g.left);
     const yFor = (gain, g) => g.top + (api.MAX_GAIN_DB - gain) / (2 * api.MAX_GAIN_DB) * (g.bottom - g.top);
@@ -105,18 +108,18 @@
           if (!allowed || !isAllowed()) {
             dirty = false;
             settings = api.normalize(effects.snapshot().eq);
-            message("Player Tools Pro is required to use EQ.");
+            message(pt("Player Tools Pro is required to use EQ."));
             break;
           }
           // Commit the newest gesture state after authorization, not an older drag sample.
           dirty = false;
           effects.setEqualizer(settings);
           onChange(settings);
-          message(effects.snapshot().initialized ? "" : "Play a track to hear EQ and see its spectrum.");
+          message(effects.snapshot().initialized ? "" : pt("Play a track to hear EQ and see its spectrum."));
         }
       } catch (error) {
         settings = api.normalize(effects.snapshot().eq);
-        message(error?.message || "Could not apply EQ.");
+        message(error?.message || pt("Could not apply EQ."));
       } finally {
         pending = false;
         render();
@@ -130,8 +133,8 @@
       commit();
     }
     function add(band = { frequency: 1000, gain: 0, type: "peaking" }) {
-      if (!isAllowed()) { message("Player Tools Pro is required to use EQ."); return; }
-      if (settings.bands.length >= api.MAX_BANDS) { message("All 8 points are in use. Move or delete a point."); return; }
+      if (!isAllowed()) { message(pt("Player Tools Pro is required to use EQ.")); return; }
+      if (settings.bands.length >= api.MAX_BANDS) { message(pt("All 8 points are in use. Move or delete a point.")); return; }
       settings.bands.push({ ...band, gain: band.type === "peaking" ? band.gain : 0,
         q: band.type === "peaking" ? 1 : Math.SQRT1_2 });
       selected = settings.bands.length - 1;
@@ -148,11 +151,11 @@
       selected = Math.min(selected, settings.bands.length - 1);
       find("header-bypass").setAttribute("aria-pressed", String(!settings.enabled));
       find("header-bypass").disabled = !allowed;
-      find("header-bypass").setAttribute("aria-label", settings.enabled ? "Bypass EQ" : "Enable EQ");
-      find("header-bypass").title = settings.enabled ? "Bypass EQ only" : "Enable EQ";
+      find("header-bypass").setAttribute("aria-label", settings.enabled ? pt("Bypass EQ") : pt("Enable EQ"));
+      find("header-bypass").title = settings.enabled ? pt("Bypass EQ only") : pt("Enable EQ");
       find("clip").setAttribute("aria-pressed", String(settings.hardClip));
-      find("clip").setAttribute("aria-label", settings.hardClip ? "Disable hard clip" : "Enable hard clip");
-      find("clip").title = settings.hardClip ? "Disable hard clipping after EQ" : "Enable hard clipping after EQ";
+      find("clip").setAttribute("aria-label", settings.hardClip ? pt("Disable hard clip") : pt("Enable hard clip"));
+      find("clip").title = settings.hardClip ? pt("Disable hard clipping after EQ") : pt("Enable hard clipping after EQ");
       find("clip").disabled = !allowed;
       find("reset").disabled = !allowed;
       find("add").disabled = !allowed || settings.bands.length >= api.MAX_BANDS;
@@ -211,10 +214,10 @@
         point.style.top = `${band.type === "peaking" ? yFor(band.gain, g) : yForQ(band.q, g)}px`;
         point.disabled = !allowed;
         point.setAttribute("aria-pressed", String(selected === index));
-        const type = band.type === "highpass" ? "High-pass" : band.type === "lowpass" ? "Low-pass" : "Bell";
+        const type = band.type === "highpass" ? pt("High-pass") : band.type === "lowpass" ? pt("Low-pass") : pt("Bell");
         const description = `${type} ${index + 1}: ${Math.round(band.frequency)} Hz, ${band.type === "peaking" ? `${band.gain.toFixed(1)} dB, ` : ""}Q ${band.q.toFixed(2)}`;
         point.setAttribute("aria-label", description);
-        point.title = `${description} · drag ${band.type === "peaking" ? "for frequency/gain" : "for frequency/Q"} · scroll for Q · double-click to remove`;
+        point.title = pt(band.type === "peaking" ? "$1 · drag for frequency/gain · scroll for Q · double-click to remove" : "$1 · drag for frequency/Q · scroll for Q · double-click to remove", description);
       });
       draw();
     }
@@ -315,7 +318,7 @@
       isCollapsed() { return collapseController.isCollapsed(); },
       sync() {
         if (!pending && !dragging) settings = api.normalize(effects.snapshot().eq);
-        if (!isAllowed()) message("Player Tools Pro is required to use EQ.");
+        if (!isAllowed()) message(pt("Player Tools Pro is required to use EQ."));
         render();
       },
       reset() {

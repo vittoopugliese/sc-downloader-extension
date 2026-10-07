@@ -1,6 +1,7 @@
 /* Shared disclosure header and state controller for Player Tools sections. */
 (() => {
   "use strict";
+  const pt = (source, ...values) => globalThis.SCPlayerToolsText?.t(source, ...values) ?? source.replace(/\$(\d+)/g, (match, index) => values[index - 1] ?? match);
   if (globalThis.SCPlayerToolsCollapsible) return;
 
   const CHEVRON = `<svg class="tool-section-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>`;
@@ -29,7 +30,7 @@
     const sync = (notify) => {
       section.classList.toggle("is-collapsed", isCollapsed);
       toggle.setAttribute("aria-expanded", String(!isCollapsed));
-      toggle.setAttribute("aria-label", `${isCollapsed ? "Expand" : "Collapse"} ${section.getAttribute("aria-label") || "section"}`);
+      toggle.setAttribute("aria-label", `${isCollapsed ? pt("Expand") : pt("Collapse")} ${section.getAttribute("aria-label") || "section"}`);
       body.hidden = isCollapsed;
       if (notify) onChange?.(isCollapsed);
     };
@@ -40,6 +41,7 @@
       sync(changed && options.notify !== false);
     };
     toggle.addEventListener("click", () => setCollapsed(!isCollapsed));
+    document.addEventListener("scdl:extension-assets-ready", () => sync(false));
     sync(false);
     return Object.freeze({ setCollapsed, isCollapsed: () => isCollapsed });
   }

@@ -42,6 +42,7 @@ $packageItems = @(
     "scripts/bitcrusher-processor.js",
     "scripts/parametric-eq.js",
     "scripts/player-tools-collapsible.js",
+    "scripts/player-tools-i18n.js",
     "scripts/parametric-eq-ui.js",
     "scripts/record-core.js",
     "scripts/record-ui.js",
