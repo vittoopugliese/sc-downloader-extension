@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#13152b">
+  <meta name="theme-color" content="#191919">
   <title>Player Tools for SoundCloud: speed, loops, pads, FX and stems</title>
   <meta name="description" content="Free Chrome extension that adds speed and Keep Tone, A–B loops, sampler pads, FX, EQ, a recorder, on-device stem separation and a private Likes Explorer to the SoundCloud player.">
   <meta property="og:type" content="website">
@@ -39,16 +39,19 @@
   <style>
     :root {
       color-scheme: dark;
-      --night: #13152b;
-      --panel: #1b1e3a;
-      --panel-2: #23274a;
-      --line: #2f3460;
-      --text: #eceaf6;
-      --muted: #a4a6c6;
-      --vocals: #f4c24d;
-      --drums: #f0716a;
-      --bass: #4fc9b0;
-      --other: #9a8cf7;
+      /* Player Tools palette: the extension's graphite surfaces and orange accents */
+      --night: #191919;
+      --panel: #202020;
+      --panel-2: #292929;
+      --line: #3b3b3b;
+      --text: #f2f2f2;
+      --muted: #aaaaaa;
+      --accent: #ff5500;
+      --accent-hover: #ff7b38;
+      --vocals: #ff5500;
+      --drums: #ff8a4c;
+      --bass: #ffb98f;
+      --other: #8c8c8c;
       --display: "Unbounded", "Arial Black", system-ui, sans-serif;
       --body: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
       --shell: min(1180px, calc(100% - 64px));
@@ -58,8 +61,8 @@
     body { margin: 0; background: var(--night); color: var(--text); font: 17px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
     a { color: inherit; }
     button, input { font: inherit; color: inherit; }
-    :focus-visible { outline: 2px solid var(--vocals); outline-offset: 3px; border-radius: 4px; }
-    ::selection { background: var(--other); color: var(--night); }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+    ::selection { background: var(--accent); color: var(--night); }
     [data-view="goodbye"] .site { display: none; }
     .shell { width: var(--shell); margin-inline: auto; }
     .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -67,7 +70,7 @@
     /* Notice for people arriving from the removed extension */
     .strip { background: var(--panel); border-bottom: 1px solid var(--line); font-size: 14px; }
     .strip .shell { margin-block: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 10px 0; color: var(--muted); }
-    .strip a { color: var(--vocals); font-weight: 600; text-underline-offset: 3px; }
+    .strip a { color: var(--drums); font-weight: 600; text-underline-offset: 3px; }
 
     header.top { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 0; }
     .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font: 600 15px/1.2 var(--display); letter-spacing: -.01em; }
@@ -77,8 +80,8 @@
     .top nav a:hover { color: var(--text); }
     .top nav .install { color: var(--night); }
 
-    .install { display: inline-flex; align-items: center; gap: 10px; padding: 12px 18px; border-radius: 999px; background: var(--vocals); color: var(--night); font-weight: 600; text-decoration: none; transition: background-color .15s; }
-    .install:hover { background: #ffd471; }
+    .install { display: inline-flex; align-items: center; gap: 10px; padding: 12px 18px; border-radius: 999px; background: var(--accent); color: var(--night); font-weight: 600; text-decoration: none; transition: background-color .15s; }
+    .install:hover { background: var(--accent-hover); }
     .install svg { width: 18px; height: 18px; flex: none; }
     .install.large { padding: 17px 26px; font-size: 18px; }
 
@@ -129,28 +132,28 @@
     .speed-readout { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
     .speed-value { font: 600 clamp(40px, 5vw, 60px)/1 var(--display); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
     .speed-pitch { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
-    input[type="range"] { width: 100%; accent-color: var(--vocals); }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
     .speed-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-top: 18px; }
     .presets { display: flex; gap: 8px; }
     .presets button { padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; font-size: 14px; font-variant-numeric: tabular-nums; cursor: pointer; }
-    .presets button[aria-pressed="true"] { border-color: var(--vocals); color: var(--vocals); }
+    .presets button[aria-pressed="true"] { border-color: var(--accent); color: var(--drums); }
     .switch { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; cursor: pointer; }
     .switch input { appearance: none; width: 42px; height: 24px; margin: 0; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; transition: background-color .15s; }
     .switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--text); transition: transform .15s; }
-    .switch input:checked { background: var(--bass); }
+    .switch input:checked { background: var(--accent); }
     .switch input:checked::after { transform: translateX(18px); }
 
     /* Loop + pads widget */
     .loop-wave { position: relative; height: 64px; margin-bottom: 20px; }
-    .loop-wave .bars i { background: #4a4f80; }
-    .loop-wave .bars i.in { background: var(--drums); }
+    .loop-wave .bars i { background: #484848; }
+    .loop-wave .bars i.in { background: var(--accent); }
     .marker { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--text); }
     .marker span { position: absolute; top: -20px; left: -6px; font-size: 12px; font-weight: 600; }
     .pads { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
     .pad { display: flex; flex-direction: column; justify-content: space-between; aspect-ratio: 1.4; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); text-align: left; cursor: pointer; transition: background-color .08s, border-color .08s; }
     .pad kbd { font: 600 18px/1 var(--display); }
     .pad span { font-size: 13px; color: var(--muted); }
-    .pad.hit { background: var(--drums); border-color: var(--drums); color: var(--night); }
+    .pad.hit { background: var(--accent); border-color: var(--accent); color: var(--night); }
     .pad.hit span { color: var(--night); }
     .pads-hint { margin: 16px 0 0; font-size: 14px; color: var(--muted); }
 
@@ -158,8 +161,8 @@
     .eq { display: block; width: 100%; height: auto; margin-bottom: 20px; }
     .fx-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
     .fx-list li { padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; }
-    .fx-list .rec { border-color: var(--drums); color: var(--drums); }
-    .fx-list .rec::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: var(--drums); }
+    .fx-list .rec { border-color: var(--accent); color: var(--drums); }
+    .fx-list .rec::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: var(--accent); }
 
     /* Stems */
     .stems-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; }
@@ -315,10 +318,10 @@
             <div><h3 data-l10n="fx_title">FX, EQ and a recorder</h3><p data-l10n="fx_copy">Reverb, delay, flanger, phaser, bitcrusher and saturation, plus a parametric EQ. Record what you hear, after FX and EQ, as a WAV file. One click compares with the original.</p></div>
             <div class="widget">
               <svg class="eq" viewBox="0 0 600 170" aria-hidden="true">
-                <g stroke="#2f3460" stroke-width="1"><path d="M0 85H600"/><path d="M120 10V160M240 10V160M360 10V160M480 10V160"/></g>
-                <path d="M0 112 C60 112 80 60 130 60 S200 98 250 96 S320 128 360 128 S430 70 470 52 S560 70 600 74" fill="none" stroke="#4fc9b0" stroke-width="3"/>
-                <path d="M0 112 C60 112 80 60 130 60 S200 98 250 96 S320 128 360 128 S430 70 470 52 S560 70 600 74 V170 H0Z" fill="#4fc9b0" opacity=".12"/>
-                <g fill="#13152b" stroke="#eceaf6" stroke-width="2.5"><circle cx="130" cy="60" r="7"/><circle cx="250" cy="96" r="7"/><circle cx="360" cy="128" r="7"/><circle cx="470" cy="52" r="7"/></g>
+                <g stroke="#3b3b3b" stroke-width="1"><path d="M0 85H600"/><path d="M120 10V160M240 10V160M360 10V160M480 10V160"/></g>
+                <path d="M0 112 C60 112 80 60 130 60 S200 98 250 96 S320 128 360 128 S430 70 470 52 S560 70 600 74" fill="none" stroke="#ff5500" stroke-width="3"/>
+                <path d="M0 112 C60 112 80 60 130 60 S200 98 250 96 S320 128 360 128 S430 70 470 52 S560 70 600 74 V170 H0Z" fill="#ff5500" opacity=".14"/>
+                <g fill="#191919" stroke="#f2f2f2" stroke-width="2.5"><circle cx="130" cy="60" r="7"/><circle cx="250" cy="96" r="7"/><circle cx="360" cy="128" r="7"/><circle cx="470" cy="52" r="7"/></g>
               </svg>
               <ul class="fx-list">
                 <li data-l10n="fx_reverb">Reverb</li><li data-l10n="fx_delay">Delay</li><li data-l10n="fx_flanger">Flanger</li><li data-l10n="fx_phaser">Phaser</li><li data-l10n="fx_crusher">Bitcrusher</li><li data-l10n="fx_saturation">Saturation</li><li class="rec" data-l10n="fx_record">Record</li>

@@ -71,7 +71,7 @@
     .bye .brand { margin-bottom: 48px; }
     .bye-head h1 { margin: 0 0 14px; font: 700 clamp(26px, 4.2vw, 38px)/1.1 var(--display); letter-spacing: -.03em; }
     .bye-head p { margin: 0; font-size: 18px; color: var(--muted); }
-    .bye-reinstall { display: inline-block; margin-top: 18px; color: var(--vocals); font-weight: 600; text-underline-offset: 3px; }
+    .bye-reinstall { display: inline-block; margin-top: 18px; color: var(--drums); font-weight: 600; text-underline-offset: 3px; }
     .bye-pitch { margin: 40px 0 0; padding: 28px; border: 1px solid var(--line); border-radius: 20px; background: var(--panel); }
     .bye-stems { display: flex; gap: 6px; margin-bottom: 22px; }
     .bye-stems i { height: 6px; flex: 1; border-radius: 3px; background: var(--c); }
@@ -83,15 +83,15 @@
     .bye fieldset { display: grid; gap: 4px; margin: 16px 0; padding: 0; border: 0; }
     .bye legend { margin-bottom: 8px; font-weight: 600; }
     .bye-radio { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; }
-    .bye-radio input { accent-color: var(--vocals); width: 18px; height: 18px; margin: 0; }
+    .bye-radio input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; }
     .bye-field { display: grid; gap: 6px; margin: 16px 0; color: var(--muted); font-size: 15px; }
     .bye-field textarea, .bye-field input { padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); resize: vertical; }
-    #feedback-status { min-height: 24px; color: var(--drums); font-size: 15px; }
+    #feedback-status { min-height: 24px; color: var(--bass); font-size: 15px; }
     .bye-actions { display: flex; gap: 12px; align-items: center; }
     .bye-send { padding: 12px 20px; border: 1px solid var(--text); border-radius: 999px; background: transparent; font-weight: 600; cursor: pointer; }
     .bye-send:disabled { opacity: .45; cursor: not-allowed; }
     .bye-skip { padding: 12px 8px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
-    .bye-success { color: var(--bass); font-weight: 600; }
+    .bye-success { color: var(--drums); font-weight: 600; }
   `;
   document.head.append(style);
 
