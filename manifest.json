@@ -4,7 +4,7 @@
   "name": "SoundCloud Player Tools, Stem Extractor & Likes Explorer",
   "description": "Speed, loops, sampler pads, FX, EQ, recorder and on-device stem separation for SoundCloud, plus a private Likes Explorer.",
   "default_locale": "en",
-  "version": "2026.10.7",
+  "version": "2026.10.8",
   "permissions": ["cookies", "tabs", "downloads", "offscreen", "notifications", "storage", "alarms"],
   "host_permissions": [
     "https://soundcloud.com/*",

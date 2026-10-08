@@ -4,7 +4,8 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
-const runtimeCopy = ["README.md", "popup.html", "index.html", "scripts/landing-i18n.js",
+// The landing dropped trial/PRO copy for the free Player Tools launch (2026-10-08).
+const runtimeCopy = ["README.md", "popup.html",
   ...fs.readdirSync(path.join(root, "_locales")).map((locale) => `_locales/${locale}/messages.json`)]
   .map((file) => `${file}\n${read(file)}`).join("\n");
 
@@ -20,9 +21,8 @@ for (const obsolete of [
   /(?:trial starts once|empieza una sola vez|começa uma única vez|startet nur einmal|запускается один раз)/i,
 ]) assert.doesNotMatch(runtimeCopy, obsolete);
 
-for (const required of [/7-day Player Tools trial/i, /20 new A–B loops/i, /WAV.*Pro/i,
-  /two activated Chrome profiles/i, /signed 30-day offline receipt/i,
-  /Full-track downloads stay free/i]) assert.match(runtimeCopy, required);
+for (const required of [/20 new A–B loops/i, /WAV.*Pro/i,
+  /two activated Chrome profiles/i, /signed 30-day offline receipt/i]) assert.match(runtimeCopy, required);
 assert.match(runtimeCopy, /trial for the current Chrome profile/i);
 
-console.log("Commercial FREE/trial/PRO copy verification passed across README, landing and five locales.");
+console.log("Commercial FREE/trial/PRO copy verification passed across README, popup and five locales.");

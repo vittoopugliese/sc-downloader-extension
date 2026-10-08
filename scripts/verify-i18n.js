@@ -60,6 +60,9 @@ for (const key of usedKeys) {
 }
 
 assert.equal(messages.en.app_name.message, "SoundCloud Track Downloader");
+// Guards against the en/es files being swapped (shipped that way in 2026.10.7).
+assert.equal(messages.en.help_hero_title.message, "Your SoundCloud studio");
+assert.equal(messages.es.retry.message, "Reintentar");
 assert(read("manifest.json").includes('"default_locale": "en"'));
 assert(read("popup.html").includes('id="helpPanel"'));
 assert(read("popup.html").includes('id="looperTab"'));

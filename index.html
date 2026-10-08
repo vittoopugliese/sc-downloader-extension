@@ -3,847 +3,405 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f7f5ef">
-  <meta name="description" content="Download SoundCloud tracks, playlists, likes and artist uploads for free. Player Tools includes a 7-day trial; Pro adds unlimited loops, WAV and processed-track exports, FX, parametric EQ and Likes Explorer.">
-  <meta name="keywords" content="soundcloud downloader, download soundcloud, soundcloud playlist downloader, soundcloud bulk download, soundcloud to mp3, soundcloud chrome extension, free soundcloud downloader, soundcloud looper">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#13152b">
+  <title>Player Tools for SoundCloud: speed, loops, pads, FX and stems</title>
+  <meta name="description" content="Free Chrome extension that adds speed and Keep Tone, A–B loops, sampler pads, FX, EQ, a recorder, on-device stem separation and a private Likes Explorer to the SoundCloud player.">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="SoundCloud Track Downloader — Free Bulk Download Chrome Extension">
-  <meta property="og:description" content="Download SoundCloud tracks, playlists & likes in bulk for free. Player Tools has a 7-day trial; Pro adds exports, FX, EQ and Likes Explorer. No login required for public tracks.">
+  <meta property="og:title" content="Player Tools for SoundCloud">
+  <meta property="og:description" content="Speed, loops, sampler pads, FX, EQ, a recorder and on-device stem separation, built into the SoundCloud player. Free.">
   <meta property="og:url" content="https://sctd.vpugliese.online/">
-  <meta property="og:image" content="https://sctd.vpugliese.online/assets/app-icon-logo-with-background-xl%20(2).png">
+  <meta property="og:image" content="https://sctd.vpugliese.online/assets/LooperPlayerToolkit.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="SoundCloud Track Downloader — Free Bulk Download">
-  <meta name="twitter:description" content="Free SoundCloud downloads for tracks, playlists and likes. Player Tools trial, with Pro exports, FX, EQ and Likes Explorer.">
-  <meta name="twitter:image" content="https://sctd.vpugliese.online/assets/app-icon-logo-with-background-xl%20(2).png">
   <link rel="canonical" href="https://sctd.vpugliese.online/">
-  <title>SoundCloud Downloader — Free Bulk Download Chrome Extension | 20K+ Users</title>
-  <link rel="icon" type="image/png" href="./assets/app-icon-logo-with-background-xl%20(2).png">
-  <link rel="apple-touch-icon" href="./assets/app-icon-logo-with-background-xl%20(2).png">
+  <link rel="icon" type="image/png" href="./assets/icon128.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@500;600;700&display=swap" rel="stylesheet">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    "name": "SoundCloud Track Downloader",
+    "name": "Player Tools for SoundCloud",
     "operatingSystem": "Chrome",
     "applicationCategory": "BrowserExtension",
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": "4.4",
-      "ratingCount": "47",
-      "bestRating": "5",
-      "worstRating": "1"
-    },
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
-    },
-    "description": "Download SoundCloud tracks, playlists, likes and artist uploads for free. Player Tools has a 7-day trial; Pro adds unlimited loops, WAV and processed-track exports, FX, parametric EQ and Likes Explorer.",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "description": "Speed and Keep Tone, A–B loops, sampler pads, FX, EQ, a recorder, on-device stem separation and a private Likes Explorer for the SoundCloud player.",
     "url": "https://sctd.vpugliese.online/",
-    "downloadUrl": "https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb",
-    "screenshot": "https://sctd.vpugliese.online/assets/images/readme_preview.png",
-    "softwareVersion": "2026.10.5",
-    "datePublished": "2025-08-01",
-    "author": {
-      "@type": "Person",
-      "name": "Vittorio Pugliese",
-      "email": "it@vpugliese.online"
-    },
-    "interactionStatistic": {
-      "@type": "InteractionCounter",
-      "interactionType": "https://schema.org/InstallAction",
-      "userInteractionCount": "20000"
-    }
+    "downloadUrl": "https://chromewebstore.google.com/detail/soundcloud-player-tools-s/gmlijjdgphenebddlpmpiknmmfijfmnk",
+    "author": { "@type": "Person", "name": "Vittorio Pugliese", "email": "it@vpugliese.online" }
   }
   </script>
+  <script>
+    // Decide the view before first paint so uninstall visitors never see the landing flash.
+    if (new URLSearchParams(location.search).get('view') === 'goodbye') document.documentElement.dataset.view = 'goodbye';
+  </script>
   <style>
-    :root { color-scheme: light; --paper:#f7f5ef; --ink:#242620; --muted:#686a61; --orange:#d93e10; --orange-soft:#f7ded3; --line:#deded4; --soft:#eaece2; --green:#59664b; }
-    * { box-sizing:border-box; }
-    html { scroll-behavior:smooth; }
-    body { margin:0; background:var(--paper); color:var(--ink); font-family:Arial,Helvetica,sans-serif; -webkit-font-smoothing:antialiased; }
-    a { color:inherit; text-decoration:none; }
-    button,select { font:inherit; }
-    button,a,select { -webkit-tap-highlight-color:transparent; }
-    button { cursor:pointer; }
-    button:disabled { cursor:default; }
-    :focus-visible { outline:3px solid var(--orange); outline-offset:5px; }
-    ::selection { background:#f4b49d; color:var(--ink); }
-    .shell { width:min(1160px,calc(100% - 80px)); margin-inline:auto; }
-    .icon { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
-    .symbol-library { position:absolute; width:0; height:0; overflow:hidden; }
-    .skip-link { position:fixed; top:8px; left:8px; padding:12px; background:var(--paper); z-index:20; transform:translateY(-150%); }
-    .skip-link:focus { transform:translateY(0); }
-    header { height:98px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); gap:20px; }
-    .brand { display:flex; align-items:center; gap:11px; font-size:14px; font-weight:700; line-height:1.25; letter-spacing:-.25px; }
-    .brand small { display:block; color:var(--muted); font-size:11px; font-weight:400; letter-spacing:.2px; margin-top:3px; }
-    .brand-mark { display:grid; place-items:center; width:39px; height:39px; border-radius:11px; background:var(--orange); color:white; }
-    nav { display:flex; align-items:center; gap:24px; font-size:13px; }
-    nav > a:not(.nav-install):hover { color:var(--orange); }
-    .nav-install { display:flex; align-items:center; gap:14px; font-weight:700; border:1px solid #bfc1b6; padding:12px 16px; border-radius:7px; transition:background .2s; }
-    .nav-install:hover { background:var(--soft); }
-    .nav-install .icon { width:17px; height:17px; }
-    .hero { padding:68px 0 52px; display:grid; grid-template-columns:.92fr 1.08fr; align-items:center; gap:58px; }
-    .eyebrow { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:11px; font-weight:500; letter-spacing:1.8px; text-transform:uppercase; display:flex; align-items:center; gap:9px; }
-    .status-dot { width:7px; height:7px; border-radius:50%; background:var(--orange); }
-    h1 { font-size:clamp(52px,5.5vw,76px); line-height:.98; font-weight:750; letter-spacing:-4.4px; margin:25px 0 24px; }
-    h1 em { color:var(--orange); font-style:normal; }
-    .intro { max-width:410px; color:var(--muted); font-size:17px; line-height:1.7; margin:0 0 27px; }
-    .intro strong { color:var(--ink); font-weight:400; }
-    .cta { display:inline-flex; justify-content:center; align-items:center; gap:12px; padding:17px 23px; background:var(--orange); color:white; font-size:14px; font-weight:700; border:1px solid transparent; border-radius:7px; box-shadow:0 4px 0 #ab310d; transition:transform .2s,background .2s; }
-    .cta:hover { background:#bd340d; transform:translateY(-2px); }
-    .cta .icon { width:21px; height:21px; }
-    .cta-note { margin:15px 0 0; font-size:11px; color:var(--muted); }
-    .cta-note span { padding:0 6px; color:#9a9d90; }
-    .mobile-note { display:none; }
-    .social-proof { display:flex; gap:11px; align-items:flex-start; margin:26px 0 0; max-width:380px; }
-    .quote-mark { color:var(--orange); font-family:Georgia,serif; font-size:42px; line-height:.9; }
-    blockquote { margin:0; font-size:12px; line-height:1.55; }
-    blockquote p { margin:0 0 5px; }
-    blockquote cite { color:var(--muted); font-size:10px; font-style:normal; }
-    .store-proof { display:flex; flex-wrap:nowrap; gap:2px; overflow:hidden; margin-top:12px; border:1px solid var(--line); border-radius:8px; background:var(--line); }
-    .store-stat { flex:1 1 0; min-width:0; padding:12px 13px; background:#fbfaf6; }
-    .store-stat strong { display:block; margin-bottom:3px; font-size:15px; letter-spacing:-.4px; }
-    .store-stat span { display:block; color:var(--muted); font-size:9px; line-height:1.35; }
-    .store-source { display:block; max-width:430px; margin:6px 0 0; color:#7b7e73; font-size:8px; text-align:left; text-decoration:underline; text-underline-offset:2px; }
-    .demo-stage { position:relative; min-width:0; background:#ebebe8; border:1px solid #d4d4d0; border-radius:15px; padding:24px 22px 19px; }
-    .demo-stage::before { content:""; position:absolute; inset:0; border-radius:inherit; opacity:.33; background-image:radial-gradient(#a5a5a0 .7px,transparent .7px); background-size:12px 12px; pointer-events:none; }
-    .demo-stage > * { position:relative; }
-    .demo-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:21px; }
-    .demo-top .eyebrow { font-size:9px; letter-spacing:1.3px; color:#5f5f5b; }
-    .demo-badge { border:1px solid #c8c8c2; border-radius:4px; padding:4px 7px; color:#6f351f; background:#fff4ef; font-family:ui-monospace,monospace; font-size:9px; }
-    .demo-tabs { display:flex; padding:4px; gap:3px; border:1px solid #d0d0cb; border-radius:7px; background:#deded9; width:fit-content; margin:0 auto 22px; }
-    .demo-tabs button { border:0; background:transparent; padding:8px 13px; color:#575754; border-radius:4px; font-size:11px; white-space:nowrap; }
-    .demo-tabs button[aria-pressed="true"] { color:#8e310f; background:#fff8f4; box-shadow:0 1px 3px #3b2a221a; font-weight:700; }
-    .browser { border:1px solid #454545; border-radius:9px; background:#1b1b1b; overflow:hidden; box-shadow:0 17px 32px -16px #29292966; }
-    .browser-bar { background:#353535; display:flex; align-items:center; gap:12px; padding:11px 12px; }
-    .dots { display:flex; gap:4px; }
-    .dots i { display:block; width:5px; height:5px; background:#919191; border-radius:50%; }
-    .address { display:flex; gap:7px; align-items:center; background:#262626; color:#b8b8b8; border-radius:4px; padding:5px 8px; font-size:9px; flex:1; min-width:0; }
-    .address .icon { width:10px; height:10px; }
-    #demo-url { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-    .extension-pin { color:#ff8753; width:15px; height:15px; }
-    .extension-preview { position:relative; text-align:center; padding:29px 20px 23px; overflow:hidden; background:#353535; color:#f6f4f2; isolation:isolate; min-height:277px; }
-    .extension-preview::before { content:""; position:absolute; inset:-30px; background:radial-gradient(ellipse at 80% 10%,#bd5b35 0%,transparent 45%),radial-gradient(ellipse at 18% 75%,#6e6e6e 0%,transparent 43%),linear-gradient(150deg,#242424,#6a5147 50%,#242424); filter:blur(15px); z-index:-2; }
-    .extension-preview::after { content:""; position:absolute; inset:0; background:#0006; z-index:-1; }
-    .extension-preview h2 { font-size:24px; line-height:1.2; letter-spacing:-.65px; margin:0 0 12px; }
-    .artist { display:flex; align-items:center; justify-content:center; gap:9px; color:#dedddb; font-size:13px; font-weight:700; }
-    .avatar { display:block; width:25px; height:25px; border-radius:50%; background:repeating-radial-gradient(ellipse at 80% 90%,#ffae82 0 2px,#bd5b35 3px 5px,#5a5a5a 6px 8px); }
-    .preview-meta { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:7px; margin:14px 0 13px; color:#dbd9d7; font-size:11px; }
-    .preview-meta select,.folder-pill { appearance:auto; background:#ffffff17; border:1px solid #ffffff3d; border-radius:14px; padding:4px 8px; color:#f7f5f2; font-size:10px; }
-    .preview-meta select option { background:#2a2a2a; color:white; }
-    .folder-pill { display:flex; align-items:center; gap:4px; }
-    .folder-pill .icon { width:11px; height:11px; }
-    .waveform-wrap { position:relative; margin:7px 0 12px; }
-    .waveform { width:100%; height:58px; display:block; color:#e4e1de; }
-    .loop-selection { position:absolute; inset:2px auto 2px 34%; width:30%; border-inline:2px solid #ff8753; background:linear-gradient(90deg,#ff6b2a3d,#ff6b2a1a 50%,#ff6b2a3d); opacity:0; visibility:hidden; transition:opacity .2s; pointer-events:none; }
-    .loop-handle { position:absolute; top:-7px; display:grid; place-items:center; width:20px; height:20px; padding:0; border:1px solid #ffd1bc; border-radius:50%; background:#f05a24; color:white; font:700 9px/1 Arial,sans-serif; box-shadow:0 2px 8px #0005; cursor:ew-resize; touch-action:none; }
-    .loop-handle[data-loop-handle="start"] { left:-11px; }
-    .loop-handle[data-loop-handle="end"] { right:-11px; }
-    .extension-preview.is-looper .loop-selection { opacity:1; visibility:visible; }
-    .demo-actions { position:relative; display:grid; place-items:center; min-height:36px; }
-    .download-demo { display:grid; place-items:center; margin:0 auto; border:0; width:34px; height:34px; border-radius:50%; color:#393939; background:#f1efec; transition:transform .2s,background .2s; }
-    .download-demo:hover { transform:translateY(-2px); background:white; }
-    .download-demo:focus-visible { outline-color:#ffb28f; }
-    .looper-state { position:absolute; right:0; display:none; align-items:center; gap:5px; min-height:30px; padding:5px 8px; border:1px solid #ff875388; border-radius:15px; color:#ffb08d; background:#ff55001f; font-size:9px; font-weight:700; letter-spacing:.2px; }
-    .looper-state .icon { width:13px; height:13px; }
-    .extension-preview.is-looper .looper-state { display:flex; }
-    .preview-status { font-size:10px; margin:9px 0 0; color:#dedbd8; min-height:14px; }
-    .preview-status.complete { color:#ffbc9e; }
-    .demo-caption { margin:20px 0 0; text-align:center; color:#5d5d59; font-size:10px; line-height:1.55; }
-    .demo-caption .arrow { display:inline-block; transform:rotate(-25deg); margin-right:4px; font-size:16px; }
-    .demo-disclaimer { display:block; margin-top:4px; font-size:9px; color:#777773; }
-    .benefit-strip { border-block:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:18px; padding:21px 0; }
-    .benefit-strip span { display:flex; align-items:center; gap:8px; font-size:11px; color:#51564b; }
-    .benefit-strip .icon { width:16px; height:16px; color:#717d60; }
-    .features { padding:51px 0 43px; scroll-margin-top:25px; }
-    .section-heading { display:flex; align-items:baseline; justify-content:space-between; gap:20px; margin-bottom:29px; }
-    .section-heading h2 { font-size:29px; letter-spacing:-1.2px; margin:0; }
-    .section-heading p { font-size:12px; color:var(--muted); margin:0; }
-    .feature-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:25px 38px; }
-    .feature { min-height:155px; padding:19px 19px 18px 0; border-top:1px solid var(--line); }
-    .feature-title { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-    .feature-title .icon { color:#68745a; }
-    .feature-index { font-family:ui-monospace,monospace; font-size:10px; color:#858a7c; }
-    .feature h3 { font-size:16px; letter-spacing:-.3px; margin:0 0 9px; }
-    .feature p { font-size:12px; line-height:1.75; color:var(--muted); margin:0; max-width:450px; }
-    .free-label { display:inline-flex; align-items:center; gap:5px; margin-top:12px; color:#58664c; font:700 9px/1 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.8px; text-transform:uppercase; }
-    .free-label::before { content:""; width:5px; height:5px; border-radius:50%; background:#6d7b60; }
-    .looper-guide { max-width:920px; margin:0 auto 55px; padding:34px; border:1px solid #f0b396; border-radius:14px; background:linear-gradient(135deg,#fff4ed,#f4f3eb); }
-    .looper-guide .section-heading { margin-bottom:25px; }
-    .looper-steps { display:grid; grid-template-columns:repeat(5,1fr); gap:0; margin:0; padding:0; list-style:none; border-top:1px solid #e6c8b8; counter-reset:looper-step; }
-    .looper-steps li { position:relative; min-height:138px; padding:21px 20px 4px 0; border-right:1px solid #e6c8b8; counter-increment:looper-step; }
-    .looper-steps li:not(:first-child) { padding-left:20px; }
-    .looper-steps li:last-child { border-right:0; }
-    .looper-steps li::before { content:counter(looper-step, decimal-leading-zero); display:block; margin-bottom:14px; color:var(--orange); font:700 10px/1 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.08em; }
-    .looper-steps h3 { margin:0 0 7px; font-size:14px; }
-    .looper-steps p { margin:0; color:var(--muted); font-size:11px; line-height:1.65; }
-    .looper-guide-note { margin:21px 0 0; color:#6c5347; font-size:11px; line-height:1.6; }
-    .reviews { padding:49px 0 45px; border-top:1px solid var(--line); scroll-margin-top:24px; }
-    .reviews .section-heading { margin-bottom:20px; }
-    .reviews-summary { max-width:640px; margin:10px auto 0; line-height:1.6 !important; text-align:center; }
-    .reviews .section-heading .reviews-summary { margin:10px auto 0; }
-    .review-viewport { overflow-x:auto; padding:4px 1px 8px; scroll-behavior:smooth; scroll-snap-type:x mandatory; overscroll-behavior-x:contain; scrollbar-color:#c8cabf transparent; scrollbar-width:thin; }
-    .review-list { display:flex; align-items:flex-start; gap:16px; width:max-content; margin:0; padding:0; list-style:none; }
-    .review-card { display:flex; flex:0 0 min(360px,calc(100vw - 80px)); flex-direction:column; min-height:220px; padding:19px; border:1px solid var(--line); border-radius:9px; background:#fbfaf6; scroll-snap-align:start; }
-    .review-card::before { content:"“"; height:27px; color:var(--orange); font:38px/.8 Georgia,serif; }
-    .review-text { margin:0 0 20px; color:#3c3f38; font-size:12px; line-height:1.65; white-space:pre-line; overflow-wrap:anywhere; }
-    .review-meta { display:flex; justify-content:space-between; gap:12px; margin-top:auto; padding-top:13px; border-top:1px solid #e6e5dc; font-size:9px; line-height:1.45; }
-    .review-author { font-weight:700; overflow-wrap:anywhere; }
-    .review-date,.review-source { color:var(--muted); }
-    .review-source { display:block; margin-top:2px; }
-    .review-controls { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-top:13px; }
-    .review-nav { display:flex; align-items:center; gap:8px; }
-    .icon-button,.text-button { display:inline-flex; align-items:center; justify-content:center; border:1px solid #c8cabf; border-radius:6px; background:transparent; color:var(--ink); }
-    .icon-button { width:35px; height:35px; }
-    .icon-button:hover,.text-button:hover { background:var(--soft); }
-    .icon-button:disabled { opacity:.35; cursor:default; }
-    .icon-button .icon { width:16px; height:16px; }
-    .icon-button.prev .icon { transform:rotate(180deg); }
-    .text-button { min-height:35px; padding:8px 12px; font-size:10px; font-weight:700; }
-    .review-implemented { display:inline-flex; width:fit-content; margin:6px 0 0; padding:3px 5px; border-radius:3px; color:#4f653f; background:#e1ecd8; font:700 8px/1 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.55px; }
-    .review-cta { display:flex; justify-content:space-between; align-items:center; gap:24px; margin-top:24px; padding:20px 22px; border:1px solid #d6d8cc; border-radius:8px; background:var(--soft); }
-    .review-cta p { margin:0; color:var(--muted); font-size:11px; line-height:1.6; }
-    .review-cta strong { display:block; margin-bottom:2px; color:var(--ink); font-size:12px; }
-    .review-cta .nav-install { flex-shrink:0; background:var(--paper); font-size:11px; }
-    .faq { padding:3px 0 47px; scroll-margin-top:24px; }
-    .faq-grid { display:grid; grid-template-columns:.72fr 1.28fr; gap:55px; }
-    .faq h2 { margin:0; font-size:30px; letter-spacing:-1.2px; }
-    .faq-lead { margin:10px 0 0; color:var(--muted); font-size:12px; line-height:1.7; }
-    .faq-list { border-top:1px solid var(--line); }
-    .faq details { border-bottom:1px solid var(--line); }
-    .faq summary { position:relative; padding:17px 35px 17px 0; cursor:pointer; font-size:13px; font-weight:700; list-style:none; }
-    .faq summary::-webkit-details-marker { display:none; }
-    .faq summary::after { content:"+"; position:absolute; right:4px; top:15px; color:var(--orange); font-size:18px; font-weight:400; }
-    .faq details[open] summary::after { content:"−"; }
-    .faq details p { margin:-5px 35px 17px 0; color:var(--muted); font-size:11px; line-height:1.7; }
-    .faq details a { text-decoration:underline; text-underline-offset:3px; }
-    .closing { display:flex; justify-content:space-between; align-items:center; gap:25px; margin:0 0 34px; padding:28px 31px; background:#edeee5; border:1px solid #e0e3d6; border-radius:9px; }
-    .closing h2 { font-size:25px; letter-spacing:-.9px; margin:0 0 7px; }
-    .closing p { font-size:12px; color:var(--muted); margin:0; line-height:1.6; }
-    .closing .cta { flex-shrink:0; padding:14px 20px; font-size:12px; }
-    footer { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:0 0 25px; font-size:10px; color:var(--muted); }
-    footer p { margin:0; line-height:1.7; }
-    footer a { text-decoration:underline; text-underline-offset:3px; }
-    .footer-links { display:flex; gap:16px; flex-shrink:0; }
-    .mobile-install { display:none; }
-    @media (min-width:1450px) { .hero { padding-top:94px; padding-bottom:79px; } }
-    @media (max-width:1000px) { .shell { width:calc(100% - 48px); } .hero { gap:28px; padding:55px 0; } h1 { font-size:58px; letter-spacing:-3px; } .demo-stage { padding:19px 14px 16px; } .intro { font-size:15px; } .demo-tabs button { padding:8px 9px; } .preview-meta { gap:5px; } .extension-preview { padding-inline:12px; } .review-list { grid-template-columns:repeat(2,1fr); } }
-    @media (max-width:760px) { header { height:80px; } nav > a:not(.nav-install) { display:none; } .nav-install { font-size:11px; padding:10px 12px; gap:8px; } .hero { grid-template-columns:1fr; padding-top:42px; gap:32px; } .hero-copy { text-align:center; } .eyebrow { justify-content:center; } h1 { font-size:66px; margin-top:22px; } .intro { margin-inline:auto; max-width:440px; } .social-proof { margin:26px auto 0; width:fit-content; text-align:left; } .store-proof,.store-source { margin-inline:auto; } .demo-stage { max-width:490px; width:100%; margin-inline:auto; padding:21px; } .extension-preview { padding:29px 20px 23px; } .benefit-strip { flex-wrap:wrap; justify-content:center; column-gap:28px; row-gap:15px; } .section-heading { display:block; text-align:center; } .section-heading p { margin-top:10px; } .feature-grid { gap:22px; } .looper { grid-template-columns:1fr; gap:24px; padding:28px; text-align:center; } .looper .eyebrow { justify-content:center; } .looper-copy > p { margin-inline:auto; } .looper-points { justify-content:center; } .looper-offer { max-width:380px; width:100%; margin-inline:auto; text-align:left; } .reviews-summary { margin-inline:auto !important; text-align:center; } .faq-grid { grid-template-columns:1fr; gap:23px; } .faq-intro { text-align:center; } .closing { padding:26px; } .closing h2 { font-size:22px; } footer { align-items:flex-start; } }
-    @media (max-width:540px) { body { padding-bottom:72px; } .shell { width:calc(100% - 36px); } .brand { font-size:12px; gap:8px; } .brand small { font-size:9px; } .brand-mark { width:33px; height:33px; border-radius:9px; } .nav-install { padding:9px 10px; } .nav-install .icon { display:none; } h1 { font-size:52px; letter-spacing:-3.4px; } .intro { font-size:15px; } .eyebrow { font-size:10px; letter-spacing:1.35px; } .mobile-note { display:block; font-size:10px; color:var(--muted); margin:12px 0 0; } .hero { padding-bottom:32px; } .store-stat { padding:10px 8px; } .store-stat strong { font-size:13px; } .demo-stage { padding:17px 13px; } .demo-top { margin-bottom:16px; } .demo-tabs { width:100%; overflow-x:auto; justify-content:flex-start; margin-bottom:16px; } .demo-tabs button { padding:8px 12px; } .extension-preview h2 { font-size:23px; } .benefit-strip { justify-content:flex-start; display:grid; grid-template-columns:1fr 1fr; gap:16px 8px; } .benefit-strip span { font-size:10px; gap:6px; } .features { padding:35px 0; } .section-heading h2 { font-size:26px; } .feature-grid { grid-template-columns:1fr; gap:0; } .feature { display:grid; grid-template-columns:35px 1fr; column-gap:12px; min-height:0; padding:18px 0; } .feature-title { grid-row:span 3; display:block; margin:0; } .feature-index { display:block; margin-top:8px; } .feature h3 { font-size:16px; margin-bottom:6px; } .feature p { max-width:none; } .free-label { grid-column:2; } .looper { margin-bottom:38px; padding:25px 20px; } .looper h2 { font-size:29px; } .review-list { grid-template-columns:1fr; } .review-controls { align-items:flex-start; } .review-cta { flex-direction:column; text-align:center; } .review-cta .nav-install { width:100%; } .closing { flex-direction:column; text-align:center; gap:19px; margin-bottom:24px; } footer { flex-direction:column; gap:12px; text-align:center; align-items:center; } .mobile-install { position:fixed; left:10px; right:10px; bottom:10px; z-index:30; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 11px 10px 14px; border:1px solid #d8c6bc; border-radius:10px; background:#f7f5eff2; box-shadow:0 12px 35px #20231d3d; backdrop-filter:blur(12px); } .mobile-install span { font-size:10px; line-height:1.35; } .mobile-install strong { display:block; margin:0; font-size:11px; } .mobile-install .cta { flex-shrink:0; padding:11px 13px; box-shadow:none; font-size:11px; } }
+    :root {
+      color-scheme: dark;
+      --night: #13152b;
+      --panel: #1b1e3a;
+      --panel-2: #23274a;
+      --line: #2f3460;
+      --text: #eceaf6;
+      --muted: #a4a6c6;
+      --vocals: #f4c24d;
+      --drums: #f0716a;
+      --bass: #4fc9b0;
+      --other: #9a8cf7;
+      --display: "Unbounded", "Arial Black", system-ui, sans-serif;
+      --body: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --shell: min(1180px, calc(100% - 64px));
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--night); }
+    body { margin: 0; background: var(--night); color: var(--text); font: 17px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
+    a { color: inherit; }
+    button, input { font: inherit; color: inherit; }
+    :focus-visible { outline: 2px solid var(--vocals); outline-offset: 3px; border-radius: 4px; }
+    ::selection { background: var(--other); color: var(--night); }
+    [data-view="goodbye"] .site { display: none; }
+    .shell { width: var(--shell); margin-inline: auto; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-    /* Refined, deliberately simple landing layout. */
-    body { font-family:"Roboto",Arial,sans-serif; background:#faf9f6; }
-    h1,h2,h3,.brand,.cta,.nav-install { font-family:"Sora",Arial,sans-serif; }
-    header { height:82px; border:0; }
-    .brand { gap:7px; font-size:13px; font-weight:700; letter-spacing:-.5px; }
-    .brand-mark { display:none; }
-    .brand-logo { display:block; width:42px; height:42px; border-radius:10px; object-fit:cover; }
-    nav { gap:22px; font-family:"Roboto",Arial,sans-serif; font-weight:500; }
-    nav > a:not(.nav-install) { display:none; }
-    .nav-install { padding:11px 15px; border-color:#deded4; border-radius:999px; font-size:11px; font-weight:700; }
-    .hero { display:block; max-width:780px; margin:0 auto; padding:76px 0 66px; text-align:center; }
-    .hero-copy { display:flex; flex-direction:column; align-items:center; }
-    .eyebrow { font-family:"Roboto",Arial,sans-serif; font-size:11px; font-weight:700; letter-spacing:1.5px; }
-    h1 { max-width:720px; margin:19px 0 20px; font-size:clamp(48px,7vw,76px); font-weight:800; line-height:1.04; letter-spacing:-4px; }
-    .intro { max-width:570px; font-size:17px; line-height:1.65; }
-    .intro strong { font-weight:500; }
-    .cta { border-radius:999px; padding:16px 23px; font-weight:700; box-shadow:none; }
-    .cta:hover { transform:translateY(-1px); }
-    .social-proof,.store-proof,.store-source,.demo-stage { display:none; }
-    .benefit-strip { justify-content:center; gap:16px 34px; padding:22px 0; }
-    .benefit-strip span { font-size:12px; font-weight:400; }
-    .features { max-width:920px; margin-inline:auto; padding:64px 0; }
-    .section-heading { display:block; margin-bottom:25px; text-align:center; }
-    .section-heading h2,.closing h2,.faq h2 { font-family:"Sora",Arial,sans-serif; font-weight:700; }
-    .section-heading h2 { font-size:30px; }
-    .section-heading p { margin-top:9px; font-size:13px; }
-    .feature-grid { grid-template-columns:repeat(3,1fr); gap:0; border-top:1px solid var(--line); }
-    .feature { min-height:0; padding:26px 24px; border-top:0; border-right:1px solid var(--line); }
-    .feature:nth-child(3) { border-right:0; }
-    .feature h3 { font-family:"Sora",Arial,sans-serif; font-size:15px; font-weight:700; }
-    .feature p { font-size:13px; line-height:1.65; }
-    .free-label { font-family:"Roboto",Arial,sans-serif; font-weight:700; }
-    .reviews,.faq { display:none; }
-    .looper-guide { display:block; }
-    .closing { width:100%; margin:0 0 34px; padding:34px; border-radius:14px; background:#242620; border:0; color:white; }
-    .closing h2 { font-size:27px; }
-    .closing p { color:#d2d3cd; font-size:13px; }
-    .closing .cta { background:white; color:var(--ink); }
-    footer { border-top:1px solid var(--line); padding-top:23px; }
-    /* Keep the richer product story visible while preserving the cleaner styling. */
-    nav > a:not(.nav-install) { display:inline-flex; }
-    .hero { display:grid; grid-template-columns:.88fr 1.12fr; max-width:none; text-align:left; gap:54px; }
-    .hero-copy { display:block; }
-    .eyebrow { justify-content:flex-start; }
-    .intro { margin-left:0; }
-    .social-proof,.store-source,.demo-stage { display:block; }
-    .store-proof { display:flex; }
-    .demo-stage { padding:22px 20px 17px; }
-    .reviews,.faq { display:block; }
-    @media (max-width:1000px) { .hero { gap:28px; } }
-    @media (max-width:760px) { .hero { display:block; padding:48px 0; text-align:center; } .hero-copy { display:flex; } .eyebrow { justify-content:center; } .intro { margin-inline:auto; } .demo-stage { display:block; } .feature-grid { grid-template-columns:1fr; } .feature { border-right:0; border-bottom:1px solid var(--line); padding:23px 0; } .looper-guide { padding:26px 21px; text-align:left; } .looper-steps { grid-template-columns:1fr; } .looper-steps li,.looper-steps li:not(:first-child) { min-height:0; padding:17px 0 17px 42px; border-right:0; border-bottom:1px solid #e6c8b8; } .looper-steps li:last-child { border-bottom:0; } .looper-steps li::before { position:absolute; top:19px; left:0; } .closing { margin-inline:0; } nav > a:not(.nav-install) { display:none; } }
-    @media (max-width:1000px) { .review-card { flex-basis:min(340px,calc(100vw - 64px)); } }
-    @media (max-width:760px) { .review-card { flex-basis:calc(100vw - 52px); } }
-    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*::before,*::after { transition:none !important; animation:none !important; } }
+    /* Notice for people arriving from the removed extension */
+    .strip { background: var(--panel); border-bottom: 1px solid var(--line); font-size: 14px; }
+    .strip .shell { margin-block: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 10px 0; color: var(--muted); }
+    .strip a { color: var(--vocals); font-weight: 600; text-underline-offset: 3px; }
 
-    .plans { padding:24px 0 64px; scroll-margin-top:28px; }
-    .plans .section-heading { max-width:720px; margin:0 auto 32px; }
-    .plan-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
-    .plan-card { padding:34px; border:1px solid var(--line); border-radius:20px; background:#fffdf8; display:flex; flex-direction:column; align-items:flex-start; }
-    .plan-kicker { display:flex; align-items:center; gap:10px; font:700 12px "Sora",sans-serif; letter-spacing:1px; }
-    .plan-kicker span { border:1px solid currentColor; border-radius:5px; padding:4px 7px; font-size:10px; }
-    .plan-card h3 { font:700 25px "Sora",sans-serif; margin:25px 0 8px; }
-    .plan-price { font:700 clamp(32px,4vw,48px) "Sora",sans-serif; letter-spacing:-2px; margin:12px 0; }
-    .plan-price small { font:400 13px "Roboto",sans-serif; letter-spacing:0; color:var(--muted); }
-    .plan-card p,.plan-card li { font-size:14px; line-height:1.7; }
-    .plan-card ul { padding:0; list-style:none; margin:15px 0 24px; }
-    .plan-card li { position:relative; padding:9px 0 9px 25px; border-bottom:1px solid #80808025; }
-    .plan-card li::before { content:"✓"; position:absolute; left:0; color:#648348; font-weight:bold; }
-    .trial-included { padding:20px; background:#edece4; border-radius:12px; margin:0 0 25px; }
-    .trial-included h4 { margin:0 0 8px; font-size:15px; }
-    .trial-included p { margin:8px 0 0; font-size:13px; }
-    .plan-card > .cta { margin-top:auto; }
-    .plan-pro { background:#242922; color:#f7f5ef; border-color:#242922; box-shadow:0 18px 45px #262e2117; }
-    .plan-pro .plan-kicker span { color:#ffac79; }
-    .plan-pro li::before { color:#ffac79; }
-    .plan-pro .payment-model { margin:0 0 16px; color:#ffbd94; }
-    .plan-pro .availability { color:#c2c8bc; font-size:12px; margin:16px 0 0; }
-    .tools-story { display:grid; grid-template-columns:1fr 1fr; gap:50px; padding:35px 0 50px; border-top:1px solid var(--line); scroll-margin-top:25px; }
-    .tools-story h2 { font:700 32px "Sora",sans-serif; letter-spacing:-1px; margin:14px 0; }
-    .tools-story p { font-size:15px; line-height:1.8; }
-    .tools-story .eyebrow { font-size:11px; }
-    .tools-detail { border-left:3px solid var(--orange); padding-left:25px; align-self:center; }
-    a:focus-visible,button:focus-visible,summary:focus-visible { outline:3px solid #d95810; outline-offset:5px; }
-    @media(max-width:760px) { .plan-grid,.tools-story { grid-template-columns:1fr; } .plan-card { padding:25px; } .tools-story { gap:15px; } .plans { padding-bottom:40px; } }
+    header.top { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 0; }
+    .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font: 600 15px/1.2 var(--display); letter-spacing: -.01em; }
+    .brand img { width: 36px; height: 36px; border-radius: 10px; }
+    .top nav { display: flex; align-items: center; gap: 28px; font-size: 15px; }
+    .top nav a { text-decoration: none; color: var(--muted); }
+    .top nav a:hover { color: var(--text); }
+    .top nav .install { color: var(--night); }
+
+    .install { display: inline-flex; align-items: center; gap: 10px; padding: 12px 18px; border-radius: 999px; background: var(--vocals); color: var(--night); font-weight: 600; text-decoration: none; transition: background-color .15s; }
+    .install:hover { background: #ffd471; }
+    .install svg { width: 18px; height: 18px; flex: none; }
+    .install.large { padding: 17px 26px; font-size: 18px; }
+
+    /* Hero */
+    .hero { padding: 56px 0 96px; }
+    .hero h1 { margin: 0 0 48px; max-width: 13ch; font: 700 clamp(44px, 7.4vw, 104px)/.98 var(--display); letter-spacing: -.035em; }
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 56px; align-items: start; }
+    .hero-copy p { margin: 0 0 32px; max-width: 34ch; font-size: 20px; line-height: 1.55; color: var(--muted); }
+    .hero-copy .note { margin: 16px 0 0; font-size: 14px; color: var(--muted); }
+    .mobile-note { display: none; }
+
+    /* Stem rack: four lanes that start stacked into one mix and split apart once */
+    .rack { --lane-h: 58px; --gap: 10px; padding: 20px; border: 1px solid var(--line); border-radius: 20px; background: var(--panel); }
+    .rack-lanes { position: relative; display: grid; gap: var(--gap); }
+    .lane { --i: 0; display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; align-items: center; gap: 14px; height: var(--lane-h); transition: transform .9s cubic-bezier(.2, .8, .2, 1), opacity .3s; transition-delay: calc(var(--i) * 70ms); }
+    .lane-name { font-size: 14px; font-weight: 600; transition: opacity .4s; }
+    .lane[data-stem="vocals"] { --c: var(--vocals); --i: 0; }
+    .lane[data-stem="drums"] { --c: var(--drums); --i: 1; }
+    .lane[data-stem="bass"] { --c: var(--bass); --i: 2; }
+    .lane[data-stem="other"] { --c: var(--other); --i: 3; }
+    .lane-name::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 8px; border-radius: 50%; background: var(--c); }
+    .bars { display: flex; align-items: center; gap: 2px; height: 100%; }
+    .bars i { flex: 1; min-width: 1px; border-radius: 2px; background: var(--c); }
+    .lane-buttons { display: flex; gap: 6px; transition: opacity .4s; }
+    .lane-buttons button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: transparent; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .lane-buttons button[aria-pressed="true"] { background: var(--c); border-color: var(--c); color: var(--night); }
+    .lane.silent .bars { opacity: .18; }
+    .rack[data-state="mixed"] .lane { transform: translateY(calc(var(--i) * -1 * (var(--lane-h) + var(--gap)))); }
+    .rack[data-state="mixed"] .lane .bars { mix-blend-mode: screen; }
+    .rack[data-state="mixed"] .lane-name, .rack[data-state="mixed"] .lane-buttons { opacity: 0; }
+    .rack-mix-label { position: absolute; top: 0; left: 0; height: var(--lane-h); display: flex; align-items: center; font-size: 14px; font-weight: 600; opacity: 0; transition: opacity .4s; pointer-events: none; }
+    .rack[data-state="mixed"] .rack-mix-label { opacity: 1; }
+    .rack-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+    .rack-foot p { margin: 0; }
+    .ghost { flex: none; padding: 9px 14px; border: 1px solid var(--line); border-radius: 999px; background: transparent; cursor: pointer; font-size: 14px; }
+    .ghost:hover { border-color: var(--muted); }
+
+    /* Sections */
+    section { padding: 96px 0; border-top: 1px solid var(--line); }
+    h2 { margin: 0 0 18px; font: 600 clamp(30px, 3.6vw, 48px)/1.08 var(--display); letter-spacing: -.025em; max-width: 20ch; }
+    h3 { margin: 0 0 12px; font: 600 22px/1.25 var(--display); letter-spacing: -.01em; }
+    .lead { margin: 0; max-width: 56ch; font-size: 19px; color: var(--muted); }
+    .tool { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: center; padding-top: 72px; }
+    .tool p { margin: 0; max-width: 46ch; color: var(--muted); }
+    .widget { padding: 24px; border: 1px solid var(--line); border-radius: 20px; background: var(--panel); }
+
+    /* Speed widget */
+    .speed-readout { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+    .speed-value { font: 600 clamp(40px, 5vw, 60px)/1 var(--display); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+    .speed-pitch { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    input[type="range"] { width: 100%; accent-color: var(--vocals); }
+    .speed-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-top: 18px; }
+    .presets { display: flex; gap: 8px; }
+    .presets button { padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; font-size: 14px; font-variant-numeric: tabular-nums; cursor: pointer; }
+    .presets button[aria-pressed="true"] { border-color: var(--vocals); color: var(--vocals); }
+    .switch { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; cursor: pointer; }
+    .switch input { appearance: none; width: 42px; height: 24px; margin: 0; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; transition: background-color .15s; }
+    .switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--text); transition: transform .15s; }
+    .switch input:checked { background: var(--bass); }
+    .switch input:checked::after { transform: translateX(18px); }
+
+    /* Loop + pads widget */
+    .loop-wave { position: relative; height: 64px; margin-bottom: 20px; }
+    .loop-wave .bars i { background: #4a4f80; }
+    .loop-wave .bars i.in { background: var(--drums); }
+    .marker { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--text); }
+    .marker span { position: absolute; top: -20px; left: -6px; font-size: 12px; font-weight: 600; }
+    .pads { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .pad { display: flex; flex-direction: column; justify-content: space-between; aspect-ratio: 1.4; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); text-align: left; cursor: pointer; transition: background-color .08s, border-color .08s; }
+    .pad kbd { font: 600 18px/1 var(--display); }
+    .pad span { font-size: 13px; color: var(--muted); }
+    .pad.hit { background: var(--drums); border-color: var(--drums); color: var(--night); }
+    .pad.hit span { color: var(--night); }
+    .pads-hint { margin: 16px 0 0; font-size: 14px; color: var(--muted); }
+
+    /* FX widget */
+    .eq { display: block; width: 100%; height: auto; margin-bottom: 20px; }
+    .fx-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .fx-list li { padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; }
+    .fx-list .rec { border-color: var(--drums); color: var(--drums); }
+    .fx-list .rec::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: var(--drums); }
+
+    /* Stems */
+    .stems-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; }
+    .facts { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+    .facts li { padding: 18px 0 18px 28px; border-bottom: 1px solid var(--line); position: relative; }
+    .facts li::before { content: ""; position: absolute; left: 0; top: 27px; width: 12px; height: 4px; border-radius: 2px; background: var(--c); }
+    .facts li:nth-child(1) { --c: var(--vocals); }
+    .facts li:nth-child(2) { --c: var(--drums); }
+    .facts li:nth-child(3) { --c: var(--bass); }
+    .facts li:nth-child(4) { --c: var(--other); }
+
+    /* Likes */
+    .likes-search { width: 100%; padding: 13px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--night); }
+    .likes-search::placeholder { color: var(--muted); }
+    .likes-list { margin: 14px 0 0; padding: 0; list-style: none; }
+    .likes-list li { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 10px 4px; border-bottom: 1px solid var(--line); }
+    .likes-list li:last-child { border-bottom: 0; }
+    .art { width: 40px; height: 40px; border-radius: 8px; background: var(--c); }
+    .likes-list b { display: block; font-weight: 500; }
+    .likes-list small { color: var(--muted); font-size: 14px; }
+    .likes-list time { font-size: 13px; color: var(--muted); }
+
+    /* FAQ */
+    .faq-grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 56px; }
+    details { border-bottom: 1px solid var(--line); }
+    details:first-child { border-top: 1px solid var(--line); }
+    summary { padding: 20px 32px 20px 0; font-weight: 600; font-size: 18px; cursor: pointer; list-style: none; position: relative; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; position: absolute; right: 4px; top: 16px; font: 500 24px/1 var(--display); color: var(--muted); }
+    details[open] summary::after { content: "−"; }
+    details p { margin: 0 0 22px; max-width: 62ch; color: var(--muted); }
+
+    /* Start */
+    .start { background: var(--panel); }
+    .start-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 40px; align-items: end; }
+    .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin: 36px 0 0; padding: 0; list-style: none; counter-reset: step; }
+    .steps li { counter-increment: step; padding-top: 18px; border-top: 2px solid var(--line); color: var(--muted); }
+    .steps li::before { content: counter(step); display: block; margin-bottom: 10px; font: 600 28px/1 var(--display); color: var(--text); }
+
+    footer { padding: 40px 0 56px; font-size: 14px; color: var(--muted); }
+    footer .shell { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+    footer nav { display: flex; gap: 22px; }
+
+    @media (max-width: 900px) {
+      :root { --shell: calc(100% - 32px); }
+      .top nav a:not(.install) { display: none; }
+      .hero { padding: 32px 0 72px; }
+      .hero h1 { margin-bottom: 28px; }
+      .hero-grid, .tool, .stems-grid, .faq-grid, .start-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+      .tool { padding-top: 56px; }
+      section { padding: 72px 0; }
+      .steps { grid-template-columns: minmax(0, 1fr); }
+      .rack { --lane-h: 46px; padding: 14px; }
+      .lane { grid-template-columns: 70px minmax(0, 1fr) auto; gap: 10px; }
+      .lane-buttons button { width: 26px; height: 26px; }
+    }
+    @media (max-width: 900px) and (pointer: coarse) {
+      .mobile-note { display: block; }
+    }
+    @media (max-width: 520px) {
+      .top .install span { display: none; }
+      .lane-name { font-size: 12px; }
+      .lane-name::before { display: none; }
+      .pad { aspect-ratio: 1; padding: 9px; }
+      .pad span { font-size: 11px; }
+      .rack-foot { flex-direction: column; align-items: flex-start; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition: none !important; }
+    }
   </style>
 </head>
 <body>
-  <svg class="symbol-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></symbol>
-    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
-    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
-    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7V5h7l2 3h9v12H3V7Z"/></symbol>
-    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m3 7 9-4 9 4-9 4-9-4Zm0 5 9 4 9-4M3 17l9 4 9-4"/></symbol>
-    <symbol id="i-background" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8m-4-4v4m-4-11 3 3 5-5"/></symbol>
-    <symbol id="i-loop" viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></symbol>
-    <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/></symbol>
-    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
-    <symbol id="i-chrome" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/><path d="M12 8.4h8.2M8.9 13.8 4.8 6.5m10.3 7.3L11 21"/></symbol>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-chrome" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="3.6"/><path d="M12 8.4h8.6M8.9 13.8 4.6 6.3M15.1 13.8l-4.3 7.6"/></g></symbol>
   </svg>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <div class="shell">
-    <header>
-      <a class="brand" href="#" aria-label="SoundCloud Track Downloader home" data-l10n-aria="brand_home">
-        <img class="brand-logo" src="./assets/app-icon-logo-with-background-xl%20(2).png" alt="" width="42" height="42">
-        <span>SoundCloud<small>Track Downloader</small></span>
-      </a>
-      <nav aria-label="Main navigation" data-l10n-aria="main_navigation">
-        <a href="how-to-download-soundcloud.html">How to Download</a>
-        <a href="#plans" data-l10n="nav_plans">Plans</a>
-        <a href="#features" data-l10n="nav_features">Features</a>
-        <a href="#reviews" data-l10n="nav_reviews">Reviews</a>
+  <div class="site">
+    <div class="strip">
+      <p class="shell"><span data-l10n="strip_copy">Coming from SoundCloud Track Downloader? It was removed from the Chrome Web Store.</span> <a href="https://chromewebstore.google.com/detail/soundcloud-player-tools-s/gmlijjdgphenebddlpmpiknmmfijfmnk?utm_source=sctd.vpugliese.online&amp;utm_medium=strip&amp;utm_campaign=player-tools" data-l10n="strip_link">Get Player Tools, our new extension</a></p>
+    </div>
+    <header class="top shell">
+      <a class="brand" href="/"><img src="./assets/icon128.png" alt="" width="36" height="36">Player Tools</a>
+      <nav aria-label="Main">
+        <a href="#tools" data-l10n="nav_tools">Tools</a>
+        <a href="#stems" data-l10n="nav_stems">Stems</a>
+        <a href="#likes" data-l10n="nav_likes">Likes</a>
         <a href="#faq" data-l10n="nav_faq">FAQ</a>
-        <a class="nav-install" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb"><span data-l10n="nav_install">Get it free</span> <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a class="install" href="https://chromewebstore.google.com/detail/soundcloud-player-tools-s/gmlijjdgphenebddlpmpiknmmfijfmnk?utm_source=sctd.vpugliese.online&amp;utm_medium=nav&amp;utm_campaign=player-tools"><svg aria-hidden="true"><use href="#i-chrome"/></svg><span data-l10n="nav_install">Add to Chrome</span></a>
       </nav>
     </header>
-    <main id="main">
-      <section class="hero" aria-labelledby="hero-title">
-        <div class="hero-copy">
-          <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span> <span data-l10n="hero_eyebrow">Free bulk downloader for Chrome</span></div>
-          <h1 id="hero-title"><span data-l10n="hero_title_first">Whole collections.</span><br><em data-l10n="hero_title_second">One click.</em></h1>
-          <p class="intro"><span data-l10n="hero_intro_first">Download individual tracks, playlists, likes and complete artist uploads without leaving SoundCloud.</span> <strong data-l10n="hero_intro_second">Keep your downloads free. Discover more ways to listen with Player Tools.</strong></p>
-          <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb"><svg class="icon" aria-hidden="true"><use href="#i-chrome"/></svg> <span data-l10n="hero_cta">Add to Chrome — it’s free</span></a>
-          <p class="mobile-note" data-l10n="mobile_note">Install on your desktop browser to start downloading.</p>
-          <div class="store-proof" aria-label="Chrome Web Store snapshot">
-            <div class="store-stat"><strong>20,000+</strong><span>public Store users</span></div>
-            <div class="store-stat"><strong>47</strong><span>public ratings</span></div>
-            <div class="store-stat"><strong>118 KiB</strong><span>focused extension</span></div>
+
+    <main>
+      <div class="hero shell">
+        <h1 data-l10n="hero_title">Take any track apart.</h1>
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p data-l10n="hero_copy">Speed, loops, sampler pads, FX, EQ, a recorder and on-device stem separation, built into the SoundCloud player. Free.</p>
+            <a class="install large" href="https://chromewebstore.google.com/detail/soundcloud-player-tools-s/gmlijjdgphenebddlpmpiknmmfijfmnk?utm_source=sctd.vpugliese.online&amp;utm_medium=hero&amp;utm_campaign=player-tools"><svg aria-hidden="true"><use href="#i-chrome"/></svg><span data-l10n="hero_cta">Add to Chrome for free</span></a>
+            <p class="note" data-l10n="hero_note">Works in desktop Chrome. No account needed.</p>
+            <p class="note mobile-note" data-l10n="mobile_note">Open this page on a computer to add Player Tools to Chrome.</p>
           </div>
-          <a class="store-source" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb" target="_blank" rel="noopener noreferrer">Chrome Web Store snapshot · September 6, 2026</a>
-        </div>
-        <div class="demo-stage" aria-label="Interactive extension preview">
-          <div class="demo-top"><span class="eyebrow">One focused extension.</span><span class="demo-badge">INTERACTIVE PREVIEW</span></div>
-          <div class="demo-tabs" role="group" aria-label="Preview a download type">
-            <button type="button" data-mode="track" aria-pressed="false">Track</button>
-            <button type="button" data-mode="playlist" aria-pressed="true">Playlist</button>
-            <button type="button" data-mode="artist" aria-pressed="false">Artist uploads</button>
-            <button type="button" data-mode="looper" aria-pressed="false">Looper</button>
-          </div>
-          <div class="browser">
-            <div class="browser-bar" aria-hidden="true">
-              <span class="dots"><i></i><i></i><i></i></span>
-              <span class="address"><svg class="icon"><use href="#i-lock"/></svg><span id="demo-url">soundcloud.com/field-notes/sets/slow-sundays</span></span>
-              <svg class="icon extension-pin"><use href="#i-download"/></svg>
+          <figure class="rack" data-state="mixed" style="margin:0">
+            <div class="rack-lanes">
+              <span class="rack-mix-label" data-l10n="lane_mix" aria-hidden="true">Original</span>
+              <div class="lane" data-stem="vocals"><span class="lane-name" data-l10n="lane_vocals">Vocals</span><div class="bars" aria-hidden="true"></div><div class="lane-buttons"><button type="button" data-act="mute" aria-pressed="false">M</button><button type="button" data-act="solo" aria-pressed="false">S</button></div></div>
+              <div class="lane" data-stem="drums"><span class="lane-name" data-l10n="lane_drums">Drums</span><div class="bars" aria-hidden="true"></div><div class="lane-buttons"><button type="button" data-act="mute" aria-pressed="false">M</button><button type="button" data-act="solo" aria-pressed="false">S</button></div></div>
+              <div class="lane" data-stem="bass"><span class="lane-name" data-l10n="lane_bass">Bass</span><div class="bars" aria-hidden="true"></div><div class="lane-buttons"><button type="button" data-act="mute" aria-pressed="false">M</button><button type="button" data-act="solo" aria-pressed="false">S</button></div></div>
+              <div class="lane" data-stem="other"><span class="lane-name" data-l10n="lane_other">Other</span><div class="bars" aria-hidden="true"></div><div class="lane-buttons"><button type="button" data-act="mute" aria-pressed="false">M</button><button type="button" data-act="solo" aria-pressed="false">S</button></div></div>
             </div>
-            <!-- An illustrative recreation of popup.html, with sample content only.
-                 This preview never requests SoundCloud data or downloads a file. -->
-            <div class="extension-preview" id="extension-preview">
-              <h2 id="preview-title">Slow Sundays</h2>
-              <div class="artist"><span class="avatar" aria-hidden="true"></span><span id="preview-artist">Field Notes</span></div>
-              <div class="preview-meta">
-                <span id="preview-count">24 tracks</span><span aria-hidden="true">·</span>
-                <select id="preview-format" aria-label="Preview audio format"><option value="auto">Auto</option><option value="mp3">MP3</option><option value="m4a">M4A</option></select>
-                <select id="preview-amount" aria-label="Preview number of tracks"><option value="all">All</option><option value="10">10</option></select>
-                <span class="folder-pill"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>Folder</span>
-              </div>
-              <div class="waveform-wrap">
-                <svg class="waveform" id="waveform" viewBox="0 0 380 58" preserveAspectRatio="none" aria-hidden="true"><path d="M0 29H380" stroke="currentColor" opacity=".3"/></svg>
-                <span class="loop-selection" id="loop-selection" aria-label="Drag the A and B markers to change the loop range">
-                  <button class="loop-handle" data-loop-handle="start" type="button" aria-label="Drag A marker">A</button>
-                  <button class="loop-handle" data-loop-handle="end" type="button" aria-label="Drag B marker">B</button>
-                </span>
-              </div>
-              <div class="demo-actions">
-                <button class="download-demo" id="preview-download" type="button" aria-label="Try the download animation"><svg class="icon" aria-hidden="true"><use id="download-icon" href="#i-download"/></svg></button>
-                <span class="looper-state"><svg class="icon" aria-hidden="true"><use href="#i-loop"/></svg>A—B ON</span>
-              </div>
-              <p class="preview-status" id="preview-status" role="status" aria-live="polite">Ready to download</p>
-            </div>
-          </div>
-          <p class="demo-caption"><span class="arrow" aria-hidden="true">↖</span> Pick a view. Press download. See how it feels.<span class="demo-disclaimer">Illustrative demo · Sample tracks · No files downloaded</span></p>
-          <noscript><p class="demo-caption">This is a sample playlist preview. Install the extension to download from SoundCloud.</p></noscript>
+            <figcaption class="rack-foot"><p data-l10n="hero_caption">The Stem Extractor splits up to 2 minutes into four parts, right in your browser.</p><button class="ghost" type="button" id="rack-toggle" data-l10n="mix_back">Mix back</button></figcaption>
+          </figure>
         </div>
-      </section>
-      <div class="benefit-strip" aria-label="At a glance" data-l10n-aria="at_a_glance">
-        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span data-l10n="benefit_free">Full-track downloads stay free</span></span>
-        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span data-l10n="benefit_sources">Tracks, playlists, likes & profiles</span></span>
-        <span><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span data-l10n="benefit_files">Cover art, metadata & folders</span></span>
       </div>
-      <section class="features" id="features" aria-labelledby="features-title">
-        <div class="section-heading"><h2 id="features-title" data-l10n="features_title">Everything around the file is handled.</h2><p data-l10n="features_intro">One focused workflow, from SoundCloud to your folder.</p></div>
-        <div class="feature-grid">
-          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg><span class="feature-index" data-l10n="feature_bulk_index">01 / BULK</span></div><h3 data-l10n="feature_bulk_title">One track or the whole collection.</h3><p data-l10n="feature_bulk_copy">Save playlists, albums, likes and every public upload on an artist’s tracks page. Select specific tracks or start one complete batch.</p><span class="free-label" data-l10n="always_free">Always free</span></article>
-          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span class="feature-index" data-l10n="feature_place_index">02 / IN PLACE</span></div><h3 data-l10n="feature_place_title">Download where you’re already listening.</h3><p data-l10n="feature_place_copy">Use the popup, the track action bar or the persistent player. No link copying, converter tab or redirect in the middle.</p><span class="free-label" data-l10n="always_free">Always free</span></article>
-          <article class="feature"><div class="feature-title"><svg class="icon" aria-hidden="true"><use href="#i-background"/></svg><span class="feature-index" data-l10n="feature_background_index">03 / BACKGROUND</span></div><h3 data-l10n="feature_background_title">Close the popup. It keeps going.</h3><p data-l10n="feature_background_copy">Pause, resume or cancel a batch. Progress stays visible on the extension badge and a desktop notification tells you when it finishes.</p><span class="free-label" data-l10n="always_free">Always free</span></article>
-        </div>
-      </section>
-      <section class="plans" id="plans" aria-labelledby="plans-title">
-        <div class="section-heading">
-        <h2 id="plans-title" data-l10n="plans_title">Downloads are free. Go Pro for the tools.</h2>
-        <p  data-l10n="plans_intro">One extension. A free downloader, a taste of Player Tools, and Pro for the full experience.</p>
-        </div>
-        <div class="plan-grid">
-        <article class="plan-card plan-free">
-        <div class="plan-kicker">DOWNLOADER <span>FREE</span>
-        </div>
-        <h3  data-l10n="free_label">Always free</h3>
-        <div class="plan-price">$0 <small data-l10n="free_price">Forever</small>
-        </div>
-        <p  data-l10n="free_copy">Everything you need to save music—without a subscription.</p>
-        <ul>
-        <li  data-l10n="free_tracks">Individual tracks, playlists, albums, public likes and public artist uploads—no SoundCloud sign-in for public tracks.</li>
-        <li  data-l10n="free_batch">Download from the popup, an inline button or the persistent player. Select tracks or start a batch; pause, resume or cancel it while it continues in the background.</li>
-        <li  data-l10n="free_files">Available source formats, cover art, metadata, numbered collection folders and a remembered destination folder. Original artist files are used when SoundCloud makes them available.</li>
-        </ul>
-        <div class="trial-included">
-        <h4  data-l10n="trial_title">Included: a taste of Player Tools</h4>
-        <p  data-l10n="trial_copy">The current Chrome profile gets a 7-day Player Tools trial with up to 20 new A–B loops total, shared across tracks and tabs. No account or browser fingerprinting is used.</p>
-        <p  data-l10n="trial_tools">During the trial: tempo, Keep Tone, up to 20 A–B loops, all FX, parametric EQ, Likes Explorer, saving loops to sampler pads and sample piano mode. EQ, premium FX, Likes Explorer and the two sampler features remain available for all seven days, independently of loop usage.</p>
-        </div>
-        <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb" data-l10n="hero_cta">Add to Chrome — it’s free</a>
-        </article>
-        <article class="plan-card plan-pro">
-        <div class="plan-kicker">
-        <img src="assets/icons/player-toolkit.png" width="32" height="32" alt=""> PLAYER TOOLS <span>PRO</span>
-        </div>
-        <div class="plan-price">USD 3.69</div>
-        <p class="payment-model" data-l10n="lifetime">lifetime · one payment</p>
-        <p  data-l10n="pro_copy">All the downloader features. The complete Player Tools experience.</p>
-        <ul>
-        <li  data-l10n="pro_loops">Unlimited A–B loops, speed, Keep Tone and two saveable speed presets.</li>
-        <li  data-l10n="pro_precision">Editable timestamps, precise marker nudges and waveform zoom for loop work.</li>
-        <li  data-l10n="pro_wav">Export the selected A–B range as WAV, with the active speed, tone setting and supported FX.</li>
-        <li  data-l10n="pro_effects">Export processed tracks and unlock all effects, including flanger, phaser, saturation and bitcrusher. Reverb and Echo are free forever.</li>
-        <li data-l10n="pro_eq">Parametric EQ with up to eight points, high/low-pass filters and optional hard clipping.</li>
-        <li data-l10n="pro_likes">Likes Explorer to revisit and browse your SoundCloud likes library.</li>
-        </ul>
-        <a class="cta" href="#looper" data-l10n="explore">Explore Player Tools</a>
-        <p class="availability" data-l10n="availability">Open the extension to buy or restore Player Tools Pro securely.</p>
-        </article>
-        </div>
-        </section>
-        <section class="tools-story" id="looper" aria-labelledby="tools-title">
-        <div>
-        <p class="eyebrow">PLAYER TOOLS</p>
-        <h2 id="tools-title" data-l10n="tools_title">Listen closer. Make it yours.</h2>
-        <p  data-l10n="tools_copy">Build a nightcore-style listen by raising speed with natural pitch, or turn on Keep Tone to change duration without changing the musical pitch. Repeat a passage, trigger sampler pads, shape playback with FX, and reset or bypass your tools at any time.</p>
-        </div>
-        <div class="tools-detail">
-        <p  data-l10n="trial_tools">During the trial: tempo, Keep Tone, up to 20 A–B loops, all FX, parametric EQ, Likes Explorer, saving loops to sampler pads and sample piano mode. EQ, premium FX, Likes Explorer and the two sampler features remain available for all seven days, independently of loop usage.</p>
-        <p  data-l10n="pitch_note">Pitch follows speed when Keep Tone is off. Independent pitch shifting and semitone controls are not included. WAV and processed exports require Pro; EQ and Likes Explorer can be tried for seven days.</p>
-        </div>
-        </section>
-      <section class="reviews" id="reviews" aria-labelledby="reviews-title">
-        <div class="section-heading">
-          <h2 id="reviews-title" data-l10n="reviews_title">Every written review. No cherry-picking.</h2>
-          <p class="reviews-summary"><span id="review-count">63</span> <span data-l10n="reviews_summary">original written reviews imported from the Chrome Web Store—praise, requests and criticism, shown in their original language.</span></p>
-        </div>
-        <div class="review-viewport" id="review-viewport" tabindex="0" aria-label="Chrome Web Store reviews" data-l10n-aria="reviews_aria">
-          <ol class="review-list" id="review-list"></ol>
-        </div>
-        <div class="review-controls">
-          <div class="review-nav" aria-label="Review carousel controls">
-            <button class="icon-button prev" id="review-prev" type="button" aria-label="Previous reviews"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
-            <button class="icon-button" id="review-next" type="button" aria-label="Next reviews"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+
+      <section id="tools" aria-labelledby="tools-title">
+        <div class="shell">
+          <h2 id="tools-title" data-l10n="tools_title">Built into the player you already use</h2>
+          <p class="lead" data-l10n="tools_intro">Open the speedometer next to SoundCloud's play controls. Every tool works on the track that's playing.</p>
+
+          <div class="tool">
+            <div><h3 data-l10n="speed_title">Speed and Keep Tone</h3><p data-l10n="speed_copy">Anywhere from 0.1× to 4×. Turn on Keep Tone to change tempo without changing pitch, or leave it off for instant nightcore and slowed edits.</p></div>
+            <div class="widget">
+              <div class="speed-readout"><output class="speed-value" id="speed-value" for="speed">1.00×</output><span class="speed-pitch" id="speed-pitch">±0 st</span></div>
+              <label class="visually-hidden" for="speed" data-l10n="speed_label">Speed</label>
+              <input id="speed" type="range" min="0.1" max="4" step="0.05" value="1">
+              <div class="speed-row">
+                <div class="presets" role="group" aria-label="Presets"><button type="button" data-speed="0.75" aria-pressed="false">0.75×</button><button type="button" data-speed="1" aria-pressed="true">1×</button><button type="button" data-speed="1.25" aria-pressed="false">1.25×</button><button type="button" data-speed="1.5" aria-pressed="false">1.5×</button></div>
+                <label class="switch"><input type="checkbox" id="keep-tone"><span data-l10n="keep_tone">Keep Tone</span></label>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="review-cta">
-          <p><strong data-l10n="reviews_cta_title">Already using the extension?</strong><span data-l10n="reviews_cta_copy">Share an honest review—it helps other people decide whether it fits their workflow.</span></p>
-          <a class="nav-install" id="review-link" data-review-cta href="https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews" target="_blank" rel="noopener noreferrer"><span data-l10n="write_review">Write a Chrome Web Store review</span> <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-        </div>
-        <noscript><p class="demo-caption">Enable JavaScript to browse all written reviews, or read them directly on the Chrome Web Store.</p></noscript>
-      </section>
-      <section class="faq" id="faq" aria-labelledby="faq-title">
-        <div class="faq-grid">
-          <div class="faq-intro"><h2 id="faq-title" data-l10n="faq_title">Straight answers.</h2><p class="faq-lead" data-l10n="faq_intro">Free downloads. Clear limits for the tools.</p></div>
-          <div class="faq-list"><details><summary  data-l10n="trial_rules_title">What counts as a trial use?</summary><p  data-l10n="trial_rules">One new, completed and activated A–B range uses one of the 20 loops. Repeating it, adjusting its markers or pausing does not use another. Clearing it and creating a new range does.</p></details><details><summary  data-l10n="trial_end_title">What happens after the trial?</summary><p  data-l10n="trial_end">Reverb, Echo, basic sampler pads and normal full-track downloads remain free. The other effects, EQ, Likes Explorer, saving loops to pads and sample piano mode require Pro after seven days. The last granted loop can finish its session.</p></details><details><summary  data-l10n="original_title">What does “free downloads” include?</summary><p  data-l10n="original_copy">Full tracks and collections without Player Tools effects, in the formats available from the source. “Original” means no effects; it does not guarantee the artist’s original upload. WAV export does not improve the source quality.</p></details>
-            <details><summary data-l10n="faq_rights_title">What can I download?</summary><p data-l10n="faq_rights_copy">Use the extension only for content you own or have permission to save. It is an independent tool and is not affiliated with, approved by or maintained by SoundCloud.</p></details>
-            <details id="privacy"><summary data-l10n="faq_privacy_title">What about privacy?</summary><p><span data-l10n="faq_privacy_copy">Audio and downloads stay in your browser. This landing has no analytics. The extension sends minimal pseudonymous product events, never track titles, music URLs, emails or license keys. Optional uninstall feedback sends only what you submit and is retained for up to 180 days.</span> <a href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb" target="_blank" rel="noopener noreferrer" data-l10n="faq_privacy_link">View the current Store disclosure</a>.</p></details>
+
+          <div class="tool">
+            <div><h3 data-l10n="loop_title">A–B loops and sampler pads</h3><p data-l10n="loop_copy">Mark A and B on the waveform, slice the loop into 8 pads and play it from your keyboard. Piano mode spreads the loop across the keys with ADSR, gain and pitch.</p></div>
+            <div class="widget">
+              <div class="loop-wave" aria-hidden="true"><div class="bars" id="loop-bars"></div><span class="marker" style="left:38%"><span>A</span></span><span class="marker" style="left:62%"><span>B</span></span></div>
+              <div class="pads" id="pads">
+                <button class="pad" type="button" data-key="z" data-sample="kick1"><kbd>Z</kbd><span data-l10n="pad_kick">Kick</span></button>
+                <button class="pad" type="button" data-key="x" data-sample="clap1"><kbd>X</kbd><span data-l10n="pad_clap">Clap</span></button>
+                <button class="pad" type="button" data-key="c" data-sample="hat1"><kbd>C</kbd><span data-l10n="pad_hat">Hat</span></button>
+                <button class="pad" type="button" data-key="v" data-sample="kick2"><kbd>V</kbd><span data-l10n="pad_kick">Kick</span></button>
+                <button class="pad" type="button" data-key="b" data-sample="snare1"><kbd>B</kbd><span data-l10n="pad_snare">Snare</span></button>
+                <button class="pad" type="button" data-key="n" data-sample="tom1"><kbd>N</kbd><span data-l10n="pad_tom">Tom</span></button>
+                <button class="pad" type="button" data-key="m" data-sample="clap2"><kbd>M</kbd><span data-l10n="pad_clap">Clap</span></button>
+                <button class="pad" type="button" data-key="l" data-sample="hat2"><kbd>L</kbd><span data-l10n="pad_hat">Hat</span></button>
+              </div>
+              <p class="pads-hint" data-l10n="pads_hint">Try it: tap a pad or press Z X C V B N M L.</p>
+            </div>
+          </div>
+
+          <div class="tool">
+            <div><h3 data-l10n="fx_title">FX, EQ and a recorder</h3><p data-l10n="fx_copy">Reverb, delay, flanger, phaser, bitcrusher and saturation, plus a parametric EQ. Record what you hear, after FX and EQ, as a WAV file. One click compares with the original.</p></div>
+            <div class="widget">
+              <svg class="eq" viewBox="0 0 600 170" aria-hidden="true">
+                <g stroke="#2f3460" stroke-width="1"><path d="M0 85H600"/><path d="M120 10V160M240 10V160M360 10V160M480 10V160"/></g>
+                <path d="M0 112 C60 112 80 60 130 60 S200 98 250 96 S320 128 360 128 S430 70 470 52 S560 70 600 74" fill="none" stroke="#4fc9b0" stroke-width="3"/>
+                <path d="M0 112 C60 112 80 60 130 60 S200 98 250 96 S320 128 360 128 S430 70 470 52 S560 70 600 74 V170 H0Z" fill="#4fc9b0" opacity=".12"/>
+                <g fill="#13152b" stroke="#eceaf6" stroke-width="2.5"><circle cx="130" cy="60" r="7"/><circle cx="250" cy="96" r="7"/><circle cx="360" cy="128" r="7"/><circle cx="470" cy="52" r="7"/></g>
+              </svg>
+              <ul class="fx-list">
+                <li data-l10n="fx_reverb">Reverb</li><li data-l10n="fx_delay">Delay</li><li data-l10n="fx_flanger">Flanger</li><li data-l10n="fx_phaser">Phaser</li><li data-l10n="fx_crusher">Bitcrusher</li><li data-l10n="fx_saturation">Saturation</li><li class="rec" data-l10n="fx_record">Record</li>
+              </ul>
+            </div>
           </div>
         </div>
       </section>
-      <section class="closing" aria-labelledby="closing-title">
-        <div><h2 id="closing-title" data-l10n="closing_title">Good music deserves a save button.</h2><p data-l10n="closing_copy">Install free. Keep downloading free. Choose Pro for Player Tools.</p></div>
-        <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb"><span data-l10n="closing_cta">Get the free extension</span> <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+
+      <section id="stems" aria-labelledby="stems-title">
+        <div class="shell stems-grid">
+          <div>
+            <h2 id="stems-title" data-l10n="stems_title">Stem Extractor, on your device</h2>
+            <p class="lead" data-l10n="stems_copy">Split up to 2 minutes into vocals, drums, bass and other. Send a loop straight from the player or import any audio file. Nothing is uploaded.</p>
+          </div>
+          <ul class="facts">
+            <li data-l10n="stems_fact_mix">Mute, solo and set the volume of each stem.</li>
+            <li data-l10n="stems_fact_pads">Put 8 cut points on the drum stem and play them as pads.</li>
+            <li data-l10n="stems_fact_model">The first split downloads a 166 MB model. Chrome caches it after that.</li>
+            <li data-l10n="stems_fact_saved">Separations stay saved in this browser.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="likes" aria-labelledby="likes-title">
+        <div class="shell tool" style="padding-top:0">
+          <div>
+            <h2 id="likes-title" data-l10n="likes_title">Likes Explorer</h2>
+            <p class="lead" data-l10n="likes_copy">Years of likes, indexed privately in your browser. Search any title or artist and jump back in time without endless scrolling.</p>
+          </div>
+          <div class="widget">
+            <label class="visually-hidden" for="likes-search" data-l10n="likes_search">Search your likes</label>
+            <input class="likes-search" id="likes-search" type="search" autocomplete="off" data-l10n-placeholder="likes_search" placeholder="Search your likes">
+            <ul class="likes-list" id="likes-list">
+              <li style="--c:var(--other)"><span class="art"></span><span><b>Night Drive (Edit)</b><small>Lowtide Club</small></span><time data-l10n="likes_liked" data-l10n-arg="2019">Liked in 2019</time></li>
+              <li style="--c:var(--bass)"><span class="art"></span><span><b>Paper Planes Dub</b><small>Kaori Waves</small></span><time data-l10n="likes_liked" data-l10n-arg="2021">Liked in 2021</time></li>
+              <li style="--c:var(--vocals)"><span class="art"></span><span><b>Cassette Summer</b><small>Dune Radio</small></span><time data-l10n="likes_liked" data-l10n-arg="2017">Liked in 2017</time></li>
+              <li style="--c:var(--drums)"><span class="art"></span><span><b>Basement Hours</b><small>Mira Ko</small></span><time data-l10n="likes_liked" data-l10n-arg="2023">Liked in 2023</time></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="faq" aria-labelledby="faq-title">
+        <div class="shell faq-grid">
+          <h2 id="faq-title" data-l10n="faq_title">Questions</h2>
+          <div>
+            <details><summary data-l10n="faq_free_q">Is it free?</summary><p data-l10n="faq_free_a">Yes. Every tool is free right now, with no account and no card.</p></details>
+            <details><summary data-l10n="faq_download_q">Does it download SoundCloud tracks?</summary><p data-l10n="faq_download_a">No. Player Tools works on the track playing in SoundCloud's own player. You can save your loops and recordings as WAV.</p></details>
+            <details id="sctd"><summary data-l10n="faq_sctd_q">What happened to SoundCloud Track Downloader?</summary><p data-l10n="faq_sctd_a">It was removed from the Chrome Web Store, so Chrome now flags it and may turn it off. Player Tools is the new extension from the same developer. It's a different product and doesn't download tracks.</p></details>
+            <details id="privacy"><summary data-l10n="faq_privacy_q">Is my audio uploaded anywhere?</summary><p data-l10n="faq_privacy_a">No. Stem separation runs on your device, and your Likes index stays in your browser. This site has no analytics.</p></details>
+            <details><summary data-l10n="faq_browsers_q">Which browsers does it work in?</summary><p data-l10n="faq_browsers_a">Chrome on desktop, version 116 or newer. Chromium browsers that install from the Chrome Web Store, like Edge and Brave, can use it too.</p></details>
+            <details><summary data-l10n="faq_official_q">Is this made by SoundCloud?</summary><p data-l10n="faq_official_a">No. Player Tools is an independent extension. It isn't affiliated with or endorsed by SoundCloud.</p></details>
+          </div>
+        </div>
+      </section>
+
+      <section class="start" aria-labelledby="start-title">
+        <div class="shell">
+          <div class="start-grid">
+            <h2 id="start-title" data-l10n="start_title">Three steps to your first loop</h2>
+            <a class="install large" href="https://chromewebstore.google.com/detail/soundcloud-player-tools-s/gmlijjdgphenebddlpmpiknmmfijfmnk?utm_source=sctd.vpugliese.online&amp;utm_medium=closing&amp;utm_campaign=player-tools"><svg aria-hidden="true"><use href="#i-chrome"/></svg><span data-l10n="hero_cta">Add to Chrome for free</span></a>
+          </div>
+          <ol class="steps">
+            <li data-l10n="start_1">Add Player Tools to Chrome.</li>
+            <li data-l10n="start_2">Reload any SoundCloud tab that was already open.</li>
+            <li data-l10n="start_3">Play a track and open the speedometer next to the play controls.</li>
+          </ol>
+        </div>
       </section>
     </main>
+
     <footer>
-      <p><span data-l10n="footer_independent">Independent extension, not affiliated with SoundCloud.</span><br><span data-l10n="footer_rights">Download only content you own or have permission to save.</span></p>
-      <div class="footer-links"><a href="#privacy" data-l10n="footer_privacy">Privacy</a><a href="mailto:it@vpugliese.online" data-l10n="footer_support">Support</a><a href="https://github.com/vittoopugliese/sc-downloader-extension" data-l10n="footer_source">Source</a><a href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb">Chrome Web Store ↗</a></div>
+      <div class="shell">
+        <p style="margin:0" data-l10n="footer_disclaimer">Player Tools is an independent extension and isn't affiliated with SoundCloud.</p>
+        <nav aria-label="Footer"><a href="mailto:it@vpugliese.online" data-l10n="footer_support">Support</a><a href="#privacy" data-l10n="footer_privacy">Privacy</a></nav>
+      </div>
     </footer>
   </div>
-  <div class="mobile-install" aria-label="Install the free extension" data-l10n-aria="mobile_install_aria">
-    <span><strong data-l10n="mobile_title">Whole collections. One click.</strong><span data-l10n="mobile_copy">Full-track downloads stay free.</span></span>
-    <a class="cta" href="https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb"><span data-l10n="mobile_cta">Add free</span> <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-  </div>
+  <div id="goodbye-root"></div>
+
   <script src="./scripts/landing-i18n.js"></script>
-  <script>
-    (() => {
-      const { t } = window.SCDLLandingI18n;
-      const params = new URLSearchParams(location.search);
-      const requestedView = params.get('view');
-      const welcomeView = requestedView === 'welcome';
-      const goodbyeView = requestedView === 'goodbye';
-      if (welcomeView) {
-        const language = (params.get('locale') || navigator.language || 'en').replace('_', '-').toLowerCase();
-        const locale = language.startsWith('es') ? 'es' : language.startsWith('pt') ? 'pt' : language.startsWith('de') ? 'de' : language.startsWith('ru') ? 'ru' : 'en';
-        const copy = {
-          en: { eyebrow:'INSTALLATION COMPLETE', title:'Extension installed. Now reload SoundCloud.', lead:'After installing the extension, reload every SoundCloud tab that was already open.', why:'Chrome can only add the downloader to those existing pages after they reload. Without this step, the extension may look like it is still loading.', step1:'Go back to every SoundCloud tab that was already open.', step2:'Reload the page now (Ctrl+R or ⌘R).', step3:'Open a track and click the extension.', action:'Open SoundCloud', ready:'Then you are ready to download.' },
-          es: { eyebrow:'INSTALACIÓN COMPLETA', title:'Extensión instalada. Ahora recargá SoundCloud.', lead:'Luego de instalar la extensión, recargá todas las pestañas de SoundCloud que ya estaban abiertas.', why:'Chrome sólo puede agregar el descargador a esas páginas existentes después de recargarlas. Sin este paso, la extensión puede parecer que sigue cargando.', step1:'Volvé a cada pestaña de SoundCloud que ya estaba abierta.', step2:'Recargá la página ahora (Ctrl+R o ⌘R).', step3:'Abrí un track y tocá la extensión.', action:'Abrir SoundCloud', ready:'Después ya podés descargar.' },
-          pt: { eyebrow:'INSTALAÇÃO CONCLUÍDA', title:'Extensão instalada. Agora recarregue o SoundCloud.', lead:'Depois de instalar a extensão, recarregue todas as abas do SoundCloud que já estavam abertas.', why:'O Chrome só consegue adicionar o downloader a essas páginas existentes depois que elas são recarregadas. Sem isso, a extensão pode parecer presa no carregamento.', step1:'Volte para cada aba do SoundCloud que já estava aberta.', step2:'Recarregue a página agora (Ctrl+R ou ⌘R).', step3:'Abra uma faixa e clique na extensão.', action:'Abrir SoundCloud', ready:'Depois disso, você já pode baixar.' },
-          de: { eyebrow:'INSTALLATION ABGESCHLOSSEN', title:'Erweiterung installiert. Jetzt SoundCloud neu laden.', lead:'Lade nach der Installation alle SoundCloud-Tabs neu, die bereits geöffnet waren.', why:'Chrome kann den Downloader erst nach dem Neuladen zu diesen vorhandenen Seiten hinzufügen. Sonst kann es so aussehen, als würde die Erweiterung endlos laden.', step1:'Wechsle zu jedem bereits geöffneten SoundCloud-Tab.', step2:'Lade die Seite jetzt neu (Strg+R oder ⌘R).', step3:'Öffne einen Track und klicke auf die Erweiterung.', action:'SoundCloud öffnen', ready:'Danach kannst du herunterladen.' },
-          ru: { eyebrow:'УСТАНОВКА ЗАВЕРШЕНА', title:'Расширение установлено. Теперь обновите SoundCloud.', lead:'После установки расширения обновите все вкладки SoundCloud, которые уже были открыты.', why:'Chrome сможет добавить загрузчик на эти открытые страницы только после обновления. Без этого расширение может бесконечно показывать загрузку.', step1:'Вернитесь на каждую уже открытую вкладку SoundCloud.', step2:'Обновите страницу сейчас (Ctrl+R или ⌘R).', step3:'Откройте трек и нажмите на расширение.', action:'Открыть SoundCloud', ready:'После этого можно скачивать.' },
-        }[locale];
-        document.documentElement.lang = locale;
-        document.title = `SoundCloud Track Downloader — ${copy.title}`;
-        document.body.innerHTML = `<main class="welcome" aria-labelledby="welcome-title"><section class="welcome-card"><p class="welcome-eyebrow">${copy.eyebrow}</p><div class="welcome-mark" aria-hidden="true">✓</div><h1 id="welcome-title">${copy.title}</h1><p class="welcome-lead">${copy.lead}</p><p class="welcome-why">${copy.why}</p><ol><li>${copy.step1}</li><li><strong>${copy.step2}</strong></li><li>${copy.step3}</li></ol><a class="welcome-action" href="https://soundcloud.com/">${copy.action} →</a><p class="welcome-ready">${copy.ready}</p></section></main>`;
-        const style = document.createElement('style');
-        style.textContent = `.welcome{min-height:100vh;padding:28px;display:grid;place-items:center;background:#f7f5ef;color:#242620;font:16px/1.55 Arial,Helvetica,sans-serif}.welcome-card{width:min(100%,650px);padding:44px;border:1px solid #deded4;border-radius:16px;background:#fff;box-shadow:0 24px 70px #24262017;text-align:center}.welcome-eyebrow{margin:0;color:#d93e10;font:700 11px/1 ui-monospace,monospace;letter-spacing:1.7px}.welcome-mark{display:grid;place-items:center;width:54px;height:54px;margin:24px auto 18px;border-radius:15px;background:#d93e10;color:white;font-size:28px;font-weight:800}.welcome h1{margin:0 auto 18px;max-width:560px;font-size:clamp(34px,6vw,52px);line-height:1.04;letter-spacing:-2px}.welcome-lead{margin:0 auto;max-width:540px;font-size:19px;line-height:1.55}.welcome-why{margin:18px auto 26px;max-width:530px;color:#686a61;font-size:14px}.welcome ol{display:grid;gap:10px;margin:0 auto 28px;padding:22px 28px 22px 52px;max-width:500px;border:1px solid #deded4;border-radius:10px;background:#f7f5ef;text-align:left}.welcome-action{display:inline-flex;padding:15px 21px;border-radius:8px;background:#d93e10;color:#fff;font-weight:800;text-decoration:none;box-shadow:0 4px 0 #ab310d}.welcome-ready{margin:18px 0 0;color:#59664b;font-size:13px;font-weight:700}@media(max-width:600px){.welcome{padding:14px}.welcome-card{padding:30px 20px}.welcome h1{letter-spacing:-1.3px}.welcome-lead{font-size:17px}.welcome ol{padding-left:42px}}`;
-        document.head.append(style);
-        return;
-      }
-      if (goodbyeView) {
-        document.title = 'SoundCloud Track Downloader — Feedback';
-        document.body.innerHTML = `<main class="goodbye" aria-labelledby="goodbye-title"><a class="goodbye-brand" href="/">SoundCloud Track Downloader</a><section class="goodbye-card"><p class="eyebrow">UNINSTALL FEEDBACK</p><h1 id="goodbye-title">Sorry to see you go.</h1><figure class="goodbye-promo"><img src="./assets/images/promo.png" alt="Preview of the upcoming Player Tools update" width="468" height="768"><figcaption>MASSIVE UPDATE INCOMING. UNINSTALL?</figcaption></figure><form id="feedback-form"><fieldset><legend>What was the main reason?</legend><label><input required type="radio" name="reason" value="yes"> Yes</label><label><input type="radio" name="reason" value="confusing_to_use"> It was confusing to use</label><label><input type="radio" name="reason" value="downloads_did_not_work"> Downloads did not work</label><label><input type="radio" name="reason" value="missing_feature"> A feature was missing</label><label><input type="radio" name="reason" value="pricing"> Pricing</label><label><input type="radio" name="reason" value="no_longer_needed"> I no longer need it</label><label><input type="radio" name="reason" value="other"> Other</label></fieldset><label>Optional comment<textarea name="comment" maxlength="2000" rows="4"></textarea></label><label>Email, only if you want a reply<input name="email" type="email" maxlength="254" autocomplete="email"></label><div id="turnstile-widget"></div><p id="feedback-status" role="status" aria-live="polite"></p><button class="cta" id="feedback-submit" type="submit" disabled>Send feedback</button><button class="goodbye-close" type="button">No thanks</button></form><p id="feedback-success" class="feedback-success" role="status" hidden>Thank you. Your feedback was received.</p></section></main>`;
-        const style = document.createElement('style');
-        style.textContent = `.goodbye{min-height:100vh;padding:28px;display:grid;place-items:center;background:#f7f6f0;color:#292b27;font:16px/1.5 Inter,system-ui,sans-serif}.goodbye-brand{position:fixed;top:22px;left:28px;color:inherit;font-weight:800;text-decoration:none}.goodbye-card{width:min(100%,580px);padding:36px;border:1px solid #d8d8cf;border-radius:12px;background:#fff;box-shadow:0 18px 50px #1b21151a}.goodbye h1{font-size:40px;margin:8px 0}.goodbye-promo{margin:22px 0;text-align:center}.goodbye-promo img{display:block;width:auto;max-width:100%;height:auto;max-height:360px;margin:auto;border-radius:10px}.goodbye-promo figcaption{margin-top:12px;font-size:16px;font-weight:800;letter-spacing:.3px}.goodbye fieldset{display:grid;gap:9px;margin:25px 0 18px;border:0;padding:0}.goodbye legend{font-weight:700;margin-bottom:9px}.goodbye label{display:grid;gap:6px;margin:14px 0}.goodbye fieldset label{display:block;margin:0}.goodbye input,.goodbye textarea{font:inherit;padding:9px;border:1px solid #b8b9b1;border-radius:6px}.goodbye textarea{resize:vertical}.goodbye-close{margin-left:12px;border:0;background:transparent;color:#555;cursor:pointer}.goodbye .cta{border:0;cursor:pointer}.goodbye .cta:disabled{cursor:not-allowed;opacity:.55}.goodbye .eyebrow{font-size:11px;color:#788269;font-weight:800;letter-spacing:1px}.goodbye #feedback-status{min-height:24px;color:#a23d24}.goodbye .feedback-success{color:#376337;font-weight:700;margin-top:24px}@media(max-width:600px){.goodbye{padding:16px}.goodbye-brand{position:static;margin-bottom:14px}.goodbye-card{padding:25px}.goodbye h1{font-size:31px}}`;
-        document.head.append(style);
-        const form = document.getElementById('feedback-form');
-        const status = document.getElementById('feedback-status');
-        const submit = document.getElementById('feedback-submit');
-        const success = document.getElementById('feedback-success');
-        const submissionId = crypto.randomUUID();
-        let turnstileToken = '';
-        let turnstileWidgetId = null;
-        const setStatus = message => { status.textContent = message; };
-        document.querySelector('.goodbye-close').addEventListener('click', () => { document.body.innerHTML = '<main class="goodbye"><p>Thanks for trying SoundCloud Track Downloader.</p></main>'; });
-        fetch('/api/uninstall-feedback/config', { cache: 'no-store' }).then(response => response.ok ? response.json() : null).then(config => {
-          if (!config?.turnstileSiteKey) { setStatus('Feedback is temporarily unavailable. Please try again later.'); return; }
-          const container = document.getElementById('turnstile-widget');
-          window.scdTurnstileSuccess = token => { turnstileToken = token; submit.disabled = false; setStatus(''); };
-          window.scdTurnstileExpired = () => { turnstileToken = ''; submit.disabled = true; setStatus('Verification expired. Please try again.'); };
-          window.scdTurnstileError = () => { turnstileToken = ''; submit.disabled = true; setStatus('Could not load feedback protection. Please try again later.'); };
-          window.scdTurnstileLoad = () => {
-            if (typeof window.turnstile?.render !== 'function') { window.scdTurnstileError(); return; }
-            try {
-              turnstileWidgetId = window.turnstile.render(container, {
-                sitekey: config.turnstileSiteKey,
-                action: 'uninstall_feedback',
-                callback: window.scdTurnstileSuccess,
-                'expired-callback': window.scdTurnstileExpired,
-                'error-callback': window.scdTurnstileError,
-              });
-            } catch { window.scdTurnstileError(); }
-          };
-          setStatus('Loading verification…');
-          const script = document.createElement('script'); script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=scdTurnstileLoad'; script.async = true; script.defer = true;
-          script.onerror = () => setStatus('Could not load feedback protection. Please try again later.');
-          script.onload = () => { if (typeof window.turnstile?.render !== 'function') window.scdTurnstileError(); };
-          document.head.append(script);
-        }).catch(() => setStatus('Could not load feedback protection. Please try again later.'));
-        form.addEventListener('submit', async event => {
-          event.preventDefault();
-          if (!turnstileToken) { setStatus('Please complete the verification first.'); return; }
-          const values = new FormData(form);
-          const payload = { reason: values.get('reason'), comment: values.get('comment'), email: values.get('email'), submissionId, locale: new URLSearchParams(location.search).get('locale') || navigator.language || '', extensionVersion: new URLSearchParams(location.search).get('version') || '', turnstileToken };
-          setStatus('Sending…');
-          submit.disabled = true;
-          try { const response = await fetch('/api/uninstall-feedback', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) throw new Error(); form.hidden = true; success.hidden = false; } catch { turnstileToken = ''; if (turnstileWidgetId !== null && typeof window.turnstile?.reset === 'function') window.turnstile.reset(turnstileWidgetId); setStatus('We could not send your feedback. Please try again.'); }
-        });
-        return;
-      }
-      const webStoreReviews = [
-        {"author":"Ethan","date":"21 sept 2026","text":"Dude, it has built in nightcore. This is the greatest thing ever.","source":"Chrome Web Store","language":"en"},
-        {"author":"zeeky","date":"20 sept 2026","text":"works as intended","source":"Chrome Web Store","language":"en"},
-        {"author":"Togamy","date":"20 sept 2026","text":"I download all liked music with 2 clicks! Absolutly free! So amazing!\nDon't forget to disable your adblock before download.","source":"Chrome Web Store","language":"en"},
-        {"author":"colder.","date":"19 sept 2026","text":"Best extension for soundcloud <3","source":"Chrome Web Store","language":"en"},
-        {"author":"Tadeo Pugliese","date":"18 sept 2026","text":"ext hella goood , thanks developer the downloader module will be ALWAYS. free. \neverybody lets rank this","source":"Chrome Web Store","language":"en"},
-        {"author":"Joel Ober","date":"18 sept 2026","text":"hella peak extension u can do alot of stuff on it like adjust the speed and other stuff too. tuff extension","source":"Chrome Web Store","language":"en"},
-        {"author":"Mikro","date":"17 sept 2026","text":"Best Extension no cap","source":"Chrome Web Store","language":"en"},
-        {"author":"René Barrios","date":"15 sept 2026","text":"tremnendo","source":"Chrome Web Store","language":"es"},
-        {"author":"prosto chel","date":"15 sept 2026","text":"Разрабу руки целовал, имбу накодил, \n\nРазработчик, кем бы ты ни был, ТЫ ПРОСТО БОСС","source":"Chrome Web Store","language":"ru"},
-        {"author":"Максим","date":"15 sept 2026","text":"Великолепное расширение что очень сильно расширяет функции Soundcloud. Скачайте, не пожалеете.","source":"Chrome Web Store","language":"ru"},
-        {"author":"Gorg Poccen","date":"14 sept 2026","text":"its just perfect with its features, would recommend who wants adjust speed of music, and wants to download it as well","source":"Chrome Web Store","language":"en"},
-        {"author":"edd eddington","date":"13 sept 2026","text":"Best soundcloud extension on the app","source":"Chrome Web Store","language":"en"},
-        {"author":"Vittorio Pugliese","date":"13 sept 2026","text":"Most useful Soundcloud toolkit extension available. Pitch, effects, velocity and looping ON TOP of all the free download module that will not ever be a paid feature? amazing","source":"Chrome Web Store","language":"en"},
-        {"author":"iamvlad (Vladpcs13)","date":"13 sept 2026","text":"разрабы вы лучшие, очень удобное расширение. и ещё и замедлять теперь можно","source":"Chrome Web Store","language":"ru"},
-        {"author":"Amk","date":"13 sept 2026","text":"имба","source":"Chrome Web Store","language":"ru"},
-        {"author":"Gnot","date":"13 sept 2026","text":"never writing a review again, best update ever","source":"Chrome Web Store","language":"en"},
-        {"author":"Qamewi","date":"13 sept 2026","text":"Разрабы, вы лучшие. Уже сколько пользуюсь расширением, очень удобно скачивать музыку. А сегодня увидела, что ещё и функцию замедления\\ускорения добавили, я вас люблю <333","source":"Chrome Web Store","language":"ru"},
-        {"author":"Данило","date":"13 sept 2026","text":"ТОПЧИК, теперь можно лёгко скачать песенку с ск и ещё можно ускорять и замедлять песню, забавно. Удобно👍🏻","source":"Chrome Web Store","language":"ru"},
-        {"author":"Taffy","date":"13 sept 2026","text":"imba","source":"Chrome Web Store","language":"en"},
-        {"author":"IceyPanda37","date":"12 sept 2026","text":"10/10 with the new update","source":"Chrome Web Store","language":"en"},
-        {"author":"luciano g","date":"26 ago 2026","text":"baixa rápido e fácil gostei uso no edge","source":"Chrome Web Store","language":"pt-BR"},
-        {"author":"1 1","date":"21 ago 2026","text":"really good, but cant download cyrillic names","source":"Chrome Web Store","language":"en","implemented":true},
-        {"author":"Mikhail Huz","date":"6 ago 2026","text":"9.9/10\nЛучшее из инструментов, которые на данный момент смог найти.\nЕдинственное, хотелось бы загружать плейлист одним нажатием, а не нажимать \"сохранить\" для каждой песни.\nGod bless Developer <3","source":"Chrome Web Store","language":"ru","implemented":true},
-        {"author":"Adrian Kucharski “Asti”","date":"2 ago 2026","text":"Wo ta si eti? Works great. Thx.","source":"Chrome Web Store","language":"en"},
-        {"author":"Dmitry Naumov","date":"31 jul 2026","text":"Downloads fine, but ignores Cyrillic names (e.g. \"Крылья - Рождение... Горизонт\" becomes \"1 - -.mp3\")","source":"Chrome Web Store","language":"en","implemented":true},
-        {"author":"Dimitri Rozomashvili","date":"21 jul 2026","text":"Fast! and downloads playlists like crazy!","source":"Chrome Web Store","language":"en"},
-        {"author":"Railas Gvaitress","date":"12 jul 2026","text":"Пока работает","source":"Chrome Web Store","language":"ru"},
-        {"author":"Павел Волков","date":"9 jul 2026","text":"Отличное расширение.\nДобавляйте плейлисты к себе и тяните из профиля (подборки с домашней страницы не определяет).","source":"Chrome Web Store","language":"ru"},
-        {"author":"Joachim Bingel","date":"9 jul 2026","text":"works nicely, would be great if one could set the default download location (instead of downloading to 'Downloads')","source":"Chrome Web Store","language":"en","implemented":true},
-        {"author":"James Roberts","date":"30 jun 2026","text":"Works perfectly, thanks!","source":"Chrome Web Store","language":"en"},
-        {"author":"silvina hebe kotrba","date":"30 jun 2026","text":"Amazing - works surprisingly well to its UI simploicity and I dont have to be logged in to download tracks, really antonymous","source":"Chrome Web Store","language":"en"},
-        {"author":"skripka","date":"30 jun 2026","text":"Автор красавчик, все работает без ошибок","source":"Chrome Web Store","language":"ru"},
-        {"author":"Dmitriy Osimhen","date":"27 jun 2026","text":"Удивительно, но работает. По крайней мере пока что на 27.06.2026, а то в последние годы подобные расширения работают очень нестабильно. Минус это то что для загрузки трека из ленты надо его открывать в отдельной вкладке","source":"Chrome Web Store","language":"ru"},
-        {"author":"Darius Holmes","date":"26 jun 2026","text":"doesn't work","source":"Chrome Web Store","language":"en"},
-        {"author":"Suicidal Tendencies","date":"18 jun 2026","text":"Rotz geht nicht!","source":"Chrome Web Store","language":"de"},
-        {"author":"Seth","date":"15 jun 2026","text":"Error #11: Stream not found (404). Reload the SoundCloud page and try again.\n\nTried that, tried switching networks, no dice whatsoever. On current version of Chrome.","source":"Chrome Web Store","language":"en"},
-        {"author":"Kira -","date":"15 jun 2026","text":"Doesn't works at all. Tried at multiply tracks. Did everything as said in instruction video.","source":"Chrome Web Store","language":"en"},
-        {"author":"Delaine Douglass","date":"13 jun 2026","text":"I see you might be adding a formatting option, which would be great, because it downloaded in mp4 format","source":"Chrome Web Store","language":"en","implemented":true},
-        {"author":"mR.jOkcer","date":"10 jun 2026","text":"нормалды, все работает","source":"Chrome Web Store","language":"ru"},
-        {"author":"ari yuhyuh","date":"4 jun 2026","text":"good，我下載了一些歌曲\n\nWhy are the downloaded files in m4a format?","source":"Chrome Web Store","implemented":true},
-        {"author":"123 123","date":"1 jun 2026","text":"thank you","source":"Chrome Web Store","language":"en"},
-        {"author":"ChallengerDeep","date":"20 may 2026","text":"This works and does the bare minimum. If you're looking to download things at the best quality, I wouldn't recommend as this doesn't have a 320kps option. Which might be a real deal breaker for some people, including myself. Also I highly recommend either refreshing the page, browser or device if it doesn't recognise you're on the soundcloud page, that was something I've ran into when testing it. I've managed to get it to work, but bare it in mind you might run into some issues.","source":"Chrome Web Store","language":"en"},
-        {"author":"anka down","date":"8 may 2026","text":"выдает ошибку, не работает","source":"Chrome Web Store","language":"ru"},
-        {"author":"safi safison","date":"28 mar 2026","text":"Funktioniert einwandfrei","source":"Chrome Web Store","language":"de"},
-        {"author":"Wings_of_Batrfly","date":"12 ene 2026","text":"Работает","source":"Chrome Web Store","language":"ru"},
-        {"author":"Marshall M","date":"25 dic 2025","text":"works perfectly. enable popups and redirects.","source":"Chrome Web Store","language":"en"},
-        {"author":"Brad Mccray","date":"20 dic 2025","text":"Doesnt work for me.  Says Im not on the main page for the track, which i definitely am.","source":"Chrome Web Store","language":"en"},
-        {"author":"Alex Mendez","date":"17 dic 2025","text":"one that actually works, tried 2 different ones and they were just duds. \nif you do have an adblocker, disable it because for some reason my adblocker blocked the extension from getting the song.","source":"Chrome Web Store","language":"en"},
-        {"author":"Yannick Ries (UbarusLX)","date":"14 dic 2025","text":"5 stars when the extension can download 320kbs","source":"Chrome Web Store","language":"en"},
-        {"author":"Gleb Drobkov","date":"9 dic 2025","text":"Fantastic, works fast, quality is close to perfect, ~ 50-80 MB file size / hr MP3 format. Thanks team!","source":"Chrome Web Store","language":"en"},
-        {"author":"Imtiaz Uddin","date":"28 oct 2025","text":"Great; worked for me !","source":"Chrome Web Store","language":"en"},
-        {"author":"Gard","date":"22 oct 2025","text":"Poor audio quality, files gets downsized and converted to mp3 from better quality uploads.","source":"Chrome Web Store","language":"en"},
-        {"author":"Daniel K","date":"17 sept 2025","text":"Not working for me","source":"Chrome Web Store","language":"en"},
-        {"author":"dani","date":"13 sept 2025","text":"Wait this is fire??","source":"Chrome Web Store","language":"en"},
-        {"author":"Lê Hoàng Nam","date":"5 sept 2025","text":"works","source":"Chrome Web Store","language":"en"},
-        {"author":"Marta","date":"20 ago 2025","text":"Error #11. Extension doesn't work.","source":"Chrome Web Store","language":"en"},
-        {"author":"Alexandro Reyes","date":"9 ago 2025","text":"works as intended","source":"Chrome Web Store","language":"en"},
-        {"author":"Exased Cur","date":"6 ago 2025","text":"работает хорошо, ну тупа лике","source":"Chrome Web Store","language":"ru"},
-        {"author":"Oreo The DJ","date":"5 ago 2025","text":"error 11, cant download anything extension doesnt work","source":"Chrome Web Store","language":"en"},
-        {"author":"Канал Канал","date":"30 jul 2025","text":"Слава яйцам, работает.","source":"Chrome Web Store","language":"ru"},
-        {"author":"Jon","date":"10 abr 2025","text":"error #11. can't download track","source":"Chrome Web Store","language":"en"},
-        {"author":"Micaela Fernandez","date":"20 mar 2025","text":"Muy buena extensión que me permite descargar mis canciones favoritas! Un éxito.","source":"Chrome Web Store","language":"es"},
-        {"author":"bless me","date":"20 mar 2025","text":"nice app, one thing to remark is that is mandatory to start form the track page, for example, if you start on soundcloud.com/likes and then go to the track page, extension does not load the track, you have to refresh the page and then it loads correctly, and then when I navigate to another track, it loads correctly too!\nnice work","source":"Chrome Web Store","language":"en"}
-      ];
-
-      const modes = {
-        track: { title: 'A little further', artist: 'Field Notes', count: '4:32', total: 1, url: 'soundcloud.com/field-notes/a-little-further' },
-        playlist: { title: 'Slow Sundays', artist: 'Field Notes', count: '24 tracks', total: 24, url: 'soundcloud.com/field-notes/sets/slow-sundays' },
-        artist: { title: 'Field Notes — Tracks', artist: 'Field Notes', count: '48 tracks', total: 48, url: 'soundcloud.com/field-notes/tracks' },
-        looper: { title: 'A little further', artist: 'Field Notes', count: 'A 01:12 · B 01:28', total: 1, url: 'soundcloud.com/field-notes/a-little-further' }
-      };
-      const tabs = [...document.querySelectorAll('[data-mode]')];
-      const status = document.getElementById('preview-status');
-      const amount = document.getElementById('preview-amount');
-      const format = document.getElementById('preview-format');
-      const download = document.getElementById('preview-download');
-      const downloadIcon = document.getElementById('download-icon');
-      const waveform = document.getElementById('waveform');
-      const extensionPreview = document.getElementById('extension-preview');
-      const loopSelection = document.getElementById('loop-selection');
-      const loopHandles = [...document.querySelectorAll('[data-loop-handle]')];
-      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-      let mode = 'playlist';
-      let timer;
-      let loopStart = 34;
-      let loopEnd = 64;
-      const bars = [];
-      for (let i = 0; i < 95; i++) {
-        const height = Math.round(7 + Math.abs(Math.sin(i * 1.73) * Math.cos(i * .23)) * 30 + Math.sin(i * .064) ** 2 * 16);
-        const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        for (const [key, value] of Object.entries({ x: i * 4, y: (58 - height) / 2, width: 2.8, height, rx: .6, fill: 'currentColor' })) bar.setAttribute(key, value);
-        waveform.appendChild(bar);
-        bars.push(bar);
-      }
-      function renderLoopSelection() {
-        loopSelection.style.left = `${loopStart}%`;
-        loopSelection.style.width = `${loopEnd - loopStart}%`;
-      }
-      function setLoopMarker(marker, clientX) {
-        const bounds = waveform.getBoundingClientRect();
-        const next = Math.max(0, Math.min(100, (clientX - bounds.left) / bounds.width * 100));
-        if (marker === 'start') loopStart = Math.min(next, loopEnd - 4);
-        else loopEnd = Math.max(next, loopStart + 4);
-        renderLoopSelection();
-        status.textContent = `Loop range: A ${Math.round(loopStart)}% · B ${Math.round(loopEnd)}%`;
-      }
-      loopHandles.forEach(handle => handle.addEventListener('pointerdown', event => {
-        if (mode !== 'looper') return;
-        event.preventDefault();
-        const marker = handle.dataset.loopHandle;
-        handle.setPointerCapture(event.pointerId);
-        setLoopMarker(marker, event.clientX);
-        const move = moveEvent => setLoopMarker(marker, moveEvent.clientX);
-        const release = releaseEvent => {
-          handle.releasePointerCapture?.(releaseEvent.pointerId);
-          handle.removeEventListener('pointermove', move);
-          handle.removeEventListener('pointerup', release);
-          handle.removeEventListener('pointercancel', release);
-        };
-        handle.addEventListener('pointermove', move);
-        handle.addEventListener('pointerup', release);
-        handle.addEventListener('pointercancel', release);
-      }));
-      renderLoopSelection();
-      function reset() {
-        window.clearInterval(timer);
-        download.disabled = false;
-        downloadIcon.setAttribute('href', '#i-download');
-        download.setAttribute('aria-label', mode === 'looper' ? 'Try the loop preview animation' : 'Try the download animation');
-        status.classList.remove('complete');
-        status.textContent = mode === 'looper'
-          ? 'Drag A or B to set the loop range.'
-          : mode === 'track'
-            ? 'Ready to download this track'
-            : `Ready to download ${modes[mode].total} tracks`;
-        bars.forEach(bar => bar.setAttribute('fill', 'currentColor'));
-      }
-      tabs.forEach(tab => tab.addEventListener('click', () => {
-        mode = tab.dataset.mode;
-        const sample = modes[mode];
-        tabs.forEach(button => button.setAttribute('aria-pressed', String(button === tab)));
-        document.getElementById('preview-title').textContent = sample.title;
-        document.getElementById('preview-artist').textContent = sample.artist;
-        document.getElementById('preview-count').textContent = sample.count;
-        document.getElementById('demo-url').textContent = sample.url;
-        extensionPreview.classList.toggle('is-looper', mode === 'looper');
-        amount.hidden = mode === 'track' || mode === 'looper';
-        amount.value = 'all';
-        format.disabled = mode === 'looper';
-        format.value = 'auto';
-        reset();
-      }));
-      amount.addEventListener('change', reset);
-      format.addEventListener('change', reset);
-      download.addEventListener('click', () => {
-        reset();
-        download.disabled = true;
-        const total = mode === 'track' ? 1 : amount.value === 'all' ? modes[mode].total : Number(amount.value);
-        const finish = () => {
-          window.clearInterval(timer);
-          bars.forEach(bar => bar.setAttribute('fill', '#ffb18a'));
-          downloadIcon.setAttribute('href', '#i-check');
-          download.disabled = false;
-          download.setAttribute('aria-label', mode === 'looper' ? 'Replay the loop preview animation' : 'Replay the download animation');
-          status.classList.add('complete');
-          status.textContent = mode === 'looper'
-            ? 'Loop range ready · No files downloaded'
-            : `Demo complete · ${total === 1 ? '1 track' : `${total} tracks`} · No files downloaded`;
-        };
-        if (reducedMotion.matches) { finish(); return; }
-        status.textContent = mode === 'looper' ? 'Demo: previewing the selected loop range…' : 'Demo: downloading in the background…';
-        let step = 0;
-        timer = window.setInterval(() => {
-          step++;
-          bars.forEach((bar, i) => bar.setAttribute('fill', i / bars.length < step / 14 ? '#ff965f' : 'currentColor'));
-          if (step >= 14) finish();
-        }, 100);
-      });
-
-      const reviewList = document.getElementById('review-list');
-      const reviewViewport = document.getElementById('review-viewport');
-      const reviewPrevious = document.getElementById('review-prev');
-      const reviewNext = document.getElementById('review-next');
-      const reviewCount = document.getElementById('review-count');
-      reviewCount.textContent = String(webStoreReviews.length);
-
-      webStoreReviews.forEach(review => {
-        const item = document.createElement('li');
-        const article = document.createElement('article');
-        const text = document.createElement('p');
-        const meta = document.createElement('div');
-        const authorWrap = document.createElement('span');
-        const author = document.createElement('span');
-        const source = document.createElement('span');
-        const date = document.createElement('time');
-
-        item.className = 'review-card';
-        article.dir = 'auto';
-        if (review.language) article.lang = review.language;
-        text.className = 'review-text';
-        text.textContent = review.text;
-        meta.className = 'review-meta';
-        author.className = 'review-author';
-        author.textContent = review.author;
-        source.className = 'review-source';
-        source.textContent = review.source;
-        date.className = 'review-date';
-        date.textContent = review.date;
-        authorWrap.append(author, source);
-        if (review.implemented) {
-          const badge = document.createElement('span');
-          badge.className = 'review-implemented';
-          badge.textContent = t('implemented_badge');
-          authorWrap.append(badge);
-        }
-        meta.append(authorWrap, date);
-        article.append(text, meta);
-        item.append(article);
-        reviewList.append(item);
-      });
-
-      const updateReviewControls = () => {
-        const maxScroll = reviewViewport.scrollWidth - reviewViewport.clientWidth - 2;
-        reviewPrevious.disabled = reviewViewport.scrollLeft <= 2;
-        reviewNext.disabled = reviewViewport.scrollLeft >= maxScroll;
-      };
-      const moveReviews = (direction) => {
-        reviewViewport.scrollBy({ left: direction * Math.max(280, reviewViewport.clientWidth * 0.86), behavior: 'smooth' });
-      };
-      reviewPrevious.addEventListener('click', () => moveReviews(-1));
-      reviewNext.addEventListener('click', () => moveReviews(1));
-      reviewViewport.addEventListener('scroll', updateReviewControls, { passive: true });
-      reviewViewport.addEventListener('wheel', (event) => {
-        const delta = event.shiftKey ? event.deltaY : Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-        if (!delta) return;
-        event.preventDefault();
-        reviewViewport.scrollLeft += delta;
-      }, { passive: false });
-      window.addEventListener('resize', updateReviewControls);
-      updateReviewControls();
-
-      const revealHashDetails = () => {
-        const target = document.getElementById(window.location.hash.slice(1));
-        if (target && target.tagName === 'DETAILS') target.open = true;
-      };
-      window.addEventListener('hashchange', revealHashDetails);
-      revealHashDetails();
-    })();
-  </script>
+  <script src="./scripts/landing-goodbye.js"></script>
+  <script src="./scripts/landing.js"></script>
 </body>
 </html>

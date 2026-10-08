@@ -1,166 +1,166 @@
 {
-  "help_hero_title": { "message": "Your SoundCloud studio" },
-  "help_hero_tagline": { "message": "Slow down, loop, sample and split any track, right inside the player." },
-  "help_open_soundcloud": { "message": "Open SoundCloud" },
-  "help_open_stems": { "message": "Stem Extractor" },
+  "help_hero_title": { "message": "Tu estudio en SoundCloud" },
+  "help_hero_tagline": { "message": "Bajá la velocidad, loopeá, sampleá y separá cualquier track, dentro del reproductor." },
+  "help_open_soundcloud": { "message": "Abrir SoundCloud" },
+  "help_open_stems": { "message": "Separador de stems" },
   "help_tab_stems": { "message": "Stems" },
   "help_tab_likes": { "message": "Likes" },
-  "help_pt_intro": { "message": "Open the speedometer beside SoundCloud's player controls. Every tool works on the track that is playing." },
-  "help_pt_speed_title": { "message": "Speed and Keep Tone" },
-  "help_pt_speed": { "message": "0.1× to 4× with quick presets. Keep Tone changes tempo without changing pitch." },
-  "help_pt_fx_title": { "message": "FX and EQ" },
-  "help_pt_fx": { "message": "Reverb, delay, flanger, phaser, bitcrusher and saturation, plus a parametric EQ." },
-  "help_pt_record_title": { "message": "Recorder" },
-  "help_pt_record": { "message": "Record what you hear, after FX and EQ, and save it as a WAV file." },
-  "help_pt_bypass_title": { "message": "Bypass and memory" },
-  "help_pt_bypass": { "message": "Compare with the original in one click. Your settings stay saved." },
-  "help_loop_intro": { "message": "Loop any part of the playing track, then turn it into an instrument." },
-  "help_loop_ab_title": { "message": "Set A and B" },
-  "help_loop_ab": { "message": "Use Set A/B in the panel or drag the markers on the waveform." },
-  "help_loop_pads_title": { "message": "Sampler pads" },
-  "help_loop_pads": { "message": "Slice the loop into 8 pads and play them from your keyboard. Right-click a pad to fine-tune it." },
-  "help_loop_piano_title": { "message": "Piano mode" },
-  "help_loop_piano": { "message": "Play the loop across the keyboard with ADSR, gain, pitch and saved presets." },
-  "help_loop_export": { "message": "Save the loop as WAV, or send it to the Stem Extractor." },
-  "help_stems_intro": { "message": "Split up to 2 minutes into vocals, drums, bass and other. It runs on your device; nothing is uploaded." },
-  "help_stems_loop_title": { "message": "From a loop" },
-  "help_stems_loop": { "message": "In Looper, use the stems button to send the selected range." },
-  "help_stems_import_title": { "message": "From your files" },
-  "help_stems_import": { "message": "Import any audio file in the Stem Extractor." },
-  "help_stems_mix_title": { "message": "Mix and save" },
-  "help_stems_mix": { "message": "Mute, solo and set the volume of each stem. Separations are saved in this browser." },
-  "help_stems_pads_title": { "message": "Drum pads" },
-  "help_stems_pads": { "message": "Place 8 slice points on the drums stem and play them as pads." },
-  "help_stems_note": { "message": "The first separation downloads a 166 MB model, then Chrome keeps it cached." },
-  "help_likes_lead": { "message": "Your likes, indexed privately in this browser." },
-  "help_likes_build_title": { "message": "Build your library" },
-  "help_likes_build": { "message": "Open your Likes on SoundCloud and start Likes Explorer. Indexing continues in the background." },
-  "help_likes_search_title": { "message": "Search and travel" },
-  "help_likes_search": { "message": "Find any title or artist and jump back years without endless scrolling." },
-  "player_tools_offer_detail": { "message": "Tempo, loops & FX" },
-  "free_downloads_forever": { "message": "Free downloads forever" },
-  "sampler_presets": { "message": "Saved sampler states" },
-  "sampler_saveState": { "message": "Save state" },
-  "sampler_stateName": { "message": "State name" },
-  "sampler_noStates": { "message": "No saved states yet" },
-  "sampler_deleteState": { "message": "Delete state" },
-  "sampler_stateSaved": { "message": "Sampler state saved." },
-  "sampler_stateLoaded": { "message": "Sampler state restored." },
-  "sampler_stateFailed": { "message": "Could not update sampler states. Please try again." },
-  "sampler_statesLoading": { "message": "Loading states…" },
-  "sampler_stateBusy": { "message": "Wait for the samples to finish saving." },
+  "help_pt_intro": { "message": "Abrí el velocímetro junto a los controles del reproductor de SoundCloud. Todas las herramientas actúan sobre el track que está sonando." },
+  "help_pt_speed_title": { "message": "Velocidad y Mantener tono" },
+  "help_pt_speed": { "message": "De 0.1× a 4× con presets rápidos. Mantener tono cambia el tempo sin cambiar la afinación." },
+  "help_pt_fx_title": { "message": "FX y EQ" },
+  "help_pt_fx": { "message": "Reverb, delay, flanger, phaser, bitcrusher y saturación, más un EQ paramétrico." },
+  "help_pt_record_title": { "message": "Grabadora" },
+  "help_pt_record": { "message": "Grabá lo que escuchás, después de FX y EQ, y guardalo como WAV." },
+  "help_pt_bypass_title": { "message": "Bypass y memoria" },
+  "help_pt_bypass": { "message": "Compará con el original en un clic. Tus ajustes quedan guardados." },
+  "help_loop_intro": { "message": "Loopeá cualquier parte del track que suena y convertila en un instrumento." },
+  "help_loop_ab_title": { "message": "Marcá A y B" },
+  "help_loop_ab": { "message": "Usá Set A/B en el panel o arrastrá los marcadores sobre la forma de onda." },
+  "help_loop_pads_title": { "message": "Pads del sampler" },
+  "help_loop_pads": { "message": "Cortá el loop en 8 pads y tocalos con el teclado. Clic derecho en un pad para ajustarlo." },
+  "help_loop_piano_title": { "message": "Modo piano" },
+  "help_loop_piano": { "message": "Tocá el loop en todo el teclado con ADSR, ganancia, pitch y presets guardados." },
+  "help_loop_export": { "message": "Guardá el loop como WAV o mandalo al separador de stems." },
+  "help_stems_intro": { "message": "Separá hasta 2 minutos en voz, batería, bajo y otros. Corre en tu dispositivo; no se sube nada." },
+  "help_stems_loop_title": { "message": "Desde un loop" },
+  "help_stems_loop": { "message": "En el Looper, usá el botón de stems para enviar el rango seleccionado." },
+  "help_stems_import_title": { "message": "Desde tus archivos" },
+  "help_stems_import": { "message": "Importá cualquier archivo de audio en el separador de stems." },
+  "help_stems_mix_title": { "message": "Mezclá y guardá" },
+  "help_stems_mix": { "message": "Silenciá, dejá solo y ajustá el volumen de cada stem. Las separaciones se guardan en este navegador." },
+  "help_stems_pads_title": { "message": "Pads de batería" },
+  "help_stems_pads": { "message": "Poné 8 puntos de corte en el stem de batería y tocalos como pads." },
+  "help_stems_note": { "message": "La primera separación descarga un modelo de 166 MB; después Chrome lo guarda en caché." },
+  "help_likes_lead": { "message": "Tus likes, indexados en privado en este navegador." },
+  "help_likes_build_title": { "message": "Armá tu biblioteca" },
+  "help_likes_build": { "message": "Abrí tus Likes en SoundCloud e iniciá Likes Explorer. La indexación sigue en segundo plano." },
+  "help_likes_search_title": { "message": "Buscá y viajá" },
+  "help_likes_search": { "message": "Encontrá cualquier título o artista y volvé años atrás sin scrollear sin fin." },
+  "player_tools_offer_detail": { "message": "Velocidad, loops y efectos" },
+  "free_downloads_forever": { "message": "Descargas gratis para siempre" },
+  "sampler_presets": { "message": "Estados guardados del sampler" },
+  "sampler_saveState": { "message": "Guardar estado" },
+  "sampler_stateName": { "message": "Nombre del estado" },
+  "sampler_noStates": { "message": "Todavía no hay estados guardados" },
+  "sampler_deleteState": { "message": "Eliminar estado" },
+  "sampler_stateSaved": { "message": "Estado del sampler guardado." },
+  "sampler_stateLoaded": { "message": "Estado del sampler restaurado." },
+  "sampler_stateFailed": { "message": "No se pudieron actualizar los estados. Volvé a intentarlo." },
+  "sampler_statesLoading": { "message": "Cargando estados…" },
+  "sampler_stateBusy": { "message": "Esperá a que los samples terminen de guardarse." },
   "download_policy_restricted": {
-    "message": "Only tracks with downloads enabled by the artist and downloads remaining are available."
+    "message": "Solo se pueden descargar pistas cuyo artista habilitó la descarga y que aún tienen descargas disponibles."
   },
   "piano_mode_status": {
-    "message": "Piano mode on · ← → octave ({octave})"
+    "message": "Modo piano activado · ← → octava ({octave})"
   },
   "piano_mode_help": {
-    "message": "Play the selected loop with your keyboard, using physical QWERTY key positions. At octave 0, Q and comma play C5 (the original sample); Z plays C4. The Z and Q rows play white notes; the A and number rows add sharps. Every mapped key sounds: the gaps repeat nearby notes. Semicolon, quote, brackets, comma, period, slash, minus and equals are included. ← lowers one octave; → raises one (range −4 to +3). The number in the message shows the octave shift. Higher notes play faster and shorter; lower notes play slower and longer. Cut itself stops earlier notes; turn it off to layer notes. With ADSR on, releasing a key starts the release. With ADSR off, samples keep playing after keyup until they end or Cut itself stops them. After preparation, move the loop boundaries to edit the sample live. Escape exits; entering again resets the octave. The track stays paused. Typing in text fields and Ctrl/Cmd/Alt shortcuts remain available."
+    "message": "Tocá el loop seleccionado con el teclado, según la posición física de las teclas QWERTY. En octava 0, Q y coma tocan C5 (el sample original); Z toca C4. Las filas Z y Q tocan notas blancas; las filas A y números agregan sostenidos. Todas las teclas del mapa suenan: los huecos repiten notas cercanas. Se incluyen punto y coma, comilla, corchetes, coma, punto, barra, menos e igual. ← baja una octava; → sube una (rango −4 a +3). El número del mensaje indica el cambio de octava. Las notas agudas suenan más rápidas y cortas; las graves, más lentas y largas. Cut itself corta las notas anteriores; desactivalo para superponerlas. Con ADSR encendido, soltar una tecla inicia el release. Con ADSR apagado, el sample sigue sonando hasta terminar o hasta que Cut itself lo corte. Después de preparar el audio, mové los límites del loop para editar el sample en vivo. Escape sale; al entrar de nuevo se reinicia la octava. El track queda pausado. Podés seguir escribiendo en campos de texto y usando atajos con Ctrl/Cmd/Alt."
   },
   "app_name": {
-    "message": "SoundCloud Track Downloader"
+    "message": "Descargador de SoundCloud"
   },
   "loading": {
-    "message": "Loading…"
+    "message": "Cargando…"
   },
   "loading_track": {
-    "message": "Loading track…"
+    "message": "Cargando track…"
   },
   "loading_track_data": {
-    "message": "Still loading track data…"
+    "message": "Todavía se están cargando los datos del track…"
   },
   "retry": {
-    "message": "Retry"
+    "message": "Reintentar"
   },
   "download": {
-    "message": "Download"
+    "message": "Descargar"
   },
   "download_format": {
-    "message": "Download format"
+    "message": "Formato de descarga"
   },
   "download_amount": {
-    "message": "Download amount"
+    "message": "Cantidad a descargar"
   },
-  "download_amount_options": { "message": "Amount options" },
-  "download_amount_range": { "message": "Enter 0–$1 tracks" },
-  "download_zero_hint": { "message": "Enter at least 1 track to download" },
-  "download_part_count": { "message": "Will download $1 of $2 tracks" },
-  "download_all_count": { "message": "Will download all $1 tracks" },
-  "download_selected_count": { "message": "Download $1 selected tracks" },
-  "download_track_hint": { "message": "Download this track" },
-  "auto_format_expected": { "message": "Auto: $1 expected" },
-  "auto_format_collection": { "message": "Auto chooses each track's format" },
-  "download_format_preference": { "message": "Prefer $1 for download" },
-  "reset_download_folder": { "message": "Reset to browser Downloads" },
+  "download_amount_options": { "message": "Opciones de cantidad" },
+  "download_amount_range": { "message": "Ingresá de 0 a $1 tracks" },
+  "download_zero_hint": { "message": "Ingresá al menos 1 track para descargar" },
+  "download_part_count": { "message": "Vas a descargar $1 de $2 tracks" },
+  "download_all_count": { "message": "Vas a descargar los $1 tracks" },
+  "download_selected_count": { "message": "Descargá $1 tracks seleccionados" },
+  "download_track_hint": { "message": "Descargá este track" },
+  "auto_format_expected": { "message": "Auto: se espera $1" },
+  "auto_format_collection": { "message": "Auto elige el formato de cada track" },
+  "download_format_preference": { "message": "Preferir $1 para la descarga" },
+  "reset_download_folder": { "message": "Restablecer Descargas del navegador" },
   "choose_folder": {
-    "message": "Choose download folder"
+    "message": "Elegir carpeta de descarga"
   },
   "use_downloads_folder": {
-    "message": "Use browser Downloads folder"
+    "message": "Usar la carpeta Descargas del navegador"
   },
   "downloads_folder": {
-    "message": "Downloads"
+    "message": "Descargas"
   },
   "back": {
-    "message": "Back"
+    "message": "Volver"
   },
   "select_all_tracks": {
-    "message": "Select all tracks"
+    "message": "Seleccionar todos los tracks"
   },
   "clear_selected_tracks": {
-    "message": "Clear selected tracks"
+    "message": "Limpiar tracks seleccionados"
   },
   "track_selection": {
-    "message": "Track selection"
+    "message": "Selección de tracks"
   },
   "pause": {
-    "message": "Pause"
+    "message": "Pausar"
   },
   "resume": {
-    "message": "Resume"
+    "message": "Reanudar"
   },
   "cancel": {
-    "message": "Cancel"
+    "message": "Cancelar"
   },
   "ready_to_download": {
-    "message": "Ready to download"
+    "message": "Listo para descargar"
   },
   "background_download_hint": {
-    "message": "You can close this popup — the download continues in the background."
+    "message": "Podés cerrar este popup: la descarga continúa en segundo plano."
   },
   "error_retry": {
-    "message": "Error, please retry"
+    "message": "Error, reintentá"
   },
   "no_track_selected": {
-    "message": "No track selected"
+    "message": "No hay un track seleccionado"
   },
   "open_soundcloud_page": {
-    "message": "Open a SoundCloud track, playlist, Likes, or User Tracks page to download it."
+    "message": "Abrí una página de track, playlist, Likes o Tracks de usuario de SoundCloud para descargar."
   },
   "track_load_failed": {
-    "message": "Couldn't load this track"
+    "message": "No se pudo cargar este track"
   },
   "track_load_failed_detail": {
-    "message": "Something went wrong while reading the track data."
+    "message": "Algo salió mal al leer los datos del track."
   },
   "reload_soundcloud": {
-    "message": "Try reloading the SoundCloud page."
+    "message": "Probá recargando la página de SoundCloud."
   },
   "auto": {
-    "message": "Auto"
+    "message": "Automático"
   },
   "original": {
     "message": "Original"
   },
   "all": {
-    "message": "All"
+    "message": "Todo"
   },
   "select": {
-    "message": "Select"
+    "message": "Elegir"
   },
   "tracks": {
-    "message": "$1 tracks",
+    "message": "$1 pistas",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -168,7 +168,7 @@
     }
   },
   "track_selected": {
-    "message": "$1 track selected",
+    "message": "$1 track seleccionado",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -176,7 +176,7 @@
     }
   },
   "tracks_selected": {
-    "message": "$1 tracks selected",
+    "message": "$1 tracks seleccionados",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -184,211 +184,211 @@
     }
   },
   "settings_and_help": {
-    "message": "Help and settings"
+    "message": "Ayuda y ajustes"
   },
   "help_title": {
-    "message": "How it works"
+    "message": "Cómo funciona"
   },
   "help_intro": {
-    "message": "Download tracks you own or have permission to download."
+    "message": "Descargá tracks propios o para los que tengas permiso."
   },
   "help_getting_started_title": {
-    "message": "Download from SoundCloud"
+    "message": "Descargar desde SoundCloud"
   },
   "help_getting_started": {
-    "message": "Open a track, playlist, Likes, or a user's Tracks page. Use the Download button here or the download button on the SoundCloud page."
+    "message": "Abrí un track, playlist, Likes o la página Tracks de un usuario. Usá el botón Descargar de acá o el botón de la página de SoundCloud."
   },
   "help_collection_title": {
-    "message": "Choose a collection"
+    "message": "Elegí una colección"
   },
   "help_collection": {
-    "message": "For playlists, Likes, and user tracks, enter an amount, choose All, or use Select for individual tracks. Downloads keep running if you close this popup."
+    "message": "Para playlists, Likes y tracks de usuarios, escribí una cantidad, elegí Todo o usá Elegir para tracks individuales. Las descargas siguen si cerrás este popup."
   },
   "help_folder_title": {
-    "message": "Choose a folder"
+    "message": "Elegí una carpeta"
   },
   "help_folder": {
-    "message": "Use the folder button to choose where files are saved. Use × to return to the browser Downloads folder."
+    "message": "Usá el botón de carpeta para elegir dónde se guardan los archivos. Usá × para volver a Descargas del navegador."
   },
   "help_format_title": {
-    "message": "Formats and quality"
+    "message": "Formatos y calidad"
   },
   "help_format": {
-    "message": "Auto selects the available stream. Original is available only when the artist has enabled an original download. Source quality varies by track."
+    "message": "Automático elige el stream disponible. Original solo aparece cuando el artista habilitó una descarga original. La calidad de origen varía según el track."
   },
   "help_progress_title": {
-    "message": "Progress and errors"
+    "message": "Progreso y errores"
   },
   "help_progress": {
-    "message": "The status shows progress and saved files. If a track cannot be read or saved, retry after reloading SoundCloud or choosing the folder again."
+    "message": "El estado muestra el progreso y los archivos guardados. Si un track no se puede leer o guardar, reintentá después de recargar SoundCloud o de elegir la carpeta otra vez."
   },
   "help_looper_title": {
     "message": "Looper"
   },
   "help_looper": {
-    "message": "Looper follows the track in SoundCloud's persistent player, even when you navigate or close the control panel. Set A/B from the panel or edit the same range on a compatible waveform; WAV export remains beside the waveform."
+    "message": "Looper sigue el track del player persistente de SoundCloud aunque navegues o cierres el panel. Podés definir A/B desde el panel o editar el mismo rango en una waveform compatible; la exportación WAV sigue junto a la waveform."
   },
   "help_speed_title": {
-    "message": "Speed"
+    "message": "Velocidad"
   },
   "help_speed_intro": {
-    "message": "The speed selector controls SoundCloud playback from 0.1x to 3x and shows the active speed beside the player controls."
+    "message": "El selector controla la reproducción de SoundCloud de 0.1x a 3x y muestra la velocidad activa junto a los controles del reproductor."
   },
   "help_speed_open_title": {
-    "message": "Open the selector"
+    "message": "Abrí el selector"
   },
   "help_speed_open": {
-    "message": "Press the speedometer in the player controls. Use the white download icon inside the panel to download the entire current track at the effective speed and Keep Tone setting. The orange WAV button exports only the selected A-B range."
+    "message": "Presioná el velocímetro en los controles del reproductor. Usá el ícono blanco de descarga dentro del panel para bajar completo el track actual con la velocidad efectiva y la opción Keep Tone. El botón WAV naranja exporta únicamente el rango A-B seleccionado."
   },
   "help_speed_presets_title": {
-    "message": "Quick speeds"
+    "message": "Velocidades rápidas"
   },
   "help_speed_presets": {
-    "message": "Choose one of the four quick speeds. The two X buttons are custom presets: hold one to save the slider's current speed, then click it to restore that exact value. Custom presets stay saved between SoundCloud sessions."
+    "message": "Elegí una de las cuatro velocidades rápidas. Los dos botones X son presets personalizados: mantené presionado uno para guardar la velocidad actual del slider y luego hacé clic para recuperarla. Se conservan entre sesiones de SoundCloud."
   },
   "help_speed_slider_title": {
-    "message": "Precise control"
+    "message": "Control preciso"
   },
   "help_speed_slider": {
-    "message": "Drag the slider anywhere from 0.1x to 3x in 0.025x steps. Double-click the slider to return to the normal 1x speed."
+    "message": "Arrastrá el control entre 0.1x y 3x en pasos de 0.025x. Hacé doble clic sobre el slider para volver a la velocidad normal de 1x."
   },
   "help_speed_pitch_title": {
-    "message": "Keep Tone"
+    "message": "Mantener tono"
   },
   "help_speed_pitch": {
-    "message": "Enable Keep Tone to change duration while keeping the original musical pitch. Leave it off to let pitch rise or fall with speed. The option is disabled when the browser cannot preserve pitch."
+    "message": "Activá Mantener tono para cambiar la duración conservando el tono musical original. Dejalo desactivado para que el tono suba o baje con la velocidad. La opción se deshabilita si el navegador no puede preservar el tono."
   },
   "help_speed_bypass_title": {
-    "message": "Temporary bypass"
+    "message": "Bypass temporal"
   },
   "help_speed_bypass": {
-    "message": "The single bypass icon temporarily disables the loop and plays at 1x without losing the selected range, speed, or Keep Tone setting. The logo turns gray while bypass is active; press it again to restore everything."
+    "message": "El único bypass desactiva temporalmente el loop y reproduce a 1x sin perder el rango, la velocidad ni Keep Tone. El logo se pone gris mientras está activo; presionalo otra vez para restaurar todo."
   },
   "help_speed_memory_title": {
-    "message": "Remembered and kept active"
+    "message": "Recordado y siempre activo"
   },
   "help_speed_memory": {
-    "message": "Your selected speed and Keep Tone choice are stored locally, restored on later visits, and applied to the current player and newly loaded SoundCloud audio."
+    "message": "La velocidad y la opción Mantener tono se guardan localmente, se recuperan en visitas posteriores y se aplican al reproductor actual y al audio nuevo que cargue SoundCloud."
   },
   "help_speed_looper_effect_title": {
-    "message": "Downloads and Looper"
+    "message": "Descargas y Looper"
   },
   "help_speed_looper_effect": {
-    "message": "Full-track downloads from the white panel button and A-B WAV exports use the effective speed. Keep Tone preserves pitch; with it off, duration and pitch change. Bypass exports at the normal 1x rate."
+    "message": "Las descargas completas del botón blanco del panel y las exportaciones WAV A-B usan la velocidad efectiva. Keep Tone conserva el tono; sin esa opción cambian duración y tono. Con bypass se exporta a 1x."
   },
   "help_speed_close_title": {
-    "message": "Close and troubleshoot"
+    "message": "Cerrar y solucionar problemas"
   },
   "help_speed_close": {
-    "message": "Click outside the panel or press Escape to close it. If playback or saving a preference fails, the panel shows a message; reload SoundCloud and try again."
+    "message": "Hacé clic fuera del panel o presioná Escape para cerrarlo. Si falla la reproducción o el guardado de una preferencia, el panel muestra un mensaje; recargá SoundCloud e intentá otra vez."
   },
   "help_support_title": {
-    "message": "Support and reviews"
+    "message": "Soporte y reseñas"
   },
   "contact": {
-    "message": "Contact"
+    "message": "Contacto"
   },
   "help_support": {
-    "message": "Need help or want to share feedback? Use the links below."
+    "message": "¿Necesitás ayuda o querés dejar feedback? Usá los enlaces de abajo."
   },
   "message_on_soundcloud": {
-    "message": "Message me on SC"
+    "message": "Escribime por SC"
   },
   "made_with": {
-    "message": "Made with"
+    "message": "Hecho con"
   },
   "by": {
-    "message": "by"
+    "message": "por"
   },
   "sctd_web": {
     "message": "SCTD Web"
   },
   "open_soundcloud": {
-    "message": "Open SoundCloud"
+    "message": "Abrir SoundCloud"
   },
   "write_review": {
-    "message": "Write a Chrome Web Store review"
+    "message": "Escribir una reseña en Chrome Web Store"
   },
   "support_email": {
-    "message": "Email support"
+    "message": "Enviar email a soporte"
   },
   "inline_downloading": {
-    "message": "Downloading…"
+    "message": "Descargando…"
   },
   "inline_preparing": {
-    "message": "Preparing download…"
+    "message": "Preparando descarga…"
   },
   "inline_loading_selector": {
-    "message": "Loading track selector…"
+    "message": "Cargando selector de tracks…"
   },
   "inline_opening_selector": {
-    "message": "Opening selector…"
+    "message": "Abriendo selector…"
   },
   "inline_selector_opened": {
-    "message": "Selector opened"
+    "message": "Selector abierto"
   },
   "inline_download_started": {
-    "message": "Download started!"
+    "message": "¡Descarga iniciada!"
   },
   "inline_downloaded": {
-    "message": "Downloaded!"
+    "message": "¡Descargado!"
   },
   "inline_download_tracks": {
-    "message": "Download tracks"
+    "message": "Descargar tracks"
   },
   "inline_download_playlist": {
-    "message": "Download playlist"
+    "message": "Descargar playlist"
   },
   "inline_select_user_tracks": {
-    "message": "Select user tracks"
+    "message": "Elegir tracks del usuario"
   },
   "inline_current_track": {
-    "message": "Download current track"
+    "message": "Descargar track actual"
   },
   "inline_current_downloading": {
-    "message": "Downloading current track…"
+    "message": "Descargando track actual…"
   },
   "inline_current_downloaded": {
-    "message": "Current track downloaded"
+    "message": "Track actual descargado"
   },
   "inline_no_track": {
-    "message": "No downloadable track is playing"
+    "message": "No se está reproduciendo ningún track descargable"
   },
   "inline_download_failed": {
-    "message": "Could not download the current track"
+    "message": "No se pudo descargar el track actual"
   },
   "looper_enable": {
-    "message": "Enable A–B loop"
+    "message": "Activar loop A–B"
   },
   "looper_disable": {
-    "message": "Disable loop"
+    "message": "Desactivar loop"
   },
   "looper_play_track": {
-    "message": "Play or load this track to enable looping"
+    "message": "Reproducí o cargá este track para activar el loop"
   },
   "looper_download": {
-    "message": "Download loop"
+    "message": "Descargar loop"
   },
   "looper_preparing": {
-    "message": "Preparing loop…"
+    "message": "Preparando loop…"
   },
   "looper_downloaded": {
-    "message": "Loop downloaded"
+    "message": "Loop descargado"
   },
   "looper_download_failed": {
-    "message": "Couldn't download the loop. Retry"
+    "message": "No se pudo descargar el loop. Reintentá"
   },
   "looper_move_selection": {
-    "message": "Move the entire loop selection"
+    "message": "Mover toda la selección del loop"
   },
   "looper_start": {
-    "message": "Loop start A"
+    "message": "Inicio del loop A"
   },
   "looper_end": {
-    "message": "Loop end B"
+    "message": "Final del loop B"
   },
   "looper_range": {
-    "message": "$1 to $2",
+    "message": "$1 a $2",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -399,19 +399,19 @@
     }
   },
   "track": {
-    "message": "Track"
+    "message": "Pista"
   },
   "folder": {
-    "message": "Folder"
+    "message": "Carpeta"
   },
   "background_download": {
-    "message": "Background download"
+    "message": "Descarga en segundo plano"
   },
   "paused": {
-    "message": "Paused"
+    "message": "En pausa"
   },
   "downloading": {
-    "message": "Downloading"
+    "message": "Descargando"
   },
   "job_progress": {
     "message": "$1: $2/$3",
@@ -428,7 +428,7 @@
     }
   },
   "saved_file_to": {
-    "message": "Saved $1 to $2",
+    "message": "Se guardó $1 en $2",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -439,7 +439,7 @@
     }
   },
   "saved_tracks_to": {
-    "message": "Saved $1/$2 tracks to $3",
+    "message": "Se guardaron $1/$2 tracks en $3",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -453,7 +453,7 @@
     }
   },
   "cancelled_after_saving": {
-    "message": "Cancelled after saving $1/$2 tracks.",
+    "message": "Se canceló después de guardar $1/$2 tracks.",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -464,7 +464,7 @@
     }
   },
   "tracks_failed": {
-    "message": "$1 track(s) failed.",
+    "message": "Fallaron $1 track(s).",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -472,10 +472,10 @@
     }
   },
   "unknown_track": {
-    "message": "Unknown track"
+    "message": "Track desconocido"
   },
   "inline_collection_confirm": {
-    "message": "Download $1 tracks as individual files in your Downloads folder? You can close this tab and the download will continue in the background. Or open the popup and select specific tracks. Continue?",
+    "message": "¿Descargar $1 tracks como archivos individuales en la carpeta Descargas? Podés cerrar esta pestaña y la descarga continuará. También podés abrir el popup y elegir tracks específicos. ¿Continuar?",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -483,31 +483,31 @@
     }
   },
   "open_popup_failed": {
-    "message": "Couldn't open the extension popup."
+    "message": "No se pudo abrir el popup de la extensión."
   },
   "open_extension_icon": {
-    "message": "Open the extension icon"
+    "message": "Abrí el ícono de la extensión"
   },
   "resolve_current_track_timeout": {
-    "message": "Timed out while resolving the current track."
+    "message": "Se agotó el tiempo para resolver el track actual."
   },
   "current_track_no_source": {
-    "message": "The current track has no downloadable source."
+    "message": "El track actual no tiene una fuente descargable."
   },
   "download_timeout": {
-    "message": "The download did not finish in time."
+    "message": "La descarga no terminó a tiempo."
   },
   "download_failed": {
-    "message": "Download failed."
+    "message": "La descarga falló."
   },
   "looper_identify_track_failed": {
-    "message": "Couldn't identify the active track."
+    "message": "No se pudo identificar el track activo."
   },
   "cancel_background_download": {
-    "message": "Cancel the background download? Files already saved will be kept."
+    "message": "¿Cancelar la descarga en segundo plano? Se conservarán los archivos ya guardados."
   },
   "loading_tracks_progress": {
-    "message": "Loading tracks $1/$2…",
+    "message": "Cargando tracks $1/$2…",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -518,7 +518,7 @@
     }
   },
   "saving_to_folder": {
-    "message": "Downloads will be saved to $1",
+    "message": "Las descargas se guardarán en $1",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -526,10 +526,10 @@
     }
   },
   "saving_to_downloads": {
-    "message": "Downloads will be saved to the browser Downloads folder"
+    "message": "Las descargas se guardarán en la carpeta Descargas del navegador"
   },
   "choose_folder_failed": {
-    "message": "Couldn't select folder: $1",
+    "message": "No se pudo elegir la carpeta: $1",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -537,7 +537,7 @@
     }
   },
   "restore_downloads_failed": {
-    "message": "Couldn't restore the Downloads folder: $1",
+    "message": "No se pudo restaurar la carpeta Descargas: $1",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -545,7 +545,7 @@
     }
   },
   "change_download_folder": {
-    "message": "Download to $1. Click to change folder.",
+    "message": "Descargar en $1. Hacé clic para cambiar la carpeta.",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -553,35 +553,35 @@
     }
   },
   "reload_if_download_fails": {
-    "message": "Tip: reload SoundCloud if download fails without login."
+    "message": "Tip: recargá SoundCloud si la descarga falla sin iniciar sesión."
   },
   "untitled_playlist": {
-    "message": "Untitled playlist"
+    "message": "Playlist sin título"
   },
   "unknown_artist": {
-    "message": "Unknown artist"
+    "message": "Artista desconocido"
   },
   "collection_download_hint": {
-    "message": "Saves individual files to the chosen folder. You can close this popup while downloading."
+    "message": "Guarda archivos individuales en la carpeta elegida.\nPodés cerrar este popup mientras descarga."
   },
   "collection_download_all_hint": {
-    "message": "Download all available tracks, including later pages. You can close this popup while downloading."
+    "message": "Descarga todos los tracks disponibles, incluidas las páginas siguientes. Podés cerrar este popup mientras descarga."
   },
   "collection_download_count_hint": {
-    "message": "Download $1 of about $2 tracks to the chosen folder."
+    "message": "Descargar $1 de aproximadamente $2 tracks en la carpeta elegida."
   },
   "collection_invalid_limit": {
-    "message": "Choose a valid download amount and try again."
+    "message": "Elegí una cantidad válida e intentá de nuevo."
   },
-  "auth_required_detail": { "message": "Sign in to SoundCloud, then retry to load your likes." },
-  "rate_limited_detail": { "message": "SoundCloud is limiting requests. Wait a moment, then retry." },
-  "network_timeout_detail": { "message": "SoundCloud took too long to respond. Check your connection and retry." },
-  "network_error_detail": { "message": "Could not reach SoundCloud. Check your connection and retry." },
+  "auth_required_detail": { "message": "Iniciá sesión en SoundCloud y volvé a intentar cargar tus likes." },
+  "rate_limited_detail": { "message": "SoundCloud está limitando las solicitudes. Esperá un momento y reintentá." },
+  "network_timeout_detail": { "message": "SoundCloud tardó demasiado en responder. Revisá tu conexión y reintentá." },
+  "network_error_detail": { "message": "No se pudo conectar con SoundCloud. Revisá tu conexión y reintentá." },
   "load_selector_failed": {
-    "message": "Couldn't load the selector. Choose an amount or try Select again."
+    "message": "No se pudo cargar el selector. Elegí una cantidad o probá Seleccionar otra vez."
   },
   "load_collection_confirm": {
-    "message": "This collection has $1 tracks. Loading the full list may take a while. Continue?",
+    "message": "Esta colección tiene $1 tracks. Cargar la lista completa puede tardar. ¿Continuar?",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -589,13 +589,13 @@
     }
   },
   "loading_track_list": {
-    "message": "Loading track list…"
+    "message": "Cargando lista de tracks…"
   },
   "load_track_list_failed": {
-    "message": "Couldn't load the track list."
+    "message": "No se pudo cargar la lista de tracks."
   },
   "load_tracks_failed": {
-    "message": "Couldn't load tracks: $1",
+    "message": "No se pudieron cargar los tracks: $1",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -603,10 +603,10 @@
     }
   },
   "select_at_least_one_track": {
-    "message": "Select at least one track to download."
+    "message": "Elegí al menos un track para descargar."
   },
   "download_selected_confirm": {
-    "message": "Download $1 selected tracks as individual files to $2? You can close this popup and the download will continue. Continue?",
+    "message": "¿Descargar $1 tracks seleccionados como archivos individuales en $2? Podés cerrar este popup y la descarga continuará. ¿Continuar?",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -617,7 +617,7 @@
     }
   },
   "preparing_selected_tracks": {
-    "message": "Preparing $1 selected tracks…",
+    "message": "Preparando $1 tracks seleccionados…",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -625,10 +625,10 @@
     }
   },
   "no_downloadable_tracks": {
-    "message": "No downloadable tracks were found."
+    "message": "No se encontraron tracks descargables."
   },
   "download_failed_detail": {
-    "message": "Download failed: $1",
+    "message": "La descarga falló: $1",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -636,7 +636,7 @@
     }
   },
   "download_collection_confirm": {
-    "message": "Download $1 tracks as individual files to $2? You can close this popup and the download will continue. Or open the popup and select specific tracks. Continue?",
+    "message": "¿Descargar $1 tracks como archivos individuales en $2? Podés cerrar este popup y la descarga continuará. También podés abrirlo y elegir tracks específicos. ¿Continuar?",
     "placeholders": {
       "1": {
         "content": "$1"
@@ -647,168 +647,168 @@
     }
   },
   "fetching_track_list": {
-    "message": "Fetching track list…"
+    "message": "Buscando lista de tracks…"
   },
   "no_downloadable_stream": {
-    "message": "Error #33: No downloadable stream was found for this track."
+    "message": "Error #33: no se encontró un stream descargable para este track."
   },
   "resolving_stream": {
-    "message": "Resolving stream…"
+    "message": "Resolviendo stream…"
   },
   "select_tracks_to_download": {
-    "message": "Select tracks to download"
+    "message": "Elegí tracks para descargar"
   },
   "soundcloud_tab_not_found": {
-    "message": "Couldn't identify the SoundCloud tab."
+    "message": "No se pudo identificar la pestaña de SoundCloud."
   },
   "resolve_selected_loop_failed": {
-    "message": "Couldn't resolve the selected loop track."
+    "message": "No se pudo resolver el track seleccionado para el loop."
   },
   "open_popup_unsupported": {
-    "message": "This browser cannot open the extension popup automatically."
+    "message": "Este navegador no puede abrir automáticamente el popup de la extensión."
   },
   "selected_loop_no_source": {
-    "message": "The selected loop track has no downloadable source."
+    "message": "El track elegido para el loop no tiene una fuente descargable."
   },
   "no_matching_tracks": {
-    "message": "No matching tracks were found for the current selection."
+    "message": "No se encontraron tracks que coincidan con la selección actual."
   },
   "open_extension_for_selection": {
-    "message": "Open the extension to select user tracks"
+    "message": "Abrí la extensión para elegir tracks del usuario"
   },
   "looper_entry": {
-    "message": "Looper guide"
+    "message": "Guía de Looper"
   },
   "looper_title": {
-    "message": "How to use Looper"
+    "message": "Cómo usar Looper"
   },
   "looper_intro": {
-    "message": "Try Player Tools for 7 days with up to 20 new A–B loops, all FX, EQ, Likes Explorer and sampler loop/piano features. Reverb and Echo stay free. WAV and processed exports require Pro."
+    "message": "Probá Player Tools durante 7 días con hasta 20 loops A–B, todos los FX, EQ, Likes Explorer y las funciones de loops/piano del sampler. Reverb y Echo siguen gratis. WAV y exportaciones procesadas requieren Pro."
   },
   "looper_step_open_title": {
-    "message": "Open an individual track"
+    "message": "Abrí un track individual"
   },
   "looper_step_open": {
-    "message": "Open the SoundCloud track you want to work with, then wait for it to load or start playing it."
+    "message": "Abrí el track de SoundCloud que querés usar y esperá que cargue o empezá a reproducirlo."
   },
   "looper_step_enable_title": {
-    "message": "Turn on the loop"
+    "message": "Activá el loop"
   },
   "looper_step_enable": {
-    "message": "Open the speedometer panel and use Set A and Set B at the live playhead, drag either handle on the Loop slider, or press the loop button before More actions on a compatible waveform."
+    "message": "Abrí el panel del velocímetro y usá Set A y Set B en la posición actual, mové los extremos del slider Loop o presioná el botón de loop antes de Más acciones en una waveform compatible."
   },
   "looper_step_range_title": {
-    "message": "Set A and B"
+    "message": "Marcá A y B"
   },
   "looper_step_range": {
-    "message": "The panel and waveform edit the same A–B range in real time. The panel shows milliseconds for short tracks and hours when needed; waveform arrow keys move a marker 100 ms, or 1 second with Shift."
+    "message": "El panel y la waveform editan el mismo rango A–B en tiempo real. El panel muestra milisegundos o, cuando hace falta, horas; en la waveform las flechas mueven 100 ms y Mayús + flechas 1 segundo."
   },
   "looper_step_zoom_title": {
-    "message": "Zoom in for precise points"
+    "message": "Hacé zoom para marcar con precisión"
   },
   "looper_step_zoom": {
-    "message": "Scroll up over the waveform to zoom toward the cursor, then scroll down to zoom back out. It makes small A–B adjustments much easier."
+    "message": "Desplazate hacia arriba sobre la forma de onda para acercarte al cursor y hacia abajo para alejarte. Así es mucho más fácil ajustar A–B con precisión."
   },
   "looper_step_save_title": {
-    "message": "Save the selected range"
+    "message": "Guardá el rango elegido"
   },
   "looper_step_save": {
-    "message": "Choose Download loop to save the A–B range as a WAV file."
+    "message": "Elegí Descargar loop para guardar el rango A–B como un archivo WAV."
   },
   "looper_tip": {
-    "message": "The loop is temporary and follows the current player track across SoundCloud navigation. Changing the playing track removes it. The shared bypass pauses both loop and playback effects without forgetting their settings."
+    "message": "El loop es temporal y sigue al track actual durante la navegación. Cambiar el track que suena lo elimina. El bypass compartido pausa el loop y los efectos sin olvidar sus ajustes."
   },
   "looper_done": {
-    "message": "Back to download"
+    "message": "Volver a descargar"
   },
   "player_tools_trial_days_remaining": {
-    "message": "$1 days left in your free trial"
+    "message": "Quedan $1 dias de tu prueba gratis"
   },
   "player_tools_trial_last_day": {
-    "message": "Last day of your Player Tools trial"
+    "message": "Ultimo dia de tu prueba de Player Tools"
   },
-  "player_tools_trial_expired": { "message": "Your trial ended. Reverb and Echo remain free; premium effects, EQ, Likes Explorer and sampler loop/piano features require Pro." },
-  "player_tools_trial_unavailable": { "message": "Your free trial could not be confirmed. Please retry." },
-  "player_tools_get_pro": { "message": "Get Pro" },
-  "player_tools_try": { "message": "Try tools" },
+  "player_tools_trial_expired": { "message": "Tu prueba terminó. Reverb y Echo siguen gratis; los efectos premium, EQ, Likes Explorer y las funciones de loops/piano del sampler requieren Pro." },
+  "player_tools_trial_unavailable": { "message": "No se pudo confirmar tu prueba gratuita. Volvé a intentarlo." },
+  "player_tools_get_pro": { "message": "Obtener Pro" },
+  "player_tools_try": { "message": "Probar herramientas" },
   "player_tools_pro_title": { "message": "Player Tools Pro" },
-  "player_tools_pro_copy": { "message": "One payment unlocks tempo, Keep Tone, loops, effects and Pro exports for this installation." },
-  "player_tools_lifetime": { "message": "lifetime" },
-  "player_tools_buy": { "message": "Buy securely" },
-  "player_tools_restore_help": { "message": "Already purchased? Enter the email and license key from your receipt." },
-  "player_tools_license_key": { "message": "License key" },
-  "player_tools_restore": { "message": "Activate / restore" },
-  "player_tools_pro_active": { "message": "Pro is active on this installation." },
-  "player_tools_checkout_opening": { "message": "Opening secure checkout…" },
-  "player_tools_checkout_pending": { "message": "Finish payment in the new tab. Pro activates automatically when you return to SoundCloud." },
-  "player_tools_checkout_error": { "message": "Checkout is temporarily unavailable." },
-  "player_tools_restore_required": { "message": "Enter both your purchase email and license key." },
-  "player_tools_restore_working": { "message": "Checking your purchase…" },
-  "player_tools_restore_success": { "message": "Pro activated. Your Player Tools controls are unlocked." },
-  "player_tools_restore_error": { "message": "The purchase could not be restored. Check the details or contact support." },
-  "email": { "message": "Email" },
-  "close": { "message": "Close" },
+  "player_tools_pro_copy": { "message": "Un solo pago desbloquea tempo, Keep Tone, loops, efectos y exportaciones Pro en esta instalacion." },
+  "player_tools_lifetime": { "message": "de por vida" },
+  "player_tools_buy": { "message": "Comprar de forma segura" },
+  "player_tools_restore_help": { "message": "Ya compraste? Ingresa el email y la clave de licencia de tu recibo." },
+  "player_tools_license_key": { "message": "Clave de licencia" },
+  "player_tools_restore": { "message": "Activar / recuperar" },
+  "player_tools_pro_active": { "message": "Pro esta activo en esta instalacion." },
+  "player_tools_checkout_opening": { "message": "Abriendo el pago seguro…" },
+  "player_tools_checkout_pending": { "message": "Terminá el pago en la pestaña nueva. Pro se activa automáticamente al volver a SoundCloud." },
+  "player_tools_checkout_error": { "message": "El pago no esta disponible temporalmente." },
+  "player_tools_restore_required": { "message": "Ingresa el email de compra y la clave de licencia." },
+  "player_tools_restore_working": { "message": "Comprobando tu compra…" },
+  "player_tools_restore_success": { "message": "Pro activado. Tus controles de Player Tools ya estan desbloqueados." },
+  "player_tools_restore_error": { "message": "No se pudo recuperar la compra. Revisa los datos o contacta a soporte." },
+  "email": { "message": "Correo electrónico" },
+  "close": { "message": "Cerrar" },
   "sampler_slice": {
-    "message": "Slice selected loop into 8 pads"
+    "message": "Dividir el loop seleccionado en 8 pads"
   },
   "sampler_title": {
-    "message": "Replace all eight pads?"
+    "message": "¿Reemplazar los ocho pads?"
   },
   "sampler_confirm": {
-    "message": "The selected A–B loop will be split into eight equal slices. This replaces all eight sounds, including custom samples. Your assigned keys will stay the same."
+    "message": "El loop seleccionado entre A y B se dividirá en ocho partes iguales. Se reemplazarán los ocho sonidos, incluidos los samples personalizados. Se conservarán tus teclas asignadas."
   },
   "sampler_replace": {
-    "message": "Replace with 8 slices"
+    "message": "Reemplazar con 8 cortes"
   },
   "sampler_cancel": {
-    "message": "Cancel"
+    "message": "Cancelar"
   },
   "sampler_preparing": {
-    "message": "Preparing 8 slices… Press Escape to cancel."
+    "message": "Preparando 8 cortes… Escape para cancelar."
   },
   "sampler_stop": {
-    "message": "Cancel slice preparation"
+    "message": "Cancelar la preparación de cortes"
   },
   "sampler_done": {
-    "message": "8 slices saved. Play them with your pad keys."
+    "message": "8 cortes guardados. Tocalos con las teclas de tus pads."
   },
   "sampler_cancelled": {
-    "message": "Slice preparation cancelled. Pads were not changed."
+    "message": "Preparación cancelada. Los pads no cambiaron."
   },
   "sampler_changed": {
-    "message": "The loop or its settings changed. Slice preparation cancelled."
+    "message": "Cambió el loop o su configuración. Preparación cancelada."
   },
   "sampler_failed": {
-    "message": "Could not save the eight slices. Please try again."
+    "message": "No se pudieron guardar los ocho cortes. Volvé a intentarlo."
   },
   "sampler_tooLong": {
-    "message": "Select a loop of up to 30 seconds at the current speed."
+    "message": "Seleccioná un loop de hasta 30 segundos a la velocidad actual."
   },
   "sampler_locked": {
-    "message": "Player Tools Pro required"
+    "message": "Requiere Player Tools Pro"
   },
   "sampler_selectPad": {
-    "message": "Choose one of the eight pads. Press Escape to cancel."
+    "message": "Elegí uno de los ocho pads. Escape para cancelar."
   },
   "help_player_tools_title": {
     "message": "Player Tools"
   },
   "help_likes_intro": {
-    "message": "Explore your SoundCloud likes in Likes Explorer."
+    "message": "Explorá tus likes de SoundCloud con Likes Explorer."
   },
   "help_likes_open_title": {
-    "message": "Open Likes Explorer"
+    "message": "Abrir Likes Explorer"
   },
   "help_likes_open": {
-    "message": "Open your Likes page on SoundCloud and use Likes Explorer to browse your collection. You can also open it directly with the button below."
+    "message": "Abrí tu página de Likes en SoundCloud y usá Likes Explorer para explorar tu colección. También podés abrirlo directamente con el botón de abajo."
   },
   "help_permitted_title": {
-    "message": "Publisher-enabled downloads"
+    "message": "Descargas habilitadas por el publisher"
   },
   "help_permitted_body": {
-    "message": "Use the download buttons on SoundCloud. Downloads are available only for tracks whose publisher has enabled downloading. If permission cannot be confirmed, the download will not start."
+    "message": "Usá los botones de descarga en SoundCloud. Solo se pueden descargar tracks cuyo publisher haya habilitado la descarga. Si no se puede confirmar el permiso, la descarga no se inicia."
   },
   "help_player_tools_intro": {
-    "message": "Start playing a track on SoundCloud, then open the speedometer beside the player controls. Adjust playback speed and Keep Tone, or use Looper to repeat an A–B range. The controls work directly on SoundCloud."
+    "message": "Reproducí un track en SoundCloud y abrí el velocímetro junto a los controles del player. Ajustá la velocidad y Keep Tone, o usá Looper para repetir un rango A–B. Los controles se usan directamente en SoundCloud."
   }
 }
