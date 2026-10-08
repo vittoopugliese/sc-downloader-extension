@@ -29,7 +29,7 @@ assert(
 );
 assert(
   /id="looperPanel"[^>]*role="tabpanel"/.test(popup) &&
-    /class="looper-tutorial"/.test(popup) &&
+    /class="looper-tutorial\b/.test(popup) &&
     !/looperPurchaseBtn|looperCheckoutNote|USD 2\.99|LOOPER PRO/.test(popup),
   "The popup must provide a free, localized Looper tutorial without payment UI."
 );

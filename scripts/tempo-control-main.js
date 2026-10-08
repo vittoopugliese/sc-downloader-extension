@@ -52,6 +52,8 @@
   const LOOP_EXPORT_EVENT = "scdl:download-loop";
   const LOOP_EXPORT_RESULT_EVENT = "scdl:download-loop-result";
   const LOOP_EXPORT_ATTRIBUTE = "data-scdl-loop-export-request";
+  // The Player Tools store build rewrites this to true: no full-track downloads, no SCTD branding.
+  const TOOLS_EDITION = false;
   const TRACK_EXPORT_EVENT = "scdl:download-current-track";
   const TRACK_EXPORT_RESULT_EVENT = "scdl:download-current-track-result";
   const TRACK_EXPORT_ATTRIBUTE = "data-scdl-track-export-request";
@@ -3087,7 +3089,7 @@
   }
 
   async function downloadCurrentTrack() {
-    if (trackDownloadPending) return;
+    if (TOOLS_EDITION || trackDownloadPending) return;
     const id = `track-export-${Date.now()}`;
     trackDownloadPending = true;
     showDownloadStatus(pt("Preparing track download…"));
@@ -3684,6 +3686,7 @@
         .panel-tool:hover { color: #fff; border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.14); }
         .panel-tool:focus-visible { border-color: rgba(255,85,0,.65); }
         .panel-tool:disabled { opacity: .48; cursor: wait; }
+        .panel-tool.is-unavailable:disabled { cursor: not-allowed; }
         .panel-tool[aria-pressed="true"] { color: #ff6a1a; border-color: #ff6a1a; }
         .panel-tool svg { display: block; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
         .panel-tool .cross-icon { display:block; width:12px; height:12px; }
@@ -3757,11 +3760,11 @@
         <div class="brand">
           <img class="brand-logo" width="42" height="42" alt="" draggable="false" hidden />
           <div class="brand-copy">
-            <div class="brand-title-line"><button class="brand-name" type="button" aria-label="Open the Looper guide">SCTD Player Tools</button><span class="free-badge" aria-label="Player Tools Free plan"><img class="plan-badge-icon" alt="" aria-hidden="true" /><span class="plan-badge-label">FREE</span></span></div>
+            <div class="brand-title-line"><button class="brand-name" type="button" aria-label="Open the Looper guide">${TOOLS_EDITION ? "Player Tools" : "SCTD Player Tools"}</button><span class="free-badge" aria-label="Player Tools Free plan"><img class="plan-badge-icon" alt="" aria-hidden="true" /><span class="plan-badge-label">FREE</span></span></div>
           </div>
         </div>
         <div class="panel-tools" role="group" aria-label="Panel options">
-          <button class="panel-tool download-track-button" type="button" aria-label="Download current playing" title="Download current playing">
+          <button class="panel-tool download-track-button${TOOLS_EDITION ? " is-unavailable" : ""}" type="button" aria-label="${TOOLS_EDITION ? "Full-track downloads are not available in this version" : "Download current playing"}" title="${TOOLS_EDITION ? "Full-track downloads are not available in this version" : "Download current playing"}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
           </button>
           <button class="panel-tool tooltips-button" type="button" aria-label="Tooltips" aria-pressed="true" data-scdl-tooltip="Toggle tooltips">
@@ -4541,7 +4544,7 @@
         : pt("Keep panel open when clicking outside")
     );
     ui.detachButton.title = ui.detachButton.getAttribute("aria-label");
-    ui.downloadTrackButton.disabled = trackDownloadPending;
+    ui.downloadTrackButton.disabled = TOOLS_EDITION || trackDownloadPending;
     const effectsState = effectsController?.snapshot();
     ui.clearRate.hidden = state.rate === DEFAULTS.rate &&
       state.preservePitch === DEFAULTS.preservePitch && !state.bypassed &&

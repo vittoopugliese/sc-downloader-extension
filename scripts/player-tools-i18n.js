@@ -87,6 +87,7 @@ Playback speed and loop¦Velocidad de reproducción y loop¦Wiedergabetempo und 
 Open the Looper guide¦Abrir la guía del looper¦Looper-Anleitung öffnen¦Abrir guia do looper¦Открыть руководство по луперу
 Panel options¦Opciones del panel¦Paneloptionen¦Opções do painel¦Параметры панели
 Download current playing¦Descargar la pista actual¦Aktuellen Titel herunterladen¦Baixar faixa atual¦Скачать текущий трек
+Full-track downloads are not available in this version¦Las descargas de tracks completos no están disponibles en esta versión¦Downloads ganzer Titel sind in dieser Version nicht verfügbar¦Downloads de faixas completas não estão disponíveis nesta versão¦Скачивание полных треков недоступно в этой версии
 Tooltips¦Ayudas¦Tooltips¦Dicas¦Подсказки
 Toggle tooltips¦Activar/desactivar ayudas¦Tooltips ein-/ausschalten¦Ativar/desativar dicas¦Включить/выключить подсказки
 Reset playback, Loop, FX and EQ. Samples are kept.¦Restablecer reproducción, loop, FX y EQ. Las muestras se conservan.¦Wiedergabe, Loop, FX und EQ zurücksetzen. Samples bleiben erhalten.¦Redefinir reprodução, loop, FX e EQ. As amostras são mantidas.¦Сбросить воспроизведение, луп, FX и EQ. Сэмплы сохраняются.

@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "minimum_chrome_version": "116",
-  "name": "SoundCloud Track Player tools and Likes Explorer - Original SoundCloud Track Donwloader",
+  "name": "SoundCloud Player Tools & Likes Explorer",
+  "description": "Speed, loops, sampler pads, FX, EQ, recorder and on-device stem separation for SoundCloud, plus a private Likes Explorer.",
   "default_locale": "en",
-  "version": "2026.9.28",
+  "version": "2026.10.7",
   "permissions": ["cookies", "tabs", "downloads", "offscreen", "notifications", "storage", "alarms"],
   "host_permissions": [
     "https://soundcloud.com/*",
@@ -14,7 +15,7 @@
     "https://playback.media-streaming.soundcloud.cloud/*"
     ,"https://huggingface.co/*"
     ,"https://*.hf.co/*"
-    ,"https://sctd-test.vpugliese.online/*"
+    ,"https://sctd.vpugliese.online/*"
   ],
   "background": {
     "service_worker": "scripts/background.js"

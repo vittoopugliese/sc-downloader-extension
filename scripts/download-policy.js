@@ -2,7 +2,10 @@
 (function (root) {
   "use strict";
   function create({ request = fetch, apiBaseUrl, storage, timeoutMs = 5000,
-    cacheTtlMs = 5 * 60 * 1000, restrictedCacheTtlMs = 5 * 60 * 1000, now = Date.now }) {
+    cacheTtlMs = 5 * 60 * 1000, restrictedCacheTtlMs = 5 * 60 * 1000, now = Date.now,
+    fixedRestricted = root.SCReleaseConfig?.DOWNLOADER_ENABLED === false }) {
+    // Builds without the downloader never consult the remote policy.
+    if (fixedRestricted) return { getPolicy: () => Promise.resolve({ allDownloadsActivated: false }) };
     const storageKey = `scdl.downloadPolicy.v1:${apiBaseUrl}`;
     let pending = null;
     let cached = null;

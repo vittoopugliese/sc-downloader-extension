@@ -236,7 +236,7 @@ function trapPanelFocus(event, panel) {
 
 document.addEventListener("DOMContentLoaded", async () => {
   SCDLI18n.localizeDocument();
-  helpOnly = await loadDownloadPolicyNotice();
+  helpOnly = globalThis.SCReleaseConfig?.DOWNLOADER_ENABLED === false || await loadDownloadPolicyNotice();
   document.body.classList.toggle("help-only", helpOnly);
   helpBackBtn.hidden = helpOnly;
   if (helpOnly) {
@@ -251,6 +251,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   helpBtn.addEventListener("click", openHelp);
   helpBackBtn.addEventListener("click", closeHelp);
+  document.getElementById("helpVersion").textContent = `v${chrome.runtime.getManifest().version}`;
+  document.getElementById("openStemsBtn").addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("stems.html") }).then(() => window.close(), () => {});
+  });
   const helpTabs = [...helpPanel.querySelectorAll('[role="tab"]')];
   helpTabs.forEach((tab, index) => {
     tab.addEventListener("click", () => selectHelpTab(tab));

@@ -1406,6 +1406,126 @@
         body.help-only .permitted-downloads-guide { display: block; }
         .help-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .help-tabs button { white-space: normal; padding: 0 5px; }
+        /* Help home: the Player Tools front door, styled like the Stem Extractor header. */
+        body #helpPanel { padding: 10px; background: #141414; }
+        body #helpPanel.is-visible { display: flex; flex-direction: column; gap: 8px; }
+        .help-hero {
+            position: relative;
+            flex: 0 0 auto;
+            padding: 12px 13px 13px;
+            border: 1px solid #42403d;
+            border-radius: 12px;
+            overflow: hidden;
+            background: radial-gradient(ellipse at 12% 0, rgba(255, 112, 32, 0.1), transparent 65%), #202020;
+        }
+        .help-hero::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto;
+            height: 2px;
+            background: linear-gradient(90deg, #ff793e 0 25%, #a693df 25% 50%, #8abfaa 50% 75%, #d8bd78 75%);
+            opacity: 0.85;
+        }
+        .help-hero-topline { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+        .help-brand { display: flex; align-items: center; gap: 7px; color: #f2f2f2; font-size: 10px; font-weight: 800; letter-spacing: 1.4px; }
+        .help-brand img { object-fit: contain; }
+        .help-edition { padding: 2px 6px; border: 1px solid #4a4540; border-radius: 4px; color: #c4c0ba; font-size: 8px; letter-spacing: 1.2px; }
+        .help-version { margin-left: auto; color: #8f8b86; font: 9px ui-monospace, monospace; }
+        #helpPanel #helpTitle { margin: 11px 0 3px; color: #f2f2f2; font-size: 21px; line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; }
+        .help-title-dot { color: var(--accent); }
+        .help-tagline { margin: 0; color: #aaaaaa; font-size: 11.5px; line-height: 1.45; }
+        .help-chips { display: flex; gap: 5px; margin-top: 10px; }
+        .help-chips span {
+            --channel: #ff793e;
+            flex: 1;
+            padding: 3px 0;
+            border: 1px solid color-mix(in srgb, var(--channel) 22%, transparent);
+            border-left: 2px solid var(--channel);
+            border-radius: 3px;
+            background: color-mix(in srgb, var(--channel) 7%, #1b1b1b);
+            color: var(--channel);
+            font: 9px ui-monospace, monospace;
+            letter-spacing: 0.04em;
+            text-align: center;
+        }
+        .help-chips [data-channel="loop"] { --channel: #a693df; }
+        .help-chips [data-channel="pads"] { --channel: #8abfaa; }
+        .help-chips [data-channel="stems"] { --channel: #d8bd78; }
+        .help-actions { display: flex; gap: 6px; margin-top: 11px; }
+        .help-action {
+            flex: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            min-height: 30px;
+            padding: 0 10px;
+            border: 1px solid #45423e;
+            border-radius: 6px;
+            background: #242321;
+            color: #f2f2f2;
+            font: 600 11px var(--scdl-ui-font);
+            text-decoration: none;
+            cursor: pointer;
+            transition: background-color var(--control-motion), border-color var(--control-motion);
+        }
+        .help-action:hover { background: #35312b; border-color: #897564; }
+        .help-action.is-primary { border-color: #e88751; background: #ed7134; color: #17120f; }
+        .help-action.is-primary:hover { background: #ff8a4e; border-color: #ffb182; }
+        .help-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .help-tabs {
+            display: flex;
+            flex: 0 0 auto;
+            gap: 3px;
+            margin: 0;
+            padding: 3px;
+            border: 1px solid #333333;
+            border-radius: 9px;
+            background: #1b1b1b;
+        }
+        .help-tabs button {
+            flex: 1 1 0;
+            min-width: 0;
+            min-height: 26px;
+            padding: 0 4px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: #aaaaaa;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .help-tabs button:hover { background: #262626; color: #ffffff; }
+        .help-tabs button[aria-selected="true"] { background: var(--accent-soft); color: #ffad80; box-shadow: inset 0 0 0 1px rgba(255, 85, 0, 0.55); }
+        .help-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 2px 4px 0; }
+        .help-feature-panel { --channel: #ff793e; }
+        #looperPanel.help-feature-panel { --channel: #a693df; }
+        #stemsHelp { --channel: #8abfaa; }
+        #likesHelp { --channel: #d8bd78; }
+        #helpPanel .help-lead { margin: 2px 2px 8px; color: #d6d6d6; font-size: 12px; line-height: 1.5; }
+        #helpPanel .help-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: help-step; }
+        #helpPanel .help-grid > .help-section,
+        #helpPanel .help-grid > li {
+            margin: 0;
+            padding: 9px 10px 10px;
+            border: 1px solid #333333;
+            border-left: 2px solid color-mix(in srgb, var(--channel) 70%, transparent);
+            border-radius: 8px;
+            background: #1c1c1c;
+            counter-increment: help-step;
+        }
+        #helpPanel .help-grid h3 { display: flex; align-items: baseline; gap: 6px; margin: 0 0 4px; color: #f2f2f2; font-size: 11.5px; line-height: 1.3; }
+        #helpPanel .help-grid h3::before { content: counter(help-step, decimal-leading-zero); flex: 0 0 auto; color: var(--channel); font: 9px ui-monospace, monospace; }
+        #helpPanel .help-grid p { margin: 0; color: #a9a9a9; font-size: 10.5px; line-height: 1.45; }
+        #helpPanel .help-note { margin: 8px 2px 0; padding: 7px 9px; border: 1px dashed #3a3a3a; border-radius: 7px; color: #9a9a9a; font-size: 10.5px; line-height: 1.45; }
+        #helpPanel .help-likes-link { width: 100%; margin-top: 8px; }
+        html.tools-edition #downloadsTab,
+        html.tools-edition #downloadsHelp,
+        html.tools-edition .help-review-link,
+        html.tools-edition .help-site-credit { display: none !important; }
     </style>
 </head>
 
@@ -1550,13 +1670,27 @@
             </div>
         </section>
         <section id="helpPanel" aria-labelledby="helpTitle" aria-modal="true" role="dialog">
-            <div class="help-header"><button id="helpBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button><h2 id="helpTitle" data-i18n="help_title">How it works</h2></div>
+            <header class="help-hero">
+                <div class="help-hero-topline">
+                    <button id="helpBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button>
+                    <div class="help-brand"><img src="./assets/icons/player-toolkit.png" width="22" height="22" alt="" draggable="false"><span>PLAYER TOOLS</span><span class="help-edition">MINI DAW</span></div>
+                    <span id="helpVersion" class="help-version"></span>
+                </div>
+                <h2 id="helpTitle"><span data-i18n="help_hero_title">Your SoundCloud studio</span><span class="help-title-dot" aria-hidden="true">.</span></h2>
+                <p class="help-tagline" data-i18n="help_hero_tagline">Slow down, loop, sample and split any track, right inside the player.</p>
+                <div class="help-chips" aria-hidden="true"><span data-channel="speed">0.1–4×</span><span data-channel="loop">A–B</span><span data-channel="pads">8 PADS</span><span data-channel="stems">4 STEMS</span></div>
+                <div class="help-actions">
+                    <a class="help-action is-primary" href="https://soundcloud.com/" target="_blank" rel="noopener noreferrer" data-i18n="help_open_soundcloud">Open SoundCloud</a>
+                    <button id="openStemsBtn" title="Stem Extractor" data-i18n-title="help_open_stems" class="help-action" type="button" data-i18n="help_open_stems">Stem Extractor</button>
+                </div>
+            </header>
             <div class="help-tabs" role="tablist" aria-label="Help topics">
-                <button id="speedTab" type="button" role="tab" aria-selected="false" aria-controls="speedHelp" tabindex="-1" data-help-tab="speedHelp" data-i18n="help_player_tools_title" data-i18n-title="help_player_tools_title" title="Speed">Speed</button>
-                <button id="looperTab" type="button" role="tab" aria-selected="false" aria-controls="looperPanel" tabindex="-1" data-help-tab="looperPanel" data-i18n="help_looper_title" title="Looper">Looper</button>
-                <button id="likesHelpTab" title="Likes Explorer" type="button" role="tab" aria-selected="false" aria-controls="likesHelp" tabindex="-1" data-help-tab="likesHelp">Likes Explorer</button>
-                <button id="downloadsTab" type="button" role="tab" aria-selected="true" aria-controls="downloadsHelp" data-help-tab="downloadsHelp" data-i18n="download" data-i18n-title="download" title="Download">Download</button>
-                <button id="supportTab" type="button" role="tab" aria-selected="false" aria-controls="supportHelp" tabindex="-1" data-help-tab="supportHelp" data-i18n="contact" data-i18n-title="contact" title="Contact">Contact</button>
+                <button id="speedTab" title="Player Tools" data-i18n-title="help_player_tools_title" type="button" role="tab" aria-selected="false" aria-controls="speedHelp" tabindex="-1" data-help-tab="speedHelp" data-i18n="help_player_tools_title">Player Tools</button>
+                <button id="looperTab" title="Looper" data-i18n-title="help_looper_title" type="button" role="tab" aria-selected="false" aria-controls="looperPanel" tabindex="-1" data-help-tab="looperPanel" data-i18n="help_looper_title">Looper</button>
+                <button id="stemsHelpTab" title="Stems" data-i18n-title="help_tab_stems" type="button" role="tab" aria-selected="false" aria-controls="stemsHelp" tabindex="-1" data-help-tab="stemsHelp" data-i18n="help_tab_stems">Stems</button>
+                <button id="likesHelpTab" title="Likes" data-i18n-title="help_tab_likes" type="button" role="tab" aria-selected="false" aria-controls="likesHelp" tabindex="-1" data-help-tab="likesHelp" data-i18n="help_tab_likes">Likes</button>
+                <button id="downloadsTab" title="Download" data-i18n-title="download" type="button" role="tab" aria-selected="true" aria-controls="downloadsHelp" data-help-tab="downloadsHelp" data-i18n="download">Download</button>
+                <button id="supportTab" title="Contact" data-i18n-title="contact" type="button" role="tab" aria-selected="false" aria-controls="supportHelp" tabindex="-1" data-help-tab="supportHelp" data-i18n="contact">Contact</button>
             </div>
             <div class="help-content">
             <section id="downloadsHelp" role="tabpanel" aria-labelledby="downloadsTab">
@@ -1568,35 +1702,42 @@
             <div class="help-section"><h3 data-i18n="help_format_title">Formats and quality</h3><p data-i18n="help_format">Auto selects the available stream. Original is available only when the artist has enabled an original download. Source quality varies by track.</p></div>
             <div class="help-section"><h3 data-i18n="help_progress_title">Progress and errors</h3><p data-i18n="help_progress">The status shows progress and saved files. If a track cannot be read or saved, retry after reloading SoundCloud or choosing the folder again.</p></div>
         </section>
-        <section id="likesHelp" role="tabpanel" aria-labelledby="likesHelpTab" hidden>
-            <p class="help-copy" data-i18n="help_likes_intro"></p>
-            <div class="help-section"><h3 data-i18n="help_likes_open_title"></h3><p data-i18n="help_likes_open"></p></div>
-            <a class="popup-control-btn help-link" href="https://soundcloud.com/you/likes#scdl-explore" target="_blank" rel="noopener noreferrer" data-i18n="help_likes_open_title"></a>
+        <section id="speedHelp" class="help-feature-panel" role="tabpanel" aria-labelledby="speedTab" hidden>
+            <p class="help-lead" data-i18n="help_pt_intro">Open the speedometer beside SoundCloud's player controls. Every tool works on the track that is playing.</p>
+            <div class="help-grid">
+                <div class="help-section"><h3 data-i18n="help_pt_speed_title">Speed and Keep Tone</h3><p data-i18n="help_pt_speed">0.1× to 4× with quick presets. Keep Tone changes tempo without changing pitch.</p></div>
+                <div class="help-section"><h3 data-i18n="help_pt_fx_title">FX and EQ</h3><p data-i18n="help_pt_fx">Reverb, delay, flanger, phaser, bitcrusher and saturation, plus a parametric EQ.</p></div>
+                <div class="help-section"><h3 data-i18n="help_pt_record_title">Recorder</h3><p data-i18n="help_pt_record">Record what you hear, after FX and EQ, and save it as a WAV file.</p></div>
+                <div class="help-section"><h3 data-i18n="help_pt_bypass_title">Bypass and memory</h3><p data-i18n="help_pt_bypass">Compare with the original in one click. Your settings stay saved.</p></div>
+            </div>
         </section>
-        <section id="speedHelp" role="tabpanel" aria-labelledby="speedTab" hidden>
-            <p class="help-copy" data-i18n="help_player_tools_intro"></p>
-            <p class="help-copy" data-i18n="help_speed_intro">The speed selector controls SoundCloud playback from 0.1x to 4x and shows the active speed beside the player controls.</p>
-            <div class="help-section"><h3 data-i18n="help_speed_open_title">Open the selector</h3><p data-i18n="help_speed_open">Press the speedometer in the player controls. Use the white download icon inside the panel to download the entire current track at the effective speed and Keep Tone setting. The orange WAV button exports only the selected A-B range.</p></div>
-            <div class="help-section"><h3 data-i18n="help_speed_presets_title">Quick speeds</h3><p data-i18n="help_speed_presets">Choose one of the six quick speeds. The two X buttons are custom presets: hold one to save the slider's current speed, then click it whenever you want to restore that exact value. Custom presets stay saved between SoundCloud sessions.</p></div>
-            <div class="help-section"><h3 data-i18n="help_speed_slider_title">Precise control</h3><p data-i18n="help_speed_slider">Drag the slider anywhere from 0.1x to 4x in 0.025x steps. Double-click the slider to return to the normal 1x speed.</p></div>
-            <div class="help-section"><h3 data-i18n="help_speed_pitch_title">Keep Tone</h3><p data-i18n="help_speed_pitch">Enable Keep Tone to change duration while keeping the original musical pitch. Leave it off to let pitch rise or fall with speed. The option is disabled when the browser cannot preserve pitch.</p></div>
-            <div class="help-section"><h3 data-i18n="help_speed_bypass_title">Temporary bypass</h3><p data-i18n="help_speed_bypass">The single bypass icon temporarily disables the loop and plays at 1x without losing the selected range, speed, or Keep Tone setting. The logo turns gray while bypass is active; press the icon again to restore everything.</p></div>
-            <div class="help-section"><h3 data-i18n="help_speed_memory_title">Remembered and kept active</h3><p data-i18n="help_speed_memory">Your selected speed and Keep Tone choice are stored locally, restored on later visits, and applied to the current player and newly loaded SoundCloud audio.</p></div>
-            <div class="help-section"><h3 data-i18n="help_speed_looper_effect_title">Downloads and Looper</h3><p data-i18n="help_speed_looper_effect">Full-track downloads from the white panel button and A-B WAV exports use the effective speed. Keep Tone preserves pitch; with it off, duration and pitch change. Bypass exports at the normal 1x rate.</p></div>
-            <div class="help-section"><h3 data-i18n="help_speed_close_title">Close and troubleshoot</h3><p data-i18n="help_speed_close">Click outside the panel or press Escape to close it. If playback or saving a preference fails, the panel shows a message; reload SoundCloud and try again.</p></div>
-        </section>
-        <section id="looperPanel" aria-labelledby="looperTab" role="tabpanel" hidden>
-            <div class="help-section"><h3 data-i18n="help_looper_title">Looper</h3><p data-i18n="help_looper">Looper follows the track in SoundCloud's persistent player, even when you navigate or close the control panel. Set A/B from the panel or edit the same range on a compatible waveform; WAV export remains beside the waveform.</p></div>
-            <h3 class="tab-heading" data-i18n="looper_title">How to use Looper</h3>
-            <p class="looper-copy" data-i18n="looper_intro">Try Player Tools for 7 days and up to 20 new A–B loops. WAV and processed exports require Pro.</p>
-            <ol class="looper-tutorial">
-                <li><h3 data-i18n="looper_step_open_title">Open an individual track</h3><p data-i18n="looper_step_open">Open the SoundCloud track you want to work with, then wait for it to load or start playing it.</p></li>
-                <li><h3 data-i18n="looper_step_enable_title">Turn on the loop</h3><p data-i18n="looper_step_enable">Open the speedometer panel and use Set A and Set B at the live playhead, drag either handle on the Loop slider, or press the loop button before More actions on a compatible waveform.</p></li>
-                <li><h3 data-i18n="looper_step_range_title">Set A and B</h3><p data-i18n="looper_step_range">The panel and waveform edit the same A–B range in real time. The panel shows milliseconds for short tracks and hours when needed; waveform arrow keys move a marker 100 ms, or 1 second with Shift.</p></li>
-                <li><h3 data-i18n="looper_step_zoom_title">Zoom in for precise points</h3><p data-i18n="looper_step_zoom">Scroll up over the waveform to zoom toward the cursor, then scroll down to zoom back out. It makes small A–B adjustments much easier.</p></li>
-                <li><h3 data-i18n="looper_step_save_title">Save the selected range</h3><p data-i18n="looper_step_save">Choose Download loop to save the A–B range as a WAV file.</p></li>
+        <section id="looperPanel" class="help-feature-panel" aria-labelledby="looperTab" role="tabpanel" hidden>
+            <p class="help-lead" data-i18n="help_loop_intro">Loop any part of the playing track, then turn it into an instrument.</p>
+            <ol class="looper-tutorial help-grid">
+                <li><h3 data-i18n="help_loop_ab_title">Set A and B</h3><p data-i18n="help_loop_ab">Use Set A/B in the panel or drag the markers on the waveform.</p></li>
+                <li><h3 data-i18n="looper_step_zoom_title">Zoom in for precise points</h3><p data-i18n="looper_step_zoom">Scroll up over the waveform to zoom toward the cursor, then scroll down to zoom back out.</p></li>
+                <li><h3 data-i18n="help_loop_pads_title">Sampler pads</h3><p data-i18n="help_loop_pads">Slice the loop into 8 pads and play them from your keyboard. Right-click a pad to fine-tune it.</p></li>
+                <li><h3 data-i18n="help_loop_piano_title">Piano mode</h3><p data-i18n="help_loop_piano">Play the loop across the keyboard with ADSR, gain, pitch and saved presets.</p></li>
             </ol>
-            <p class="looper-tip" data-i18n="looper_tip">The loop is temporary and follows the current player track across SoundCloud navigation. Changing the playing track removes it. The shared bypass pauses both loop and playback effects without forgetting their settings.</p>
+            <p class="help-note" data-i18n="help_loop_export">Save the loop as WAV, or send it to the Stem Extractor.</p>
+        </section>
+        <section id="stemsHelp" class="help-feature-panel" role="tabpanel" aria-labelledby="stemsHelpTab" hidden>
+            <p class="help-lead" data-i18n="help_stems_intro">Split up to 2 minutes into vocals, drums, bass and other. It runs on your device; nothing is uploaded.</p>
+            <div class="help-grid">
+                <div class="help-section"><h3 data-i18n="help_stems_loop_title">From a loop</h3><p data-i18n="help_stems_loop">In Looper, use the stems button to send the selected range.</p></div>
+                <div class="help-section"><h3 data-i18n="help_stems_import_title">From your files</h3><p data-i18n="help_stems_import">Import any audio file in the Stem Extractor.</p></div>
+                <div class="help-section"><h3 data-i18n="help_stems_mix_title">Mix and save</h3><p data-i18n="help_stems_mix">Mute, solo and set the volume of each stem. Separations are saved in this browser.</p></div>
+                <div class="help-section"><h3 data-i18n="help_stems_pads_title">Drum pads</h3><p data-i18n="help_stems_pads">Place 8 slice points on the drums stem and play them as pads.</p></div>
+            </div>
+            <p class="help-note" data-i18n="help_stems_note">The first separation downloads a 166 MB model, then Chrome keeps it cached.</p>
+        </section>
+        <section id="likesHelp" class="help-feature-panel" role="tabpanel" aria-labelledby="likesHelpTab" hidden>
+            <p class="help-lead" data-i18n="help_likes_lead">Your likes, indexed privately in this browser.</p>
+            <div class="help-grid">
+                <div class="help-section"><h3 data-i18n="help_likes_build_title">Build your library</h3><p data-i18n="help_likes_build">Open your Likes on SoundCloud and start Likes Explorer. Indexing continues in the background.</p></div>
+                <div class="help-section"><h3 data-i18n="help_likes_search_title">Search and travel</h3><p data-i18n="help_likes_search">Find any title or artist and jump back years without endless scrolling.</p></div>
+            </div>
+            <a class="help-action is-primary help-likes-link" href="https://soundcloud.com/you/likes#scdl-explore" target="_blank" rel="noopener noreferrer" data-i18n="help_likes_open_title"></a>
         </section>
         <section id="supportHelp" role="tabpanel" aria-labelledby="supportTab" hidden>
             <section id="contactContent" class="contact-content" aria-labelledby="contactContentTitle" hidden>
@@ -1605,8 +1746,8 @@
                 <a id="contactContentLink" target="_blank" rel="noopener noreferrer" hidden></a>
                 <img id="contactContentImage" alt="" hidden>
             </section>
-            <div class="help-section"><h3 data-i18n="help_support_title">Support and reviews</h3><p data-i18n="help_support">Need help or want to share feedback? Use the links below.</p><div class="help-links"><a class="popup-control-btn help-link" href="https://soundcloud.com/tttorio/tracks" target="_blank" rel="noopener noreferrer" data-i18n="message_on_soundcloud">Message me on SC</a><a class="popup-control-btn help-link" href="mailto:it@vpugliese.online" data-i18n="support_email">Email support</a><a class="popup-control-btn help-link" href="https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews" target="_blank" rel="noopener noreferrer" data-i18n="write_review">Write a Chrome Web Store review</a></div></div>
-            <p class="help-credit"><span data-i18n="made_with">Made with</span><img class="help-credit-icon" src="./assets/icons/bypass.svg" alt="" width="17" height="17" draggable="false"><span data-i18n="by">by</span><a href="https://vittoriodev.netlify.app/" target="_blank" rel="noopener noreferrer">Vittorio</a><span class="help-credit-separator" aria-hidden="true">·</span><a href="https://sctd.vpugliese.online" target="_blank" rel="noopener noreferrer" data-i18n="sctd_web">SCTD Web</a></p>
+            <div class="help-section"><h3 data-i18n="help_support_title">Support and reviews</h3><p data-i18n="help_support">Need help or want to share feedback? Use the links below.</p><div class="help-links"><a class="popup-control-btn help-link" href="https://soundcloud.com/tttorio/tracks" target="_blank" rel="noopener noreferrer" data-i18n="message_on_soundcloud">Message me on SC</a><a class="popup-control-btn help-link" href="mailto:it@vpugliese.online" data-i18n="support_email">Email support</a><a class="popup-control-btn help-link help-review-link" href="https://chrome.google.com/webstore/detail/ekmbbjdpakacalghjkikfppebgdpoebb/reviews" target="_blank" rel="noopener noreferrer" data-i18n="write_review">Write a Chrome Web Store review</a></div></div>
+            <p class="help-credit"><span data-i18n="made_with">Made with</span><img class="help-credit-icon" src="./assets/icons/bypass.svg" alt="" width="17" height="17" draggable="false"><span data-i18n="by">by</span><a href="https://vittoriodev.netlify.app/" target="_blank" rel="noopener noreferrer">Vittorio</a><span class="help-credit-separator help-site-credit" aria-hidden="true">·</span><a class="help-site-credit" href="https://sctd.vpugliese.online" target="_blank" rel="noopener noreferrer" data-i18n="sctd_web">SCTD Web</a></p>
         </section>
         </div>
         </section>

@@ -5,6 +5,14 @@ const os = require('node:os');
 const { execFileSync } = require('node:child_process');
 const provenance = require('./package-provenance.js');
 const root = path.resolve(__dirname,'..');
+const edition = process.env.PACKAGE_EDITION || 'full';
+if (!['full', 'tools'].includes(edition)) throw new Error('PACKAGE_EDITION must be "full" or "tools".');
+const zipBaseName = edition === 'tools' ? 'soundcloud-player-tools' : 'soundcloud-track-downloader';
+// The tools edition is the separate Player Tools listing: downloader hidden, track downloads off.
+const editionSwitches = [
+  ['scripts/release-config.js', 'const DOWNLOADER_ENABLED = true;', 'const DOWNLOADER_ENABLED = false;'],
+  ['scripts/tempo-control-main.js', 'const TOOLS_EDITION = false;', 'const TOOLS_EDITION = true;'],
+];
 
 function zipEntries(zipPath) {
   return execFileSync('unzip', ['-Z1', zipPath], { encoding: 'utf8' })
@@ -47,21 +55,26 @@ function smokePackage(zipPath, apiPermission) {
   if (receipts.includes('PACKAGED_ENTITLEMENT_PUBLIC_JWK = null') || /PACKAGED_ENTITLEMENT_PUBLIC_JWK[^;]*"d"\s*:/.test(receipts)) {
     throw new Error('Package smoke check: entitlement key is missing or contains private material.');
   }
-  console.log(`Package smoke passed (${files.length} files; no local Pro bypass; no development paths).`);
+  if (edition === 'tools') {
+    for (const [file, , enabled] of editionSwitches) {
+      if (!zipText(zipPath, file).includes(enabled)) throw new Error(`Package smoke check: ${file} is not switched to the tools edition.`);
+    }
+  }
+  console.log(`Package smoke passed (${edition} edition; ${files.length} files; no local Pro bypass; no development paths).`);
 }
 
 if (process.platform === 'win32') {
   execFileSync('powershell',['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(__dirname,'package-extension.ps1')],{stdio:'inherit'});
   const apiBaseUrl = new URL(process.env.PLAYER_TOOLS_API_BASE_URL || '');
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
-  smokePackage(path.join(root, 'dist', `soundcloud-track-downloader-${manifest.version}.zip`), `${apiBaseUrl.origin}/*`);
+  smokePackage(path.join(root, 'dist', `${zipBaseName}-${manifest.version}.zip`), `${apiBaseUrl.origin}/*`);
 } else {
   const script = fs.readFileSync(path.join(__dirname,'package-extension.ps1'),'utf8');
   const list = script.match(/\$packageItems = @\(([\s\S]*?)\n\s*\)/)[1];
   const items = [...list.matchAll(/"([^"]+)"/g)].map(match=>match[1]);
   const stage = fs.mkdtempSync(path.join(os.tmpdir(),'scdl-package-'));
   const manifest = JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8'));
-  const output = path.join(root,'dist',`soundcloud-track-downloader-${manifest.version}.zip`);
+  const output = path.join(root,'dist',`${zipBaseName}-${manifest.version}.zip`);
   fs.mkdirSync(path.dirname(output),{recursive:true});
   try {
     for (const item of items) {
@@ -77,6 +90,14 @@ if (process.platform === 'win32') {
       }
     };
     removePlatformMetadata(stage);
+    if (edition === 'tools') {
+      for (const [file, disabled, enabled] of editionSwitches) {
+        const target = path.join(stage, file);
+        const source = fs.readFileSync(target, 'utf8');
+        if (source.split(disabled).length !== 2) throw new Error(`Could not apply the tools edition switch in ${file}.`);
+        fs.writeFileSync(target, source.replace(disabled, enabled));
+      }
+    }
     const commercePath = path.join(stage,'scripts','player-tools-commerce.js');
     const apiBaseLine = 'const API_BASE_URL = "https://sctd-test.vpugliese.online/api/player-tools";';
     let apiBaseUrl;

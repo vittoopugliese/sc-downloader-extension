@@ -150,5 +150,8 @@ const { create } = require("./download-policy.js");
   for (const getDownloadPolicy of [undefined, async () => { throw new Error("offline"); }]) {
     await assert.rejects(makeSource({ ...adapter, getDownloadPolicy }).resolve(track), error => error.code === "download_not_permitted");
   }
+  const fixed = create({ ...configuration, fixedRestricted: true, request: async () => { throw new Error("Tools edition must not read the remote policy"); } });
+  flag = true;
+  assert.equal((await fixed.getPolicy()).allDownloadsActivated, false, "Tools edition keeps downloads restricted regardless of the remote flag");
   console.log("Download policy verification passed.");
 })().catch(error => { console.error(error); process.exitCode = 1; });

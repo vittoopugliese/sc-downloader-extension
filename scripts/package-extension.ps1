@@ -1,8 +1,12 @@
 param(
-    [string]$OutputDirectory = "dist"
+    [string]$OutputDirectory = "dist",
+    # "tools" builds the separate Player Tools listing: downloader hidden, track downloads off.
+    [ValidateSet("full", "tools")]
+    [string]$Edition = $(if ($env:PACKAGE_EDITION) { $env:PACKAGE_EDITION } else { "full" })
 )
 
 $ErrorActionPreference = "Stop"
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $manifestPath = Join-Path $projectRoot "manifest.json"
@@ -10,7 +14,8 @@ $manifest = Get-Content -Raw -Encoding utf8 $manifestPath | ConvertFrom-Json
 $version = $manifest.version
 $distributionRoot = Join-Path $projectRoot $OutputDirectory
 $stagingRoot = Join-Path $distributionRoot "extension-staging"
-$zipPath = Join-Path $distributionRoot "soundcloud-track-downloader-$version.zip"
+$zipBaseName = if ($Edition -eq "tools") { "soundcloud-player-tools" } else { "soundcloud-track-downloader" }
+$zipPath = Join-Path $distributionRoot "$zipBaseName-$version.zip"
 
 # This is an allow-list, deliberately separate from the development scripts in
 # this directory. Adding a runtime script requires adding it here as well. That
@@ -152,8 +157,24 @@ if (Test-Path -LiteralPath $nestedIconsPath -PathType Container) {
     throw "Package asset smoke check failed. Icons were copied under assets/icons/icons instead of assets/icons."
 }
 
+if ($Edition -eq "tools") {
+    # Each switch must exist exactly once, so a refactor cannot silently ship the downloader.
+    $editionSwitches = @(
+        @{ Path = "scripts/release-config.js"; From = "const DOWNLOADER_ENABLED = true;"; To = "const DOWNLOADER_ENABLED = false;" },
+        @{ Path = "scripts/tempo-control-main.js"; From = "const TOOLS_EDITION = false;"; To = "const TOOLS_EDITION = true;" }
+    )
+    foreach ($switch in $editionSwitches) {
+        $switchPath = Join-Path $stagingRoot $switch.Path
+        $switchSource = Get-Content -LiteralPath $switchPath -Raw -Encoding utf8
+        if (([regex]::Matches($switchSource, [regex]::Escape($switch.From))).Count -ne 1) {
+            throw "Could not apply the tools edition switch in $($switch.Path)."
+        }
+        [System.IO.File]::WriteAllText($switchPath, $switchSource.Replace($switch.From, $switch.To), $utf8NoBom)
+    }
+}
+
 $commercePath = Join-Path $stagingRoot "scripts/player-tools-commerce.js"
-$commerceSource = Get-Content -LiteralPath $commercePath -Raw
+$commerceSource = Get-Content -LiteralPath $commercePath -Raw -Encoding utf8
 $apiBaseLine = 'const API_BASE_URL = "https://sctd-test.vpugliese.online/api/player-tools";'
 if (-not $commerceSource.Contains($apiBaseLine)) { throw "Could not inject the Player Tools API endpoint." }
 if (-not $env:PLAYER_TOOLS_API_BASE_URL) { throw "Set PLAYER_TOOLS_API_BASE_URL to the HTTPS test or production licensing endpoint before packaging." }
@@ -166,19 +187,20 @@ if ($apiBaseUri.Scheme -ne "https" -or -not $apiBaseUri.IsAbsoluteUri -or $apiBa
 $normalizedApiBaseUrl = $apiBaseUri.GetLeftPart([System.UriPartial]::Authority) + "/api/player-tools"
 $apiBaseLiteral = $normalizedApiBaseUrl | ConvertTo-Json -Compress
 $commerceSource = $commerceSource.Replace($apiBaseLine, "const API_BASE_URL = $apiBaseLiteral;")
-Set-Content -LiteralPath $commercePath -Value $commerceSource -NoNewline
+[System.IO.File]::WriteAllText($commercePath, $commerceSource, $utf8NoBom)
 
 $packagedManifestPath = Join-Path $stagingRoot "manifest.json"
-$packagedManifest = Get-Content -LiteralPath $packagedManifestPath -Raw | ConvertFrom-Json
+$packagedManifest = Get-Content -LiteralPath $packagedManifestPath -Raw -Encoding utf8 | ConvertFrom-Json
 $apiPermission = $apiBaseUri.GetLeftPart([System.UriPartial]::Authority) + "/*"
 $packagedManifest.host_permissions = @($packagedManifest.host_permissions | Where-Object { $_ -ne "https://sctd-test.vpugliese.online/*" })
 if ($packagedManifest.host_permissions -notcontains $apiPermission) {
     $packagedManifest.host_permissions = @($packagedManifest.host_permissions) + $apiPermission
 }
-$packagedManifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $packagedManifestPath -Encoding utf8
+# Chrome expects manifest.json without a byte order mark.
+[System.IO.File]::WriteAllText($packagedManifestPath, ($packagedManifest | ConvertTo-Json -Depth 20), $utf8NoBom)
 
 $receiptsPath = Join-Path $stagingRoot "scripts/player-tools-receipts.js"
-$receiptSource = Get-Content -LiteralPath $receiptsPath -Raw
+$receiptSource = Get-Content -LiteralPath $receiptsPath -Raw -Encoding utf8
 $publicKeyLine = 'const PACKAGED_ENTITLEMENT_PUBLIC_JWK = Object.freeze({"keys":[{"kty":"EC","x":"5GzHukBSSLNF68uaBVAPv1j7cTortu1O78FnobWhDb4","y":"qRiRyTjbXx1gLiDSYEEsgDHY7FHw_eKLrefAA9kfxQ0","crv":"P-256","kid":"p256-test-2026-09"}]});'
 if (-not $env:ENTITLEMENT_PUBLIC_JWK) { throw "Set ENTITLEMENT_PUBLIC_JWK before packaging." }
 try { $publicJwk = $env:ENTITLEMENT_PUBLIC_JWK | ConvertFrom-Json }
@@ -195,7 +217,7 @@ foreach ($key in $publicKeys) {
 }
 if (-not $receiptSource.Contains($publicKeyLine)) { throw "Could not inject the entitlement verification key." }
 $publicJwkCompact = $publicJwk | ConvertTo-Json -Compress
-Set-Content -LiteralPath $receiptsPath -Value $receiptSource.Replace($publicKeyLine, "const PACKAGED_ENTITLEMENT_PUBLIC_JWK = Object.freeze($publicJwkCompact);") -NoNewline
+[System.IO.File]::WriteAllText($receiptsPath, $receiptSource.Replace($publicKeyLine, "const PACKAGED_ENTITLEMENT_PUBLIC_JWK = Object.freeze($publicJwkCompact);"), $utf8NoBom)
 
 & node (Join-Path $PSScriptRoot "write-package-provenance.js") stage $stagingRoot $normalizedApiBaseUrl
 if ($LASTEXITCODE -ne 0) { throw "Could not write package provenance." }
@@ -203,7 +225,19 @@ if ($LASTEXITCODE -ne 0) { throw "Could not write package provenance." }
 if (Test-Path -LiteralPath $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
 }
-Compress-Archive -LiteralPath (Get-ChildItem -LiteralPath $stagingRoot -Force | Select-Object -ExpandProperty FullName) -DestinationPath $zipPath -CompressionLevel Optimal
+# Compress-Archive on Windows PowerShell writes "\" separators, which the Web Store and
+# non-Windows unzip treat as part of the file name. Write portable "/" entries instead.
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$stagingPrefixLength = (Resolve-Path -LiteralPath $stagingRoot).Path.TrimEnd([char]92).Length + 1
+$zipArchive = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)
+try {
+    foreach ($file in Get-ChildItem -LiteralPath $stagingRoot -Recurse -Force -File) {
+        $entryName = $file.FullName.Substring($stagingPrefixLength).Replace([char]92, [char]47)
+        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zipArchive, $file.FullName, $entryName, [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+    }
+}
+finally { $zipArchive.Dispose() }
 & node (Join-Path $PSScriptRoot "write-package-provenance.js") sidecar $zipPath $stagingRoot
 if ($LASTEXITCODE -ne 0) { throw "Could not write package provenance sidecar." }
 Remove-Item -LiteralPath $stagingRoot -Recurse -Force
