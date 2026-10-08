@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "minimum_chrome_version": "116",
-  "name": "SoundCloud Player Tools & Likes Explorer",
+  "name": "SoundCloud Player Tools, Stem Extractor & Likes Explorer",
   "description": "Speed, loops, sampler pads, FX, EQ, recorder and on-device stem separation for SoundCloud, plus a private Likes Explorer.",
   "default_locale": "en",
   "version": "2026.10.7",
