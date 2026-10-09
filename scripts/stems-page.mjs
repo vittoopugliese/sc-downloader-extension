@@ -206,7 +206,8 @@ function mountWaveform(parent, buffer, label) {
   const visibleWaveformWindow = () => stemLoop.viewport();
   const loopPercentInWindow = (time, range) => (time - range.startMs) / (range.endMs - range.startMs) * 100;
   // Copied from tempo-control-main.js: same physical-pixel peak aggregation,
-  // RGB energy mapping and normalization as the Player Tools looper.
+  // RGB energy mapping as the Player Tools looper. Use a fixed amplitude
+  // scale so quiet separation residuals stay quiet-looking across stems.
   function drawWaveform() {
     if (!ui?.waveformCanvas || waveformCollapsed || ui.panel.hidden || document.hidden) return;
     const canvas = ui.waveformCanvas;
@@ -233,9 +234,7 @@ function mountWaveform(parent, buffer, label) {
     const start = complete ? loopPercentInWindow(displayedRange.startMs, windowRange) : -1;
     const end = complete ? loopPercentInWindow(displayedRange.endMs, windowRange) : -1;
     // One column per physical pixel; peak aggregation preserves short transients.
-    let maximum = 0;
-    for (const sample of samples) maximum = Math.max(maximum, Math.abs(Number(sample) || 0));
-    if (!samples.length || !maximum) return;
+    if (!samples.length) return;
     const bands = waveformSpectrum?.bands;
     const sourceDuration = waveformSpectrum?.durationMs || durationMs;
     const windowSpan = windowRange.endMs - windowRange.startMs;
@@ -263,7 +262,7 @@ function mountWaveform(parent, buffer, label) {
         : '#858d96';
       const percent = x / width * 100;
       context.globalAlpha = complete && (percent < start || percent > end) ? .58 : .96;
-      const barHeight = peak / maximum * height * .88;
+      const barHeight = Math.min(1, peak) * height * .88;
       context.fillRect(x, (height - barHeight) / 2, 1, barHeight);
     }
     context.globalAlpha = 1;

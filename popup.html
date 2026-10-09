@@ -24,6 +24,10 @@
             --accent: #ff5500;
             --accent-warm: #ff7a33;
             --accent-soft: #42291d;
+            --vocals: #ff5500;
+            --drums: #ff8a4c;
+            --bass: #ffb98f;
+            --other: #8c8c8c;
             --surface: #101010;
             --surface-low: #080808;
             --control: #292929;
@@ -1423,7 +1427,7 @@
             position: absolute;
             inset: 0 0 auto;
             height: 2px;
-            background: linear-gradient(90deg, #ff793e 0 25%, #a693df 25% 50%, #8abfaa 50% 75%, #d8bd78 75%);
+            background: linear-gradient(90deg, var(--vocals) 0 25%, var(--drums) 25% 50%, var(--bass) 50% 75%, var(--other) 75%);
             opacity: 0.85;
         }
         .help-hero-topline { display: flex; align-items: center; gap: 8px; min-height: 24px; }
@@ -1436,7 +1440,7 @@
         .help-tagline { margin: 0; color: #aaaaaa; font-size: 11.5px; line-height: 1.45; }
         .help-chips { display: flex; gap: 5px; margin-top: 10px; }
         .help-chips span {
-            --channel: #ff793e;
+            --channel: var(--vocals);
             flex: 1;
             padding: 3px 0;
             border: 1px solid color-mix(in srgb, var(--channel) 22%, transparent);
@@ -1448,9 +1452,9 @@
             letter-spacing: 0.04em;
             text-align: center;
         }
-        .help-chips [data-channel="loop"] { --channel: #a693df; }
-        .help-chips [data-channel="pads"] { --channel: #8abfaa; }
-        .help-chips [data-channel="stems"] { --channel: #d8bd78; }
+        .help-chips [data-channel="loop"] { --channel: var(--drums); }
+        .help-chips [data-channel="pads"] { --channel: var(--bass); }
+        .help-chips [data-channel="stems"] { --channel: var(--other); }
         .help-actions { display: flex; gap: 6px; margin-top: 11px; }
         .help-action {
             flex: 1;
@@ -1501,10 +1505,10 @@
         .help-tabs button:hover { background: #262626; color: #ffffff; }
         .help-tabs button[aria-selected="true"] { background: var(--accent-soft); color: #ffad80; box-shadow: inset 0 0 0 1px rgba(255, 85, 0, 0.55); }
         .help-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 2px 4px 0; }
-        .help-feature-panel { --channel: #ff793e; }
-        #looperPanel.help-feature-panel { --channel: #a693df; }
-        #stemsHelp { --channel: #8abfaa; }
-        #likesHelp { --channel: #d8bd78; }
+        .help-feature-panel { --channel: var(--vocals); }
+        #looperPanel.help-feature-panel { --channel: var(--drums); }
+        #stemsHelp { --channel: var(--bass); }
+        #likesHelp { --channel: var(--other); }
         #helpPanel .help-lead { margin: 2px 2px 8px; color: #d6d6d6; font-size: 12px; line-height: 1.5; }
         #helpPanel .help-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: help-step; }
         #helpPanel .help-grid > .help-section,

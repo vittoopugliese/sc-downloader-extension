@@ -185,7 +185,7 @@ const { chromium } = require('playwright');
     await page.waitForTimeout(250);
     await page.locator('#original').click();
     assert.equal(await page.locator('#original').getAttribute('aria-pressed'), 'true');
-    await page.locator('.stem button').nth(1).click();
+    await page.locator('.stem-enable').first().click();
     assert.equal(await page.locator('#mix').getAttribute('aria-pressed'), 'true');
     await page.locator('#play').click();
     await page.screenshot({ path: path.join(artifacts, 'stems-desktop.png'), fullPage: true });
