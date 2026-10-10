@@ -1,5 +1,6 @@
 import { mountDrumSampler } from './stem-sampler.mjs';
 import { mountDrumSequencer } from './stem-sequencer.mjs';
+import { mountStemPiano } from './stem-piano.mjs';
 import { createEqualizedOutput } from './local-audio-output.mjs';
 import { createStemLoop } from './stem-loop.mjs';
 import { SAMPLE_RATE, MAX_SECONDS, STEMS, encodeWav } from './stem-audio.mjs';
@@ -153,11 +154,12 @@ const padStyle = document.createElement('style');
 padStyle.textContent = globalThis.SCSamplerCore.PAD_STYLES;
 document.head.append(padStyle);
 const waveforms = new Set();
-let drumSampler = null, drumSequencer = null, sequenceRevision = 0;
+let drumSampler = null, drumSequencer = null, pianoRoll = null, sequenceRevision = 0;
 const retiringNodes = new Set();
 const stemLoop = createStemLoop({ viewportChanged() {
   for (const view of waveforms) view.draw();
   updatePlayheads(); drumSampler?.render(); drumSequencer?.renderMarker();
+  pianoRoll?.sampler.render();
 }, duration: () => original?.duration || 0, changed(previous) {
   const current = offset(previous);
   const { startMs, endMs } = stemLoop.range();
@@ -166,6 +168,7 @@ const stemLoop = createStemLoop({ viewportChanged() {
   if (playing) startedAt = Math.max(startedAt, context.currentTime);
   if ((current < startMs / 1000 || current >= endMs / 1000)) seekTo(startMs / 1000);
   if (drumSequencer?.enabled() && !drumSequencer.matchesRange(stemLoop.range())) drumSequencer.deactivate();
+  if (pianoRoll?.enabled() && !drumSequencer.matchesRange(stemLoop.range())) pianoRoll.deactivate();
 } });
 const zoomTools = document.createElement('div'); zoomTools.className = 'stem-zoom-tools';
 for (const [label, title, action] of [
@@ -187,6 +190,7 @@ function seekTo(value) {
 function updatePlayheads() {
   if (!original) return;
   drumSequencer?.updateTransport(offset(), playing, rate);
+  pianoRoll?.updateTransport(offset(), playing, rate);
   const percent = stemLoop.percent(Math.max(0, offset()) * 1000);
   for (const view of waveforms) {
     view.playhead.style.left = `${percent}%`;
@@ -208,8 +212,9 @@ function mountWaveform(parent, buffer, label) {
   const canvas = document.createElement('canvas'); canvas.setAttribute('role', 'img'); canvas.setAttribute('aria-label', label);
   const playhead = document.createElement('span'); playhead.className = 'waveform-playhead'; playhead.setAttribute('aria-hidden', 'true');
   element.append(canvas, playhead); parent.append(element);
-  const disposeLoop = stemLoop.mount(element, seekTo, seconds => parent.dataset.stem === 'drums' &&
-    (drumSequencer?.place(seconds) || drumSampler?.place(seconds)));
+  const disposeLoop = stemLoop.mount(element, seekTo, seconds => parent.dataset.stem === 'drums'
+    ? (drumSequencer?.place(seconds) || drumSampler?.place(seconds))
+    : parent.dataset.stem === 'other' && pianoRoll?.sampler.place(seconds));
   const controller = new AbortController();
   const view = { element, playhead, draw: () => drawWaveform(), dispose() { disposeLoop(); controller.abort(); observer.disconnect(); waveforms.delete(view); element.remove(); } };
   waveforms.add(view);
@@ -379,7 +384,7 @@ $('import-form').onsubmit = event => {
   mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
   $('import-dialog').close(); status(text('ready'));
 };
-const settings = () => ({ drumSlices: drumSampler?.snapshot(), drumSequence: drumSequencer?.snapshot(), states: structuredClone(states), rate, keepTone, mode, eq: mixOutput.snapshot().eq });
+const settings = () => ({ drumSlices: drumSampler?.snapshot(), drumSequence: drumSequencer?.snapshot(), piano: pianoRoll?.snapshot(), states: structuredClone(states), rate, keepTone, mode, eq: mixOutput.snapshot().eq });
 libraryUI = mountStemLibrary({ locale, report: status,
   onOperation(value) { libraryOperating = value; $('separate').disabled = value || busy || !initialized; $('cancel').disabled = value; $('import-audio').disabled = value || busy || !importReady; },
   snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : null }),
@@ -504,11 +509,13 @@ function pause() {
 }
 function applyMix() {
   drumSampler?.updateGain();
+  pianoRoll?.updateGain();
   const solo = states.some(state => state.solo);
   nodes.forEach(({ gain }, index) => {
-    const state = states[index - 1];
+    const state = states[index === 5 ? 2 : index - 1];
     const value = index === 0 ? Number(mode === 'original') :
-      mode === 'mix' && !state.muted && (!solo || state.solo) ? state.gain : 0;
+      mode === 'mix' && !state.muted && (!solo || state.solo) &&
+      !(index === 3 && pianoRoll?.enabled() && pianoRoll.replaces()) ? state.gain : 0;
     gain.gain.setTargetAtTime(value, context.currentTime, 0.008);
   });
   document.querySelectorAll('.stem').forEach((row, index) => {
@@ -531,23 +538,29 @@ function createPlaybackNode(buffer, when, at, pattern = false) {
   source.start(when, seek);
   return node;
 }
-async function syncSequence({ loop = false } = {}) {
-  const version = ++sequenceRevision, owner = drumSequencer;
+async function syncSequence({ loop = false, audio = true } = {}) {
+  const owner = drumSequencer, piano = pianoRoll;
   if (!owner) return;
   libraryUI.changed();
+  if (!audio) return;
+  const version = ++sequenceRevision;
+  piano?.gridChanged();
   if (loop && owner.range()) stemLoop.setRange(owner.range());
   if (!playing) return;
   const transportVersion = playbackRevision;
-  const pattern = owner.enabled() ? await owner.prepare() : null;
+  const [pattern, melody] = await Promise.all([owner.enabled() ? owner.prepare() : null, piano?.enabled() ? piano.prepare() : null]);
   if (!playing || version !== sequenceRevision || transportVersion !== playbackRevision || owner !== drumSequencer) return;
-  const when = context.currentTime + .015, old = nodes[1];
-  const next = createPlaybackNode(pattern || buffers[0], when, offset(undefined, when), !!pattern);
-  nodes[1] = next;
-  const audible = mode === 'mix' && !states[0].muted && (!states.some(state => state.solo) || states[0].solo);
-  next.gain.gain.setValueAtTime(0, when);
-  next.gain.gain.linearRampToValueAtTime(audible ? states[0].gain : 0, when + .008);
-  old.gain.gain.cancelAndHoldAtTime(when);
-  old.gain.gain.linearRampToValueAtTime(0, when + .008); retiringNodes.add(old); old.source.stop(when + .008);
+  const when = context.currentTime + .015;
+  for (const [index, audioBuffer, isPattern] of [[1, pattern || buffers[0], !!pattern], [5, melody, true]]) {
+    const old = nodes[index];
+    if (audioBuffer) nodes[index] = createPlaybackNode(audioBuffer, when, offset(undefined, when), isPattern);
+    else if (index === 5) nodes.length = 5;
+    if (old) {
+      old.gain.gain.cancelAndHoldAtTime(when); old.gain.gain.linearRampToValueAtTime(0, when + .008);
+      retiringNodes.add(old); old.source.stop(when + .008);
+    }
+  }
+  applyMix();
 }
 async function play() {
   if (!original || playing) return;
@@ -555,7 +568,11 @@ async function play() {
   context ||= new AudioContext({ sampleRate: SAMPLE_RATE });
   await context.resume();
   await prepareTone();
-  const pattern = drumSequencer?.enabled() ? await drumSequencer.prepare() : null;
+  let pattern, melody, revision;
+  do {
+    revision = sequenceRevision;
+    [pattern, melody] = await Promise.all([drumSequencer?.enabled() ? drumSequencer.prepare() : null, pianoRoll?.enabled() ? pianoRoll.prepare() : null]);
+  } while (revision !== sequenceRevision && version === playbackRevision);
   if (playing || version !== playbackRevision) return;
   const { startMs, endMs } = stemLoop.range();
   if ((position < startMs / 1000 || position >= endMs / 1000)) position = startMs / 1000;
@@ -563,12 +580,14 @@ async function play() {
   startedAt = context.currentTime + 0.03;
   nodes = [original, ...buffers].map((buffer, index) =>
     createPlaybackNode(index === 1 && pattern ? pattern : buffer, startedAt, position, index === 1 && !!pattern));
+  if (melody) nodes.push(createPlaybackNode(melody, startedAt, position, true));
   toneNode.port.postMessage({ rate, keepTone, reset: true });
   playing = true; applyMix(); playLabel(true);
 }
 function disposeResults() {
   mixOutput.setEqualizer(null); equalizerUI.reset();
   pause(); drumSequencer?.dispose(); drumSequencer = null; sequenceRevision++;
+  pianoRoll?.dispose(); pianoRoll = null;
   drumSampler?.dispose(); drumSampler = null; stemLoop.reset(); buffers = []; outputs = [];
   urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
   for (const view of waveforms) if ($('stems').contains(view.element)) view.dispose();
@@ -667,10 +686,16 @@ function showResults(result, saved = null) {
         buffer: buffers[index], sampler: drumSampler, saved: saved?.drumSequence, changed: syncSequence,
         togglePlayback, rate: () => rate, setRate: value => changeTempo(value), report: playbackError });
     }
+    if (stem === 'other') pianoRoll = mountStemPiano({ row, actions, waveform: row.querySelector('.waveform'),
+      buffer: buffers[index], timeline: stemLoop, saved: saved?.piano,
+      getGrid: () => drumSequencer.grid(), setGrid: value => drumSequencer.setGrid(value),
+      audioContext: () => mixOutput.getPlaybackContext(), output: () => mixOutput.input(),
+      level: () => states[index].muted ? 0 : states[index].gain,
+      rate: () => rate, setRate: value => changeTempo(value), changed: syncSequence, togglePlayback, locale, report: playbackError });
   });
   outputs = [];
   $('mix').disabled = false; $('quality-note').hidden = false; mode = saved?.mode === 'original' ? 'original' : 'mix'; applyMix();
-  if (drumSequencer?.enabled() && drumSequencer.range()) stemLoop.setRange(drumSequencer.range());
+  if ((drumSequencer?.enabled() || pianoRoll?.enabled()) && drumSequencer.range()) stemLoop.setRange(drumSequencer.range());
   status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`);
 }
 
@@ -783,7 +808,7 @@ window.addEventListener('pagehide', () => {
   equalizerUI.dispose(); recorderUI.dispose(); mixOutput.dispose();
   cancelAnimationFrame(animationFrame);
   for (const view of waveforms) view.dispose();
-  drumSequencer?.dispose(); drumSampler?.dispose(); worker?.terminate(); pause(); toneNode?.port.postMessage({ type: 'dispose' }); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
+  pianoRoll?.dispose(); drumSequencer?.dispose(); drumSampler?.dispose(); worker?.terminate(); pause(); toneNode?.port.postMessage({ type: 'dispose' }); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
   if (jobId) chrome.runtime.sendMessage({ type: 'STEM_LOOP_CANCEL', jobId }).catch(() => {});
 });
 function renderInfo(value) {

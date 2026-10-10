@@ -21,6 +21,30 @@ Enable $1¦Activar $1¦$1 aktivieren¦Ativar $1¦Включить $1
 Enable/disable $1 · Right-click: hear only this track¦Activar/desactivar $1 · Clic derecho: escuchar solo esta pista¦$1 ein-/ausschalten · Rechtsklick: nur diese Spur hören¦Ativar/desativar $1 · Clique direito: ouvir só esta faixa¦Включить/выключить $1 · Правая кнопка: слушать только эту дорожку
 Sampler¦Sampler¦Sampler¦Sampler¦Сэмплер
 Sequencer¦Secuenciador¦Sequenzer¦Sequenciador¦Секвенсор
+Piano roll¦Piano roll¦Piano-Roll¦Piano roll¦Пианоролл
+Select piano sample¦Seleccionar sample de piano¦Piano-Sample auswählen¦Selecionar amostra de piano¦Выбрать сэмпл для пианоролла
+Click the instruments waveform to select a sample. Drag its edges and fades.¦Clic o arrastrá en la onda de instrumentos para seleccionar un sample. Editá sus bordes y fades.¦Klicke oder ziehe auf der Instrumenten-Wellenform, um ein Sample auszuwählen. Ränder und Fades bearbeiten.¦Clique ou arraste na onda dos instrumentos para selecionar uma amostra. Edite bordas e fades.¦Нажмите или перетащите по волне инструментов, чтобы выбрать сэмпл. Настройте края и затухание.
+Root note¦Nota raíz¦Grundton¦Nota base¦Основная нота
+Piano playback¦Reproducción del piano¦Piano-Wiedergabe¦Reprodução do piano¦Воспроизведение пианоролла
+Original instruments¦Instrumentos originales¦Originalinstrumente¦Instrumentos originais¦Исходные инструменты
+Layer piano¦Agregar piano¦Piano hinzufügen¦Adicionar piano¦Добавить пианоролл
+Replace instruments¦Reemplazar instrumentos¦Instrumente ersetzen¦Substituir instrumentos¦Заменить инструменты
+BPM¦BPM¦BPM¦BPM¦BPM
+Use loop start as first beat¦Usar el inicio del loop como primer tiempo¦Loop-Anfang als erste Zählzeit verwenden¦Usar o início do loop como primeiro tempo¦Начало лупа как первая доля
+Snap notes¦Ajuste de notas¦Notenraster¦Grade de notas¦Привязка нот
+Keyboard range¦Rango del teclado¦Tastaturbereich¦Extensão do teclado¦Диапазон клавиатуры
+Loop sample during notes¦Repetir sample durante la nota¦Sample während der Note wiederholen¦Repetir amostra durante a nota¦Повторять сэмпл на протяжении ноты
+Undo notes¦Deshacer notas¦Noten rückgängig¦Desfazer notas¦Отменить ноты
+Redo notes¦Rehacer notas¦Noten wiederherstellen¦Refazer notas¦Повторить ноты
+Duplicate note¦Duplicar nota¦Note duplizieren¦Duplicar nota¦Дублировать ноту
+Delete note¦Eliminar nota¦Note löschen¦Excluir nota¦Удалить ноту
+Clear piano notes¦Borrar notas del piano¦Piano-Noten löschen¦Limpar notas do piano¦Очистить ноты пианоролла
+Note velocity¦Intensidad de la nota¦Anschlagstärke¦Intensidade da nota¦Сила нажатия
+Piano notes¦Notas del piano¦Piano-Noten¦Notas do piano¦Ноты пианоролла
+Preview note¦Escuchar nota¦Note vorhören¦Ouvir nota¦Прослушать ноту
+Choose a sample from the instruments stem, assign its root note, then draw your melody.¦Elegí un sample del stem de instrumentos, asigná su nota raíz y dibujá tu melodía.¦Wähle ein Sample aus dem Instrumenten-Stem, lege seinen Grundton fest und zeichne deine Melodie.¦Escolha uma amostra do stem de instrumentos, atribua sua nota base e desenhe sua melodia.¦Выберите сэмпл из стема инструментов, задайте основную ноту и нарисуйте мелодию.
+Piano note limit reached (512).¦Se alcanzó el límite de 512 notas.¦Limit von 512 Noten erreicht.¦Limite de 512 notas atingido.¦Достигнут лимит в 512 нот.
+Click to draw notes; drag to move, drag the right edge to resize. Delete removes; arrows move; Shift + Left/Right resizes.¦Clic para dibujar; arrastrá para mover o desde el borde derecho para alargar. Supr borra; flechas mueven; Shift + Izq./Der. cambia la duración.¦Klicken zeichnet Noten; ziehen verschiebt, rechter Rand ändert die Länge. Entf löscht; Pfeile verschieben; Umschalt + Links/Rechts ändert die Länge.¦Clique para desenhar; arraste para mover ou pela borda direita para redimensionar. Delete apaga; setas movem; Shift + Esquerda/Direita altera a duração.¦Нажмите для создания нот; перетаскивайте для перемещения, правый край меняет длину. Delete удаляет; стрелки перемещают; Shift + Влево/Вправо меняет длину.
 Tempo (BPM) · uses the speed slider; Keep Tone keeps the pitch¦Tempo (BPM) · usa el slider de velocidad; Mantener tono conserva la altura¦Tempo (BPM) · nutzt den Tempo-Regler; Tonhöhe halten bewahrt die Tonhöhe¦Tempo (BPM) · usa o controle de velocidade; Manter tom preserva a altura¦Темп (BPM) · использует ползунок скорости; «Сохранять тон» сохраняет высоту
 Grid¦Grilla¦Raster¦Grade¦Сетка
 Fit the grid to the A–B loop¦Ajustar la grilla al loop A–B¦Raster an den A–B-Loop anpassen¦Ajustar a grade ao loop A–B¦Подогнать сетку под луп A–B

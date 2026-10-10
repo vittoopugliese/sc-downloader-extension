@@ -229,6 +229,12 @@ export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, s
   render();
   return {
     range, renderMarker, enabled: () => state.enabled,
+    grid: () => ({ bpm: state.bpm, bars: state.bars, start: state.start }),
+    setGrid(value) {
+      const next = normalizeSequence({ ...state, ...value }, buffer.duration);
+      state.bpm = next.bpm; state.bars = next.bars; state.start = next.start;
+      bar = Math.min(bar, state.bars - 1); emit(true);
+    },
     snapshot: () => normalizeSequence(state, buffer.duration),
     matchesRange: value => { const expected = range(); return expected && Math.abs(value.startMs - expected.startMs) < .01 && Math.abs(value.endMs - expected.endMs) < .01; },
     deactivate() { state.enabled = false; emit(); },

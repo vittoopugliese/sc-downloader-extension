@@ -4,6 +4,24 @@ import fs from 'node:fs';
 import { separateAudio, encodeWav, validateAudio } from './stem-audio.mjs';
 import './stem-jobs.js';
 import { normalizeDrumSlice, editDrumSlice } from './stem-sampler.mjs';
+import { normalizePiano, pitchRatio, noteName, MAX_PIANO_NOTES } from './stem-piano-core.mjs';
+
+test('piano presets normalize malformed notes, bound metadata and preserve hidden bars without mutating input', () => {
+  const buffer = { duration: 3, sampleRate: 44100 };
+  const value = { sample: { start: 1, end: 20 }, root: 200, octave: -5, mode: 'replace',
+    notes: [{ pitch: 60, start: 40, length: 8, velocity: .5 }, { pitch: NaN, start: 0, length: 1 },
+      { pitch: 100, start: 63.5, length: 500, velocity: -2 }, { pitch: 60, start: 64, length: 1 }] };
+  const normalized = normalizePiano(value, buffer);
+  assert.equal(normalized.root, 96); assert.equal(normalized.sample.end, 3);
+  assert.equal(normalized.octave, 1); assert.equal(normalized.mode, 'replace');
+  assert.deepEqual(normalized.notes, [{ pitch: 60, start: 40, length: 8, velocity: .5 }, { pitch: 96, start: 63.5, length: 64, velocity: .01 }]);
+  assert.equal(value.sample.end, 20); assert.equal(value.notes.length, 4);
+  assert.equal(normalizePiano({ notes: Array(10000).fill({ pitch: 60, start: 0, length: 1 }) }, buffer).notes.length, MAX_PIANO_NOTES);
+  assert.deepEqual(normalizePiano(undefined, buffer).notes, []);
+  assert.equal(normalizePiano({ notes: {} }, buffer).mode, 'off');
+  assert.equal(pitchRatio(72, 60), 2); assert.equal(pitchRatio(48, 60), .5);
+  assert.equal(noteName(60), 'C4'); assert.equal(noteName(69), 'A4');
+});
 
 test('drum slices default to 154 ms and migrate start-only presets without playing the remaining stem', () => {
   const buffer = { duration: 120, sampleRate: 44100 };
@@ -67,6 +85,7 @@ test('the shipping allow-list contains the analyzer and every local runtime depe
     'scripts/stem-presets.mjs', 'scripts/stem-library-ui.mjs', 'scripts/stem-tone-processor.mjs',
     'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/local-audio-output.mjs', 'assets/icons/mute.svg',
     'scripts/stem-sequencer-core.mjs', 'scripts/stem-sequencer.mjs',
+    'scripts/stem-piano-core.mjs', 'scripts/stem-piano.mjs',
     'scripts/parametric-eq.js', 'scripts/parametric-eq-ui.js', 'scripts/player-tools-collapsible.js',
     'scripts/record-core.js', 'scripts/record-ui.js', 'scripts/record-processor.js',
     'scripts/stem-model.mjs', 'scripts/stem-worker.mjs', 'scripts/stem-jobs.js',

@@ -162,7 +162,7 @@ const { chromium } = require('playwright');
     await page.locator('#mix').click();
     const download = page.waitForEvent('download'); await page.locator('.download').first().click();
     assert.match((await download).suggestedFilename(), /_drums.wav$/);
-    assert.equal(await page.locator('.stem-sampler-toggle').count(), 1);
+    assert.equal(await page.locator('.stem-sampler-toggle').count(), 2);
     assert.equal(await page.locator('.stem-mute').count(), 0);
     for (const row of await page.locator('.stem[data-stem=drums]').all()) {
       const toggle = row.locator('.stem-sampler-toggle');
@@ -398,6 +398,7 @@ const { chromium } = require('playwright');
       await checkAlignment();
       await page.screenshot({ path: path.join(artifacts, `mobile-${width}.png`), fullPage: true });
     }
+    await require('./stem-piano.browser-check.cjs')(page, root);
     assert.deepEqual(errors, []);
     await page.evaluate(() => document.querySelector('#artwork').dispatchEvent(new Event('error')));
     assert.equal(await page.locator('#artwork-fallback').isVisible(), true);

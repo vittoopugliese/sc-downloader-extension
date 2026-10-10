@@ -48,7 +48,54 @@ el preset, tanto en navegador como en carpeta. Los presets anteriores, que
 solo guardaban posiciones de inicio, se abren con el recorte de 154 ms. Los
 WAV originales no cambian.
 
-### Archivos del equipo
+### Piano roll melódico
+
+El stem **Otros** (instrumentos) tiene un botón **Piano roll**. Usa el mismo
+tempo, primer tiempo y cantidad de compases que el secuenciador de pads. Las
+ediciones de grilla en cualquiera de los dos se reflejan en el otro; el BPM de
+reproducción sigue al slider global y **Keep Tone** conserva la altura.
+
+1. Abrí Piano roll y hacé clic o arrastrá sobre la waveform de instrumentos para
+   elegir su sample. Este recorte es independiente de A–B y de los pads de batería.
+   Un clic crea un recorte de 500 ms; sus bordes y fades se editan en la waveform.
+   El botón de selección permite elegir otra muestra; la lupa acerca el recorte.
+2. Asigná la **nota raíz** del sonido original (C4 por defecto, MIDI 60). No se
+   detecta su afinación: la asignación es manual. Las demás notas transponen el
+   sample por semitonos, como el sampler de Player Tools.
+3. Dibujá notas o acordes con clic. Arrastrá para moverlos y usá el borde derecho
+   para cambiar su duración. La grilla ofrece 1/4, 1/8, 1/16 y 1/32, de 1 a 4
+   compases. Las teclas de la izquierda permiten escuchar cada altura.
+4. Elegí **Agregar piano**, **Reemplazar instrumentos** o **Instrumentos
+   originales**. Play/Pausa controla el transporte común. El piano responde al
+   volumen, mute y solo de Otros, pasa por el EQ y llega al grabador de la mezcla.
+5. **Repetir sample durante la nota** sostiene el recorte hasta el final de cada
+   nota; sin esa opción, el sonido termina al agotarse el sample o al terminar
+   la nota. Las transposiciones también cambian la duración natural del sample.
+
+Supr o clic derecho elimina una nota; las flechas la mueven. Shift + Izq./Der.
+cambia su duración y Shift + Arriba/Abajo la transpone una octava. Hay intensidad
+por nota, duplicación y deshacer/rehacer (Ctrl/Cmd + Z, Shift + Z o Y). Los
+patrones admiten hasta 512 notas. Al reducir los compases, las notas de los
+compases ocultos se conservan.
+
+El guardado existente conserva el recorte, fades, nota raíz, notas, intensidad,
+modo y repetición del sample en navegador o carpeta. Los WAV separados no se
+modifican. Cambiar A–B a un rango distinto del patrón desactiva su reproducción;
+ajustá la grilla al nuevo loop y volvé a activarla. Plegar el stem o cerrar el
+editor conserva el patrón y su reproducción.
+
+Implementación: `stem-piano.mjs` y `stem-piano-core.mjs`. El patrón se renderiza
+en un buffer derivado con `OfflineAudioContext`, incluyendo las colas que cruzan
+la vuelta del loop. Comparte el reloj, playbackRate y procesador Keep Tone con
+los stems; no depende de timers para disparar notas. Se verificaron las
+[reglas de duración y playbackRate de Web Audio](https://webaudio.github.io/web-audio-api/#AudioBufferSourceNode).
+
+Pruebas: `npm run test:stems` valida normalización y empaquetado;
+`npm run test:e2e:stems-ui` incluye `stem-piano.browser-check.cjs` para edición,
+recorte independiente, presets, sincronización, frecuencia real del audio,
+duración, colas del loop, Keep Tone y layout de escritorio/390/320 px.
+
+### Archivos del equipo (importación)
 
 **Cargar audio del equipo** abre el selector de archivos en Stems, incluso al
 entrar a `stems.html` sin un job de SoundCloud. La importación muestra nombre,

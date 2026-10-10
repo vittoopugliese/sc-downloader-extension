@@ -65,6 +65,8 @@ $packageItems = @(
     "scripts/stem-sampler.mjs",
     "scripts/stem-sequencer-core.mjs",
     "scripts/stem-sequencer.mjs",
+    "scripts/stem-piano-core.mjs",
+    "scripts/stem-piano.mjs",
     "scripts/local-audio-output.mjs",
     "scripts/stem-tone-processor.mjs",
     "scripts/vendor/onnxruntime",
