@@ -58,7 +58,7 @@ const { chromium } = require('playwright');
       assert.equal(await page.locator('#track').textContent(), 'Record');
       await page.locator('.stem-sampler-toggle').click();
       const copy = await page.evaluate(() => ({
-        hint: SCPlayerToolsText.t('Click a pad to set its start. A S D F G H J K to play. Drag for the loop.'),
+        hint: SCPlayerToolsText.t('A S D F G H J K to play. Edit sample to zoom; drag its edges and fades.'),
         reset: SCPlayerToolsText.t('Reset speed and tone'),
         record: SCPlayerToolsText.t('Record the final mix'),
       }));

@@ -83,6 +83,12 @@ export function createStemLoop({ duration, changed, viewportChanged = () => {} }
     element.addEventListener('dblclick', () => set(null), options);
     return () => { controller.abort(); views.delete(view); overlay.remove(); };
   }
-  return { range, mount, viewport, percent, zoomAt, resetZoom() { setZoom(null); },
+  return { range, mount, viewport, percent, zoomAt,
+    focusRange(startMs, endMs) {
+      const total = duration() * 1000, span = Math.min(total, Math.max(100, (endMs - startMs) * 1.6));
+      const start = Math.max(0, Math.min(total - span, (startMs + endMs - span) / 2));
+      setZoom({ startMs: start, endMs: start + span });
+    },
+    resetZoom() { setZoom(null); },
     reset() { selection = null; zoom = null; render(); viewportChanged(); } };
 }

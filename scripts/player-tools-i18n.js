@@ -20,6 +20,12 @@ Wheel: zoom · Shift + wheel: pan¦Rueda: zoom · Shift + rueda: desplazar¦Maus
 Enable $1¦Activar $1¦$1 aktivieren¦Ativar $1¦Включить $1
 Enable/disable $1 · Right-click: hear only this track¦Activar/desactivar $1 · Clic derecho: escuchar solo esta pista¦$1 ein-/ausschalten · Rechtsklick: nur diese Spur hören¦Ativar/desativar $1 · Clique direito: ouvir só esta faixa¦Включить/выключить $1 · Правая кнопка: слушать только эту дорожку
 Sampler¦Sampler¦Sampler¦Sampler¦Сэмплер
+Edit sample¦Editar sample¦Sample bearbeiten¦Editar amostra¦Редактировать сэмпл
+Sample start¦Inicio del sample¦Sample-Anfang¦Início da amostra¦Начало сэмпла
+Sample end¦Fin del sample¦Sample-Ende¦Fim da amostra¦Конец сэмпла
+Fade in¦Entrada suave¦Einblenden¦Entrada suave¦Нарастание
+Fade out¦Salida suave¦Ausblenden¦Saída suave¦Затухание
+A S D F G H J K to play. Edit sample to zoom; drag its edges and fades.¦A S D F G H J K para tocar. Editar sample para acercar; arrastrá sus bordes y fades.¦A S D F G H J K zum Spielen. Sample bearbeiten zum Zoomen; Ränder und Fades ziehen.¦A S D F G H J K para tocar. Editar amostra para ampliar; arraste as bordas e os fades.¦A S D F G H J K — играть. Редактировать сэмпл — увеличить; перетаскивайте края и точки затухания.
 Drums¦Batería¦Schlagzeug¦Bateria¦Ударные
 Unassigned¦Sin asignar¦Nicht zugewiesen¦Não atribuído¦Не назначено
 Click a pad to set its start. A S D F G H J K to play. Drag for the loop.¦Clic en un pad para fijar su inicio. A S D F G H J K para tocar. Arrastrá para el loop.¦Pad anklicken, um den Start festzulegen. A S D F G H J K zum Spielen. Ziehen für den Loop.¦Clique em um pad para definir o início. A S D F G H J K para tocar. Arraste para o loop.¦Нажмите пэд, чтобы задать начало. A S D F G H J K — играть. Перетаскивайте для выбора лупа.

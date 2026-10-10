@@ -27,6 +27,27 @@ persistencia en `stems-roadmap.md`. No convierte Stems en una web independiente.
 
 ## Audio
 
+### Samples de batería
+
+El botón **Sampler** abre los ocho pads A S D F G H J K. Elegí un pad y hacé
+clic en la waveform de batería para colocar un sample de **300 ms**, con
+entrada de 3 ms y salida de 30 ms. Cada pad tiene su propio final, aunque sea
+el único o el último marcador del stem. Cerca del final del audio, el recorte
+y los fades se acortan para caber en las muestras disponibles.
+
+**Editar sample** acerca las waveforms al recorte seleccionado. Arrastrá la
+letra para ajustar el inicio, el borde inferior derecho para cambiar el final,
+y los dos puntos de la envolvente para editar los fades. Los controles también
+aceptan flechas (1 ms), Shift + flechas (10 ms), Home y End. La rueda mantiene
+el zoom habitual; ↔ vuelve a mostrar todo el audio. Los fades son una envolvente
+de entrada/salida para disparos de una sola vez, sin sustain dependiente de
+mantener la tecla. Repetir una tecla apaga suavemente su voz anterior.
+
+Con **Guardar localmente** activo, los recortes y fades se guardan junto con
+el preset, tanto en navegador como en carpeta. Los presets anteriores, que
+solo guardaban posiciones de inicio, se abren con el recorte de 300 ms. Los
+WAV originales no cambian.
+
 ### Archivos del equipo
 
 **Cargar audio del equipo** abre el selector de archivos en Stems, incluso al

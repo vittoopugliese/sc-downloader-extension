@@ -203,6 +203,12 @@ const { chromium } = require('playwright');
     for (let i = 0; i < 8; i++) {
       await drums.locator('.drum-pad').nth(i).click();
       await drumWave.click({ position: { x: drumBounds.width * (.1 + i * .1), y: 40 } });
+      if (i < 2) {
+        await page.keyboard.press('as'[i]);
+        await page.waitForFunction(() => stemTestSources.at(-1).testStart?.length === 3);
+        const duration = await page.evaluate(() => stemTestSources.at(-1).testStart[2]);
+        assert.ok(Math.abs(duration - .3) < 1 / 44100, 'One or two pads still stop after 300 ms');
+      }
     }
     assert.equal(await drums.locator('.stem-pad-marker:visible').count(), 8);
     assert.equal(await page.locator('.stem-loop-selection:visible').count(), 0, 'Pad clicks do not create loops');
@@ -212,10 +218,62 @@ const { chromium } = require('playwright');
     await page.waitForTimeout(30);
     const sample = await page.evaluate(() => stemTestSources.at(-1).testStart);
     assert.ok(Math.abs(sample[1] - starts[0]) < .001);
-    assert.ok(Math.abs(sample[2] - (starts[1] - starts[0])) < .001, 'Pad stops at next marker');
+    assert.ok(Math.abs(sample[2] - .3) < .001, 'Pad has its own 300 ms range');
     await page.keyboard.press('k'); await page.waitForTimeout(30);
     const lastSample = await page.evaluate(() => stemTestSources.at(-1).testStart);
-    assert.ok(Math.abs(lastSample[2] - (3 - starts[7])) < .001, 'Last pad plays to the end');
+    assert.ok(Math.abs(lastSample[2] - .3) < .001, 'Last pad stops after 300 ms');
+    await page.keyboard.press('a');
+    await drums.locator('.stem-sample-tools button').click();
+    const editWindow = await drumWave.evaluate(node => [Number(node.dataset.viewportStart), Number(node.dataset.viewportEnd)]);
+    assert.ok(editWindow[1] - editWindow[0] < 500, 'Edit sample zooms into a short, editable window');
+    const firstRegion = drums.locator('.stem-pad-region').first();
+    const attackHandle = await firstRegion.locator('.stem-sample-fadeIn').boundingBox();
+    assert.equal(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.dataset.sampleHandle,
+      { x: attackHandle.x + attackHandle.width / 2, y: attackHandle.y + attackHandle.height / 2 }), 'fadeIn', 'The default attack handle is not covered by its pad label');
+    await firstRegion.locator('.stem-sample-fadeIn').press('Shift+ArrowRight');
+    assert.ok(Math.abs(Number(await firstRegion.getAttribute('data-fade-in')) - .013) < .001);
+    const fadeHandle = await firstRegion.locator('.stem-sample-fadeOut').boundingBox();
+    const focusedBounds = await drumWave.boundingBox();
+    const desiredTime = starts[0] + .2;
+    await page.mouse.move(fadeHandle.x + fadeHandle.width / 2, fadeHandle.y + fadeHandle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(focusedBounds.x + (desiredTime * 1000 - editWindow[0]) / (editWindow[1] - editWindow[0]) * focusedBounds.width, fadeHandle.y + fadeHandle.height / 2, { steps: 5 });
+    await page.mouse.up();
+    assert.ok(Math.abs(Number(await firstRegion.getAttribute('data-fade-out')) - .1) < .002, 'Fade is edited directly on the zoomed waveform');
+    await firstRegion.locator('.stem-sample-end').press('Shift+ArrowRight');
+    const editedEnd = Number(await firstRegion.getAttribute('data-end'));
+    assert.ok(Math.abs(editedEnd - starts[0] - .31) < .001);
+    const samplerArtifacts = path.join(root, 'test-results/stems-ui'); fs.mkdirSync(samplerArtifacts, { recursive: true });
+    await drums.screenshot({ path: path.join(samplerArtifacts, 'sample-envelope.png') });
+    assert.equal(await page.locator('.stem-loop-selection:visible').count(), 0, 'Editing a sample does not create a loop');
+    await page.keyboard.press('a'); await page.waitForTimeout(30);
+    assert.ok(Math.abs(await page.evaluate(() => stemTestSources.at(-1).testStart[2]) - .31) < .001, 'Edited length controls playback, even past a neighboring marker');
+    await page.keyboard.press('s'); await page.waitForTimeout(30);
+    assert.ok(Math.abs(await page.evaluate(() => stemTestSources.at(-1).testStart[2]) - .3) < .001, 'Other pads retain their own length');
+    await page.waitForFunction(() => document.querySelectorAll('.drum-pad.is-active').length === 0);
+    const envelopeAudio = await page.evaluate(async () => {
+      const { normalizeDrumSlice, scheduleDrumEnvelope } = await import('./scripts/stem-sampler.mjs');
+      const results = [];
+      for (const settings of [{ start: 1 }, { start: 1, end: 1.31, fadeIn: .013, fadeOut: .1 }]) {
+        const context = new OfflineAudioContext(1, 22050, 44100);
+        const buffer = context.createBuffer(1, 88200, 44100); buffer.getChannelData(0).fill(1);
+        const slice = normalizeDrumSlice(settings, buffer), length = slice.end - slice.start;
+        const source = context.createBufferSource(), envelope = context.createGain(); source.buffer = buffer;
+        scheduleDrumEnvelope(envelope.gain, slice, .01);
+        source.connect(envelope).connect(context.destination); source.start(.01, slice.start, length);
+        const audio = (await context.startRendering()).getChannelData(0);
+        const at = seconds => audio[Math.round((.01 + seconds) * 44100)];
+        results.push({ first: at(0), attack: at(slice.fadeIn / 2), peak: at(slice.fadeIn + .01),
+          release: at(length - slice.fadeOut / 2), tail: at(length + .005) });
+      }
+      return results;
+    });
+    for (const audio of envelopeAudio) {
+      assert.equal(audio.first, 0); assert.equal(audio.tail, 0, 'Rendered audio is silent past the slice end');
+      assert.ok(Math.abs(audio.attack - .5) < .01 && Math.abs(audio.release - .5) < .01, 'Both editable fades shape the actual PCM');
+      assert.equal(audio.peak, 1, 'The body of the hit retains its level');
+    }
+    await page.locator('.stem-zoom-tools button').last().click();
     await drumWave.hover(); await page.mouse.wheel(0, -100); await page.waitForTimeout(100);
     const windows = await page.locator('.waveform').evaluateAll(nodes => nodes.map(node => [Number(node.dataset.viewportStart), Number(node.dataset.viewportEnd)]));
     assert.ok(windows.every(window => JSON.stringify(window) === JSON.stringify(windows[0])));

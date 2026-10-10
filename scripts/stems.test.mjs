@@ -3,6 +3,31 @@ import test from 'node:test';
 import fs from 'node:fs';
 import { separateAudio, encodeWav, validateAudio } from './stem-audio.mjs';
 import './stem-jobs.js';
+import { normalizeDrumSlice, editDrumSlice } from './stem-sampler.mjs';
+
+test('drum slices default to 300 ms and migrate start-only presets without playing the remaining stem', () => {
+  const buffer = { duration: 120, sampleRate: 44100 };
+  const slice = normalizeDrumSlice(42, buffer);
+  assert.ok(Math.abs(slice.end - slice.start - .3) < 1 / 44100);
+  assert.equal(slice.fadeIn, .003); assert.equal(slice.fadeOut, .03);
+  assert.deepEqual(normalizeDrumSlice(slice, buffer), slice);
+  for (const bad of [null, undefined, NaN, Infinity, -1, 120, {}, { start: '1' }]) assert.equal(normalizeDrumSlice(bad, buffer), null);
+});
+
+test('sample trim and fades remain bounded at the final PCM frame and after extreme edits', () => {
+  const buffer = { duration: 3, sampleRate: 44100 };
+  const slice = normalizeDrumSlice({ start: 2.99999, fadeIn: 5, fadeOut: 10 }, buffer);
+  assert.ok(slice.end <= buffer.duration && slice.end > slice.start);
+  assert.ok(slice.fadeIn > 0 && slice.fadeOut > 0);
+  assert.ok(slice.fadeIn + slice.fadeOut <= slice.end - slice.start + 1e-12);
+  const normal = normalizeDrumSlice(1, buffer);
+  for (const kind of ['start', 'end', 'fadeIn', 'fadeOut']) for (const time of [-100, 0, 1.1, 100]) {
+    const edited = editDrumSlice(normal, kind, time, buffer);
+    assert.ok(edited.start >= 0 && edited.end <= buffer.duration && edited.start < edited.end);
+    assert.ok(edited.fadeIn > 0 && edited.fadeOut > 0 && edited.fadeIn + edited.fadeOut <= edited.end - edited.start + 1e-12);
+  }
+  assert.deepEqual(normal, { start: 1, end: 1.3, fadeIn: .003, fadeOut: .03 }, 'Editing does not mutate saved snapshots');
+});
 
 test('overlap/cropping preserves endpoints, stereo alignment and amplitude for short and multi-segment loops', async () => {
   for (const length of [1, 7, 16, 17, 28, 29, 47]) {

@@ -363,7 +363,7 @@ $('import-form').onsubmit = event => {
   mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
   $('import-dialog').close(); status(text('ready'));
 };
-const settings = () => ({ drumStarts: drumSampler?.snapshot(), states: structuredClone(states), rate, keepTone, mode, eq: mixOutput.snapshot().eq });
+const settings = () => ({ drumSlices: drumSampler?.snapshot(), states: structuredClone(states), rate, keepTone, mode, eq: mixOutput.snapshot().eq });
 libraryUI = mountStemLibrary({ locale, report: status,
   onOperation(value) { libraryOperating = value; $('separate').disabled = value || busy || !initialized; $('cancel').disabled = value; $('import-audio').disabled = value || busy || !importReady; },
   snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : null }),
@@ -601,7 +601,7 @@ function showResults(result, saved = null) {
     if (stem === 'drums') drumSampler = mountDrumSampler({ row, actions, waveform: row.querySelector('.waveform'),
       buffer: buffers[index], timeline: stemLoop, audioContext: () => mixOutput.getPlaybackContext(), output: () => mixOutput.input(),
       level: () => states[index].muted ? 0 : states[index].gain, changed: () => libraryUI.changed(),
-      saved: saved?.drumStarts, locale, report: playbackError });
+      saved: saved?.drumSlices ?? saved?.drumStarts, locale, report: playbackError });
   });
   outputs = [];
   $('mix').disabled = false; $('quality-note').hidden = false; mode = saved?.mode === 'original' ? 'original' : 'mix'; applyMix();

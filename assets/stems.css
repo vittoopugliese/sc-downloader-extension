@@ -296,11 +296,35 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .stem-sampler .stem-pads{margin:0 auto}
 .stem-sampler-hint{margin:6px 0 0;text-align:center;font-size:10px;color:var(--muted)}
 .stem-pads .drum-pad.is-assigned{border-bottom-color:#ff8a4c}
-.stem-pad-marker{position:absolute;top:18px;bottom:0;width:1px;background:#ffbc7e;pointer-events:none;z-index:3;font:700 10px Arial;color:#fff;text-shadow:0 1px 2px #000}
-.stem-pad-marker::first-letter{background:#80502e}
-.stem-pad-marker.is-selected{background:#fff;color:#ffb887}
+.stem-pad-marker{position:absolute;top:18px;bottom:0;width:1px;background:#ffbc7e;pointer-events:none;z-index:5}
+.stem-pad-marker.is-selected{background:#fff;z-index:6}
 .stem-pad-marker[hidden]{display:none}
 .waveform.is-placing-pad{outline:1px solid #ff8a4c;outline-offset:1px}
+.stem .waveform.is-sampling canvas{height:104px}
+.stem-actions .stem-sampler-toggle{width:auto;gap:5px;font-size:10px}
+.stem-sampler .drum-pad{height:43px;flex-direction:column;gap:4px}
+.stem-pad-length{font-size:8px;font-variant-numeric:tabular-nums;white-space:nowrap;opacity:.8}
+.stem-sampler .drum-pad.is-armed{outline:1px dashed #ffc39c;outline-offset:2px}
+.stem-sample-tools{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:8px}
+.stem-sample-tools[hidden],.stem-pad-region[hidden],.stem-sample-handle[hidden]{display:none}
+.stem-sample-summary{font-size:10px;color:#ffcead;font-variant-numeric:tabular-nums;text-align:center}
+.stem-sample-tools button{font-size:10px;padding:4px 8px;white-space:nowrap}
+.stem-pad-region{position:absolute;top:18px;bottom:0;pointer-events:none;z-index:3;border-right:1px solid #ffbc7e55;background:#ff8a4c0b}
+.stem-pad-region.is-selected{z-index:4;border-right-color:#ffb887;background:#ff8a4c14}
+.stem-pad-region svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.stem-pad-region polyline{fill:#ff995514;stroke:#ffbc7e66;stroke-width:1;vector-effect:non-scaling-stroke}
+.stem-pad-region.is-selected polyline{fill:#ff995533;stroke:#ffd1ab;stroke-width:1.5}
+.waveform .stem-sample-handle{position:absolute;display:block;min-width:0;width:16px;height:16px;padding:0;border:1px solid #fdbb88;border-radius:3px;background:#6b3d22;color:#fff;font:700 10px Arial;cursor:ew-resize;pointer-events:auto;touch-action:none}
+.waveform .stem-sample-start{left:0;top:0;border-radius:0 3px 3px 0}
+.waveform .stem-sample-end{bottom:0;transform:translateX(-100%);border-radius:3px 0 0 3px}
+.stem-sample-end::after{content:'↔'}
+.waveform .stem-sample-fadeIn,.waveform .stem-sample-fadeOut{top:35%;transform:translate(-50%,-50%);width:18px;height:18px;background:#ffd1ab;border:2px solid #653716}
+.stem-sample-fadeIn::after{content:'↗';color:#51250e}
+.stem-sample-fadeOut::after{content:'↘';color:#51250e}
+.waveform .stem-sample-handle:hover{background:#ffae78;color:#20130b}
+.waveform .stem-sample-handle:focus-visible{outline:2px solid #fff;outline-offset:2px;z-index:7}
+.waveform.is-placing-pad .stem-sample-handle{pointer-events:none}
+@media(max-width:600px){.stem-actions .stem-sampler-toggle span{display:none}.stem-sample-summary{font-size:9px}.stem-pad-length{font-size:7px}}
 .stem-zoom-tools{display:flex;align-items:center;gap:5px;margin:0 11px 8px}
 .stem-zoom-tools button{padding:2px 8px;font-size:15px}
 .stem-zoom-tools span{font-size:10px;color:var(--muted);margin-left:5px}
