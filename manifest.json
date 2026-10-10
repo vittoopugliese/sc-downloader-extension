@@ -69,6 +69,7 @@
         "scripts/inline-button.js",
         "scripts/likes-explorer-i18n.js",
         "scripts/soundcloud-likes-locator.js",
+        "scripts/likes-player.js",
         "scripts/likes-explorer.js"
       ]
     },

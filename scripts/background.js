@@ -447,7 +447,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const action = request.view === null ? chrome.storage.local.remove(key) : chrome.storage.local.set({ [key]: request.view });
     return respond(action, sendResponse);
   }
-  if (['GET_LIKES_LIBRARY_STATUS','START_LIKES_INDEX','REFRESH_LIKES_LIBRARY','CANCEL_LIKES_INDEX','QUERY_LIKES','SAVE_LIKES_VIEW','OPEN_LIKED_TRACK','LOCATE_LIKED_TRACK','START_LIKES_ARTWORK','PAUSE_LIKES_ARTWORK','GET_LIKES_ARTWORK','DELETE_LIKES_ARTWORK','DELETE_LIKES_LIBRARY','GET_LIKES_DOWNLOAD_SELECTION'].includes(request.type)) {
+  if (['GET_LIKES_LIBRARY_STATUS','START_LIKES_INDEX','REFRESH_LIKES_LIBRARY','CANCEL_LIKES_INDEX','QUERY_LIKES','SAVE_LIKES_VIEW','OPEN_LIKED_TRACK','PLAY_LIKED_TRACK','LOCATE_LIKED_TRACK','START_LIKES_ARTWORK','PAUSE_LIKES_ARTWORK','GET_LIKES_ARTWORK','DELETE_LIKES_ARTWORK','DELETE_LIKES_LIBRARY','GET_LIKES_DOWNLOAD_SELECTION'].includes(request.type)) {
     return respond(likesJobs.handle(request, sender), sendResponse);
   }
   if (request.type === "BULK_JOB_UPDATE" && ["completed", "completed_with_errors", "failed", "cancelled", "partial"].includes(request.job?.status)) {

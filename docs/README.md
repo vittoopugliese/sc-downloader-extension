@@ -1,5 +1,7 @@
 # Documentación y estado
 
+**09/10/2026 — Likes Explorer:** [selección y reproducción con widget compacto integrado, y apertura en otra pestaña](LIKES-EXPLORER-PLAYBACK-20261009.md), con validación del widget real de SoundCloud.
+
 **01/10/2026 — Interfaz de Stems:** estética de la landing, logo Player Tools, iconos y waveforms del looper con cursores sincronizados. Implementación y pruebas al final de [loop-stems.md](loop-stems.md).
 
 **30/09/2026 — Stems de loops:** [milestone funcional, pruebas y handoff para sesión en frío](loop-stems.md). Separación local HTDemucs en Chrome; evaluación musical contra FL Studio pendiente.

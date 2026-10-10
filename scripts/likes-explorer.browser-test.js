@@ -56,6 +56,7 @@ const { chromium } = require('playwright');
         if(r.type==='GET_LIKES_LIBRARY_STATUS')return{success:true,ownerId:'42',sourceUserId:'42',collectionId:'likes:42',displayName:'Your archive',library:fixtureLibraryReady?{generation:'g1',revision:1,count:fixtureCount,complete:true}:null,job:fixtureLibraryReady?{phase:'complete',count:fixtureCount}:null,collections:[]};
         if(r.type==='START_LIKES_INDEX'){fixtureLibraryReady=true;return{success:true};}
         if(r.type==='LOCATE_LIKED_TRACK')return{success:true,permalink:`https://soundcloud.com/artist/track-${r.trackId}`};
+        if(r.type==='PLAY_LIKED_TRACK')return{success:true,item:items.find(item=>item.itemId===r.trackId)};
         if(r.type==='QUERY_LIKES'){
           const all=items.slice(0,fixtureCount); const filtered=all.filter(x=>(!r.query || `${x.title} ${x.artistName}`.toLowerCase().includes(r.query.toLowerCase()))&&(!r.period || x.likedAt.slice(0,7)===r.period));
           const periods={};for(const x of all){const k=x.likedAt.slice(0,7);periods[k]||={count:0,firstTrackId:x.itemId};periods[k].count++;}
@@ -65,7 +66,7 @@ const { chromium } = require('playwright');
       }}};
     });
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
-    for(const file of ['fast-tooltips.js','likes-explorer-i18n.js','soundcloud-likes-locator.js','likes-explorer.js'])await page.addScriptTag({path:path.join(__dirname,file)});
+    for(const file of ['fast-tooltips.js','likes-explorer-i18n.js','soundcloud-likes-locator.js','likes-player.js','likes-explorer.js'])await page.addScriptTag({path:path.join(__dirname,file)});
     const locator=await page.evaluate(async()=>{
       const scroll=document.scrollingElement,original=scroll.scrollTo;let calls=0;
       scroll.scrollTo=()=>{calls++;setTimeout(()=>{const link=document.createElement('a');link.className='soundTitle__title';link.href='https://soundcloud.com/a/target';link.textContent='Target';document.querySelector('.l-main').append(link);},10);};
@@ -202,7 +203,7 @@ const { chromium } = require('playwright');
         openSingleLine:open.scrollHeight<=open.clientHeight,
       };
     });
-    assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['Abrir ↗',''],detailOrder:['cover','detail-copy','status','detail-actions'],oneLine:true,locateTitle:'Localizar en SoundCloud',locateIcon:true,openSingleLine:true});
+    assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['▶ Reproducir','↗',''],detailOrder:['detail-media','status','detail-actions'],oneLine:true,locateTitle:'Localizar en SoundCloud',locateIcon:true,openSingleLine:true});
     const teleportButton=page.locator('#scdl-likes-explorer .locate-action');
     await page.mouse.move(0,0);
     await teleportButton.hover(); await page.waitForTimeout(400);
@@ -261,11 +262,14 @@ const { chromium } = require('playwright');
     assert.equal(result.oversizedCode,'invalid-image');assert.equal(result.responseCancelled,true);
     console.log('Real extension service worker loaded; single compact 48px WebP encoding and decoding passed.');
     const jobsResult=await worker.evaluate(async()=>{
-      const originalSend=chrome.tabs.sendMessage, originalQuery=chrome.tabs.query, originalPage=SCLikesSource.fetchPage;
+      const originalSend=chrome.tabs.sendMessage, originalQuery=chrome.tabs.query, originalPage=SCLikesSource.fetchPage, originalCreate=chrome.tabs.create, originalUpdate=chrome.tabs.update;
+      const createdTabs=[]; let updatedTabs=0;
+      chrome.tabs.create=async options=>{createdTabs.push(options);return{id:456};};
+      chrome.tabs.update=async()=>{updatedTabs++;};
       let token='fixture-a', allowed=true, changeDuringFetch=true, fetches=0, fetchedOwners=[];
       chrome.tabs.sendMessage=async()=>({success:true,clientId:'fixture-client'});
       chrome.tabs.query=async()=>[{id:123,url:'https://soundcloud.com/you/likes'}];
-      SCLikesSource.fetchPage=async({ownerId})=>{fetches++;fetchedOwners.push(String(ownerId));if(changeDuringFetch)token='fixture-b';return {entries:[{kind:'track',itemId:String(ownerId)==='654'?'902':'901',title:'Private fixture',artistName:'Fixture',likedAt:null,artworkUrl:null}],rawCount:1,nextCursor:null};};
+      SCLikesSource.fetchPage=async({ownerId})=>{fetches++;fetchedOwners.push(String(ownerId));if(changeDuringFetch)token='fixture-b';return {entries:[{kind:'track',itemId:String(ownerId)==='654'?'902':'901',title:'Private fixture',artistName:'Fixture',likedAt:null,artworkUrl:null,permalink:'https://soundcloud.com/fixture/track'}],rawCount:1,nextCursor:null};};
       const jobs=SCLikesJobs.create({getToken:async()=>token,resolveUser:async()=>({user:{id:987,username:'Fixture'},oauthToken:token}),access:{authorize:async()=>({allowed,code:'pro-required'})}});
       const sender={id:chrome.runtime.id,tab:{id:123,url:'https://soundcloud.com/you/likes'},frameId:0,url:'https://soundcloud.com/you/likes'};
       try {
@@ -276,22 +280,31 @@ const { chromium } = require('playwright');
         await SCLikesLibrary.start('987','Fixture',false);await jobs.tick();
         const status=await jobs.handle({type:'GET_LIKES_LIBRARY_STATUS',ownerId:'987'},sender);
         const query=await jobs.handle({type:'QUERY_LIKES',ownerId:'987',limit:10},sender);
+        const opened=await jobs.handle({type:'OPEN_LIKED_TRACK',ownerId:'987',trackId:'901'},sender);
+        const playback=await jobs.handle({type:'PLAY_LIKED_TRACK',ownerId:'987',trackId:'901'},sender);
+        let missingPlayback,stalePlayback;
+        try{await jobs.handle({type:'PLAY_LIKED_TRACK',ownerId:'987',trackId:'999'},sender);}catch(e){missingPlayback=e.code;}
+        try{await jobs.handle({type:'PLAY_LIKED_TRACK',ownerId:'987',trackId:'901',generation:'obsolete'},sender);}catch(e){stalePlayback=e.code;}
         await SCLikesLibrary.startCollection('987',{collectionId:'likes:654',sourceUserId:'654',name:'Other profile'},true);
         await jobs.tick();
         const other=await SCLikesLibrary.get('collections',['987','likes:654']);
-        let wrongOwner,wrongSender,free;
+        let wrongOwner,wrongSender,free,freePlayback;
         try{await jobs.handle({type:'QUERY_LIKES',ownerId:'888'},sender);}catch(e){wrongOwner=e.code;}
         try{await jobs.handle({type:'QUERY_LIKES',ownerId:'987'},{...sender,frameId:1});}catch(e){wrongSender=e.code;}
         allowed=false;
         try{await jobs.handle({type:'QUERY_LIKES',ownerId:'987'},sender);}catch(e){free=e.code;}
+        try{await jobs.handle({type:'PLAY_LIKED_TRACK',ownerId:'987',trackId:'901'},sender);}catch(e){freePlayback=e.code;}
         await jobs.handle({type:'DELETE_LIKES_LIBRARY',ownerId:'987'},sender);
         const deleted=await SCLikesLibrary.get('libraries','987');
-        return {invalidatedCount:invalidated.count,paused:paused.phase,complete:status.library.complete,count:query.items.length,wrongOwner,wrongSender,free,deleted:!deleted,fetches,otherSource:other?.sourceUserId,externalFetched:fetchedOwners.includes('654')};
-      }finally{chrome.tabs.sendMessage=originalSend;chrome.tabs.query=originalQuery;SCLikesSource.fetchPage=originalPage;}
+        return {invalidatedCount:invalidated.count,paused:paused.phase,complete:status.library.complete,count:query.items.length,wrongOwner,wrongSender,free,deleted:!deleted,fetches,otherSource:other?.sourceUserId,externalFetched:fetchedOwners.includes('654'),createdTabs,updatedTabs,opened,playback,missingPlayback,stalePlayback,freePlayback};
+      }finally{chrome.tabs.sendMessage=originalSend;chrome.tabs.query=originalQuery;SCLikesSource.fetchPage=originalPage;chrome.tabs.create=originalCreate;chrome.tabs.update=originalUpdate;}
     });
     assert.equal(jobsResult.invalidatedCount,0);assert.equal(jobsResult.paused,'paused');assert.equal(jobsResult.complete,true);assert.equal(jobsResult.count,1);
     assert.equal(jobsResult.otherSource,'654');assert.equal(jobsResult.externalFetched,true);
     assert.equal(jobsResult.wrongOwner,'owner-mismatch');assert.equal(jobsResult.wrongSender,'invalid-request');assert.equal(jobsResult.free,'pro-required');assert.equal(jobsResult.deleted,true);
+    assert.deepEqual(jobsResult.createdTabs,[{url:'https://soundcloud.com/fixture/track',active:false,openerTabId:123}]);
+    assert.equal(jobsResult.updatedTabs,0);assert.equal(jobsResult.opened.tabId,456);assert.equal(jobsResult.playback.item.itemId,'901');
+    assert.equal(jobsResult.missingPlayback,'track-missing');assert.equal(jobsResult.stalePlayback,'stale-generation');assert.equal(jobsResult.freePlayback,'pro-required');
     console.log('Worker jobs: account change during fetch blocks commit; resume, sender/owner checks, Pro denial and Free deletion passed.');
     const popup=await context.newPage();await popup.setViewportSize({width:426,height:760});
     await popup.goto(`chrome-extension://${new URL(worker.url()).host}/popup.html`);
