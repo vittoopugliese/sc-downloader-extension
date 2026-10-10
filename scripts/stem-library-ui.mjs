@@ -51,8 +51,6 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
   const $ = id => document.getElementById(id);
   const selector = $('stem-presets'), toggle = $('save-locally'), dialog = $('save-dialog');
   $('preset-label').textContent = copy.saved;
-  $('save-label').textContent = copy.save;
-  toggle.title = copy.off;
   $('preset-folder').title = $('preset-folder').ariaLabel = copy.folder;
   $('preset-reset').title = $('preset-reset').ariaLabel = copy.reset;
   $('save-title').textContent = copy.confirm;
@@ -70,7 +68,9 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
   function controls() {
     onOperation(operating);
     for (const id of ['stem-presets', 'preset-folder', 'preset-reset', 'preset-reconnect', 'save-locally']) $(id).disabled = operating || inference || !library;
-    toggle.checked = enabled;
+    toggle.setAttribute('aria-pressed', String(enabled));
+    toggle.title = enabled ? `${copy.save} · ${copy.off}` : copy.save;
+    toggle.setAttribute('aria-label', copy.save);
     toggle.disabled ||= !snapshot().info;
     $('preset-reset').hidden = !library?.directory;
     $('preset-folder').classList.toggle('has-custom-folder', !!library?.directory);
@@ -126,9 +126,8 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
     } catch (cause) { enabled = false; error(cause); }
     finally { operating = false; controls(); }
   }
-  toggle.onchange = () => {
-    if (!toggle.checked) { enabled = false; controls(); return; }
-    toggle.checked = false;
+  toggle.onclick = () => {
+    if (enabled) { enabled = false; controls(); return; }
     if (active) { enabled = true; changed(); controls(); return; }
     $('save-name').value = snapshot().info?.title || '';
     $('save-destination').textContent = `${copy.destination}: ${library.directory?.name || copy.browser}`;

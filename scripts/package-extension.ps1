@@ -63,6 +63,8 @@ $packageItems = @(
     "scripts/stem-library-ui.mjs",
     "scripts/stem-loop.mjs",
     "scripts/stem-sampler.mjs",
+    "scripts/stem-sequencer-core.mjs",
+    "scripts/stem-sequencer.mjs",
     "scripts/local-audio-output.mjs",
     "scripts/stem-tone-processor.mjs",
     "scripts/vendor/onnxruntime",

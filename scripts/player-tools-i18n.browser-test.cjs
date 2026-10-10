@@ -48,7 +48,7 @@ const { chromium } = require('playwright');
       await page.goto(`${origin}/stems.html`);
       await page.locator('#import-audio:not(:disabled)').waitFor();
       assert.equal(await page.locator('html').getAttribute('lang'), locale);
-      assert.equal(await page.locator('.keep-tone').innerText(), tone);
+      assert.ok((await page.locator('.keep-tone').getAttribute('title')).toLowerCase().startsWith(tone.toLowerCase()), `${locale}: Keep Tone tooltip`);
       assert.equal(await page.locator('.record-section .tool-section-title').textContent(), record);
       await page.locator('#audio-file').setInputFiles({ name: 'Track.wav', mimeType: 'audio/wav', buffer: wav });
       await page.locator('#import-name').fill('Record'); // A user title matching a catalog key must stay untouched.
@@ -63,7 +63,7 @@ const { chromium } = require('playwright');
         record: SCPlayerToolsText.t('Record the final mix'),
       }));
       assert.equal(await page.locator('.stem-sampler-hint').textContent(), copy.hint);
-      assert.equal(await page.locator('#stem-rate-reset').getAttribute('aria-label'), copy.reset);
+      assert.equal(await page.locator('#stem-rate').getAttribute('title'), await page.evaluate(() => SCPlayerToolsText.t('Double-click to reset')));
       assert.equal(await page.locator('.record-start').getAttribute('title'), copy.record);
       for (const width of [1000, 390, 320]) {
         await page.setViewportSize({ width, height: 1000 });

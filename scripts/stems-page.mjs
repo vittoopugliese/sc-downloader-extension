@@ -1,4 +1,5 @@
 import { mountDrumSampler } from './stem-sampler.mjs';
+import { mountDrumSequencer } from './stem-sequencer.mjs';
 import { createEqualizedOutput } from './local-audio-output.mjs';
 import { createStemLoop } from './stem-loop.mjs';
 import { SAMPLE_RATE, MAX_SECONDS, STEMS, encodeWav } from './stem-audio.mjs';
@@ -11,7 +12,7 @@ const translations = {
     separationLabel: 'Separation', extract: 'Unpack your sound.', local: 'On-device',
     intro: 'Separate vocals, drums, bass and other instruments locally. Your audio stays in Chrome.',
     details: 'First use downloads a 166 MB model. Processing can take a few minutes and uses substantial memory. Up to 2 minutes, at original speed without effects.',
-    separate: 'Separate loop', cancel: 'Cancel', clearCache: 'Remove cached model', playGame: 'Play Lumberjack game', hideGame: 'Close Lumberjack game', gameTitle: 'Lumberjack game',
+    separate: 'Separate loop', cancel: 'Cancel', clearCache: 'Remove model', playGame: 'Play Lumberjack game', hideGame: 'Close Lumberjack game', gameTitle: 'Lumberjack game',
     listenCompareLabel: 'Listen and compare', listen: 'Find your mix.', play: 'Play', stop: 'Pause', comparisonLabel: 'Compare', original: 'Original', mix: 'Stem mix',
     lows: 'Lows', mids: 'Mids', highs: 'Highs', position: 'Position',
     quality: 'Some bleed and artifacts are normal. Compare with the original. Stems: stereo 44.1 kHz float WAV. Recorder: stereo 48 kHz PCM16 WAV.',
@@ -30,7 +31,7 @@ const translations = {
     separationLabel: 'Separación', extract: 'Separá tu sonido.', local: 'En tu equipo',
     intro: 'Separá voz, batería, bajo y otros instrumentos localmente. Tu audio se queda en Chrome.',
     details: 'El primer uso descarga un modelo de 166 MB. El proceso puede tardar unos minutos y consume bastante memoria. Hasta 2 minutos, a velocidad original y sin efectos.',
-    separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Eliminar modelo de la caché', playGame: 'Jugar a Lumberjack', hideGame: 'Cerrar Lumberjack', gameTitle: 'Juego Lumberjack',
+    separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Eliminar modelo', playGame: 'Jugar a Lumberjack', hideGame: 'Cerrar Lumberjack', gameTitle: 'Juego Lumberjack',
     listenCompareLabel: 'Escuchar y comparar', listen: 'Encontrá tu mezcla.', play: 'Reproducir', stop: 'Pausar', comparisonLabel: 'Comparar', original: 'Original', mix: 'Mezcla de stems',
     lows: 'Graves', mids: 'Medios', highs: 'Agudos', position: 'Posición',
     quality: 'Puede haber filtraciones y artefactos. Compará con el original. Stems: WAV estéreo de 44,1 kHz en coma flotante. Recorder: WAV estéreo de 48 kHz PCM16.',
@@ -49,7 +50,7 @@ const translations = {
     separationLabel: 'Stem-Trennung', extract: 'Entfalte deinen Sound.', local: 'Auf diesem Gerät',
     intro: 'Trenne Gesang, Schlagzeug, Bass und andere Instrumente lokal. Dein Audio bleibt in Chrome.',
     details: 'Bei der ersten Verwendung wird ein 166-MB-Modell heruntergeladen. Die Verarbeitung kann einige Minuten dauern und benötigt viel Arbeitsspeicher. Bis zu 2 Minuten, in Originalgeschwindigkeit und ohne Effekte.',
-    separate: 'Loop trennen', cancel: 'Abbrechen', clearCache: 'Modell aus Cache entfernen', playGame: 'Lumberjack spielen', hideGame: 'Lumberjack schließen', gameTitle: 'Lumberjack-Spiel',
+    separate: 'Loop trennen', cancel: 'Abbrechen', clearCache: 'Modell entfernen', playGame: 'Lumberjack spielen', hideGame: 'Lumberjack schließen', gameTitle: 'Lumberjack-Spiel',
     listenCompareLabel: 'Anhören und vergleichen', listen: 'Finde deinen Mix.', play: 'Abspielen', stop: 'Pausieren', comparisonLabel: 'Vergleichen', original: 'Original', mix: 'Stem-Mix',
     lows: 'Bässe', mids: 'Mitten', highs: 'Höhen', position: 'Position',
     quality: 'Übersprechen und Artefakte sind normal. Vergleiche das Ergebnis mit dem Original. Stems: Stereo-WAV mit 44,1 kHz und Fließkommawerten. Recorder: Stereo-WAV mit 48 kHz PCM16.',
@@ -68,7 +69,7 @@ const translations = {
     separationLabel: 'Separação', extract: 'Abra seu som.', local: 'Neste dispositivo',
     intro: 'Separe vocais, bateria, baixo e outros instrumentos localmente. Seu áudio permanece no Chrome.',
     details: 'No primeiro uso, um modelo de 166 MB será baixado. O processamento pode levar alguns minutos e usar bastante memória. Até 2 minutos, na velocidade original e sem efeitos.',
-    separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Remover modelo do cache', playGame: 'Jogar Lumberjack', hideGame: 'Fechar Lumberjack', gameTitle: 'Jogo Lumberjack',
+    separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Remover modelo', playGame: 'Jogar Lumberjack', hideGame: 'Fechar Lumberjack', gameTitle: 'Jogo Lumberjack',
     listenCompareLabel: 'Ouvir e comparar', listen: 'Encontre sua mixagem.', play: 'Reproduzir', stop: 'Pausar', comparisonLabel: 'Comparar', original: 'Original', mix: 'Mixagem de stems',
     lows: 'Graves', mids: 'Médios', highs: 'Agudos', position: 'Posição',
     quality: 'Algum vazamento e alguns artefatos são normais. Compare com o original. Stems: WAV estéreo de 44,1 kHz em ponto flutuante. Recorder: WAV estéreo de 48 kHz PCM16.',
@@ -87,7 +88,7 @@ const translations = {
     separationLabel: 'Разделение', extract: 'Разберите звук на части.', local: 'На этом устройстве',
     intro: 'Разделяйте вокал, ударные, бас и другие инструменты локально. Аудио остается в Chrome.',
     details: 'При первом запуске загружается модель размером 166 МБ. Обработка может занять несколько минут и требует много памяти. До 2 минут, с исходной скоростью и без эффектов.',
-    separate: 'Разделить луп', cancel: 'Отменить', clearCache: 'Удалить модель из кеша', playGame: 'Играть в Lumberjack', hideGame: 'Закрыть Lumberjack', gameTitle: 'Игра Lumberjack',
+    separate: 'Разделить луп', cancel: 'Отменить', clearCache: 'Удалить модель', playGame: 'Играть в Lumberjack', hideGame: 'Закрыть Lumberjack', gameTitle: 'Игра Lumberjack',
     listenCompareLabel: 'Прослушать и сравнить', listen: 'Создайте свой микс.', play: 'Воспроизвести', stop: 'Пауза', comparisonLabel: 'Сравнить', original: 'Оригинал', mix: 'Микс стемов',
     lows: 'Низкие', mids: 'Средние', highs: 'Высокие', position: 'Позиция',
     quality: 'Небольшое проникновение звука и артефакты — это нормально. Сравните с оригиналом. Стемы: стерео WAV 44,1 кГц с плавающей точкой. Recorder: стерео WAV 48 кГц PCM16.',
@@ -114,6 +115,7 @@ document.documentElement.lang = locale;
 document.title = text('pageTitle');
 globalThis.SCPlayerToolsText.localize(document.querySelector('main'));
 document.querySelectorAll('[data-copy]').forEach(node => { node.textContent = text(node.dataset.copy); });
+document.querySelectorAll('[data-copy-title]').forEach(node => { node.title = text(node.dataset.copyTitle); node.setAttribute('aria-label', node.title); });
 document.querySelectorAll('[data-copy-aria-label]').forEach(node => { node.setAttribute('aria-label', text(node.dataset.copyAriaLabel)); });
 // Local inline icons keep the extension page self-contained.
 const iconPaths = {
@@ -129,6 +131,8 @@ const iconPaths = {
   bass: '<path d="M5 12v2m4-7v12m4-16v18m4-15v12m4-9v6"/>',
   other: '<path d="M3 4h18v16H3zM7 4v9h3V4m4 0v9h3V4M9 13v7m6-7v7"/>',
   vocals: '<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/>',
+  game: '<rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 10v5M4.5 12.5h5M15 11h.01M18 14h.01"/>',
+  save: '<path d="M5 3h11l5 5v13H3V3h2Zm2 0v6h8V3M7 21v-7h10v7"/>',
   upload: '<path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/>',
 };
 function icon(name) {
@@ -137,23 +141,31 @@ function icon(name) {
   node.classList.add('icon'); node.innerHTML = iconPaths[name] || iconPaths.music;
   return node;
 }
+$('separate').title = `${text('separate')} · ${text('details')}`;
+$('toggle-game').title = text('playGame');
 document.querySelectorAll('[data-icon]').forEach(node => node.replaceChildren(icon(node.dataset.icon)));
-function playLabel(active) { $('play').replaceChildren(icon(active ? 'pause' : 'play'), document.createTextNode(text(active ? 'stop' : 'play'))); }
+function playLabel(active) {
+  const label = text(active ? 'stop' : 'play');
+  $('play').replaceChildren(icon(active ? 'pause' : 'play'));
+  $('play').title = label; $('play').setAttribute('aria-label', label);
+}
 const padStyle = document.createElement('style');
 padStyle.textContent = globalThis.SCSamplerCore.PAD_STYLES;
 document.head.append(padStyle);
 const waveforms = new Set();
-let drumSampler = null;
+let drumSampler = null, drumSequencer = null, sequenceRevision = 0;
+const retiringNodes = new Set();
 const stemLoop = createStemLoop({ viewportChanged() {
   for (const view of waveforms) view.draw();
-  updatePlayheads(); drumSampler?.render();
+  updatePlayheads(); drumSampler?.render(); drumSequencer?.renderMarker();
 }, duration: () => original?.duration || 0, changed(previous) {
   const current = offset(previous);
   const { startMs, endMs } = stemLoop.range();
-  for (const { source } of nodes) { source.loopStart = startMs / 1000; source.loopEnd = endMs / 1000; }
+  for (const { source, pattern } of nodes) if (!pattern) { source.loopStart = startMs / 1000; source.loopEnd = endMs / 1000; }
   position = current;
   if (playing) startedAt = Math.max(startedAt, context.currentTime);
   if ((current < startMs / 1000 || current >= endMs / 1000)) seekTo(startMs / 1000);
+  if (drumSequencer?.enabled() && !drumSequencer.matchesRange(stemLoop.range())) drumSequencer.deactivate();
 } });
 const zoomTools = document.createElement('div'); zoomTools.className = 'stem-zoom-tools';
 for (const [label, title, action] of [
@@ -174,6 +186,7 @@ function seekTo(value) {
 }
 function updatePlayheads() {
   if (!original) return;
+  drumSequencer?.updateTransport(offset(), playing, rate);
   const percent = stemLoop.percent(Math.max(0, offset()) * 1000);
   for (const view of waveforms) {
     view.playhead.style.left = `${percent}%`;
@@ -195,7 +208,8 @@ function mountWaveform(parent, buffer, label) {
   const canvas = document.createElement('canvas'); canvas.setAttribute('role', 'img'); canvas.setAttribute('aria-label', label);
   const playhead = document.createElement('span'); playhead.className = 'waveform-playhead'; playhead.setAttribute('aria-hidden', 'true');
   element.append(canvas, playhead); parent.append(element);
-  const disposeLoop = stemLoop.mount(element, seekTo, seconds => parent.dataset.stem === 'drums' && drumSampler?.place(seconds));
+  const disposeLoop = stemLoop.mount(element, seekTo, seconds => parent.dataset.stem === 'drums' &&
+    (drumSequencer?.place(seconds) || drumSampler?.place(seconds)));
   const controller = new AbortController();
   const view = { element, playhead, draw: () => drawWaveform(), dispose() { disposeLoop(); controller.abort(); observer.disconnect(); waveforms.delete(view); element.remove(); } };
   waveforms.add(view);
@@ -301,7 +315,9 @@ const recorderUI = globalThis.SCRecordUI.mount({
 equalizerUI.setCollapsed(false);
 recorderUI.setCollapsed(false);
 function revealAudition() {
-  $('audition').hidden = false;
+  $('audition').hidden = false; $('listen-controls').hidden = false;
+  // With results, the source row also holds the transport: keep it to one line.
+  document.querySelector('.prepare').classList.add('has-results');
   equalizerUI.setVisible(true);
   recorderUI.setVisible(true);
 }
@@ -363,7 +379,7 @@ $('import-form').onsubmit = event => {
   mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
   $('import-dialog').close(); status(text('ready'));
 };
-const settings = () => ({ drumSlices: drumSampler?.snapshot(), states: structuredClone(states), rate, keepTone, mode, eq: mixOutput.snapshot().eq });
+const settings = () => ({ drumSlices: drumSampler?.snapshot(), drumSequence: drumSequencer?.snapshot(), states: structuredClone(states), rate, keepTone, mode, eq: mixOutput.snapshot().eq });
 libraryUI = mountStemLibrary({ locale, report: status,
   onOperation(value) { libraryOperating = value; $('separate').disabled = value || busy || !initialized; $('cancel').disabled = value; $('import-audio').disabled = value || busy || !importReady; },
   snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : null }),
@@ -394,7 +410,9 @@ libraryUI = mountStemLibrary({ locale, report: status,
 function renderTempo() {
   $('stem-rate').value = rate;
   $('stem-rate').style.setProperty('--range-fill', `${(rate - .1) / 2.9 * 100}%`);
-  $('stem-rate-number').value = rate;
+  // Same truncated display as the Player Tools speed readout.
+  $('stem-rate-value').textContent = `${(Math.floor(rate * 1000 + 1e-9) / 1000).toFixed(3)}x`;
+  $('stem-rate').setAttribute('aria-valuetext', $('stem-rate-value').textContent);
   $('stem-keep-tone').checked = keepTone;
 }
 function changeTempo(value = rate, preserve = keepTone) {
@@ -411,10 +429,9 @@ function changeTempo(value = rate, preserve = keepTone) {
   renderTempo(); libraryUI.changed();
 }
 $('stem-rate').oninput = event => changeTempo(event.target.value);
-$('stem-rate-number').onchange = event => changeTempo(event.target.value);
 $('stem-rate').ondblclick = () => changeTempo(1);
 $('stem-keep-tone').onchange = event => changeTempo(rate, event.target.checked);
-$('stem-rate-reset').onclick = () => changeTempo(1, false);
+$('stem-rate').title = pt('Double-click to reset');
 renderTempo();
 
 async function prepareTone() {
@@ -470,9 +487,9 @@ function audioBuffer(channels) {
   channels.forEach((channel, i) => buffer.copyToChannel(channel, i));
   return buffer;
 }
-function offset(loopRange = stemLoop.range()) {
+function offset(loopRange = stemLoop.range(), at = context?.currentTime || 0) {
   if (!playing) return position;
-  const value = Math.max(0, position + Math.max(0, context.currentTime - startedAt) * rate);
+  const value = Math.max(0, position + Math.max(0, at - startedAt) * rate);
   const { startMs, endMs } = loopRange;
   const start = startMs / 1000, end = endMs / 1000;
   return value >= end ? start + (value - end) % (end - start) : Math.min(value, original.duration);
@@ -480,7 +497,7 @@ function offset(loopRange = stemLoop.range()) {
 function pause() {
   playbackRevision++;
   position = offset(); playing = false;
-  for (const { source, gain } of nodes) { source.stop(); source.disconnect(); gain.disconnect(); }
+  for (const node of [...nodes, ...retiringNodes]) { node.source.stop(); node.cleanup(); }
   nodes = [];
   toneNode?.port.postMessage({ rate, keepTone, reset: true });
   playLabel(false); updatePlayheads();
@@ -502,30 +519,57 @@ function applyMix() {
   $('original').setAttribute('aria-pressed', String(mode === 'original'));
   $('mix').setAttribute('aria-pressed', String(mode === 'mix'));
 }
+function createPlaybackNode(buffer, when, at, pattern = false) {
+  const source = context.createBufferSource(), gain = context.createGain();
+  const { startMs, endMs } = stemLoop.range();
+  source.buffer = buffer; source.loop = true; source.playbackRate.value = rate;
+  source.loopStart = pattern ? 0 : startMs / 1000; source.loopEnd = pattern ? buffer.duration : endMs / 1000;
+  gain.gain.value = 0; source.connect(gain).connect(toneNode);
+  const node = { source, gain, pattern, cleanup() { source.disconnect(); gain.disconnect(); retiringNodes.delete(node); } };
+  source.onended = node.cleanup;
+  const seek = pattern ? ((at - startMs / 1000) % buffer.duration + buffer.duration) % buffer.duration : at;
+  source.start(when, seek);
+  return node;
+}
+async function syncSequence({ loop = false } = {}) {
+  const version = ++sequenceRevision, owner = drumSequencer;
+  if (!owner) return;
+  libraryUI.changed();
+  if (loop && owner.range()) stemLoop.setRange(owner.range());
+  if (!playing) return;
+  const transportVersion = playbackRevision;
+  const pattern = owner.enabled() ? await owner.prepare() : null;
+  if (!playing || version !== sequenceRevision || transportVersion !== playbackRevision || owner !== drumSequencer) return;
+  const when = context.currentTime + .015, old = nodes[1];
+  const next = createPlaybackNode(pattern || buffers[0], when, offset(undefined, when), !!pattern);
+  nodes[1] = next;
+  const audible = mode === 'mix' && !states[0].muted && (!states.some(state => state.solo) || states[0].solo);
+  next.gain.gain.setValueAtTime(0, when);
+  next.gain.gain.linearRampToValueAtTime(audible ? states[0].gain : 0, when + .008);
+  old.gain.gain.cancelAndHoldAtTime(when);
+  old.gain.gain.linearRampToValueAtTime(0, when + .008); retiringNodes.add(old); old.source.stop(when + .008);
+}
 async function play() {
   if (!original || playing) return;
   const version = ++playbackRevision;
   context ||= new AudioContext({ sampleRate: SAMPLE_RATE });
   await context.resume();
   await prepareTone();
+  const pattern = drumSequencer?.enabled() ? await drumSequencer.prepare() : null;
   if (playing || version !== playbackRevision) return;
   const { startMs, endMs } = stemLoop.range();
   if ((position < startMs / 1000 || position >= endMs / 1000)) position = startMs / 1000;
   else if (position >= original.duration) position = 0;
   startedAt = context.currentTime + 0.03;
-  nodes = [original, ...buffers].map(buffer => {
-    const source = context.createBufferSource(), gain = context.createGain();
-    source.buffer = buffer; source.loopStart = startMs / 1000; source.loopEnd = endMs / 1000; source.loop = true; source.playbackRate.value = rate;
-    gain.gain.value = 0; source.connect(gain).connect(toneNode);
-    source.start(startedAt, position);
-    return { source, gain };
-  });
+  nodes = [original, ...buffers].map((buffer, index) =>
+    createPlaybackNode(index === 1 && pattern ? pattern : buffer, startedAt, position, index === 1 && !!pattern));
   toneNode.port.postMessage({ rate, keepTone, reset: true });
   playing = true; applyMix(); playLabel(true);
 }
 function disposeResults() {
   mixOutput.setEqualizer(null); equalizerUI.reset();
-  pause(); drumSampler?.dispose(); drumSampler = null; stemLoop.reset(); buffers = []; outputs = [];
+  pause(); drumSequencer?.dispose(); drumSequencer = null; sequenceRevision++;
+  drumSampler?.dispose(); drumSampler = null; stemLoop.reset(); buffers = []; outputs = [];
   urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
   for (const view of waveforms) if ($('stems').contains(view.element)) view.dispose();
   $('stems').replaceChildren(); $('mix').disabled = true; $('quality-note').hidden = true;
@@ -537,14 +581,30 @@ function showResults(result, saved = null) {
   outputs = result.outputs;
   buffers = outputs.map(audioBuffer);
   states = STEMS.map((_, index) => ({ muted: !!saved?.states?.[index]?.muted, solo: false,
-    gain: Number.isFinite(saved?.states?.[index]?.gain) ? Math.max(0, Math.min(1, saved.states[index].gain)) : 1 }));
+    gain: Number.isFinite(saved?.states?.[index]?.gain) ? Math.max(0, Math.min(1, saved.states[index].gain)) : 1,
+    collapsed: saved?.states?.[index]?.collapsed === true }));
   rate = Number.isFinite(saved?.rate) ? Math.max(.1, Math.min(3, saved.rate)) : 1;
   keepTone = !!saved?.keepTone;
   renderTempo();
   wavs = [new Blob([encodeWav([original.getChannelData(0), original.getChannelData(1)])], { type: 'audio/wav' })];
   STEMS.forEach((stem, index) => {
     const row = document.createElement('div'); row.className = 'stem'; row.dataset.stem = stem;
-    const name = document.createElement('h2'); name.append(icon(stem), document.createTextNode(text(stem)));
+    // Same disclosure as the Player Tools sections: the header stays, the waveform and tools fold away.
+    const name = document.createElement('h2'), collapse = document.createElement('button');
+    collapse.type = 'button'; collapse.className = 'stem-collapse';
+    collapse.innerHTML = '<svg class="stem-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>';
+    collapse.prepend(icon(stem), document.createTextNode(text(stem))); name.append(collapse);
+    const renderCollapsed = () => {
+      row.classList.toggle('is-collapsed', states[index].collapsed);
+      collapse.setAttribute('aria-expanded', String(!states[index].collapsed));
+      collapse.title = `${pt(states[index].collapsed ? 'Expand' : 'Collapse')} ${text(stem)}`;
+      collapse.setAttribute('aria-label', collapse.title);
+    };
+    collapse.onclick = () => {
+      states[index].collapsed = !states[index].collapsed; renderCollapsed(); libraryUI.changed();
+      if (!states[index].collapsed) requestAnimationFrame(() => { for (const view of waveforms) if (row.contains(view.element)) view.draw(); });
+    };
+    renderCollapsed();
     const enabled = document.createElement('button'); enabled.type = 'button'; enabled.className = 'stem-enable stem-solo';
     enabled.setAttribute('role', 'switch');
     enabled.setAttribute('aria-label', pt('Enable $1', text(stem)));
@@ -598,13 +658,19 @@ function showResults(result, saved = null) {
     const actions = document.createElement('div'); actions.className = 'stem-actions'; actions.append(...controls, link, volume);
     row.append(name, actions); $('stems').append(row);
     mountWaveform(row, buffers[index], `${text(stem)} · ${text('position')}`);
-    if (stem === 'drums') drumSampler = mountDrumSampler({ row, actions, waveform: row.querySelector('.waveform'),
+    if (stem === 'drums') {
+      drumSampler = mountDrumSampler({ row, actions, waveform: row.querySelector('.waveform'),
       buffer: buffers[index], timeline: stemLoop, audioContext: () => mixOutput.getPlaybackContext(), output: () => mixOutput.input(),
-      level: () => states[index].muted ? 0 : states[index].gain, changed: () => libraryUI.changed(),
+      level: () => states[index].muted ? 0 : states[index].gain, changed: () => { libraryUI.changed(); drumSequencer?.samplesChanged(); },
       saved: saved?.drumSlices ?? saved?.drumStarts, locale, report: playbackError });
+      drumSequencer = mountDrumSequencer({ row, actions, waveform: row.querySelector('.waveform'), timeline: stemLoop,
+        buffer: buffers[index], sampler: drumSampler, saved: saved?.drumSequence, changed: syncSequence,
+        togglePlayback, rate: () => rate, setRate: value => changeTempo(value), report: playbackError });
+    }
   });
   outputs = [];
   $('mix').disabled = false; $('quality-note').hidden = false; mode = saved?.mode === 'original' ? 'original' : 'mix'; applyMix();
+  if (drumSequencer?.enabled() && drumSequencer.range()) stemLoop.setRange(drumSequencer.range());
   status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`);
 }
 
@@ -688,7 +754,8 @@ $('toggle-game').onclick = () => {
   }
   panel.hidden = !open;
   $('toggle-game').setAttribute('aria-expanded', String(open));
-  $('toggle-game').replaceChildren(icon(open ? 'close' : 'play'), document.createTextNode(text(open ? 'hideGame' : 'playGame')));
+  const gameLabel = document.createElement('span'); gameLabel.dataset.copy = open ? 'hideGame' : 'playGame'; gameLabel.textContent = text(gameLabel.dataset.copy);
+  $('toggle-game').replaceChildren(icon(open ? 'close' : 'game'), gameLabel); $('toggle-game').title = gameLabel.textContent;
 };
 $('clear-cache').onclick = async () => {
   try { await caches.delete(MODEL.cache); status(text('cleared')); } catch (error) { console.error('[Stems cache]', error); status(text('cacheClearFailed'), true); }
@@ -712,16 +779,11 @@ function animate() {
   animationFrame = requestAnimationFrame(animate);
 }
 animate();
-const timeInterval = setInterval(() => {
-  if (!original) return;
-  const current = Math.max(0, offset());
-  $('time').textContent = `${formatOneDecimal.format(current)} / ${formatOneDecimal.format(original.duration)} s`;
-}, 100);
 window.addEventListener('pagehide', () => {
   equalizerUI.dispose(); recorderUI.dispose(); mixOutput.dispose();
-  cancelAnimationFrame(animationFrame); clearInterval(timeInterval);
+  cancelAnimationFrame(animationFrame);
   for (const view of waveforms) view.dispose();
-  drumSampler?.dispose(); worker?.terminate(); pause(); toneNode?.port.postMessage({ type: 'dispose' }); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
+  drumSequencer?.dispose(); drumSampler?.dispose(); worker?.terminate(); pause(); toneNode?.port.postMessage({ type: 'dispose' }); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
   if (jobId) chrome.runtime.sendMessage({ type: 'STEM_LOOP_CANCEL', jobId }).catch(() => {});
 });
 function renderInfo(value) {
@@ -733,8 +795,9 @@ function renderInfo(value) {
     const seconds = Math.round(info.durationMs / 1000);
     metadata.push(`${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
   }
-  $('track-meta').textContent = metadata.filter(Boolean).join(' · ');
-  $('track-meta').hidden = !$('track-meta').textContent;
+  // Only the title and cover are visible; details stay in the tooltip.
+  const track = $('track');
+  track.dataset.meta = metadata.filter(Boolean).join(' · ');
   $('artwork').hidden = true; $('artwork-fallback').hidden = false; $('artwork').removeAttribute('src');
   if (typeof info.artworkUrl === 'string' && /^https:\/\//i.test(info.artworkUrl)) {
     const artwork = $('artwork');
@@ -742,7 +805,8 @@ function renderInfo(value) {
     artwork.onerror = () => { artwork.hidden = true; $('artwork-fallback').hidden = false; };
     artwork.src = info.artworkUrl;
   }
-  $('range').textContent = `A ${formatTwoDecimals.format(info.trimRange.startMs / 1000)} s → B ${formatTwoDecimals.format(info.trimRange.endMs / 1000)} s · ${formatTwoDecimals.format((info.trimRange.endMs - info.trimRange.startMs) / 1000)} s`;
+  track.dataset.range = `A ${formatTwoDecimals.format(info.trimRange.startMs / 1000)} s → B ${formatTwoDecimals.format(info.trimRange.endMs / 1000)} s · ${formatTwoDecimals.format((info.trimRange.endMs - info.trimRange.startMs) / 1000)} s`;
+  track.title = [title, track.dataset.meta, track.dataset.range].filter(Boolean).join('\n');
 }
 document.querySelector('footer [data-copy="footer"]').textContent = ({
   es: 'El audio permanece en tu equipo. Activá Guardar localmente para conservar la separación.',

@@ -55,8 +55,8 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('.prepare').getAttribute('aria-label'), 'Separación');
     assert.equal(await page.locator('#audition').getAttribute('aria-label'), 'Escuchar y comparar');
     assert.equal(await page.locator('.comparison').getAttribute('aria-label'), 'Comparar');
-    assert.equal(await page.locator('#clear-cache').textContent(), 'Eliminar modelo de la caché');
-    assert.equal(await page.locator('#track-meta').textContent(), 'Fixture artist · 3:05');
+    assert.equal(await page.locator('#clear-cache').textContent(), 'Eliminar modelo');
+    assert.equal(await page.locator('#track').getAttribute('data-meta'), 'Fixture artist · 3:05');
     assert.equal(await page.locator('#artwork-fallback').isVisible(), false);
     await page.evaluate(() => {
       const send = chrome.runtime.sendMessage;
@@ -131,19 +131,19 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('#repeat').count(), 0, 'Repeat is always enabled and has no toggle');
     await page.locator('#play').press('Space');
     await page.waitForTimeout(3200);
-    assert.match(await page.locator('#play').textContent(), /Pausar/, 'The full sample keeps playing past its end');
+    assert.match(await page.locator('#play').getAttribute('aria-label'), /Pausar/, 'The full sample keeps playing past its end');
     assert.ok(await page.evaluate(() => stemTestSources.slice(-5).every(source => source.loop && source.loopStart === 0 && source.loopEnd === 3)));
     await page.locator('#play').dispatchEvent('keydown', { code: 'Space', key: ' ', repeat: true });
-    assert.match(await page.locator('#play').textContent(), /Pausar/, 'Holding Space does not toggle repeatedly');
+    assert.match(await page.locator('#play').getAttribute('aria-label'), /Pausar/, 'Holding Space does not toggle repeatedly');
     await page.evaluate(() => {
       const input = document.createElement('input'); input.id = 'shortcut-text-fixture'; document.body.append(input); input.focus();
     });
     await page.keyboard.press('Space');
     assert.equal(await page.locator('#shortcut-text-fixture').inputValue(), ' ');
-    assert.match(await page.locator('#play').textContent(), /Pausar/, 'Typing does not pause audio');
+    assert.match(await page.locator('#play').getAttribute('aria-label'), /Pausar/, 'Typing does not pause audio');
     await page.locator('#shortcut-text-fixture').evaluate(input => input.remove());
     await page.keyboard.press('Space');
-    assert.match(await page.locator('#play').textContent(), /Reproducir/);
+    assert.match(await page.locator('#play').getAttribute('aria-label'), /Reproducir/);
     await page.locator('#original-waveform canvas').click({ position: { x: 450, y: 30 } });
     assert.ok(parseFloat(await page.locator('.waveform-playhead').first().evaluate(node => node.style.left)) > 45);
     await page.locator('.stem-enable').first().click();
@@ -191,7 +191,7 @@ const { chromium } = require('playwright');
     const loopPosition = parseFloat(await page.locator('.waveform-playhead').first().evaluate(node => node.style.left));
     assert.ok(loopPosition >= 24 && loopPosition < 61, 'Playback wraps inside A-B');
     await page.locator('#play').press('Space');
-    assert.match(await page.locator('#play').textContent(), /Reproducir/, 'Space pauses the selected loop');
+    assert.match(await page.locator('#play').getAttribute('aria-label'), /Reproducir/, 'Space pauses the selected loop');
     await page.locator('.stem-loop-end').last().press('ArrowLeft');
     assert.ok(await page.locator('.stem-loop-end').evaluateAll(nodes => nodes.every(node => Number(node.getAttribute('aria-valuenow')) < 1.75)));
     await page.locator('#original-waveform canvas').dblclick({ position: { x: 30, y: 40 } });
@@ -207,7 +207,7 @@ const { chromium } = require('playwright');
         await page.keyboard.press('as'[i]);
         await page.waitForFunction(() => stemTestSources.at(-1).testStart?.length === 3);
         const duration = await page.evaluate(() => stemTestSources.at(-1).testStart[2]);
-        assert.ok(Math.abs(duration - .3) < 1 / 44100, 'One or two pads still stop after 300 ms');
+        assert.ok(Math.abs(duration - .154) < 1 / 44100, 'One or two pads still stop after 154 ms');
       }
     }
     assert.equal(await drums.locator('.stem-pad-marker:visible').count(), 8);
@@ -218,10 +218,10 @@ const { chromium } = require('playwright');
     await page.waitForTimeout(30);
     const sample = await page.evaluate(() => stemTestSources.at(-1).testStart);
     assert.ok(Math.abs(sample[1] - starts[0]) < .001);
-    assert.ok(Math.abs(sample[2] - .3) < .001, 'Pad has its own 300 ms range');
+    assert.ok(Math.abs(sample[2] - .154) < .001, 'Pad has its own 154 ms range');
     await page.keyboard.press('k'); await page.waitForTimeout(30);
     const lastSample = await page.evaluate(() => stemTestSources.at(-1).testStart);
-    assert.ok(Math.abs(lastSample[2] - .3) < .001, 'Last pad stops after 300 ms');
+    assert.ok(Math.abs(lastSample[2] - .154) < .001, 'Last pad stops after 154 ms');
     await page.keyboard.press('a');
     await drums.locator('.stem-sample-tools button').click();
     const editWindow = await drumWave.evaluate(node => [Number(node.dataset.viewportStart), Number(node.dataset.viewportEnd)]);
@@ -234,7 +234,7 @@ const { chromium } = require('playwright');
     assert.ok(Math.abs(Number(await firstRegion.getAttribute('data-fade-in')) - .013) < .001);
     const fadeHandle = await firstRegion.locator('.stem-sample-fadeOut').boundingBox();
     const focusedBounds = await drumWave.boundingBox();
-    const desiredTime = starts[0] + .2;
+    const desiredTime = starts[0] + .054;
     await page.mouse.move(fadeHandle.x + fadeHandle.width / 2, fadeHandle.y + fadeHandle.height / 2);
     await page.mouse.down();
     await page.mouse.move(focusedBounds.x + (desiredTime * 1000 - editWindow[0]) / (editWindow[1] - editWindow[0]) * focusedBounds.width, fadeHandle.y + fadeHandle.height / 2, { steps: 5 });
@@ -242,14 +242,14 @@ const { chromium } = require('playwright');
     assert.ok(Math.abs(Number(await firstRegion.getAttribute('data-fade-out')) - .1) < .002, 'Fade is edited directly on the zoomed waveform');
     await firstRegion.locator('.stem-sample-end').press('Shift+ArrowRight');
     const editedEnd = Number(await firstRegion.getAttribute('data-end'));
-    assert.ok(Math.abs(editedEnd - starts[0] - .31) < .001);
+    assert.ok(Math.abs(editedEnd - starts[0] - .164) < .001);
     const samplerArtifacts = path.join(root, 'test-results/stems-ui'); fs.mkdirSync(samplerArtifacts, { recursive: true });
     await drums.screenshot({ path: path.join(samplerArtifacts, 'sample-envelope.png') });
     assert.equal(await page.locator('.stem-loop-selection:visible').count(), 0, 'Editing a sample does not create a loop');
     await page.keyboard.press('a'); await page.waitForTimeout(30);
-    assert.ok(Math.abs(await page.evaluate(() => stemTestSources.at(-1).testStart[2]) - .31) < .001, 'Edited length controls playback, even past a neighboring marker');
+    assert.ok(Math.abs(await page.evaluate(() => stemTestSources.at(-1).testStart[2]) - .164) < .001, 'Edited length controls playback');
     await page.keyboard.press('s'); await page.waitForTimeout(30);
-    assert.ok(Math.abs(await page.evaluate(() => stemTestSources.at(-1).testStart[2]) - .3) < .001, 'Other pads retain their own length');
+    assert.ok(Math.abs(await page.evaluate(() => stemTestSources.at(-1).testStart[2]) - .154) < .001, 'Other pads retain their own length');
     await page.waitForFunction(() => document.querySelectorAll('.drum-pad.is-active').length === 0);
     const envelopeAudio = await page.evaluate(async () => {
       const { normalizeDrumSlice, scheduleDrumEnvelope } = await import('./scripts/stem-sampler.mjs');
@@ -298,6 +298,48 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('.stem-loop-selection:visible').count(), 5);
     await page.keyboard.press('Escape');
     await page.locator('#original-waveform .waveform').dblclick({ position: { x: 10, y: 40 } });
+    // Drum sequencer: icon controls, pattern switch, tempo from the shared speed slider.
+    await drums.locator('.stem-sequencer-toggle').click();
+    const sequencer = drums.locator('.stem-sequencer');
+    assert.equal(await sequencer.isVisible(), true);
+    assert.equal(await sequencer.locator('.seq-switch').getAttribute('aria-checked'), 'false');
+    assert.ok(await sequencer.locator('.seq-controls button').evaluateAll(nodes => nodes.every(node => node.title || node.getAttribute('aria-label'))), 'Icon controls explain themselves in tooltips');
+    assert.equal(await sequencer.locator('.seq-bpm').inputValue(), '120');
+    await sequencer.locator('.seq-step[data-row="0"][data-column="0"]').click();
+    await sequencer.locator('.seq-step[data-row="1"][data-column="4"]').click();
+    assert.equal(await sequencer.locator('.seq-step.is-on').count(), 2);
+    await sequencer.locator('.seq-switch').click();
+    assert.equal(await sequencer.locator('.seq-switch').getAttribute('aria-checked'), 'true');
+    await sequencer.locator('.seq-bpm').fill('180'); await sequencer.locator('.seq-bpm').press('Tab');
+    assert.equal(await page.locator('#stem-rate').inputValue(), '1.5', 'Tempo edits drive the speed slider');
+    assert.equal(await page.locator('#stem-rate-value').textContent(), '1.500x', 'The speed readout matches Player Tools');
+    await page.locator('#stem-rate').dblclick();
+    await page.waitForFunction(() => document.querySelector('.seq-bpm').value === '120');
+    await sequencer.locator('.seq-play').click();
+    await page.waitForTimeout(150);
+    const patternSource = await page.evaluate(() => stemTestSources.slice(-5).map(source => [source.buffer?.duration, source.loop]));
+    assert.ok(patternSource.some(([duration, repeat]) => repeat && Math.abs(duration - 2) < .001), 'One 120 BPM bar loops as the drum source');
+    await sequencer.locator('.seq-play').click();
+    await page.locator('#original-waveform .waveform').dblclick({ position: { x: 10, y: 40 } });
+    const loopBounds = await page.locator('#original-waveform .waveform').boundingBox();
+    await page.mouse.move(loopBounds.x + loopBounds.width * .25, loopBounds.y + 35); await page.mouse.down();
+    await page.mouse.move(loopBounds.x + loopBounds.width * .75, loopBounds.y + 35, { steps: 6 }); await page.mouse.up();
+    assert.equal(await sequencer.locator('.seq-switch').getAttribute('aria-checked'), 'false', 'A new loop returns to the original drums');
+    await sequencer.locator('.seq-fit').click();
+    assert.ok(Math.abs(Number(await sequencer.locator('.seq-bpm').inputValue()) - 160) < 1, 'The grid fits the 1.5 s loop as one bar');
+    await drums.screenshot({ path: path.join(root, 'test-results/stems-ui/sequencer.png') });
+    await drums.locator('.stem-sequencer-toggle').click();
+    await page.locator('#original-waveform .waveform').dblclick({ position: { x: 10, y: 40 } });
+    const vocals = page.locator('.stem[data-stem=vocals]');
+    const openHeight = (await vocals.boundingBox()).height;
+    await vocals.locator('.stem-collapse').click();
+    assert.equal(await vocals.locator('.stem-collapse').getAttribute('aria-expanded'), 'false');
+    assert.equal(await vocals.locator('.waveform').isVisible(), false, 'A collapsed stem hides its waveform');
+    assert.ok((await vocals.boundingBox()).height < openHeight / 2, 'A collapsed stem is compact');
+    assert.equal(await vocals.locator('.pad-knob').isVisible(), true, 'Volume stays reachable when collapsed');
+    await page.screenshot({ path: path.join(root, 'test-results/stems-ui/collapsed.png') });
+    await vocals.locator('.stem-collapse').click();
+    assert.equal(await vocals.locator('.waveform').isVisible(), true);
     const artifacts = path.join(root, 'test-results/stems-ui'); fs.mkdirSync(artifacts, { recursive: true });
     const eqBounds = await page.locator('.peq').boundingBox();
     const recorderBounds = await page.locator('.record-section').boundingBox();
@@ -306,8 +348,8 @@ const { chromium } = require('playwright');
     // Record the audible mix through the real worklet and inspect downloaded PCM.
     // Isolate the quiet vocal stem to avoid clipping, then compare all-OFF and EQ.
     await page.locator('.stem-enable').last().click({ button: 'right' });
-    await page.locator('#stem-rate-reset').click();
-    if (await page.locator('#play').textContent().then(value => value.includes('Pausar'))) await page.locator('#play').click();
+    await page.locator('#stem-rate').dblclick();
+    if (await page.locator('#play').getAttribute('aria-label').then(value => value.includes('Pausar'))) await page.locator('#play').click();
     await page.locator('#play').click();
     async function captureRms() {
       await page.locator('.record-start').click();
@@ -361,11 +403,11 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('#artwork-fallback').isVisible(), true);
     assert.equal(await page.locator('#artwork').isVisible(), false);
     const localeChecks = [
-      ['en-US', 'en', 'Stem Extractor · Player Tools', 'Remove cached model', 'Separation'],
-      ['de-DE', 'de', 'Stem-Extraktor · Player Tools', 'Modell aus Cache entfernen', 'Stem-Trennung'],
-      ['pt-BR', 'pt-BR', 'Separador de stems · Player Tools', 'Remover modelo do cache', 'Separação'],
-      ['ru-RU', 'ru', 'Разделение на стемы · Player Tools', 'Удалить модель из кеша', 'Разделение'],
-      ['fr-FR', 'en', 'Stem Extractor · Player Tools', 'Remove cached model', 'Separation'],
+      ['en-US', 'en', 'Stem Extractor · Player Tools', 'Remove model', 'Separation'],
+      ['de-DE', 'de', 'Stem-Extraktor · Player Tools', 'Modell entfernen', 'Stem-Trennung'],
+      ['pt-BR', 'pt-BR', 'Separador de stems · Player Tools', 'Remover modelo', 'Separação'],
+      ['ru-RU', 'ru', 'Разделение на стемы · Player Tools', 'Удалить модель', 'Разделение'],
+      ['fr-FR', 'en', 'Stem Extractor · Player Tools', 'Remove model', 'Separation'],
     ];
     for (const [browserLocale, documentLocale, localizedTitle, clearCache, separationLabel] of localeChecks) {
       const context = await browser.newContext({ locale: browserLocale, viewport: { width: 320, height: 844 } });

@@ -5,10 +5,10 @@ import { separateAudio, encodeWav, validateAudio } from './stem-audio.mjs';
 import './stem-jobs.js';
 import { normalizeDrumSlice, editDrumSlice } from './stem-sampler.mjs';
 
-test('drum slices default to 300 ms and migrate start-only presets without playing the remaining stem', () => {
+test('drum slices default to 154 ms and migrate start-only presets without playing the remaining stem', () => {
   const buffer = { duration: 120, sampleRate: 44100 };
   const slice = normalizeDrumSlice(42, buffer);
-  assert.ok(Math.abs(slice.end - slice.start - .3) < 1 / 44100);
+  assert.ok(Math.abs(slice.end - slice.start - .154) < 1 / 44100);
   assert.equal(slice.fadeIn, .003); assert.equal(slice.fadeOut, .03);
   assert.deepEqual(normalizeDrumSlice(slice, buffer), slice);
   for (const bad of [null, undefined, NaN, Infinity, -1, 120, {}, { start: '1' }]) assert.equal(normalizeDrumSlice(bad, buffer), null);
@@ -26,7 +26,8 @@ test('sample trim and fades remain bounded at the final PCM frame and after extr
     assert.ok(edited.start >= 0 && edited.end <= buffer.duration && edited.start < edited.end);
     assert.ok(edited.fadeIn > 0 && edited.fadeOut > 0 && edited.fadeIn + edited.fadeOut <= edited.end - edited.start + 1e-12);
   }
-  assert.deepEqual(normal, { start: 1, end: 1.3, fadeIn: .003, fadeOut: .03 }, 'Editing does not mutate saved snapshots');
+  assert.deepEqual(normal, normalizeDrumSlice(1, buffer), 'Editing does not mutate saved snapshots');
+  assert.ok(Math.abs(normal.end - 1.154) < 1 / 44100);
 });
 
 test('overlap/cropping preserves endpoints, stereo alignment and amplitude for short and multi-segment loops', async () => {
@@ -65,6 +66,7 @@ test('the shipping allow-list contains the analyzer and every local runtime depe
   const required = ['stems.html', 'assets/stems.css', 'scripts/stems-page.mjs', 'scripts/stem-audio.mjs',
     'scripts/stem-presets.mjs', 'scripts/stem-library-ui.mjs', 'scripts/stem-tone-processor.mjs',
     'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/local-audio-output.mjs', 'assets/icons/mute.svg',
+    'scripts/stem-sequencer-core.mjs', 'scripts/stem-sequencer.mjs',
     'scripts/parametric-eq.js', 'scripts/parametric-eq-ui.js', 'scripts/player-tools-collapsible.js',
     'scripts/record-core.js', 'scripts/record-ui.js', 'scripts/record-processor.js',
     'scripts/stem-model.mjs', 'scripts/stem-worker.mjs', 'scripts/stem-jobs.js',

@@ -40,15 +40,15 @@ const { chromium } = require('playwright');
     const url = `http://127.0.0.1:${server.address().port}/stems.html?job=test`;
     await page.goto(url);
     await page.locator('#save-locally:not(:disabled)').waitFor();
-    assert.equal(await page.locator('#save-locally').isChecked(), false);
+    assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'false');
     await page.locator('#save-locally').click();
     await page.locator('#save-cancel').click();
-    assert.equal(await page.locator('#save-locally').isChecked(), false);
+    assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'false');
     await page.locator('#save-locally').click();
     await page.locator('#save-name').fill('My saved mix');
     await page.locator('#save-confirm').click();
-    await page.locator('#save-locally:checked').waitFor();
-    assert.equal(await page.locator('#save-locally').isChecked(), true);
+    await page.locator('#save-locally[aria-pressed=true]').waitFor();
+    assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'true');
     await page.locator('#separate').click();
     await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
     const id = await page.locator('#stem-presets').inputValue();
@@ -70,8 +70,7 @@ const { chromium } = require('playwright');
     await page.locator('.stem-sample-fadeOut').first().press('Shift+ArrowRight');
     await page.locator('.stem-sample-end').first().press('Shift+ArrowRight');
     const savedSlice = await page.locator('.stem-pad-region').first().evaluate(node => ({ ...node.dataset }));
-    await page.locator('#stem-rate-number').fill('0.5');
-    await page.locator('#stem-rate-number').press('Tab');
+    await page.locator('#stem-rate').evaluate((node, value) => { node.value = value; node.dispatchEvent(new Event('input', { bubbles: true })); }, '0.5');
     await page.locator('#stem-keep-tone').check();
     await page.locator('.peq-add').click();
     await page.locator('.peq-clip').click();
@@ -82,7 +81,7 @@ const { chromium } = require('playwright');
     });
     await page.goto(url.replace('?job=test', ''));
     await page.waitForFunction(() => document.querySelector('#stem-presets').options.length === 2);
-    assert.equal(await page.locator('#save-locally').isChecked(), false);
+    assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'false');
     await page.locator('#stem-presets').selectOption(id);
     await page.locator('.pad-knob').first().waitFor();
     assert.equal(await page.evaluate(() => inferences), 0, 'Loading never starts model inference');
@@ -92,14 +91,14 @@ const { chromium } = require('playwright');
     await page.locator('.stem-sampler-toggle').click();
     assert.equal(Number(await page.locator('.stem-pad-marker').first().getAttribute('data-start')), savedStart);
     assert.deepEqual(await page.locator('.stem-pad-region').first().evaluate(node => ({ ...node.dataset })), savedSlice, 'Trim and both fades survive preset restoration');
-    assert.equal(await page.locator('#stem-rate-number').inputValue(), '0.5');
+    assert.equal(await page.locator('#stem-rate').inputValue(), '0.5');
     assert.equal(await page.locator('#stem-keep-tone').isChecked(), true);
     assert.equal(await page.locator('#repeat').count(), 0);
     assert.equal(await page.locator('.peq-point').count(), 1);
     assert.equal(await page.locator('.peq-clip').getAttribute('aria-pressed'), 'true');
     // Turning off never deletes a saved separation.
-    await page.locator('#save-locally').uncheck();
-    await page.locator('#stem-rate-reset').click();
+    await page.locator('#save-locally').click();
+    await page.locator('#stem-rate').dblclick();
     assert.equal((await stored()).record.settings.rate, .5);
     // Select a different root and save the loaded audio there, retaining the DB copy.
     await page.locator('#preset-folder').click();
@@ -124,7 +123,7 @@ const { chromium } = require('playwright');
     await page.waitForFunction(id => [...document.querySelector('#stem-presets').options].some(o => o.value === id), id);
     assert.equal(await page.locator('#preset-reset').isVisible(), false);
     await page.locator('#stem-presets').selectOption(id);
-    await page.waitForFunction(() => document.querySelector('#stem-rate-number').value === '0.5');
+    await page.waitForFunction(() => document.querySelector('#stem-rate').value === '0.5');
     // Interrupted folder saves must not appear in the list; prior data survives.
     assert.equal(await page.evaluate(async () => {
       const { StemPresets } = await import('./scripts/stem-presets.mjs');
@@ -151,13 +150,13 @@ const { chromium } = require('playwright');
     await page.locator('#stem-presets').selectOption(folderId);
     await page.locator('#status.error').waitFor();
     assert.equal(await page.locator('.stem').count(), 4);
-    assert.equal(await page.locator('#stem-rate-number').inputValue(), '0.5');
+    assert.equal(await page.locator('#stem-rate').inputValue(), '0.5');
     // Real Signalsmith AudioWorklet, real audio: rate affects frequency only when
     // Keep Tone is off. Shared clock remains aligned through live changes/seek.
     await page.locator('#preset-reset').click();
     await page.locator('#stem-presets:not(:disabled)').waitFor();
     await page.locator('#stem-presets').selectOption(id);
-    await page.locator('#save-locally:checked').waitFor();
+    await page.locator('#save-locally[aria-pressed=true]').waitFor();
     await page.locator('.peq-reset').click();
     await page.locator('#original').click();
     await page.evaluate(() => {
@@ -172,9 +171,9 @@ const { chromium } = require('playwright');
       };
     });
     await page.locator('#play').click();
-    await page.waitForFunction(() => document.querySelector('#play').textContent === 'Pause');
+    await page.waitForFunction(() => document.querySelector('#play').getAttribute('aria-label') === 'Pause');
     for (const [rate, keep, frequency] of [[.5, false, 220], [.5, true, 440], [2, true, 440], [2, false, 880], [.1, true, 440], [3, true, 440]]) {
-      await page.locator('#stem-rate-number').fill(String(rate)); await page.locator('#stem-rate-number').press('Tab');
+      await page.locator('#stem-rate').evaluate((node, value) => { node.value = value; node.dispatchEvent(new Event('input', { bubbles: true })); }, String(rate));
       await page.locator('#stem-keep-tone').setChecked(keep);
       await page.waitForTimeout(650);
       const measured = await page.evaluate(() => {

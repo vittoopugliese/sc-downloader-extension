@@ -30,7 +30,7 @@ persistencia en `stems-roadmap.md`. No convierte Stems en una web independiente.
 ### Samples de batería
 
 El botón **Sampler** abre los ocho pads A S D F G H J K. Elegí un pad y hacé
-clic en la waveform de batería para colocar un sample de **300 ms**, con
+clic en la waveform de batería para colocar un sample de **154 ms**, con
 entrada de 3 ms y salida de 30 ms. Cada pad tiene su propio final, aunque sea
 el único o el último marcador del stem. Cerca del final del audio, el recorte
 y los fades se acortan para caber en las muestras disponibles.
@@ -45,7 +45,7 @@ mantener la tecla. Repetir una tecla apaga suavemente su voz anterior.
 
 Con **Guardar localmente** activo, los recortes y fades se guardan junto con
 el preset, tanto en navegador como en carpeta. Los presets anteriores, que
-solo guardaban posiciones de inicio, se abren con el recorte de 300 ms. Los
+solo guardaban posiciones de inicio, se abren con el recorte de 154 ms. Los
 WAV originales no cambian.
 
 ### Archivos del equipo

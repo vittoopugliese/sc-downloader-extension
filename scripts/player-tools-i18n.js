@@ -20,6 +20,33 @@ Wheel: zoom · Shift + wheel: pan¦Rueda: zoom · Shift + rueda: desplazar¦Maus
 Enable $1¦Activar $1¦$1 aktivieren¦Ativar $1¦Включить $1
 Enable/disable $1 · Right-click: hear only this track¦Activar/desactivar $1 · Clic derecho: escuchar solo esta pista¦$1 ein-/ausschalten · Rechtsklick: nur diese Spur hören¦Ativar/desativar $1 · Clique direito: ouvir só esta faixa¦Включить/выключить $1 · Правая кнопка: слушать только эту дорожку
 Sampler¦Sampler¦Sampler¦Sampler¦Сэмплер
+Sequencer¦Secuenciador¦Sequenzer¦Sequenciador¦Секвенсор
+Tempo (BPM) · uses the speed slider; Keep Tone keeps the pitch¦Tempo (BPM) · usa el slider de velocidad; Mantener tono conserva la altura¦Tempo (BPM) · nutzt den Tempo-Regler; Tonhöhe halten bewahrt die Tonhöhe¦Tempo (BPM) · usa o controle de velocidade; Manter tom preserva a altura¦Темп (BPM) · использует ползунок скорости; «Сохранять тон» сохраняет высоту
+Grid¦Grilla¦Raster¦Grade¦Сетка
+Fit the grid to the A–B loop¦Ajustar la grilla al loop A–B¦Raster an den A–B-Loop anpassen¦Ajustar a grade ao loop A–B¦Подогнать сетку под луп A–B
+Half grid tempo¦Mitad del tempo de la grilla¦Halbes Raster-Tempo¦Metade do tempo da grade¦Половина темпа сетки
+Double grid tempo¦Doble del tempo de la grilla¦Doppeltes Raster-Tempo¦Dobro do tempo da grade¦Удвоить темп сетки
+Set the first beat on the waveform¦Marcar el primer tiempo en la waveform¦Ersten Schlag in der Wellenform setzen¦Marcar o primeiro tempo na forma de onda¦Указать первую долю на волне
+First beat · drag to align the grid¦Primer tiempo · arrastrá para alinear la grilla¦Erster Schlag · ziehen, um das Raster auszurichten¦Primeiro tempo · arraste para alinhar a grade¦Первая доля · перетащите, чтобы выровнять сетку
+Pattern replaces the drum stem · click for the original drums¦El patrón reemplaza la batería · clic para la batería original¦Pattern ersetzt das Schlagzeug · klicken für das Original¦O padrão substitui a bateria · clique para a bateria original¦Паттерн заменяет ударные · нажмите для оригинала
+Original drums · click to play the pattern¦Batería original · clic para tocar el patrón¦Original-Schlagzeug · klicken, um das Pattern zu spielen¦Bateria original · clique para tocar o padrão¦Оригинальные ударные · нажмите, чтобы играть паттерн
+Drum sequencer¦Secuenciador de batería¦Drum-Sequenzer¦Sequenciador de bateria¦Секвенсор ударных
+Pattern¦Patrón¦Pattern¦Padrão¦Паттерн
+Bars¦Compases¦Takte¦Compassos¦Такты
+Show pattern loop¦Ver loop del patrón¦Pattern-Loop anzeigen¦Ver loop do padrão¦Показать луп паттерна
+Bar $1¦Compás $1¦Takt $1¦Compasso $1¦Такт $1
+Step $1¦Paso $1¦Schritt $1¦Passo $1¦Шаг $1
+Pattern steps¦Pasos del patrón¦Pattern-Schritte¦Passos do padrão¦Шаги паттерна
+Pad¦Pad¦Pad¦Pad¦Пэд
+Hit velocity¦Intensidad del golpe¦Anschlagstärke¦Intensidade da batida¦Сила удара
+Clear bar¦Vaciar compás¦Takt leeren¦Limpar compasso¦Очистить такт
+Assign a sample¦Asignar un sample¦Sample zuweisen¦Atribuir amostra¦Назначить сэмпл
+Play pattern¦Reproducir patrón¦Pattern abspielen¦Reproduzir padrão¦Играть паттерн
+Pause¦Pausar¦Pause¦Pausar¦Пауза
+The pattern exceeds the audio. Move the first beat, use fewer bars or raise the BPM.¦El patrón supera el audio. Mové el primer tiempo, usá menos compases o subí el BPM.¦Das Pattern ist länger als das Audio. Verschiebe den ersten Schlag, nutze weniger Takte oder erhöhe die BPM.¦O padrão ultrapassa o áudio. Mova o primeiro tempo, use menos compassos ou aumente o BPM.¦Паттерн выходит за пределы аудио. Сдвиньте первую долю, уменьшите число тактов или увеличьте BPM.
+Click the drum waveform to set the first beat. Esc cancels.¦Hacé clic en la waveform de batería para marcar el primer tiempo. Esc cancela.¦Klicke auf die Drum-Wellenform, um den ersten Schlag zu setzen. Esc bricht ab.¦Clique na forma de onda da bateria para marcar o primeiro tempo. Esc cancela.¦Нажмите на волну ударных, чтобы указать первую долю. Esc — отмена.
+Choose a row letter, then click the waveform to assign a sample.¦Elegí la letra de una fila y hacé clic en la waveform para asignar un sample.¦Wähle einen Zeilenbuchstaben und klicke auf die Wellenform, um ein Sample zuzuweisen.¦Escolha a letra de uma linha e clique na forma de onda para atribuir uma amostra.¦Выберите букву строки, затем нажмите на волну, чтобы назначить сэмпл.
+Click to add or remove hits. Shift + click selects a hit to edit its velocity.¦Clic para agregar o quitar golpes. Shift + clic selecciona un golpe para editar su intensidad.¦Klicken fügt Schläge hinzu oder entfernt sie. Umschalt + Klick wählt einen Schlag zum Ändern der Stärke.¦Clique para adicionar ou remover batidas. Shift + clique seleciona uma batida para editar a intensidade.¦Щелчок добавляет или удаляет удары. Shift + щелчок выбирает удар для изменения силы.
 Edit sample¦Editar sample¦Sample bearbeiten¦Editar amostra¦Редактировать сэмпл
 Sample start¦Inicio del sample¦Sample-Anfang¦Início da amostra¦Начало сэмпла
 Sample end¦Fin del sample¦Sample-Ende¦Fim da amostra¦Конец сэмпла

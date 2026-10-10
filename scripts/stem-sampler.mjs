@@ -7,7 +7,7 @@ export function normalizeDrumSlice(value, buffer) {
   if (!Number.isFinite(value?.start) || value.start < 0 || value.start >= buffer.duration) return null;
   const frame = 1 / buffer.sampleRate, snap = time => Math.round(time * buffer.sampleRate) / buffer.sampleRate;
   const start = clamp(snap(value.start), 0, buffer.duration - frame);
-  const end = clamp(snap(Number.isFinite(value.end) ? value.end : start + .3), start + frame, buffer.duration);
+  const end = clamp(snap(Number.isFinite(value.end) ? value.end : start + .154), start + frame, buffer.duration);
   const length = end - start, minimum = Math.min(.001, length / 2);
   let fadeIn = clamp(Number.isFinite(value.fadeIn) ? value.fadeIn : .003, minimum, length);
   let fadeOut = clamp(Number.isFinite(value.fadeOut) ? value.fadeOut : .03, minimum, length);
@@ -47,20 +47,20 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
   toggle.title = pt('Sampler'); toggle.setAttribute('aria-label', pt('Sampler'));
   toggle.setAttribute('aria-controls', 'pads-drums'); toggle.setAttribute('aria-expanded', 'false');
   toggle.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
-  const toggleLabel = document.createElement('span'); toggleLabel.textContent = pt('Sampler'); toggle.append(toggleLabel);
   actions.insertBefore(toggle, actions.querySelector('.download'));
   const panel = document.createElement('div'); panel.className = 'stem-sampler'; panel.id = 'pads-drums'; panel.hidden = true;
   const pads = document.createElement('div'); pads.className = 'drum-pads stem-pads';
   const hint = document.createElement('p'); hint.className = 'stem-sampler-hint'; hint.setAttribute('role', 'status');
   const toolbar = document.createElement('div'); toolbar.className = 'stem-sample-tools'; toolbar.hidden = true;
-  const summary = document.createElement('output'); summary.className = 'stem-sample-summary';
-  const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = pt('Edit sample');
+  const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'stem-sample-edit';
+  edit.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M7 10h6M10 7v6"/></svg>';
+  edit.setAttribute('aria-label', pt('Edit sample'));
   edit.onclick = () => {
     const slice = slices[selected]; if (!slice) return;
     armed = null; timeline.focusRange(slice.start * 1000, slice.end * 1000); render();
   };
-  toolbar.append(summary, edit);
-  const markers = [], regions = [], envelopes = [], handles = [], buttons = [], lengths = [];
+  toolbar.append(edit);
+  const markers = [], regions = [], envelopes = [], handles = [], buttons = [];
   const milliseconds = seconds => `${(seconds * 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} ms`;
   const labels = { start: pt('Sample start'), end: pt('Sample end'), fadeIn: pt('Fade in'), fadeOut: pt('Fade out') };
 
@@ -68,12 +68,14 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
     hint.textContent = armed === null
       ? pt('A S D F G H J K to play. Edit sample to zoom; drag its edges and fades.')
       : pt('Pad $1: click the drum waveform to set its start. Esc cancels.', KEYS[armed]);
+    hint.hidden = armed === null;
+    pads.title = pt('A S D F G H J K to play. Edit sample to zoom; drag its edges and fades.');
     waveform.classList.toggle('is-placing-pad', armed !== null);
     waveform.classList.toggle('is-sampling', !panel.hidden);
     toolbar.hidden = !slices[selected];
     if (!toolbar.hidden) {
       const slice = slices[selected];
-      summary.textContent = `${KEYS[selected]} · ${milliseconds(slice.end - slice.start)} · ${labels.fadeIn} ${milliseconds(slice.fadeIn)} · ${labels.fadeOut} ${milliseconds(slice.fadeOut)}`;
+      edit.title = `${pt('Edit sample')} · ${KEYS[selected]} · ${milliseconds(slice.end - slice.start)} · ${labels.fadeIn} ${milliseconds(slice.fadeIn)} · ${labels.fadeOut} ${milliseconds(slice.fadeOut)}`;
     }
     buttons.forEach((button, i) => {
       const slice = slices[i], active = selected === i;
@@ -81,7 +83,6 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
       button.classList.toggle('is-armed', armed === i);
       button.setAttribute('aria-pressed', String(active));
       button.title = `${KEYS[i]}: ${slice ? `${slice.start.toLocaleString(locale, { maximumFractionDigits: 3 })} s · ${milliseconds(slice.end - slice.start)}` : pt('Unassigned')}`;
-      lengths[i].textContent = slice ? milliseconds(slice.end - slice.start) : '—';
       const x = slice ? timeline.percent(slice.start * 1000) : -1, end = slice ? timeline.percent(slice.end * 1000) : -1;
       markers[i].hidden = panel.hidden || x < 0 || x > 100;
       markers[i].style.left = `${x}%`; markers[i].dataset.start = String(slice?.start ?? null);
@@ -187,7 +188,6 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
     const slot = document.createElement('div'); slot.className = 'drum-slot';
     const button = document.createElement('button'); button.type = 'button'; button.className = 'drum-pad';
     button.innerHTML = `<span class="drum-key">${key}</span>`; button.setAttribute('aria-label', `${pt('Drums')} ${key}`);
-    const length = document.createElement('span'); length.className = 'stem-pad-length'; button.append(length); lengths.push(length);
     button.onclick = () => { selected = i; armed = i; render(); trigger(i); };
     const marker = document.createElement('span'); marker.className = 'stem-pad-marker';
     const region = document.createElement('div'); region.className = 'stem-pad-region';
@@ -214,6 +214,14 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
   panel.append(pads, toolbar, hint); row.append(panel); render();
   return {
     render, snapshot: () => slices.map(slice => slice ? { ...slice } : null),
+    cancelPlacement() { armed = null; render(); },
+    editPad(i) {
+      if (!Number.isInteger(i) || i < 0 || i >= 8) return;
+      panel.hidden = false; toggle.setAttribute('aria-expanded', 'true');
+      selected = i; armed = slices[i] ? null : i;
+      if (slices[i]) timeline.focusRange(slices[i].start * 1000, slices[i].end * 1000);
+      render();
+    },
     place(seconds) {
       if (armed === null || panel.hidden || !Number.isFinite(seconds)) return false;
       slices[armed] = normalizeDrumSlice({ start: clamp(seconds, 0, buffer.duration - 1 / buffer.sampleRate) }, buffer);
