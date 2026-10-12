@@ -39,6 +39,7 @@ const SCTrackDownloadExecution = (() => {
             {
               forceRefresh: sourceAttempt > 0,
               reuseEligibilitySnapshot: command.reuseEligibilitySnapshot === true,
+              streamSource: command.streamSource === true,
               reason: sourceAttempt > 0 ? "expired_media" : "initial",
               attempt: sourceAttempt,
             }

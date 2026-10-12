@@ -530,8 +530,10 @@ const destinationHandler = SCDownloadDestination.create({
 });
 
 const trackDownloadExecution = SCTrackDownloadExecution.create({
-  resolveSource: (trackData, formatPreference, options) =>
-    SCDownloadSource.resolve(trackData, formatPreference, options),
+  // A–B loop exports rip the playback stream, so they skip the download policy.
+  resolveSource: (trackData, formatPreference, options) => options?.streamSource
+    ? SCDownloadSource.resolveForPlayback(trackData, formatPreference, options)
+    : SCDownloadSource.resolve(trackData, formatPreference, options),
   buildTrack: ({
     buildId,
     trackData,
@@ -571,7 +573,7 @@ function directOperationSignature(trackData, formatPreference, trimRange, playba
     trimRange || null, playbackTransform || null, effects || null, destination?.id || null]);
 }
 
-async function executeDirectOperation({ operationId, trackData, formatPreference, destination, trimRange = null, playbackTransform = null, effects = null }) {
+async function executeDirectOperation({ operationId, trackData, formatPreference, destination, trimRange = null, playbackTransform = null, effects = null, streamSource = false }) {
   let id = operationId || newDirectOperationId();
   const signature = directOperationSignature(trackData, formatPreference, trimRange, playbackTransform, effects, destination);
   const existing = await SCBulkLibrary.beginOperation(id, signature);
@@ -586,7 +588,7 @@ async function executeDirectOperation({ operationId, trackData, formatPreference
   };
   try {
     const result = await trackDownloadExecution.execute({
-      operationId: id, trackData, formatPreference, destination, trimRange, playbackTransform, effects,
+      operationId: id, trackData, formatPreference, destination, trimRange, playbackTransform, effects, streamSource,
       onStage: async (stage) => {
         const state = stage === "saving" ? "save_requested" : stage === "resolving" ? "resolving" : "building";
         await SCBulkLibrary.updateOperation(id, { state, stage });
@@ -1152,7 +1154,7 @@ const BulkJobManager = {
       await ensureOffscreenDocument();
       return await queueSingleDownload(() =>
         executeDirectOperation({ operationId, trackData, formatPreference: formatPreference || "auto",
-          destination: resolvedDestination, trimRange, playbackTransform, effects })
+          destination: resolvedDestination, trimRange, playbackTransform, effects, streamSource: true })
       );
     } finally {
       singleDownloadsInFlight = Math.max(0, singleDownloadsInFlight - 1);

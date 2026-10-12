@@ -714,13 +714,16 @@ const SCPageIntake = (() => {
         html: response.ok ? await response.text() : null,
       }));
       if (!response.ok) throw new Error(`Could not load the current track (${response.status}).`);
-      const hydration = parseHydration(html);
-      const sound = hydration?.find((item) => {
-        if (item?.hydratable !== "sound" || !item.data) return false;
-        const permalink = normalizeUrl(item.data.permalink_url);
-        return !permalink || permalink === normalized;
-      })?.data;
-      if (!sound) throw new Error("The current player item is not a downloadable track.");
+      const sounds = (parseHydration(html) || [])
+        .filter((item) => item?.hydratable === "sound" && item.data)
+        .map((item) => item.data);
+      // Renamed tracks redirect to a new permalink; a track page hydrates one sound.
+      const landedUrl = response.url ? normalizeUrl(response.url) : null;
+      const sound = sounds.find((value) => {
+        const permalink = normalizeUrl(value.permalink_url);
+        return !permalink || permalink === normalized || permalink === landedUrl;
+      }) || (sounds.length === 1 ? sounds[0] : null);
+      if (!sound) throw new Error("The current player track could not be loaded.");
       const hydrationClientId = id || (await resolveClientId(html));
       if (!hydrationClientId) throw new Error("SoundCloud client information is unavailable.");
       return toTrack(sound, hydrationClientId, normalized, "auto");
