@@ -36,6 +36,13 @@
   },
   "content_scripts": [
     {
+      "matches": ["https://w.soundcloud.com/player/*"],
+      "include_globs": ["*scdl_likes_player=1*"],
+      "all_frames": true,
+      "run_at": "document_start",
+      "css": ["assets/likes-player.css"]
+    },
+    {
       "matches": ["https://soundcloud.com/*"],
       "all_frames": true,
       "match_origin_as_fallback": true,

@@ -362,7 +362,7 @@
   const CSS = `
     .card.is-playing{border-color:#e99b74}
     .detail-media{flex:1;min-width:0}.detail-summary{display:flex;align-items:center;gap:7px;min-width:0}.detail-summary>.cover{width:34px;height:34px;flex-shrink:0}
-    .player-inline{min-width:0;overflow:hidden;border-radius:5px}.player-widget{height:80px;background:#eee}.player-widget:empty{height:0}
+    .player-inline{min-width:0;overflow:hidden;border-radius:5px}.player-widget{height:80px;background:#2c2c2c}.player-widget:empty{height:0}
     .player-status{padding:4px 0;color:#bdb6af;font-size:10px;line-height:1.4}.player-inline[data-state="error"] .player-status,.player-inline[data-state="needs-play"] .player-status{color:#ffd0a9}.detail.has-player>.status{display:none}
     :host{all:initial;--top:60px;--bottom:88px;font:13px/1.45 system-ui,-apple-system,sans-serif;color:#ece9e4;position:fixed;inset:0;z-index:2147483647;isolation:isolate;contain:paint;pointer-events:none;color-scheme:dark}
     .teleport-overlay{pointer-events:auto;position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.2);cursor:pointer;text-align:center}.teleport-message{display:flex;flex-direction:column;align-items:center;gap:9px;max-width:360px;padding:24px 28px;border:1px solid #ffffff30;border-radius:16px;background:#17171bd9;box-shadow:0 12px 40px #0008;color:#fff}.teleport-icon{width:58px;height:58px;filter:invert(1)}.teleport-message strong{font-size:18px;font-weight:700}.teleport-message span{font-size:12px;line-height:1.5;color:#e4e0dc}.teleport-overlay:focus-visible{outline:2px solid #ff996a;outline-offset:-4px}

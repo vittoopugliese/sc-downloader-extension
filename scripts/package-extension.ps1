@@ -26,6 +26,7 @@ $packageItems = @(
     "offscreen.html",
     "stems.html",
     "assets/stems.css",
+    "assets/likes-player.css",
     "assets/icon48.png",
     "assets/icon128.png",
     "assets/LooperPlayerToolkit.png",

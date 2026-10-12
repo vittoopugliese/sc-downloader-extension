@@ -58,7 +58,7 @@
         const url = new URL('/player/', ORIGIN);
         url.search = new URLSearchParams({ url: `https://api.soundcloud.com/tracks/${item.itemId}`, auto_play: 'false',
           visual: 'false', show_artwork: 'true', show_user: 'true', show_related: 'false',
-          sharing: 'false', buying: 'false', download: 'false', color: '#e99b74' }).toString();
+          sharing: 'false', buying: 'false', download: 'false', color: '#e99b74', scdl_likes_player: '1' }).toString();
         frame.src = url.href;
         container.replaceChildren(frame);
         state('loading');
