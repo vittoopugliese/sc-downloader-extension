@@ -79,7 +79,7 @@ for (const [source, translations] of Object.entries(toolsCopy.messages)) {
     assert.deepEqual(placeholders(translation), placeholders(source), `${toolsCopy.locales[index]}: ${source} placeholders`);
   }
 }
-for (const language of ['en-US', 'es-AR', 'de-AT', 'pt-BR', 'pt-PT', 'pt', 'ru-RU', 'fr-FR']) {
+for (const language of ['en-US', 'en-GB', 'es-AR', 'de-AT', 'pt-BR', 'pt-PT', 'pt', 'ru-RU', 'fr-FR']) {
   const sandbox = { navigator: { language } };
   vm.runInNewContext(read('scripts/player-tools-i18n.js'), sandbox);
   const expected = language.startsWith('pt') ? 'pt-BR' : language.startsWith('fr') ? 'en' : language.slice(0, 2);
@@ -90,7 +90,7 @@ for (const language of ['en-US', 'es-AR', 'de-AT', 'pt-BR', 'pt-PT', 'pt', 'ru-R
   if (expected === 'pt-BR') assert.equal(sandbox.SCLikesText('open'), 'Abrir');
 }
 const manifest = JSON.parse(read('manifest.json'));
-const mainScripts = manifest.content_scripts.find(entry => entry.js.includes('scripts/tempo-control-main.js')).js;
+const mainScripts = manifest.content_scripts.find(entry => entry.js?.includes('scripts/tempo-control-main.js')).js;
 assert.ok(mainScripts.indexOf('scripts/player-tools-i18n.js') < mainScripts.indexOf('scripts/tempo-control-main.js'));
 assert.ok(read('scripts/package-extension.ps1').includes('"scripts/player-tools-i18n.js"'));
 assert.ok(read('stems.html').indexOf('scripts/player-tools-i18n.js') < read('stems.html').indexOf('scripts/record-ui.js'));
