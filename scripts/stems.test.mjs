@@ -3,8 +3,9 @@ import test from 'node:test';
 import fs from 'node:fs';
 import { separateAudio, encodeWav, validateAudio } from './stem-audio.mjs';
 import './stem-jobs.js';
-import { normalizeDrumSlice, editDrumSlice } from './stem-sampler.mjs';
+import { normalizeDrumSlice, editDrumSlice, detectDrumSlices } from './stem-sampler.mjs';
 import { normalizePiano, pitchRatio, noteName, MAX_PIANO_NOTES } from './stem-piano-core.mjs';
+import { normalizeSequence, songClip, patternPhase, sequenceStep, arrangeChannels } from './stem-sequencer-core.mjs';
 
 test('piano presets normalize malformed notes, bound metadata and preserve hidden bars without mutating input', () => {
   const buffer = { duration: 3, sampleRate: 44100 };
@@ -30,6 +31,62 @@ test('drum slices default to 154 ms and migrate start-only presets without playi
   assert.equal(slice.fadeIn, .003); assert.equal(slice.fadeOut, .03);
   assert.deepEqual(normalizeDrumSlice(slice, buffer), slice);
   for (const bad of [null, undefined, NaN, Infinity, -1, 120, {}, { start: '1' }]) assert.equal(normalizeDrumSlice(bad, buffer), null);
+});
+
+test('auto-slice finds kick, snare and hat attacks sample-close and cuts at the next hit', () => {
+  const sampleRate = 44100, length = sampleRate * 2, data = new Float32Array(length);
+  let seed = 7; const noise = () => ((seed = seed * 16807 % 2147483647) / 2147483647) * 2 - 1;
+  // Kick (60 Hz), snare (noise + 200 Hz) and hat (bright noise), each with a fast decay.
+  const hits = [[.1, 'kick'], [.35, 'hat'], [.6, 'snare'], [.85, 'hat'], [1.1, 'kick'], [1.35, 'hat'], [1.6, 'snare'], [1.85, 'hat']];
+  for (const [time, kind] of hits) {
+    const at = Math.round(time * sampleRate);
+    for (let i = 0; i < sampleRate * .15 && at + i < length; i++) {
+      const t = i / sampleRate, decay = Math.exp(-t * (kind === 'hat' ? 60 : 25));
+      let previous = 0, value = kind === 'kick' ? Math.sin(2 * Math.PI * 60 * t) : kind === 'snare' ? .5 * noise() + .5 * Math.sin(2 * Math.PI * 200 * t) : noise() - previous;
+      previous = value; data[at + i] += .8 * decay * value;
+    }
+  }
+  for (let i = 0; i < length; i++) data[i] += .001 * noise();
+  const buffer = { sampleRate, length, duration: length / sampleRate, numberOfChannels: 1, getChannelData: () => data };
+  const slices = detectDrumSlices(buffer);
+  assert.equal(slices.length, 8);
+  slices.forEach((slice, i) => {
+    assert.ok(Math.abs(slice.start - hits[i][0]) < .004, `pad ${i} starts at ${slice.start}, hit at ${hits[i][0]}`);
+    if (i < 7) assert.ok(Math.abs(slice.end - hits[i + 1][0]) < .004, `pad ${i} ends at ${slice.end}`);
+  });
+  const looped = detectDrumSlices(buffer, { startMs: 550, endMs: 1150 });
+  assert.deepEqual(looped.map(slice => Math.round(slice.start * 20) / 20), [.6, .85, 1.1]);
+  assert.ok(looped.at(-1).end <= 1.15 + 1e-9);
+  assert.deepEqual(detectDrumSlices({ ...buffer, getChannelData: () => new Float32Array(length) }), []);
+});
+
+test('SONG mode repeats the pattern on the grid inside a bar-snapped playlist clip', () => {
+  const buffer = { duration: 20, sampleRate: 1000 };
+  // 120 BPM: 2 s bars; first beat at 3 s, so a partial bar -2 starts at 0 s.
+  const state = normalizeSequence({ bpm: 120, bars: 2, start: 3, song: true, enabled: true }, buffer.duration);
+  assert.deepEqual(songClip(state, buffer.duration), { from: 0, to: 9, first: -2, last: 9, start: 3, end: 20 });
+  assert.equal(patternPhase(state, buffer, 2.9), -1, 'Silent before the clip');
+  assert.equal(patternPhase(state, buffer, 3), 0);
+  assert.equal(patternPhase(state, buffer, 9), .5, 'Second repeat, halfway through the 4 s pattern');
+  assert.equal(sequenceStep(state, buffer, 9), 16);
+  const clipped = { ...state, clip: { from: -2, to: 2 } };
+  assert.deepEqual(songClip(clipped, buffer.duration), { from: -2, to: 2, first: -2, last: 9, start: 0, end: 7 });
+  assert.equal(patternPhase(clipped, buffer, 1), .5, 'Bars before the first beat keep the grid phase');
+  assert.equal(patternPhase(clipped, buffer, 7), -1);
+  assert.equal(patternPhase({ ...state, song: false }, buffer, 9), -1, 'PAT mode only plays its own bars');
+  assert.equal(normalizeSequence({ clip: { from: 1.5, to: 'x' } }, 10).clip.from, null);
+});
+
+test('SONG lanes keep the stem outside the clip and tile the pattern from the first beat inside it', () => {
+  const source = Float32Array.from({ length: 100 }, () => 1), tile = Float32Array.from({ length: 10 }, (_, i) => i / 10);
+  const out = new Float32Array(100);
+  arrangeChannels([out], [source], [tile], { offset: 3, from: 20, to: 60, attack: 1, fade: 1 });
+  assert.equal(out[19], 1); assert.equal(out[60], 1);
+  assert.ok(Math.abs(out[20] - .7) < 1e-6, 'Frame 20 is step 7 of a tile anchored at frame 3');
+  assert.ok(Math.abs(out[33] - 0) < 1e-6);
+  const layered = new Float32Array(100);
+  arrangeChannels([layered], [source], [tile], { offset: 0, from: 0, to: 100, layer: true, attack: 1, fade: 1 });
+  assert.ok(Math.abs(layered[45] - 1.5) < 1e-6, 'Layer mode adds the pattern to the stem');
 });
 
 test('sample trim and fades remain bounded at the final PCM frame and after extreme edits', () => {

@@ -18,7 +18,7 @@ let playerTrackUrl = null;
 let successResetTimeout = null;
 let playerVisualRequestId = 0;
 
-function publishPlayerVisual(trackUrl) {
+function publishPlayerVisual(trackUrl, attempt = 0) {
   const requestId = playerVisualRequestId += 1;
   const root = document.documentElement;
   if (!root?.setAttribute) return;
@@ -36,8 +36,15 @@ function publishPlayerVisual(trackUrl) {
       }));
       if (typeof document.dispatchEvent === "function" && typeof CustomEvent === "function") document.dispatchEvent(new CustomEvent(PLAYER_WAVEFORM_EVENT));
     })
-    .catch(() => {
+    .catch((error) => {
+      console.warn("[SC Downloader] Player track could not be resolved for the waveform.", trackUrl, error);
       if (requestId !== playerVisualRequestId) return;
+      // A cold client_id lookup can time out; retry before leaving the looper without a waveform.
+      if (attempt < 2 && playerTrackUrl === trackUrl) {
+        setTimeout(() => {
+          if (requestId === playerVisualRequestId && playerTrackUrl === trackUrl) publishPlayerVisual(trackUrl, attempt + 1);
+        }, 2000 * (attempt + 1));
+      }
       root.setAttribute(PLAYER_WAVEFORM_ATTRIBUTE, JSON.stringify({ trackUrl, waveformUrl: null }));
       if (typeof document.dispatchEvent === "function" && typeof CustomEvent === "function") document.dispatchEvent(new CustomEvent(PLAYER_WAVEFORM_EVENT));
     });

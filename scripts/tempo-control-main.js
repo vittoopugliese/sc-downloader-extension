@@ -2256,7 +2256,10 @@
       const data = await response.json();
       if (loadId !== waveformLoadId) return;
       waveformSamples = Array.isArray(data.samples) ? data.samples : [];
-    } catch { if (loadId !== waveformLoadId) return; waveformSamples = []; }
+    } catch (error) {
+      console.warn("[SC Downloader] Player waveform could not be loaded.", descriptor.waveformUrl, error);
+      if (loadId !== waveformLoadId) return; waveformSamples = [];
+    }
     waveformRevision += 1;
     renderLoop();
   }
@@ -2282,7 +2285,8 @@
       waveformRevision += 1;
       ui.waveformCanvas.title = pt('Red: bass | Green: mids | Blue: treble');
       renderLoop();
-    } catch {
+    } catch (error) {
+      console.warn("[SC Downloader] Spectral waveform analysis failed.", trackUrl, error);
       if (waveformAnalysisCache === analysis) waveformAnalysisCache = null;
       if (loadId === waveformLoadId) ui.waveformCanvas.title = pt('Amplitude waveform | Frequency analysis unavailable');
     }

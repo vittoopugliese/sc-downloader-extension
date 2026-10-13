@@ -1,5 +1,5 @@
 import { mountDrumSampler } from './stem-sampler.mjs';
-import { sequenceRange } from './stem-sequencer-core.mjs';
+import { patternPhase, sequenceRange } from './stem-sequencer-core.mjs';
 import { clamp, MAX_PIANO_NOTES, normalizePiano, noteName, renderPianoPattern, schedulePianoNote } from './stem-piano-core.mjs';
 
 // A melodic lane has its own sample and notes, but no independent transport or
@@ -202,7 +202,7 @@ export function mountStemPiano({ row, actions, waveform, buffer, timeline, saved
     renderGrid(); renderNotes(); updateCursor();
   }
   function updateCursor() {
-    const loop = range(), fraction = loop ? (position * 1000 - loop.startMs) / (loop.endMs - loop.startMs) : -1;
+    const fraction = patternPhase(getGrid(), buffer, position);
     cursor.hidden = !playing || fraction < 0 || fraction >= 1;
     cursor.style.left = `${fraction * 100}%`;
     if (play.dataset.playing !== String(playing)) {

@@ -59,6 +59,10 @@ Pattern¦Patrón¦Pattern¦Padrão¦Паттерн
 Bars¦Compases¦Takte¦Compassos¦Такты
 Show pattern loop¦Ver loop del patrón¦Pattern-Loop anzeigen¦Ver loop do padrão¦Показать луп паттерна
 Bar $1¦Compás $1¦Takt $1¦Compasso $1¦Такт $1
+Pattern clip start¦Inicio del clip del patrón¦Pattern-Clip-Anfang¦Início do clipe do padrão¦Начало клипа паттерна
+Pattern clip end¦Fin del clip del patrón¦Pattern-Clip-Ende¦Fim do clipe do padrão¦Конец клипа паттерна
+Song mode · the pattern repeats along the track inside its clip; drag the clip edges¦Modo canción · el patrón se repite a lo largo del tema dentro de su clip; arrastrá los bordes del clip¦Song-Modus · das Pattern wiederholt sich im Clip über den Track; Clip-Ränder ziehen¦Modo música · o padrão se repete ao longo da faixa dentro do clipe; arraste as bordas do clipe¦Режим песни · паттерн повторяется по треку внутри клипа; перетаскивайте края клипа
+Pattern mode · the A–B loop follows the pattern bars¦Modo patrón · el loop A–B sigue los compases del patrón¦Pattern-Modus · der A–B-Loop folgt den Pattern-Takten¦Modo padrão · o loop A–B segue os compassos do padrão¦Режим паттерна · луп A–B следует тактам паттерна
 Step $1¦Paso $1¦Schritt $1¦Passo $1¦Шаг $1
 Pattern steps¦Pasos del patrón¦Pattern-Schritte¦Passos do padrão¦Шаги паттерна
 Pad¦Pad¦Pad¦Pad¦Пэд
@@ -72,6 +76,7 @@ Click the drum waveform to set the first beat. Esc cancels.¦Hacé clic en la wa
 Choose a row letter, then click the waveform to assign a sample.¦Elegí la letra de una fila y hacé clic en la waveform para asignar un sample.¦Wähle einen Zeilenbuchstaben und klicke auf die Wellenform, um ein Sample zuzuweisen.¦Escolha a letra de uma linha e clique na forma de onda para atribuir uma amostra.¦Выберите букву строки, затем нажмите на волну, чтобы назначить сэмпл.
 Click to add or remove hits. Shift + click selects a hit to edit its velocity.¦Clic para agregar o quitar golpes. Shift + clic selecciona un golpe para editar su intensidad.¦Klicken fügt Schläge hinzu oder entfernt sie. Umschalt + Klick wählt einen Schlag zum Ändern der Stärke.¦Clique para adicionar ou remover batidas. Shift + clique seleciona uma batida para editar a intensidade.¦Щелчок добавляет или удаляет удары. Shift + щелчок выбирает удар для изменения силы.
 Edit sample¦Editar sample¦Sample bearbeiten¦Editar amostra¦Редактировать сэмпл
+Auto-slice the loop¦Cortar el loop automáticamente¦Loop automatisch slicen¦Fatiar o loop automaticamente¦Автоматически нарезать луп
 Sample start¦Inicio del sample¦Sample-Anfang¦Início da amostra¦Начало сэмпла
 Sample end¦Fin del sample¦Sample-Ende¦Fim da amostra¦Конец сэмпла
 Fade in¦Entrada suave¦Einblenden¦Entrada suave¦Нарастание

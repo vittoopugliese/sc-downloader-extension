@@ -1,4 +1,4 @@
-import { DRUM_KEYS, normalizeSequence, sequenceRange, sequenceStep, renderDrumPattern } from './stem-sequencer-core.mjs';
+import { DRUM_KEYS, normalizeSequence, sequenceRange, sequenceStep, songClip, renderDrumPattern } from './stem-sequencer-core.mjs';
 
 export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, sampler, saved, changed, togglePlayback, rate, setRate, report }) {
   const pt = globalThis.SCPlayerToolsText.t;
@@ -17,10 +17,10 @@ export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, s
     const node = element('button', className, text); node.type = 'button';
     node.addEventListener('click', action, options); return node;
   }
-  function emit(loop = false) {
+  function emit(loop = false, song = false) {
     if (disposed) return;
     if (!range()) state.enabled = false;
-    render(); Promise.resolve(changed({ loop })).catch(report);
+    render(); Promise.resolve(changed({ loop, song })).catch(report);
   }
   const svg = (paths, filled = false) => `<svg class="icon${filled ? ' is-filled' : ''}" viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
   const ICONS = {
@@ -58,6 +58,13 @@ export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, s
   const mode = button('seq-switch', '', () => { if (state.enabled || range()) { state.enabled = !state.enabled; emit(state.enabled); } });
   mode.setAttribute('role', 'switch'); mode.setAttribute('aria-label', pt('Pattern'));
   mode.innerHTML = `${svg(ICONS.wave)}<span class="seq-switch-track" aria-hidden="true"></span>${svg(ICONS.sequencer)}`;
+  // PAT | SONG, as in FL Studio's transport. SONG frees the A–B loop from the pattern.
+  const song = button('seq-song', '', () => {
+    state.song = !state.song;
+    if (range()) state.enabled = true;
+    emit(!state.song, state.song);
+  });
+  song.setAttribute('role', 'switch'); song.innerHTML = '<span>PAT</span><span>SONG</span>';
   // The visible BPM is the playback tempo. It drives the shared speed slider,
   // so Keep Tone decides whether the pitch follows. The grid keeps its source BPM.
   const bpm = element('input', 'seq-bpm'); bpm.type = 'number'; bpm.min = '1'; bpm.max = '900'; bpm.step = '.1';
@@ -102,7 +109,7 @@ export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, s
     for (const line of state.steps) line.fill(0, bar * 16, (bar + 1) * 16); emit();
   });
   const group = (...nodes) => { const node = element('div', 'seq-group'); node.append(...nodes); return node; };
-  controls.append(group(play, mode), group(bpmLabel), group(fit, half, double, barsLabel, setStart, focus), navigation,
+  controls.append(group(play, mode, song), group(bpmLabel), group(fit, half, double, barsLabel, setStart, focus), navigation,
     group(velocityLabel, clear));
   const scroll = element('div', 'seq-scroll');
   const grid = element('div', 'seq-grid'); grid.setAttribute('role', 'group'); grid.setAttribute('aria-label', pt('Pattern steps'));
@@ -172,12 +179,70 @@ export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, s
   };
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && armed) { armed = false; render(); } }, options);
 
+  // The playlist clip: where SONG mode plays the pattern. Its edges snap to bars.
+  const clip = element('div', 'stem-pattern-clip');
+  const clipLabel = element('span', 'stem-pattern-clip-label');
+  const edges = ['from', 'to'].map(edge => {
+    const handle = button(`stem-pattern-clip-edge is-${edge}`, '', () => {});
+    handle.dataset.edge = edge; handle.setAttribute('role', 'slider');
+    handle.onpointerdown = event => {
+      if (event.button !== 0) return;
+      event.preventDefault(); event.stopPropagation();
+      drag = { id: event.pointerId, edge, viewport: { ...timeline.viewport() }, rect: waveform.getBoundingClientRect() };
+      handle.setPointerCapture(event.pointerId); handle.focus({ preventScroll: true });
+    };
+    handle.onpointermove = event => {
+      if (drag?.id !== event.pointerId || drag.edge !== edge) return;
+      const seconds = (drag.viewport.startMs + (event.clientX - drag.rect.left) / drag.rect.width * (drag.viewport.endMs - drag.viewport.startMs)) / 1000;
+      moveEdge(edge, Math.round((seconds - state.start) * state.bpm / 240));
+    };
+    const finish = event => {
+      if (drag?.id !== event.pointerId || drag.edge !== edge) return;
+      drag = null; if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId); emit();
+    };
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) handle.addEventListener(type, finish, options);
+    handle.ondblclick = event => event.stopPropagation();
+    handle.onkeydown = event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault(); event.stopPropagation();
+      const current = songClip(state, buffer.duration);
+      moveEdge(edge, event.key === 'Home' ? current.first : event.key === 'End' ? current.last : current[edge] + (event.key === 'ArrowLeft' ? -1 : 1));
+      emit();
+    };
+    return handle;
+  });
+  // A clip reaching the last bar stays open-ended, so it follows tempo and first-beat edits.
+  function moveEdge(edge, bar) {
+    const current = songClip(state, buffer.duration);
+    state.clip = edge === 'from' ? { from: Math.min(bar, current.to - 1), to: current.to === current.last ? null : current.to }
+      : { from: current.from, to: bar >= current.last ? null : Math.max(bar, current.from + 1) };
+    renderMarker();
+  }
+  clip.append(clipLabel, ...edges); waveform.append(clip);
+
   function renderMarker() {
     const percent = timeline.percent(state.start * 1000);
     anchor.hidden = panel.hidden || percent < 0 || percent > 100;
     anchor.style.left = `${percent}%`; anchor.setAttribute('aria-valuenow', String(state.start));
     anchor.title = pt('First beat · drag to align the grid');
     waveform.classList.toggle('is-placing-beat', armed && !panel.hidden);
+    const current = songClip(state, buffer.duration), left = timeline.percent(current.start * 1000), right = timeline.percent(current.end * 1000);
+    clip.hidden = !state.song || !range() || right < 0 || left > 100;
+    if (clip.hidden) return;
+    const loop = range(), length = (loop.endMs - loop.startMs) / 1000, { startMs, endMs } = timeline.viewport();
+    const tile = length * 1000 / (endMs - startMs) * waveform.clientWidth;
+    clip.classList.toggle('is-muted', !state.enabled);
+    clip.style.left = `${left}%`; clip.style.width = `${right - left}%`;
+    clip.style.backgroundSize = `${tile}px 100%`;
+    clip.style.backgroundPosition = `${-(((current.start - state.start) / length) % 1 + 1) % 1 * tile}px 0`;
+    clipLabel.textContent = `${pt('Pattern')} ×${(Math.round((current.end - current.start) / length * 10) / 10).toLocaleString()}`;
+    edges.forEach(handle => {
+      const edge = handle.dataset.edge;
+      handle.title = `${pt(edge === 'from' ? 'Pattern clip start' : 'Pattern clip end')} · ${pt('Bar $1', current[edge] + (edge === 'from' ? 1 : 0))}`;
+      handle.setAttribute('aria-label', handle.title);
+      handle.setAttribute('aria-valuemin', String(current.first)); handle.setAttribute('aria-valuemax', String(current.last));
+      handle.setAttribute('aria-valuenow', String(current[edge]));
+    });
   }
   function renderTempo() {
     if (document.activeElement !== bpm) bpm.value = String(Math.round(state.bpm * currentRate * 10) / 10);
@@ -187,6 +252,10 @@ export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, s
     if (disposed) return;
     bars.value = String(state.bars); renderTempo();
     mode.setAttribute('aria-checked', String(state.enabled)); mode.disabled = !state.enabled && !range();
+    song.setAttribute('aria-checked', String(state.song)); song.disabled = !range();
+    song.title = state.song ? pt('Song mode · the pattern repeats along the track inside its clip; drag the clip edges') :
+      pt('Pattern mode · the A–B loop follows the pattern bars');
+    song.setAttribute('aria-label', song.title);
     mode.title = state.enabled ? pt('Pattern replaces the drum stem · click for the original drums') : pt('Original drums · click to play the pattern');
     play.disabled = !playing && !range(); focus.disabled = !range();
     setStart.setAttribute('aria-pressed', String(armed));
@@ -228,8 +297,8 @@ export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, s
   const key = () => JSON.stringify([state.bpm, state.bars, state.steps, sampler.snapshot()]);
   render();
   return {
-    range, renderMarker, enabled: () => state.enabled,
-    grid: () => ({ bpm: state.bpm, bars: state.bars, start: state.start }),
+    range, renderMarker, enabled: () => state.enabled, song: () => state.song,
+    grid: () => ({ bpm: state.bpm, bars: state.bars, start: state.start, song: state.song, clip: { ...state.clip } }),
     setGrid(value) {
       const next = normalizeSequence({ ...state, ...value }, buffer.duration);
       state.bpm = next.bpm; state.bars = next.bars; state.start = next.start;
@@ -244,7 +313,7 @@ export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, s
       state.start = Math.max(0, Math.min(buffer.duration, seconds)); armed = false; emit(true); return true;
     },
     updateTransport(position, active, rate) {
-      const next = sequenceStep(state, range(), position);
+      const next = sequenceStep(state, buffer, position);
       if (next === currentStep && playing === active && currentRate === rate) return;
       const tempoChanged = currentRate !== rate;
       currentStep = next; playing = active; currentRate = rate;
@@ -265,6 +334,6 @@ export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, s
       }
       return null;
     },
-    dispose() { disposed = true; controller.abort(); cache = null; panel.remove(); toggle.remove(); anchor.remove(); waveform.classList.remove('is-placing-beat'); },
+    dispose() { disposed = true; controller.abort(); cache = null; panel.remove(); toggle.remove(); anchor.remove(); clip.remove(); waveform.classList.remove('is-placing-beat'); },
   };
 }

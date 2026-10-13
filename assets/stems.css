@@ -350,6 +350,18 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .waveform .stem-sequence-anchor{position:absolute;bottom:0;z-index:7;width:20px;height:18px;padding:0;transform:translateX(-50%);border:1px solid #a9d6de;border-radius:3px;background:#2b555b;color:#dbfaff;font:700 10px ui-monospace,monospace;cursor:ew-resize;touch-action:none}
 .stem-sequence-anchor::after{content:'';position:absolute;bottom:17px;left:50%;height:110px;border-left:1px dashed #a9d6de77;pointer-events:none}
 .waveform.is-placing-beat{outline:1px dashed #a9d6de;outline-offset:2px}
+/* SONG mode playlist clip: one tile line per pattern repeat, grips taller than the first-beat anchor. */
+.waveform .stem-pattern-clip{position:absolute;top:0;bottom:0;z-index:1;pointer-events:none;border-bottom:3px solid #6fc3cf;background-color:#4fb8c40f;background-image:linear-gradient(90deg,#a9d6de66 0 1px,transparent 1px);background-repeat:repeat-x}
+.waveform .stem-pattern-clip[hidden]{display:none}
+.waveform .stem-pattern-clip.is-muted{border-bottom-color:#6fc3cf55;background-color:transparent}
+.stem-pattern-clip-label{position:absolute;bottom:4px;left:14px;font:700 9px ui-monospace,monospace;color:#bdeef5;white-space:nowrap;text-shadow:0 1px 2px #000}
+.waveform .stem-pattern-clip-edge{position:absolute;bottom:0;width:7px;height:44px;padding:0;border:0;border-radius:2px 2px 0 0;background:#6fc3cf;cursor:ew-resize;pointer-events:auto;touch-action:none}
+.stem-pattern-clip-edge.is-from{left:0}
+.stem-pattern-clip-edge.is-to{right:0}
+.stem-pattern-clip-edge:focus-visible{outline:2px solid #fff;outline-offset:1px}
+.stem-sequencer .seq-song{display:inline-flex;padding:0;overflow:hidden;font:700 9px ui-monospace,monospace;letter-spacing:.04em}
+.seq-song span{padding:0 6px;line-height:22px;color:#8f877e}
+.seq-song[aria-checked=false] span:first-child,.seq-song[aria-checked=true] span:last-child{background:#ed7134;color:#fff}
 .waveform.is-placing-beat .stem-sample-handle,.waveform.is-placing-pad .stem-sequence-anchor{pointer-events:none}
 @media(max-width:600px){.stem-sequencer{padding:6px}.seq-group+.seq-group{padding-left:0;border-left:0}.seq-velocity{width:64px}}
 

@@ -1,5 +1,6 @@
 import { mountDrumSampler } from './stem-sampler.mjs';
 import { mountDrumSequencer } from './stem-sequencer.mjs';
+import { arrangeSong } from './stem-sequencer-core.mjs';
 import { mountStemPiano } from './stem-piano.mjs';
 import { createEqualizedOutput } from './local-audio-output.mjs';
 import { createStemLoop } from './stem-loop.mjs';
@@ -167,8 +168,11 @@ const stemLoop = createStemLoop({ viewportChanged() {
   position = current;
   if (playing) startedAt = Math.max(startedAt, context.currentTime);
   if ((current < startMs / 1000 || current >= endMs / 1000)) seekTo(startMs / 1000);
-  if (drumSequencer?.enabled() && !drumSequencer.matchesRange(stemLoop.range())) drumSequencer.deactivate();
-  if (pianoRoll?.enabled() && !drumSequencer.matchesRange(stemLoop.range())) pianoRoll.deactivate();
+  // PAT mode owns the A–B loop; in SONG mode any loop leaves the pattern playing.
+  if (!drumSequencer?.song()) {
+    if (drumSequencer?.enabled() && !drumSequencer.matchesRange(stemLoop.range())) drumSequencer.deactivate();
+    if (pianoRoll?.enabled() && !drumSequencer.matchesRange(stemLoop.range())) pianoRoll.deactivate();
+  }
 } });
 const zoomTools = document.createElement('div'); zoomTools.className = 'stem-zoom-tools';
 for (const [label, title, action] of [
@@ -515,7 +519,7 @@ function applyMix() {
     const state = states[index === 5 ? 2 : index - 1];
     const value = index === 0 ? Number(mode === 'original') :
       mode === 'mix' && !state.muted && (!solo || state.solo) &&
-      !(index === 3 && pianoRoll?.enabled() && pianoRoll.replaces()) ? state.gain : 0;
+      !(index === 3 && pianoRoll?.enabled() && pianoRoll.replaces() && !drumSequencer?.song()) ? state.gain : 0;
     gain.gain.setTargetAtTime(value, context.currentTime, 0.008);
   });
   document.querySelectorAll('.stem').forEach((row, index) => {
@@ -538,21 +542,41 @@ function createPlaybackNode(buffer, when, at, pattern = false) {
   source.start(when, seek);
   return node;
 }
-async function syncSequence({ loop = false, audio = true } = {}) {
+// Lanes the sequencers drive, as [node index, buffer, loops on its own]. PAT loops each
+// rendered pattern as its own node; SONG bakes it into a full-length drums/other lane.
+const arranged = new WeakMap();
+function arrangeLane(pattern, stem, grid, layer) {
+  const key = JSON.stringify([grid, layer]), cached = arranged.get(pattern);
+  if (cached?.key === key && cached.stem === stem) return cached.value;
+  const value = arrangeSong(stem, pattern, grid, layer);
+  arranged.set(pattern, { key, stem, value }); return value;
+}
+async function sequenceLanes() {
+  const owner = drumSequencer, piano = pianoRoll;
+  const [pattern, melody] = await Promise.all([owner?.enabled() ? owner.prepare() : null, piano?.enabled() ? piano.prepare() : null]);
+  if (!owner?.song()) return [[1, pattern || buffers[0], !!pattern], [3, buffers[2], false], [5, melody, true]];
+  const grid = owner.grid();
+  return [[1, pattern ? arrangeLane(pattern, buffers[0], grid, false) : buffers[0], false],
+    [3, melody ? arrangeLane(melody, buffers[2], grid, !piano.replaces()) : buffers[2], false], [5, null, true]];
+}
+async function syncSequence({ loop = false, song = false, audio = true } = {}) {
   const owner = drumSequencer, piano = pianoRoll;
   if (!owner) return;
   libraryUI.changed();
   if (!audio) return;
   const version = ++sequenceRevision;
   piano?.gridChanged();
-  if (loop && owner.range()) stemLoop.setRange(owner.range());
+  if (loop && owner.range() && !owner.song()) stemLoop.setRange(owner.range());
+  // Entering SONG releases an A–B loop that only existed to follow the pattern.
+  if (song && owner.matchesRange(stemLoop.range())) stemLoop.setRange(null);
   if (!playing) return;
   const transportVersion = playbackRevision;
-  const [pattern, melody] = await Promise.all([owner.enabled() ? owner.prepare() : null, piano?.enabled() ? piano.prepare() : null]);
+  const lanes = await sequenceLanes();
   if (!playing || version !== sequenceRevision || transportVersion !== playbackRevision || owner !== drumSequencer) return;
   const when = context.currentTime + .015;
-  for (const [index, audioBuffer, isPattern] of [[1, pattern || buffers[0], !!pattern], [5, melody, true]]) {
+  for (const [index, audioBuffer, isPattern] of lanes) {
     const old = nodes[index];
+    if (old && old.source.buffer === audioBuffer && !isPattern) continue;
     if (audioBuffer) nodes[index] = createPlaybackNode(audioBuffer, when, offset(undefined, when), isPattern);
     else if (index === 5) nodes.length = 5;
     if (old) {
@@ -568,10 +592,10 @@ async function play() {
   context ||= new AudioContext({ sampleRate: SAMPLE_RATE });
   await context.resume();
   await prepareTone();
-  let pattern, melody, revision;
+  let lanes, revision;
   do {
     revision = sequenceRevision;
-    [pattern, melody] = await Promise.all([drumSequencer?.enabled() ? drumSequencer.prepare() : null, pianoRoll?.enabled() ? pianoRoll.prepare() : null]);
+    lanes = new Map((await sequenceLanes()).map(([index, audio, isPattern]) => [index, { audio, isPattern }]));
   } while (revision !== sequenceRevision && version === playbackRevision);
   if (playing || version !== playbackRevision) return;
   const { startMs, endMs } = stemLoop.range();
@@ -579,8 +603,8 @@ async function play() {
   else if (position >= original.duration) position = 0;
   startedAt = context.currentTime + 0.03;
   nodes = [original, ...buffers].map((buffer, index) =>
-    createPlaybackNode(index === 1 && pattern ? pattern : buffer, startedAt, position, index === 1 && !!pattern));
-  if (melody) nodes.push(createPlaybackNode(melody, startedAt, position, true));
+    createPlaybackNode(lanes.get(index)?.audio || buffer, startedAt, position, !!lanes.get(index)?.isPattern));
+  if (lanes.get(5)?.audio) nodes.push(createPlaybackNode(lanes.get(5).audio, startedAt, position, true));
   toneNode.port.postMessage({ rate, keepTone, reset: true });
   playing = true; applyMix(); playLabel(true);
 }
@@ -695,7 +719,7 @@ function showResults(result, saved = null) {
   });
   outputs = [];
   $('mix').disabled = false; $('quality-note').hidden = false; mode = saved?.mode === 'original' ? 'original' : 'mix'; applyMix();
-  if ((drumSequencer?.enabled() || pianoRoll?.enabled()) && drumSequencer.range()) stemLoop.setRange(drumSequencer.range());
+  if ((drumSequencer?.enabled() || pianoRoll?.enabled()) && drumSequencer.range() && !drumSequencer.song()) stemLoop.setRange(drumSequencer.range());
   status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`);
 }
 

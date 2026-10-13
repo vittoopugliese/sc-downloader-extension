@@ -36,13 +36,91 @@ export function scheduleDrumEnvelope(param, slice, now) {
   param.linearRampToValueAtTime(0, now + length);
 }
 
+// Slicex-style auto-slicing, sized for the main thread: one pass of one-pole band
+// splits (no FFT), log-energy flux, adaptive peak picking, then the strongest
+// distinct hits are kept and mapped to the keys in time order.
+const HOP = 256, BANDS = [150, 2500];
+export function detectDrumSlices(buffer, { startMs = 0, endMs = buffer.duration * 1000, count = KEYS.length } = {}) {
+  const rate = buffer.sampleRate, channels = Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c));
+  const first = clamp(Math.floor(startMs / 1000 * rate), 0, buffer.length);
+  const last = clamp(Math.ceil(endMs / 1000 * rate), first, buffer.length);
+  // Four frames of pre-roll settle the filters, so a hit on the loop's first sample is still a rise.
+  const origin = Math.max(0, first - 4 * HOP), frames = Math.floor((last - origin) / HOP);
+  if (frames < 8) return [];
+  const sample = i => { let x = 0; for (const data of channels) x += data[i]; return x / channels.length; };
+  // Hot loop reads at most two typed arrays; other layouts are downmixed once.
+  const [left, right] = channels.length <= 2 ? channels : [Float32Array.from({ length: buffer.length }, (_, i) => sample(i))];
+  // Bands run on sample pairs (half rate): attacks keep their detail, the hot loop halves.
+  const [aLow, aHigh] = BANDS.map(hz => 1 - Math.exp(-4 * Math.PI * hz / rate));
+  const energy = [new Float32Array(frames), new Float32Array(frames), new Float32Array(frames)];
+  let low = 0, smooth = 0;
+  for (let f = 0, i = origin; f < frames; f++) {
+    let el = 0, em = 0, eh = 0;
+    for (const end = i + HOP; i < end; i += 2) {
+      const x = right ? (left[i] + left[i + 1] + right[i] + right[i + 1]) * .25 : (left[i] + left[i + 1]) * .5;
+      low += aLow * (x - low); smooth += aHigh * (x - smooth);
+      const mid = smooth - low, high = x - smooth;
+      el += low * low; em += mid * mid; eh += high * high;
+    }
+    energy[0][f] = Math.log1p(el * 2e4 / HOP); energy[1][f] = Math.log1p(em * 2e4 / HOP); energy[2][f] = Math.log1p(eh * 2e4 / HOP);
+  }
+  // A two-frame lag keeps a hit that straddles frames as one peak.
+  const flux = new Float32Array(frames), rise = f => energy.map(band => Math.max(0, band[f] - band[Math.max(0, f - 2)]));
+  let peak = 0;
+  for (let f = 1; f < frames; f++) { flux[f] = rise(f).reduce((a, b) => a + b, 0); peak = Math.max(peak, flux[f]); }
+  if (!peak) return [];
+  const near = Math.round(.06 * rate / HOP), wide = Math.round(.1 * rate / HOP), firstFrame = Math.floor((first - origin) / HOP) - 1;
+  const onsets = [];
+  for (let f = Math.max(1, firstFrame); f < frames; f++) {
+    let mean = 0, n = 0, isPeak = flux[f] > .08 * peak;
+    for (let k = Math.max(1, f - wide); isPeak && k <= Math.min(frames - 1, f + wide); k++) {
+      mean += flux[k]; n++;
+      if (Math.abs(k - f) <= near && (flux[k] > flux[f] || (flux[k] === flux[f] && k < f))) isPeak = false;
+    }
+    if (isPeak && flux[f] > 1.5 * mean / n) onsets.push({ frame: f, strength: flux[f], profile: rise(f) });
+  }
+  // Sample-accurate start: first crossing of a quarter of the attack above the floor, then back to a zero crossing.
+  const at = frame => origin + frame * HOP;
+  for (const onset of onsets) {
+    const from = Math.max(origin, at(onset.frame - 2)), to = Math.min(last, at(onset.frame + 1) + Math.round(.01 * rate));
+    let floor = 0, top = 0;
+    for (let i = Math.max(0, from - HOP); i < from; i++) floor = Math.max(floor, Math.abs(sample(i)));
+    for (let i = from; i < to; i++) top = Math.max(top, Math.abs(sample(i)));
+    let start = from;
+    while (start < to - 1 && Math.abs(sample(start)) < floor + .25 * (top - floor)) start++;
+    for (const stop = Math.max(first, start - Math.round(.003 * rate)); start > stop && sample(start) * sample(start - 1) > 0;) start--;
+    onset.start = Math.max(first, start);
+  }
+  // Keep the strongest hits, discounting ones that sound like a hit already kept.
+  const similarity = (a, b) => {
+    const dot = a.reduce((sum, x, i) => sum + x * b[i], 0), norm = Math.hypot(...a) * Math.hypot(...b);
+    return norm ? dot / norm : 0;
+  };
+  const chosen = [], pool = [...onsets];
+  while (chosen.length < count && pool.length) {
+    let best = 0, score = -Infinity;
+    pool.forEach((onset, i) => {
+      const value = onset.strength * (1.2 - Math.max(0, ...chosen.map(other => similarity(onset.profile, other.profile))));
+      if (value > score) { score = value; best = i; }
+    });
+    chosen.push(...pool.splice(best, 1));
+  }
+  chosen.sort((a, b) => a.start - b.start);
+  // Each cut ends at the next detected hit, as Slicex regions do, capped at one second.
+  return chosen.map(onset => {
+    const next = onsets.find(other => other.start > onset.start + .02 * rate)?.start ?? last;
+    const end = Math.min(next, last, onset.start + rate) / rate, start = onset.start / rate;
+    return normalizeDrumSlice({ start, end, fadeIn: .001, fadeOut: Math.min(.02, (end - start) * .3) }, buffer);
+  });
+}
+
 // Pads share PCM, but own their trim and envelope; no pad depends on its neighbor.
 export function mountDrumSampler({ row, actions, waveform, buffer, timeline, audioContext, output, level, changed, saved, locale, report,
-  keys = KEYS, id = 'drums', keyboard = true, defaultLength = .154, title = 'Sampler' }) {
+  keys = KEYS, id = 'drums', keyboard = true, autoSlice = keyboard, defaultLength = .154, title = 'Sampler' }) {
   const pt = globalThis.SCPlayerToolsText.t;
   const slices = Array.from({ length: keys.length }, (_, i) => normalizeDrumSlice(saved?.[i], buffer));
   const controller = new AbortController(), options = { signal: controller.signal };
-  let selected = null, armed = null, disposed = false, drag = null;
+  let selected = null, armed = null, disposed = false, drag = null, sliced = null;
   const voices = new Map(), liveVoices = new Set(), revisions = Array(keys.length).fill(0);
   const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'stem-sampler-toggle';
   toggle.title = pt(title); toggle.setAttribute('aria-label', pt(title));
@@ -60,7 +138,11 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
     const slice = slices[selected]; if (!slice) return;
     armed = null; timeline.focusRange(slice.start * 1000, slice.end * 1000); render();
   };
-  toolbar.append(edit);
+  const auto = document.createElement('button'); auto.type = 'button'; auto.className = 'stem-sample-edit stem-sample-auto';
+  auto.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21 15 9M14 4v3M19 9h3M17.5 5.5l2-2M10 6.5 8 4.5M17.5 12.5l2 2"/></svg>';
+  auto.title = pt('Auto-slice the loop'); auto.setAttribute('aria-label', auto.title);
+  auto.hidden = !autoSlice; auto.onclick = () => slice(true);
+  toolbar.append(edit, auto);
   const markers = [], regions = [], envelopes = [], handles = [], buttons = [];
   const milliseconds = seconds => `${(seconds * 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} ms`;
   const labels = { start: pt('Sample start'), end: pt('Sample end'), fadeIn: pt('Fade in'), fadeOut: pt('Fade out') };
@@ -73,8 +155,8 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
     pads.title = keyboard ? pt('A S D F G H J K to play. Edit sample to zoom; drag its edges and fades.') : pt('Select piano sample');
     waveform.classList.toggle('is-placing-pad', armed !== null);
     waveform.classList.toggle('is-sampling', !panel.hidden);
-    toolbar.hidden = !slices[selected];
-    if (!toolbar.hidden) {
+    edit.hidden = !slices[selected]; toolbar.hidden = edit.hidden && !autoSlice;
+    if (!edit.hidden) {
       const slice = slices[selected];
       edit.title = `${pt('Edit sample')} · ${keys[selected]} · ${milliseconds(slice.end - slice.start)} · ${labels.fadeIn} ${milliseconds(slice.fadeIn)} · ${labels.fadeOut} ${milliseconds(slice.fadeOut)}`;
     }
@@ -111,6 +193,22 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
         handle.title = `${keys[i]} · ${labels[kind]}: ${milliseconds(value)}`;
       }
     });
+  }
+  // The A–B loop is the slicing range; without one, the visible part of the waveform.
+  function sliceRange() {
+    const loop = timeline.range();
+    return loop.endMs - loop.startMs < buffer.duration * 1000 - 1 ? loop : timeline.viewport();
+  }
+  // Opening the pads slices empty pads, and re-slices pads that are still an untouched
+  // auto-slice of another range. Edited or saved pads are never overwritten.
+  function slice(force = false) {
+    const { startMs, endMs } = sliceRange(), key = `${Math.round(startMs)}:${Math.round(endMs)}`;
+    const untouched = sliced && slices.every((value, i) => value === sliced.slices[i]);
+    if (!force && !slices.every(value => !value) && !(untouched && sliced.key !== key)) return;
+    const found = detectDrumSlices(buffer, { startMs, endMs, count: keys.length });
+    if (!found.length) return;
+    buttons.forEach((_, i) => { slices[i] = found[i] ?? null; revisions[i]++; stop(i); });
+    sliced = { key, slices: [...slices] }; selected = 0; armed = null; render(); changed();
   }
   function stop(i) {
     const voice = voices.get(i); if (!voice) return;
@@ -204,6 +302,8 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
   toggle.onclick = () => {
     panel.hidden = !panel.hidden; toggle.setAttribute('aria-expanded', String(!panel.hidden)); armed = null;
     if (panel.hidden) buttons.forEach((_, i) => { revisions[i]++; stop(i); }); render();
+    // Slice after the panel paints; a whole song costs one long frame.
+    if (!panel.hidden && autoSlice) requestAnimationFrame(() => setTimeout(() => { if (!disposed && !panel.hidden) slice(); }));
   };
   // The melodic selector captures a drag as a sample cut, independently of A–B.
   // Drum pads retain their existing click-to-place and drag-to-loop behavior.
