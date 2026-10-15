@@ -24,12 +24,13 @@
         </div>
       </div>
       <div class="workspace-toolbar">
+        <div class="source-mini"><div class="source-cover"><img id="artwork" alt="" referrerpolicy="no-referrer" hidden><span id="artwork-fallback" data-icon="music"></span></div><h1 id="track" class="track"></h1></div>
         <div class="header-library">
           <div class="library-heading"><label id="preset-label" for="stem-presets">Saved separations</label><small id="preset-destination"></small></div>
-          <div class="preset-toolbar"><select id="stem-presets" disabled></select><button id="save-locally" type="button" aria-pressed="false" disabled><span data-icon="save"></span></button><button id="preset-folder" type="button" disabled><img src="assets/icons/folder-icon.svg" alt=""></button><button id="preset-reset" type="button" hidden><img src="assets/icons/cross.svg" alt=""></button></div>
+          <div class="preset-toolbar"><select id="stem-presets" disabled></select><button id="save-locally" type="button" aria-pressed="false" disabled><span data-icon="save"></span></button><button id="preset-folder" type="button" disabled><img src="assets/icons/folder-icon.svg" alt=""></button><button id="preset-reset" type="button" hidden><img src="assets/icons/cross.svg" alt=""></button><button id="import-audio" type="button" disabled><span data-icon="upload"></span><span id="import-audio-label">Load</span></button></div>
           <button id="preset-reconnect" type="button" hidden></button>
         </div>
-        <div class="local-import"><div class="import-row"><button id="import-audio" type="button" aria-describedby="import-hint" disabled><span data-icon="upload"></span><span id="import-audio-label">Import audio</span></button><div class="source-mini"><div class="source-cover"><img id="artwork" alt="" referrerpolicy="no-referrer" hidden><span id="artwork-fallback" data-icon="music"></span></div><h1 id="track" class="track"></h1></div></div><input id="audio-file" type="file" accept="audio/*,.wav,.mp3,.flac,.m4a,.ogg,.aac,.aif,.aiff" hidden><span id="import-hint" class="muted"></span></div>
+        <input id="audio-file" type="file" accept="audio/*,.wav,.mp3,.flac,.m4a,.ogg,.aac,.aif,.aiff" hidden>
       </div>
     </header>
     <div class="studio-card"><section class="prepare" aria-label="Separation" data-copy-aria-label="separationLabel">

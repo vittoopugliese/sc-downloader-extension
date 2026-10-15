@@ -361,10 +361,11 @@ const localCopy = ({
   'pt-BR': ['Carregar áudio do computador', 'Escolha um arquivo e um trecho de até 2 minutos.', 'Carregar trecho', 'Nome', 'Início (s)', 'Fim (s)', 'Cancelar', 'Lendo áudio…', 'Não foi possível ler o áudio. Tente outro arquivo ou formato compatível com o Chrome.', 'Escolha um intervalo válido de até 2 minutos dentro do arquivo.', 'Escolha um áudio local ou uma separação salva.'],
   ru: ['Загрузить аудио с компьютера', 'Выберите файл и фрагмент до 2 минут.', 'Загрузить фрагмент', 'Название', 'Начало (с)', 'Конец (с)', 'Отмена', 'Чтение аудио…', 'Не удалось прочитать аудио. Попробуйте другой файл или формат, поддерживаемый Chrome.', 'Выберите допустимый фрагмент до 2 минут в пределах файла.', 'Выберите локальное аудио или сохранённое разделение.'],
 })[locale] || [];
-for (const [id, index] of Object.entries({ 'import-audio-label': 0, 'import-hint': 1, 'import-title': 2, 'import-confirm': 2,
+for (const [id, index] of Object.entries({ 'import-title': 2, 'import-confirm': 2,
   'import-name-label': 3, 'import-start-label': 4, 'import-end-label': 5, 'import-cancel': 6, 'import-range-hint': 1 })) $(id).textContent = localCopy[index];
 let importDraft = null;
-$('import-hint').textContent += ' · ≤256 MiB';
+$('import-audio-label').textContent = ({ es: 'Cargar', en: 'Load', de: 'Laden', 'pt-BR': 'Carregar', ru: 'Загрузить' })[locale] || 'Load';
+$('import-audio').title = localCopy[0];
 $('import-audio').onclick = () => $('audio-file').click();
 $('audio-file').onchange = async event => {
   const file = event.target.files[0]; event.target.value = '';
