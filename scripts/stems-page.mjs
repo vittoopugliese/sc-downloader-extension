@@ -170,7 +170,7 @@ const stemLoop = createStemLoop({ viewportChanged() {
     if (pianoRoll?.enabled() && !drumSequencer.matchesRange(stemLoop.range())) pianoRoll.deactivate();
   }
 } });
-// The A–B selection loops the playlist; without one, the playlist's own Loop applies.
+// The A–B selection loops the playlist; clearing it disables looping.
 function syncLoop() {
   const { startMs, endMs } = stemLoop.range();
   playlist.setLoopRange(stemLoop.selected() ? { start: startMs / 1000, end: endMs / 1000 } : null);

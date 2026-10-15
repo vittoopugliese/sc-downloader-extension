@@ -76,7 +76,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   const clock = seconds => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, '0')}`;
   const now = () => engine?.now() ?? position;
   const playing = () => !!engine?.playing();
-  const transport = () => ({ rate, loop: loopRange || (loop.checked && arrangementEnd(state) ? { start: 0, end: arrangementEnd(state) } : null) });
+  const transport = () => ({ rate, loop: loopRange });
   // Stretched clips render in a worker; their clips show a striped overlay until ready.
   const stretchStatus = t('Stretching clips…', 'Estirando clips…');
   const stretching = clip => needsStretch(clip) && !cache.has(clip, assets.get(clip.asset));
@@ -109,28 +109,16 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   const play = button('▶', t('Play / pause (Space)', 'Reproducir / pausar (Espacio)'), safe(toggle)); play.className = 'pl-play'; play.setAttribute('aria-pressed', 'false');
   const stopButton = button('■', t('Stop and rewind', 'Detener y volver al inicio'), () => stop(true));
   const time = node('output', 'pl-time', '0:00.00');
-  const loopLabel = node('label', 'pl-field'), loop = node('input'); loop.type = 'checkbox'; loop.checked = true;
-  loopLabel.title = t('Loop the arrangement when no A–B loop is set', 'Repetir el arreglo cuando no hay loop A–B');
-  loopLabel.append(loop, document.createTextNode('Loop'));
-  loop.onchange = () => engine?.update(state, transport());
   function field(text, type, value, min, max, step) {
     const label = node('label', 'pl-field', text), input = node('input'); input.type = type; input.value = String(value);
     input.setAttribute('aria-label', text); if (min !== undefined) input.min = min; if (max !== undefined) input.max = max; if (step !== undefined) input.step = step;
     label.append(input); return { label, input };
   }
   const tempo = field('BPM', 'number', 120, 20, 300, 1); tempo.input.title = t('Grid tempo; audio speed is set per clip', 'Tempo de la grilla; la velocidad se cambia por clip');
-  const loopA = field('A', 'number', 0, 0, LIMITS.seconds, .1), loopB = field('B', 'number', 0, 0, LIMITS.seconds, .1);
-  loopA.input.setAttribute('aria-label', 'Loop A'); loopB.input.setAttribute('aria-label', 'Loop B');
   function changeLoop(range) {
     loopRange = range; engine?.update(state, transport()); renderLoopBand();
     onLoopChange?.(range);
   }
-  for (const input of [loopA.input, loopB.input]) input.onchange = () => {
-    const start = Number(loopA.input.value), end = Number(loopB.input.value);
-    if (Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start && end <= LIMITS.seconds) changeLoop({ start, end });
-    else renderLoopBand();
-  };
-  const clearLoop = button('× A–B', t('Clear A–B loop', 'Quitar loop A–B'), () => changeLoop(null));
   tempo.input.onchange = () => commit(() => { state.bpm = Number(tempo.input.value); });
   const snapLabel = node('label', 'pl-field', 'Snap'), snapSelect = node('select'); snapSelect.setAttribute('aria-label', 'Snap');
   for (const [value, label] of [[0, 'Off'], [.25, '1/16'], [.5, '1/8'], [1, '1/4'], [4, t('Bar', 'Compás')]]) snapSelect.add(new Option(label, value));
@@ -139,24 +127,47 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   const redo = button('↷', t('Redo (Ctrl+Shift+Z)', 'Rehacer (Ctrl+Shift+Z)'), () => travel(true));
   const fileInput = node('input'); fileInput.type = 'file'; fileInput.accept = 'audio/*,.wav,.mp3,.flac,.m4a,.ogg'; fileInput.multiple = true; fileInput.hidden = true;
   fileInput.onchange = safe(async () => { const files = [...fileInput.files]; fileInput.value = ''; await importFiles(files); });
-  const importButton = button(t('+ Samples', '+ Samples'), t('Import audio files', 'Importar archivos de audio'), () => fileInput.click());
-  const addTrack = button(t('+ Track', '+ Pista'), t('Add track', 'Agregar pista'), () => commit(() => state.tracks.push({ id: uid(), name: `${t('Track', 'Pista')} ${state.tracks.filter(item => !item.stem).length + 1}`, gain: 1, mute: false, solo: false })));
+  function iconButton(path, title, action) {
+    const control = button('', title, action); control.className = 'pl-icon-button';
+    control.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
+    return control;
+  }
+  const importButton = iconButton('M3 10v4m4-7v10m4-13v16m4-10v4m1-9h6m-3-3v6', t('Import audio files', 'Importar archivos de audio'), () => fileInput.click());
+  const addTrack = iconButton('M3 4h18v4H3zM3 12h10M3 18h10m3-3h6m-3-3v6', t('Add track', 'Agregar pista'), () => commit(() => state.tracks.push({ id: uid(), name: `${t('Track', 'Pista')} ${state.tracks.filter(item => !item.stem).length + 1}`, gain: 1, mute: false, solo: false })));
   const exportButton = button('↓ WAV', t('Export playlist mix as WAV', 'Exportar mezcla de la playlist como WAV'), safe(exportMix));
-  toolbar.append(play, stopButton, time, loopLabel, loopA.label, loopB.label, clearLoop, tempo.label, snapLabel, undo, redo, node('span', 'pl-spacer'), importButton, addTrack, exportButton, fileInput);
+  exportButton.className = 'pl-export';
+  toolbar.append(play, stopButton, time, tempo.label, snapLabel, undo, redo, node('span', 'pl-spacer'), importButton, addTrack, exportButton, fileInput);
   const shelf = node('div', 'pl-shelf'); shelf.setAttribute('aria-label', t('Sample library', 'Biblioteca de samples'));
   const scroll = node('div', 'pl-scroll'); scroll.tabIndex = 0; scroll.setAttribute('aria-label', t('Playlist timeline', 'Línea de tiempo de la playlist'));
   const grid = node('div', 'pl-grid'); scroll.append(grid);
   const waveCanvas = node('canvas', 'pl-wave-layer'); waveCanvas.setAttribute('aria-hidden', 'true'); grid.append(waveCanvas);
   const playhead = node('div', 'pl-playhead'); playhead.setAttribute('aria-hidden', 'true'); grid.append(playhead);
   const rulerRow = node('div', 'pl-grid-row pl-ruler-row'), corner = node('div', 'pl-track-head', t('CHANNELS', 'CANALES')), ruler = node('div', 'pl-ruler');
+  ruler.title = t('Drag on the ruler to create a loop · drag inside the selection to move it · drag its edges to resize · double-click to clear · click to seek · Alt bypasses snap.', 'Arrastrá en la regla para crear un loop · arrastrá dentro de la selección para moverla · arrastrá sus bordes para ajustar · doble clic para eliminar · clic para mover el cursor · Alt desactiva snap.');
+  ruler.setAttribute('aria-label', ruler.title);
   rulerRow.append(corner, ruler); grid.prepend(rulerRow);
   let loopDrag;
   const rulerTime = event => clamp((event.clientX - ruler.getBoundingClientRect().left) / zoom, 0, LIMITS.seconds);
-  ruler.onpointerdown = event => { if (event.button !== 0) return; event.preventDefault(); loopDrag = { id: event.pointerId, x: event.clientX, at: rulerTime(event), before: loopRange }; ruler.setPointerCapture(event.pointerId); };
+  const loopHit = event => {
+    if (!loopRange) return 'create';
+    const at = rulerTime(event), a = Math.abs(at - loopRange.start) * zoom, b = Math.abs(at - loopRange.end) * zoom;
+    if (Math.min(a, b) <= 7) return a <= b ? 'start' : 'end';
+    return at > loopRange.start && at < loopRange.end ? 'move' : 'create';
+  };
+  ruler.onpointerdown = event => { if (event.button !== 0) return; event.preventDefault(); loopDrag = { id: event.pointerId, x: event.clientX, at: rulerTime(event), before: loopRange, kind: loopHit(event) }; ruler.setPointerCapture(event.pointerId); };
   ruler.onpointermove = event => {
-    if (loopDrag?.id !== event.pointerId || Math.abs(event.clientX - loopDrag.x) < 4) return;
+    const kind = loopDrag?.kind || loopHit(event);
+    ruler.style.cursor = kind === 'create' ? 'crosshair' : kind === 'move' ? (loopDrag ? 'grabbing' : 'grab') : 'ew-resize';
+    if (loopDrag?.id !== event.pointerId || (!loopDrag.moved && Math.abs(event.clientX - loopDrag.x) < 4)) return;
     const at = snapAt(rulerTime(event), event.altKey), from = snapAt(loopDrag.at, event.altKey);
-    if (Math.abs(at - from) >= .01) { loopDrag.moved = true; changeLoop({ start: Math.min(at, from), end: Math.max(at, from) }); }
+    const before = loopDrag.before;
+    loopDrag.moved = true;
+    if (kind === 'move') {
+      const span = before.end - before.start, start = clamp(snapAt(before.start + rulerTime(event) - loopDrag.at, event.altKey), 0, LIMITS.seconds - span);
+      changeLoop({ start, end: start + span });
+    } else if (kind === 'start') changeLoop({ start: clamp(at, 0, before.end - .01), end: before.end });
+    else if (kind === 'end') changeLoop({ start: before.start, end: clamp(at, before.start + .01, LIMITS.seconds) });
+    else if (Math.abs(at - from) >= .01) changeLoop({ start: Math.min(at, from), end: Math.max(at, from) });
   };
   ruler.onpointerup = event => { if (loopDrag?.id !== event.pointerId) return; if (!loopDrag.moved) seek(rulerTime(event)); loopDrag = null; ruler.releasePointerCapture(event.pointerId); };
   ruler.onpointercancel = () => { if (loopDrag) changeLoop(loopDrag.before); loopDrag = null; };
@@ -223,7 +234,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) { scroll.scrollLeft += event.deltaX || event.deltaY; return; }
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
-  const hint = node('p', 'pl-hint', t('Drag clips to move · edges to trim · Alt bypasses snap · Space plays · S splits · drop audio files on a track. The A–B loop above loops the playlist. 16 tracks / 5 minutes.', 'Arrastrá clips para mover · bordes para recortar · Alt desactiva snap · Espacio reproduce · S corta · soltá audio en una pista. El loop A–B de arriba repite la playlist. 16 pistas / 5 minutos.'));
+  const hint = node('p', 'pl-hint', t('Drag clips to move · edges to trim · Alt bypasses snap · Space plays · S splits · drop audio files on a track. Select a loop on the ruler; hover for controls. 16 tracks / 5 minutes.', 'Arrastrá clips para mover · bordes para recortar · Alt desactiva snap · Espacio reproduce · S corta · soltá audio en una pista. Seleccioná un loop en la regla; pasá el cursor para ver los controles. 16 pistas / 5 minutos.'));
   const message = node('p', 'pl-message'); message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite');
   container.classList.add('playlist'); container.tabIndex = -1;
   container.append(toolbar, shelf, zoomTools, scroll, inspector, hint, message);
@@ -425,7 +436,6 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     return item;
   }
   function renderLoopBand(band = grid.querySelector('.pl-loop-band')) {
-    loopA.input.value = loopRange?.start ?? 0; loopB.input.value = loopRange?.end ?? arrangementEnd(state);
     if (!band) return;
     band.hidden = !loopRange;
     if (loopRange) { band.style.left = `${loopRange.start * zoom}px`; band.style.width = `${(loopRange.end - loopRange.start) * zoom}px`; }
@@ -587,7 +597,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
       if (clip) seek(clip.at + (clip.reverse ? clip.out - seconds : seconds - clip.in) / clipRate(clip));
     },
     setMonitor(value) { state.monitor = value; engine?.update(state, transport()); draw(); onChange?.(); },
-    // The host's A–B loop in timeline seconds; null loops the whole arrangement.
+    // The host's A–B loop in timeline seconds; null disables looping.
     setLoopRange(range) {
       loopRange = range && range.end > range.start ? { start: range.start, end: range.end } : null;
       if (!playing() && loopRange && (position < loopRange.start || position >= loopRange.end)) position = loopRange.start;

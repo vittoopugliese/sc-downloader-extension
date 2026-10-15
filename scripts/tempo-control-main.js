@@ -3049,8 +3049,8 @@
 
   async function separateLoopStems() {
     if (!loopState.active || ui.separateStems.dataset.pending === "true") return;
-    if (loopState.endMs - loopState.startMs > 30000) {
-      showDownloadStatus(pt("Stem separation supports loops up to 30 seconds. Shorten the selected loop first."));
+    if (loopState.endMs - loopState.startMs > 120000) {
+      showDownloadStatus(pt("Stem separation supports loops up to 2 minutes. Shorten the selected loop first."));
       return;
     }
     const snapshot = { trackUrl: String(loopState.trackIdentity || "").replace(/^permalink:/, ""),
@@ -4428,7 +4428,7 @@
     ui.separateStems.type = "button";
     ui.separateStems.className = "separate-stems";
     ui.separateStems.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg><span>Stems</span>';
-    ui.separateStems.title = pt("Separate the selected loop into vocals, drums, bass and other (up to 30 seconds)");
+    ui.separateStems.title = pt("Separate the selected loop into vocals, drums, bass and other (up to 2 minutes)");
     ui.separateStems.setAttribute("aria-label", ui.separateStems.title);
     ui.downloadLoop.before(ui.separateStems);
     ui.separateStems.addEventListener("click", separateLoopStems);

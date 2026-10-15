@@ -52,3 +52,6 @@
 [1007/201225.660:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)
 [1007/201227.640:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)
 [1007/201400.731:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)
+[1014/232656.331:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)
+[1014/233649.685:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)
+[1015/123616.479:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)

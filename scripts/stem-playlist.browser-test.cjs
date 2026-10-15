@@ -44,6 +44,41 @@ const { chromium } = require('playwright');
     assert.equal(await playlist.isVisible(), true);
     await playlist.locator('input[type=file]').setInputFiles({ name: 'tone.wav', mimeType: 'audio/wav', buffer: wav });
     await playlist.locator('.pl-clip').first().waitFor();
+    assert.equal(await playlist.locator('.pl-toolbar input[type=checkbox], .pl-toolbar [aria-label="Loop A"], .pl-toolbar [aria-label="Loop B"]').count(), 0);
+    assert.equal(await playlist.getByRole('button', { name: 'Clear A–B loop' }).count(), 0);
+    for (const name of ['Import audio files', 'Add track']) {
+      const control = playlist.getByRole('button', { name, exact: true });
+      assert.equal(await control.textContent(), '');
+      assert.equal(await control.locator('svg').count(), 1);
+      assert.equal(await control.getAttribute('title'), name);
+    }
+    assert.equal(await playlist.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(255, 85, 0)');
+    const ruler = playlist.locator('.pl-ruler'), band = playlist.locator('.pl-loop-band');
+    assert.match(await ruler.getAttribute('title'), /drag inside.*edges.*double-click/i);
+    const dragRuler = async (from, to) => {
+      const bounds = await ruler.boundingBox();
+      await page.mouse.move(bounds.x + from, bounds.y + 14); await page.mouse.down();
+      await page.mouse.move(bounds.x + to, bounds.y + 14, { steps: 5 }); await page.mouse.up();
+    };
+    const selection = () => band.evaluate(e => ({ left: parseFloat(e.style.left), width: parseFloat(e.style.width) }));
+    // At the initial 48 px/s zoom, create .5–1.5, move to 1–2, then resize both edges.
+    await dragRuler(24, 72);
+    assert.deepEqual(await selection(), { left: 24, width: 48 });
+    await dragRuler(48, 72);
+    assert.deepEqual(await selection(), { left: 48, width: 48 });
+    await dragRuler(48, 36);
+    assert.deepEqual(await selection(), { left: 36, width: 60 });
+    await dragRuler(96, 84);
+    assert.deepEqual(await selection(), { left: 36, width: 48 });
+    await ruler.dblclick({ position: { x: 12, y: 14 } });
+    assert.equal(await band.isVisible(), false);
+    // Without a selection, playback finishes instead of silently looping the arrangement.
+    await playlist.locator('.pl-play').click();
+    await page.waitForFunction(() => document.querySelector('.pl-play').getAttribute('aria-pressed') === 'true');
+    await page.waitForFunction(() => document.querySelector('.pl-play').getAttribute('aria-pressed') === 'false');
+    await dragRuler(0, 96);
+    const artifacts = path.join(root, 'test-results'); fs.mkdirSync(artifacts, { recursive: true });
+    await playlist.screenshot({ path: path.join(artifacts, 'playlist-toolbar.png') });
     // Playback starts on the press: no full mix render before the first sound.
     const before = Date.now();
     await playlist.locator('.pl-play').click();

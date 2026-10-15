@@ -16,8 +16,10 @@
 .pl-toolbar,.pl-zoom{display:flex;align-items:center;flex-wrap:wrap;gap:7px}
 .pl-toolbar{padding:9px 12px;border:1px solid var(--pl-edge);border-radius:10px 10px 0 0;background:linear-gradient(180deg,#2b2a28,#242321)}
 .pl-spacer{flex:1}
-.playlist .pl-play{min-width:38px;background:var(--orange);border-color:var(--orange);color:#fff;box-shadow:0 2px 0 #a83700}
-.playlist .pl-play:hover:enabled{background:#ff7b38;border-color:#ff7b38}
+.playlist .pl-play,.playlist .pl-export{min-width:38px;background:var(--orange);border-color:var(--orange);color:#fff;box-shadow:0 2px 0 #a83700}
+.playlist .pl-play:hover:enabled,.playlist .pl-export:hover:enabled{background:#ff7b38;border-color:#ff7b38}
+.playlist .pl-icon-button{display:inline-flex;align-items:center;justify-content:center;width:32px;padding:6px}
+.pl-icon-button svg{width:18px;height:18px;pointer-events:none}
 .playlist .pl-play[aria-pressed=true]{background:#e64d00;color:#fff}
 .pl-time{min-width:83px;padding:3px 8px;border:1px solid #45423e;border-radius:5px;background:var(--pl-night);font:14px ui-monospace,monospace;letter-spacing:1px;color:#ffad80}
 .pl-field{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--pl-muted);white-space:nowrap}
@@ -50,7 +52,7 @@
 .playlist .pl-track-controls button:not(.pad-knob){min-height:22px;padding:1px 6px;font-size:9px}
 .pl-grid-row.is-silent .pl-lane{opacity:.45}
 .pl-lane{position:relative;flex-shrink:0;min-height:76px;border-bottom:1px solid #2c2b29;background:repeating-linear-gradient(90deg,#ffffff07 0 1px,transparent 1px var(--beat)),repeating-linear-gradient(90deg,#ffffff12 0 1px,transparent 1px calc(var(--beat)*4)),var(--pl-night)}
-.pl-ruler{position:relative;flex-shrink:0;border-bottom:1px solid var(--pl-edge);background:var(--pl-panel);color:#97938e;font:10px ui-monospace,monospace;cursor:crosshair}
+.pl-ruler{position:relative;flex-shrink:0;border-bottom:1px solid var(--pl-edge);background:var(--pl-panel);color:#97938e;font:10px ui-monospace,monospace;cursor:crosshair;touch-action:none;user-select:none}
 .pl-ruler span{position:absolute;top:6px;padding-left:6px;border-left:1px solid #5a554f}
 .pl-loop-band{position:absolute;top:0;bottom:0;border-inline:2px solid var(--orange);background:#ff550026;pointer-events:none}
 

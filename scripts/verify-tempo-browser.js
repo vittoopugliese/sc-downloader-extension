@@ -143,6 +143,7 @@ async function main() {
       window.sliceCommitRequests = [];
       window.preparedSlices = {};
       window.instrumentRenderRequests = [];
+      window.stemRenderRequests = [];
       window.savedPadSamples = {};
       window.addEventListener("message", async (event) => {
         const data = event.data;
@@ -150,6 +151,8 @@ async function main() {
         let result = { success: true };
         if (data.action === "list") {
           result.pads = Object.entries(window.savedPadSamples).map(([index, pad]) => ({ index: Number(index), name: pad.name }));
+        } else if (data.action === "stems") {
+          window.stemRenderRequests.push(data);
         } else if (data.action === "render") {
           window.padRenderRequests.push(data);
           window.savedPadSamples[data.index] = { name: data.name, dataUrl: `${location.origin}/assets/drums/tom1.wav` };
@@ -839,6 +842,11 @@ async function main() {
         delete target.releasePointerCapture;
       }, { marker, fromMs, toMs });
     };
+    await editWaveform('create', 0, 120000);
+    await page.waitForFunction(() => JSON.parse(document.documentElement.getAttribute('data-scdl-loop-session')).endMs === 120000);
+    await host.locator('.separate-stems').click();
+    await page.waitForFunction(() => window.stemRenderRequests.length === 1);
+    assert.deepEqual(await page.evaluate(() => window.stemRenderRequests[0].trimRange), { startMs: 0, endMs: 120000 }, 'Looper sends the full two-minute selection to Stems');
     await editWaveform('create', 12345, 20678);
     await page.waitForFunction(() => JSON.parse(document.documentElement.getAttribute('data-scdl-loop-session')).endMs === 20678);
     assert.equal(await host.locator('.set-a, .set-b, .header-set-a, .header-set-b, .loop-time').count(), 0);
