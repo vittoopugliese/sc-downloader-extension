@@ -219,7 +219,7 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     mounted = { key, buffer }; view = { startMs: 0, endMs: buffer.duration * 1000 }; drawn = '';
     sampler = mountPadSampler({ waveform: wave, buffer, timeline, audioContext, output, locale, report,
       saved: instruments.instrument(key).slices,
-      keyboardActive: event => shell.active() && !event.target.closest?.('.playlist,.stem-piano-roll'),
+      keyboardActive: event => shell.active() && !event.target.closest?.('.pl-ui,.stem-piano-roll'),
       changed: slices => instruments.editInstrument(instrument => { instrument.slices = slices; }, key),
       onRender: renderPads });
     if (!sampler.state().slices.some(Boolean)) requestAnimationFrame(() => setTimeout(() => {

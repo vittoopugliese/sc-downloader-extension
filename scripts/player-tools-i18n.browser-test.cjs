@@ -63,7 +63,7 @@ const { chromium } = require('playwright');
         record: SCPlayerToolsText.t('Record the final mix'),
       }));
       assert.equal(await page.locator('#stem-rack .plugin-hint').textContent(), copy.hint);
-      assert.equal(await page.locator('#stem-rate').getAttribute('title'), await page.evaluate(() => SCPlayerToolsText.t('Double-click to reset')));
+      assert.equal(await page.locator('#stem-rate').getAttribute('title'), await page.evaluate(() => SCPlayerToolsText.t('Playback speed of the whole session (0.1×–3×). Unlike BPM, it changes how fast the audio plays. Double-click to reset to 1×.')));
       assert.equal(await page.locator('.record-start').getAttribute('title'), copy.record);
       for (const width of [1000, 390, 320]) {
         await page.setViewportSize({ width, height: 1000 });

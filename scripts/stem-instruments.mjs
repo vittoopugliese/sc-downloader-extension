@@ -146,7 +146,7 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
     tracks: () => tracks(), focused, focus: setFocus, patternsOf, instrument,
     focusPattern(id) { const pattern = patterns.find(item => item.id === id); if (pattern && pattern.id !== focus.pattern) setFocus(pattern.track, id); },
     createPattern: () => createPattern(),
-    duplicatePattern: () => { const pattern = focused().pattern; return pattern && createPattern(pattern); },
+    duplicatePattern: (id = focus.pattern) => { const pattern = patterns.find(item => item.id === id); return pattern && createPattern(pattern, pattern.track); },
     deletePattern, editPattern, editInstrument,
     place() { const pattern = focused().pattern; return !!pattern && playlist.place(assetId(pattern.id)); },
     play, stop: stopPreview, playing: () => !!preview, previewing: id => preview?.id === id, phase,

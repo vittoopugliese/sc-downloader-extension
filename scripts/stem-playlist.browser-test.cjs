@@ -38,21 +38,25 @@ const { chromium } = require('playwright');
       };
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html`);
-    const playlist = page.locator('#playlist');
+    const playlist = page.locator('#playlist'), transport = page.locator('#transport');
     // One workspace, including before source import.
     assert.equal(await page.locator('#tab-playlist').count(), 0);
     assert.equal(await playlist.isVisible(), true);
-    await playlist.locator('input[type=file]').setInputFiles({ name: 'tone.wav', mimeType: 'audio/wav', buffer: wav });
+    await transport.locator('input[type=file]').setInputFiles({ name: 'tone.wav', mimeType: 'audio/wav', buffer: wav });
     await playlist.locator('.pl-clip').first().waitFor();
-    assert.equal(await playlist.locator('.pl-toolbar input[type=checkbox], .pl-toolbar [aria-label="Loop A"], .pl-toolbar [aria-label="Loop B"]').count(), 0);
-    assert.equal(await playlist.getByRole('button', { name: 'Clear A–B loop' }).count(), 0);
-    for (const name of ['Import audio files', 'Add track']) {
-      const control = playlist.getByRole('button', { name, exact: true });
+    assert.equal(await transport.locator('.pl-toolbar [aria-label="Loop A"], .pl-toolbar [aria-label="Loop B"]').count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Clear A–B loop' }).count(), 0);
+    // The transport bar lives in the header: the header play button is the only one.
+    assert.equal(await page.locator('.pl-play').count(), 0);
+    assert.equal(await transport.locator('#stem-rate').count(), 1, 'Speed sits next to the tempo controls');
+    for (const name of ['Import audio files', 'Add track', 'Download WAV']) {
+      const host = name === 'Download WAV' ? transport : playlist.locator('.pl-session-actions');
+      const control = host.getByRole('button', { name, exact: true });
       assert.equal(await control.textContent(), '');
       assert.equal(await control.locator('svg').count(), 1);
-      assert.equal(await control.getAttribute('title'), name);
+      assert.match(await control.getAttribute('title'), new RegExp('^' + name + ': '));
     }
-    assert.equal(await playlist.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(255, 85, 0)');
+    assert.equal(await transport.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(255, 85, 0)');
     const ruler = playlist.locator('.pl-ruler'), band = playlist.locator('.pl-loop-band');
     assert.match(await ruler.getAttribute('title'), /drag inside.*edges.*double-click/i);
     const dragRuler = async (from, to) => {
@@ -74,21 +78,21 @@ const { chromium } = require('playwright');
     assert.equal(await band.isVisible(), false);
     // Without a selection, the whole arrangement keeps looping automatically.
     const startsBeforeLoop = await page.evaluate(() => window.playlistStarts);
-    await playlist.locator('.pl-play').click();
-    await page.waitForFunction(() => document.querySelector('.pl-play').getAttribute('aria-pressed') === 'true');
+    await page.locator('#play').click();
+    await page.waitForFunction(() => document.querySelector('#play').getAttribute('aria-pressed') === 'true');
     await page.waitForTimeout(2300);
-    assert.equal(await playlist.locator('.pl-play').getAttribute('aria-pressed'), 'true', 'Playback continues past the end without a selection');
+    assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'true', 'Playback continues past the end without a selection');
     assert.ok(await page.evaluate(count => window.playlistStarts >= count + 2, startsBeforeLoop), 'Audio starts again on the next loop');
-    await playlist.locator('.pl-play').click();
+    await page.locator('#play').click();
     await dragRuler(0, 96);
     const artifacts = path.join(root, 'test-results'); fs.mkdirSync(artifacts, { recursive: true });
     await playlist.screenshot({ path: path.join(artifacts, 'playlist-toolbar.png') });
     // Playback starts on the press: no full mix render before the first sound.
     const before = Date.now();
-    await playlist.locator('.pl-play').click();
-    await page.waitForFunction(() => document.querySelector('.pl-play').getAttribute('aria-pressed') === 'true' && window.playlistStarts > 0);
+    await page.locator('#play').click();
+    await page.waitForFunction(() => document.querySelector('#play').getAttribute('aria-pressed') === 'true' && window.playlistStarts > 0);
     assert.ok(Date.now() - before < 1500, 'playback starts immediately');
-    const time = () => playlist.locator('.pl-time').textContent();
+    const time = () => transport.locator('.pl-time').textContent();
     const t0 = await time(); await page.waitForTimeout(300);
     assert.notEqual(await time(), t0, 'transport advances');
     // Pitch +12 in Stretch mode while playing: the clip stretches in the worker,
@@ -99,7 +103,7 @@ const { chromium } = require('playwright');
     await playlist.getByRole('slider', { name: 'Pitch', exact: true }).press('Shift+ArrowUp');
     assert.equal(await playlist.getByRole('slider', { name: 'Pitch', exact: true }).getAttribute('aria-valuenow'), '12');
     await page.waitForFunction(() => !document.querySelector('.pl-clip.is-stretching'), null, { timeout: 15000 });
-    assert.equal(await playlist.locator('.pl-play').getAttribute('aria-pressed'), 'true', 'still playing after the edit');
+    assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'true', 'still playing after the edit');
     assert.ok(Math.abs((await playlist.locator('.pl-clip').first().boundingBox()).width - width) < 1, 'stretch keeps the clip length');
     // Wheel zooms the timeline around the pointer, like the stem waveforms; Shift pans.
     const scroller = playlist.locator('.pl-scroll'), box = await scroller.boundingBox();
@@ -115,11 +119,11 @@ const { chromium } = require('playwright');
     const starts = await page.evaluate(() => window.playlistStarts);
     await playlist.locator('.pl-clip').first().press('ArrowRight');
     await page.waitForFunction(count => window.playlistStarts > count, starts);
-    assert.equal(await playlist.locator('.pl-play').getAttribute('aria-pressed'), 'true');
-    await playlist.locator('.pl-play').click();
-    assert.equal(await playlist.locator('.pl-play').getAttribute('aria-pressed'), 'false');
+    assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'true');
+    await page.locator('#play').click();
+    assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'false');
     // Export uses the same clip scheduling and cached stretch as playback.
-    const [download] = await Promise.all([page.waitForEvent('download'), playlist.getByLabel('Export playlist mix as WAV').click()]);
+    const [download] = await Promise.all([page.waitForEvent('download'), transport.getByLabel('Download WAV').click()]);
     const file = await download.path();
     const result = await page.evaluate(async bytes => {
       const buffer = await new OfflineAudioContext(2, 1, 44100).decodeAudioData(new Uint8Array(bytes).buffer);
@@ -131,6 +135,42 @@ const { chromium } = require('playwright');
     assert.ok(Math.abs(result.duration - 2.125) < .01, `export length ${result.duration}`);
     assert.ok(Math.abs(result.first - .125) < .01, `clip moved by one 1/16 step: ${result.first}`);
     assert.ok(Math.abs(result.frequency - 880) < 20, `exported pitch ${result.frequency}`);
+    // The timeline scrollbar spans the lanes only; channel headers cover clips and the playhead.
+    const [scrollBox, barBox] = await Promise.all([playlist.locator('.pl-scroll').boundingBox(), playlist.locator('.pl-hbar').boundingBox()]);
+    const head = await playlist.locator('.pl-track-head').first().boundingBox();
+    assert.ok(Math.abs(barBox.x - (scrollBox.x + 1 + head.width)) <= 2, 'Scrollbar starts after the channel headers');
+    assert.equal(await playlist.locator('.pl-scroll').evaluate(e => e.offsetHeight - e.clientHeight), 2, 'No native scrollbar under the headers');
+    assert.ok(await page.evaluate(() => +getComputedStyle(document.querySelector('.pl-track-head')).zIndex > +getComputedStyle(document.querySelector('.pl-playhead')).zIndex));
+    // Help and status lines expire.
+    await playlist.locator('.pl-hint').waitFor({ state: 'hidden', timeout: 12000 });
+    // Right-click menus: library entries duplicate/delete; clips add pitch mode and edit tool.
+    const menu = page.locator('.pl-menu');
+    await playlist.locator('.pl-shelf button', { hasText: 'tone.wav' }).first().click({ button: 'right' });
+    assert.deepEqual(await menu.locator('.pl-menu-label').allTextContents(), ['Duplicate', 'Delete']);
+    assert.equal(await menu.locator('.pl-menu-item.is-danger .pl-menu-label').textContent(), 'Delete');
+    assert.equal(await menu.locator('.pl-menu-item svg').count(), 2);
+    assert.equal(await menu.locator('.pl-menu-item.is-danger').evaluate(e => getComputedStyle(e).color), 'rgb(255, 107, 107)');
+    await menu.getByRole('menuitem', { name: 'Duplicate' }).click();
+    assert.equal(await menu.count(), 0, 'Choosing an item closes the menu');
+    const copy = playlist.locator('.pl-shelf button', { hasText: 'tone.wav (2)' });
+    await copy.waitFor();
+    await copy.click({ button: 'right' }); await menu.getByRole('menuitem', { name: 'Delete' }).click();
+    await copy.waitFor({ state: 'detached' });
+    await playlist.locator('.pl-clip').first().click({ button: 'right' });
+    assert.ok((await menu.locator('.pl-menu-heading').allTextContents()).includes('Pitch mode'));
+    await menu.getByRole('menuitemradio', { name: 'Resample · pitch + speed' }).click();
+    await playlist.locator('.pl-clip').first().click({ button: 'right' });
+    assert.equal(await menu.getByRole('menuitemradio', { name: 'Resample · pitch + speed' }).getAttribute('aria-checked'), 'true');
+    await page.waitForTimeout(300); await page.screenshot({ path: path.join(artifacts, 'playlist-clip-menu.png') });
+    await page.keyboard.press('Escape'); assert.equal(await menu.count(), 0);
+    // Space twice rewinds to the loop start and plays, like FL Studio.
+    await playlist.locator('.pl-scroll').focus();
+    await page.keyboard.press('Space'); await page.waitForTimeout(900);
+    await page.keyboard.press('Space'); await page.keyboard.press('Space');
+    assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'true');
+    await page.waitForTimeout(100); const restarted = await time();
+    assert.ok(Number(restarted.split(':')[1]) < .4, 'Restarted from the loop start: ' + restarted);
+    await page.keyboard.press('Space');
     assert.deepEqual(errors, []);
     console.log('Playlist browser test passed.', result);
   } finally {

@@ -181,6 +181,7 @@ Time (duration, keeps tone; next hit)¦Tiempo (duración, mantiene tono; próxim
 Selected pad¦Pad seleccionado¦Ausgewähltes Pad¦Pad selecionado¦Выбранный пэд
 Keyboard¦Teclado¦Tastatur¦Teclado¦Клавиатура
 Double-click to reset¦Doble clic para restablecer¦Doppelklick zum Zurücksetzen¦Clique duplo para redefinir¦Двойной щелчок для сброса
+Playback speed of the whole session (0.1×–3×). Unlike BPM, it changes how fast the audio plays. Double-click to reset to 1×.¦Velocidad de reproducción de toda la sesión (0.1×–3×). A diferencia del BPM, cambia qué tan rápido suena el audio. Doble clic para volver a 1×.¦Wiedergabetempo der ganzen Sitzung (0.1×–3×). Anders als BPM ändert es, wie schnell das Audio läuft. Doppelklick setzt auf 1× zurück.¦Velocidade de reprodução de toda a sessão (0.1×–3×). Diferente do BPM, muda a rapidez com que o áudio toca. Clique duplo para voltar a 1×.¦Скорость воспроизведения всей сессии (0.1×–3×). В отличие от BPM, меняет скорость звучания аудио. Двойной щелчок — сброс на 1×.
 FX presets¦Presets de efectos¦Effekt-Presets¦Presets de efeitos¦Пресеты эффектов
 Subtle¦Sutil¦Dezent¦Sutil¦Мягкий
 Studio¦Estudio¦Studio¦Estúdio¦Студия

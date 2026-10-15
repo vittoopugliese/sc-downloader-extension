@@ -55,7 +55,7 @@ module.exports = async function verifyInstruments(page) {
   await rack.locator('.plugin-play').click();
   await page.waitForFunction(() => document.querySelector('#stem-rack .plugin-play').getAttribute('aria-pressed') === 'true');
   await page.waitForFunction(() => document.querySelector('#stem-rack .rack-beat.is-current'));
-  assert.equal(await playlist.locator('.pl-play').getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'false');
   await page.locator('#play').click();
   await page.waitForFunction(() => document.querySelector('#stem-rack .plugin-play').getAttribute('aria-pressed') === 'false');
   await page.locator('#play').click();
@@ -82,11 +82,11 @@ module.exports = async function verifyInstruments(page) {
   assert.ok(playing >= 1, 'The pattern clip plays in the song');
 
   // Tempo lives in the playlist: pattern clips keep their bars.
-  const tempo = playlist.locator('.pl-toolbar input[type=number]');
+  const tempo = page.locator('#transport .pl-toolbar input[type=number]');
   await tempo.fill('60'); await tempo.press('Enter');
   const slow = await clip.boundingBox();
   assert.ok(Math.abs(slow.width - repeated.width * 2) < 6, `Half tempo doubles the clip: ${repeated.width} → ${slow.width}`);
-  await playlist.locator('.pl-toolbar button[title*="Ctrl+Z"]').click();
+  await page.locator('#transport .pl-toolbar button[title*="Ctrl+Z"]').click();
   assert.equal(await tempo.inputValue(), '120');
 
   // Piano roll: same track and pattern; the next note copies the last clicked one.
@@ -158,6 +158,8 @@ module.exports = async function verifyInstruments(page) {
   assert.equal(saved.playlist.clips.filter(clip => clip.asset.startsWith('pattern:')).length, 1);
   await page.reload();
   await page.locator('#stem-presets:not(:disabled)').waitFor(); await page.locator('#stem-presets').selectOption(id);
+  // Off-screen clips are virtualized: bring the user track into view.
+  await page.locator('.pl-user-head').waitFor(); await page.locator('.pl-user-head').scrollIntoViewIfNeeded();
   await playlist.locator('.pl-clip.is-pattern').waitFor();
   // Zoom fits the session on load: compare with the 3 s stem clip instead of pixels.
   const stemClip = await playlist.locator('.pl-clip:not(.is-pattern)').first().boundingBox();

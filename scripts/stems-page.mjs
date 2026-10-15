@@ -16,6 +16,7 @@ const translations = {
     intro: 'Separate vocals, drums, bass and other instruments locally. Your audio stays in Chrome.',
     details: 'First use downloads a 166 MB model. Processing can take a few minutes and uses substantial memory. Up to 2 minutes, at original speed without effects.',
     separate: 'Separate loop', cancel: 'Cancel', clearCache: 'Remove model', playGame: 'Play Lumberjack game', hideGame: 'Close Lumberjack game', gameTitle: 'Lumberjack game',
+    clearCacheTip: 'Remove model: deletes the 166 MB separation model from the browser cache to free space. Saved separations stay; the next separation downloads it again.', playTip: 'Play / pause the playlist (Space)', pauseTip: 'Pause the playlist (Space)', originalTip: 'Original: hear the song as it was, without separating', mixTip: 'Stem mix: hear your mix of the separated stems (mute, solo and volume per track)', gameTip: 'Play Lumberjack while the stems are separated', transport: 'Transport',
     listenCompareLabel: 'Listen and compare', listen: 'Find your mix.', play: 'Play', stop: 'Pause', comparisonLabel: 'Compare', original: 'Original', mix: 'Stem mix',
     lows: 'Lows', mids: 'Mids', highs: 'Highs', position: 'Position',
     quality: 'Some bleed and artifacts are normal. Compare with the original. Stems: stereo 44.1 kHz float WAV. Recorder: stereo 48 kHz PCM16 WAV.',
@@ -35,6 +36,7 @@ const translations = {
     intro: 'Separá voz, batería, bajo y otros instrumentos localmente. Tu audio se queda en Chrome.',
     details: 'El primer uso descarga un modelo de 166 MB. El proceso puede tardar unos minutos y consume bastante memoria. Hasta 2 minutos, a velocidad original y sin efectos.',
     separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Eliminar modelo', playGame: 'Jugar a Lumberjack', hideGame: 'Cerrar Lumberjack', gameTitle: 'Juego Lumberjack',
+    clearCacheTip: 'Eliminar modelo: borra de la caché del navegador el modelo de separación de 166 MB para liberar espacio. Las separaciones guardadas se conservan; la próxima separación lo vuelve a descargar.', playTip: 'Reproducir / pausar la playlist (Espacio)', pauseTip: 'Pausar la playlist (Espacio)', originalTip: 'Original: escuchá la canción tal cual, sin separar', mixTip: 'Mezcla de stems: escuchá tu mezcla de los stems separados (mute, solo y volumen por pista)', gameTip: 'Jugá a Lumberjack mientras se separan los stems', transport: 'Transporte',
     listenCompareLabel: 'Escuchar y comparar', listen: 'Encontrá tu mezcla.', play: 'Reproducir', stop: 'Pausar', comparisonLabel: 'Comparar', original: 'Original', mix: 'Mezcla de stems',
     lows: 'Graves', mids: 'Medios', highs: 'Agudos', position: 'Posición',
     quality: 'Puede haber filtraciones y artefactos. Compará con el original. Stems: WAV estéreo de 44,1 kHz en coma flotante. Recorder: WAV estéreo de 48 kHz PCM16.',
@@ -54,6 +56,7 @@ const translations = {
     intro: 'Trenne Gesang, Schlagzeug, Bass und andere Instrumente lokal. Dein Audio bleibt in Chrome.',
     details: 'Bei der ersten Verwendung wird ein 166-MB-Modell heruntergeladen. Die Verarbeitung kann einige Minuten dauern und benötigt viel Arbeitsspeicher. Bis zu 2 Minuten, in Originalgeschwindigkeit und ohne Effekte.',
     separate: 'Loop trennen', cancel: 'Abbrechen', clearCache: 'Modell entfernen', playGame: 'Lumberjack spielen', hideGame: 'Lumberjack schließen', gameTitle: 'Lumberjack-Spiel',
+    clearCacheTip: 'Modell entfernen: löscht das 166-MB-Trennmodell aus dem Browser-Cache, um Platz zu schaffen. Gespeicherte Trennungen bleiben erhalten; die nächste Trennung lädt es erneut herunter.', playTip: 'Playlist abspielen / pausieren (Leertaste)', pauseTip: 'Playlist pausieren (Leertaste)', originalTip: 'Original: den Song unverändert hören, ohne Trennung', mixTip: 'Stem-Mix: deinen Mix der getrennten Stems hören (Stumm, Solo und Lautstärke pro Spur)', gameTip: 'Lumberjack spielen, während die Stems getrennt werden', transport: 'Transport',
     listenCompareLabel: 'Anhören und vergleichen', listen: 'Finde deinen Mix.', play: 'Abspielen', stop: 'Pausieren', comparisonLabel: 'Vergleichen', original: 'Original', mix: 'Stem-Mix',
     lows: 'Bässe', mids: 'Mitten', highs: 'Höhen', position: 'Position',
     quality: 'Übersprechen und Artefakte sind normal. Vergleiche das Ergebnis mit dem Original. Stems: Stereo-WAV mit 44,1 kHz und Fließkommawerten. Recorder: Stereo-WAV mit 48 kHz PCM16.',
@@ -73,6 +76,7 @@ const translations = {
     intro: 'Separe vocais, bateria, baixo e outros instrumentos localmente. Seu áudio permanece no Chrome.',
     details: 'No primeiro uso, um modelo de 166 MB será baixado. O processamento pode levar alguns minutos e usar bastante memória. Até 2 minutos, na velocidade original e sem efeitos.',
     separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Remover modelo', playGame: 'Jogar Lumberjack', hideGame: 'Fechar Lumberjack', gameTitle: 'Jogo Lumberjack',
+    clearCacheTip: 'Remover modelo: apaga do cache do navegador o modelo de separação de 166 MB para liberar espaço. As separações salvas continuam; a próxima separação baixa o modelo de novo.', playTip: 'Reproduzir / pausar a playlist (Espaço)', pauseTip: 'Pausar a playlist (Espaço)', originalTip: 'Original: ouça a música como era, sem separar', mixTip: 'Mix de stems: ouça sua mixagem dos stems separados (mudo, solo e volume por faixa)', gameTip: 'Jogue Lumberjack enquanto os stems são separados', transport: 'Transporte',
     listenCompareLabel: 'Ouvir e comparar', listen: 'Encontre sua mixagem.', play: 'Reproduzir', stop: 'Pausar', comparisonLabel: 'Comparar', original: 'Original', mix: 'Mixagem de stems',
     lows: 'Graves', mids: 'Médios', highs: 'Agudos', position: 'Posição',
     quality: 'Algum vazamento e alguns artefatos são normais. Compare com o original. Stems: WAV estéreo de 44,1 kHz em ponto flutuante. Recorder: WAV estéreo de 48 kHz PCM16.',
@@ -92,6 +96,7 @@ const translations = {
     intro: 'Разделяйте вокал, ударные, бас и другие инструменты локально. Аудио остается в Chrome.',
     details: 'При первом запуске загружается модель размером 166 МБ. Обработка может занять несколько минут и требует много памяти. До 2 минут, с исходной скоростью и без эффектов.',
     separate: 'Разделить луп', cancel: 'Отменить', clearCache: 'Удалить модель', playGame: 'Играть в Lumberjack', hideGame: 'Закрыть Lumberjack', gameTitle: 'Игра Lumberjack',
+    clearCacheTip: 'Удалить модель: стирает из кэша браузера модель разделения на 166 МБ, чтобы освободить место. Сохранённые разделения остаются; при следующем разделении модель загрузится снова.', playTip: 'Воспроизвести / пауза плейлиста (Пробел)', pauseTip: 'Пауза плейлиста (Пробел)', originalTip: 'Оригинал: слушать трек как есть, без разделения', mixTip: 'Микс стемов: слушать ваш микс разделённых стемов (mute, solo и громкость по дорожкам)', gameTip: 'Играть в Lumberjack, пока стемы разделяются', transport: 'Транспорт',
     listenCompareLabel: 'Прослушать и сравнить', listen: 'Создайте свой микс.', play: 'Воспроизвести', stop: 'Пауза', comparisonLabel: 'Сравнить', original: 'Оригинал', mix: 'Микс стемов',
     lows: 'Низкие', mids: 'Средние', highs: 'Высокие', position: 'Позиция',
     quality: 'Небольшое проникновение звука и артефакты — это нормально. Сравните с оригиналом. Стемы: стерео WAV 44,1 кГц с плавающей точкой. Recorder: стерео WAV 48 кГц PCM16.',
@@ -145,13 +150,18 @@ function icon(name) {
   return node;
 }
 $('separate').title = `${text('separate')} · ${text('details')}`;
-$('toggle-game').title = text('playGame');
+$('toggle-game').title = text('gameTip'); $('toggle-game').setAttribute('aria-label', text('playGame'));
+$('clear-cache').title = text('clearCacheTip'); $('clear-cache').setAttribute('aria-label', text('clearCache'));
+$('original').title = text('originalTip'); $('mix').title = text('mixTip');
+$('transport').setAttribute('aria-label', text('transport'));
 document.querySelectorAll('[data-icon]').forEach(node => node.replaceChildren(icon(node.dataset.icon)));
 function playLabel(active) {
   const label = text(active ? 'stop' : 'play');
   $('play').replaceChildren(icon(active ? 'pause' : 'play'));
-  $('play').title = label; $('play').setAttribute('aria-label', label);
+  $('play').title = text(active ? 'pauseTip' : 'playTip'); $('play').setAttribute('aria-label', label);
+  $('play').setAttribute('aria-pressed', String(active));
 }
+playLabel(false);
 const padStyle = document.createElement('style');
 padStyle.textContent = globalThis.SCSamplerCore.PAD_STYLES;
 document.head.append(padStyle);
@@ -299,7 +309,15 @@ function reconcileChannels() {
   const keys = new Set(playlist.tracks().map(track => track.stem || track.id));
   for (const [key, item] of channels) if (!keys.has(key)) { item.head.remove(); channels.delete(key); }
 }
-const playlist = mountPlaylist({ container: $('playlist'), audio: playlistAudio, channel: channelForTrack,
+// The header play button is the transport; the playlist toolbar joins the header with
+// the speed slider next to the tempo controls.
+const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('transport'), playButton: false,
+  // One line: separate and play, tempo and speed, edits, then model and game utilities.
+  toolbarStart: [$('separate'), $('cancel'), $('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [$('clear-cache'), $('toggle-game')],
+  // Original / stem mix sits in the clip actions row, across from the tools with hotkeys.
+  inspectorControls: [$('listen-controls')],
+  onPatternAction(action, id) { const pattern = id.slice('pattern:'.length); if (action === 'duplicate') instruments?.duplicatePattern(pattern); else instruments?.deletePattern(pattern); },
+  audio: playlistAudio, channel: channelForTrack,
   onLoopChange(range) { stemLoop.setRange(range ? { startMs: range.start * 1000, endMs: range.end * 1000, durationMs: original?.duration * 1000 || range.end * 1000 } : null); },
   onChange() { reconcileChannels(); renderChannels(); instruments?.sync(); libraryUI?.changed(); },
   // Selecting a pattern clip opens that pattern, as double-clicking one does in FL Studio.
@@ -354,7 +372,7 @@ $('import-audio').onclick = () => $('audio-file').click();
 $('audio-file').onchange = async event => {
   const file = event.target.files[0]; event.target.value = '';
   if (!file || busy || libraryOperating) return;
-  setBusy(true, false); $('cancel').hidden = true; status(localCopy[7]);
+  setBusy(true); $('cancel').hidden = true; status(localCopy[7]);
   try {
     if (!file.size || file.size > 256 * 1024 * 1024) throw new Error('Invalid file size (maximum 256 MiB)');
     const decoded = await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(await file.arrayBuffer());
@@ -448,7 +466,7 @@ function changeTempo(value = rate, preserve = keepTone) {
 $('stem-rate').oninput = event => changeTempo(event.target.value);
 $('stem-rate').ondblclick = () => changeTempo(1);
 $('stem-keep-tone').onchange = event => changeTempo(rate, event.target.checked);
-$('stem-rate').title = pt('Double-click to reset');
+$('stem-rate').title = $('stem-rate-value').title = pt('Playback speed of the whole session (0.1×–3×). Unlike BPM, it changes how fast the audio plays. Double-click to reset to 1×.');
 renderTempo();
 
 async function prepareTone() {
@@ -480,7 +498,13 @@ async function playlistAudio() {
   catch (error) { console.error('[Stems tone]', error); return { context: playback, output: mixOutput.input() }; }
 }
 
-function status(message, error = false) { $('status').textContent = message; $('status').classList.toggle('error', error); }
+// Status lines go away after 10 s; progress messages stay while a task runs.
+let statusTimer = 0;
+function status(message, error = false) {
+  $('status').textContent = message; $('status').classList.toggle('error', error);
+  clearTimeout(statusTimer);
+  if (message && !busy) statusTimer = setTimeout(() => { if (!busy) { $('status').textContent = ''; $('status').classList.remove('error'); } }, 10000);
+}
 function localizedError(key) { const error = new Error(text(key)); error.localized = true; return error; }
 function playbackError(error) { console.error('[Stems playback]', error); status(text('playbackFailed'), true); }
 async function message(type) {
@@ -496,7 +520,7 @@ async function message(type) {
   }
   return result;
 }
-function setBusy(value, revealGame = true) {
+function setBusy(value) {
   busy = value;
   $('separate').disabled = value || libraryOperating || !initialized;
   $('cancel').hidden = !value;
@@ -504,7 +528,8 @@ function setBusy(value, revealGame = true) {
   $('progress').hidden = !value;
   $('status').classList.toggle('is-loading', value);
   libraryUI?.setBusy(value);
-  if (value && revealGame) $('toggle-game').hidden = false;
+  // The last message of a finished task also expires.
+  if (!value && $('status').textContent) status($('status').textContent, $('status').classList.contains('error'));
 }
 function audioBuffer(channels) {
   const buffer = new AudioBuffer({ numberOfChannels: 2, length: channels[0].length, sampleRate: SAMPLE_RATE });
@@ -726,7 +751,8 @@ document.addEventListener('keydown', event => {
   if (target instanceof Element && (target.isContentEditable || target.closest('input, textarea, select, a, [role="textbox"]') ||
       (target.closest('button') && target.closest('button').id !== 'play'))) return;
   event.preventDefault();
-  if (!event.repeat) togglePlayback();
+  // Space twice rewinds to the loop start and plays.
+  if (!event.repeat) playlist.space();
 });
 $('original').onclick = () => playlist.setMonitor('original');
 $('mix').onclick = () => playlist.setMonitor('mix');
