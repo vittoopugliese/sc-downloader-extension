@@ -128,6 +128,7 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
   toggle.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
   actions.insertBefore(toggle, actions.querySelector('.download'));
   const panel = document.createElement('div'); panel.className = 'stem-sampler'; panel.id = `pads-${id}`; panel.hidden = true;
+  if (!keyboard) { toggle.className = 'stem-piano-sample-toggle'; toggle.hidden = true; }
   const pads = document.createElement('div'); pads.className = 'drum-pads stem-pads';
   const hint = document.createElement('p'); hint.className = 'stem-sampler-hint'; hint.setAttribute('role', 'status');
   const toolbar = document.createElement('div'); toolbar.className = 'stem-sample-tools'; toolbar.hidden = true;
