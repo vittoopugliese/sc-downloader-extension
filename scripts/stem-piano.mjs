@@ -5,7 +5,7 @@ import { clamp, MAX_PIANO_NOTES, normalizePiano, noteName, renderPianoPattern, s
 // A melodic lane has its own sample and notes, but no independent transport or
 // tempo. getGrid/setGrid are the same grid used by the existing pad sequencer.
 export function mountStemPiano({ row, actions, waveform, buffer, timeline, saved, getGrid, setGrid,
-  audioContext, output, level, rate, setRate, changed, togglePlayback, locale, report }) {
+  audioContext, output, level, rate, setRate, changed, togglePlayback, locale, report, id = 'other' }) {
   const pt = globalThis.SCPlayerToolsText.t, controller = new AbortController();
   const options = { signal: controller.signal };
   let state = normalizePiano(saved, buffer), selected = -1, disposed = false, drag = null;
@@ -35,12 +35,12 @@ export function mountStemPiano({ row, actions, waveform, buffer, timeline, saved
     if (panel.hidden) stopPreview();
     render();
   });
-  toggle.setAttribute('aria-controls', 'piano-other'); toggle.setAttribute('aria-expanded', String(state.mode !== 'off'));
+  toggle.setAttribute('aria-controls', `piano-${id}`); toggle.setAttribute('aria-expanded', String(state.mode !== 'off'));
   actions.insertBefore(toggle, actions.querySelector('.download'));
-  const panel = element('section', 'stem-piano'); panel.id = 'piano-other'; panel.hidden = state.mode === 'off';
+  const panel = element('section', 'stem-piano'); panel.id = `piano-${id}`; panel.hidden = state.mode === 'off';
   panel.setAttribute('aria-label', pt('Piano roll'));
   const sampler = mountDrumSampler({ row, actions, waveform, buffer, timeline, audioContext, output, level,
-    locale, report, saved: [state.sample], keys: '♪', id: 'piano-other', keyboard: false,
+    locale, report, saved: [state.sample], keys: '♪', id: `piano-${id}`, keyboard: false,
     defaultLength: .5, title: 'Select piano sample', changed() {
       state.sample = sampler.snapshot()[0]; stopPreview(); emit();
     } });

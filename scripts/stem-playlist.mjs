@@ -61,6 +61,12 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   let state = emptyArrangement(), assets = new Map(), selected = null, zoom = 48, snap = .25;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
   let drag = null, frame, operating = false, liveBefore = null, loopRange = null, rate = 1, rateTimer = 0;
+  const derived = new Map();
+  const derivedId = (track, asset) => 'pattern:' + track + ':' + asset;
+  const playbackState = () => ({ ...state, clips: state.clips.map(clip => {
+    const id = derivedId(clip.track, clip.asset);
+    return derived.has(id) ? { ...clip, asset: id } : clip;
+  }) });
   const rowViews = new Map(), clipViews = new Map(), analyzing = new WeakSet();
   let paintFrame = 0, shelfKey = '', editMode = 'move';
   // Channel header width comes from CSS (--pl-head), narrower on phones.
@@ -76,7 +82,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   const clock = seconds => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, '0')}`;
   const now = () => engine?.now() ?? position;
   const playing = () => !!engine?.playing();
-  const transport = () => ({ rate, loop: loopRange });
+  const transport = () => ({ rate, loop: loopRange || (arrangementEnd(state) ? { start: 0, end: arrangementEnd(state) } : null) });
   // Stretched clips render in a worker; their clips show a striped overlay until ready.
   const stretchStatus = t('Stretching clips…', 'Estirando clips…');
   const stretching = clip => needsStretch(clip) && !cache.has(clip, assets.get(clip.asset));
@@ -95,8 +101,8 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   }
   // Edits apply to the running schedule and warm the stretch cache; playback never stops.
   function changed() {
-    engine?.update(state, transport());
-    prefetchStretches(state, assets, cache, report);
+    engine?.update(playbackState(), transport());
+    prefetchStretches(playbackState(), assets, cache, report);
     onChange?.();
   }
   function commit(action, before = copy()) {
@@ -116,10 +122,33 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   }
   const tempo = field('BPM', 'number', 120, 20, 300, 1); tempo.input.title = t('Grid tempo; audio speed is set per clip', 'Tempo de la grilla; la velocidad se cambia por clip');
   function changeLoop(range) {
-    loopRange = range; engine?.update(state, transport()); renderLoopBand();
+    loopRange = range; engine?.update(playbackState(), transport()); renderLoopBand();
     onLoopChange?.(range);
   }
   tempo.input.onchange = () => commit(() => { state.bpm = Number(tempo.input.value); });
+  // Tap tempo like FL Studio's tapper: BPM is the average of every interval since the first tap;
+  // a pause longer than two beats (3 s minimum) starts over. One tap session is one undo step.
+  let taps = [], tapTimer = 0, tapUndo = null;
+  const tapButton = button('TAP', t('Tap tempo (T) · tap in time; pause to start over', 'Tap tempo (T) · tocá a tiempo; una pausa reinicia'), () => {});
+  tapButton.className = 'pl-tap';
+  const tapInterval = () => taps.length > 1 ? (taps.at(-1) - taps[0]) / (taps.length - 1) : 0;
+  const tapWait = () => Math.max(3000, tapInterval() * 2);
+  function tapTempo() {
+    const at = performance.now();
+    if (!taps.length || at - taps.at(-1) > tapWait()) { taps = []; tapUndo = null; }
+    taps.push(at); if (taps.length > 16) taps.shift();
+    const wait = tapWait();
+    tapButton.style.setProperty('--tap-wait', wait + 'ms');
+    tapButton.classList.remove('is-waiting'); void tapButton.offsetWidth; tapButton.classList.add('is-waiting');
+    clearTimeout(tapTimer); tapTimer = setTimeout(() => { taps = []; tapUndo = null; tapButton.classList.remove('is-waiting'); }, wait);
+    if (taps.length < 2) return;
+    const bpm = clamp(Math.round(60000 / tapInterval()), 20, 300);
+    if (bpm === state.bpm) return;
+    if (tapUndo && history.at(-1) === tapUndo) { state.bpm = bpm; changed(); draw(); }
+    else if (commit(() => { state.bpm = bpm; })) tapUndo = history.at(-1);
+  }
+  tapButton.onpointerdown = event => { if (event.button === 0) { event.preventDefault(); tapTempo(); } };
+  tapButton.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) tapTempo(); } };
   const snapLabel = node('label', 'pl-field', 'Snap'), snapSelect = node('select'); snapSelect.setAttribute('aria-label', 'Snap');
   for (const [value, label] of [[0, 'Off'], [.25, '1/16'], [.5, '1/8'], [1, '1/4'], [4, t('Bar', 'Compás')]]) snapSelect.add(new Option(label, value));
   snapSelect.value = snap; snapSelect.onchange = () => { snap = Number(snapSelect.value); }; snapLabel.append(snapSelect);
@@ -136,7 +165,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   const addTrack = iconButton('M3 4h18v4H3zM3 12h10M3 18h10m3-3h6m-3-3v6', t('Add track', 'Agregar pista'), () => commit(() => state.tracks.push({ id: uid(), name: `${t('Track', 'Pista')} ${state.tracks.filter(item => !item.stem).length + 1}`, gain: 1, mute: false, solo: false })));
   const exportButton = button('↓ WAV', t('Export playlist mix as WAV', 'Exportar mezcla de la playlist como WAV'), safe(exportMix));
   exportButton.className = 'pl-export';
-  toolbar.append(play, stopButton, time, tempo.label, snapLabel, undo, redo, node('span', 'pl-spacer'), importButton, addTrack, exportButton, fileInput);
+  toolbar.append(play, stopButton, time, tempo.label, tapButton, snapLabel, undo, redo, node('span', 'pl-spacer'), importButton, addTrack, exportButton, fileInput);
   const shelf = node('div', 'pl-shelf'); shelf.setAttribute('aria-label', t('Sample library', 'Biblioteca de samples'));
   const scroll = node('div', 'pl-scroll'); scroll.tabIndex = 0; scroll.setAttribute('aria-label', t('Playlist timeline', 'Línea de tiempo de la playlist'));
   const grid = node('div', 'pl-grid'); scroll.append(grid);
@@ -234,7 +263,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) { scroll.scrollLeft += event.deltaX || event.deltaY; return; }
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
-  const hint = node('p', 'pl-hint', t('Drag clips to move · edges to trim · Alt bypasses snap · Space plays · S splits · drop audio files on a track. Select a loop on the ruler; hover for controls. 16 tracks / 5 minutes.', 'Arrastrá clips para mover · bordes para recortar · Alt desactiva snap · Espacio reproduce · S corta · soltá audio en una pista. Seleccioná un loop en la regla; pasá el cursor para ver los controles. 16 pistas / 5 minutos.'));
+  const hint = node('p', 'pl-hint', t('Drag clips to move · edges to trim · Alt bypasses snap · Space plays · S splits · T taps tempo · drop audio files on a track. Select a loop on the ruler; hover for controls. 16 tracks / 5 minutes.', 'Arrastrá clips para mover · bordes para recortar · Alt desactiva snap · Espacio reproduce · S corta · T marca el tempo · soltá audio en una pista. Seleccioná un loop en la regla; pasá el cursor para ver los controles. 16 pistas / 5 minutos.'));
   const message = node('p', 'pl-message'); message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite');
   container.classList.add('playlist'); container.tabIndex = -1;
   container.append(toolbar, shelf, zoomTools, scroll, inspector, hint, message);
@@ -363,7 +392,9 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     const band = node('div', 'pl-loop-band'); ruler.append(band); renderLoopBand(band);
     const rows = [rulerRow];
     state.tracks.forEach((track, index) => {
-      const host = track.stem ? channel?.(track) : null;
+      const clip = sourceClip(track.id);
+      const source = assets.get(track.stem ? `audio-${track.stem}` : clip?.asset);
+      const host = channel?.(track, source) || null;
       let view = rowViews.get(track.id);
       if (!view || view.host !== host) {
         if (view) { view.row.remove(); view.drawer?.remove(); }
@@ -390,7 +421,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
       }
       rows.push(view.row); if (view.drawer) rows.push(view.drawer);
       if (host?.waveform) {
-        const clip = sourceClip(track.stem), wave = host.waveform;
+        const clip = sourceClip(track.id), wave = host.waveform;
         wave.hidden = !clip;
         if (clip) { wave.style.left = (clip.at * zoom) + 'px'; wave.style.width = (clipDuration(clip) * zoom) + 'px'; }
       }
@@ -398,10 +429,11 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     for (const [id, view] of rowViews) if (!state.tracks.some(t => t.id === id)) { view.row.remove(); view.drawer?.remove(); rowViews.delete(id); }
     let cursor = grid.firstElementChild;
     for (const row of rows) { if (row === cursor) cursor = cursor.nextElementSibling; else grid.insertBefore(row, cursor); }
-    const nextShelf = [...assets.values()].map(a => a.id + ':' + a.name).join('|');
+    const shelfAssets = [...assets.values()].filter(asset => !asset.derived);
+    const nextShelf = shelfAssets.map(a => a.id + ':' + a.name).join('|');
     if (nextShelf !== shelfKey) {
       shelfKey = nextShelf; shelf.replaceChildren();
-      for (const asset of assets.values()) {
+      for (const asset of shelfAssets) {
         const b = button(asset.name, t('Drag onto a track, or click to add at cursor', 'Arrastrá a una pista o hacé clic para agregar en el cursor'), () => commit(() => {
           const clip = newClip(asset, picked()?.track || firstUserTrack(), position); state.clips.push(clip); selected = clip.id;
         }));
@@ -480,7 +512,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
         if (lane) { clip.track = lane.dataset.track; item.style.transform = `translateY(${lane.getBoundingClientRect().top - home}px)`; }
       }
       drag.changed = true; item.style.left = `${clip.at * zoom}px`; item.style.width = `${Math.max(8, clipDuration(clip) * zoom)}px`;
-      engine?.update(state, transport()); paintSoon();
+      engine?.update(playbackState(), transport()); paintSoon();
     };
     const finish = cancel => {
       if (!drag) return;
@@ -497,7 +529,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   // Track edits from the host and the track headers. Live edits are heard at once
   // and become one undo step with the next final edit.
   function edit(action, { live = false } = {}) {
-    if (live) { liveBefore ||= copy(); action(state); engine?.update(state, transport()); return true; }
+    if (live) { liveBefore ||= copy(); action(state); engine?.update(playbackState(), transport()); return true; }
     const before = liveBefore || copy(); liveBefore = null;
     return commit(() => action(state), before);
   }
@@ -514,17 +546,17 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     if (playing()) { stop(); return; }
     if (!arrangementEnd(state)) { report(t('Add a sample to the playlist first.', 'Primero agregá un sample a la playlist.')); return; }
     await connect();
-    if (engine.play(state, position, transport())) { renderPlay(true); onTransport?.(true); }
+    if (engine.play(playbackState(), position, transport())) { renderPlay(true); onTransport?.(true); }
   }
   function seek(seconds) {
     position = clamp(seconds, 0, Math.max(arrangementEnd(state), loopRange?.end ?? 0));
-    if (playing()) engine.play(state, position, transport());
+    if (playing()) engine.play(playbackState(), position, transport());
   }
   async function exportMix() {
     if (exporting) return;
     exporting = new AbortController(); exportButton.disabled = true;
     try {
-      const rendered = await renderArrangement(copy(), new Map(assets), cache, { signal: exporting.signal,
+      const rendered = await renderArrangement(structuredClone(playbackState()), new Map(assets), cache, { signal: exporting.signal,
         progress: p => report(`${t('Rendering', 'Renderizando')} ${Math.round(p * 100)}%`) });
       const blob = new Blob([encodeWav([rendered.getChannelData(0), rendered.getChannelData(1)], rendered.sampleRate)], { type: 'audio/wav' });
       const url = URL.createObjectURL(blob), link = node('a'); link.href = url; link.download = 'playlist.wav'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -535,6 +567,8 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   // `saved` restores channel mix and clips from a preset; invalid data falls back.
   function setSession({ sources, saved = null, monitor = 'mix' }) {
     stop(true);
+    for (const id of derived.keys()) { cache.forget(id); assets.delete(id); }
+    derived.clear();
     for (const old of assets.values()) if (old.session) cache.forget(old.id);
     const next = new Map([...assets].filter(([, asset]) => !asset.session));
     for (const source of sources) next.set(source.id, { id: source.id, name: source.name, buffer: source.buffer, version: 0, session: true });
@@ -558,8 +592,8 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     changed(); draw(); requestAnimationFrame(fit);
   }
   function sourceClip(stem) {
-    const matches = clip => clip.track === `track-${stem}` && clip.asset === `audio-${stem}`;
-    return (picked() && matches(picked()) ? picked() : state.clips.find(matches)) || null;
+    const track = state.tracks.find(track => track.id === stem || track.stem === stem);
+    return state.clips.find(clip => clip.track === track?.id && (!track.stem || clip.asset === `audio-${track.stem}`)) || null;
   }
   container.addEventListener('keydown', event => {
     if (event.target.closest('input,select,textarea,.pl-drawer') || event.target.isContentEditable) return;
@@ -568,6 +602,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     else if (modifier && event.key.toLowerCase() === 'z') { event.preventDefault(); travel(event.shiftKey); }
     else if (modifier && event.key.toLowerCase() === 'd') { event.preventDefault(); if (picked()) duplicate.click(); }
     else if (!modifier && event.key.toLowerCase() === 's') { event.preventDefault(); if (picked()) split.click(); }
+    else if (!modifier && event.key.toLowerCase() === 't') { event.preventDefault(); if (!event.repeat) tapTempo(); }
     else if (['Delete', 'Backspace'].includes(event.key) && picked()) { event.preventDefault(); remove.click(); }
   });
   function animate() {
@@ -578,7 +613,8 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   draw(); animate();
   return {
     toggle: safe(toggle), pause: () => stop(), seek, now, playing, setSession, edit, draw,
-    track: stem => state.tracks.find(track => track.stem === stem),
+    track: stem => state.tracks.find(track => track.id === stem || track.stem === stem),
+    tracks: () => state.tracks,
     audible: track => trackAudible(state, track),
     monitor: () => state.monitor,
     sourceWindow(stem) {
@@ -596,24 +632,37 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
       const clip = sourceClip(stem);
       if (clip) seek(clip.at + (clip.reverse ? clip.out - seconds : seconds - clip.in) / clipRate(clip));
     },
-    setMonitor(value) { state.monitor = value; engine?.update(state, transport()); draw(); onChange?.(); },
-    // The host's A–B loop in timeline seconds; null disables looping.
+    setMonitor(value) { state.monitor = value; engine?.update(playbackState(), transport()); draw(); onChange?.(); },
+    // The host's A–B loop in timeline seconds; null loops the whole arrangement.
     setLoopRange(range) {
       loopRange = range && range.end > range.start ? { start: range.start, end: range.end } : null;
       if (!playing() && loopRange && (position < loopRange.start || position >= loopRange.end)) position = loopRange.start;
-      engine?.update(state, transport()); renderLoopBand();
+      engine?.update(playbackState(), transport()); renderLoopBand();
     },
     // Global speed. Restarts are coalesced while a slider is dragged.
     setRate(value) {
       rate = value; clearTimeout(rateTimer);
-      rateTimer = setTimeout(() => engine?.update(state, transport()), 40);
+      rateTimer = setTimeout(() => engine?.update(playbackState(), transport()), 40);
+    },
+    // Derived audio is scoped to a track, even when multiple tracks share a sample.
+    setTrackBuffer(track, source, buffer) {
+      const original = assets.get(source); if (!original) return;
+      const id = derivedId(track, source), previous = derived.get(id);
+      if ((!previous && buffer === original.buffer) || previous?.buffer === buffer) return;
+      cache.forget(id);
+      if (buffer === original.buffer) { derived.delete(id); assets.delete(id); }
+      else {
+        const asset = { ...original, id, buffer, derived: true, version: (previous?.version || 0) + 1 };
+        derived.set(id, asset); assets.set(id, asset);
+      }
+      engine?.update(playbackState(), transport()); prefetchStretches(playbackState(), assets, cache, report); draw();
     },
     // A channel's audio replaced by a rendered pattern or melody lane of the same length.
     setAssetBuffer(id, buffer) {
       const asset = assets.get(id);
       if (!asset || asset.buffer === buffer) return;
       cache.forget(id); asset.buffer = buffer; asset.version++;
-      engine?.update(state, transport()); prefetchStretches(state, assets, cache, report); draw();
+      engine?.update(playbackState(), transport()); prefetchStretches(playbackState(), assets, cache, report); draw();
     },
     // Channel mix is saved by the host; the arrangement saves tempo and clips.
     snapshot: () => ({ bpm: state.bpm,

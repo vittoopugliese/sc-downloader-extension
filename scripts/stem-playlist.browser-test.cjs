@@ -72,10 +72,14 @@ const { chromium } = require('playwright');
     assert.deepEqual(await selection(), { left: 36, width: 48 });
     await ruler.dblclick({ position: { x: 12, y: 14 } });
     assert.equal(await band.isVisible(), false);
-    // Without a selection, playback finishes instead of silently looping the arrangement.
+    // Without a selection, the whole arrangement keeps looping automatically.
+    const startsBeforeLoop = await page.evaluate(() => window.playlistStarts);
     await playlist.locator('.pl-play').click();
     await page.waitForFunction(() => document.querySelector('.pl-play').getAttribute('aria-pressed') === 'true');
-    await page.waitForFunction(() => document.querySelector('.pl-play').getAttribute('aria-pressed') === 'false');
+    await page.waitForTimeout(2300);
+    assert.equal(await playlist.locator('.pl-play').getAttribute('aria-pressed'), 'true', 'Playback continues past the end without a selection');
+    assert.ok(await page.evaluate(count => window.playlistStarts >= count + 2, startsBeforeLoop), 'Audio starts again on the next loop');
+    await playlist.locator('.pl-play').click();
     await dragRuler(0, 96);
     const artifacts = path.join(root, 'test-results'); fs.mkdirSync(artifacts, { recursive: true });
     await playlist.screenshot({ path: path.join(artifacts, 'playlist-toolbar.png') });

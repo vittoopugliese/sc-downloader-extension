@@ -1,6 +1,6 @@
 import { DRUM_KEYS, normalizeSequence, sequenceRange, sequenceStep, songClip, renderDrumPattern } from './stem-sequencer-core.mjs';
 
-export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, sampler, saved, changed, togglePlayback, rate, setRate, report }) {
+export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, sampler, saved, changed, togglePlayback, rate, setRate, report, id = 'drums' }) {
   const pt = globalThis.SCPlayerToolsText.t;
   const state = normalizeSequence(saved, buffer.duration);
   const controller = new AbortController(), options = { signal: controller.signal };
@@ -45,10 +45,10 @@ export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, s
     if (panel.hidden) state.enabled = false;
     emit(!panel.hidden);
   });
-  toggle.setAttribute('aria-controls', 'sequence-drums'); toggle.setAttribute('aria-expanded', String(state.enabled));
+  toggle.setAttribute('aria-controls', `sequence-${id}`); toggle.setAttribute('aria-expanded', String(state.enabled));
   actions.insertBefore(toggle, actions.querySelector('.download'));
-  const panel = element('section', 'stem-sequencer'); panel.id = 'sequence-drums'; panel.hidden = !state.enabled;
-  panel.setAttribute('aria-label', pt('Drum sequencer'));
+  const panel = element('section', 'stem-sequencer'); panel.id = `sequence-${id}`; panel.hidden = !state.enabled;
+  panel.setAttribute('aria-label', pt('Sequencer'));
   const controls = element('div', 'seq-controls');
   const play = iconButton('seq-play', 'play', pt('Play pattern'), () => {
     if (!playing && range()) { state.enabled = true; emit(true); }

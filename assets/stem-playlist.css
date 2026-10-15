@@ -21,6 +21,12 @@
 .playlist .pl-icon-button{display:inline-flex;align-items:center;justify-content:center;width:32px;padding:6px}
 .pl-icon-button svg{width:18px;height:18px;pointer-events:none}
 .playlist .pl-play[aria-pressed=true]{background:#e64d00;color:#fff}
+.playlist .pl-tap{position:relative;overflow:hidden;min-width:44px;font-weight:700;letter-spacing:1px;touch-action:manipulation;user-select:none}
+.playlist .pl-tap:active{border-color:var(--orange);background:#42291d;color:#ffad80}
+/* Waiting gauge: drains until the tap session resets, like FL Studio's tapper. */
+.pl-tap::after{content:'';position:absolute;inset:auto 0 0;height:3px;background:var(--orange);transform:scaleX(0);transform-origin:left}
+.pl-tap.is-waiting::after{animation:pl-tap-wait var(--tap-wait,3s) linear forwards}
+@keyframes pl-tap-wait{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 .pl-time{min-width:83px;padding:3px 8px;border:1px solid #45423e;border-radius:5px;background:var(--pl-night);font:14px ui-monospace,monospace;letter-spacing:1px;color:#ffad80}
 .pl-field{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--pl-muted);white-space:nowrap}
 .pl-field input[type=number]{width:61px}.pl-field input[type=checkbox]{accent-color:var(--orange)}

@@ -116,7 +116,7 @@ export function detectDrumSlices(buffer, { startMs = 0, endMs = buffer.duration 
 
 // Pads share PCM, but own their trim and envelope; no pad depends on its neighbor.
 export function mountDrumSampler({ row, actions, waveform, buffer, timeline, audioContext, output, level, changed, saved, locale, report,
-  keys = KEYS, id = 'drums', keyboard = true, autoSlice = keyboard, defaultLength = .154, title = 'Sampler' }) {
+  keys = KEYS, id = 'drums', keyboard = true, keyboardActive = () => true, autoSlice = keyboard, defaultLength = .154, title = 'Sampler' }) {
   const pt = globalThis.SCPlayerToolsText.t;
   const slices = Array.from({ length: keys.length }, (_, i) => normalizeDrumSlice(saved?.[i], buffer));
   const controller = new AbortController(), options = { signal: controller.signal };
@@ -342,7 +342,7 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
     if (panel.hidden || event.ctrlKey || event.metaKey || event.altKey || document.querySelector('dialog[open]') ||
       event.target.closest('input,textarea,select,[contenteditable="true"]')) return;
     if (event.key === 'Escape') { armed = null; render(); return; }
-    if (!keyboard || event.defaultPrevented || row.classList.contains('is-collapsed') || event.target.closest('.stem-piano')) return;
+    if (!keyboard || !keyboardActive() || row.hidden || event.defaultPrevented || row.classList.contains('is-collapsed') || event.target.closest('.stem-piano')) return;
     const index = keys.indexOf(event.code?.startsWith('Key') ? event.code.slice(3) : event.key.toUpperCase());
     if (index < 0 || event.repeat) return;
     event.preventDefault(); selected = index; armed = null; render(); trigger(index);

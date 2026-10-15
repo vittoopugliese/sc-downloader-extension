@@ -1,7 +1,5 @@
-import { mountDrumSampler } from './stem-sampler.mjs';
-import { mountDrumSequencer } from './stem-sequencer.mjs';
+import { mountTrackEditor } from './stem-track-editor.mjs';
 import { arrangeChannels, arrangeSong } from './stem-sequencer-core.mjs';
-import { mountStemPiano } from './stem-piano.mjs';
 import { createEqualizedOutput } from './local-audio-output.mjs';
 import { createStemLoop } from './stem-loop.mjs';
 import { SAMPLE_RATE, MAX_SECONDS, STEMS, encodeWav } from './stem-audio.mjs';
@@ -157,20 +155,23 @@ const padStyle = document.createElement('style');
 padStyle.textContent = globalThis.SCSamplerCore.PAD_STYLES;
 document.head.append(padStyle);
 const waveforms = new Set();
-let drumSampler = null, drumSequencer = null, pianoRoll = null, sequenceRevision = 0;
+let sequenceRevision = 0, savedEditors = {}, activeChannel = null;
+const editors = () => [...channels.values()].filter(item => item.editor);
+const renderEditors = () => { for (const item of editors()) item.editor.render(); };
 const stemLoop = createStemLoop({ viewportChanged() {
   for (const view of waveforms) view.draw();
-  updatePlayheads(); drumSampler?.render(); drumSequencer?.renderMarker();
-  pianoRoll?.sampler.render();
+  updatePlayheads(); renderEditors();
 }, duration: () => original?.duration || 0, changed() {
   syncLoop();
   // PAT mode owns the A–B loop; in SONG mode any loop leaves the pattern playing.
-  if (!drumSequencer?.song()) {
-    if (drumSequencer?.enabled() && !drumSequencer.matchesRange(stemLoop.range())) drumSequencer.deactivate();
-    if (pianoRoll?.enabled() && !drumSequencer.matchesRange(stemLoop.range())) pianoRoll.deactivate();
+  for (const { editor: { sequencer, piano } } of editors()) {
+    if (!sequencer.song() && !sequencer.matchesRange(stemLoop.range())) {
+      if (sequencer.enabled()) sequencer.deactivate();
+      if (piano.enabled()) piano.deactivate();
+    }
   }
 } });
-// The A–B selection loops the playlist; clearing it disables looping.
+// The A–B selection loops the playlist; clearing it loops the whole arrangement.
 function syncLoop() {
   const { startMs, endMs } = stemLoop.range();
   playlist.setLoopRange(stemLoop.selected() ? { start: startMs / 1000, end: endMs / 1000 } : null);
@@ -192,8 +193,7 @@ const offset = () => playlist.now();
 function updatePlayheads() {
   if (!original) return;
   const at = offset(), active = playlist.playing();
-  drumSequencer?.updateTransport(at, active, rate);
-  pianoRoll?.updateTransport(at, active, rate);
+  for (const item of editors()) item.editor.updateTransport(at, active, rate);
   const percent = stemLoop.percent(Math.max(0, at) * 1000);
   for (const view of waveforms) {
     view.playhead.style.left = `${percent}%`;
@@ -215,9 +215,7 @@ function mountWaveform(parent, buffer, label) {
   const canvas = document.createElement('canvas'); canvas.setAttribute('role', 'img'); canvas.setAttribute('aria-label', label);
   const playhead = document.createElement('span'); playhead.className = 'waveform-playhead'; playhead.setAttribute('aria-hidden', 'true');
   element.append(canvas, playhead); parent.append(element);
-  const disposeLoop = stemLoop.mount(element, seekTo, seconds => parent.dataset.stem === 'drums'
-    ? (drumSequencer?.place(seconds) || drumSampler?.place(seconds))
-    : parent.dataset.stem === 'other' && pianoRoll?.sampler.place(seconds));
+  const disposeLoop = stemLoop.mount(element, seekTo, seconds => channels.get(parent.dataset.stem)?.editor?.place(seconds));
   const controller = new AbortController();
   const view = { element, playhead, draw: () => drawWaveform(), dispose() { disposeLoop(); controller.abort(); observer.disconnect(); waveforms.delete(view); element.remove(); } };
   waveforms.add(view);
@@ -309,9 +307,9 @@ let libraryUI, importReady = false;
 // The playlist is the only transport. Each stem is a channel: its header and editor
 // (waveform, sampler, channel rack, piano roll) persist across playlist redraws.
 const channels = new Map();
-const playlist = mountPlaylist({ container: $('playlist'), audio: playlistAudio, channel: track => channels.get(track.stem),
+const playlist = mountPlaylist({ container: $('playlist'), audio: playlistAudio, channel: channelForTrack,
   onLoopChange(range) { stemLoop.setRange(range ? { startMs: range.start * 1000, endMs: range.end * 1000, durationMs: original?.duration * 1000 || range.end * 1000 } : null); },
-  onViewChange() { requestAnimationFrame(() => { drumSampler?.render(); drumSequencer?.renderMarker(); pianoRoll?.sampler.render(); }); },
+  onViewChange() { requestAnimationFrame(renderEditors); },
   onChange() { renderChannels(); libraryUI?.changed(); },
   onTransport(active) { toneNode?.port.postMessage({ rate, keepTone, reset: true }); playLabel(active); updatePlayheads(); } });
 const mixOutput = createEqualizedOutput({ audioContext: () => context ||= new AudioContext({ sampleRate: SAMPLE_RATE }) });
@@ -394,7 +392,9 @@ $('import-form').onsubmit = event => {
   showOriginal();
   $('import-dialog').close(); status(text('ready'));
 };
-const settings = () => ({ drumSlices: drumSampler?.snapshot(), drumSequence: drumSequencer?.snapshot(), piano: pianoRoll?.snapshot(),
+const settings = () => ({
+  trackEditors: Object.fromEntries([...channels].map(([key, item]) => [key, { ...item.editor?.snapshot(), collapsed: item.collapsed }])),
+  drumSlices: channels.get('drums')?.editor?.sampler.snapshot(), drumSequence: channels.get('drums')?.editor?.sequencer.snapshot(), piano: channels.get('other')?.editor?.piano.snapshot(),
   states: STEMS.map(stem => { const track = playlist.track(stem); return { muted: !!track?.mute, solo: false, gain: track?.gain ?? 1, collapsed: channels.get(stem)?.collapsed ?? true }; }),
   rate, keepTone, mode: playlist.monitor(), eq: mixOutput.snapshot().eq, playlist: playlist.snapshot() });
 libraryUI = mountStemLibrary({ locale, report: status,
@@ -521,13 +521,13 @@ function renderChannels() {
     item.head.classList.toggle('is-silent', silent); item.drawer?.classList.toggle('is-silent', silent);
     item.volume.show(Math.round(track.gain * 100));
   }
-  drumSampler?.updateGain(); pianoRoll?.updateGain();
+  for (const item of editors()) item.editor.updateGain();
   const monitor = playlist.monitor();
   $('original').setAttribute('aria-pressed', String(monitor === 'original'));
   $('mix').setAttribute('aria-pressed', String(monitor === 'mix'));
 }
 function editChannel(stem, change, options) {
-  playlist.edit(state => change(state.tracks.find(track => track.stem === stem), state), options);
+  playlist.edit(state => change(state.tracks.find(track => (track.stem || track.id) === stem), state), options);
 }
 const useMix = () => { if (buffers.length && playlist.monitor() !== 'mix') playlist.setMonitor('mix'); };
 // Header: name and fold, enable (right-click: hear only this), tools, WAV, volume.
@@ -540,13 +540,19 @@ function channelTimeline(stem) {
     focusRange: (start, end) => playlist.focusSource(stem, start, end),
   };
 }
-function buildChannel(stem, buffer, wav, collapsed = true) {
-  const name = stem === 'original' ? text('original') : text(stem);
-  const head = document.createElement('div'); head.className = 'stem pl-stem-head'; head.dataset.stem = stem;
+function buildChannel(stem, buffer, wav, collapsed = true, trackName = null) {
+  const name = trackName || (stem === 'original' ? text('original') : text(stem));
+  const head = document.createElement('div'); head.className = `stem ${trackName ? 'pl-user-head' : 'pl-stem-head'}`; head.dataset.stem = stem;
   const heading = document.createElement('h2'), collapse = document.createElement('button');
   collapse.type = 'button'; collapse.className = 'stem-collapse';
   collapse.innerHTML = '<svg class="stem-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>';
-  collapse.prepend(icon(stem === 'original' ? 'music' : stem), document.createTextNode(name)); heading.append(collapse);
+  collapse.prepend(icon(STEMS.includes(stem) ? stem : 'music'), document.createTextNode(name)); heading.append(collapse);
+  if (trackName) {
+    const rename = document.createElement('input'); rename.className = 'pl-track-name'; rename.value = name; rename.maxLength = 160;
+    rename.setAttribute('aria-label', pt('Name'));
+    rename.onchange = () => editChannel(stem, track => { track.name = rename.value.trim() || name; });
+    heading.append(rename);
+  }
   const enable = document.createElement('button'); enable.type = 'button'; enable.className = 'stem-enable stem-solo';
   enable.setAttribute('role', 'switch'); enable.setAttribute('aria-label', pt('Enable $1', name));
   enable.title = pt('Enable/disable $1 · Right-click: hear only this track', name);
@@ -554,22 +560,23 @@ function buildChannel(stem, buffer, wav, collapsed = true) {
   enable.oncontextmenu = event => {
     event.preventDefault();
     if (stem === 'original') { playlist.setMonitor('original'); return; }
-    playlist.edit(state => { for (const track of state.tracks) if (track.stem && track.stem !== 'original') { track.mute = track.stem !== stem; track.solo = false; } });
+    playlist.edit(state => { for (const track of state.tracks) if (track.stem !== 'original') { track.mute = (track.stem || track.id) !== stem; track.solo = false; } });
     useMix();
   };
-  const volume = createKnob({ label: `${text('volume')} ${name}`, min: 0, max: 100, step: 1, coarse: 10, value: 100, reset: 100,
+  const volume = createKnob({ label: `${text('volume')} ${name}`, min: 0, max: trackName ? 200 : 100, step: 1, coarse: 10, value: 100, reset: 100,
     hint: text('resetVolume'), format: value => `${value}%`,
-    onInput: value => { editChannel(stem, track => { track.gain = value / 100; }, { live: true }); drumSampler?.updateGain(); pianoRoll?.updateGain(); },
+    onInput: value => { editChannel(stem, track => { track.gain = value / 100; }, { live: true }); for (const item of editors()) item.editor.updateGain(); },
     onCommit: value => { editChannel(stem, track => { track.gain = value / 100; }); if (stem !== 'original') useMix(); } });
   volume.wrap.classList.add('is-inline', 'stem-volume');
   const link = document.createElement('a'); link.className = 'download';
-  const url = URL.createObjectURL(wav); urls.push(url);
+  const url = wav ? URL.createObjectURL(wav) : ''; if (url) urls.push(url);
+  link.hidden = !wav;
   link.href = url; link.download = `${title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 80)}_${stem}.wav`;
   link.append(icon('download')); link.title = `${text('download')} WAV - ${name}`; link.setAttribute('aria-label', `${text('download')} ${name}`);
   const actions = document.createElement('div'); actions.className = 'stem-actions'; actions.append(enable, link, volume.wrap);
   head.append(heading, actions);
   const item = { head, drawer: null, enable, volume, actions, collapsed: true };
-  if (stem !== 'original') {
+  {
     const drawer = document.createElement('div'); drawer.className = 'stem'; drawer.dataset.stem = stem;
     const waveform = document.createElement('div'); waveform.className = 'waveform pl-source-wave'; waveform.dataset.stem = stem;
     waveform.setAttribute('aria-label', `${name} · ${text('position')}`);
@@ -578,7 +585,7 @@ function buildChannel(stem, buffer, wav, collapsed = true) {
       if (event.target.closest('button,.stem-pad-region,.stem-pattern-clip')) return;
       const rect = waveform.getBoundingClientRect(), view = timeline.viewport();
       const seconds = (view.startMs + (event.clientX - rect.left) / rect.width * (view.endMs - view.startMs)) / 1000;
-      const placed = stem === 'drums' ? (drumSequencer?.place(seconds) || drumSampler?.place(seconds)) : stem === 'other' && pianoRoll?.sampler.place(seconds);
+      const placed = item.editor?.place(seconds);
       if (!placed) playlist.sourceSeek(stem, seconds);
     });
     item.waveform = waveform; item.timeline = timeline;
@@ -596,7 +603,11 @@ function buildChannel(stem, buffer, wav, collapsed = true) {
       if (item.collapsed && event.target.closest('.stem-sampler-toggle, .stem-sequencer-toggle, .stem-piano-toggle')) { fold(false); libraryUI.changed(); }
     });
     fold(collapsed);
-  } else collapse.disabled = true;
+  }
+  for (const surface of [head, item.drawer, item.waveform]) {
+    surface?.addEventListener('pointerdown', () => { activeChannel = stem; });
+    surface?.addEventListener('focusin', () => { activeChannel = stem; });
+  }
   channels.set(stem, item);
   return item;
 }
@@ -618,25 +629,49 @@ function arrangeLane(pattern, stem, grid, layer, range) {
   arranged.set(pattern, { key, stem, value }); return value;
 }
 async function applyLanes() {
-  const owner = drumSequencer, piano = pianoRoll, version = ++sequenceRevision;
-  if (!owner || !buffers.length) return;
-  const [pattern, melody] = await Promise.all([owner.enabled() ? owner.prepare() : null, piano?.enabled() ? piano.prepare() : null]);
-  if (version !== sequenceRevision || owner !== drumSequencer) return;
-  const song = owner.song(), grid = owner.grid(), range = song ? null : owner.range();
-  const lane = (audio, stem, layer) => audio && (song || range) ? arrangeLane(audio, stem, grid, layer, range) : stem;
-  playlist.setAssetBuffer('audio-drums', lane(pattern, buffers[0], false));
-  playlist.setAssetBuffer('audio-other', lane(melody, buffers[2], !piano?.replaces()));
+  const version = ++sequenceRevision;
+  await Promise.all(editors().map(async item => {
+    const { sequencer, piano } = item.editor;
+    const [pattern, melody] = await Promise.all([sequencer.enabled() ? sequencer.prepare() : null, piano.enabled() ? piano.prepare() : null]);
+    if (version !== sequenceRevision || channels.get(item.key) !== item) return;
+    const song = sequencer.song(), grid = sequencer.grid(), range = song ? null : sequencer.range();
+    const lane = (audio, source, layer) => audio && (song || range) ? arrangeLane(audio, source, grid, layer, range) : source;
+    const audio = lane(melody, lane(pattern, item.buffer, false), !piano.replaces());
+    playlist.setTrackBuffer(item.trackId, item.sourceId, audio);
+  }));
 }
-async function syncSequence({ loop = false, song = false, audio = true } = {}) {
-  const owner = drumSequencer;
+async function syncSequence(item, { loop = false, song = false, audio = true } = {}) {
+  const owner = item.editor?.sequencer;
   if (!owner) return;
   libraryUI.changed();
   if (!audio) return;
-  pianoRoll?.gridChanged();
   if (loop && owner.range() && !owner.song()) stemLoop.setRange(owner.range());
-  // Entering SONG releases an A–B loop that only existed to follow the pattern.
   if (song && owner.matchesRange(stemLoop.range())) stemLoop.setRange(null);
   await applyLanes();
+}
+function channelForTrack(track, source) {
+  if (!original) return null;
+  const key = track.stem || track.id, previous = channels.get(key);
+  if (previous && previous.buffer === source?.buffer) return previous;
+  const saved = previous?.editor?.snapshot() || savedEditors[key];
+  previous?.editor?.dispose(); previous?.head.remove(); previous?.drawer?.remove();
+  const item = buildChannel(key, source?.buffer, source ? wavOf(source.buffer) : null,
+    previous?.collapsed ?? saved?.collapsed ?? true, track.stem ? null : track.name);
+  Object.assign(item, { key, trackId: track.id, sourceId: source?.id, buffer: source?.buffer });
+  if (source) {
+    item.editor = mountTrackEditor({ id: key, row: item.drawer, actions: item.actions, waveform: item.waveform,
+      buffer: source.buffer, timeline: item.timeline, saved,
+      audioContext: () => mixOutput.getPlaybackContext(), output: () => mixOutput.input(),
+      level: () => channelLevel(key), keyboardActive: () => activeChannel === key,
+      changed: change => syncSequence(item, change), togglePlayback, rate: () => rate,
+      setRate: value => changeTempo(value), locale, report: playbackError });
+  } else {
+    for (const [className, title] of [['stem-sequencer-toggle', 'Sequencer'], ['stem-piano-toggle', 'Piano roll']]) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = className;
+      button.textContent = pt(title); button.disabled = true; button.title = pt('Select a sample'); item.actions.append(button);
+    }
+  }
+  return item;
 }
 function startSession(saved = null) {
   const sources = [original, ...buffers].map((buffer, index) => {
@@ -649,18 +684,18 @@ function startSession(saved = null) {
   $('original-waveform').hidden = true; zoomTools.hidden = true;
   renderChannels();
 }
-const wavOf = buffer => new Blob([encodeWav([buffer.getChannelData(0), buffer.getChannelData(1)])], { type: 'audio/wav' });
+const wavOf = buffer => new Blob([encodeWav([buffer.getChannelData(0), buffer.getChannelData(Math.min(1, buffer.numberOfChannels - 1))], buffer.sampleRate)], { type: 'audio/wav' });
 // Before separation the playlist holds the source audio alone.
 function showOriginal() {
   wavs = [];
-  buildChannel('original', original, wavOf(original));
   startSession(); syncLoop();
 }
 function disposeResults() {
   mixOutput.setEqualizer(null); equalizerUI.reset();
-  playlist.pause(); drumSequencer?.dispose(); drumSequencer = null; sequenceRevision++;
-  pianoRoll?.dispose(); pianoRoll = null;
-  drumSampler?.dispose(); drumSampler = null; stemLoop.reset(); buffers = []; outputs = [];
+  playlist.pause(); sequenceRevision++;
+  for (const item of channels.values()) { item.editor?.dispose(); item.head.remove(); item.drawer?.remove(); }
+  channels.clear(); savedEditors = {}; activeChannel = null;
+  stemLoop.reset(); buffers = []; outputs = [];
   urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
   for (const view of waveforms) if (!$('original-waveform').contains(view.element)) view.dispose();
   for (const item of channels.values()) { item.head.remove(); item.drawer?.remove(); }
@@ -676,30 +711,18 @@ function showResults(result, saved = null) {
   keepTone = !!saved?.keepTone;
   renderTempo(); playlist.setRate(rate);
   wavs = [wavOf(original)];
-  buildChannel('original', original, wavs[0]);
-  STEMS.forEach((stem, index) => {
-    const wav = new Blob([encodeWav(outputs[index])], { type: 'audio/wav' }); wavs.push(wav);
-    const { drawer: row, actions, waveform, timeline } = buildChannel(stem, buffers[index], wav, saved?.states?.[index]?.collapsed ?? true);
-    if (stem === 'drums') {
-      drumSampler = mountDrumSampler({ row, actions, waveform,
-      buffer: buffers[index], timeline, audioContext: () => mixOutput.getPlaybackContext(), output: () => mixOutput.input(),
-      level: () => channelLevel(stem), changed: () => { libraryUI.changed(); drumSequencer?.samplesChanged(); },
-      saved: saved?.drumSlices ?? saved?.drumStarts, locale, report: playbackError });
-      drumSequencer = mountDrumSequencer({ row, actions, waveform, timeline,
-        buffer: buffers[index], sampler: drumSampler, saved: saved?.drumSequence, changed: syncSequence,
-        togglePlayback, rate: () => rate, setRate: value => changeTempo(value), report: playbackError });
-    }
-    if (stem === 'other') pianoRoll = mountStemPiano({ row, actions, waveform,
-      buffer: buffers[index], timeline, saved: saved?.piano,
-      getGrid: () => drumSequencer.grid(), setGrid: value => drumSequencer.setGrid(value),
-      audioContext: () => mixOutput.getPlaybackContext(), output: () => mixOutput.input(),
-      level: () => channelLevel(stem),
-      rate: () => rate, setRate: value => changeTempo(value), changed: syncSequence, togglePlayback, locale, report: playbackError });
-  });
+  savedEditors = saved?.trackEditors || Object.fromEntries(STEMS.map((stem, index) => [stem, {
+    slices: stem === 'drums' ? saved?.drumSlices ?? saved?.drumStarts : undefined,
+    sequence: saved?.drumSequence && (stem === 'drums' ? saved.drumSequence : { ...saved.drumSequence, enabled: false, steps: undefined }),
+    piano: stem === 'other' ? saved?.piano : undefined,
+    collapsed: saved?.states?.[index]?.collapsed ?? true,
+  }]));
+  for (const output of outputs) wavs.push(new Blob([encodeWav(output)], { type: 'audio/wav' }));
   outputs = [];
   $('mix').disabled = false; $('quality-note').hidden = false;
   startSession(saved);
-  if ((drumSequencer?.enabled() || pianoRoll?.enabled()) && drumSequencer.range() && !drumSequencer.song()) stemLoop.setRange(drumSequencer.range());
+  const looping = editors().find(({ editor: { sequencer, piano } }) => (sequencer.enabled() || piano.enabled()) && sequencer.range() && !sequencer.song());
+  if (looping) stemLoop.setRange(looping.editor.sequencer.range());
   syncLoop(); applyLanes().catch(playbackError);
   status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`);
 }
@@ -815,7 +838,8 @@ window.addEventListener('pagehide', () => {
   equalizerUI.dispose(); recorderUI.dispose(); mixOutput.dispose();
   cancelAnimationFrame(animationFrame);
   for (const view of waveforms) view.dispose();
-  pianoRoll?.dispose(); drumSequencer?.dispose(); drumSampler?.dispose(); worker?.terminate(); toneNode?.port.postMessage({ type: 'dispose' }); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
+  for (const item of editors()) item.editor.dispose();
+  worker?.terminate(); toneNode?.port.postMessage({ type: 'dispose' }); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
   if (jobId) chrome.runtime.sendMessage({ type: 'STEM_LOOP_CANCEL', jobId }).catch(() => {});
 });
 function renderInfo(value) {
