@@ -6,8 +6,10 @@ module.exports = async function verifyPiano(page, root) {
   await page.setViewportSize({ width: 1200, height: 1100 });
   await page.goto(page.url());
   await page.locator('#separate:not(:disabled)').click();
-  const other = page.locator('.stem[data-stem=other]');
-  await other.locator('.stem-piano-toggle').click();
+  // The instruments stem is a playlist channel: tools in its header, editor below it.
+  const other = page.locator('.pl-drawer[data-stem=other]'), otherHead = page.locator('.pl-stem-head[data-stem=other]');
+  await otherHead.locator('.stem-piano-toggle').click();
+  await other.locator('.waveform').scrollIntoViewIfNeeded();
   const piano = other.locator('.stem-piano'), grid = piano.locator('.piano-grid');
   assert.equal(await piano.isVisible(), true);
   assert.equal(await piano.locator('.piano-play').isDisabled(), true);
@@ -17,7 +19,7 @@ module.exports = async function verifyPiano(page, root) {
   assert.equal(await page.locator('.stem-loop-selection:visible').count(), 0, 'Sample selection does not change A–B');
   const start = Number(await other.locator('.stem-pad-marker').getAttribute('data-start'));
   const end = Number(await other.locator('.stem-pad-region').getAttribute('data-end'));
-  assert.ok(Math.abs(start - .3) < .01 && Math.abs(end - .75) < .01, 'Own melodic sample can be drawn on the instruments waveform');
+  assert.ok(Math.abs(start - .3) < .01 && Math.abs(end - .75) < .01, `Own melodic sample can be drawn on the instruments waveform: ${start}–${end}`);
   await piano.locator('.piano-root').selectOption('60');
   async function point(pitch, step) {
     await grid.locator(`.piano-pitch-row[data-pitch="${pitch}"]`).scrollIntoViewIfNeeded();
@@ -63,7 +65,7 @@ module.exports = async function verifyPiano(page, root) {
   await page.mouse.move(rect.x + 3 + width / 16 * 2, rect.y + 10, { steps: 4 }); await page.mouse.up();
   assert.equal(await note.getAttribute('data-length'), '6');
   // Both editors read/write the same grid and shared speed slider.
-  await page.locator('.stem[data-stem=drums] .stem-sequencer-toggle').click();
+  await page.locator('.pl-stem-head[data-stem=drums] .stem-sequencer-toggle').click();
   await piano.locator('.piano-bpm').fill('180'); await piano.locator('.piano-bpm').press('Tab');
   await page.waitForFunction(() => document.querySelector('.seq-bpm').value === '180');
   assert.equal(await page.locator('#stem-rate').inputValue(), '1.5');
@@ -78,11 +80,10 @@ module.exports = async function verifyPiano(page, root) {
   assert.equal(await piano.locator('.piano-bpm').inputValue(), '120');
   await piano.locator('.piano-play').click();
   await page.waitForFunction(() => document.querySelector('#play').getAttribute('aria-label') === 'Pausar');
-  const sources = await page.evaluate(() => stemTestSources.filter(source => source.loop && source.testStart).slice(-6)
-    .map(source => ({ when: source.testStart[0], duration: source.buffer.duration, offset: source.testStart[1] })));
-  assert.equal(sources.length, 6);
-  assert.ok(sources.every(source => source.when === sources[0].when), 'Piano and stems start on exactly the same audio clock');
-  assert.equal(sources.at(-1).duration, 2);
+  // One schedule: every channel clip starts on exactly the same audio clock.
+  const sources = await page.evaluate(() => stemTestSources.filter(source => source.testStart).slice(-5).map(source => source.testStart[0]));
+  assert.equal(sources.length, 5);
+  assert.ok(sources.every(when => Math.abs(when - sources[0]) < 1e-9), 'Piano lane and stems start on the same audio clock');
   await page.waitForFunction(() => !document.querySelector('.piano-cursor').hidden);
   // Edits replace derived audio while the transport keeps running.
   await piano.locator('.piano-root').selectOption('57');
@@ -109,12 +110,13 @@ module.exports = async function verifyPiano(page, root) {
   assert.equal(await piano.locator('.piano-root').inputValue(), '57');
   assert.equal(await piano.locator('.piano-mode').inputValue(), 'replace');
   assert.equal(await piano.locator('.piano-sustain').isChecked(), true);
-  await other.locator('.stem-collapse').click();
+  await otherHead.locator('.stem-collapse').click();
   assert.equal(await piano.isVisible(), false);
-  await other.locator('.stem-collapse').click();
+  await otherHead.locator('.stem-collapse').click();
   for (const width of [1200, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Piano fits ${width}px`);
+    await other.scrollIntoViewIfNeeded();
     await other.screenshot({ path: path.join(root, `test-results/stems-ui/piano-${width}.png`) });
   }
   // Isolate a sustained octave-up melody from the fixture's 70 Hz opening.
@@ -141,6 +143,7 @@ module.exports = async function verifyPiano(page, root) {
   });
   await piano.locator('.piano-play').click();
   await page.waitForFunction(() => document.querySelector('#play').getAttribute('aria-label') === 'Pausar');
+  await other.locator('.waveform').scrollIntoViewIfNeeded();
   for (const [speed, keep, expected] of [[1, false, 140], [.5, false, 70], [.5, true, 140], [2, true, 140], [2, false, 280]]) {
     await page.locator('#stem-rate').evaluate((node, value) => { node.value = String(value); node.dispatchEvent(new Event('input', { bubbles: true })); }, speed);
     await page.locator('#stem-keep-tone').setChecked(keep); await page.waitForTimeout(700);
@@ -155,9 +158,9 @@ module.exports = async function verifyPiano(page, root) {
   await other.locator('.waveform').click({ position: { x: 80, y: 35 } });
   await page.waitForTimeout(100);
   assert.equal(await page.locator('#play').getAttribute('aria-label'), 'Pausar', 'Seeking restarts all lanes together');
-  const times = await page.evaluate(() => stemTestSources.filter(source => source.loop).slice(-6).map(source => source.testStart[0]));
-  assert.ok(times.every(time => time === times[0]));
-  await other.locator('.stem-enable').click(); await page.waitForTimeout(100);
+  const times = await page.evaluate(() => stemTestSources.filter(source => source.testStart).slice(-5).map(source => source.testStart[0]));
+  assert.ok(times.every(time => Math.abs(time - times[0]) < 1e-9));
+  await otherHead.locator('.stem-enable').click(); await page.waitForTimeout(100);
   const rms = await page.evaluate(() => {
     const data = new Float32Array(pianoAnalyser.fftSize); pianoAnalyser.getFloatTimeDomainData(data);
     return Math.sqrt(data.reduce((sum, sample) => sum + sample * sample, 0) / data.length);

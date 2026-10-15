@@ -1,12 +1,14 @@
 import { mountDrumSampler } from './stem-sampler.mjs';
 import { mountDrumSequencer } from './stem-sequencer.mjs';
-import { arrangeSong } from './stem-sequencer-core.mjs';
+import { arrangeChannels, arrangeSong } from './stem-sequencer-core.mjs';
 import { mountStemPiano } from './stem-piano.mjs';
 import { createEqualizedOutput } from './local-audio-output.mjs';
 import { createStemLoop } from './stem-loop.mjs';
 import { SAMPLE_RATE, MAX_SECONDS, STEMS, encodeWav } from './stem-audio.mjs';
 import { MODEL } from './stem-model.mjs';
 import { mountStemLibrary } from './stem-library-ui.mjs';
+import { createKnob, mountPlaylist } from './stem-playlist.mjs';
+import { spectrumOf } from './stem-spectrum.mjs';
 
 const translations = {
   en: {
@@ -156,24 +158,23 @@ padStyle.textContent = globalThis.SCSamplerCore.PAD_STYLES;
 document.head.append(padStyle);
 const waveforms = new Set();
 let drumSampler = null, drumSequencer = null, pianoRoll = null, sequenceRevision = 0;
-const retiringNodes = new Set();
 const stemLoop = createStemLoop({ viewportChanged() {
   for (const view of waveforms) view.draw();
   updatePlayheads(); drumSampler?.render(); drumSequencer?.renderMarker();
   pianoRoll?.sampler.render();
-}, duration: () => original?.duration || 0, changed(previous) {
-  const current = offset(previous);
-  const { startMs, endMs } = stemLoop.range();
-  for (const { source, pattern } of nodes) if (!pattern) { source.loopStart = startMs / 1000; source.loopEnd = endMs / 1000; }
-  position = current;
-  if (playing) startedAt = Math.max(startedAt, context.currentTime);
-  if ((current < startMs / 1000 || current >= endMs / 1000)) seekTo(startMs / 1000);
+}, duration: () => original?.duration || 0, changed() {
+  syncLoop();
   // PAT mode owns the A–B loop; in SONG mode any loop leaves the pattern playing.
   if (!drumSequencer?.song()) {
     if (drumSequencer?.enabled() && !drumSequencer.matchesRange(stemLoop.range())) drumSequencer.deactivate();
     if (pianoRoll?.enabled() && !drumSequencer.matchesRange(stemLoop.range())) pianoRoll.deactivate();
   }
 } });
+// The A–B selection loops the playlist; without one, the playlist's own Loop applies.
+function syncLoop() {
+  const { startMs, endMs } = stemLoop.range();
+  playlist.setLoopRange(stemLoop.selected() ? { start: startMs / 1000, end: endMs / 1000 } : null);
+}
 const zoomTools = document.createElement('div'); zoomTools.className = 'stem-zoom-tools';
 for (const [label, title, action] of [
   ['−', pt('Zoom out'), () => stemLoop.zoomAt(offset() * 1000, 1)],
@@ -186,20 +187,18 @@ for (const [label, title, action] of [
 const zoomHint = document.createElement('span');
 zoomHint.textContent = pt('Wheel: zoom · Shift + wheel: pan');
 zoomTools.append(zoomHint); $('original-waveform').before(zoomTools);
-function seekTo(value) {
-  const resume = playing; pause(); position = Math.max(0, Math.min(original.duration, value));
-  updatePlayheads();
-  if (resume) play().catch(playbackError);
-}
+function seekTo(value) { playlist.seek(Math.max(0, value)); updatePlayheads(); }
+const offset = () => playlist.now();
 function updatePlayheads() {
   if (!original) return;
-  drumSequencer?.updateTransport(offset(), playing, rate);
-  pianoRoll?.updateTransport(offset(), playing, rate);
-  const percent = stemLoop.percent(Math.max(0, offset()) * 1000);
+  const at = offset(), active = playlist.playing();
+  drumSequencer?.updateTransport(at, active, rate);
+  pianoRoll?.updateTransport(at, active, rate);
+  const percent = stemLoop.percent(Math.max(0, at) * 1000);
   for (const view of waveforms) {
     view.playhead.style.left = `${percent}%`;
     view.playhead.hidden = percent < 0 || percent > 100;
-    view.element.setAttribute('aria-valuenow', offset().toFixed(1));
+    view.element.setAttribute('aria-valuenow', at.toFixed(1));
   }
 }
 function mountWaveform(parent, buffer, label) {
@@ -222,7 +221,7 @@ function mountWaveform(parent, buffer, label) {
   const controller = new AbortController();
   const view = { element, playhead, draw: () => drawWaveform(), dispose() { disposeLoop(); controller.abort(); observer.disconnect(); waveforms.delete(view); element.remove(); } };
   waveforms.add(view);
-  const ui = { waveformCanvas: canvas, panel: $('audition') };
+  const ui = { waveformCanvas: canvas };
   const waveformCollapsed = false, waveformSamples = [], waveformDrawPreview = null;
   let waveformSpectrum, waveformStaticKey = '', waveformRevision = 0;
   const loopState = { durationMs: buffer.duration * 1000 };
@@ -232,7 +231,7 @@ function mountWaveform(parent, buffer, label) {
   // RGB energy mapping as the Player Tools looper. Use a fixed amplitude
   // scale so quiet separation residuals stay quiet-looking across stems.
   function drawWaveform() {
-    if (!ui?.waveformCanvas || waveformCollapsed || ui.panel.hidden || document.hidden) return;
+    if (!ui?.waveformCanvas || waveformCollapsed || !ui.waveformCanvas.getClientRects().length || document.hidden) return;
     const canvas = ui.waveformCanvas;
     const rect = canvas.getBoundingClientRect();
     const scale = Math.max(1, window.devicePixelRatio || 1);
@@ -293,7 +292,7 @@ function mountWaveform(parent, buffer, label) {
 
 
   const observer = new ResizeObserver(drawWaveform); observer.observe(canvas);
-  globalThis.SCSpectralWaveform.analyze(buffer, controller.signal).then(spectrum => {
+  spectrumOf(buffer).then(spectrum => {
     if (controller.signal.aborted) return;
     waveformSpectrum = spectrum; waveformRevision++; drawWaveform(); updatePlayheads();
   }).catch(error => { if (error.name !== 'AbortError') console.error('[Stems waveform]', error); });
@@ -303,12 +302,16 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) for (const view of waveforms) view.draw();
 });
 const jobId = new URL(location.href).searchParams.get('job');
-let original, buffers = [], context, nodes = [], outputs = [], urls = [];
-let mode = 'original', playing = false, position = 0, startedAt = 0;
+let original, buffers = [], context, outputs = [], urls = [];
 let busy = false, revision = 0, worker, rejectWorker, title = text('loop'), initialized = false;
-let states = STEMS.map(() => ({ muted: false, solo: false, gain: 1 }));
-let info = null, wavs = [], rate = 1, keepTone = false, toneNode, toneReady, playbackRevision = 0, toneLatency = 0, libraryOperating = false;
+let info = null, wavs = [], rate = 1, keepTone = false, toneNode, toneReady, toneLatency = 0, libraryOperating = false;
 let libraryUI, importReady = false;
+// The playlist is the only transport. Each stem is a channel: its header and editor
+// (waveform, sampler, channel rack, piano roll) persist across playlist redraws.
+const channels = new Map();
+const playlist = mountPlaylist({ container: $('playlist'), audio: playlistAudio, channel: track => channels.get(track.stem),
+  onChange() { renderChannels(); libraryUI?.changed(); },
+  onTransport(active) { toneNode?.port.postMessage({ rate, keepTone, reset: true }); playLabel(active); updatePlayheads(); } });
 const mixOutput = createEqualizedOutput({ audioContext: () => context ||= new AudioContext({ sampleRate: SAMPLE_RATE }) });
 const equalizerUI = globalThis.SCParametricEQUI.mount({
   container: $('mix-tools'), effects: mixOutput, isAllowed: () => true, authorize: async () => true,
@@ -379,16 +382,19 @@ $('import-form').onsubmit = event => {
   const next = audioBuffer(channels);
   disposeResults();
   for (const view of waveforms) view.dispose();
-  original = next; wavs = []; position = 0; rate = 1; keepTone = false; renderTempo();
+  original = next; wavs = []; rate = 1; keepTone = false; renderTempo(); playlist.setRate(rate);
   renderInfo({ title: $('import-name').value.trim() || file.name, artist: '', artworkUrl: '', durationMs: decoded.duration * 1000,
     trimRange: { startMs: first / SAMPLE_RATE * 1000, endMs: last / SAMPLE_RATE * 1000 },
     localFile: { name: file.name, type: file.type, size: file.size, lastModified: file.lastModified, channels: decoded.numberOfChannels } });
   initialized = true; libraryUI.newExtraction();
   revealAudition();
   mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
+  showOriginal();
   $('import-dialog').close(); status(text('ready'));
 };
-const settings = () => ({ drumSlices: drumSampler?.snapshot(), drumSequence: drumSequencer?.snapshot(), piano: pianoRoll?.snapshot(), states: structuredClone(states), rate, keepTone, mode, eq: mixOutput.snapshot().eq });
+const settings = () => ({ drumSlices: drumSampler?.snapshot(), drumSequence: drumSequencer?.snapshot(), piano: pianoRoll?.snapshot(),
+  states: STEMS.map(stem => { const track = playlist.track(stem); return { muted: !!track?.mute, solo: false, gain: track?.gain ?? 1, collapsed: channels.get(stem)?.collapsed ?? true }; }),
+  rate, keepTone, mode: playlist.monitor(), eq: mixOutput.snapshot().eq, playlist: playlist.snapshot() });
 libraryUI = mountStemLibrary({ locale, report: status,
   onOperation(value) { libraryOperating = value; $('separate').disabled = value || busy || !initialized; $('cancel').disabled = value; $('import-audio').disabled = value || busy || !importReady; },
   snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : null }),
@@ -427,13 +433,9 @@ function renderTempo() {
 function changeTempo(value = rate, preserve = keepTone) {
   const next = Number(value);
   if (!Number.isFinite(next)) { renderTempo(); return; }
-  const current = offset();
   rate = Math.round(Math.max(.1, Math.min(3, next)) * 10000) / 10000;
   keepTone = preserve;
-  if (playing) {
-    position = current; startedAt = context.currentTime;
-    nodes.forEach(({ source }) => source.playbackRate.setValueAtTime(rate, context.currentTime));
-  }
+  playlist.setRate(rate);
   toneNode?.port.postMessage({ rate, keepTone });
   renderTempo(); libraryUI.changed();
 }
@@ -457,12 +459,19 @@ async function prepareTone() {
     }).catch(error => { node.port.postMessage({ type: 'dispose' }); node.disconnect(); throw error; });
     toneNode = node;
     node.onprocessorerror = () => {
-      pause(); node.disconnect(); toneNode = null; toneReady = null;
+      playlist.pause(); node.disconnect(); toneNode = null; toneReady = null;
       playbackError(new Error('Tone processor failed'));
     };
     toneNode.connect(mixOutput.input());
   })().catch(error => { toneReady = null; throw error; });
   await toneReady;
+}
+// The playlist plays into the shared context: Keep Tone, then EQ and recorder.
+async function playlistAudio() {
+  const playback = mixOutput.getPlaybackContext();
+  await playback.resume();
+  try { await prepareTone(); return { context: playback, output: toneNode }; }
+  catch (error) { console.error('[Stems tone]', error); return { context: playback, output: mixOutput.input() }; }
 }
 
 function status(message, error = false) { $('status').textContent = message; $('status').classList.toggle('error', error); }
@@ -496,215 +505,163 @@ function audioBuffer(channels) {
   channels.forEach((channel, i) => buffer.copyToChannel(channel, i));
   return buffer;
 }
-function offset(loopRange = stemLoop.range(), at = context?.currentTime || 0) {
-  if (!playing) return position;
-  const value = Math.max(0, position + Math.max(0, at - startedAt) * rate);
-  const { startMs, endMs } = loopRange;
-  const start = startMs / 1000, end = endMs / 1000;
-  return value >= end ? start + (value - end) % (end - start) : Math.min(value, original.duration);
+// Channel headers mirror the playlist tracks; the live pads follow their level.
+function channelLevel(stem) {
+  const track = playlist.track(stem);
+  return track && playlist.audible(track) ? track.gain : 0;
 }
-function pause() {
-  playbackRevision++;
-  position = offset(); playing = false;
-  for (const node of [...nodes, ...retiringNodes]) { node.source.stop(); node.cleanup(); }
-  nodes = [];
-  toneNode?.port.postMessage({ rate, keepTone, reset: true });
-  playLabel(false); updatePlayheads();
+function renderChannels() {
+  for (const [stem, item] of channels) {
+    const track = playlist.track(stem);
+    if (!track) continue;
+    item.enable.setAttribute('aria-checked', String(!track.mute));
+    const silent = !playlist.audible(track) || track.gain === 0;
+    item.head.classList.toggle('is-silent', silent); item.drawer?.classList.toggle('is-silent', silent);
+    item.volume.show(Math.round(track.gain * 100));
+  }
+  drumSampler?.updateGain(); pianoRoll?.updateGain();
+  const monitor = playlist.monitor();
+  $('original').setAttribute('aria-pressed', String(monitor === 'original'));
+  $('mix').setAttribute('aria-pressed', String(monitor === 'mix'));
 }
-function applyMix() {
-  drumSampler?.updateGain();
-  pianoRoll?.updateGain();
-  const solo = states.some(state => state.solo);
-  nodes.forEach(({ gain }, index) => {
-    const state = states[index === 5 ? 2 : index - 1];
-    const value = index === 0 ? Number(mode === 'original') :
-      mode === 'mix' && !state.muted && (!solo || state.solo) &&
-      !(index === 3 && pianoRoll?.enabled() && pianoRoll.replaces() && !drumSequencer?.song()) ? state.gain : 0;
-    gain.gain.setTargetAtTime(value, context.currentTime, 0.008);
-  });
-  document.querySelectorAll('.stem').forEach((row, index) => {
-    const state = states[index];
-    row.querySelector('.stem-enable').setAttribute('aria-checked', String(!state.muted));
-    row.classList.toggle('is-silent', mode === 'original' || state.muted || (solo && !state.solo) || state.gain === 0);
-  });
-  $('original').setAttribute('aria-pressed', String(mode === 'original'));
-  $('mix').setAttribute('aria-pressed', String(mode === 'mix'));
+function editChannel(stem, change, options) {
+  playlist.edit(state => change(state.tracks.find(track => track.stem === stem), state), options);
 }
-function createPlaybackNode(buffer, when, at, pattern = false) {
-  const source = context.createBufferSource(), gain = context.createGain();
-  const { startMs, endMs } = stemLoop.range();
-  source.buffer = buffer; source.loop = true; source.playbackRate.value = rate;
-  source.loopStart = pattern ? 0 : startMs / 1000; source.loopEnd = pattern ? buffer.duration : endMs / 1000;
-  gain.gain.value = 0; source.connect(gain).connect(toneNode);
-  const node = { source, gain, pattern, cleanup() { source.disconnect(); gain.disconnect(); retiringNodes.delete(node); } };
-  source.onended = node.cleanup;
-  const seek = pattern ? ((at - startMs / 1000) % buffer.duration + buffer.duration) % buffer.duration : at;
-  source.start(when, seek);
-  return node;
+const useMix = () => { if (buffers.length && playlist.monitor() !== 'mix') playlist.setMonitor('mix'); };
+// Header: name and fold, enable (right-click: hear only this), tools, WAV, volume.
+// Editor: the stem's full waveform with its sampler, channel rack and piano roll.
+function buildChannel(stem, buffer, wav, collapsed = true) {
+  const name = stem === 'original' ? text('original') : text(stem);
+  const head = document.createElement('div'); head.className = 'stem pl-stem-head'; head.dataset.stem = stem;
+  const heading = document.createElement('h2'), collapse = document.createElement('button');
+  collapse.type = 'button'; collapse.className = 'stem-collapse';
+  collapse.innerHTML = '<svg class="stem-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>';
+  collapse.prepend(icon(stem === 'original' ? 'music' : stem), document.createTextNode(name)); heading.append(collapse);
+  const enable = document.createElement('button'); enable.type = 'button'; enable.className = 'stem-enable stem-solo';
+  enable.setAttribute('role', 'switch'); enable.setAttribute('aria-label', pt('Enable $1', name));
+  enable.title = pt('Enable/disable $1 · Right-click: hear only this track', name);
+  enable.onclick = () => { editChannel(stem, track => { track.mute = !track.mute; }); if (stem !== 'original') useMix(); };
+  enable.oncontextmenu = event => {
+    event.preventDefault();
+    if (stem === 'original') { playlist.setMonitor('original'); return; }
+    playlist.edit(state => { for (const track of state.tracks) if (track.stem && track.stem !== 'original') { track.mute = track.stem !== stem; track.solo = false; } });
+    useMix();
+  };
+  const volume = createKnob({ label: `${text('volume')} ${name}`, min: 0, max: 100, step: 1, coarse: 10, value: 100, reset: 100,
+    hint: text('resetVolume'), format: value => `${value}%`,
+    onInput: value => { editChannel(stem, track => { track.gain = value / 100; }, { live: true }); drumSampler?.updateGain(); pianoRoll?.updateGain(); },
+    onCommit: value => { editChannel(stem, track => { track.gain = value / 100; }); if (stem !== 'original') useMix(); } });
+  volume.wrap.classList.add('is-inline', 'stem-volume');
+  const link = document.createElement('a'); link.className = 'download';
+  const url = URL.createObjectURL(wav); urls.push(url);
+  link.href = url; link.download = `${title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 80)}_${stem}.wav`;
+  link.append(icon('download')); link.title = `${text('download')} WAV - ${name}`; link.setAttribute('aria-label', `${text('download')} ${name}`);
+  const actions = document.createElement('div'); actions.className = 'stem-actions'; actions.append(enable, link, volume.wrap);
+  head.append(heading, actions);
+  const item = { head, drawer: null, enable, volume, actions, collapsed: true };
+  if (stem !== 'original') {
+    const drawer = document.createElement('div'); drawer.className = 'stem'; drawer.dataset.stem = stem;
+    mountWaveform(drawer, buffer, `${name} · ${text('position')}`);
+    item.drawer = drawer;
+    const fold = value => {
+      item.collapsed = value; drawer.hidden = value; head.classList.toggle('is-folded', value);
+      collapse.setAttribute('aria-expanded', String(!value));
+      collapse.title = `${pt(value ? 'Expand' : 'Collapse')} ${name}`; collapse.setAttribute('aria-label', collapse.title);
+      if (!value) requestAnimationFrame(() => { for (const view of waveforms) if (drawer.contains(view.element)) view.draw(); });
+    };
+    collapse.onclick = () => { fold(!item.collapsed); libraryUI.changed(); };
+    // Opening a tool from the header opens the channel editor that holds it.
+    actions.addEventListener('click', event => {
+      if (item.collapsed && event.target.closest('.stem-sampler-toggle, .stem-sequencer-toggle, .stem-piano-toggle')) { fold(false); libraryUI.changed(); }
+    });
+    fold(collapsed);
+  } else collapse.disabled = true;
+  channels.set(stem, item);
+  return item;
 }
-// Lanes the sequencers drive, as [node index, buffer, loops on its own]. PAT loops each
-// rendered pattern as its own node; SONG bakes it into a full-length drums/other lane.
+// Lanes the sequencers drive replace the drums/other channel audio. SONG bakes the
+// pattern into the song clip; PAT plays it once per pass of its A–B loop.
 const arranged = new WeakMap();
-function arrangeLane(pattern, stem, grid, layer) {
-  const key = JSON.stringify([grid, layer]), cached = arranged.get(pattern);
+const channelData = buffer => Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c));
+function arrangeRange(stem, pattern, range, layer) {
+  const sampleRate = stem.sampleRate, from = Math.round(range.startMs / 1000 * sampleRate), to = Math.min(stem.length, from + pattern.length);
+  const result = new AudioBuffer({ numberOfChannels: stem.numberOfChannels, length: stem.length, sampleRate });
+  arrangeChannels(channelData(result), channelData(stem), channelData(pattern), { offset: from, from, to, layer,
+    attack: Math.round(.0015 * sampleRate), fade: Math.round(.01 * sampleRate) });
+  return result;
+}
+function arrangeLane(pattern, stem, grid, layer, range) {
+  const key = JSON.stringify([grid, layer, range]), cached = arranged.get(pattern);
   if (cached?.key === key && cached.stem === stem) return cached.value;
-  const value = arrangeSong(stem, pattern, grid, layer);
+  const value = range ? arrangeRange(stem, pattern, range, layer) : arrangeSong(stem, pattern, grid, layer);
   arranged.set(pattern, { key, stem, value }); return value;
 }
-async function sequenceLanes() {
-  const owner = drumSequencer, piano = pianoRoll;
-  const [pattern, melody] = await Promise.all([owner?.enabled() ? owner.prepare() : null, piano?.enabled() ? piano.prepare() : null]);
-  if (!owner?.song()) return [[1, pattern || buffers[0], !!pattern], [3, buffers[2], false], [5, melody, true]];
-  const grid = owner.grid();
-  return [[1, pattern ? arrangeLane(pattern, buffers[0], grid, false) : buffers[0], false],
-    [3, melody ? arrangeLane(melody, buffers[2], grid, !piano.replaces()) : buffers[2], false], [5, null, true]];
+async function applyLanes() {
+  const owner = drumSequencer, piano = pianoRoll, version = ++sequenceRevision;
+  if (!owner || !buffers.length) return;
+  const [pattern, melody] = await Promise.all([owner.enabled() ? owner.prepare() : null, piano?.enabled() ? piano.prepare() : null]);
+  if (version !== sequenceRevision || owner !== drumSequencer) return;
+  const song = owner.song(), grid = owner.grid(), range = song ? null : owner.range();
+  const lane = (audio, stem, layer) => audio && (song || range) ? arrangeLane(audio, stem, grid, layer, range) : stem;
+  playlist.setAssetBuffer('audio-drums', lane(pattern, buffers[0], false));
+  playlist.setAssetBuffer('audio-other', lane(melody, buffers[2], !piano?.replaces()));
 }
 async function syncSequence({ loop = false, song = false, audio = true } = {}) {
-  const owner = drumSequencer, piano = pianoRoll;
+  const owner = drumSequencer;
   if (!owner) return;
   libraryUI.changed();
   if (!audio) return;
-  const version = ++sequenceRevision;
-  piano?.gridChanged();
+  pianoRoll?.gridChanged();
   if (loop && owner.range() && !owner.song()) stemLoop.setRange(owner.range());
   // Entering SONG releases an A–B loop that only existed to follow the pattern.
   if (song && owner.matchesRange(stemLoop.range())) stemLoop.setRange(null);
-  if (!playing) return;
-  const transportVersion = playbackRevision;
-  const lanes = await sequenceLanes();
-  if (!playing || version !== sequenceRevision || transportVersion !== playbackRevision || owner !== drumSequencer) return;
-  const when = context.currentTime + .015;
-  for (const [index, audioBuffer, isPattern] of lanes) {
-    const old = nodes[index];
-    if (old && old.source.buffer === audioBuffer && !isPattern) continue;
-    if (audioBuffer) nodes[index] = createPlaybackNode(audioBuffer, when, offset(undefined, when), isPattern);
-    else if (index === 5) nodes.length = 5;
-    if (old) {
-      old.gain.gain.cancelAndHoldAtTime(when); old.gain.gain.linearRampToValueAtTime(0, when + .008);
-      retiringNodes.add(old); old.source.stop(when + .008);
-    }
-  }
-  applyMix();
+  await applyLanes();
 }
-async function play() {
-  if (!original || playing) return;
-  const version = ++playbackRevision;
-  context ||= new AudioContext({ sampleRate: SAMPLE_RATE });
-  await context.resume();
-  await prepareTone();
-  let lanes, revision;
-  do {
-    revision = sequenceRevision;
-    lanes = new Map((await sequenceLanes()).map(([index, audio, isPattern]) => [index, { audio, isPattern }]));
-  } while (revision !== sequenceRevision && version === playbackRevision);
-  if (playing || version !== playbackRevision) return;
-  const { startMs, endMs } = stemLoop.range();
-  if ((position < startMs / 1000 || position >= endMs / 1000)) position = startMs / 1000;
-  else if (position >= original.duration) position = 0;
-  startedAt = context.currentTime + 0.03;
-  nodes = [original, ...buffers].map((buffer, index) =>
-    createPlaybackNode(lanes.get(index)?.audio || buffer, startedAt, position, !!lanes.get(index)?.isPattern));
-  if (lanes.get(5)?.audio) nodes.push(createPlaybackNode(lanes.get(5).audio, startedAt, position, true));
-  toneNode.port.postMessage({ rate, keepTone, reset: true });
-  playing = true; applyMix(); playLabel(true);
+function startSession(saved = null) {
+  const sources = [original, ...buffers].map((buffer, index) => {
+    const stem = index ? STEMS[index - 1] : 'original';
+    return { id: `audio-${stem}`, stem, name: index ? text(stem) : text('original'), buffer };
+  });
+  // The stem mix lives in `states` (as before the playlist); the arrangement adds clips.
+  const tracks = saved?.states && STEMS.map((stem, i) => ({ stem, gain: saved.states[i]?.gain, mute: saved.states[i]?.muted === true }));
+  playlist.setSession({ sources, saved: saved && { ...saved.playlist, tracks }, monitor: buffers.length && saved?.mode !== 'original' ? 'mix' : 'original' });
+  renderChannels();
+}
+const wavOf = buffer => new Blob([encodeWav([buffer.getChannelData(0), buffer.getChannelData(1)])], { type: 'audio/wav' });
+// Before separation the playlist holds the source audio alone.
+function showOriginal() {
+  wavs = [];
+  buildChannel('original', original, wavOf(original));
+  startSession(); syncLoop();
 }
 function disposeResults() {
   mixOutput.setEqualizer(null); equalizerUI.reset();
-  pause(); drumSequencer?.dispose(); drumSequencer = null; sequenceRevision++;
+  playlist.pause(); drumSequencer?.dispose(); drumSequencer = null; sequenceRevision++;
   pianoRoll?.dispose(); pianoRoll = null;
   drumSampler?.dispose(); drumSampler = null; stemLoop.reset(); buffers = []; outputs = [];
   urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
-  for (const view of waveforms) if ($('stems').contains(view.element)) view.dispose();
-  $('stems').replaceChildren(); $('mix').disabled = true; $('quality-note').hidden = true;
-  mode = 'original'; applyMix();
+  for (const view of waveforms) if (!$('original-waveform').contains(view.element)) view.dispose();
+  for (const item of channels.values()) { item.head.remove(); item.drawer?.remove(); }
+  channels.clear();
+  $('mix').disabled = true; $('quality-note').hidden = true;
 }
 function showResults(result, saved = null) {
-  disposeResults(); position = 0;
+  disposeResults();
   mixOutput.setEqualizer(globalThis.SCParametricEQ.normalize(saved?.eq)); equalizerUI.reset();
   outputs = result.outputs;
   buffers = outputs.map(audioBuffer);
-  states = STEMS.map((_, index) => ({ muted: !!saved?.states?.[index]?.muted, solo: false,
-    gain: Number.isFinite(saved?.states?.[index]?.gain) ? Math.max(0, Math.min(1, saved.states[index].gain)) : 1,
-    collapsed: saved?.states?.[index]?.collapsed === true }));
   rate = Number.isFinite(saved?.rate) ? Math.max(.1, Math.min(3, saved.rate)) : 1;
   keepTone = !!saved?.keepTone;
-  renderTempo();
-  wavs = [new Blob([encodeWav([original.getChannelData(0), original.getChannelData(1)])], { type: 'audio/wav' })];
+  renderTempo(); playlist.setRate(rate);
+  wavs = [wavOf(original)];
+  buildChannel('original', original, wavs[0]);
   STEMS.forEach((stem, index) => {
-    const row = document.createElement('div'); row.className = 'stem'; row.dataset.stem = stem;
-    // Same disclosure as the Player Tools sections: the header stays, the waveform and tools fold away.
-    const name = document.createElement('h2'), collapse = document.createElement('button');
-    collapse.type = 'button'; collapse.className = 'stem-collapse';
-    collapse.innerHTML = '<svg class="stem-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>';
-    collapse.prepend(icon(stem), document.createTextNode(text(stem))); name.append(collapse);
-    const renderCollapsed = () => {
-      row.classList.toggle('is-collapsed', states[index].collapsed);
-      collapse.setAttribute('aria-expanded', String(!states[index].collapsed));
-      collapse.title = `${pt(states[index].collapsed ? 'Expand' : 'Collapse')} ${text(stem)}`;
-      collapse.setAttribute('aria-label', collapse.title);
-    };
-    collapse.onclick = () => {
-      states[index].collapsed = !states[index].collapsed; renderCollapsed(); libraryUI.changed();
-      if (!states[index].collapsed) requestAnimationFrame(() => { for (const view of waveforms) if (row.contains(view.element)) view.draw(); });
-    };
-    renderCollapsed();
-    const enabled = document.createElement('button'); enabled.type = 'button'; enabled.className = 'stem-enable stem-solo';
-    enabled.setAttribute('role', 'switch');
-    enabled.setAttribute('aria-label', pt('Enable $1', text(stem)));
-    enabled.title = pt('Enable/disable $1 · Right-click: hear only this track', text(stem));
-    enabled.setAttribute('aria-checked', String(!states[index].muted));
-    enabled.onclick = () => {
-      states[index].muted = !states[index].muted; states.forEach(state => { state.solo = false; });
-      mode = 'mix'; applyMix(); libraryUI.changed();
-    };
-    enabled.oncontextmenu = event => {
-      event.preventDefault();
-      states.forEach((state, other) => { state.muted = other !== index; state.solo = false; });
-      mode = 'mix'; applyMix(); libraryUI.changed();
-    };
-    const controls = [enabled];
-    const volume = document.createElement('div'); volume.className = 'stem-volume';
-    const caption = document.createElement('span'); caption.textContent = text('volume');
-    const knob = document.createElement('button'); knob.type = 'button'; knob.className = 'pad-knob';
-    knob.setAttribute('role', 'slider'); knob.setAttribute('aria-label', `${text('volume')} ${text(stem)}`);
-    knob.setAttribute('aria-valuemin', '0'); knob.setAttribute('aria-valuemax', '100'); knob.setAttribute('aria-orientation', 'vertical');
-    const level = document.createElement('output');
-    const renderVolume = () => {
-      const value = Math.round(states[index].gain * 100);
-      knob.style.setProperty('--knob-angle', `${-135 + value * 2.7}deg`);
-      knob.setAttribute('aria-valuenow', String(value)); knob.setAttribute('aria-valuetext', `${value}%`);
-      knob.title = `${text('volume')}: ${value}% · ${text('resetVolume')}`;
-      level.textContent = `${value}%`;
-    };
-    const updateVolume = value => { states[index].gain = Math.round(Math.max(0, Math.min(100, value))) / 100; renderVolume(); mode = 'mix'; applyMix(); libraryUI.changed(); };
-    let drag;
-    knob.onpointerdown = event => {
-      if (event.button !== 0) return;
-      drag = { id: event.pointerId, y: event.clientY, value: states[index].gain * 100 };
-      knob.setPointerCapture(event.pointerId); knob.focus(); event.preventDefault();
-    };
-    knob.onpointermove = event => { if (drag?.id === event.pointerId) updateVolume(drag.value + (drag.y - event.clientY) * 100 / 140); };
-    for (const kind of ['pointerup', 'pointercancel', 'lostpointercapture']) knob.addEventListener(kind, () => { drag = null; });
-    knob.ondblclick = () => updateVolume(100);
-    knob.onkeydown = event => {
-      if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault(); event.stopPropagation();
-      updateVolume(event.key === 'Home' ? 0 : event.key === 'End' ? 100 : states[index].gain * 100 +
-        (['ArrowUp', 'ArrowRight'].includes(event.key) ? 1 : -1) * (event.shiftKey ? 10 : 1));
-    };
-    renderVolume(); volume.append(caption, knob, level);
-    const link = document.createElement('a'); link.className = 'download';
     const wav = new Blob([encodeWav(outputs[index])], { type: 'audio/wav' }); wavs.push(wav);
-    const url = URL.createObjectURL(wav); urls.push(url);
-    link.href = url; link.download = `${title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 80)}_${stem}.wav`;
-    link.append(icon('download')); link.title = text('download') + ' WAV - ' + text(stem); link.setAttribute('aria-label', `${text('download')} ${text(stem)}`);
-    const actions = document.createElement('div'); actions.className = 'stem-actions'; actions.append(...controls, link, volume);
-    row.append(name, actions); $('stems').append(row);
-    mountWaveform(row, buffers[index], `${text(stem)} · ${text('position')}`);
+    const { drawer: row, actions } = buildChannel(stem, buffers[index], wav, saved?.states?.[index]?.collapsed ?? true);
     if (stem === 'drums') {
       drumSampler = mountDrumSampler({ row, actions, waveform: row.querySelector('.waveform'),
       buffer: buffers[index], timeline: stemLoop, audioContext: () => mixOutput.getPlaybackContext(), output: () => mixOutput.input(),
-      level: () => states[index].muted ? 0 : states[index].gain, changed: () => { libraryUI.changed(); drumSequencer?.samplesChanged(); },
+      level: () => channelLevel(stem), changed: () => { libraryUI.changed(); drumSequencer?.samplesChanged(); },
       saved: saved?.drumSlices ?? saved?.drumStarts, locale, report: playbackError });
       drumSequencer = mountDrumSequencer({ row, actions, waveform: row.querySelector('.waveform'), timeline: stemLoop,
         buffer: buffers[index], sampler: drumSampler, saved: saved?.drumSequence, changed: syncSequence,
@@ -714,12 +671,14 @@ function showResults(result, saved = null) {
       buffer: buffers[index], timeline: stemLoop, saved: saved?.piano,
       getGrid: () => drumSequencer.grid(), setGrid: value => drumSequencer.setGrid(value),
       audioContext: () => mixOutput.getPlaybackContext(), output: () => mixOutput.input(),
-      level: () => states[index].muted ? 0 : states[index].gain,
+      level: () => channelLevel(stem),
       rate: () => rate, setRate: value => changeTempo(value), changed: syncSequence, togglePlayback, locale, report: playbackError });
   });
   outputs = [];
-  $('mix').disabled = false; $('quality-note').hidden = false; mode = saved?.mode === 'original' ? 'original' : 'mix'; applyMix();
+  $('mix').disabled = false; $('quality-note').hidden = false;
+  startSession(saved);
   if ((drumSequencer?.enabled() || pianoRoll?.enabled()) && drumSequencer.range() && !drumSequencer.song()) stemLoop.setRange(drumSequencer.range());
+  syncLoop(); applyLanes().catch(playbackError);
   status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`);
 }
 
@@ -770,6 +729,7 @@ async function separate() {
         original = audioBuffer([decoded.getChannelData(0), decoded.getChannelData(Math.min(1, decoded.numberOfChannels - 1))]);
         revealAudition();
         mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
+        showOriginal();
       }
       if (version !== revision) return;
       const result = await runWorker([original.getChannelData(0).slice(), original.getChannelData(1).slice()]);
@@ -809,7 +769,7 @@ $('toggle-game').onclick = () => {
 $('clear-cache').onclick = async () => {
   try { await caches.delete(MODEL.cache); status(text('cleared')); } catch (error) { console.error('[Stems cache]', error); status(text('cacheClearFailed'), true); }
 };
-function togglePlayback() { if (playing) pause(); else play().catch(playbackError); }
+function togglePlayback() { playlist.toggle(); }
 $('play').onclick = togglePlayback;
 $('play').setAttribute('aria-keyshortcuts', 'Space');
 document.addEventListener('keydown', event => {
@@ -818,10 +778,10 @@ document.addEventListener('keydown', event => {
   if (target instanceof Element && (target.isContentEditable || target.closest('input, textarea, select, a, [role="textbox"]') ||
       (target.closest('button') && target.closest('button').id !== 'play'))) return;
   event.preventDefault();
-  if (!event.repeat && !$('play').disabled) togglePlayback();
+  if (!event.repeat) togglePlayback();
 });
-$('original').onclick = () => { mode = 'original'; applyMix(); libraryUI.changed(); };
-$('mix').onclick = () => { mode = 'mix'; applyMix(); libraryUI.changed(); };
+$('original').onclick = () => playlist.setMonitor('original');
+$('mix').onclick = () => playlist.setMonitor('mix');
 let animationFrame;
 function animate() {
   updatePlayheads();
@@ -829,10 +789,11 @@ function animate() {
 }
 animate();
 window.addEventListener('pagehide', () => {
+  playlist.dispose();
   equalizerUI.dispose(); recorderUI.dispose(); mixOutput.dispose();
   cancelAnimationFrame(animationFrame);
   for (const view of waveforms) view.dispose();
-  pianoRoll?.dispose(); drumSequencer?.dispose(); drumSampler?.dispose(); worker?.terminate(); pause(); toneNode?.port.postMessage({ type: 'dispose' }); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
+  pianoRoll?.dispose(); drumSequencer?.dispose(); drumSampler?.dispose(); worker?.terminate(); toneNode?.port.postMessage({ type: 'dispose' }); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
   if (jobId) chrome.runtime.sendMessage({ type: 'STEM_LOOP_CANCEL', jobId }).catch(() => {});
 });
 function renderInfo(value) {
