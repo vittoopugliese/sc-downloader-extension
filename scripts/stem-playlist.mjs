@@ -141,7 +141,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   const es = document.documentElement.lang === 'es', t = (en, spanish) => es ? spanish : en;
   let state = emptyArrangement(), assets = new Map(), selected = null, zoom = 48, snap = .25;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
-  let drag = null, frame, operating = false, liveBefore = null, loopRange = null, rate = 1, rateTimer = 0;
+  let drag = null, frame, operating = false, liveBefore = null, loopRange = null, marker = 0, rate = 1, rateTimer = 0;
   const isPattern = clip => !!assets.get(clip.asset)?.loop;
   // What the engine and the export hear: one plain clip per pass of a looping clip.
   const playbackState = () => ({ ...state, clips: state.clips.flatMap(clip => {
@@ -184,7 +184,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   function renderPlay(active) { if (!play) return; play.textContent = active ? 'Ⅱ' : '▶'; play.setAttribute('aria-pressed', String(active)); }
   function stop(reset = false) {
     const was = playing(), at = engine?.stop();
-    position = reset ? loopRange?.start ?? 0 : at ?? position;
+    position = reset ? marker : at ?? position;
     renderPlay(false); if (was) onTransport?.(false);
   }
   // Edits apply to the running schedule and warm the stretch cache; playback never stops.
@@ -215,7 +215,8 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   }
   const tempo = field('BPM', 'number', 120, 20, 300, .01); tempo.label.title = tempo.input.title = t('Project tempo (20–300 BPM): grid, snap, channel rack and piano roll. It does not change the audio speed; the speed slider next to it does.', 'Tempo del proyecto (20–300 BPM): grilla, snap, channel rack y piano roll. No cambia la velocidad del audio; para eso está el slider de velocidad al lado.');
   function changeLoop(range) {
-    loopRange = range; engine?.update(playbackState(), transport()); renderLoopBand();
+    loopRange = range; if (range) marker = range.start;
+    engine?.update(playbackState(), transport()); renderLoopBand();
     onLoopChange?.(range);
   }
   tempo.input.onchange = () => { const bpm = Number(tempo.input.value); if (bpm >= 20 && bpm <= 300) commit(() => retimePatternClips(state, bpm, isPattern)); else draw(); };
@@ -307,7 +308,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     else if (kind === 'end') changeLoop({ start: before.start, end: clamp(at, before.start + .01, LIMITS.seconds) });
     else if (Math.abs(at - from) >= .01) changeLoop({ start: Math.min(at, from), end: Math.max(at, from) });
   };
-  ruler.onpointerup = event => { if (loopDrag?.id !== event.pointerId) return; if (!loopDrag.moved) seek(rulerTime(event)); loopDrag = null; ruler.releasePointerCapture(event.pointerId); };
+  ruler.onpointerup = event => { if (loopDrag?.id !== event.pointerId) return; if (!loopDrag.moved) { seek(rulerTime(event)); marker = position; renderLoopBand(); } loopDrag = null; ruler.releasePointerCapture(event.pointerId); };
   ruler.onpointercancel = () => { if (loopDrag) changeLoop(loopDrag.before); loopDrag = null; };
   ruler.ondblclick = () => changeLoop(null);
   scroll.addEventListener('scroll', () => { paintSoon(); onViewChange?.(); });
@@ -410,7 +411,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) { scroll.scrollLeft += event.deltaX || event.deltaY; return; }
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
-  const hint = node('p', 'pl-hint', t('Drag clips to move · edges to trim · right-click for more · Alt bypasses snap · Space plays, twice restarts · S splits · T taps tempo · drop audio files on a track. Select a loop on the ruler; hover for controls. 16 tracks / 5 minutes.', 'Arrastrá clips para mover · bordes para recortar · clic derecho para más · Alt desactiva snap · Espacio reproduce, dos veces reinicia · S corta · T marca el tempo · soltá audio en una pista. Seleccioná un loop en la regla; pasá el cursor para ver los controles. 16 pistas / 5 minutos.'));
+  const hint = node('p', 'pl-hint', t('Drag clips to move · edges to trim · right-click for more · Alt bypasses snap · Space plays, twice restarts from the last ruler click (or loop start) · S splits · T taps tempo · drop audio files on a track. Select a loop on the ruler; hover for controls. 16 tracks / 5 minutes.', 'Arrastrá clips para mover · bordes para recortar · clic derecho para más · Alt desactiva snap · Espacio reproduce, dos veces reinicia desde el último clic en la regla (o el inicio del loop) · S corta · T marca el tempo · soltá audio en una pista. Seleccioná un loop en la regla; pasá el cursor para ver los controles. 16 pistas / 5 minutos.'));
   const message = node('p', 'pl-message'); message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite');
   container.classList.add('playlist', 'pl-ui'); container.tabIndex = -1;
   // Messages, help and the clip inspector sit above the timeline, under the transport.
@@ -557,7 +558,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     ruler.style.width = width + 'px'; ruler.replaceChildren();
     const barSeconds = 240 / state.bpm, barStep = Math.max(1, Math.ceil(55 / (barSeconds * zoom)));
     for (let bar = 0; bar * barSeconds * zoom < width; bar += barStep) { const mark = node('span', '', String(bar + 1)); mark.style.left = (bar * barSeconds * zoom) + 'px'; ruler.append(mark); }
-    const band = node('div', 'pl-loop-band'); ruler.append(band); renderLoopBand(band);
+    const band = node('div', 'pl-loop-band'), mark = node('div', 'pl-marker'); ruler.append(band, mark); renderLoopBand(band);
     const rows = [rulerRow];
     state.tracks.forEach((track, index) => {
       const host = channel?.(track, trackSource(track.id)) || null;
@@ -633,6 +634,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     if (!band) return;
     band.hidden = !loopRange;
     if (loopRange) { band.style.left = `${loopRange.start * zoom}px`; band.style.width = `${(loopRange.end - loopRange.start) * zoom}px`; }
+    const mark = grid.querySelector('.pl-marker'); if (mark) mark.style.left = `${marker * zoom}px`;
   }
   function updateSelection() {
     const clip = picked(); selectionLabel.textContent = clip ? assets.get(clip.asset).name : t('Select a clip', 'Seleccioná un clip');
@@ -714,7 +716,8 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     await connect();
     if (engine.play(playbackState(), position, transport())) { renderPlay(true); onTransport?.(true); }
   }
-  // A second Space within 350 ms rewinds to the loop start (or 0) and plays, like FL Studio.
+  // A second Space within 350 ms rewinds to the marker and plays, like FL Studio. The marker is
+  // the last ruler click; making or moving a loop puts it on the loop start.
   let lastSpace = 0;
   function space() {
     const at = performance.now(), twice = at - lastSpace < 350;
@@ -763,7 +766,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     };
     let candidate = build(!!saved);
     try { validateArrangement(candidate, next); } catch { candidate = build(false); validateArrangement(candidate, next); }
-    state = candidate; assets = next; history = []; future = []; selected = null; liveBefore = null; position = loopRange?.start ?? 0;
+    state = candidate; assets = next; history = []; future = []; selected = null; liveBefore = null; position = marker = loopRange?.start ?? 0;
     changed(); draw(); requestAnimationFrame(fit);
   }
   // The audio a track's instrument is cut from: the stem, or the first non-pattern clip.
@@ -802,6 +805,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     // The host's A–B loop in timeline seconds; null loops the whole arrangement.
     setLoopRange(range) {
       loopRange = range && range.end > range.start ? { start: range.start, end: range.end } : null;
+      if (loopRange) marker = loopRange.start;
       if (!playing() && loopRange && (position < loopRange.start || position >= loopRange.end)) position = loopRange.start;
       engine?.update(playbackState(), transport()); renderLoopBand();
     },

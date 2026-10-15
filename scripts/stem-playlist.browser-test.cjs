@@ -74,8 +74,12 @@ const { chromium } = require('playwright');
     assert.deepEqual(await selection(), { left: 36, width: 60 });
     await dragRuler(96, 84);
     assert.deepEqual(await selection(), { left: 36, width: 48 });
+    // The marker follows the loop start, then the last ruler click; it stays when the loop is cleared.
+    const marker = () => playlist.locator('.pl-marker').evaluate(e => parseFloat(e.style.left));
+    assert.equal(await marker(), 36);
     await ruler.dblclick({ position: { x: 12, y: 14 } });
     assert.equal(await band.isVisible(), false);
+    assert.equal(await marker(), 12);
     // Without a selection, the whole arrangement keeps looping automatically.
     const startsBeforeLoop = await page.evaluate(() => window.playlistStarts);
     await page.locator('#play').click();
