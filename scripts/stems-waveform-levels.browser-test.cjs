@@ -51,26 +51,31 @@ const { chromium } = require('playwright');
       };
     });
     await page.locator('#separate').click();
-    await page.waitForFunction(() => document.querySelectorAll('.stem canvas').length === 4);
+    await page.waitForFunction(() => document.querySelectorAll('.pl-stem-head').length === 5);
+    await page.locator('.pl-scroll').scrollIntoViewIfNeeded();
     // Wait for asynchronous spectral analysis on all five buffers.
     await page.waitForFunction(() => globalThis.testAnalyzed === 5);
     await page.locator('#play').click();
-    await page.waitForFunction(() => globalThis.testSources.length === 5);
-    const peaks = await page.evaluate(() => testSources.map(source => source.buffer.getChannelData(0).reduce((peak, value) => Math.max(peak, Math.abs(value)), 0)));
-    const heights = await page.locator('#original-waveform canvas, .stem canvas').evaluateAll(canvases => canvases.map(canvas => {
-      const { width, height } = canvas;
-      const data = canvas.getContext('2d').getImageData(0, 0, width, height).data;
-      let rows = 0;
-      for (let y = 0; y < height; y++) {
-        let colored = 0;
-        for (let x = Math.floor(width * .2); x < width * .8; x++) {
-          const at = (y * width + x) * 4;
-          if (Math.max(data[at], data[at + 1], data[at + 2]) > 50) colored++;
+    // Looping playback schedules passes ahead; the first five sources are the first pass.
+    await page.waitForFunction(() => globalThis.testSources.length >= 5);
+    const peaks = await page.evaluate(() => testSources.slice(0, 5).map(source => source.buffer.getChannelData(0).reduce((peak, value) => Math.max(peak, Math.abs(value)), 0)));
+    await page.locator('.pl-scroll').scrollIntoViewIfNeeded(); await page.waitForTimeout(100);
+    const heights = await page.evaluate(() => {
+      const canvas = document.querySelector('.pl-wave-layer'), box = canvas.getBoundingClientRect();
+      const scale = canvas.width / box.width, ctx = canvas.getContext('2d');
+      return [...document.querySelectorAll('.pl-stem-head')].map(head => {
+        const clip = head.parentElement.querySelector('.pl-clip').getBoundingClientRect();
+        const width = Math.floor(clip.width * .6 * scale), height = Math.floor(44 * scale);
+        const data = ctx.getImageData(Math.round((clip.left + clip.width * .2 - box.left) * scale), Math.round((clip.top + 20 - box.top) * scale), width, height).data;
+        let rows = 0;
+        for (let y = 0; y < height; y++) {
+          let colored = 0;
+          for (let x = 0; x < width; x++) { const i = (y * width + x) * 4; if (Math.max(data[i], data[i + 1], data[i + 2]) > 50) colored++; }
+          if (colored > width * .4) rows++;
         }
-        if (colored > width * .25) rows++;
-      }
-      return rows / height;
-    }));
+        return rows / height;
+      });
+    });
     console.log(JSON.stringify({ playbackPeaks: peaks, waveformHeightFractions: heights }));
     assert.ok(peaks[3] > 0 && peaks[3] < .00001, 'Near-silent output reaches playback unchanged');
     assert.equal(peaks[4], 0, 'Digital silence stays silent');

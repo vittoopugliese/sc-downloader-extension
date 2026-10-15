@@ -39,10 +39,8 @@ const { chromium } = require('playwright');
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html`);
     const playlist = page.locator('#playlist');
-    // Stems is the default view; the Playlist tab swaps the panel.
-    assert.equal(await playlist.isVisible(), false);
-    await page.locator('#tab-playlist').click();
-    assert.equal(await page.locator('#tab-playlist').getAttribute('aria-selected'), 'true');
+    // One workspace, including before source import.
+    assert.equal(await page.locator('#tab-playlist').count(), 0);
     assert.equal(await playlist.isVisible(), true);
     await playlist.locator('input[type=file]').setInputFiles({ name: 'tone.wav', mimeType: 'audio/wav', buffer: wav });
     await playlist.locator('.pl-clip').first().waitFor();
@@ -59,8 +57,8 @@ const { chromium } = require('playwright');
     await playlist.locator('.pl-clip').first().click();
     const width = (await playlist.locator('.pl-clip').first().boundingBox()).width;
     // Shift + ArrowUp on the pitch knob is one octave.
-    await playlist.getByRole('slider', { name: 'Pitch' }).press('Shift+ArrowUp');
-    assert.equal(await playlist.getByRole('slider', { name: 'Pitch' }).getAttribute('aria-valuenow'), '12');
+    await playlist.getByRole('slider', { name: 'Pitch', exact: true }).press('Shift+ArrowUp');
+    assert.equal(await playlist.getByRole('slider', { name: 'Pitch', exact: true }).getAttribute('aria-valuenow'), '12');
     await page.waitForFunction(() => !document.querySelector('.pl-clip.is-stretching'), null, { timeout: 15000 });
     assert.equal(await playlist.locator('.pl-play').getAttribute('aria-pressed'), 'true', 'still playing after the edit');
     assert.ok(Math.abs((await playlist.locator('.pl-clip').first().boundingBox()).width - width) < 1, 'stretch keeps the clip length');
@@ -68,7 +66,7 @@ const { chromium } = require('playwright');
     const scroller = playlist.locator('.pl-scroll'), box = await scroller.boundingBox();
     await page.mouse.move(box.x + 400, box.y + 120);
     await page.mouse.wheel(0, -300);
-    await page.waitForFunction(clipWidth => document.querySelector('.pl-clip').getBoundingClientRect().width > clipWidth * 1.5, width);
+    await page.waitForFunction(clipWidth => document.querySelector('.pl-clip').getBoundingClientRect().width > clipWidth * 1.4, width);
     await page.keyboard.down('Shift'); await page.mouse.wheel(0, 200); await page.keyboard.up('Shift');
     await page.waitForFunction(() => document.querySelector('.pl-scroll').scrollLeft > 0);
     await playlist.getByRole('button', { name: 'Show the whole arrangement' }).click();

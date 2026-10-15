@@ -32,6 +32,15 @@
 .pl-zoom span{margin-left:5px;font-size:10px;color:var(--muted)}
 .pl-scroll{position:relative;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;border:1px solid var(--pl-edge);background:var(--pl-night)}
 .pl-grid{position:relative}
+.pl-wave-layer{position:absolute;z-index:3;pointer-events:none}
+.pl-lane>.waveform{position:absolute;top:25px;height:44px;min-height:0;margin:0;border:0;border-radius:0;background:transparent;z-index:5;pointer-events:none;overflow:hidden}
+.pl-lane>.waveform.is-sampling,.pl-lane>.waveform.is-placing-beat{pointer-events:auto}
+.pl-lane>.waveform[hidden]{display:none}
+.pl-lane>.waveform.is-folded{visibility:hidden;pointer-events:none}
+.pl-lane>.waveform .stem-pad-region,.pl-lane>.waveform .stem-pad-marker,.pl-lane>.waveform .stem-seq-anchor{pointer-events:auto}
+.pl-clip.is-muted .pl-clip-title{opacity:.4}
+.pl-clip[aria-pressed=true]{background:transparent}
+.pl-drawer:empty{display:none}
 .pl-grid-row{display:flex;min-height:76px}
 .pl-ruler-row{min-height:0;height:28px}
 .pl-track-head{position:sticky;left:0;z-index:4;display:flex;flex-direction:column;justify-content:center;gap:6px;flex-shrink:0;width:var(--pl-head);padding:8px 10px;border-right:1px solid var(--pl-edge);border-bottom:1px solid #2c2b29;border-left:3px solid var(--track-color,#8c8c8c);background:var(--pl-head-bg)}

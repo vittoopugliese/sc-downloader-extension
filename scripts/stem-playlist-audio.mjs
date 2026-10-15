@@ -1,29 +1,46 @@
-import { arrangementEnd, audibleClips, clipDuration, clipRate, clipsInWindow, needsStretch, stretchKey, trackAudible, transportWindows, validateArrangement } from './stem-playlist-core.mjs';
+import { arrangementEnd, audibleClips, clipDuration, clipRate, clipPitch, clipEnvelope, clipsInWindow, needsStretch, stretchKey, trackAudible, transportWindows, validateArrangement } from './stem-playlist-core.mjs';
 
 const LOOKAHEAD = 1.5, TICK_MS = 200, RESTART_FADE = .01, STRETCH_PAD = 1;
 const MAX_RENDER_BYTES = 128 * 1024 * 1024;
+const reversedBuffers = new WeakMap();
+function reversed(buffer) {
+  if (!reversedBuffers.has(buffer)) {
+    const result = new AudioBuffer({ length: buffer.length, sampleRate: buffer.sampleRate, numberOfChannels: buffer.numberOfChannels });
+    for (let c = 0; c < buffer.numberOfChannels; c++) result.copyToChannel(buffer.getChannelData(c).slice().reverse(), c);
+    reversedBuffers.set(buffer, result);
+  }
+  return reversedBuffers.get(buffer);
+}
 
 // One clip as a buffer source on any context: the realtime engine and the offline
 // export share it, so the exported WAV matches what was heard. `offset` and `limit`
 // are timeline seconds; `rate` is the global transport speed. A late start skips
 // ahead instead of drifting.
 export function startClip(context, destination, clip, asset, stretched, when, offset = 0, { rate = 1, limit = Infinity } = {}) {
+  if (clip.mute) return null;
   const late = context instanceof AudioContext ? Math.max(0, context.currentTime + .005 - when) : 0;
   when += late; offset += late * rate;
   const span = Math.min(clipDuration(clip) - offset, limit - (late * rate)), duration = span / rate;
   if (duration <= .002) return null;
   const source = context.createBufferSource(), gain = context.createGain();
   const base = stretched ? 1 : clipRate(clip);
-  source.buffer = stretched ? stretched.buffer : asset.buffer;
+  const buffer = stretched ? stretched.buffer : asset.buffer;
+  source.buffer = clip.reverse ? reversed(buffer) : buffer;
   source.playbackRate.value = base * rate;
   // 3 ms ramps at the edges avoid clicks on arbitrary cuts, loop seams and mid-clip entries.
   const fade = Math.min(.003, duration / 2);
   gain.gain.setValueAtTime(0, when);
-  gain.gain.linearRampToValueAtTime(clip.gain, when + fade);
-  gain.gain.setValueAtTime(clip.gain, when + duration - fade);
+  const length = clipDuration(clip), fi = Math.min(clip.fadeIn || 0, length), fo = Math.min(clip.fadeOut || 0, length);
+  const points = [fade, duration - fade, (fi - offset) / rate, (length - fo - offset) / rate];
+  if (fi + fo > length) points.push((length * fi / (fi + fo) - offset) / rate);
+  for (const at of [...new Set(points)].filter(at => at >= fade && at <= duration - fade).sort((a, b) => a - b)) {
+    gain.gain.linearRampToValueAtTime(clip.gain * clipEnvelope(clip, offset + at * rate), when + at);
+  }
   gain.gain.linearRampToValueAtTime(0, when + duration);
   source.connect(gain).connect(destination);
-  source.start(when, stretched ? stretched.offset + offset : clip.in + offset * base, span * base);
+  const first = stretched ? stretched.offset : clip.in;
+  const start = clip.reverse ? buffer.duration - first - length * base : first;
+  source.start(when, Math.max(0, start + offset * base), span * base);
   source.stop(when + duration);
   source.onended = () => { source.disconnect(); gain.disconnect(); };
   return { source, gain };
@@ -87,7 +104,7 @@ export function createStretchCache({ budget = 192 * 1024 * 1024, onChange = () =
       range.set(buffer.getChannelData(c).subarray(Math.max(0, first), Math.min(buffer.length, last)), Math.max(0, -first));
       return range;
     });
-    const output = await stretch({ channels, sampleRate: rate, pitch: clip.pitch, speed: clip.speed }, channels.map(c => c.buffer));
+    const output = await stretch({ channels, sampleRate: rate, pitch: clipPitch(clip), speed: clip.speed }, channels.map(c => c.buffer));
     const result = new AudioBuffer({ numberOfChannels: output.length, length: output[0].length, sampleRate: rate });
     output.forEach((channel, c) => result.copyToChannel(channel, c));
     const entry = { from: first / rate, to: last / rate, buffer: result, used: ++used, bytes: result.length * result.numberOfChannels * 4 };
@@ -112,7 +129,8 @@ export function createStretchCache({ budget = 192 * 1024 * 1024, onChange = () =
         if (range.from <= to && range.to >= from) { from = Math.min(from, range.from); to = Math.max(to, range.to); }
       }
       const job = { key, from, to };
-      job.promise = queue.then(() => render(key, clip, asset, from, to)).finally(() => {
+      const snapshot = { ...clip }, source = { ...asset };
+      job.promise = queue.then(() => render(key, snapshot, source, from, to)).finally(() => {
         pending.splice(pending.indexOf(job), 1); onChange();
       });
       queue = job.promise.catch(() => {});
@@ -184,7 +202,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     }
     owner.horizon = target;
   }
-  function begin(state, from, transport) {
+  function begin(state, from, transport, editing = false) {
     retire();
     clearInterval(timer);
     const snapshot = structuredClone(state), length = arrangementEnd(snapshot);
@@ -192,7 +210,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     if (!(length > 0) || (loop && loop.start >= length)) { session = null; return false; }
     if (loop ? from < loop.start || from >= loop.end : from >= length) from = loop ? loop.start : 0;
     mixTracks(snapshot);
-    session = { state: snapshot, from, loop, length, rate: transport.rate || 1, ctxStart: context.currentTime + .03, horizon: 0 };
+    session = { state: snapshot, from, loop, length, rate: transport.rate || 1, ctxStart: context.currentTime + (editing ? .005 : .03), horizon: 0 };
     signature = signatureOf(snapshot, transport);
     timer = setInterval(tick, TICK_MS); tick();
     return true;
@@ -217,7 +235,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     update(state, transport) {
       if (!session) return;
       if (signatureOf(state, transport) === signature) mixTracks(state);
-      else begin(state, now(), transport);
+      else begin(state, now(), transport, true);
     },
     stop, now,
     playing: () => !!session,

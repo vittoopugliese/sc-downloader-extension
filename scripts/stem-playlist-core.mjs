@@ -3,7 +3,8 @@ export const LIMITS = Object.freeze({ tracks: 16, clips: 256, seconds: 300, pcmB
 export const MONITORS = Object.freeze(['mix', 'original']);
 export const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 export const uid = () => crypto.randomUUID();
-export const clipRate = clip => clip.speed * (clip.keepLength ? 1 : 2 ** (clip.pitch / 12));
+export const clipPitch = clip => clip.pitch + (clip.cents || 0) / 100;
+export const clipRate = clip => clip.speed * (clip.keepLength ? 1 : 2 ** (clipPitch(clip) / 12));
 export const clipDuration = clip => (clip.out - clip.in) / clipRate(clip);
 export const arrangementEnd = state => Math.max(0, ...state.clips.map(c => c.at + clipDuration(c)));
 export const snapTime = (seconds, bpm, division) => division ? Math.round(seconds / (60 / bpm * division)) * 60 / bpm * division : seconds;
@@ -11,7 +12,7 @@ export function emptyArrangement() {
   return { version: 1, bpm: 120, monitor: 'mix', tracks: Array.from({ length: 4 }, (_, i) => ({ id: uid(), name: `Track ${i + 1}`, gain: 1, mute: false, solo: false })), clips: [] };
 }
 export function newClip(asset, track, at = 0) {
-  return { id: uid(), asset: asset.id, track, at, in: 0, out: asset.buffer.duration, pitch: 0, speed: 1, keepLength: true, gain: 1 };
+  return { id: uid(), asset: asset.id, track, at, in: 0, out: asset.buffer.duration, pitch: 0, cents: 0, speed: 1, keepLength: true, gain: 1, mute: false, reverse: false, fadeIn: 0, fadeOut: 0 };
 }
 export function validateArrangement(state, assets) {
   if (state?.version !== 1 || !Number.isFinite(state.bpm) || state.bpm < 20 || state.bpm > 300 || !MONITORS.includes(state.monitor ?? 'mix') ||
@@ -31,6 +32,9 @@ export function validateArrangement(state, assets) {
         clip.at < 0 || clip.in < 0 || clip.out <= clip.in || clip.out > asset.buffer.duration + 1e-6 ||
         Math.abs(clip.pitch) > 24 || clip.speed < .25 || clip.speed > 4 || clip.gain < 0 || clip.gain > 2 ||
         typeof clip.keepLength !== 'boolean' || clip.at + clipDuration(clip) > LIMITS.seconds + 1e-6) throw new Error('Invalid clip or playlist exceeds 5 minutes.');
+    for (const key of ['mute', 'reverse']) if (clip[key] !== undefined && typeof clip[key] !== 'boolean') throw new Error('Invalid clip flag.');
+    if (!Number.isFinite(clip.cents ?? 0) || Math.abs(clip.cents ?? 0) > 100) throw new Error('Invalid fine pitch.');
+    for (const key of ['fadeIn', 'fadeOut']) if (!Number.isFinite(clip[key] ?? 0) || (clip[key] ?? 0) < 0 || (clip[key] ?? 0) > LIMITS.seconds) throw new Error('Invalid fade.');
     clips.add(clip.id);
   }
   return state;
@@ -38,14 +42,36 @@ export function validateArrangement(state, assets) {
 export function splitClip(clip, seconds) {
   if (seconds <= clip.at + .01 || seconds >= clip.at + clipDuration(clip) - .01) return null;
   const cut = clip.in + (seconds - clip.at) * clipRate(clip);
-  return [{ ...clip, out: cut }, { ...clip, id: uid(), at: seconds, in: cut }];
+  if (clip.reverse) {
+    const reverseCut = clip.out - (seconds - clip.at) * clipRate(clip);
+    return [{ ...clip, in: reverseCut, fadeOut: 0 }, { ...clip, id: uid(), at: seconds, out: reverseCut, fadeIn: 0 }];
+  }
+  return [{ ...clip, out: cut, fadeOut: 0 }, { ...clip, id: uid(), at: seconds, in: cut, fadeIn: 0 }];
+}
+
+// Slip changes the source window, retaining the clip's timeline edges.
+export function slipClip(clip, delta, duration) {
+  const shift = clamp(delta * clipRate(clip), -clip.in, duration - clip.out);
+  return { ...clip, in: clip.in + shift, out: clip.out + shift };
+}
+export function crossfadeClips(clips) {
+  const ordered = [...clips].filter(clip => !clip.mute).sort((a, b) => a.at - b.at);
+  for (let i = 0; i < ordered.length; i++) for (let j = i + 1; j < ordered.length; j++) {
+    const a = ordered[i], b = ordered[j], end = a.at + clipDuration(a);
+    if (a.track !== b.track || b.at <= a.at || b.at >= end || b.at + clipDuration(b) < end) continue;
+    a.fadeOut = b.fadeIn = Math.min(end - b.at, clipDuration(a), clipDuration(b));
+  }
+}
+export function clipEnvelope(clip, offset) {
+  const duration = clipDuration(clip), fadeIn = Math.min(clip.fadeIn || 0, duration), fadeOut = Math.min(clip.fadeOut || 0, duration);
+  return Math.max(0, Math.min(1, fadeIn ? offset / fadeIn : 1, fadeOut ? (duration - offset) / fadeOut : 1));
 }
 
 // Stretch mode with a pitch or speed change needs the time-stretcher; everything
 // else plays straight from the source buffer through playbackRate. The asset
 // version changes when a channel's audio is replaced (pattern or melody lanes).
-export const needsStretch = clip => clip.keepLength && (clip.pitch !== 0 || clip.speed !== 1);
-export const stretchKey = (clip, version = 0) => `${clip.asset}#${version}|${clip.pitch}|${clip.speed}`;
+export const needsStretch = clip => clip.keepLength && (clipPitch(clip) !== 0 || clip.speed !== 1);
+export const stretchKey = (clip, version = 0) => `${clip.asset}#${version}|${clipPitch(clip)}|${clip.speed}`;
 
 // Transport seconds [a, b) after playback began at timeline `from`, as timeline
 // windows. Without a loop, playback ends at `length`. With loop {start, end}, it
@@ -97,5 +123,5 @@ export function trackAudible(state, track) {
 }
 
 export function audibleClips(state) {
-  return state.clips.filter(clip => trackAudible(state, state.tracks.find(t => t.id === clip.track)));
+  return state.clips.filter(clip => !clip.mute && trackAudible(state, state.tracks.find(t => t.id === clip.track)));
 }

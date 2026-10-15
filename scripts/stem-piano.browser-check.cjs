@@ -8,17 +8,18 @@ module.exports = async function verifyPiano(page, root) {
   await page.locator('#separate:not(:disabled)').click();
   // The instruments stem is a playlist channel: tools in its header, editor below it.
   const other = page.locator('.pl-drawer[data-stem=other]'), otherHead = page.locator('.pl-stem-head[data-stem=other]');
+  const otherWave = page.locator('.pl-source-wave[data-stem=other]');
   await otherHead.locator('.stem-piano-toggle').click();
-  await other.locator('.waveform').scrollIntoViewIfNeeded();
+  await otherWave.scrollIntoViewIfNeeded();
   const piano = other.locator('.stem-piano'), grid = piano.locator('.piano-grid');
   assert.equal(await piano.isVisible(), true);
   assert.equal(await piano.locator('.piano-play').isDisabled(), true);
-  const wave = await other.locator('.waveform').boundingBox();
+  const wave = await otherWave.boundingBox();
   await page.mouse.move(wave.x + wave.width * .1, wave.y + 35); await page.mouse.down();
   await page.mouse.move(wave.x + wave.width * .25, wave.y + 35, { steps: 5 }); await page.mouse.up();
   assert.equal(await page.locator('.stem-loop-selection:visible').count(), 0, 'Sample selection does not change A–B');
-  const start = Number(await other.locator('.stem-pad-marker').getAttribute('data-start'));
-  const end = Number(await other.locator('.stem-pad-region').getAttribute('data-end'));
+  const start = Number(await otherWave.locator('.stem-pad-marker').getAttribute('data-start'));
+  const end = Number(await otherWave.locator('.stem-pad-region').getAttribute('data-end'));
   assert.ok(Math.abs(start - .3) < .01 && Math.abs(end - .75) < .01, `Own melodic sample can be drawn on the instruments waveform: ${start}–${end}`);
   await piano.locator('.piano-root').selectOption('60');
   async function point(pitch, step) {
@@ -143,7 +144,7 @@ module.exports = async function verifyPiano(page, root) {
   });
   await piano.locator('.piano-play').click();
   await page.waitForFunction(() => document.querySelector('#play').getAttribute('aria-label') === 'Pausar');
-  await other.locator('.waveform').scrollIntoViewIfNeeded();
+  await otherWave.scrollIntoViewIfNeeded();
   for (const [speed, keep, expected] of [[1, false, 140], [.5, false, 70], [.5, true, 140], [2, true, 140], [2, false, 280]]) {
     await page.locator('#stem-rate').evaluate((node, value) => { node.value = String(value); node.dispatchEvent(new Event('input', { bubbles: true })); }, speed);
     await page.locator('#stem-keep-tone').setChecked(keep); await page.waitForTimeout(700);
@@ -155,7 +156,7 @@ module.exports = async function verifyPiano(page, root) {
     assert.ok(Math.abs(frequency - expected) < 12, `Piano rate=${speed}, Keep Tone=${keep}: ${frequency} Hz, expected ${expected}`);
   }
   await page.locator('#stem-rate').dblclick(); await page.locator('#stem-keep-tone').uncheck();
-  await other.locator('.waveform').click({ position: { x: 80, y: 35 } });
+  await page.locator('.pl-ruler').click({ position: { x: 80, y: 10 } });
   await page.waitForTimeout(100);
   assert.equal(await page.locator('#play').getAttribute('aria-label'), 'Pausar', 'Seeking restarts all lanes together');
   const times = await page.evaluate(() => stemTestSources.filter(source => source.testStart).slice(-5).map(source => source.testStart[0]));

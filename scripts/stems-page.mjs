@@ -310,6 +310,8 @@ let libraryUI, importReady = false;
 // (waveform, sampler, channel rack, piano roll) persist across playlist redraws.
 const channels = new Map();
 const playlist = mountPlaylist({ container: $('playlist'), audio: playlistAudio, channel: track => channels.get(track.stem),
+  onLoopChange(range) { stemLoop.setRange(range ? { startMs: range.start * 1000, endMs: range.end * 1000, durationMs: original?.duration * 1000 || range.end * 1000 } : null); },
+  onViewChange() { requestAnimationFrame(() => { drumSampler?.render(); drumSequencer?.renderMarker(); pianoRoll?.sampler.render(); }); },
   onChange() { renderChannels(); libraryUI?.changed(); },
   onTransport(active) { toneNode?.port.postMessage({ rate, keepTone, reset: true }); playLabel(active); updatePlayheads(); } });
 const mixOutput = createEqualizedOutput({ audioContext: () => context ||= new AudioContext({ sampleRate: SAMPLE_RATE }) });
@@ -529,7 +531,15 @@ function editChannel(stem, change, options) {
 }
 const useMix = () => { if (buffers.length && playlist.monitor() !== 'mix') playlist.setMonitor('mix'); };
 // Header: name and fold, enable (right-click: hear only this), tools, WAV, volume.
-// Editor: the stem's full waveform with its sampler, channel rack and piano roll.
+// Editors share the playlist waveform: this transparent surface holds only sample
+// markers and gestures. It never draws a second copy of the source.
+function channelTimeline(stem) {
+  return { ...stemLoop,
+    viewport: () => playlist.sourceWindow(stem),
+    percent(ms) { const view = playlist.sourceWindow(stem); return (ms - view.startMs) / (view.endMs - view.startMs) * 100; },
+    focusRange: (start, end) => playlist.focusSource(stem, start, end),
+  };
+}
 function buildChannel(stem, buffer, wav, collapsed = true) {
   const name = stem === 'original' ? text('original') : text(stem);
   const head = document.createElement('div'); head.className = 'stem pl-stem-head'; head.dataset.stem = stem;
@@ -561,10 +571,21 @@ function buildChannel(stem, buffer, wav, collapsed = true) {
   const item = { head, drawer: null, enable, volume, actions, collapsed: true };
   if (stem !== 'original') {
     const drawer = document.createElement('div'); drawer.className = 'stem'; drawer.dataset.stem = stem;
-    mountWaveform(drawer, buffer, `${name} · ${text('position')}`);
+    const waveform = document.createElement('div'); waveform.className = 'waveform pl-source-wave'; waveform.dataset.stem = stem;
+    waveform.setAttribute('aria-label', `${name} · ${text('position')}`);
+    const timeline = channelTimeline(stem);
+    waveform.addEventListener('click', event => {
+      if (event.target.closest('button,.stem-pad-region,.stem-pattern-clip')) return;
+      const rect = waveform.getBoundingClientRect(), view = timeline.viewport();
+      const seconds = (view.startMs + (event.clientX - rect.left) / rect.width * (view.endMs - view.startMs)) / 1000;
+      const placed = stem === 'drums' ? (drumSequencer?.place(seconds) || drumSampler?.place(seconds)) : stem === 'other' && pianoRoll?.sampler.place(seconds);
+      if (!placed) playlist.sourceSeek(stem, seconds);
+    });
+    item.waveform = waveform; item.timeline = timeline;
     item.drawer = drawer;
     const fold = value => {
       item.collapsed = value; drawer.hidden = value; head.classList.toggle('is-folded', value);
+      waveform.classList.toggle('is-folded', value);
       collapse.setAttribute('aria-expanded', String(!value));
       collapse.title = `${pt(value ? 'Expand' : 'Collapse')} ${name}`; collapse.setAttribute('aria-label', collapse.title);
       if (!value) requestAnimationFrame(() => { for (const view of waveforms) if (drawer.contains(view.element)) view.draw(); });
@@ -625,6 +646,7 @@ function startSession(saved = null) {
   // The stem mix lives in `states` (as before the playlist); the arrangement adds clips.
   const tracks = saved?.states && STEMS.map((stem, i) => ({ stem, gain: saved.states[i]?.gain, mute: saved.states[i]?.muted === true }));
   playlist.setSession({ sources, saved: saved && { ...saved.playlist, tracks }, monitor: buffers.length && saved?.mode !== 'original' ? 'mix' : 'original' });
+  $('original-waveform').hidden = true; zoomTools.hidden = true;
   renderChannels();
 }
 const wavOf = buffer => new Blob([encodeWav([buffer.getChannelData(0), buffer.getChannelData(1)])], { type: 'audio/wav' });
@@ -657,18 +679,18 @@ function showResults(result, saved = null) {
   buildChannel('original', original, wavs[0]);
   STEMS.forEach((stem, index) => {
     const wav = new Blob([encodeWav(outputs[index])], { type: 'audio/wav' }); wavs.push(wav);
-    const { drawer: row, actions } = buildChannel(stem, buffers[index], wav, saved?.states?.[index]?.collapsed ?? true);
+    const { drawer: row, actions, waveform, timeline } = buildChannel(stem, buffers[index], wav, saved?.states?.[index]?.collapsed ?? true);
     if (stem === 'drums') {
-      drumSampler = mountDrumSampler({ row, actions, waveform: row.querySelector('.waveform'),
-      buffer: buffers[index], timeline: stemLoop, audioContext: () => mixOutput.getPlaybackContext(), output: () => mixOutput.input(),
+      drumSampler = mountDrumSampler({ row, actions, waveform,
+      buffer: buffers[index], timeline, audioContext: () => mixOutput.getPlaybackContext(), output: () => mixOutput.input(),
       level: () => channelLevel(stem), changed: () => { libraryUI.changed(); drumSequencer?.samplesChanged(); },
       saved: saved?.drumSlices ?? saved?.drumStarts, locale, report: playbackError });
-      drumSequencer = mountDrumSequencer({ row, actions, waveform: row.querySelector('.waveform'), timeline: stemLoop,
+      drumSequencer = mountDrumSequencer({ row, actions, waveform, timeline,
         buffer: buffers[index], sampler: drumSampler, saved: saved?.drumSequence, changed: syncSequence,
         togglePlayback, rate: () => rate, setRate: value => changeTempo(value), report: playbackError });
     }
-    if (stem === 'other') pianoRoll = mountStemPiano({ row, actions, waveform: row.querySelector('.waveform'),
-      buffer: buffers[index], timeline: stemLoop, saved: saved?.piano,
+    if (stem === 'other') pianoRoll = mountStemPiano({ row, actions, waveform,
+      buffer: buffers[index], timeline, saved: saved?.piano,
       getGrid: () => drumSequencer.grid(), setGrid: value => drumSequencer.setGrid(value),
       audioContext: () => mixOutput.getPlaybackContext(), output: () => mixOutput.input(),
       level: () => channelLevel(stem),

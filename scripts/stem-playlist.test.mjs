@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clipsInWindow, needsStretch, stretchKey, trackAudible, transportWindows } from './stem-playlist-core.mjs';
+import { audibleClips, clipEnvelope, clipsInWindow, crossfadeClips, needsStretch, slipClip, splitClip, stretchKey, trackAudible, transportWindows } from './stem-playlist-core.mjs';
 import { stretchChannels } from './stem-playlist-stretch.mjs';
 import createSignalsmith from './vendor/signalsmith/wasm-factory.mjs';
 
@@ -18,6 +18,25 @@ test('transport windows cover the span once, wrap inside the loop and stop witho
   assert.deepEqual(pick(transportWindows(3, 4, 5, 10, { start: 4, end: 6 })), [[4, 5, -1, 6, true]]);
   assert.deepEqual(pick(transportWindows(3.5, 4, 5, 10, { start: 4, end: 6 })), [[4.5, 5, -1, 6, false]]);
   assert.deepEqual(transportWindows(0, 1, 0, 10, { start: 3, end: 3 }), []);
+});
+
+test('clip edits: slip keeps edges, reverse splits from the end, fades and crossfades shape the envelope', () => {
+  // Slip moves the source window inside the asset, clamped to its bounds.
+  assert.deepEqual([slipClip(clip(0, 4, { in: 1, out: 3 }), .5, 4)].map(c => [c.at, c.in, c.out]), [[0, 1.5, 3.5]]);
+  assert.deepEqual([slipClip(clip(0, 4, { in: 1, out: 3 }), 5, 4)].map(c => [c.in, c.out]), [[2, 4]]);
+  assert.deepEqual([slipClip(clip(0, 4, { in: 1, out: 3 }), -5, 4)].map(c => [c.in, c.out]), [[0, 2]]);
+  // A reversed clip plays out→in, so the first half keeps the end of the source.
+  const [head, tail] = splitClip(clip(0, 4, { reverse: true, fadeIn: 1, fadeOut: 1 }), 1);
+  assert.deepEqual([head.in, head.out, head.fadeIn, head.fadeOut], [3, 4, 1, 0]);
+  assert.deepEqual([tail.at, tail.in, tail.out, tail.fadeIn, tail.fadeOut], [1, 0, 3, 0, 1]);
+  const faded = clip(0, 4, { fadeIn: 1, fadeOut: 2 });
+  assert.deepEqual([0, .5, 1, 2, 3, 4].map(at => clipEnvelope(faded, at)), [0, .5, 1, 1, .5, 0]);
+  // Overlapping clips on one track fade across the overlap; muted clips are skipped and silent.
+  const a = clip(0, 4), b = clip(3, 4), muted = clip(2, 4, { id: 'm', mute: true });
+  crossfadeClips([b, muted, a]);
+  assert.deepEqual([a.fadeOut, b.fadeIn, muted.fadeIn], [1, 1, undefined]);
+  const state = { monitor: 'mix', tracks: [{ id: 't', mute: false }], clips: [a, muted] };
+  assert.deepEqual(audibleClips(state).map(c => c.id), ['c0']);
 });
 
 test('the original and stem channels follow the comparison monitor', () => {
