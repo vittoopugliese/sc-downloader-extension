@@ -62,7 +62,7 @@ const { chromium } = require('playwright');
     await page.locator('.pl-stem-head[data-stem=drums] .pad-knob').press('Shift+ArrowUp');
     await page.locator('.pl-stem-head[data-stem=drums] .stem-enable').click();
     // Pad A of the drums, cut by hand in the channel rack (right-click arms it).
-    await page.locator('.pl-stem-head[data-stem=drums] .stem-rack-focus').click();
+    { await page.locator('.pl-stem-head[data-stem=drums] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
     await page.locator('#stem-rack .rack-pad').first().click({ button: 'right' });
     await page.locator('#stem-rack .rack-wave').click({ position: { x: 100, y: 30 } });
     const savedStart = Number(await page.locator('#stem-rack .stem-pad-marker').first().getAttribute('data-start'));
@@ -88,7 +88,7 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('#track').textContent(), 'My saved mix');
     assert.equal(await page.locator('.pl-stem-head[data-stem=drums] .pad-knob').getAttribute('aria-valuenow'), '10');
     assert.equal(await page.locator('.pl-stem-head[data-stem=drums] .stem-enable').getAttribute('aria-checked'), 'false');
-    await page.locator('.pl-stem-head[data-stem=drums] .stem-rack-focus').click();
+    { await page.locator('.pl-stem-head[data-stem=drums] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
     assert.equal(Number(await page.locator('#stem-rack .stem-pad-marker').first().getAttribute('data-start')), savedStart);
     assert.deepEqual(await page.locator('#stem-rack .stem-pad-region').first().evaluate(node => ({ ...node.dataset })), savedSlice, 'Trim and both fades survive preset restoration');
     assert.equal(await page.locator('#stem-rate').inputValue(), '0.5');
@@ -158,7 +158,7 @@ const { chromium } = require('playwright');
     await page.locator('#stem-presets').selectOption(id);
     await page.locator('#save-locally[aria-pressed=true]').waitFor();
     await page.locator('.peq-reset').click();
-    await page.locator('#original').click();
+    await page.locator('.pl-stem-head[data-stem=original] .stem-enable').click({ button: 'right' });
     await page.evaluate(() => {
       const connect = AudioNode.prototype.connect;
       AudioNode.prototype.connect = function (destination, ...args) {

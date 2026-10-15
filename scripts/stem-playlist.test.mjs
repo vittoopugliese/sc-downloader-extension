@@ -35,14 +35,14 @@ test('clip edits: slip keeps edges, reverse splits from the end, fades and cross
   const a = clip(0, 4), b = clip(3, 4), muted = clip(2, 4, { id: 'm', mute: true });
   crossfadeClips([b, muted, a]);
   assert.deepEqual([a.fadeOut, b.fadeIn, muted.fadeIn], [1, 1, undefined]);
-  const state = { monitor: 'mix', tracks: [{ id: 't', mute: false }], clips: [a, muted] };
+  const state = { tracks: [{ id: 't', mute: false }], clips: [a, muted] };
   assert.deepEqual(audibleClips(state).map(c => c.id), ['c0']);
 });
 
-test('the original and stem channels follow the comparison monitor', () => {
-  const state = { monitor: 'mix', tracks: [{ id: 'o', stem: 'original', mute: false }, { id: 'd', stem: 'drums', mute: false }, { id: 'u', mute: false }] };
+test('the original and stem channels follow mute and solo alike', () => {
+  const state = { tracks: [{ id: 'o', stem: 'original', mute: true }, { id: 'd', stem: 'drums', mute: false }, { id: 'u', mute: false }] };
   assert.deepEqual(state.tracks.map(track => trackAudible(state, track)), [false, true, true]);
-  state.monitor = 'original';
+  state.tracks[0].mute = false; state.tracks[1].mute = true;
   assert.deepEqual(state.tracks.map(track => trackAudible(state, track)), [true, false, true]);
   state.tracks[2].solo = true;
   assert.deepEqual(state.tracks.map(track => trackAudible(state, track)), [false, false, true]);

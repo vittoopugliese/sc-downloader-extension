@@ -36,7 +36,8 @@ export function contextMenu(event, items) {
   openMenu?.close();
   const back = document.activeElement, menu = document.createElement('div');
   menu.className = 'pl-menu'; menu.setAttribute('role', 'menu');
-  const svg = path => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`;
+  // An icon is a path, or SVG markup when it starts with '<'.
+  const svg = path => `<svg viewBox="0 0 24 24" aria-hidden="true">${path.startsWith('<') ? path : `<path d="${path}"/>`}</svg>`;
   for (const item of items) {
     if (item === '-') { const line = document.createElement('div'); line.className = 'pl-menu-sep'; line.setAttribute('role', 'separator'); menu.append(line); continue; }
     if (item.heading) { const head = document.createElement('div'); head.className = 'pl-menu-heading'; head.textContent = item.heading; menu.append(head); continue; }
@@ -377,7 +378,6 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   const pitch = createKnob({ label: 'Pitch', min: -24, max: 24, step: 1, coarse: 12, value: 0, reset: 0, hint: `${t('transposes the clip in semitones', 'transpone el clip en semitonos')} · ${resetHint}`, format: v => `${signed(v)} st`, onCommit: v => setClip('pitch', v) });
   const fine = createKnob({ label: t('Fine pitch', 'Pitch fino'), min: -100, max: 100, step: 1, coarse: 10, value: 0, reset: 0, hint: `${t('fine tuning in cents (100 = 1 semitone)', 'afinación fina en cents (100 = 1 semitono)')} · ${resetHint}`, format: v => `${signed(v)} ct`, onCommit: v => setClip('cents', v) });
   const speed = createKnob({ label: t('Speed', 'Velocidad'), min: .25, max: 4, step: .01, coarse: .25, value: 1, reset: 1, log: true, hint: `${t('speed of this clip only', 'velocidad solo de este clip')} · ${resetHint}`, format: v => `${v.toFixed(2)}×`, onCommit: v => setClip('speed', v) });
-  const gain = createKnob({ label: t('Gain', 'Volumen'), min: 0, max: 200, step: 1, coarse: 10, value: 100, reset: 100, hint: `${t('volume of this clip', 'volumen de este clip')} · ${resetHint}`, format: v => `${v}%`, onCommit: v => setClip('gain', v / 100) });
   const fades = ['fadeIn', 'fadeOut'].map((key, i) => createKnob({ label: i ? 'Fade out' : 'Fade in', min: 0, max: 10, step: .01, coarse: .1, value: 0, reset: 0, hint: `${i ? t('fades the end of the clip out', 'baja el volumen al final del clip') : t('fades the start of the clip in', 'sube el volumen al inicio del clip')} · ${resetHint}`, format: v => `${v.toFixed(2)} s`, onCommit: v => setClip(key, v) }));
   const muteClip = iconButton(ICONS.mute, t('Mute clip: silences only the selected clip; the track keeps playing', 'Silenciar clip: calla solo el clip seleccionado; la pista sigue sonando'), () => setClip('mute', !picked()?.mute));
   const reverseClip = iconButton(ICONS.reverse, t('Reverse: plays the selected clip backwards', 'Invertir: reproduce el clip seleccionado al revés'), () => setClip('reverse', !picked()?.reverse));
@@ -451,7 +451,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     [ICONS.fit, t('Show the whole arrangement', 'Ver todo el arreglo'), fit],
   ]) zoomTools.append(iconButton(path, title, action));
   zoomTools.querySelector('button:last-child').title = t('Show the whole arrangement: fits every clip in view', 'Ver todo el arreglo: ajusta el zoom para ver todos los clips');
-  inspector.append(selectionLabel, pitch.wrap, fine.wrap, speed.wrap, gain.wrap, ...fades.map(f => f.wrap), clipActions, zoomTools);
+  inspector.append(selectionLabel, pitch.wrap, fine.wrap, speed.wrap, ...fades.map(f => f.wrap), clipActions, zoomTools);
   let zoomFrame = 0, zoomTarget = null, zoomAnchor = null;
   function zoomAround(x, factor) {
     if (!(factor > 0) || !Number.isFinite(factor)) return;
@@ -701,10 +701,10 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     if (!picked() && extra.size) { selected = extra.values().next().value; extra.delete(selected); }
     const clip = picked(), count = chosen().length;
     selectionLabel.textContent = count > 1 ? `${count} clips` : clip ? assets.get(clip.asset).name : t('Select a clip', 'Seleccioná un clip');
-    for (const input of [pitch.dial, fine.dial, speed.dial, gain.dial, ...fades.map(f => f.dial), muteClip, reverseClip, duplicate, split, remove]) input.disabled = !clip;
+    for (const input of [pitch.dial, fine.dial, speed.dial, ...fades.map(f => f.dial), muteClip, reverseClip, duplicate, split, remove]) input.disabled = !clip;
     fine.show(clip?.cents ?? 0); fades[0].show(clip?.fadeIn ?? 0); fades[1].show(clip?.fadeOut ?? 0);
     muteClip.setAttribute('aria-pressed', String(!!clip?.mute)); reverseClip.setAttribute('aria-pressed', String(!!clip?.reverse));
-    pitch.show(clip?.pitch ?? 0); speed.show(clip?.speed ?? 1); gain.show(Math.round((clip?.gain ?? 1) * 100));
+    pitch.show(clip?.pitch ?? 0); speed.show(clip?.speed ?? 1);
     for (const item of grid.querySelectorAll('.pl-clip')) item.setAttribute('aria-pressed', String(isChosen(item.dataset.clip)));
     // Reported on change only: redraws must not move the host's focus.
     if (selected !== reported) { reported = selected; onSelect?.(clip && assets.get(clip.asset)); }
@@ -839,7 +839,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   }
   // Replace the host's channels (original and stems); user tracks with clips stay.
   // `saved` restores channel mix and clips from a preset; invalid data falls back.
-  function setSession({ sources, saved = null, monitor = 'mix' }) {
+  function setSession({ sources, saved = null }) {
     showHint();
     stop(true);
     for (const old of assets.values()) if (old.session) cache.forget(old.id);
@@ -853,13 +853,13 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
       const tracks = sources.map(source => {
         const old = restore && saved?.tracks?.find(item => item?.stem === source.stem);
         return { id: `track-${source.stem}`, name: source.name, stem: source.stem, gain: Number.isFinite(old?.gain) ? clamp(old.gain, 0, 2) : 1,
-          mute: old?.mute === true, solo: false };
+          mute: old ? old.mute === true : source.mute === true, solo: false };
       });
       const clips = restore && Array.isArray(saved?.clips) ? saved.clips.map(clip => ({ ...clip })) :
         sources.map(source => newClip(next.get(source.id), `track-${source.stem}`, 0));
       const restoredUsers = restore && Array.isArray(saved?.userTracks) ? saved.userTracks.filter(track => !track.stem) : [];
       const users = [...restoredUsers, ...userTracks.filter(track => !restoredUsers.some(saved => saved.id === track.id) && (!restoredUsers.length || userClips.some(clip => clip.track === track.id)))];
-      return { version: 1, bpm: restore && Number.isFinite(saved?.bpm) ? saved.bpm : state.bpm, monitor, tracks: [...tracks, ...users], clips: [...clips, ...userClips] };
+      return { version: 1, bpm: restore && Number.isFinite(saved?.bpm) ? saved.bpm : state.bpm, tracks: [...tracks, ...users], clips: [...clips, ...userClips] };
     };
     let candidate = build(!!saved);
     try { validateArrangement(candidate, next); } catch { candidate = build(false); validateArrangement(candidate, next); }
@@ -900,8 +900,6 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     duration: () => arrangementEnd(state),
     trackSource,
     audible: track => trackAudible(state, track),
-    monitor: () => state.monitor,
-    setMonitor(value) { state.monitor = value; engine?.update(playbackState(), transport()); draw(); onChange?.(); },
     // The host's A–B loop in timeline seconds; null loops the whole arrangement.
     setLoopRange(range) {
       loopRange = range && range.end > range.start ? { start: range.start, end: range.end } : null;

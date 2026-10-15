@@ -66,13 +66,16 @@
 .pl-marker{position:absolute;bottom:0;width:0;margin-left:-5px;border-bottom:7px solid var(--orange);border-left:5px solid transparent;border-right:5px solid transparent;pointer-events:none}
 
 /* Stem channel headers reuse the stem controls: fold, enable, tools, WAV and volume. */
-.pl-track-head.stem{display:flex;align-items:stretch;grid-template-columns:none;margin:0;border-radius:0;border-top:0;border-right:1px solid var(--pl-edge);background:var(--pl-head-bg)}
-.pl-ui .pl-track-head.stem .stem-name{justify-content:flex-start;min-height:0;padding:0;border:0;background:none;color:#f2f2f2;font:700 12px Arial,Helvetica,sans-serif}
-.pl-track-head.stem h2{display:flex;align-items:center;gap:7px;margin:0;font-size:12px;min-width:0}
-.pl-track-head.stem h2 .icon{width:15px;height:15px;color:var(--track-color)}
-.pl-track-head.stem .stem-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:4px}
-.pl-ui .pl-track-head.stem .stem-actions button:not(.pad-knob),.pl-track-head.stem .download{width:28px;height:28px;min-height:0;padding:5px}
-.pl-ui .pl-track-head.stem .stem-solo{width:20px;padding:0;border:0;background:transparent}
+.pl-track-head.stem{display:flex;flex-direction:row;align-items:center;gap:6px;grid-template-columns:none;margin:0;border-radius:0;border-top:0;border-right:1px solid var(--pl-edge);background:var(--pl-head-bg)}
+.pl-ui .pl-track-head.stem .stem-name{justify-content:flex-start;min-height:0;padding:0;overflow:hidden;border:0;background:none;color:#f2f2f2;font:700 12px Arial,Helvetica,sans-serif;white-space:nowrap}
+.pl-track-head.stem h2{display:flex;align-items:center;gap:7px;flex:1;margin:0;font-size:12px;min-width:0}
+.pl-track-head.stem h2 .icon{width:15px;height:15px;flex-shrink:0;color:var(--track-color)}
+.pl-ui .pl-track-head.stem .stem-solo{flex-shrink:0;width:20px;height:28px;padding:0;border:0;background:transparent}
+.pl-track-head.stem .stem-volume{flex-direction:column;gap:1px;flex-shrink:0;margin:0}
+.pl-track-head.stem .stem-volume .pl-knob-value{min-width:0;text-align:center}
+.pl-ui .pl-track-head.stem .stem-more{flex-shrink:0;width:22px;height:30px;min-height:0;padding:0;border:0;border-radius:5px;background:transparent;box-shadow:none;color:#b9b3ab}
+.pl-ui .pl-track-head.stem .stem-more:hover,.pl-ui .pl-track-head.stem .stem-more:focus-visible{background:#ffffff14;color:#fff}
+.stem-more .icon{width:16px;height:16px;fill:currentColor;stroke:none}
 .pl-track-head.stem.is-silent h2{opacity:.5}
 
 /* Clips: header bar in the channel color, frequency-colored waveform like the stems. */

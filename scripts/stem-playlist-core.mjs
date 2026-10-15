@@ -1,6 +1,5 @@
 // Arrangement times are seconds. BPM changes the editing grid, never the source audio.
 export const LIMITS = Object.freeze({ tracks: 16, clips: 256, seconds: 300, pcmBytes: 256 * 1024 * 1024 });
-export const MONITORS = Object.freeze(['mix', 'original']);
 export const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 export const uid = () => crypto.randomUUID();
 export const clipPitch = clip => clip.pitch + (clip.cents || 0) / 100;
@@ -9,13 +8,13 @@ export const clipDuration = clip => (clip.out - clip.in) / clipRate(clip);
 export const arrangementEnd = state => Math.max(0, ...state.clips.map(c => c.at + clipDuration(c)));
 export const snapTime = (seconds, bpm, division) => division ? Math.round(seconds / (60 / bpm * division)) * 60 / bpm * division : seconds;
 export function emptyArrangement() {
-  return { version: 1, bpm: 120, monitor: 'mix', tracks: Array.from({ length: 4 }, (_, i) => ({ id: uid(), name: `Track ${i + 1}`, gain: 1, mute: false, solo: false })), clips: [] };
+  return { version: 1, bpm: 120, tracks: Array.from({ length: 4 }, (_, i) => ({ id: uid(), name: `Track ${i + 1}`, gain: 1, mute: false, solo: false })), clips: [] };
 }
 export function newClip(asset, track, at = 0) {
   return { id: uid(), asset: asset.id, track, at, in: 0, out: asset.buffer.duration, pitch: 0, cents: 0, speed: 1, keepLength: true, gain: 1, mute: false, reverse: false, fadeIn: 0, fadeOut: 0 };
 }
 export function validateArrangement(state, assets) {
-  if (state?.version !== 1 || !Number.isFinite(state.bpm) || state.bpm < 20 || state.bpm > 300 || !MONITORS.includes(state.monitor ?? 'mix') ||
+  if (state?.version !== 1 || !Number.isFinite(state.bpm) || state.bpm < 20 || state.bpm > 300 ||
       !Array.isArray(state.tracks) || !state.tracks.length || state.tracks.length > LIMITS.tracks ||
       !Array.isArray(state.clips) || state.clips.length > LIMITS.clips) throw new Error('Invalid playlist.');
   const tracks = new Set(), clips = new Set();
@@ -139,11 +138,9 @@ export function clipsInWindow(clips, from, to, active = false) {
   return result;
 }
 
-// Monitor "original" compares against the source: stem channels fall silent.
-// Monitor "mix" silences the original channel. Other tracks follow mute and solo.
+// Every track, the original included, follows mute and solo.
 export function trackAudible(state, track) {
   if (!track || track.mute) return false;
-  if (state.monitor === 'original' ? track.stem && track.stem !== 'original' : track.stem === 'original') return false;
   const solo = state.tracks.some(item => item.solo);
   return !solo || !!track.solo;
 }

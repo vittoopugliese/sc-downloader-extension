@@ -118,9 +118,6 @@ button.game-toggle:hover{background:linear-gradient(135deg,#ff833d,#e64d00);bord
 .studio-label{margin-left:auto;font:9px ui-monospace,monospace;color:var(--muted)}
 .transport{display:flex;align-items:center;gap:20px}
 .transport label{display:flex;align-items:center;gap:6px;font-size:12px}
-.comparison{display:flex;gap:4px;margin:18px 0;width:fit-content;padding:3px;border:1px solid #3b3b3b;border-radius:8px;background:#191919}
-.comparison button{border-color:transparent;padding:7px 13px}
-.comparison button[aria-pressed=true]{background:#42291d;box-shadow:0 1px 3px #0004}
 .wave-heading{display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;font-size:11px;font-weight:700}
 .frequency-key{display:flex;gap:12px;font-size:9px;font-weight:400;color:var(--muted)}
 .frequency-key span:before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;background:#d66666}
@@ -217,10 +214,6 @@ select:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
 .actions{gap:7px;margin-top:14px}
 button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .transport{gap:12px;flex-wrap:wrap}
-.comparison{margin:12px 0}
-.comparison button{padding:6px 11px}
-.listen-controls{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin:0}
-.listen-controls .comparison{margin:0}
 .stem{grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px;margin-top:8px}
 .stem h2{gap:7px;font-size:12px;min-width:0}
 .stem h2 .icon{width:15px;height:15px}
@@ -288,9 +281,7 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 #status:empty{display:none}
 #play{display:grid;place-items:center;width:38px;height:34px;min-width:0;padding:0}
 #play .icon{width:16px;height:16px}
-.listen-controls .comparison{margin:0}
 #audition{padding-top:12px}
-.listen-controls .comparison button{display:grid;place-items:center;width:34px;height:30px;padding:0}
 .prepare .utility-actions{margin-left:auto}
 .prepare.has-results #separate [data-copy],#toggle-game [data-copy]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .prepare.has-results #separate,.prepare #toggle-game{display:grid;place-items:center;width:38px;height:34px;padding:0}
@@ -379,7 +370,6 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .piano-note-end{position:absolute;right:0;top:0;bottom:0;width:7px;cursor:ew-resize;background:#fff2;border-left:1px solid #0002}
 .piano-cursor{position:absolute;top:0;bottom:0;width:1px;background:#fff;box-shadow:0 0 5px #fff8;pointer-events:none;z-index:2}
 /* Track header buttons that focus a plugin on the track. */
-.stem-actions .stem-rack-focus,.stem-actions .stem-piano-focus{width:30px;height:30px;padding:5px;flex-shrink:0}
 .stem-name{display:inline-flex;align-items:center;gap:inherit;min-width:0}
 @media(max-width:600px){.stem-plugin-body{padding:6px}.plugin-focus{border-right:0;padding-right:0}.rack-grid{grid-template-columns:28px repeat(16,minmax(16px,1fr))}.piano-scroll{max-height:300px}}
 

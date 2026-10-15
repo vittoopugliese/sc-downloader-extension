@@ -54,7 +54,6 @@ const { chromium } = require('playwright');
     assert.equal(await page.title(), 'Separador de stems · Player Tools');
     assert.equal(await page.locator('.prepare').getAttribute('aria-label'), 'Separación');
     assert.equal(await page.locator('#audition').getAttribute('aria-label'), 'Escuchar y comparar');
-    assert.equal(await page.locator('.comparison').getAttribute('aria-label'), 'Comparar');
     assert.equal(await page.locator('#clear-cache').getAttribute('aria-label'), 'Eliminar modelo');
     assert.match(await page.locator('#clear-cache').getAttribute('title'), /^Eliminar modelo: borra .*166 MB/);
     assert.equal(await page.locator('#toggle-game').isVisible(), true, 'Lumberjack is always available');
@@ -119,8 +118,11 @@ const { chromium } = require('playwright');
     await stemEnables.first().click(); assert.equal(await stemEnables.first().getAttribute('aria-checked'), 'false');
     await stemEnables.first().click({ button: 'right' });
     assert.deepEqual(await stemEnables.evaluateAll(nodes => nodes.map(n => n.getAttribute('aria-checked'))), ['true', 'false', 'false', 'false']);
-    await page.locator('#original').click(); assert.equal(await page.locator('.pl-stem-head[data-stem=original]').evaluate(n => n.classList.contains('is-silent')), false);
-    await page.locator('#mix').click();
+    // Hear only this track mutes the original too; the original follows its own switch.
+    const originalHead = page.locator('.pl-stem-head[data-stem=original]'), silent = () => originalHead.evaluate(n => n.classList.contains('is-silent'));
+    assert.equal(await silent(), true);
+    await originalHead.locator('.stem-enable').click(); assert.equal(await silent(), false);
+    await originalHead.locator('.stem-enable').click(); assert.equal(await silent(), true);
     // A-B is created and cleared directly on the playlist ruler.
     await ruler.dblclick({ position: { x: 10, y: 14 } });
     await selectLoop(.75, 1.8);
@@ -134,9 +136,13 @@ const { chromium } = require('playwright');
     await knob.press('ArrowDown');
     assert.ok(await page.evaluate(() => savedHead === document.querySelector('.pl-stem-head[data-stem=drums]')));
     await knob.dblclick();
-    await drumHead.locator('.stem-rack-focus').click();
-    assert.equal(await page.locator('#stem-rack .plugin-track').inputValue(), 'drums', 'The header button focuses its track in the rack');
-    const downloadEvent = page.waitForEvent('download'); await drumHead.locator('.download').click();
+    // Rack, piano roll and WAV live in the header menu: ⋮ or right-click on the header.
+    await drumHead.locator('.stem-more').click();
+    assert.equal(await page.locator('.pl-menu-item').count(), 4);
+    await page.locator('.pl-menu-item').nth(0).click();
+    assert.equal(await page.locator('#stem-rack .plugin-track').inputValue(), 'drums', 'The header menu focuses its track in the rack');
+    await drumHead.locator('h2').click({ button: 'right' });
+    const downloadEvent = page.waitForEvent('download'); await page.locator('.pl-menu-item').nth(2).click();
     assert.match((await downloadEvent).suggestedFilename(), /drums\.wav$/);
     // One frame: opening the rack scrolls smoothly, so separate reads could straddle a scroll.
     const [eqBounds, recorderBounds, playlistBounds] = await page.evaluate(() => ['.peq', '.record-section', '#playlist']

@@ -12,7 +12,7 @@ module.exports = async function verifyInstruments(page) {
     assert.equal(await page.locator(removed).count(), 0, `${removed} is gone`);
 
   // Focusing a whole bass stem slices it at once and exposes eight playable pads.
-  await page.locator('.pl-stem-head[data-stem=bass] .stem-rack-focus').click();
+  { await page.locator('.pl-stem-head[data-stem=bass] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
   assert.equal(await rack.locator('.plugin-track').inputValue(), 'bass');
   const wave = rack.locator('.rack-wave'), pads = rack.locator('.rack-pad');
   await page.waitForFunction(() => document.querySelectorAll('#stem-rack .rack-pad.is-assigned').length > 0, null, { timeout: 5000 });
@@ -90,7 +90,7 @@ module.exports = async function verifyInstruments(page) {
   assert.equal(await tempo.inputValue(), '120');
 
   // Piano roll: same track and pattern; the next note copies the last clicked one.
-  await page.locator('.pl-stem-head[data-stem=bass] .stem-piano-focus').click();
+  { await page.locator('.pl-stem-head[data-stem=bass] .stem-more').click(); await page.locator('.pl-menu-item').nth(1).click(); }
   assert.equal(await piano.locator('.plugin-track').inputValue(), 'bass');
   assert.equal(await piano.locator('.plugin-pattern option:checked').textContent(), 'Pat 1');
   const grid = piano.locator('.piano-grid');
@@ -165,9 +165,9 @@ module.exports = async function verifyInstruments(page) {
   const stemClip = await playlist.locator('.pl-clip:not(.is-pattern)').first().boundingBox();
   const restored = await playlist.locator('.pl-clip.is-pattern').boundingBox();
   assert.ok(Math.abs(restored.width / stemClip.width - 2) < .05, `The 3-bar clip (6 s) survives a fresh page: ${restored.width / stemClip.width}`);
-  await page.locator('.pl-stem-head[data-stem=bass] .stem-piano-focus').click();
+  { await page.locator('.pl-stem-head[data-stem=bass] .stem-more').click(); await page.locator('.pl-menu-item').nth(1).click(); }
   assert.equal(await piano.locator('.piano-note').count(), 2);
-  await page.locator('.pl-stem-head[data-stem=bass] .stem-rack-focus').click();
+  { await page.locator('.pl-stem-head[data-stem=bass] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
   assert.equal(await rack.locator('.rack-step.is-on').count(), 2);
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 900 });

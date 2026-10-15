@@ -56,7 +56,7 @@ const { chromium } = require('playwright');
       await page.locator('#separate:not(:disabled)').click();
       await page.locator('.stem').first().waitFor();
       assert.equal(await page.locator('#track').textContent(), 'Record');
-      await page.locator('.pl-stem-head[data-stem=drums] .stem-rack-focus').click();
+      { await page.locator('.pl-stem-head[data-stem=drums] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
       const copy = await page.evaluate(() => ({
         hint: SCPlayerToolsText.t('A S D F G H J K play the pads. Drag on the waveform to re-cut the selected pad; wheel zooms. Click a step to add a hit, drag it up or down for velocity.'),
         reset: SCPlayerToolsText.t('Reset speed and tone'),

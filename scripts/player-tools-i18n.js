@@ -5,6 +5,8 @@
   const locales = ['en', 'es', 'de', 'pt-BR', 'ru'];
   const rows = `
 Channel rack¦Channel Rack¦Channel Rack¦Channel Rack¦Channel Rack
+Track options: $1 · or right-click the track¦Opciones de pista: $1 · o clic derecho en la pista¦Spuroptionen: $1 · oder Rechtsklick auf die Spur¦Opções da faixa: $1 · ou clique direito na faixa¦Параметры дорожки: $1 · или правый клик по дорожке
+Hear only this track¦Escuchar solo esta pista¦Nur diese Spur hören¦Ouvir só esta faixa¦Слушать только эту дорожку
 Playlist track¦Pista¦Spur¦Faixa¦Дорожка
 Pattern length¦Largo del patrón¦Pattern-Länge¦Duração do padrão¦Длина паттерна
 New pattern¦Nuevo patrón¦Neues Pattern¦Novo padrão¦Новый паттерн

@@ -60,7 +60,7 @@ test('pattern clips repeat past one pass, in timeline order, and keep their posi
   // Pitch changes the rate, so passes are shorter on the timeline.
   assert.deepEqual(loopSegments({ ...base, pitch: 12, keepLength: false, out: 4 }, 2).map(c => c.at), [1, 2]);
   const asset = { id: 'pattern:p', loop: true, buffer: { duration: 2 } };
-  const state = { version: 1, bpm: 120, monitor: 'mix', tracks: [{ id: 't', name: 'T', gain: 1, mute: false, solo: false }], clips: [base, { ...base, id: 'audio', asset: 'a', out: 1 }] };
+  const state = { version: 1, bpm: 120, tracks: [{ id: 't', name: 'T', gain: 1, mute: false, solo: false }], clips: [base, { ...base, id: 'audio', asset: 'a', out: 1 }] };
   validateArrangement(state, new Map([['pattern:p', asset], ['a', { buffer: { duration: 1 } }]]));
   assert.throws(() => validateArrangement(state, new Map([['pattern:p', { ...asset, loop: false }], ['a', { buffer: { duration: 1 } }]])));
   retimePatternClips(state, 60, clip => clip.asset === 'pattern:p');
