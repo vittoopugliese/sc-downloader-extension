@@ -50,12 +50,17 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('.pl-play').count(), 0);
     assert.equal(await transport.locator('#stem-rate').count(), 1, 'Speed sits next to the tempo controls');
     for (const name of ['Import audio files', 'Add track', 'Download WAV']) {
-      const host = name === 'Download WAV' ? transport : playlist.locator('.pl-session-actions');
+      const host = name === 'Download WAV' ? transport : playlist.locator('.pl-tools');
       const control = host.getByRole('button', { name, exact: true });
       assert.equal(await control.textContent(), '');
       assert.equal(await control.locator('svg').count(), 1);
-      assert.match(await control.getAttribute('title'), new RegExp('^' + name + ': '));
+      assert.match(await control.getAttribute('title'), new RegExp('^' + name + (name === 'Download WAV' ? '' : ' \\([A-Z]\\)') + ': '));
     }
+    // Every tool sits in two rows of seven, each with a hotkey.
+    const tools = playlist.locator('.pl-tools > button');
+    assert.equal(await tools.count(), 14);
+    assert.equal(new Set(await tools.evaluateAll(nodes => nodes.map(n => Math.round(n.getBoundingClientRect().top)))).size, 2);
+    assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 14);
     assert.equal(await transport.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(255, 85, 0)');
     const ruler = playlist.locator('.pl-ruler'), band = playlist.locator('.pl-loop-band');
     assert.match(await ruler.getAttribute('title'), /drag inside.*edges.*double-click/i);
@@ -80,9 +85,11 @@ const { chromium } = require('playwright');
     await ruler.dblclick({ position: { x: 12, y: 14 } });
     assert.equal(await band.isVisible(), false);
     assert.equal(await marker(), 12);
-    // Without a selection, the whole arrangement keeps looping automatically.
+    // Without a loop, double-clicking the ruler clears the marker and plays from the top;
+    // the whole arrangement keeps looping automatically.
     const startsBeforeLoop = await page.evaluate(() => window.playlistStarts);
-    await page.locator('#play').click();
+    await ruler.dblclick({ position: { x: 60, y: 14 } });
+    assert.equal(await marker(), 0);
     await page.waitForFunction(() => document.querySelector('#play').getAttribute('aria-pressed') === 'true');
     await page.waitForTimeout(2300);
     assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'true', 'Playback continues past the end without a selection');
@@ -195,9 +202,11 @@ const { chromium } = require('playwright');
     assert.equal(await clipCount(), 3);
     assert.equal(await playlist.locator('.pl-selected').textContent(), '3 clips', 'Both halves stay selected');
     // The slice tool cuts at the mouse, without moving the playhead.
-    const sliceTool = transport.getByLabel(/^Slice tool/);
+    const sliceTool = playlist.getByRole('button', { name: 'Slice tool', exact: true });
     await page.keyboard.press('c');
     assert.equal(await sliceTool.getAttribute('aria-pressed'), 'true');
+    assert.equal(await sliceTool.evaluate(n => n.getAnimations({ subtree: true }).filter(a => a.effect?.pseudoElement === '::after').length), 1, 'The hotkey flashes its button');
+    assert.equal(await sliceTool.evaluate(n => getComputedStyle(n).getPropertyValue('--key-color')), '#ff5d8f');
     const headAt = await time(), piece = await clips.last().boundingBox();
     await page.mouse.move(piece.x + piece.width * .3, piece.y + piece.height / 2);
     assert.equal(await playlist.locator('.pl-slice-line').isVisible(), true);

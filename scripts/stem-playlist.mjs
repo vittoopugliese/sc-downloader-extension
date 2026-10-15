@@ -211,6 +211,21 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     control.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
     return control;
   }
+  // Tool buttons carry a hotkey and a color: a click or the hotkey flashes the button in its
+  // color, like FL Studio. The flash animates a pseudo-element's opacity only (compositor-only).
+  // `keys` are normalized combos ('m', 'ctrl+d', 'ctrl+shift+z', 'delete'); `repeat` allows key repeat.
+  const hotkeys = new Map();
+  function flash(control) {
+    try { control.animate([{ opacity: .85 }, { opacity: 0 }], { duration: 300, easing: 'ease-out', pseudoElement: '::after' }); } catch { /* no pseudo-element animations */ }
+  }
+  function toolButton({ icon, name, detail = '', key, keys, color, repeat = false }, action) {
+    const control = iconButton(icon, name, () => { flash(control); action(); });
+    control.title = `${name} (${key})${detail ? ': ' + detail : ''}`;
+    control.setAttribute('aria-keyshortcuts', key.replace('Ctrl', 'Control').replace('Del', 'Delete').replace('Supr', 'Delete'));
+    control.classList.add('pl-key'); control.style.setProperty('--key-color', color);
+    for (const combo of keys) hotkeys.set(combo, { control, repeat });
+    return control;
+  }
   const play = playButton ? button('▶', t('Play / pause (Space)', 'Reproducir / pausar (Espacio)'), safe(toggle)) : null;
   if (play) { play.className = 'pl-play'; play.setAttribute('aria-pressed', 'false'); }
   const time = node('output', 'pl-time', '0:00.00'); time.title = t('Playhead position (minutes:seconds)', 'Posición del cursor (minutos:segundos)');
@@ -264,26 +279,28 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   snapLabel.title = snapSelect.title = t('Snap: grid that clips, edges and loops stick to. Hold Alt while dragging to ignore it.', 'Snap: grilla a la que se pegan clips, bordes y loops. Mantené Alt al arrastrar para ignorarla.');
   for (const [value, label] of [[0, 'Off'], [.25, '1/16'], [.5, '1/8'], [1, '1/4'], [4, t('Bar', 'Compás')]]) snapSelect.add(new Option(label, value));
   snapSelect.value = snap; snapSelect.onchange = () => { snap = Number(snapSelect.value); }; snapLabel.append(snapSelect);
-  const undo = iconButton(ICONS.undo, t('Undo the last playlist edit (Ctrl+Z)', 'Deshacer la última edición de la playlist (Ctrl+Z)'), () => travel(false));
-  const redo = iconButton(ICONS.redo, t('Redo (Ctrl+Shift+Z)', 'Rehacer (Ctrl+Shift+Z)'), () => travel(true));
+  const undo = toolButton({ icon: ICONS.undo, name: t('Undo', 'Deshacer'), detail: t('the last playlist edit', 'la última edición de la playlist'), key: 'Ctrl+Z', keys: ['ctrl+z'], color: '#5aa9ff', repeat: true }, () => travel(false));
+  const redo = toolButton({ icon: ICONS.redo, name: t('Redo', 'Rehacer'), key: 'Ctrl+Y', keys: ['ctrl+y', 'ctrl+shift+z'], color: '#5aa9ff', repeat: true }, () => travel(true));
   const fileInput = node('input'); fileInput.type = 'file'; fileInput.accept = 'audio/*,.wav,.mp3,.flac,.m4a,.ogg'; fileInput.multiple = true; fileInput.hidden = true;
   fileInput.onchange = safe(async () => { const files = [...fileInput.files]; fileInput.value = ''; await importFiles(files); });
-  const importButton = iconButton(ICONS.import, t('Import audio files', 'Importar archivos de audio'), () => fileInput.click());
-  importButton.title = t('Import audio files: WAV, MP3, FLAC, M4A or OGG land at the playhead on the first free track. You can also drop them on a track.', 'Importar archivos de audio: WAV, MP3, FLAC, M4A u OGG se agregan en el cursor, en la primera pista libre. También podés soltarlos sobre una pista.');
-  const addTrack = iconButton(ICONS.addTrack, t('Add track', 'Agregar pista'), () => commit(() => state.tracks.push({ id: uid(), name: `${t('Track', 'Pista')} ${state.tracks.filter(item => !item.stem).length + 1}`, gain: 1, mute: false, solo: false })));
-  addTrack.title = t('Add track: an empty lane for samples and patterns (up to 16 tracks)', 'Agregar pista: un carril vacío para samples y patrones (hasta 16 pistas)');
+  const importButton = toolButton({ icon: ICONS.import, name: t('Import audio files', 'Importar archivos de audio'), key: 'I', keys: ['i'], color: '#ff7a2f',
+    detail: t('WAV, MP3, FLAC, M4A or OGG land at the playhead on the first free track. You can also drop them on a track.', 'WAV, MP3, FLAC, M4A u OGG se agregan en el cursor, en la primera pista libre. También podés soltarlos sobre una pista.') }, () => fileInput.click());
+  const addTrack = toolButton({ icon: ICONS.addTrack, name: t('Add track', 'Agregar pista'), key: 'N', keys: ['n'], color: '#ffd166',
+    detail: t('an empty lane for samples and patterns (up to 16 tracks)', 'un carril vacío para samples y patrones (hasta 16 pistas)') },
+  () => commit(() => state.tracks.push({ id: uid(), name: `${t('Track', 'Pista')} ${state.tracks.filter(item => !item.stem).length + 1}`, gain: 1, mute: false, solo: false })));
   const exportButton = iconButton(ICONS.download, t('Download WAV', 'Descargar WAV'), safe(exportMix));
   exportButton.classList.add('pl-export');
   exportButton.title = t('Download WAV: renders the whole playlist (or the A–B loop) with mute, solo, volume and EQ into a stereo WAV file', 'Descargar WAV: renderiza toda la playlist (o el loop A–B) con mute, solo, volumen y EQ en un WAV estéreo');
   // Slice tool, like FL Studio's: a click cuts the clip under the mouse; dragging up or down
   // cuts every lane the line crosses. Snap applies unless Alt is held.
-  const sliceButton = iconButton(ICONS.slice, t('Slice tool (C): click a clip to cut it at the mouse; drag up or down to cut several tracks at once · Alt bypasses snap · Esc exits', 'Herramienta de corte (C): hacé clic en un clip para cortarlo donde está el mouse; arrastrá hacia arriba o abajo para cortar varias pistas a la vez · Alt desactiva snap · Esc sale'), () => setSlicing(!slicing));
+  const sliceButton = toolButton({ icon: ICONS.slice, name: t('Slice tool', 'Herramienta de corte'), key: 'C', keys: ['c'], color: '#ff5d8f',
+    detail: t('click a clip to cut it at the mouse; drag up or down to cut several tracks at once · Alt bypasses snap · Esc exits', 'hacé clic en un clip para cortarlo donde está el mouse; arrastrá hacia arriba o abajo para cortar varias pistas a la vez · Alt desactiva snap · Esc sale') }, () => setSlicing(!slicing));
   sliceButton.setAttribute('aria-pressed', 'false');
   function setSlicing(on) {
     slicing = on; slice = null; sliceLine.hidden = true;
     sliceButton.setAttribute('aria-pressed', String(on)); container.classList.toggle('is-slicing', on);
   }
-  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.label, tapButton, fitTempo, ...tempoControls, snapLabel, sliceButton, undo, redo, node('span', 'pl-spacer'), ...toolbarEnd, exportButton, fileInput);
+  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.label, tapButton, fitTempo, ...tempoControls, snapLabel, node('span', 'pl-spacer'), ...toolbarEnd, exportButton, fileInput);
   const shelf = node('div', 'pl-shelf'); shelf.setAttribute('aria-label', t('Sample library', 'Biblioteca de samples'));
   shelf.title = t('Library: click to add at the cursor, drag onto a track, right-click to duplicate or delete. Wheel scrolls.', 'Biblioteca: clic para agregar en el cursor, arrastrá a una pista, clic derecho para duplicar o eliminar. La rueda desplaza.');
   shelf.addEventListener('wheel', event => {
@@ -297,7 +314,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   const playhead = node('div', 'pl-playhead'); playhead.setAttribute('aria-hidden', 'true'); grid.append(playhead);
   const sliceLine = node('div', 'pl-slice-line'); sliceLine.hidden = true; sliceLine.setAttribute('aria-hidden', 'true'); grid.append(sliceLine);
   const rulerRow = node('div', 'pl-grid-row pl-ruler-row'), corner = node('div', 'pl-track-head', t('CHANNELS', 'CANALES')), ruler = node('div', 'pl-ruler');
-  ruler.title = t('Drag on the ruler to create a loop · drag inside the selection to move it · drag its edges to resize · double-click to clear · click to seek · Alt bypasses snap.', 'Arrastrá en la regla para crear un loop · arrastrá dentro de la selección para moverla · arrastrá sus bordes para ajustar · doble clic para eliminar · clic para mover el cursor · Alt desactiva snap.');
+  ruler.title = t('Drag on the ruler to create a loop · drag inside the selection to move it · drag its edges to resize · double-click to clear (without a loop: play from the start) · click to seek · Alt bypasses snap.', 'Arrastrá en la regla para crear un loop · arrastrá dentro de la selección para moverla · arrastrá sus bordes para ajustar · doble clic para eliminar (sin loop: reproduce desde el inicio) · clic para mover el cursor · Alt desactiva snap.');
   ruler.setAttribute('aria-label', ruler.title);
   rulerRow.append(corner, ruler); grid.prepend(rulerRow);
   let loopDrag;
@@ -325,7 +342,12 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   };
   ruler.onpointerup = event => { if (loopDrag?.id !== event.pointerId) return; if (!loopDrag.moved) { seek(rulerTime(event)); marker = position; renderLoopBand(); } loopDrag = null; ruler.releasePointerCapture(event.pointerId); };
   ruler.onpointercancel = () => { if (loopDrag) changeLoop(loopDrag.before); loopDrag = null; };
-  ruler.ondblclick = () => changeLoop(null);
+  // Double-click clears the loop; without one it clears the marker and plays from the top.
+  ruler.ondblclick = () => {
+    if (loopRange) { changeLoop(null); return; }
+    marker = 0; renderLoopBand(); seek(0);
+    if (!playing()) safe(toggle)();
+  };
   const lanes = () => [...grid.querySelectorAll('.pl-lane')];
   const laneIndex = (y, nearest) => {
     const list = lanes(), index = list.findIndex(lane => { const box = lane.getBoundingClientRect(); return y >= box.top && y < box.bottom; });
@@ -379,12 +401,12 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   const fine = createKnob({ label: t('Fine pitch', 'Pitch fino'), min: -100, max: 100, step: 1, coarse: 10, value: 0, reset: 0, hint: `${t('fine tuning in cents (100 = 1 semitone)', 'afinación fina en cents (100 = 1 semitono)')} · ${resetHint}`, format: v => `${signed(v)} ct`, onCommit: v => setClip('cents', v) });
   const speed = createKnob({ label: t('Speed', 'Velocidad'), min: .25, max: 4, step: .01, coarse: .25, value: 1, reset: 1, log: true, hint: `${t('speed of this clip only', 'velocidad solo de este clip')} · ${resetHint}`, format: v => `${v.toFixed(2)}×`, onCommit: v => setClip('speed', v) });
   const fades = ['fadeIn', 'fadeOut'].map((key, i) => createKnob({ label: i ? 'Fade out' : 'Fade in', min: 0, max: 10, step: .01, coarse: .1, value: 0, reset: 0, hint: `${i ? t('fades the end of the clip out', 'baja el volumen al final del clip') : t('fades the start of the clip in', 'sube el volumen al inicio del clip')} · ${resetHint}`, format: v => `${v.toFixed(2)} s`, onCommit: v => setClip(key, v) }));
-  const muteClip = iconButton(ICONS.mute, t('Mute clip: silences only the selected clip; the track keeps playing', 'Silenciar clip: calla solo el clip seleccionado; la pista sigue sonando'), () => setClip('mute', !picked()?.mute));
-  const reverseClip = iconButton(ICONS.reverse, t('Reverse: plays the selected clip backwards', 'Invertir: reproduce el clip seleccionado al revés'), () => setClip('reverse', !picked()?.reverse));
-  const crossfade = iconButton(ICONS.crossfade, t('Crossfade overlaps: fades clips that overlap on the same track so the joins do not click', 'Fundir superposiciones: aplica fundidos a los clips que se pisan en la misma pista para que los cortes no hagan clic'), () => commit(() => crossfadeClips(state.clips)));
-  const duplicate = iconButton(ICONS.duplicate, t('Duplicate: copies the selected clip right after it (Ctrl+D)', 'Duplicar: copia el clip seleccionado justo después (Ctrl+D)'), () => commit(() => { const clip = picked(); if (clip) { const next = { ...clip, id: uid(), at: clip.at + clipDuration(clip) }; state.clips.push(next); pick(next.id); } }));
-  const split = iconButton(ICONS.split, t('Split at cursor: cuts every selected clip at the playhead (S). Ctrl/Shift+click clips, or drag on empty space, to select several.', 'Cortar en cursor: corta todos los clips seleccionados en la posición del cursor (S). Ctrl/Shift+clic en los clips, o arrastrá en un espacio vacío, para seleccionar varios.'), () => cutClips(chosen(), now()));
-  const remove = iconButton(ICONS.trash, t('Delete the selected clips (Delete)', 'Eliminar los clips seleccionados (Supr)'), () => commit(() => { state.clips = state.clips.filter(c => !isChosen(c.id)); pick(null); }));
+  const muteClip = toolButton({ icon: ICONS.mute, name: t('Mute clip', 'Silenciar clip'), key: 'M', keys: ['m'], color: '#9aa3ad', detail: t('silences only the selected clips; the track keeps playing', 'calla solo los clips seleccionados; la pista sigue sonando') }, () => setClip('mute', !picked()?.mute));
+  const reverseClip = toolButton({ icon: ICONS.reverse, name: t('Reverse', 'Invertir'), key: 'R', keys: ['r'], color: '#b48cff', detail: t('plays the selected clips backwards', 'reproduce los clips seleccionados al revés') }, () => setClip('reverse', !picked()?.reverse));
+  const crossfade = toolButton({ icon: ICONS.crossfade, name: t('Crossfade overlaps', 'Fundir superposiciones'), key: 'X', keys: ['x'], color: '#4fc3f7', detail: t('fades clips that overlap on the same track so the joins do not click', 'aplica fundidos a los clips que se pisan en la misma pista para que los cortes no hagan clic') }, () => commit(() => crossfadeClips(state.clips)));
+  const duplicate = toolButton({ icon: ICONS.duplicate, name: t('Duplicate', 'Duplicar'), key: 'Ctrl+D', keys: ['ctrl+d'], color: '#66d17a', detail: t('copies the selected clip right after it', 'copia el clip seleccionado justo después') }, () => commit(() => { const clip = picked(); if (clip) { const next = { ...clip, id: uid(), at: clip.at + clipDuration(clip) }; state.clips.push(next); pick(next.id); } }));
+  const split = toolButton({ icon: ICONS.split, name: t('Split at cursor', 'Cortar en cursor'), key: 'S', keys: ['s'], color: '#ffb02e', detail: t('cuts every selected clip at the playhead. Ctrl/Shift+click clips, or drag on empty space, to select several.', 'corta todos los clips seleccionados en la posición del cursor. Ctrl/Shift+clic en los clips, o arrastrá en un espacio vacío, para seleccionar varios.') }, () => cutClips(chosen(), now()));
+  const remove = toolButton({ icon: ICONS.trash, name: t('Delete clips', 'Eliminar clips'), key: t('Del', 'Supr'), keys: ['delete', 'backspace'], color: '#ff4d4d', detail: t('deletes the selected clips', 'elimina los clips seleccionados') }, () => commit(() => { state.clips = state.clips.filter(c => !isChosen(c.id)); pick(null); }));
   // Cuts every clip in `clips` that crosses `seconds`; both halves of a selected clip stay selected.
   function cutClips(clips, seconds) {
     const targets = clips.filter(clip => splitClip(clip, seconds));
@@ -396,9 +418,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
       }
     });
   }
-  const clipActions = node('div', 'pl-clip-actions'); clipActions.append(muteClip, reverseClip, crossfade, duplicate, split, remove);
-  const sessionActions = node('div', 'pl-session-actions'); sessionActions.append(...inspectorControls, importButton, addTrack);
-  library.append(shelf, sessionActions);
+  library.append(shelf, ...inspectorControls);
   // Right-click menus: clips get their actions plus pitch mode and edit tool; library
   // entries can be duplicated or deleted. Session audio (the stems) stays in the library.
   const MODES = [['stretch', t('Stretch · keep length', 'Stretch · conservar duración'), t('Changing the pitch keeps the clip length', 'Cambiar el pitch conserva la duración del clip')],
@@ -412,8 +432,8 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     contextMenu(event, [
       { label: t('Duplicate', 'Duplicar'), icon: ICONS.duplicate, shortcut: 'Ctrl+D', action: () => duplicate.click() },
       { label: t('Split at cursor', 'Cortar en cursor'), icon: ICONS.split, shortcut: 'S', action: () => split.click() },
-      { label: t('Mute clip', 'Silenciar clip'), icon: ICONS.mute, checked: !!clip.mute, action: () => muteClip.click() },
-      { label: t('Reverse', 'Invertir'), icon: ICONS.reverse, checked: !!clip.reverse, action: () => reverseClip.click() },
+      { label: t('Mute clip', 'Silenciar clip'), icon: ICONS.mute, shortcut: 'M', checked: !!clip.mute, action: () => muteClip.click() },
+      { label: t('Reverse', 'Invertir'), icon: ICONS.reverse, shortcut: 'R', checked: !!clip.reverse, action: () => reverseClip.click() },
       '-', { heading: t('Pitch mode', 'Modo de pitch') },
       ...MODES.map(([value, label, title]) => ({ label, title, radio: true, checked: (clip.keepLength !== false ? 'stretch' : 'resample') === value,
         action: () => commit(() => { const current = state.clips.find(c => c.id === clip.id); if (current) current.keepLength = value === 'stretch'; }) })),
@@ -443,15 +463,15 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     ]);
   }
   // Same navigation as the stem waveforms: wheel zooms around the pointer, Shift pans.
-  const zoomTools = node('div', 'pl-zoom');
   const fit = () => { scroll.scrollLeft = 0; zoomAround(0, (scroll.clientWidth - TRACK_HEAD - 12) / Math.max(1, arrangementEnd(state) || 16) / zoom); };
-  for (const [path, title, action] of [
-    [ICONS.zoomOut, t('Zoom out · on the timeline the mouse wheel zooms and Shift + wheel pans', 'Alejar · sobre la línea de tiempo la rueda hace zoom y Shift + rueda desplaza'), () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1 / 1.5)],
-    [ICONS.zoomIn, t('Zoom in · on the timeline the mouse wheel zooms and Shift + wheel pans', 'Acercar · sobre la línea de tiempo la rueda hace zoom y Shift + rueda desplaza'), () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1.5)],
-    [ICONS.fit, t('Show the whole arrangement', 'Ver todo el arreglo'), fit],
-  ]) zoomTools.append(iconButton(path, title, action));
-  zoomTools.querySelector('button:last-child').title = t('Show the whole arrangement: fits every clip in view', 'Ver todo el arreglo: ajusta el zoom para ver todos los clips');
-  inspector.append(selectionLabel, pitch.wrap, fine.wrap, speed.wrap, ...fades.map(f => f.wrap), clipActions, zoomTools);
+  const wheelHint = t('on the timeline the mouse wheel zooms and Shift + wheel pans', 'sobre la línea de tiempo la rueda hace zoom y Shift + rueda desplaza');
+  const zoomOut = toolButton({ icon: ICONS.zoomOut, name: t('Zoom out', 'Alejar'), detail: wheelHint, key: '-', keys: ['-', '_'], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1 / 1.5));
+  const zoomIn = toolButton({ icon: ICONS.zoomIn, name: t('Zoom in', 'Acercar'), detail: wheelHint, key: '+', keys: ['+', '='], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1.5));
+  const fitButton = toolButton({ icon: ICONS.fit, name: t('Show the whole arrangement', 'Ver todo el arreglo'), detail: t('fits every clip in view', 'ajusta el zoom para ver todos los clips'), key: 'F', keys: ['f'], color: '#e6e1da' }, fit);
+  // Every tool in two rows of seven: clip edits, then history, view and tracks.
+  const tools = node('div', 'pl-tools');
+  tools.append(muteClip, reverseClip, crossfade, duplicate, split, sliceButton, remove, undo, redo, zoomOut, zoomIn, fitButton, importButton, addTrack);
+  inspector.append(selectionLabel, pitch.wrap, fine.wrap, speed.wrap, ...fades.map(f => f.wrap), tools);
   let zoomFrame = 0, zoomTarget = null, zoomAnchor = null;
   function zoomAround(x, factor) {
     if (!(factor > 0) || !Number.isFinite(factor)) return;
@@ -877,15 +897,13 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   for (const root of new Set([container, toolbar])) root.addEventListener('keydown', event => {
     if (event.target.closest('input,select,textarea') || event.target.isContentEditable) return;
     const modifier = event.ctrlKey || event.metaKey;
-    if (event.code === 'Space') { event.preventDefault(); event.stopPropagation(); if (!event.repeat) safe(space)(); }
-    else if (modifier && event.key.toLowerCase() === 'z') { event.preventDefault(); travel(event.shiftKey); }
-    else if (modifier && event.key.toLowerCase() === 'd') { event.preventDefault(); if (picked()) duplicate.click(); }
-    else if (!modifier && event.key.toLowerCase() === 's') { event.preventDefault(); if (chosen().length) split.click(); }
-    else if (!modifier && event.key.toLowerCase() === 'c') { event.preventDefault(); if (!event.repeat) setSlicing(!slicing); }
+    if (event.altKey) return;
+    if (event.code === 'Space') { event.preventDefault(); event.stopPropagation(); if (!event.repeat) safe(space)(); return; }
+    const combo = (modifier ? 'ctrl+' : '') + (modifier && event.shiftKey ? 'shift+' : '') + event.key.toLowerCase(), tool = hotkeys.get(combo);
+    if (tool) { event.preventDefault(); if ((!event.repeat || tool.repeat) && !tool.control.disabled) tool.control.click(); }
     else if (event.key === 'Escape' && slicing) { event.preventDefault(); setSlicing(false); }
-    else if (modifier && event.key.toLowerCase() === 'a') { event.preventDefault(); selected = state.clips[0]?.id ?? null; extra = new Set(state.clips.slice(1).map(c => c.id)); updateSelection(); }
-    else if (!modifier && event.key.toLowerCase() === 't') { event.preventDefault(); if (!event.repeat) tapTempo(); }
-    else if (['Delete', 'Backspace'].includes(event.key) && chosen().length) { event.preventDefault(); remove.click(); }
+    else if (combo === 'ctrl+a') { event.preventDefault(); selected = state.clips[0]?.id ?? null; extra = new Set(state.clips.slice(1).map(c => c.id)); updateSelection(); }
+    else if (combo === 't') { event.preventDefault(); if (!event.repeat) tapTempo(); }
   });
   function animate() {
     const at = now(); time.textContent = clock(at);
