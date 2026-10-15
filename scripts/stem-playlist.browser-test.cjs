@@ -175,6 +175,37 @@ const { chromium } = require('playwright');
     await page.waitForTimeout(100); const restarted = await time();
     assert.ok(Number(restarted.split(':')[1]) < .4, 'Restarted from the loop start: ' + restarted);
     await page.keyboard.press('Space');
+    // Several selected clips split together at the playhead.
+    const clips = playlist.locator('.pl-clip'), clipCount = () => clips.count();
+    await clips.first().click(); await page.keyboard.press('Control+d');
+    await playlist.getByLabel('Show the whole arrangement').click();
+    await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('Control+a');
+    assert.equal(await clipCount(), 2);
+    assert.equal(await playlist.locator('.pl-selected').textContent(), '2 clips');
+    for (const index of [0, 1]) await clips.nth(index).click({ modifiers: ['Control'] });
+    assert.equal(await playlist.locator('.pl-clip[aria-pressed=true]').count(), 0, 'Ctrl+click toggles clips off');
+    const [laneBox, firstBox, secondBox] = await Promise.all([playlist.locator('.pl-lane').first().boundingBox(), clips.nth(0).boundingBox(), clips.nth(1).boundingBox()]);
+    const timelineBox = await playlist.locator('.pl-scroll').boundingBox();
+    await page.mouse.move(timelineBox.x + timelineBox.width - 6, laneBox.y + 3); await page.mouse.down();
+    await page.mouse.move(Math.min(firstBox.x, secondBox.x) + 4, laneBox.y + laneBox.height - 4, { steps: 5 }); await page.mouse.up();
+    assert.equal(await playlist.locator('.pl-selected').textContent(), '2 clips', 'A box drag on empty space selects clips');
+    const target = firstBox.x < secondBox.x ? firstBox : secondBox, rulerBox = await ruler.boundingBox();
+    await page.mouse.click(target.x + target.width / 2, rulerBox.y + 14);
+    await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('s');
+    assert.equal(await clipCount(), 3);
+    assert.equal(await playlist.locator('.pl-selected').textContent(), '3 clips', 'Both halves stay selected');
+    // The slice tool cuts at the mouse, without moving the playhead.
+    const sliceTool = transport.getByLabel(/^Slice tool/);
+    await page.keyboard.press('c');
+    assert.equal(await sliceTool.getAttribute('aria-pressed'), 'true');
+    const headAt = await time(), piece = await clips.last().boundingBox();
+    await page.mouse.move(piece.x + piece.width * .3, piece.y + piece.height / 2);
+    assert.equal(await playlist.locator('.pl-slice-line').isVisible(), true);
+    await page.mouse.down(); await page.mouse.up();
+    assert.equal(await clipCount(), 4);
+    assert.equal(await time(), headAt, "The playhead stays put");
+    await page.keyboard.press('Escape');
+    assert.equal(await sliceTool.getAttribute('aria-pressed'), 'false');
     assert.deepEqual(errors, []);
     console.log('Playlist browser test passed.', result);
   } finally {

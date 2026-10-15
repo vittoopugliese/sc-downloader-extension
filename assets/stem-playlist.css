@@ -85,6 +85,10 @@
 .pl-edge-left{left:0}.pl-edge-right{right:0}.pl-edge:hover{background:#ffffff40}
 .pl-playhead{position:absolute;top:0;bottom:0;z-index:4;width:1px;background:#fff;box-shadow:0 0 5px #fff8;pointer-events:none}
 .pl-playhead:before{content:'';position:absolute;top:0;left:-4px;border-top:7px solid #fff;border-left:4px solid transparent;border-right:4px solid transparent}
+.pl-slice-line{position:absolute;z-index:6;width:0;margin-left:-1px;border-left:2px dashed #fff;filter:drop-shadow(0 0 2px #000);pointer-events:none}
+.pl-marquee{position:absolute;z-index:6;border:1px solid var(--orange);background:#ff55001f;pointer-events:none}
+.playlist.is-slicing .pl-lane,.playlist.is-slicing .pl-clip,.playlist.is-slicing .pl-edge{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M12 1v22' stroke='%23000' stroke-width='4'/%3E%3Cpath d='M12 1v22' stroke='%23fff' stroke-width='2'/%3E%3Cpath d='M6 4h12' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E") 12 12,crosshair}
+.playlist.is-slicing .pl-edge:hover{background:none}
 .pl-inspector{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:10px 12px;border:1px solid var(--pl-edge);border-radius:10px 10px 0 0;background:var(--pl-panel)}
 .pl-selected{flex:0 1 auto;max-width:140px;overflow:hidden;font-size:11px;color:#ffad80;white-space:nowrap;text-overflow:ellipsis}
 .pl-clip-actions{display:flex;flex-wrap:wrap;gap:5px}
