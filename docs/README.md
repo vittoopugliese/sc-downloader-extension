@@ -1,5 +1,7 @@
 # Documentación y estado
 
+**14/10/2026 — Likes Explorer y Player Tools:** [botón adicional verde agua para reproducción nativa, conservando el iframe de preview](LIKES-EXPLORER-NATIVE-PLAYBACK-RESEARCH-20261014.md#implementación-posterior-del-14102026). Implementado localmente; no publicado.
+
 **09/10/2026 — Likes Explorer:** [selección y reproducción con widget compacto integrado, y apertura en otra pestaña](LIKES-EXPLORER-PLAYBACK-20261009.md), con validación del widget real de SoundCloud.
 
 **01/10/2026 — Interfaz de Stems:** estética de la landing, logo Player Tools, iconos y waveforms del looper con cursores sincronizados. Implementación y pruebas al final de [loop-stems.md](loop-stems.md).

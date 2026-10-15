@@ -48,7 +48,7 @@ const widgetHtml = `<!doctype html><button id="play">Play</button><script>
         },
       }};
     });
-    for (const file of ['likes-explorer-i18n.js', 'soundcloud-likes-locator.js', 'likes-player.js', 'likes-explorer.js']) await page.addScriptTag({ path: path.join(__dirname, file) });
+    for (const file of ['likes-explorer-i18n.js', 'soundcloud-likes-locator.js', 'likes-player.js', 'soundcloud-playback.js', 'likes-explorer.js']) await page.addScriptTag({ path: path.join(__dirname, file) });
     const ui = selector => page.locator(`#scdl-likes-explorer ${selector}`);
     const state = value => page.waitForFunction(value => document.querySelector('#scdl-likes-explorer')?.shadowRoot.querySelector('.player-inline')?.dataset.state === value, value);
     const selectTrack = async id => { await ui(`.card[data-id="${id}"] .card-main`).click(); };
@@ -116,6 +116,9 @@ const widgetHtml = `<!doctype html><button id="play">Play</button><script>
     await ui('.viewport').evaluate(node => {node.scrollTop = 480;});
     await page.waitForTimeout(250);
     await ui('.card-main').nth(12).click();
+    // Selection changes detail height; allow its ResizeObserver to restore the
+    // anchor before measuring the view that the Open action must preserve.
+    await page.waitForTimeout(180);
     const scroll = await ui('.viewport').evaluate(node => node.scrollTop);
     await ui('.open-track').click();
     assert.equal(page.url(), 'https://soundcloud.com/you/likes');

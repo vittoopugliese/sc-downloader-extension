@@ -18,6 +18,7 @@
   let highlightId = null, anchorPixelOffset = 0;
   let selectedContext, player, detailSummary, playerInline, playerStatus, playerWidget;
   let nowTrack = null, playContext = null, playPhase = 'idle', playEpoch = 0;
+  let nativeTrack = null, nativeContext = null, nativePhase = 'idle', nativeEpoch = 0, nativeRequest, nativeStatus;
   function button(label, action, cls = '') { const b = el('button', cls, label); b.type = 'button'; b.addEventListener('click', () => Promise.resolve(action()).catch(showError)); return b; }
   async function send(type, payload = {}) {
     const epoch = routeEpoch;
@@ -156,6 +157,7 @@
     const copy = el('div','detail-copy'); copy.append(el('strong','',item.title),el('span','',item.artistName)); detailSummary.append(copy);
     for (const [id, card] of cardNodes) card.classList.toggle('selected',id === item.itemId);
     updateDetailPlayback();
+    updateNativePlayback();
     cachedArt([item],48,routeEpoch).catch(()=>{});
   }
   function updateCardPlayback(card) {
@@ -186,11 +188,13 @@
     for (const card of cardNodes.values()) updateCardPlayback(card);
     updateDetailPlayback();
     if (playing) {
+      cancelNativePlayback();
       const native = document.querySelector('.playControls .playControl.playing');
       native?.click();
     }
   }
   function stopPlayback() {
+    cancelNativePlayback(true);
     playEpoch++; player?.destroy(); player = null; nowTrack = playContext = null;
     playPhase = 'idle';
     for (const card of cardNodes.values()) updateCardPlayback(card);
@@ -198,6 +202,7 @@
   }
   async function playTrack(item, context) {
     if (!context) return;
+    cancelNativePlayback();
     if (nowTrack?.itemId === item.itemId && playContext?.collectionId === context.collectionId && player && !['error','loading'].includes(playPhase)) {
       if (playPhase === 'playing') player.pause(); else player.play();
       return;
@@ -216,6 +221,47 @@
       playerState('error'); showError(error);
     }
   }
+  function updateNativePlayback() {
+    const control = detail?.querySelector('.native-play');
+    const current = !!nativeTrack && selected?.itemId === nativeTrack.itemId && selectedContext?.collectionId === nativeContext?.collectionId;
+    if (control) {
+      control.disabled = current && nativePhase === 'loading';
+      control.setAttribute('aria-busy', String(control.disabled));
+      control.dataset.state = current ? nativePhase : 'idle';
+    }
+    if (nativeStatus) {
+      nativeStatus.hidden = !current || nativePhase === 'idle';
+      nativeStatus.textContent = text(({loading:'nativeLoading',playing:'nativePlaying','needs-play':'nativeNeedsPlay',unavailable:'nativeUnavailable'})[nativePhase] || 'nativePlay');
+    }
+  }
+  function cancelNativePlayback(clear = false) {
+    nativeEpoch++; nativeRequest?.abort(); nativeRequest = null; nativePhase = 'idle';
+    if (clear) nativeTrack = nativeContext = null;
+    updateNativePlayback();
+  }
+  async function playNativeTrack(item, context) {
+    if (!context) return;
+    cancelNativePlayback(); SCLikesLocator.cancel();
+    const seq = nativeEpoch, request = new AbortController(); nativeRequest = request;
+    nativeTrack = item; nativeContext = { ...context }; nativePhase = 'loading';
+    // Cancel pending preview authorization as well as pausing a mounted widget.
+    // The iframe stays mounted so its position and controls remain available.
+    playEpoch++; player?.pause();
+    if (!player && playPhase === 'loading') playerState('paused');
+    updateNativePlayback(); persist();
+    try {
+      const result = await send('PLAY_LIKED_TRACK', { ...context, trackId: item.itemId });
+      if (seq !== nativeEpoch) return;
+      nativeTrack = result.item;
+      const playback = await SCSoundCloudPlayback.play(result.item, { signal: request.signal });
+      if (seq !== nativeEpoch) return;
+      nativePhase = playback.phase; updateNativePlayback();
+    } catch (error) {
+      if (seq !== nativeEpoch) return;
+      nativePhase = error.code === 'cancelled' ? 'idle' : 'unavailable'; updateNativePlayback();
+      showError(error);
+    } finally { if (seq === nativeEpoch) nativeRequest = null; }
+  }
   function mountDetail() {
     const media = el('div','detail-media');
     detailSummary = el('div','detail-summary');
@@ -223,15 +269,21 @@
     playerStatus = el('div','player-status'); playerStatus.setAttribute('role','status');
     playerWidget = el('div','player-widget');
     playerInline.append(playerWidget,playerStatus); media.append(detailSummary,playerInline);
+    nativeStatus = el('div','native-status'); nativeStatus.hidden = true; nativeStatus.setAttribute('role','status'); media.append(nativeStatus);
     const actions = el('div','detail-actions');
     actions.append(button('▶ '+text('play'),()=>playTrack(selected,selectedContext),'accent detail-play'));
     const open = button('↗',()=>openTrack(selected),'small open-track'); open.title = text('openHint'); open.setAttribute('aria-label',text('openHint')); actions.append(open);
     const locateButton = button('',()=>locate(selected),'small locate-action');
     const locateIcon = el('img','locate-icon'); locateIcon.src = TELEPORT_ICON_URL; locateIcon.alt = '';
     locateButton.append(locateIcon); locateButton.title = text('locate'); locateButton.setAttribute('aria-label',text('locate')); actions.append(locateButton);
+    const nativePlay = button('',()=>playNativeTrack(selected,selectedContext),'small native-play');
+    nativePlay.title = text('nativePlay'); nativePlay.setAttribute('aria-label',text('nativePlay'));
+    nativePlay.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="m3 5 8 7-8 7V5Z" fill="currentColor"/><path d="M15 4v16M21 4v16M13 9h4m2 6h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+    actions.append(nativePlay);
     detail.append(media,status,actions);
   }
   async function locate(item) {
+    if (nativePhase === 'loading') cancelNativePlayback();
     const r = await send('LOCATE_LIKED_TRACK',{generation,trackId:item.itemId});
     const overlay = teleportOverlay;
     overlay.hidden = false;
@@ -254,7 +306,7 @@
     settings.replaceChildren(empty); settings.hidden = false;
   }
   async function poll() {
-    if ((!opened && !nowTrack) || statusBusy) return; statusBusy = true;
+    if ((!opened && !nowTrack && !nativeTrack) || statusBusy) return; statusBusy = true;
     try {
       const r = await send('GET_LIKES_LIBRARY_STATUS'); lastStatus = r; ownerId = r.ownerId; collectionId = r.collectionId; sourceUserId = r.sourceUserId;
       if (settings.querySelector('.gate')) { settings.replaceChildren(); settings.hidden = true; viewport.hidden = toolbar.hidden = false; }
@@ -274,6 +326,7 @@
       }
       const changed = generation !== lib.generation || revision !== lib.revision;
       generation = lib.generation; revision = lib.revision; total = lib.count;
+      if (nativePhase === 'loading' && nativeContext?.generation !== generation) cancelNativePlayback();
       if (changed || !restored) {
         const r2 = await send('QUERY_LIKES',{generation,limit:1});
         const value = period.value; period.replaceChildren(new Option(text('all'),''));
@@ -294,7 +347,7 @@
     settings.append(button(text('removeLibrary'),async()=>{ if (!confirm(text('confirmDelete'))) return; await send('DELETE_LIKES_LIBRARY'); stopPlayback(); routeEpoch++; imageEpoch++; requestEpoch++; statusBusy = false; generation = null; total = count = 0; selected = anchor = null; detail.hidden = true; images.clear(); cardNodes.clear(); settings.hidden = true; restored = false; await poll(); },'danger'));
     settings.append(button(text('close'),()=>{ settings.hidden = true; }));
   }
-  function close() { opened = false; panel.hidden = true; launch.hidden = false; requestEpoch++; SCLikesLocator.cancel(); persist(); focusBefore?.focus?.(); }
+  function close() { if (nativePhase === 'loading') cancelNativePlayback(); opened = false; panel.hidden = true; launch.hidden = false; requestEpoch++; SCLikesLocator.cancel(); persist(); focusBefore?.focus?.(); }
   async function open() { opened = true; focusBefore = document.activeElement; panel.hidden = false; launch.hidden = true; search.focus(); await poll(); }
   function mount() {
     host = el('div'); host.id = 'scdl-likes-explorer'; shadow = host.attachShadow({mode:'open'});
@@ -332,7 +385,7 @@
     mountDetail(); document.body.append(host); layout();
     search.addEventListener('input',()=>{ clearTimeout(searchTimer); searchTimer = setTimeout(()=>{ query = search.value; viewport.scrollTop = 0; render().catch(showError); },160); });
     period.addEventListener('change',()=>{ filter = period.value; viewport.scrollTop = 0; render().catch(showError); });
-    collectionSelect.addEventListener('change',()=>{ const item=(lastStatus?.collections || []).find(value=>value.collectionId===collectionSelect.value); if (!item) return; clearTimeout(saveTimer); collectionId=item.collectionId; sourceUserId=item.sourceUserId; generation=null; revision=null; anchor=selected=selectedContext=null; detail.hidden=true; restored=false; viewport.scrollTop=0; pollAfter().catch(showError); });
+    collectionSelect.addEventListener('change',()=>{ const item=(lastStatus?.collections || []).find(value=>value.collectionId===collectionSelect.value); if (!item) return; if (nativePhase === 'loading') cancelNativePlayback(); clearTimeout(saveTimer); collectionId=item.collectionId; sourceUserId=item.sourceUserId; generation=null; revision=null; anchor=selected=selectedContext=null; detail.hidden=true; restored=false; viewport.scrollTop=0; pollAfter().catch(showError); });
     viewport.addEventListener('scroll',()=>{ clearTimeout(renderTimer); renderTimer = setTimeout(()=>render().catch(showError),45); });
     shadow.addEventListener('keydown',e=>{ if(e.key === 'Escape') { if (!settings.hidden) settings.hidden = true; else close(); } });
     resizeObserver = new ResizeObserver(()=>{ layout(); if(opened && generation && anchor) restoreAnchor(anchor.itemId).catch(showError); }); resizeObserver.observe(viewport);
@@ -351,15 +404,17 @@
   }
   function route() {
     const eligible = location.origin === 'https://soundcloud.com' && /^\/(?:you|[^/]+)\/likes$/.test(location.pathname.replace(/\/$/,''));
-    if (!eligible && !nowTrack) { if(host) dispose(); return; }
+    if (!eligible && !nowTrack && !nativeTrack) { if(host) dispose(); return; }
     if (!host && document.body) mount();
     if (host && location.hash === '#scdl-explore') { history.replaceState(history.state,'',location.pathname+location.search); open().catch(showError); }
     if (playPhase === 'playing' && document.querySelector('.playControls .playControl.playing')) player?.pause();
-    if ((opened || nowTrack) && Date.now()-lastPoll > 1800) { lastPoll = Date.now(); poll().catch(showError); }
+    if (nativePhase === 'playing' && SCSoundCloudPlayback.currentTrack() !== nativeTrack?.permalink) { nativePhase = 'idle'; updateNativePlayback(); }
+    if ((opened || nowTrack || nativeTrack) && Date.now()-lastPoll > 1800) { lastPoll = Date.now(); poll().catch(showError); }
   }
   chrome.runtime.onMessage.addListener(message=>{ if(message.type === 'LIKES_IDENTITY_CHANGED') { dispose(); route(); } if(message.type === 'OPEN_LIKES_EXPLORER') { route(); if(host) open().catch(showError); } });
   document.addEventListener('scdl:open-likes-explorer',()=>{ if (host) open().catch(showError); else location.href = 'https://soundcloud.com/you/likes#scdl-explore'; });
   const CSS = `
+    .detail .native-play{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:28px;padding:4px;background:#70d6cb;color:#102d2a;border-color:#70d6cb}.detail .native-play:hover{background:#93e6dd;border-color:#93e6dd}.detail .native-play[aria-busy="true"]{opacity:.65}.native-status{padding-top:5px;font-size:10px;line-height:1.4;color:#93e6dd;overflow-wrap:anywhere}
     .card.is-playing{border-color:#e99b74}
     .detail-media{flex:1;min-width:0}.detail-summary{display:flex;align-items:center;gap:7px;min-width:0}.detail-summary>.cover{width:34px;height:34px;flex-shrink:0}
     .player-inline{min-width:0;overflow:hidden;border-radius:5px}.player-widget{height:80px;background:#2c2c2c}.player-widget:empty{height:0}

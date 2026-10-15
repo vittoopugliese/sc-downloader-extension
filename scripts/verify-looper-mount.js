@@ -7,7 +7,7 @@ const manifest = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, "..", "manifest.json"), "utf8")
 );
 const looperRegistration = manifest.content_scripts.find((registration) =>
-  registration.js.includes("scripts/looper.js")
+  registration.js?.includes("scripts/looper.js")
 );
 assert.equal(
   looperRegistration?.all_frames,
@@ -15,7 +15,7 @@ assert.equal(
   "The looper must run in SoundCloud's embedded crossfade frame"
 );
 const bridgeRegistration = manifest.content_scripts.find((registration) =>
-  registration.js.includes("scripts/looper-main-bridge.js")
+  registration.js?.includes("scripts/looper-main-bridge.js")
 );
 assert.equal(bridgeRegistration?.world, "MAIN", "The media bridge must run in MAIN");
 assert.equal(

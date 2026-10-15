@@ -66,7 +66,7 @@ const { chromium } = require('playwright');
       }}};
     });
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
-    for(const file of ['fast-tooltips.js','likes-explorer-i18n.js','soundcloud-likes-locator.js','likes-player.js','likes-explorer.js'])await page.addScriptTag({path:path.join(__dirname,file)});
+    for(const file of ['fast-tooltips.js','likes-explorer-i18n.js','soundcloud-likes-locator.js','likes-player.js','soundcloud-playback.js','likes-explorer.js'])await page.addScriptTag({path:path.join(__dirname,file)});
     const locator=await page.evaluate(async()=>{
       const scroll=document.scrollingElement,original=scroll.scrollTo;let calls=0;
       scroll.scrollTo=()=>{calls++;setTimeout(()=>{const link=document.createElement('a');link.className='soundTitle__title';link.href='https://soundcloud.com/a/target';link.textContent='Target';document.querySelector('.l-main').append(link);},10);};
@@ -203,7 +203,7 @@ const { chromium } = require('playwright');
         openSingleLine:open.scrollHeight<=open.clientHeight,
       };
     });
-    assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['▶ Reproducir','↗',''],detailOrder:['detail-media','status','detail-actions'],oneLine:true,locateTitle:'Localizar en SoundCloud',locateIcon:true,openSingleLine:true});
+    assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['▶ Reproducir','↗','',''],detailOrder:['detail-media','status','detail-actions'],oneLine:true,locateTitle:'Localizar en SoundCloud',locateIcon:true,openSingleLine:true});
     const teleportButton=page.locator('#scdl-likes-explorer .locate-action');
     await page.mouse.move(0,0);
     await teleportButton.hover(); await page.waitForTimeout(400);

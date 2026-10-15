@@ -43,6 +43,7 @@ $packageItems = @(
     "scripts/likes-explorer-i18n.js",
     "scripts/likes-explorer.js",
     "scripts/likes-player.js",
+    "scripts/soundcloud-playback.js",
     "scripts/soundcloud-likes-locator.js",
     "scripts/likes-popup.js",
     "scripts/audio-effects-core.js",

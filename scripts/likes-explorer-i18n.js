@@ -52,5 +52,14 @@
   };
   const playbackLocale = playback[language] || playback.en;
   playbackKeys.forEach((key,i)=>{dictionary[key]=playbackLocale[i];});
+  const nativeKeys = ['nativePlay','nativeLoading','nativePlaying','nativeNeedsPlay','nativeUnavailable'];
+  const nativeCopy = {
+    en: ['Use in Player Tools','Sending to Player Tools…','Track loaded in SoundCloud · Player Tools ready','Track selected. Press Play in the bottom SoundCloud player.','Could not start this track in SoundCloud. Retry or close Explorer to play it on its page.'],
+    es: ['Usar en Player Tools','Pasando a Player Tools…','Track cargado en SoundCloud · Player Tools listo','Track seleccionado. Pulsá Play en la barra inferior de SoundCloud.','No se pudo iniciar este track en SoundCloud. Reintentá o cerrá Explorer para reproducirlo en su página.'],
+    pt_BR: ['Usar no Player Tools','Enviando ao Player Tools…','Faixa carregada no SoundCloud · Player Tools pronto','Faixa selecionada. Pressione Play no player inferior do SoundCloud.','Não foi possível iniciar esta faixa no SoundCloud. Tente novamente ou feche o Explorer para reproduzi-la na página.'],
+    de: ['In Player Tools verwenden','Wird an Player Tools übergeben…','Track in SoundCloud geladen · Player Tools bereit','Track ausgewählt. Drücke Play im unteren SoundCloud-Player.','Dieser Track konnte in SoundCloud nicht gestartet werden. Erneut versuchen oder Explorer schließen und auf der Track-Seite abspielen.'],
+    ru: ['Использовать в Player Tools','Передача в Player Tools…','Трек загружен в SoundCloud · Player Tools готов','Трек выбран. Нажми Play в нижнем плеере SoundCloud.','Не удалось запустить трек в SoundCloud. Повтори попытку или закрой Explorer и запусти его на странице трека.']
+  };
+  nativeKeys.forEach((key,i)=>{dictionary[key]=(nativeCopy[language] || nativeCopy.en)[i];});
   root.SCLikesText = key => dictionary[key] || dictionary['network-error'];
 })(globalThis);
