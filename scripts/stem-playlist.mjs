@@ -1,4 +1,4 @@
-import { LIMITS, uid, clamp, emptyArrangement, newClip, clipDuration, clipRate, clipPitch, clipEnvelope, slipClip, crossfadeClips, arrangementEnd, snapTime, splitClip, validateArrangement, needsStretch, trackAudible } from './stem-playlist-core.mjs';
+import { LIMITS, uid, clamp, emptyArrangement, newClip, clipDuration, clipRate, clipPitch, clipEnvelope, slipClip, crossfadeClips, arrangementEnd, snapTime, splitClip, validateArrangement, needsStretch, trackAudible, loopSegments, retimePatternClips } from './stem-playlist-core.mjs';
 import { createPlaylistEngine, createStretchCache, prefetchStretches, renderArrangement } from './stem-playlist-audio.mjs';
 import { encodeWav } from './stem-audio.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
@@ -55,20 +55,23 @@ export function createKnob({ label, min, max, step, coarse, value, reset, format
 
 // The arrangement and the only transport of the Stem Extractor. The host page adds
 // its channels (original and stems) with setSession and supplies persistent header
-// and editor elements for them through `channel(track)`.
-export function mountPlaylist({ container, audio, channel, onChange, onTransport, onViewChange, onLoopChange }) {
+// elements for them through `channel(track, source)`. Patterns arrive as looping
+// assets through setPatterns; their clips repeat when stretched past one pass.
+export function mountPlaylist({ container, audio, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect }) {
   const es = document.documentElement.lang === 'es', t = (en, spanish) => es ? spanish : en;
   let state = emptyArrangement(), assets = new Map(), selected = null, zoom = 48, snap = .25;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
   let drag = null, frame, operating = false, liveBefore = null, loopRange = null, rate = 1, rateTimer = 0;
-  const derived = new Map();
-  const derivedId = (track, asset) => 'pattern:' + track + ':' + asset;
-  const playbackState = () => ({ ...state, clips: state.clips.map(clip => {
-    const id = derivedId(clip.track, clip.asset);
-    return derived.has(id) ? { ...clip, asset: id } : clip;
+  const isPattern = clip => !!assets.get(clip.asset)?.loop;
+  // What the engine and the export hear: one plain clip per pass of a looping clip.
+  const playbackState = () => ({ ...state, clips: state.clips.flatMap(clip => {
+    const asset = assets.get(clip.asset);
+    return asset?.loop ? loopSegments(clip, asset.buffer.duration) : [clip];
   }) });
+  // Clips of pattern and session audio are saved; imported files are not.
+  const savable = id => !!(assets.get(id)?.session || assets.get(id)?.pattern);
   const rowViews = new Map(), clipViews = new Map(), analyzing = new WeakSet();
-  let paintFrame = 0, shelfKey = '', editMode = 'move';
+  let paintFrame = 0, shelfKey = '', editMode = 'move', reported = null;
   // Channel header width comes from CSS (--pl-head), narrower on phones.
   let TRACK_HEAD = 236;
   const node = (tag, className = '', text = '') => { const e = document.createElement(tag); e.className = className; e.textContent = text; return e; };
@@ -120,12 +123,12 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     input.setAttribute('aria-label', text); if (min !== undefined) input.min = min; if (max !== undefined) input.max = max; if (step !== undefined) input.step = step;
     label.append(input); return { label, input };
   }
-  const tempo = field('BPM', 'number', 120, 20, 300, 1); tempo.input.title = t('Grid tempo; audio speed is set per clip', 'Tempo de la grilla; la velocidad se cambia por clip');
+  const tempo = field('BPM', 'number', 120, 20, 300, .01); tempo.input.title = t('Project tempo: grid, channel rack and piano roll. Audio speed is set per clip.', 'Tempo del proyecto: grilla, channel rack y piano roll. La velocidad del audio se cambia por clip.');
   function changeLoop(range) {
     loopRange = range; engine?.update(playbackState(), transport()); renderLoopBand();
     onLoopChange?.(range);
   }
-  tempo.input.onchange = () => commit(() => { state.bpm = Number(tempo.input.value); });
+  tempo.input.onchange = () => { const bpm = Number(tempo.input.value); if (bpm >= 20 && bpm <= 300) commit(() => retimePatternClips(state, bpm, isPattern)); else draw(); };
   // Tap tempo like FL Studio's tapper: BPM is the average of every interval since the first tap;
   // a pause longer than two beats (3 s minimum) starts over. One tap session is one undo step.
   let taps = [], tapTimer = 0, tapUndo = null;
@@ -144,11 +147,21 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     if (taps.length < 2) return;
     const bpm = clamp(Math.round(60000 / tapInterval()), 20, 300);
     if (bpm === state.bpm) return;
-    if (tapUndo && history.at(-1) === tapUndo) { state.bpm = bpm; changed(); draw(); }
-    else if (commit(() => { state.bpm = bpm; })) tapUndo = history.at(-1);
+    if (tapUndo && history.at(-1) === tapUndo) { retimePatternClips(state, bpm, isPattern); changed(); draw(); }
+    else if (commit(() => retimePatternClips(state, bpm, isPattern))) tapUndo = history.at(-1);
   }
   tapButton.onpointerdown = event => { if (event.button === 0) { event.preventDefault(); tapTempo(); } };
   tapButton.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) tapTempo(); } };
+  // The A–B loop is 1, 2, 4 or 8 bars; the tempo closest to 120 BPM wins.
+  const fitTempo = button('A–B', t('Set the tempo from the A–B loop (1, 2, 4 or 8 bars)', 'Calcular el tempo desde el loop A–B (1, 2, 4 u 8 compases)'), () => {
+    if (!loopRange) { report(t('Select a loop on the ruler first.', 'Primero seleccioná un loop en la regla.')); return; }
+    const seconds = loopRange.end - loopRange.start;
+    const bpm = [1, 2, 4, 8].map(bars => bars * 240 / seconds).filter(value => value >= 20 && value <= 300)
+      .sort((a, b) => Math.abs(a - 120) - Math.abs(b - 120))[0];
+    if (!bpm) { report(t('The loop is outside the 20–300 BPM range.', 'El loop queda fuera del rango 20–300 BPM.')); return; }
+    commit(() => retimePatternClips(state, Math.round(bpm * 100) / 100, isPattern));
+  });
+  fitTempo.className = 'pl-fit-tempo';
   const snapLabel = node('label', 'pl-field', 'Snap'), snapSelect = node('select'); snapSelect.setAttribute('aria-label', 'Snap');
   for (const [value, label] of [[0, 'Off'], [.25, '1/16'], [.5, '1/8'], [1, '1/4'], [4, t('Bar', 'Compás')]]) snapSelect.add(new Option(label, value));
   snapSelect.value = snap; snapSelect.onchange = () => { snap = Number(snapSelect.value); }; snapLabel.append(snapSelect);
@@ -165,7 +178,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   const addTrack = iconButton('M3 4h18v4H3zM3 12h10M3 18h10m3-3h6m-3-3v6', t('Add track', 'Agregar pista'), () => commit(() => state.tracks.push({ id: uid(), name: `${t('Track', 'Pista')} ${state.tracks.filter(item => !item.stem).length + 1}`, gain: 1, mute: false, solo: false })));
   const exportButton = button('↓ WAV', t('Export playlist mix as WAV', 'Exportar mezcla de la playlist como WAV'), safe(exportMix));
   exportButton.className = 'pl-export';
-  toolbar.append(play, stopButton, time, tempo.label, tapButton, snapLabel, undo, redo, node('span', 'pl-spacer'), importButton, addTrack, exportButton, fileInput);
+  toolbar.append(play, stopButton, time, tempo.label, tapButton, fitTempo, snapLabel, undo, redo, node('span', 'pl-spacer'), importButton, addTrack, exportButton, fileInput);
   const shelf = node('div', 'pl-shelf'); shelf.setAttribute('aria-label', t('Sample library', 'Biblioteca de samples'));
   const scroll = node('div', 'pl-scroll'); scroll.tabIndex = 0; scroll.setAttribute('aria-label', t('Playlist timeline', 'Línea de tiempo de la playlist'));
   const grid = node('div', 'pl-grid'); scroll.append(grid);
@@ -258,7 +271,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   }
   scroll.addEventListener('wheel', event => {
     // Channel editors keep their own waveform zoom.
-    if (event.target.closest?.('.pl-drawer') || (!event.deltaY && !event.deltaX)) return;
+    if (!event.deltaY && !event.deltaX) return;
     event.preventDefault();
     if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) { scroll.scrollLeft += event.deltaX || event.deltaY; return; }
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
@@ -271,7 +284,8 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   function travel(forward) {
     const from = forward ? future : history, to = forward ? history : future;
     if (!from.length) return;
-    to.push(copy()); state = from.pop(); changed(); draw();
+    to.push(copy()); state = from.pop();
+    state.clips = state.clips.filter(clip => assets.has(clip.asset)); changed(); draw();
   }
   function checkBudget(next) {
     let bytes = 0; for (const asset of next.values()) bytes += asset.buffer.length * asset.buffer.numberOfChannels * 4;
@@ -305,13 +319,20 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     if (!spectrum && !analyzing.has(buffer)) {
       analyzing.add(buffer); spectrumOf(buffer).then(paintSoon, () => {});
     }
-    const data = buffer.getChannelData(0), bins = spectrum?.peaks.length;
+    const data = buffer.getChannelData(0), bins = spectrum?.peaks.length, loop = assets.get(clip.asset)?.loop ? buffer.duration : 0;
     const binSeconds = spectrum ? spectrum.durationMs / 1000 / bins : 0;
     const startX = Math.max(TRACK_HEAD, Math.floor(left)), endX = Math.min(scroll.clientWidth, Math.ceil(left + width));
+    let lastPass = null;
     for (let x = startX; x < endX; x++) {
       const a = clamp((x - left) / width, 0, 1), b = clamp((x + 1 - left) / width, 0, 1), span = clip.out - clip.in;
-      const from = clip.reverse ? clip.out - b * span : clip.in + a * span;
-      const to = clip.reverse ? clip.out - a * span : clip.in + b * span;
+      let from = clip.reverse ? clip.out - b * span : clip.in + a * span;
+      let to = clip.reverse ? clip.out - a * span : clip.in + b * span;
+      if (loop) {
+        const pass = Math.floor(from / loop + 1e-9);
+        // A faint line marks where a pattern clip repeats.
+        if (x > startX && pass !== lastPass) { ctx.fillStyle = '#ffffff40'; ctx.fillRect(x, top, 1, height); }
+        lastPass = pass; from -= pass * loop; to = Math.min(loop, to - pass * loop);
+      }
       let peak = 0;
       if (spectrum) {
         let low = 0, mid = 0, high = 0;
@@ -383,7 +404,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   }
   function draw() {
     TRACK_HEAD = parseFloat(getComputedStyle(container).getPropertyValue('--pl-head')) || 236;
-    tempo.input.value = state.bpm; undo.disabled = !history.length; redo.disabled = !future.length;
+    tempo.input.value = String(Math.round(state.bpm * 100) / 100); undo.disabled = !history.length; redo.disabled = !future.length;
     const extent = Math.min(LIMITS.seconds, Math.max(16, arrangementEnd(state) + 8)), width = Math.max(640, extent * zoom);
     grid.style.width = (width + TRACK_HEAD) + 'px'; grid.style.setProperty('--beat', (60 / state.bpm * zoom) + 'px');
     ruler.style.width = width + 'px'; ruler.replaceChildren();
@@ -392,12 +413,10 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     const band = node('div', 'pl-loop-band'); ruler.append(band); renderLoopBand(band);
     const rows = [rulerRow];
     state.tracks.forEach((track, index) => {
-      const clip = sourceClip(track.id);
-      const source = assets.get(track.stem ? `audio-${track.stem}` : clip?.asset);
-      const host = channel?.(track, source) || null;
+      const host = channel?.(track, trackSource(track.id)) || null;
       let view = rowViews.get(track.id);
       if (!view || view.host !== host) {
-        if (view) { view.row.remove(); view.drawer?.remove(); }
+        view?.row.remove();
         const row = node('div', 'pl-grid-row'), lane = node('div', 'pl-lane');
         const head = host?.head || userHead(track, index);
         head.classList.add('pl-track-head'); lane.dataset.track = track.id; row.append(head, lane);
@@ -409,8 +428,6 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
           if (asset) commit(() => { const clip = newClip(asset, track.id, at); selected = clip.id; state.clips.push(clip); });
         });
         view = { row, lane, head, host }; rowViews.set(track.id, view);
-        if (host?.waveform) lane.append(host.waveform);
-        if (host?.drawer) { view.drawer = node('div', 'pl-drawer-row'); host.drawer.classList.add('pl-drawer'); view.drawer.append(host.drawer); }
       }
       view.head.style.setProperty('--track-color', color(track));
       view.row.classList.toggle('is-silent', !trackAudible(state, track)); view.lane.style.width = width + 'px';
@@ -419,17 +436,12 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
         for (const key of ['mute', 'solo']) view.head.querySelector('[data-mix=' + key + ']').setAttribute('aria-pressed', String(track[key]));
         view.head.volume.show(Math.round(track.gain * 100));
       }
-      rows.push(view.row); if (view.drawer) rows.push(view.drawer);
-      if (host?.waveform) {
-        const clip = sourceClip(track.id), wave = host.waveform;
-        wave.hidden = !clip;
-        if (clip) { wave.style.left = (clip.at * zoom) + 'px'; wave.style.width = (clipDuration(clip) * zoom) + 'px'; }
-      }
+      rows.push(view.row);
     });
-    for (const [id, view] of rowViews) if (!state.tracks.some(t => t.id === id)) { view.row.remove(); view.drawer?.remove(); rowViews.delete(id); }
+    for (const [id, view] of rowViews) if (!state.tracks.some(t => t.id === id)) { view.row.remove(); rowViews.delete(id); }
     let cursor = grid.firstElementChild;
     for (const row of rows) { if (row === cursor) cursor = cursor.nextElementSibling; else grid.insertBefore(row, cursor); }
-    const shelfAssets = [...assets.values()].filter(asset => !asset.derived);
+    const shelfAssets = [...assets.values()];
     const nextShelf = shelfAssets.map(a => a.id + ':' + a.name).join('|');
     if (nextShelf !== shelfKey) {
       shelfKey = nextShelf; shelf.replaceChildren();
@@ -437,6 +449,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
         const b = button(asset.name, t('Drag onto a track, or click to add at cursor', 'Arrastrá a una pista o hacé clic para agregar en el cursor'), () => commit(() => {
           const clip = newClip(asset, picked()?.track || firstUserTrack(), position); state.clips.push(clip); selected = clip.id;
         }));
+        b.classList.toggle('is-pattern', !!asset.pattern); b.dataset.asset = asset.id;
         b.draggable = true; b.ondragstart = event => event.dataTransfer.setData('application/x-stem-sample', asset.id); shelf.append(b);
       }
     }
@@ -447,7 +460,7 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     item.setAttribute('aria-label', name + ', ' + clock(clip.at) + ', ' + clipPitch(clip) + ' ' + t('semitones', 'semitonos'));
     item.setAttribute('aria-pressed', String(clip.id === selected));
     item.style.left = (clip.at * zoom) + 'px'; item.style.width = Math.max(8, clipDuration(clip) * zoom) + 'px'; item.style.setProperty('--clip-color', color(trackOf(clip.track)));
-    item.classList.toggle('is-stretching', stretching(clip)); item.classList.toggle('is-muted', !!clip.mute);
+    item.classList.toggle('is-stretching', stretching(clip)); item.classList.toggle('is-muted', !!clip.mute); item.classList.toggle('is-pattern', isPattern(clip));
     item.querySelector('.pl-clip-title').textContent = (clip.reverse ? '↶ ' : '') + name + (clipPitch(clip) ? '  ' + signed(clipPitch(clip)) + ' st' : '') + (clip.speed !== 1 ? '  ' + clip.speed.toFixed(2) + '×' : '');
   }
   function clipElement(initial) {
@@ -479,6 +492,8 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     muteClip.setAttribute('aria-pressed', String(!!clip?.mute)); reverseClip.setAttribute('aria-pressed', String(!!clip?.reverse));
     pitch.show(clip?.pitch ?? 0); speed.show(clip?.speed ?? 1); gain.show(Math.round((clip?.gain ?? 1) * 100)); mode.value = clip?.keepLength === false ? 'resample' : 'stretch';
     for (const item of grid.querySelectorAll('.pl-clip')) item.setAttribute('aria-pressed', String(item.dataset.clip === selected));
+    // Reported on change only: redraws must not move the host's focus.
+    if (selected !== reported) { reported = selected; onSelect?.(clip && assets.get(clip.asset)); }
   }
   function beginDrag(event, clip, item) {
     if (event.button !== 0) return;
@@ -489,8 +504,10 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     item.onpointermove = move => {
       if (drag?.id !== move.pointerId) return;
       const original = drag.clip, delta = (move.clientX - drag.x + scroll.scrollLeft - drag.scroll) / zoom, speedRate = clipRate(original);
+      // Pattern clips have no source end: stretching them repeats the pattern.
+      const length = isPattern(clip) ? Infinity : assets.get(clip.asset).buffer.duration;
       if (editMode === 'slip' && !drag.edge) {
-        Object.assign(clip, slipClip(original, delta * (original.reverse ? -1 : 1), assets.get(clip.asset).buffer.duration));
+        Object.assign(clip, slipClip(original, delta * (original.reverse ? -1 : 1), length));
       } else if (editMode === 'stretch' && drag.edge === 'right') {
         const end = snapAt(original.at + clipDuration(original) + delta, move.altKey);
         const pitchRate = original.keepLength ? 1 : 2 ** (clipPitch(original) / 12);
@@ -499,9 +516,9 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
       } else if (drag.edge === 'right') {
         const end = snapAt(original.at + clipDuration(original) + delta, move.altKey);
         if (original.reverse) clip.in = clamp(original.out - (end - original.at) * speedRate, Math.max(0, original.out - (LIMITS.seconds - clip.at) * speedRate), original.out - .01 * speedRate);
-        else clip.out = clamp(original.in + (end - original.at) * speedRate, original.in + .01 * speedRate, Math.min(assets.get(clip.asset).buffer.duration, original.in + (LIMITS.seconds - clip.at) * speedRate));
+        else clip.out = clamp(original.in + (end - original.at) * speedRate, original.in + .01 * speedRate, Math.min(length, original.in + (LIMITS.seconds - clip.at) * speedRate));
       } else if (drag.edge === 'left') {
-        const room = original.reverse ? assets.get(clip.asset).buffer.duration - original.out : original.in;
+        const room = original.reverse ? length - original.out : original.in;
         const next = clamp(snapAt(original.at + delta, move.altKey), Math.max(0, original.at - room / speedRate), original.at + clipDuration(original) - .01);
         clip.at = next;
         if (original.reverse) clip.out = original.out - (next - original.at) * speedRate;
@@ -567,8 +584,6 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   // `saved` restores channel mix and clips from a preset; invalid data falls back.
   function setSession({ sources, saved = null, monitor = 'mix' }) {
     stop(true);
-    for (const id of derived.keys()) { cache.forget(id); assets.delete(id); }
-    derived.clear();
     for (const old of assets.values()) if (old.session) cache.forget(old.id);
     const next = new Map([...assets].filter(([, asset]) => !asset.session));
     for (const source of sources) next.set(source.id, { id: source.id, name: source.name, buffer: source.buffer, version: 0, session: true });
@@ -593,24 +608,16 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     state = candidate; assets = next; history = []; future = []; selected = null; liveBefore = null; position = loopRange?.start ?? 0;
     changed(); draw(); requestAnimationFrame(fit);
   }
-  function sourceClip(stem) {
-    const track = state.tracks.find(track => track.id === stem || track.stem === stem);
-    return state.clips.find(clip => clip.track === track?.id && (!track.stem || clip.asset === `audio-${track.stem}`)) || null;
-  }
-  function sourceTime(stem, seconds) {
-    const clip = sourceClip(stem);
-    return clip ? (clip.reverse ? clip.out - (seconds - clip.at) * clipRate(clip) : clip.in + (seconds - clip.at) * clipRate(clip)) : seconds;
-  }
-  function sourceRange(stem, range, toTimeline = false) {
-    const clip = sourceClip(stem); if (!clip || !range) return range;
-    const convert = seconds => toTimeline
-      ? clip.at + (clip.reverse ? clip.out - seconds : seconds - clip.in) / clipRate(clip)
-      : sourceTime(stem, seconds);
-    const a = convert(range.startMs / 1000), b = convert(range.endMs / 1000);
-    return { ...range, startMs: Math.min(a, b) * 1000, endMs: Math.max(a, b) * 1000 };
+  // The audio a track's instrument is cut from: the stem, or the first non-pattern clip.
+  function trackSource(id) {
+    const track = state.tracks.find(item => item.id === id || item.stem === id);
+    if (!track) return null;
+    const asset = track.stem ? assets.get(`audio-${track.stem}`) :
+      assets.get(state.clips.find(clip => clip.track === track.id && !isPattern(clip))?.asset);
+    return asset ? { id: asset.id, name: asset.name, buffer: asset.buffer } : null;
   }
   container.addEventListener('keydown', event => {
-    if (event.target.closest('input,select,textarea,.pl-drawer') || event.target.isContentEditable) return;
+    if (event.target.closest('input,select,textarea') || event.target.isContentEditable) return;
     const modifier = event.ctrlKey || event.metaKey;
     if (event.code === 'Space') { event.preventDefault(); event.stopPropagation(); if (!event.repeat) safe(toggle)(); }
     else if (modifier && event.key.toLowerCase() === 'z') { event.preventDefault(); travel(event.shiftKey); }
@@ -630,24 +637,9 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     track: stem => state.tracks.find(track => track.id === stem || track.stem === stem),
     tracks: () => state.tracks,
     duration: () => arrangementEnd(state),
-    sourceTime, sourceRange,
+    trackSource,
     audible: track => trackAudible(state, track),
     monitor: () => state.monitor,
-    sourceWindow(stem) {
-      const clip = sourceClip(stem);
-      return clip ? { startMs: (clip.reverse ? clip.out : clip.in) * 1000, endMs: (clip.reverse ? clip.in : clip.out) * 1000 } : { startMs: 0, endMs: 1 };
-    },
-    focusSource(stem, startMs, endMs) {
-      const clip = sourceClip(stem); if (!clip) return;
-      const from = clip.at + ((clip.reverse ? clip.out - endMs / 1000 : startMs / 1000 - clip.in) / clipRate(clip));
-      const span = Math.max(.1, (endMs - startMs) / 1000 / clipRate(clip));
-      zoom = clamp((scroll.clientWidth - TRACK_HEAD) / (span * 1.6), MIN_ZOOM, MAX_ZOOM);
-      draw(); scroll.scrollLeft = Math.max(0, (from - span * .3) * zoom); paintSoon();
-    },
-    sourceSeek(stem, seconds) {
-      const clip = sourceClip(stem);
-      if (clip) seek(clip.at + (clip.reverse ? clip.out - seconds : seconds - clip.in) / clipRate(clip));
-    },
     setMonitor(value) { state.monitor = value; engine?.update(playbackState(), transport()); draw(); onChange?.(); },
     // The host's A–B loop in timeline seconds; null loops the whole arrangement.
     setLoopRange(range) {
@@ -660,30 +652,42 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
       rate = value; clearTimeout(rateTimer);
       rateTimer = setTimeout(() => engine?.update(playbackState(), transport()), 40);
     },
-    // Derived audio is scoped to a track, even when multiple tracks share a sample.
-    setTrackBuffer(track, source, buffer) {
-      const original = assets.get(source); if (!original) return;
-      const id = derivedId(track, source), previous = derived.get(id);
-      if ((!previous && buffer === original.buffer) || previous?.buffer === buffer) return;
-      cache.forget(id);
-      if (buffer === original.buffer) { derived.delete(id); assets.delete(id); }
-      else {
-        const asset = { ...original, id, buffer, derived: true, version: (previous?.version || 0) + 1 };
-        derived.set(id, asset); assets.set(id, asset);
+    bpm: () => state.bpm,
+    // Looping assets for patterns, [{ id, name, buffer }]. Missing ones are removed with their clips.
+    setPatterns(list) {
+      const ids = new Set(list.map(item => item.id));
+      for (const [id, asset] of assets) if (asset.pattern && !ids.has(id)) { assets.delete(id); cache.forget(id); }
+      state.clips = state.clips.filter(clip => assets.has(clip.asset));
+      if (selected && !picked()) selected = null;
+      for (const item of list) {
+        const asset = assets.get(item.id);
+        if (!asset) assets.set(item.id, { id: item.id, name: item.name, buffer: item.buffer, version: 0, pattern: true, loop: true });
+        else {
+          asset.name = item.name;
+          if (asset.buffer !== item.buffer) { cache.forget(item.id); asset.buffer = item.buffer; asset.version++; }
+        }
       }
       engine?.update(playbackState(), transport()); prefetchStretches(playbackState(), assets, cache, report); draw();
     },
-    // A channel's audio replaced by a rendered pattern or melody lane of the same length.
-    setAssetBuffer(id, buffer) {
-      const asset = assets.get(id);
-      if (!asset || asset.buffer === buffer) return;
-      cache.forget(id); asset.buffer = buffer; asset.version++;
-      engine?.update(playbackState(), transport()); prefetchStretches(playbackState(), assets, cache, report); draw();
+    // Adds a clip at the bar under the playhead, on the first user track free there.
+    place(id) {
+      const asset = assets.get(id); if (!asset) return false;
+      const bar = 240 / state.bpm, at = Math.floor(now() / bar + 1e-6) * bar, end = at + asset.buffer.duration;
+      return commit(() => {
+        const free = state.tracks.find(track => !track.stem && !state.clips.some(clip => clip.track === track.id && clip.at < end && clip.at + clipDuration(clip) > at));
+        let track = free;
+        if (!track && state.tracks.length < LIMITS.tracks) {
+          track = { id: uid(), name: `${t('Track', 'Pista')} ${state.tracks.filter(item => !item.stem).length + 1}`, gain: 1, mute: false, solo: false };
+          state.tracks.push(track);
+        }
+        const clip = newClip(asset, (track || state.tracks.find(item => !item.stem) || state.tracks[0]).id, at);
+        state.clips.push(clip); selected = clip.id;
+      });
     },
     // Channel mix is saved by the host; the arrangement saves tempo and clips.
     snapshot: () => ({ bpm: state.bpm,
-      userTracks: state.tracks.filter(track => !track.stem && state.clips.filter(clip => clip.track === track.id).every(clip => assets.get(clip.asset)?.session)).map(track => ({ ...track })),
-      clips: state.clips.filter(clip => assets.get(clip.asset)?.session && (trackOf(clip.track)?.stem || state.clips.filter(other => other.track === clip.track).every(other => assets.get(other.asset)?.session))).map(clip => ({ ...clip })) }),
+      userTracks: state.tracks.filter(track => !track.stem && state.clips.filter(clip => clip.track === track.id).every(clip => savable(clip.asset))).map(track => ({ ...track })),
+      clips: state.clips.filter(clip => savable(clip.asset) && (trackOf(clip.track)?.stem || state.clips.filter(other => other.track === clip.track).every(other => savable(other.asset)))).map(clip => ({ ...clip })) }),
     dispose() {
       exporting?.abort(); engine?.dispose(); cache.dispose(); viewObserver.disconnect();
       cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();

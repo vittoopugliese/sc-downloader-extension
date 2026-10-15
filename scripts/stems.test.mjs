@@ -4,24 +4,69 @@ import fs from 'node:fs';
 import { separateAudio, encodeWav, validateAudio } from './stem-audio.mjs';
 import './stem-jobs.js';
 import { normalizeDrumSlice, editDrumSlice, detectDrumSlices } from './stem-sampler.mjs';
-import { normalizePiano, pitchRatio, noteName, MAX_PIANO_NOTES } from './stem-piano-core.mjs';
-import { normalizeSequence, songClip, patternPhase, sequenceStep, arrangeChannels } from './stem-sequencer-core.mjs';
+import { MAX_NOTES, migrateLegacy, noteName, normalizeInstrument, normalizePattern, normalizeProject, patternSeconds, pitchRatio } from './stem-pattern-core.mjs';
+import { loopSegments, retimePatternClips, validateArrangement } from './stem-playlist-core.mjs';
 
-test('piano presets normalize malformed notes, bound metadata and preserve hidden bars without mutating input', () => {
-  const buffer = { duration: 3, sampleRate: 44100 };
-  const value = { sample: { start: 1, end: 20 }, root: 200, octave: -5, mode: 'replace',
+test('patterns normalize malformed notes and steps, keep hidden bars and do not mutate input', () => {
+  const value = { id: 'p1', track: 'bass', name: '  Groove  ', bars: 3, steps: [[1.5, -1, .5]],
     notes: [{ pitch: 60, start: 40, length: 8, velocity: .5 }, { pitch: NaN, start: 0, length: 1 },
       { pitch: 100, start: 63.5, length: 500, velocity: -2 }, { pitch: 60, start: 64, length: 1 }] };
-  const normalized = normalizePiano(value, buffer);
-  assert.equal(normalized.root, 96); assert.equal(normalized.sample.end, 3);
-  assert.equal(normalized.octave, 1); assert.equal(normalized.mode, 'replace');
-  assert.deepEqual(normalized.notes, [{ pitch: 60, start: 40, length: 8, velocity: .5 }, { pitch: 96, start: 63.5, length: 64, velocity: .01 }]);
-  assert.equal(value.sample.end, 20); assert.equal(value.notes.length, 4);
-  assert.equal(normalizePiano({ notes: Array(10000).fill({ pitch: 60, start: 0, length: 1 }) }, buffer).notes.length, MAX_PIANO_NOTES);
-  assert.deepEqual(normalizePiano(undefined, buffer).notes, []);
-  assert.equal(normalizePiano({ notes: {} }, buffer).mode, 'off');
+  const pattern = normalizePattern(value);
+  assert.equal(pattern.name, 'Groove'); assert.equal(pattern.bars, 1, 'Only 1, 2 or 4 bars');
+  assert.deepEqual(pattern.steps[0].slice(0, 3), [1, 0, .5]); assert.equal(pattern.steps.length, 8); assert.equal(pattern.steps[7].length, 64);
+  assert.deepEqual(pattern.notes, [{ pitch: 60, start: 40, length: 8, velocity: .5 }, { pitch: 96, start: 63.5, length: 64, velocity: .01 }]);
+  assert.equal(value.notes.length, 4); assert.equal(value.steps[0][0], 1.5);
+  assert.equal(normalizePattern({ ...value, notes: Array(10000).fill({ pitch: 60, start: 0, length: 1 }) }).notes.length, MAX_NOTES);
+  for (const bad of [null, {}, { id: 'p', track: '../x' }, { id: '', track: 'bass' }]) assert.equal(normalizePattern(bad), null);
+  const project = normalizeProject({ instruments: { bass: { piano: { pad: 12, root: 200, snap: 3 } }, 'x y': {} }, patterns: [value, value, null] });
+  assert.deepEqual(Object.keys(project.instruments), ['bass']);
+  assert.deepEqual(project.instruments.bass.piano, { pad: 7, root: 96, sustain: false, octave: 3, snap: 1 });
+  assert.equal(project.patterns.length, 1, 'Duplicate pattern IDs are dropped');
+  const bounded = normalizeInstrument({ slices: [{ start: 1, end: 20 }, { start: 5 }] }, { duration: 3, sampleRate: 44100 });
+  assert.equal(bounded.slices[0].end, 3); assert.equal(bounded.slices[1], null);
+  assert.equal(patternSeconds({ bars: 2 }, 120), 4);
   assert.equal(pitchRatio(72, 60), 2); assert.equal(pitchRatio(48, 60), .5);
   assert.equal(noteName(60), 'C4'); assert.equal(noteName(69), 'A4');
+});
+
+test('per-track editor presets migrate to instruments and patterns; the piano sample takes a free pad', () => {
+  let id = 0;
+  const migrated = migrateLegacy({ trackEditors: {
+    drums: { slices: [{ start: .1, end: .2 }, null], sequence: { bars: 2, steps: [[0, .8]], enabled: true, song: true } },
+    other: { piano: { sample: { start: 1, end: 1.5 }, root: 57, sustain: true, notes: [{ pitch: 60, start: 0, length: 4 }] } },
+    vocals: { slices: [], sequence: { steps: [] } },
+  } }, () => 'p' + ++id);
+  assert.deepEqual(Object.keys(migrated.instruments), ['drums', 'other'], 'Untouched tracks are skipped');
+  assert.equal(migrated.patterns.length, 2);
+  assert.deepEqual([migrated.patterns[0].track, migrated.patterns[0].bars, migrated.patterns[0].steps[0][1]], ['drums', 2, .8]);
+  assert.deepEqual(migrated.instruments.other.slices[0], { start: 1, end: 1.5 });
+  assert.deepEqual(migrated.instruments.other.piano, { pad: 0, root: 57, sustain: true, octave: 3, snap: 1 });
+  assert.equal(migrated.patterns[1].notes.length, 1);
+  // The oldest presets stored drum starts and one piano outside trackEditors.
+  const oldest = migrateLegacy({ drumStarts: [.5], piano: { sample: { start: 2 } } }, () => 'x');
+  assert.equal(oldest.instruments.drums.slices[0].start, .5); assert.equal(oldest.patterns.length, 0);
+  assert.deepEqual(migrateLegacy(null), { instruments: {}, patterns: [] });
+});
+
+test('pattern clips repeat past one pass, in timeline order, and keep their position in beats on tempo changes', () => {
+  const base = { id: 'c', asset: 'pattern:p', track: 't', at: 1, in: 0, out: 5, pitch: 0, cents: 0, speed: 1, keepLength: true, gain: 1, fadeIn: .5, fadeOut: .25 };
+  const pieces = loopSegments(base, 2);
+  assert.deepEqual(pieces.map(c => [c.at, c.in, c.out]), [[1, 0, 2], [3, 0, 2], [5, 0, 1]]);
+  assert.deepEqual(pieces.map(c => [c.fadeIn, c.fadeOut]), [[.5, 0], [0, 0], [0, .25]]);
+  assert.equal(new Set(pieces.map(c => c.id)).size, 3);
+  assert.deepEqual(loopSegments({ ...base, in: 1, out: 2 }, 2), [{ ...base, in: 1, out: 2 }], 'One pass stays one clip');
+  // Reversed: the end of the source plays first.
+  assert.deepEqual(loopSegments({ ...base, reverse: true, in: 0, out: 3 }, 2).map(c => [c.at, c.in, c.out]), [[1, 0, 1], [2, 0, 2]]);
+  // Pitch changes the rate, so passes are shorter on the timeline.
+  assert.deepEqual(loopSegments({ ...base, pitch: 12, keepLength: false, out: 4 }, 2).map(c => c.at), [1, 2]);
+  const asset = { id: 'pattern:p', loop: true, buffer: { duration: 2 } };
+  const state = { version: 1, bpm: 120, monitor: 'mix', tracks: [{ id: 't', name: 'T', gain: 1, mute: false, solo: false }], clips: [base, { ...base, id: 'audio', asset: 'a', out: 1 }] };
+  validateArrangement(state, new Map([['pattern:p', asset], ['a', { buffer: { duration: 1 } }]]));
+  assert.throws(() => validateArrangement(state, new Map([['pattern:p', { ...asset, loop: false }], ['a', { buffer: { duration: 1 } }]])));
+  retimePatternClips(state, 60, clip => clip.asset === 'pattern:p');
+  assert.equal(state.bpm, 60);
+  assert.deepEqual([state.clips[0].at, state.clips[0].out, state.clips[0].fadeIn], [2, 10, 1], 'Half tempo: same bar, twice the seconds');
+  assert.deepEqual([state.clips[1].at, state.clips[1].out], [1, 1], 'Audio clips keep their seconds');
 });
 
 test('drum slices default to 154 ms and migrate start-only presets without playing the remaining stem', () => {
@@ -58,35 +103,6 @@ test('auto-slice finds kick, snare and hat attacks sample-close and cuts at the 
   assert.deepEqual(looped.map(slice => Math.round(slice.start * 20) / 20), [.6, .85, 1.1]);
   assert.ok(looped.at(-1).end <= 1.15 + 1e-9);
   assert.deepEqual(detectDrumSlices({ ...buffer, getChannelData: () => new Float32Array(length) }), []);
-});
-
-test('SONG mode repeats the pattern on the grid inside a bar-snapped playlist clip', () => {
-  const buffer = { duration: 20, sampleRate: 1000 };
-  // 120 BPM: 2 s bars; first beat at 3 s, so a partial bar -2 starts at 0 s.
-  const state = normalizeSequence({ bpm: 120, bars: 2, start: 3, song: true, enabled: true }, buffer.duration);
-  assert.deepEqual(songClip(state, buffer.duration), { from: 0, to: 9, first: -2, last: 9, start: 3, end: 20 });
-  assert.equal(patternPhase(state, buffer, 2.9), -1, 'Silent before the clip');
-  assert.equal(patternPhase(state, buffer, 3), 0);
-  assert.equal(patternPhase(state, buffer, 9), .5, 'Second repeat, halfway through the 4 s pattern');
-  assert.equal(sequenceStep(state, buffer, 9), 16);
-  const clipped = { ...state, clip: { from: -2, to: 2 } };
-  assert.deepEqual(songClip(clipped, buffer.duration), { from: -2, to: 2, first: -2, last: 9, start: 0, end: 7 });
-  assert.equal(patternPhase(clipped, buffer, 1), .5, 'Bars before the first beat keep the grid phase');
-  assert.equal(patternPhase(clipped, buffer, 7), -1);
-  assert.equal(patternPhase({ ...state, song: false }, buffer, 9), -1, 'PAT mode only plays its own bars');
-  assert.equal(normalizeSequence({ clip: { from: 1.5, to: 'x' } }, 10).clip.from, null);
-});
-
-test('SONG lanes keep the stem outside the clip and tile the pattern from the first beat inside it', () => {
-  const source = Float32Array.from({ length: 100 }, () => 1), tile = Float32Array.from({ length: 10 }, (_, i) => i / 10);
-  const out = new Float32Array(100);
-  arrangeChannels([out], [source], [tile], { offset: 3, from: 20, to: 60, attack: 1, fade: 1 });
-  assert.equal(out[19], 1); assert.equal(out[60], 1);
-  assert.ok(Math.abs(out[20] - .7) < 1e-6, 'Frame 20 is step 7 of a tile anchored at frame 3');
-  assert.ok(Math.abs(out[33] - 0) < 1e-6);
-  const layered = new Float32Array(100);
-  arrangeChannels([layered], [source], [tile], { offset: 0, from: 0, to: 100, layer: true, attack: 1, fade: 1 });
-  assert.ok(Math.abs(layered[45] - 1.5) < 1e-6, 'Layer mode adds the pattern to the stem');
 });
 
 test('sample trim and fades remain bounded at the final PCM frame and after extreme edits', () => {
@@ -141,8 +157,7 @@ test('the shipping allow-list contains the analyzer and every local runtime depe
   const required = ['stems.html', 'assets/stems.css', 'scripts/stems-page.mjs', 'scripts/stem-audio.mjs',
     'scripts/stem-presets.mjs', 'scripts/stem-library-ui.mjs', 'scripts/stem-tone-processor.mjs',
     'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/local-audio-output.mjs', 'assets/icons/mute.svg',
-    'scripts/stem-sequencer-core.mjs', 'scripts/stem-sequencer.mjs',
-    'scripts/stem-piano-core.mjs', 'scripts/stem-piano.mjs', 'scripts/stem-track-editor.mjs',
+    'scripts/stem-pattern-core.mjs', 'scripts/stem-instruments.mjs', 'scripts/stem-channel-rack.mjs', 'scripts/stem-piano.mjs',
     'scripts/parametric-eq.js', 'scripts/parametric-eq-ui.js', 'scripts/player-tools-collapsible.js',
     'scripts/record-core.js', 'scripts/record-ui.js', 'scripts/record-processor.js',
     'scripts/stem-model.mjs', 'scripts/stem-worker.mjs', 'scripts/stem-jobs.js',

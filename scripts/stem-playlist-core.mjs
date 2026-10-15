@@ -29,7 +29,7 @@ export function validateArrangement(state, assets) {
     const asset = assets.get(clip.asset);
     if (!asset || !tracks.has(clip.track) || typeof clip.id !== 'string' || clips.has(clip.id) ||
         !['at', 'in', 'out', 'pitch', 'speed', 'gain'].every(key => Number.isFinite(clip[key])) ||
-        clip.at < 0 || clip.in < 0 || clip.out <= clip.in || clip.out > asset.buffer.duration + 1e-6 ||
+        clip.at < 0 || clip.in < 0 || clip.out <= clip.in || (!asset.loop && clip.out > asset.buffer.duration + 1e-6) ||
         Math.abs(clip.pitch) > 24 || clip.speed < .25 || clip.speed > 4 || clip.gain < 0 || clip.gain > 2 ||
         typeof clip.keepLength !== 'boolean' || clip.at + clipDuration(clip) > LIMITS.seconds + 1e-6) throw new Error('Invalid clip or playlist exceeds 5 minutes.');
     for (const key of ['mute', 'reverse']) if (clip[key] !== undefined && typeof clip[key] !== 'boolean') throw new Error('Invalid clip flag.');
@@ -38,6 +38,32 @@ export function validateArrangement(state, assets) {
     clips.add(clip.id);
   }
   return state;
+}
+// Looping assets (patterns) repeat when a clip runs past their length, as FL Studio
+// pattern clips do. Playback and export see one plain clip per pass, in timeline order;
+// the clip's fades apply to its first and last pass.
+export function loopSegments(clip, length) {
+  if (!(length > 0) || clip.out <= length + 1e-6) return [clip];
+  const rate = clipRate(clip), pieces = [];
+  for (let from = clip.in; from < clip.out - 1e-6;) {
+    const cycle = Math.floor(from / length + 1e-9), to = Math.min(clip.out, (cycle + 1) * length);
+    if (to - from > 1e-4) pieces.push({ ...clip, id: `${clip.id}#${pieces.length}`, at: clip.at + (clip.reverse ? clip.out - to : from - clip.in) / rate,
+      in: from - cycle * length, out: Math.min(length, to - cycle * length), fadeIn: 0, fadeOut: 0 });
+    from = to;
+  }
+  if (!pieces.length) return [clip];
+  pieces.sort((a, b) => a.at - b.at);
+  pieces[0].fadeIn = clip.fadeIn || 0; pieces.at(-1).fadeOut = clip.fadeOut || 0;
+  return pieces;
+}
+// Patterns follow the project tempo: their clips keep their position in beats.
+export function retimePatternClips(state, bpm, isPattern) {
+  const factor = state.bpm / bpm;
+  for (const clip of state.clips) if (isPattern(clip)) {
+    clip.at *= factor; clip.in *= factor; clip.out *= factor;
+    clip.fadeIn = (clip.fadeIn || 0) * factor; clip.fadeOut = (clip.fadeOut || 0) * factor;
+  }
+  state.bpm = bpm;
 }
 export function splitClip(clip, seconds) {
   if (seconds <= clip.at + .01 || seconds >= clip.at + clipDuration(clip) - .01) return null;

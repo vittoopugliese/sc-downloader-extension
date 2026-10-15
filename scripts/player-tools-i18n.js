@@ -4,15 +4,25 @@
   'use strict';
   const locales = ['en', 'es', 'de', 'pt-BR', 'ru'];
   const rows = `
-Choose a sample from this track, assign its root note, then draw your melody.¦Elegí un sample de esta pista, asigná su nota raíz y dibujá tu melodía.¦Wähle ein Sample aus dieser Spur, lege seinen Grundton fest und zeichne deine Melodie.¦Escolha uma amostra desta faixa, atribua sua nota base e desenhe sua melodia.¦Выберите сэмпл из этой дорожки, задайте основную ноту и нарисуйте мелодию.
-Click the waveform of this track to select a sample. Drag its edges and fades.¦Clic o arrastrá en la onda de esta pista para seleccionar un sample. Editá sus bordes y fades.¦Klicke auf die Wellenform dieser Spur, um ein Sample auszuwählen. Ziehe seine Ränder und Fades.¦Clique na onda desta faixa para selecionar uma amostra. Arraste suas bordas e fades.¦Нажмите на волну этой дорожки, чтобы выбрать сэмпл. Перетащите края и затухания.
-Pad $1: click the waveform of this track to set its start. Esc cancels.¦Pad $1: clic en la onda de esta pista para fijar el inicio. Esc cancela.¦Pad $1: Wellenform dieser Spur anklicken, um den Start festzulegen. Esc bricht ab.¦Pad $1: clique na onda desta faixa para definir o início. Esc cancela.¦Пэд $1: нажмите на волну этой дорожки, чтобы задать начало. Esc — отмена.
-Original audio¦Audio original¦Originalaudio¦Áudio original¦Исходное аудио
-Pattern replaces this track · click for the original audio¦El patrón reemplaza esta pista · clic para escuchar el audio original¦Pattern ersetzt diese Spur · klicken für Originalaudio¦O padrão substitui esta faixa · clique para ouvir o áudio original¦Паттерн заменяет эту дорожку · нажмите для исходного аудио
-Original audio · click to play the pattern¦Audio original · clic para reproducir el patrón¦Originalaudio · klicken, um das Pattern abzuspielen¦Áudio original · clique para reproduzir o padrão¦Исходное аудио · нажмите для воспроизведения паттерна
-Replace audio¦Reemplazar audio¦Audio ersetzen¦Substituir áudio¦Заменить аудио
+Channel rack¦Channel Rack¦Channel Rack¦Channel Rack¦Channel Rack
+Playlist track¦Pista¦Spur¦Faixa¦Дорожка
+Pattern length¦Largo del patrón¦Pattern-Länge¦Duração do padrão¦Длина паттерна
+New pattern¦Nuevo patrón¦Neues Pattern¦Novo padrão¦Новый паттерн
+Duplicate pattern¦Duplicar patrón¦Pattern duplizieren¦Duplicar padrão¦Дублировать паттерн
+Delete pattern¦Eliminar patrón¦Pattern löschen¦Excluir padrão¦Удалить паттерн
+Add to playlist¦Agregar a la playlist¦Zur Playlist hinzufügen¦Adicionar à playlist¦Добавить в плейлист
+Playlist¦Playlist¦Playlist¦Playlist¦Плейлист
+Auto-slice the visible audio into the eight pads¦Cortar automáticamente el audio visible en los ocho pads¦Sichtbares Audio automatisch auf die acht Pads schneiden¦Fatiar automaticamente o áudio visível nos oito pads¦Автоматически нарезать видимое аудио на восемь пэдов
+Clear steps¦Borrar pasos¦Schritte löschen¦Limpar passos¦Очистить шаги
+Separate or import audio to start.¦Separá o importá audio para empezar.¦Trenne oder importiere Audio, um zu beginnen.¦Separe ou importe áudio para começar.¦Разделите или импортируйте аудио, чтобы начать.
+Click to play · right-click to choose another sample¦Clic para escuchar · clic derecho para elegir otro sample¦Klicken zum Abspielen · Rechtsklick für ein anderes Sample¦Clique para ouvir · clique direito para escolher outra amostra¦Нажмите для прослушивания · правая кнопка — другой сэмпл
+Pad $1: click or drag on the waveform to choose its sample. Esc cancels.¦Pad $1: hacé clic o arrastrá en la onda para elegir su sample. Esc cancela.¦Pad $1: Auf die Wellenform klicken oder ziehen, um das Sample zu wählen. Esc bricht ab.¦Pad $1: clique ou arraste na onda para escolher a amostra. Esc cancela.¦Пэд $1: нажмите или протяните по волне, чтобы выбрать сэмпл. Esc — отмена.
+A S D F G H J K play the pads. Drag on the waveform to re-cut the selected pad; wheel zooms. Click a step to add a hit, drag it up or down for velocity.¦A S D F G H J K tocan los pads. Arrastrá en la onda para recortar de nuevo el pad elegido; la rueda hace zoom. Clic en un paso agrega un golpe; arrastralo arriba o abajo para la intensidad.¦A S D F G H J K spielen die Pads. Auf der Wellenform ziehen, um das gewählte Pad neu zu schneiden; Mausrad zoomt. Klick auf einen Schritt setzt einen Schlag, nach oben oder unten ziehen für die Anschlagstärke.¦A S D F G H J K tocam os pads. Arraste na onda para recortar o pad escolhido; a roda dá zoom. Clique num passo para adicionar um golpe; arraste para cima ou para baixo para a intensidade.¦A S D F G H J K играют пэды. Протяните по волне, чтобы заново нарезать выбранный пэд; колесо — масштаб. Нажмите на шаг, чтобы добавить удар; тяните вверх или вниз для силы.
+Piano sample¦Sample del piano¦Piano-Sample¦Amostra do piano¦Сэмпл пианино
+empty¦vacío¦leer¦vazio¦пусто
+Pad $1 has no sample. Choose one in the channel rack, or pick another pad.¦El pad $1 no tiene sample. Elegí uno en el Channel Rack o usá otro pad.¦Pad $1 hat kein Sample. Wähle eines im Channel Rack oder nimm ein anderes Pad.¦O pad $1 não tem amostra. Escolha uma no Channel Rack ou use outro pad.¦У пэда $1 нет сэмпла. Выберите его в Channel Rack или используйте другой пэд.
+Click to add a note with the length and velocity of the last note you clicked. Drag to move, drag the right edge to resize, Alt + drag up or down for velocity. Right-click deletes; Ctrl+D duplicates.¦Clic para agregar una nota con el largo y la intensidad de la última nota que tocaste. Arrastrá para mover, el borde derecho para alargar, Alt + arrastrar arriba o abajo para la intensidad. Clic derecho borra; Ctrl+D duplica.¦Klicken fügt eine Note mit Länge und Anschlagstärke der zuletzt angeklickten Note hinzu. Ziehen verschiebt, rechter Rand ändert die Länge, Alt + nach oben oder unten ziehen ändert die Anschlagstärke. Rechtsklick löscht; Strg+D dupliziert.¦Clique para adicionar uma nota com a duração e a intensidade da última nota clicada. Arraste para mover, a borda direita para alongar, Alt + arrastar para cima ou para baixo para a intensidade. Clique direito apaga; Ctrl+D duplica.¦Нажмите, чтобы добавить ноту с длиной и силой последней нажатой ноты. Тяните, чтобы двигать; правый край — длина; Alt + вверх или вниз — сила. Правая кнопка удаляет; Ctrl+D дублирует.
 Add a sample to this track to use its editors.¦Agregá un sample a esta pista para usar sus editores.¦Füge dieser Spur ein Sample hinzu, um ihre Editoren zu verwenden.¦Adicione uma amostra a esta faixa para usar seus editores.¦Добавьте сэмпл на эту дорожку, чтобы использовать её редакторы.
-
 Stem Extractor¦Separador de stems¦Stem-Extraktor¦Separador de stems¦Разделение на стемы
 MINI DAW¦MINI DAW¦MINI DAW¦MINI DAW¦МИНИ-DAW
 Tone & Velocity¦Tono y velocidad¦Tonhöhe & Tempo¦Tom e velocidade¦Тон и скорость
@@ -29,63 +39,29 @@ Wheel: zoom · Shift + wheel: pan¦Rueda: zoom · Shift + rueda: desplazar¦Maus
 Enable $1¦Activar $1¦$1 aktivieren¦Ativar $1¦Включить $1
 Enable/disable $1 · Right-click: hear only this track¦Activar/desactivar $1 · Clic derecho: escuchar solo esta pista¦$1 ein-/ausschalten · Rechtsklick: nur diese Spur hören¦Ativar/desativar $1 · Clique direito: ouvir só esta faixa¦Включить/выключить $1 · Правая кнопка: слушать только эту дорожку
 Sampler¦Sampler¦Sampler¦Sampler¦Сэмплер
-Sequencer¦Secuenciador¦Sequenzer¦Sequenciador¦Секвенсор
 Piano roll¦Piano roll¦Piano-Roll¦Piano roll¦Пианоролл
-Select piano sample¦Seleccionar sample de piano¦Piano-Sample auswählen¦Selecionar amostra de piano¦Выбрать сэмпл для пианоролла
-Click the instruments waveform to select a sample. Drag its edges and fades.¦Clic o arrastrá en la onda de instrumentos para seleccionar un sample. Editá sus bordes y fades.¦Klicke oder ziehe auf der Instrumenten-Wellenform, um ein Sample auszuwählen. Ränder und Fades bearbeiten.¦Clique ou arraste na onda dos instrumentos para selecionar uma amostra. Edite bordas e fades.¦Нажмите или перетащите по волне инструментов, чтобы выбрать сэмпл. Настройте края и затухание.
 Root note¦Nota raíz¦Grundton¦Nota base¦Основная нота
-Piano playback¦Reproducción del piano¦Piano-Wiedergabe¦Reprodução do piano¦Воспроизведение пианоролла
-Original instruments¦Instrumentos originales¦Originalinstrumente¦Instrumentos originais¦Исходные инструменты
-Layer piano¦Agregar piano¦Piano hinzufügen¦Adicionar piano¦Добавить пианоролл
-Replace instruments¦Reemplazar instrumentos¦Instrumente ersetzen¦Substituir instrumentos¦Заменить инструменты
 BPM¦BPM¦BPM¦BPM¦BPM
-Use loop start as first beat¦Usar el inicio del loop como primer tiempo¦Loop-Anfang als erste Zählzeit verwenden¦Usar o início do loop como primeiro tempo¦Начало лупа как первая доля
 Snap notes¦Ajuste de notas¦Notenraster¦Grade de notas¦Привязка нот
 Keyboard range¦Rango del teclado¦Tastaturbereich¦Extensão do teclado¦Диапазон клавиатуры
 Loop sample during notes¦Repetir sample durante la nota¦Sample während der Note wiederholen¦Repetir amostra durante a nota¦Повторять сэмпл на протяжении ноты
 Undo notes¦Deshacer notas¦Noten rückgängig¦Desfazer notas¦Отменить ноты
 Redo notes¦Rehacer notas¦Noten wiederherstellen¦Refazer notas¦Повторить ноты
-Duplicate note¦Duplicar nota¦Note duplizieren¦Duplicar nota¦Дублировать ноту
-Delete note¦Eliminar nota¦Note löschen¦Excluir nota¦Удалить ноту
 Clear piano notes¦Borrar notas del piano¦Piano-Noten löschen¦Limpar notas do piano¦Очистить ноты пианоролла
-Note velocity¦Intensidad de la nota¦Anschlagstärke¦Intensidade da nota¦Сила нажатия
 Piano notes¦Notas del piano¦Piano-Noten¦Notas do piano¦Ноты пианоролла
 Preview note¦Escuchar nota¦Note vorhören¦Ouvir nota¦Прослушать ноту
-Choose a sample from the instruments stem, assign its root note, then draw your melody.¦Elegí un sample del stem de instrumentos, asigná su nota raíz y dibujá tu melodía.¦Wähle ein Sample aus dem Instrumenten-Stem, lege seinen Grundton fest und zeichne deine Melodie.¦Escolha uma amostra do stem de instrumentos, atribua sua nota base e desenhe sua melodia.¦Выберите сэмпл из стема инструментов, задайте основную ноту и нарисуйте мелодию.
 Piano note limit reached (512).¦Se alcanzó el límite de 512 notas.¦Limit von 512 Noten erreicht.¦Limite de 512 notas atingido.¦Достигнут лимит в 512 нот.
-Click to draw notes; drag to move, drag the right edge to resize. Delete removes; arrows move; Shift + Left/Right resizes.¦Clic para dibujar; arrastrá para mover o desde el borde derecho para alargar. Supr borra; flechas mueven; Shift + Izq./Der. cambia la duración.¦Klicken zeichnet Noten; ziehen verschiebt, rechter Rand ändert die Länge. Entf löscht; Pfeile verschieben; Umschalt + Links/Rechts ändert die Länge.¦Clique para desenhar; arraste para mover ou pela borda direita para redimensionar. Delete apaga; setas movem; Shift + Esquerda/Direita altera a duração.¦Нажмите для создания нот; перетаскивайте для перемещения, правый край меняет длину. Delete удаляет; стрелки перемещают; Shift + Влево/Вправо меняет длину.
-Tempo (BPM) · uses the speed slider; Keep Tone keeps the pitch¦Tempo (BPM) · usa el slider de velocidad; Mantener tono conserva la altura¦Tempo (BPM) · nutzt den Tempo-Regler; Tonhöhe halten bewahrt die Tonhöhe¦Tempo (BPM) · usa o controle de velocidade; Manter tom preserva a altura¦Темп (BPM) · использует ползунок скорости; «Сохранять тон» сохраняет высоту
 Grid¦Grilla¦Raster¦Grade¦Сетка
-Fit the grid to the A–B loop¦Ajustar la grilla al loop A–B¦Raster an den A–B-Loop anpassen¦Ajustar a grade ao loop A–B¦Подогнать сетку под луп A–B
-Half grid tempo¦Mitad del tempo de la grilla¦Halbes Raster-Tempo¦Metade do tempo da grade¦Половина темпа сетки
-Double grid tempo¦Doble del tempo de la grilla¦Doppeltes Raster-Tempo¦Dobro do tempo da grade¦Удвоить темп сетки
-Set the first beat on the waveform¦Marcar el primer tiempo en la waveform¦Ersten Schlag in der Wellenform setzen¦Marcar o primeiro tempo na forma de onda¦Указать первую долю на волне
-First beat · drag to align the grid¦Primer tiempo · arrastrá para alinear la grilla¦Erster Schlag · ziehen, um das Raster auszurichten¦Primeiro tempo · arraste para alinhar a grade¦Первая доля · перетащите, чтобы выровнять сетку
-Pattern replaces the drum stem · click for the original drums¦El patrón reemplaza la batería · clic para la batería original¦Pattern ersetzt das Schlagzeug · klicken für das Original¦O padrão substitui a bateria · clique para a bateria original¦Паттерн заменяет ударные · нажмите для оригинала
-Original drums · click to play the pattern¦Batería original · clic para tocar el patrón¦Original-Schlagzeug · klicken, um das Pattern zu spielen¦Bateria original · clique para tocar o padrão¦Оригинальные ударные · нажмите, чтобы играть паттерн
-Drum sequencer¦Secuenciador de batería¦Drum-Sequenzer¦Sequenciador de bateria¦Секвенсор ударных
 Pattern¦Patrón¦Pattern¦Padrão¦Паттерн
 Bars¦Compases¦Takte¦Compassos¦Такты
-Show pattern loop¦Ver loop del patrón¦Pattern-Loop anzeigen¦Ver loop do padrão¦Показать луп паттерна
 Bar $1¦Compás $1¦Takt $1¦Compasso $1¦Такт $1
-Pattern clip start¦Inicio del clip del patrón¦Pattern-Clip-Anfang¦Início do clipe do padrão¦Начало клипа паттерна
-Pattern clip end¦Fin del clip del patrón¦Pattern-Clip-Ende¦Fim do clipe do padrão¦Конец клипа паттерна
-Song mode · the pattern repeats along the track inside its clip; drag the clip edges¦Modo canción · el patrón se repite a lo largo del tema dentro de su clip; arrastrá los bordes del clip¦Song-Modus · das Pattern wiederholt sich im Clip über den Track; Clip-Ränder ziehen¦Modo música · o padrão se repete ao longo da faixa dentro do clipe; arraste as bordas do clipe¦Режим песни · паттерн повторяется по треку внутри клипа; перетаскивайте края клипа
-Pattern mode · the A–B loop follows the pattern bars¦Modo patrón · el loop A–B sigue los compases del patrón¦Pattern-Modus · der A–B-Loop folgt den Pattern-Takten¦Modo padrão · o loop A–B segue os compassos do padrão¦Режим паттерна · луп A–B следует тактам паттерна
 Step $1¦Paso $1¦Schritt $1¦Passo $1¦Шаг $1
 Pattern steps¦Pasos del patrón¦Pattern-Schritte¦Passos do padrão¦Шаги паттерна
 Pad¦Pad¦Pad¦Pad¦Пэд
-Hit velocity¦Intensidad del golpe¦Anschlagstärke¦Intensidade da batida¦Сила удара
-Clear bar¦Vaciar compás¦Takt leeren¦Limpar compasso¦Очистить такт
 Assign a sample¦Asignar un sample¦Sample zuweisen¦Atribuir amostra¦Назначить сэмпл
 Play pattern¦Reproducir patrón¦Pattern abspielen¦Reproduzir padrão¦Играть паттерн
 Pause¦Pausar¦Pause¦Pausar¦Пауза
-The pattern exceeds the audio. Move the first beat, use fewer bars or raise the BPM.¦El patrón supera el audio. Mové el primer tiempo, usá menos compases o subí el BPM.¦Das Pattern ist länger als das Audio. Verschiebe den ersten Schlag, nutze weniger Takte oder erhöhe die BPM.¦O padrão ultrapassa o áudio. Mova o primeiro tempo, use menos compassos ou aumente o BPM.¦Паттерн выходит за пределы аудио. Сдвиньте первую долю, уменьшите число тактов или увеличьте BPM.
-Click the drum waveform to set the first beat. Esc cancels.¦Hacé clic en la waveform de batería para marcar el primer tiempo. Esc cancela.¦Klicke auf die Drum-Wellenform, um den ersten Schlag zu setzen. Esc bricht ab.¦Clique na forma de onda da bateria para marcar o primeiro tempo. Esc cancela.¦Нажмите на волну ударных, чтобы указать первую долю. Esc — отмена.
-Choose a row letter, then click the waveform to assign a sample.¦Elegí la letra de una fila y hacé clic en la waveform para asignar un sample.¦Wähle einen Zeilenbuchstaben und klicke auf die Wellenform, um ein Sample zuzuweisen.¦Escolha a letra de uma linha e clique na forma de onda para atribuir uma amostra.¦Выберите букву строки, затем нажмите на волну, чтобы назначить сэмпл.
-Click to add or remove hits. Shift + click selects a hit to edit its velocity.¦Clic para agregar o quitar golpes. Shift + clic selecciona un golpe para editar su intensidad.¦Klicken fügt Schläge hinzu oder entfernt sie. Umschalt + Klick wählt einen Schlag zum Ändern der Stärke.¦Clique para adicionar ou remover batidas. Shift + clique seleciona uma batida para editar a intensidade.¦Щелчок добавляет или удаляет удары. Shift + щелчок выбирает удар для изменения силы.
 Edit sample¦Editar sample¦Sample bearbeiten¦Editar amostra¦Редактировать сэмпл
-Auto-slice the loop¦Cortar el loop automáticamente¦Loop automatisch slicen¦Fatiar o loop automaticamente¦Автоматически нарезать луп
 Sample start¦Inicio del sample¦Sample-Anfang¦Início da amostra¦Начало сэмпла
 Sample end¦Fin del sample¦Sample-Ende¦Fim da amostra¦Конец сэмпла
 Fade in¦Entrada suave¦Einblenden¦Entrada suave¦Нарастание
@@ -93,8 +69,6 @@ Fade out¦Salida suave¦Ausblenden¦Saída suave¦Затухание
 A S D F G H J K to play. Edit sample to zoom; drag its edges and fades.¦A S D F G H J K para tocar. Editar sample para acercar; arrastrá sus bordes y fades.¦A S D F G H J K zum Spielen. Sample bearbeiten zum Zoomen; Ränder und Fades ziehen.¦A S D F G H J K para tocar. Editar amostra para ampliar; arraste as bordas e os fades.¦A S D F G H J K — играть. Редактировать сэмпл — увеличить; перетаскивайте края и точки затухания.
 Drums¦Batería¦Schlagzeug¦Bateria¦Ударные
 Unassigned¦Sin asignar¦Nicht zugewiesen¦Não atribuído¦Не назначено
-Click a pad to set its start. A S D F G H J K to play. Drag for the loop.¦Clic en un pad para fijar su inicio. A S D F G H J K para tocar. Arrastrá para el loop.¦Pad anklicken, um den Start festzulegen. A S D F G H J K zum Spielen. Ziehen für den Loop.¦Clique em um pad para definir o início. A S D F G H J K para tocar. Arraste para o loop.¦Нажмите пэд, чтобы задать начало. A S D F G H J K — играть. Перетаскивайте для выбора лупа.
-Pad $1: click the drum waveform to set its start. Esc cancels.¦Pad $1: clic en la onda de batería para fijar el inicio. Esc cancela.¦Pad $1: Schlagzeug-Wellenform anklicken, um den Start festzulegen. Esc bricht ab.¦Pad $1: clique na onda da bateria para definir o início. Esc cancela.¦Пэд $1: нажмите на волну ударных, чтобы задать начало. Esc — отмена.
 Expand¦Expandir¦Aufklappen¦Expandir¦Развернуть
 Collapse¦Contraer¦Zuklappen¦Recolher¦Свернуть
 section¦sección¦Abschnitt¦seção¦раздел

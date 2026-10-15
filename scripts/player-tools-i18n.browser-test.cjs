@@ -56,13 +56,13 @@ const { chromium } = require('playwright');
       await page.locator('#separate:not(:disabled)').click();
       await page.locator('.stem').first().waitFor();
       assert.equal(await page.locator('#track').textContent(), 'Record');
-      await page.locator('.stem[data-stem=drums] .stem-sampler-toggle').click();
+      await page.locator('.pl-stem-head[data-stem=drums] .stem-rack-focus').click();
       const copy = await page.evaluate(() => ({
-        hint: SCPlayerToolsText.t('A S D F G H J K to play. Edit sample to zoom; drag its edges and fades.'),
+        hint: SCPlayerToolsText.t('A S D F G H J K play the pads. Drag on the waveform to re-cut the selected pad; wheel zooms. Click a step to add a hit, drag it up or down for velocity.'),
         reset: SCPlayerToolsText.t('Reset speed and tone'),
         record: SCPlayerToolsText.t('Record the final mix'),
       }));
-      assert.equal(await page.locator('#pads-drums .stem-sampler-hint').textContent(), copy.hint);
+      assert.equal(await page.locator('#stem-rack .plugin-hint').textContent(), copy.hint);
       assert.equal(await page.locator('#stem-rate').getAttribute('title'), await page.evaluate(() => SCPlayerToolsText.t('Double-click to reset')));
       assert.equal(await page.locator('.record-start').getAttribute('title'), copy.record);
       for (const width of [1000, 390, 320]) {

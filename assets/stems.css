@@ -119,7 +119,7 @@ button.game-toggle:hover{background:linear-gradient(135deg,#ff833d,#e64d00);bord
 #mix-tools .tool-section-toggle{justify-content:flex-start;border-radius:0;letter-spacing:normal}
 @media(max-width:760px){#mix-tools{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:420px){
-  #mix-tools .tool-section-header{min-height:62px}
+  #mix-tools>:not(.stem-plugin) .tool-section-header{min-height:62px}
   #mix-tools .tool-section-actions{top:33px;right:9px}
   #mix-tools .tool-section-toggle{padding-right:25px}
   #mix-tools .peq .tool-section-heading{padding-right:0}
@@ -259,38 +259,22 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .import-range input{box-sizing:border-box;display:block;width:100%;margin-top:8px}
 #import-error{color:var(--danger,#ff8585)}
 #import-file-info{overflow-wrap:anywhere}
-.stem-pads{grid-column:1/-1;grid-row:3;width:min(100%,400px);justify-self:center;padding:4px 0}
-.stem-pads[hidden]{display:none}
-.stem-pads .drum-pad{padding:3px 6px;color:#fff}
-.stem-actions .stem-sampler-toggle,.stem .download{width:30px;height:30px;padding:5px;flex-shrink:0}
 .stem-actions .stem-solo{width:22px;height:30px;padding:0;border:0;background:transparent;flex-shrink:0}
 .stem-solo::before{content:'';width:10px;height:10px;border-radius:50%;background:#47483f;border:1px solid #85867a;box-shadow:inset 0 1px 3px #0009}
 .stem-solo[aria-checked=true]::before{background:#fff4c7;border-color:#b4ae91;box-shadow:0 0 4px #fff1b766,inset 0 0 0 2px #9c947a}
 .stem-actions .stem-solo[aria-pressed=true]{background:transparent}
-.stem-sampler-toggle[aria-expanded=true]{color:#ffad80;border-color:var(--orange)}
 .stem-loop-selection{position:absolute;top:0;bottom:0;background:#ff55001c;border-inline:1px solid #ff7b38;cursor:grab;min-width:2px}
 .stem-loop-selection[hidden]{display:none}
 .waveform .stem-loop-selection button{position:absolute;top:0;bottom:0;width:15px;padding:0;border:0;border-radius:0;color:#fff;background:linear-gradient(#f50 18px,transparent 18px);font:700 10px Arial;display:flex;align-items:flex-start;justify-content:center;cursor:ew-resize;touch-action:none}
 .stem-loop-start{left:0}
 .stem-loop-end{right:0}
 .waveform-playhead{z-index:2}
-@media(max-width:600px){.stem{grid-template-columns:minmax(0,1fr) auto}.stem-actions{gap:3px}.stem-pads .drum-pad{padding:3px}}
-.stem-sampler{grid-column:1/-1;grid-row:3;min-width:0}
-.stem-sampler[hidden]{display:none}
-.stem-sampler .stem-pads{margin:0 auto}
-.stem-sampler-hint{margin:4px 0 0;text-align:center;font-size:10px;color:var(--muted)}
-.stem-pads .drum-pad.is-assigned{border-bottom-color:#ff8a4c}
+@media(max-width:600px){.stem{grid-template-columns:minmax(0,1fr) auto}.stem-actions{gap:3px}}
 .stem-pad-marker{position:absolute;top:18px;bottom:0;width:1px;background:#ffbc7e;pointer-events:none;z-index:5}
 .stem-pad-marker.is-selected{background:#fff;z-index:6}
 .stem-pad-marker[hidden]{display:none}
 .waveform.is-placing-pad{outline:1px solid #ff8a4c;outline-offset:1px}
-.stem .waveform.is-sampling canvas{height:104px}
-.stem-sampler .drum-pad.is-armed{outline:1px dashed #ffc39c;outline-offset:2px}
-.stem-sample-tools{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px}
-.stem-sample-tools[hidden],.stem-pad-region[hidden],.stem-sample-handle[hidden]{display:none}
-.stem-sample-summary{font-size:10px;color:#ffcead;font-variant-numeric:tabular-nums;text-align:center}
-.stem-sample-tools .stem-sample-edit{width:28px;height:24px;padding:4px}
-.stem-sample-edit .icon{width:15px;height:15px}
+.stem-pad-region[hidden],.stem-sample-handle[hidden]{display:none}
 .stem-pad-region{position:absolute;top:18px;bottom:0;pointer-events:none;z-index:3;border-right:1px solid #ffbc7e55;background:#ff8a4c0b}
 .stem-pad-region.is-selected{z-index:4;border-right-color:#ffb887;background:#ff8a4c14}
 .stem-pad-region svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
@@ -309,72 +293,7 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .stem-zoom-tools{display:flex;align-items:center;gap:5px;margin:0 11px 8px}
 .stem-zoom-tools button{padding:2px 8px;font-size:15px}
 .stem-zoom-tools span{font-size:10px;color:var(--muted);margin-left:5px}
-.stem-actions .stem-sequencer-toggle{width:30px;height:30px;padding:5px;flex-shrink:0}
-.stem-sequencer-toggle[aria-expanded=true]{color:#ffad80;border-color:var(--orange)}
-.stem-sequencer{grid-column:1/-1;grid-row:4;min-width:0;margin-top:-2px;padding:7px;border:1px solid #3e352d;border-radius:7px;background:#1d1b19}
-.seq-controls,.seq-group,.seq-navigation{display:flex;align-items:center;gap:4px}
-.seq-controls{flex-wrap:wrap;gap:6px 10px;margin-bottom:6px}
-.seq-group+.seq-group{padding-left:10px;border-left:1px solid #ffffff10}
-.stem-sequencer button{display:inline-grid;place-items:center;height:26px;min-width:26px;padding:0 6px;font-size:10px;border-radius:4px}
-.stem-sequencer .icon{width:14px;height:14px}
-.stem-sequencer .icon.is-filled{fill:currentColor;stroke:none}
-.stem-sequencer button[aria-pressed=true]{border-color:#f98b4b;background:#60391f;color:#ffdbc3}
-.stem-sequencer .seq-play{width:34px;background:#ed7134;border-color:#ff945b;color:#1b110b}
-.stem-sequencer .seq-switch{display:inline-flex;gap:5px;padding:0 6px;color:#bcb3a8}
-.seq-switch-track{position:relative;width:24px;height:12px;border-radius:6px;background:#3a3631;transition:background .12s}
-.seq-switch-track::after{content:'';position:absolute;top:2px;left:2px;width:8px;height:8px;border-radius:50%;background:#d8cfc4;transition:transform .12s}
-.seq-switch[aria-checked=true] .seq-switch-track{background:#ed7134}
-.seq-switch[aria-checked=true] .seq-switch-track::after{transform:translateX(12px);background:#fff}
-.seq-switch[aria-checked=true] .icon:last-child,.seq-switch[aria-checked=false] .icon:first-child{color:#ffb887}
-.seq-field{display:flex;align-items:center;gap:4px;color:#bbb2a7}
-.seq-field input,.seq-field select{min-width:0;height:26px;padding:0 5px;border:1px solid #514c44;border-radius:4px;background:#121313;color:#fff;font:11px ui-monospace,monospace}
-.seq-field .seq-bpm{width:60px}
-.seq-field select{width:42px}
-.seq-navigation button{min-width:22px;padding:0 4px}
-.seq-scroll{overflow-x:auto;overscroll-behavior-x:contain;max-width:100%;border:1px solid #2f2a25;border-radius:5px;padding:4px;background:#141414}
-.seq-grid{display:grid;grid-template-columns:28px repeat(16,minmax(20px,1fr));min-width:420px;gap:3px;align-items:center}
-.seq-beat{height:12px;font:9px/12px ui-monospace,monospace;text-align:left;color:#7d756d;padding-left:2px}
-.seq-beat.is-current{background:#ffbc7e55;border-radius:2px}
-.stem-sequencer .seq-pad{position:sticky;left:0;z-index:1;height:24px;padding:0;background:#262626;border-color:#3c3833;color:#777}
-.stem-sequencer .seq-pad.is-assigned{color:#ffd2b3;border-color:#80624e}
-.stem-sequencer .seq-step{position:relative;height:24px;padding:0;min-width:0;background:#292723;border:1px solid #3b3832;border-radius:3px;touch-action:manipulation}
-.stem-sequencer .seq-step.is-beat{border-left:3px solid #72604e}
-.stem-sequencer .seq-step:disabled{opacity:.3}
-.stem-sequencer .seq-step.is-on{background:#63391f;border-color:#dc8a53;box-shadow:inset 0 calc(-18px * var(--velocity)) #f28b41}
-.stem-sequencer .seq-step.is-selected{outline:1px solid #ffe1c7;outline-offset:1px}
-.stem-sequencer .seq-step.is-current{border-top-color:#ffe9d6;border-bottom-color:#ffe9d6;background-color:#463c31}
-.stem-sequencer .seq-step:focus-visible{outline:2px solid #fff;outline-offset:1px}
-.seq-velocity{width:80px;accent-color:#ff9149}
-.seq-hint{margin:6px 0 0;font-size:10px;color:var(--muted);line-height:1.5}
-.seq-hint.is-error{color:#ffba86}
-.waveform .stem-sequence-anchor{position:absolute;bottom:0;z-index:7;width:20px;height:18px;padding:0;transform:translateX(-50%);border:1px solid #a9d6de;border-radius:3px;background:#2b555b;color:#dbfaff;font:700 10px ui-monospace,monospace;cursor:ew-resize;touch-action:none}
-.stem-sequence-anchor::after{content:'';position:absolute;bottom:17px;left:50%;height:110px;border-left:1px dashed #a9d6de77;pointer-events:none}
-.waveform.is-placing-beat{outline:1px dashed #a9d6de;outline-offset:2px}
-/* SONG mode playlist clip: one tile line per pattern repeat, grips taller than the first-beat anchor. */
-.waveform .stem-pattern-clip{position:absolute;top:0;bottom:0;z-index:1;pointer-events:none;border-bottom:3px solid #6fc3cf;background-color:#4fb8c40f;background-image:linear-gradient(90deg,#a9d6de66 0 1px,transparent 1px);background-repeat:repeat-x}
-.waveform .stem-pattern-clip[hidden]{display:none}
-.waveform .stem-pattern-clip.is-muted{border-bottom-color:#6fc3cf55;background-color:transparent}
-.stem-pattern-clip-label{position:absolute;bottom:4px;left:14px;font:700 9px ui-monospace,monospace;color:#bdeef5;white-space:nowrap;text-shadow:0 1px 2px #000}
-.waveform .stem-pattern-clip-edge{position:absolute;bottom:0;width:7px;height:44px;padding:0;border:0;border-radius:2px 2px 0 0;background:#6fc3cf;cursor:ew-resize;pointer-events:auto;touch-action:none}
-.stem-pattern-clip-edge.is-from{left:0}
-.stem-pattern-clip-edge.is-to{right:0}
-.stem-pattern-clip-edge:focus-visible{outline:2px solid #fff;outline-offset:1px}
-.stem-sequencer .seq-song{display:inline-flex;padding:0;overflow:hidden;font:700 9px ui-monospace,monospace;letter-spacing:.04em}
-.seq-song span{padding:0 6px;line-height:22px;color:#8f877e}
-.seq-song[aria-checked=false] span:first-child,.seq-song[aria-checked=true] span:last-child{background:#ed7134;color:#fff}
-.waveform.is-placing-beat .stem-sample-handle,.waveform.is-placing-pad .stem-sequence-anchor{pointer-events:none}
-@media(max-width:600px){.stem-sequencer{padding:6px}.seq-group+.seq-group{padding-left:0;border-left:0}.seq-velocity{width:64px}}
 
-/* Collapsible stems: same chevron and behavior as the Player Tools sections. */
-.stem-collapse{display:inline-flex;align-items:center;gap:inherit;min-width:0;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer}
-.stem-collapse:hover{color:#ff7b38}
-.stem-collapse:focus-visible{outline:2px solid var(--orange);outline-offset:3px}
-.stem-chevron{flex:0 0 auto;width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform 160ms ease}
-.stem.is-collapsed .stem-chevron{transform:rotate(180deg)}
-.stem.is-collapsed{padding-block:4px;gap:0}
-.stem.is-collapsed>:not(h2):not(.stem-actions),.stem.is-collapsed .stem-sampler-toggle,.stem.is-collapsed .stem-sequencer-toggle{display:none!important}
-.stem.is-collapsed .stem-actions .download{width:24px;height:24px;padding:3px}
-.stem.is-collapsed .stem-volume{grid-template-columns:auto auto;align-items:center;gap:4px}
 
 /* One line: cover, title, Separate and utilities; transport, mix, speed and legend. */
 .prepare .source-card{flex-wrap:wrap;margin:0}
@@ -399,21 +318,6 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .prepare.has-results #separate [data-copy],#toggle-game [data-copy]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .prepare.has-results #separate,.prepare #toggle-game{display:grid;place-items:center;width:38px;height:34px;padding:0}
 
-/* Melodic editor: a local sample, with the pad sequencer's musical timeline. */
-.stem-actions .stem-piano-toggle{width:30px;height:30px;padding:5px}
-.stem-piano-toggle[aria-expanded=true]{color:#ffad80;border-color:var(--orange)}
-.stem.is-collapsed .stem-piano-toggle{display:none!important}
-.stem-piano{grid-column:1/-1;grid-row:4;min-width:0;padding:8px;border:1px solid #514337;border-radius:7px;background:#1b1b1b}
-.stem-piano[hidden]{display:none}
-.piano-controls{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:7px}
-.piano-controls button{height:27px;min-width:27px;padding:3px 6px;border-radius:4px}
-.piano-controls .icon{width:15px;height:15px}
-.piano-controls .piano-play{background:#ed7134;border-color:#ff945b;color:#1b110b}
-.stem .piano-field{display:flex;align-items:center;gap:5px;font-size:10px;color:#bcb3a8;white-space:nowrap}
-.piano-controls select,.piano-controls input[type=number]{height:27px;padding:3px 5px;border:1px solid #514c44;border-radius:4px;background:#121313;color:#eee;font:11px ui-monospace,monospace;max-width:160px}
-.piano-controls .piano-bpm{width:61px}
-.piano-controls input[type=checkbox]{accent-color:#ed7134}
-.piano-controls .piano-velocity{width:75px;accent-color:#ed7134}
 .piano-scroll{max-width:100%;max-height:360px;overflow:auto;overscroll-behavior:contain;border:1px solid #444;border-radius:5px;background:#171717}
 .piano-sheet{--piano-steps:16;display:grid;grid-template-columns:46px minmax(0,1fr);grid-template-rows:24px 550px;min-width:calc(46px + var(--piano-steps)*26px)}
 .piano-corner{position:sticky;left:0;top:0;z-index:6;display:grid;place-items:center;background:#282828;color:#ffb887}
@@ -433,10 +337,71 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .piano-note-end{position:absolute;right:0;top:0;bottom:0;width:7px;cursor:ew-resize;background:#fff2;border-left:1px solid #0002}
 .piano-cursor{position:absolute;top:0;bottom:0;width:1px;background:#fff;box-shadow:0 0 5px #fff8;pointer-events:none;z-index:2}
 .piano-cursor[hidden]{display:none}
-.piano-hint,.piano-instructions{margin:6px 0 0;color:#b5aca3;font-size:10px;line-height:1.5}
-.piano-hint{color:#ffba86}
-#pads-piano-other{display:flex;align-items:center;justify-content:center;gap:8px}
-#pads-piano-other[hidden]{display:none}
-#pads-piano-other .stem-pads{margin:0;grid-template-columns:40px}
-#pads-piano-other .stem-sample-tools{margin:0}
-@media(max-width:600px){.stem-piano{padding:5px}.stem .piano-field{font-size:9px}.piano-controls{gap:4px}.piano-scroll{max-height:300px}}
+
+/* Instrument plugins, as in FL Studio: the channel rack and piano roll edit the focused
+   track and pattern. Full width, above the EQ and recorder. */
+#mix-tools>.stem-plugin{grid-column:1/-1}
+.stem-plugin{overflow:hidden;border:1px solid #343434;border-radius:11px;background:#151515;color:#eee}
+.stem-plugin[hidden],.stem-plugin [hidden]{display:none!important}
+.stem-plugin-body{padding:8px 10px 10px}
+.stem-plugin .icon{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.plugin-toolbar,.plugin-focus{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.plugin-toolbar{margin-bottom:8px}
+.plugin-focus{padding-right:8px;border-right:1px solid #ffffff14}
+.stem-plugin .plugin-toolbar button{height:28px;min-width:28px;padding:0 7px;border-radius:5px;font-size:11px}
+.stem-plugin .plugin-toolbar button span{font-weight:600}
+.stem-plugin .plugin-play{width:36px;background:#ed7134;border-color:#ff945b;color:#1b110b}
+.stem-plugin .plugin-play .icon{fill:currentColor;stroke:none}
+.stem-plugin .plugin-play[aria-pressed=true]{background:#ffad80;color:#1b110b}
+.stem-plugin select{height:28px;padding:0 6px;border:1px solid #514c44;border-radius:5px;background:#121313;color:#eee;font:11px ui-monospace,monospace;max-width:170px}
+.plugin-track{min-width:96px}
+.plugin-field{display:flex;align-items:center;gap:5px;font-size:10px;color:#bcb3a8;white-space:nowrap}
+.plugin-field input[type=checkbox]{accent-color:#ed7134}
+.plugin-hint,.plugin-instructions,.plugin-empty{margin:7px 0 0;font-size:10px;line-height:1.5;color:#b5aca3}
+.plugin-hint{color:#ffcfae}
+.plugin-empty{margin:4px 0;color:var(--muted)}
+/* Channel rack: waveform of the focused track, then one row per pad. */
+.rack-wave{margin-bottom:8px;cursor:crosshair}
+.rack-wave .rack-wave-canvas{height:92px}
+.rack-wave.is-placing-pad{outline:1px solid #ff8a4c;outline-offset:1px}
+.rack-bars{display:flex;gap:4px;margin-bottom:5px}
+.stem-plugin .rack-bars button{height:22px;min-width:24px;padding:0 6px;font-size:10px}
+.rack-grid{display:grid;grid-template-columns:34px repeat(16,minmax(18px,1fr));gap:3px;align-items:center;overflow-x:auto;padding:4px;border:1px solid #2f2a25;border-radius:5px;background:#141414}
+.rack-beat{height:12px;padding-left:2px;font:9px/12px ui-monospace,monospace;color:#7d756d}
+.rack-beat.is-current{border-radius:2px;background:#ffbc7e55}
+.stem-plugin .rack-pad{position:sticky;left:0;z-index:1;height:26px;padding:0;border-color:#3c3833;background:#262626;color:#777;font:700 11px ui-monospace,monospace}
+.stem-plugin .rack-pad.is-assigned{border-color:#80624e;color:#ffd2b3}
+.stem-plugin .rack-pad.is-selected{border-color:#ffb887;background:#4b2d1c}
+.stem-plugin .rack-pad.is-armed{outline:1px dashed #ffc39c;outline-offset:2px}
+.stem-plugin .rack-pad.is-active{background:#ed7134;color:#1b110b}
+.stem-plugin .rack-step{position:relative;height:26px;min-width:0;padding:0;border:1px solid #3b3832;border-radius:3px;background:#292723;touch-action:none}
+.stem-plugin .rack-step.is-beat{border-left:3px solid #72604e}
+.stem-plugin .rack-step:disabled{opacity:.3}
+.stem-plugin .rack-step.is-on{border-color:#dc8a53;background:#63391f;box-shadow:inset 0 calc(-22px * var(--velocity)) #f28b41}
+.stem-plugin .rack-step.is-current{border-top-color:#ffe9d6;border-bottom-color:#ffe9d6}
+.stem-plugin .rack-step:focus-visible{outline:2px solid #fff;outline-offset:1px}
+.rack-step[data-tip]::after,.piano-note[data-tip]::after{content:attr(data-tip);position:absolute;z-index:8;bottom:calc(100% + 3px);left:50%;padding:1px 4px;border-radius:3px;background:#000d;color:#fff;font:9px/14px ui-monospace,monospace;transform:translateX(-50%);pointer-events:none}
+/* Piano roll. */
+.piano-scroll{max-width:100%;max-height:380px;overflow:auto;overscroll-behavior:contain;border:1px solid #444;border-radius:5px;background:#171717}
+.piano-sheet{--piano-steps:16;display:grid;grid-template-columns:46px minmax(0,1fr);grid-template-rows:24px 550px;min-width:calc(46px + var(--piano-steps)*26px)}
+.piano-corner{position:sticky;left:0;top:0;z-index:6;display:grid;place-items:center;background:#282828;color:#ffb887}
+.piano-ruler{display:flex;position:sticky;top:0;z-index:4;background:#252321;border-bottom:1px solid #544437;font:10px/24px ui-monospace,monospace;color:#e5b898}
+.piano-ruler>span{flex:1;padding-left:5px;border-left:1px solid #5a4636}
+.piano-keys{position:sticky;left:0;z-index:3;background:#252321}
+.piano-keys .piano-key{display:block;width:46px;height:22px;min-height:0;padding:0 5px;border:0;border-bottom:1px solid #888;border-radius:0;background:#c8c1b9;color:#292624;text-align:right;font:9px/21px ui-monospace,monospace}
+.piano-keys .piano-key.is-black{background:#33302e;color:#bcb4ad;border-color:#171717}
+.piano-keys .piano-key:active{background:#ed7134;color:#fff}
+.piano-grid{position:relative;height:550px;isolation:isolate;touch-action:none;outline-offset:-2px;cursor:crosshair}
+.piano-pitch-row{position:absolute;left:0;right:0;height:22px;border-bottom:1px solid #ffffff0b;background:#242321;z-index:-1;pointer-events:none}
+.piano-pitch-row.is-black{background:#1b1b1b}
+.piano-grid::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(to right,#f6a46e38 1px,transparent 1px) 0 0/calc(400% / var(--piano-steps)) 100%,linear-gradient(to right,#ffffff12 1px,transparent 1px) 0 0/calc(100% * var(--piano-snap,1) / var(--piano-steps)) 100%;z-index:0}
+.piano-notes{position:absolute;inset:0;pointer-events:none;z-index:1}
+.piano-notes .piano-note{position:absolute;height:20px;min-width:0;display:block;padding:0 5px;border:1px solid #bb6d42;border-radius:3px;background:linear-gradient(to top,#ed7134 calc(var(--note-velocity)*100%),#864c2b 0);color:#1c1109;font:9px/18px ui-monospace,monospace;text-align:left;overflow:visible;white-space:nowrap;cursor:grab;touch-action:none;pointer-events:auto}
+.piano-notes .piano-note.is-selected{border-color:#ffe5d4;box-shadow:inset 0 0 0 1px #ffe5d4}
+.piano-notes .piano-note.is-velocity{cursor:ns-resize}
+.piano-note-end{position:absolute;right:0;top:0;bottom:0;width:7px;cursor:ew-resize;background:#fff2;border-left:1px solid #0002}
+.piano-cursor{position:absolute;top:0;bottom:0;width:1px;background:#fff;box-shadow:0 0 5px #fff8;pointer-events:none;z-index:2}
+/* Track header buttons that focus a plugin on the track. */
+.stem-actions .stem-rack-focus,.stem-actions .stem-piano-focus{width:30px;height:30px;padding:5px;flex-shrink:0}
+.stem-name{display:inline-flex;align-items:center;gap:inherit;min-width:0}
+@media(max-width:600px){.stem-plugin-body{padding:6px}.plugin-focus{border-right:0;padding-right:0}.rack-grid{grid-template-columns:28px repeat(16,minmax(16px,1fr))}.piano-scroll{max-height:300px}}

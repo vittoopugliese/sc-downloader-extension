@@ -79,14 +79,13 @@ const { chromium } = require('playwright');
     await page.locator('.pl-stem-head[data-stem=vocals]').waitFor();
     const playlist = page.locator('#playlist'), drumHead = page.locator('.pl-stem-head[data-stem=drums]');
     const stemEnables = page.locator('.pl-stem-head:not([data-stem=original]) .stem-enable');
-    const drums = page.locator('.pl-drawer[data-stem=drums]'), drumWave = page.locator('.pl-source-wave[data-stem=drums]');
     const artifacts = path.join(root, 'test-results/stems-ui'); fs.mkdirSync(artifacts, { recursive: true });
     assert.equal(await page.locator('.pl-stem-head').count(), 5);
-    assert.equal(await playlist.locator('canvas').count(), 1, 'One shared waveform canvas, even with editors open');
-    assert.equal(await page.locator('.pl-drawer canvas, .pl-clip canvas').count(), 0, 'No duplicate waveform per track');
+    assert.equal(await playlist.locator('canvas').count(), 1, 'One shared waveform canvas');
+    assert.equal(await page.locator('.pl-clip canvas').count(), 0, 'No duplicate waveform per track');
     assert.equal(await page.locator('#original-waveform').isVisible(), false);
-    assert.equal(await page.locator('.pl-drawer:visible').count(), 0);
-    assert.equal(await page.locator('#mix-tools canvas').count(), 2);
+    // Channel rack waveform, EQ and recorder.
+    assert.equal(await page.locator('#mix-tools canvas').count(), 3);
     const checkAlignment = async () => {
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Workspace fits viewport');
       const view = await playlist.locator('.pl-scroll').boundingBox();
@@ -127,37 +126,19 @@ const { chromium } = require('playwright');
     const at = Number((await playlist.locator('.pl-time').textContent()).split(':')[1]);
     assert.ok(at >= .75 && at < 1.8, 'Transport wraps within A-B');
     await page.locator('#play').click(); await ruler.dblclick({ position: { x: 10, y: 14 } });
-    await drumHead.locator('.stem-sampler-toggle').click();
-    assert.equal(await drums.isVisible(), true); assert.equal(await drumWave.isVisible(), true);
-    assert.equal(await playlist.locator('canvas').count(), 1);
-    await drums.locator('.drum-pad').first().click();
-    await drumWave.click({ position: { x: 100, y: 22 } });
-    const firstRegion = drumWave.locator('.stem-pad-region').first();
-    assert.ok(Number(await firstRegion.getAttribute('data-end')) > 0);
-    await firstRegion.locator('.stem-sample-fadeIn').press('Shift+ArrowRight');
-    assert.ok(Number(await firstRegion.getAttribute('data-fade-in')) > .003);
-    await firstRegion.locator('.stem-sample-end').press('Shift+ArrowRight');
-    await drums.locator('.drum-pad').first().press('a');
-    await drumHead.locator('.stem-sequencer-toggle').click();
-    const sequencer = drums.locator('.stem-sequencer'); assert.equal(await sequencer.isVisible(), true);
-    await sequencer.locator('.seq-step').first().click();
-    await sequencer.locator('.seq-play').click(); await page.waitForTimeout(200);
-    assert.match(await page.locator('#play').getAttribute('aria-label'), /Pausar/);
-    await sequencer.locator('.seq-play').click();
-    await drumHead.locator('.stem-collapse').click(); assert.equal(await sequencer.isVisible(), false);
-    await drumHead.locator('.stem-collapse').click(); assert.equal(await sequencer.isVisible(), true);
-    // Header and editor identity survive mix edits, keeping focused knobs/drags attached.
-    await drumHead.evaluate(n => { window.savedHead = n; window.savedEditor = document.querySelector('.stem-sequencer'); });
+    // Header identity survives mix edits, keeping focused knobs and drags attached.
+    await drumHead.evaluate(n => { window.savedHead = n; });
     await knob.press('ArrowDown');
-    assert.ok(await page.evaluate(() => savedHead === document.querySelector('.pl-stem-head[data-stem=drums]') && savedEditor === document.querySelector('.stem-sequencer')));
+    assert.ok(await page.evaluate(() => savedHead === document.querySelector('.pl-stem-head[data-stem=drums]')));
     await knob.dblclick();
-    await ruler.dblclick({ position: { x: 10, y: 14 } });
-    await drumHead.locator('.stem-sequencer-toggle').click();
+    await drumHead.locator('.stem-rack-focus').click();
+    assert.equal(await page.locator('#stem-rack .plugin-track').inputValue(), 'drums', 'The header button focuses its track in the rack');
     const downloadEvent = page.waitForEvent('download'); await drumHead.locator('.download').click();
     assert.match((await downloadEvent).suggestedFilename(), /drums\.wav$/);
-    const eqBounds = await page.locator('.peq').boundingBox();
-    const recorderBounds = await page.locator('.record-section').boundingBox();
-    assert.ok(eqBounds.y >= (await playlist.boundingBox()).y + (await playlist.boundingBox()).height, 'EQ and recorder are below playlist');
+    // One frame: opening the rack scrolls smoothly, so separate reads could straddle a scroll.
+    const [eqBounds, recorderBounds, playlistBounds] = await page.evaluate(() => ['.peq', '.record-section', '#playlist']
+      .map(selector => { const { y, height, width } = document.querySelector(selector).getBoundingClientRect(); return { y, height, width }; }));
+    assert.ok(eqBounds.y >= playlistBounds.y + playlistBounds.height, 'EQ and recorder are below playlist');
     assert.equal(eqBounds.y, recorderBounds.y, 'EQ and recorder sit side by side');
     assert.ok(Math.abs(eqBounds.width - recorderBounds.width) < 1, 'Both cards have equal width');
     // Record the audible mix through the real worklet and inspect downloaded PCM.
@@ -213,7 +194,6 @@ const { chromium } = require('playwright');
       await checkAlignment();
       await page.screenshot({ path: path.join(artifacts, `mobile-${width}.png`), fullPage: true });
     }
-    await require('./stem-piano.browser-check.cjs')(page, root);
     assert.deepEqual(errors, []);
     await page.evaluate(() => document.querySelector('#artwork').dispatchEvent(new Event('error')));
     assert.equal(await page.locator('#artwork-fallback').isVisible(), true);
@@ -243,6 +223,6 @@ const { chromium } = require('playwright');
       assert.deepEqual(localizedErrors, []);
       await context.close();
     }
-    console.log('Stems UI: spectral colors, five synchronized playheads, play/pause, waveform seek, mute, drum slice assignment/playback, shared zoom/pan, loop gestures, WAV download and responsive layout passed.');
+    console.log('Stems UI: spectral colors, five synchronized playheads, play/pause, waveform seek, mute, channel focus, shared zoom/pan, loop gestures, WAV download and responsive layout passed.');
   } finally { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

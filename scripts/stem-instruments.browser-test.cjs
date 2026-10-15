@@ -1,4 +1,4 @@
-// UI regression with deterministic PCM and a fixture separation worker.
+// Channel rack, piano roll and pattern clips with deterministic PCM and a fixture separation worker.
 // Real audio playback and spectral analysis; no model download/inference here.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -49,7 +49,7 @@ const { chromium } = require('playwright');
       };
     }, { dataUrl });
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html?job=fixture`);
-    await require('./stem-track-editors.browser-check.cjs')(page);
+    await require('./stem-instruments.browser-check.cjs')(page);
     assert.deepEqual(errors, []);
   } finally { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

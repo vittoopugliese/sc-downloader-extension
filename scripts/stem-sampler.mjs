@@ -114,71 +114,34 @@ export function detectDrumSlices(buffer, { startMs = 0, endMs = buffer.duration 
   });
 }
 
-const waveformSamplers = new WeakMap();
-// Pads share PCM, but own their trim and envelope; no pad depends on its neighbor.
-export function mountDrumSampler({ row, actions, waveform, buffer, timeline, audioContext, output, level, changed, saved, locale, report,
-  keys = KEYS, id = 'drums', keyboard = true, keyboardActive = () => true, autoSlice = keyboard, defaultLength = .154, title = 'Sampler' }) {
+// Eight pads cut from one buffer. Each pad owns its trim and envelope; no pad depends
+// on its neighbor. Markers, regions and handles live on `waveform`; the host draws the
+// pad buttons and reads `state()` in `onRender`. An armed pad takes its sample from
+// the next click (default length) or drag (selection) on the waveform; otherwise a
+// drag re-cuts the selected pad, and a plain click changes nothing.
+export function mountPadSampler({ waveform, buffer, timeline, audioContext, output, changed, saved, locale, report,
+  keyboardActive = () => true, onRender = () => {}, defaultLength = .154 }) {
   const pt = globalThis.SCPlayerToolsText.t;
-  const slices = Array.from({ length: keys.length }, (_, i) => normalizeDrumSlice(saved?.[i], buffer));
+  const slices = Array.from({ length: KEYS.length }, (_, i) => normalizeDrumSlice(saved?.[i], buffer));
   const controller = new AbortController(), options = { signal: controller.signal };
-  let selected = null, armed = null, disposed = false, drag = null, sliced = null;
-  const voices = new Map(), liveVoices = new Set(), revisions = Array(keys.length).fill(0);
-  const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'stem-sampler-toggle';
-  toggle.title = pt(title); toggle.setAttribute('aria-label', pt(title));
-  toggle.setAttribute('aria-controls', `pads-${id}`); toggle.setAttribute('aria-expanded', 'false');
-  toggle.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
-  actions.insertBefore(toggle, actions.querySelector('.download'));
-  const panel = document.createElement('div'); panel.className = 'stem-sampler'; panel.id = `pads-${id}`; panel.hidden = true;
-  if (!keyboard) { toggle.className = 'stem-piano-sample-toggle'; toggle.hidden = true; }
-  const peers = waveformSamplers.get(waveform) || new Set(); waveformSamplers.set(waveform, peers);
-  const activity = () => ({ visible: !panel.hidden, armed: armed !== null }); peers.add(activity);
-  function renderActivity() {
-    waveform.classList.toggle('is-placing-pad', [...peers].some(peer => peer().armed));
-    waveform.classList.toggle('is-sampling', [...peers].some(peer => peer().visible));
-  }
-  const pads = document.createElement('div'); pads.className = 'drum-pads stem-pads';
-  const hint = document.createElement('p'); hint.className = 'stem-sampler-hint'; hint.setAttribute('role', 'status');
-  const toolbar = document.createElement('div'); toolbar.className = 'stem-sample-tools'; toolbar.hidden = true;
-  const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'stem-sample-edit';
-  edit.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M7 10h6M10 7v6"/></svg>';
-  edit.setAttribute('aria-label', pt('Edit sample'));
-  edit.onclick = () => {
-    const slice = slices[selected]; if (!slice) return;
-    armed = null; timeline.focusRange(slice.start * 1000, slice.end * 1000); render();
-  };
-  const auto = document.createElement('button'); auto.type = 'button'; auto.className = 'stem-sample-edit stem-sample-auto';
-  auto.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21 15 9M14 4v3M19 9h3M17.5 5.5l2-2M10 6.5 8 4.5M17.5 12.5l2 2"/></svg>';
-  auto.title = pt('Auto-slice the loop'); auto.setAttribute('aria-label', auto.title);
-  auto.hidden = !autoSlice; auto.onclick = () => slice(true);
-  toolbar.append(edit, auto);
-  const markers = [], regions = [], envelopes = [], handles = [], buttons = [];
+  let selected = 0, armed = null, disposed = false, drag = null;
+  const voices = new Map(), liveVoices = new Set(), revisions = Array(KEYS.length).fill(0), active = new Set();
+  const markers = [], regions = [], envelopes = [], handles = [];
   const milliseconds = seconds => `${(seconds * 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} ms`;
   const labels = { start: pt('Sample start'), end: pt('Sample end'), fadeIn: pt('Fade in'), fadeOut: pt('Fade out') };
+  const state = () => ({ slices: slices.map(slice => slice && { ...slice }), selected, armed, playing: new Set(active) });
 
   function render() {
-    hint.textContent = armed === null
-      ? pt('A S D F G H J K to play. Edit sample to zoom; drag its edges and fades.')
-      : keyboard ? pt('Pad $1: click the waveform of this track to set its start. Esc cancels.', keys[armed]) : pt('Click the waveform of this track to select a sample. Drag its edges and fades.');
-    hint.hidden = armed === null;
-    pads.title = keyboard ? pt('A S D F G H J K to play. Edit sample to zoom; drag its edges and fades.') : pt('Select piano sample');
-    renderActivity();
-    edit.hidden = !slices[selected]; toolbar.hidden = edit.hidden && !autoSlice;
-    if (!edit.hidden) {
-      const slice = slices[selected];
-      edit.title = `${pt('Edit sample')} · ${keys[selected]} · ${milliseconds(slice.end - slice.start)} · ${labels.fadeIn} ${milliseconds(slice.fadeIn)} · ${labels.fadeOut} ${milliseconds(slice.fadeOut)}`;
-    }
-    buttons.forEach((button, i) => {
-      const slice = slices[i], active = selected === i;
-      button.classList.toggle('is-selected', active); button.classList.toggle('is-assigned', !!slice);
-      button.classList.toggle('is-armed', armed === i);
-      button.setAttribute('aria-pressed', String(active));
-      button.title = `${keys[i]}: ${slice ? `${slice.start.toLocaleString(locale, { maximumFractionDigits: 3 })} s · ${milliseconds(slice.end - slice.start)}` : pt('Unassigned')}`;
+    if (disposed) return;
+    waveform.classList.toggle('is-placing-pad', armed !== null);
+    slices.forEach((slice, i) => {
+      const current = selected === i;
       const x = slice ? timeline.percent(slice.start * 1000) : -1, end = slice ? timeline.percent(slice.end * 1000) : -1;
-      markers[i].hidden = panel.hidden || x < 0 || x > 100;
+      markers[i].hidden = !slice || x < 0 || x > 100;
       markers[i].style.left = `${x}%`; markers[i].dataset.start = String(slice?.start ?? null);
-      markers[i].classList.toggle('is-selected', active);
-      regions[i].hidden = panel.hidden || !slice || end < 0 || x > 100;
-      regions[i].classList.toggle('is-selected', active);
+      markers[i].classList.toggle('is-selected', current);
+      regions[i].hidden = !slice || end < 0 || x > 100;
+      regions[i].classList.toggle('is-selected', current);
       regions[i].style.left = `${x}%`; regions[i].style.width = `${Math.max(0, end - x)}%`;
       if (!slice) return;
       const length = slice.end - slice.start;
@@ -193,33 +156,28 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
         const maximum = kind === 'fadeIn' ? length - slice.fadeOut : kind === 'fadeOut' ? length - slice.fadeIn :
           kind === 'start' ? slice.end - 1 / buffer.sampleRate : buffer.duration;
         if (kind !== 'start') handle.style.left = `${(position - slice.start) / length * 100}%`;
-        handle.hidden = kind !== 'start' && (!active || timeline.percent(position * 1000) < 0 || timeline.percent(position * 1000) > 100);
-        handle.setAttribute('aria-label', `${keys[i]} · ${labels[kind]}`);
+        handle.hidden = kind !== 'start' && (!current || timeline.percent(position * 1000) < 0 || timeline.percent(position * 1000) > 100);
+        handle.setAttribute('aria-label', `${KEYS[i]} · ${labels[kind]}`);
         handle.setAttribute('aria-valuemin', String(minimum * 1000)); handle.setAttribute('aria-valuemax', String(maximum * 1000));
         handle.setAttribute('aria-valuenow', String(value * 1000)); handle.setAttribute('aria-valuetext', milliseconds(value));
-        handle.title = `${keys[i]} · ${labels[kind]}: ${milliseconds(value)}`;
+        handle.title = `${KEYS[i]} · ${labels[kind]}: ${milliseconds(value)}`;
       }
     });
+    onRender(state());
   }
-  // The A–B loop is the slicing range; without one, the visible part of the waveform.
-  function sliceRange() {
-    const loop = timeline.range();
-    return loop.endMs - loop.startMs < buffer.duration * 1000 - 1 ? loop : timeline.viewport();
-  }
-  // Opening the pads slices empty pads, and re-slices pads that are still an untouched
-  // auto-slice of another range. Edited or saved pads are never overwritten.
-  function slice(force = false) {
-    const { startMs, endMs } = sliceRange(), key = `${Math.round(startMs)}:${Math.round(endMs)}`;
-    const untouched = sliced && slices.every((value, i) => value === sliced.slices[i]);
-    if (!force && !slices.every(value => !value) && !(untouched && sliced.key !== key)) return;
-    const found = detectDrumSlices(buffer, { startMs, endMs, count: keys.length });
-    if (!found.length) return;
-    buttons.forEach((_, i) => { slices[i] = found[i] ?? null; revisions[i]++; stop(i); });
-    sliced = { key, slices: [...slices] }; selected = 0; armed = null; render(); changed();
+  function emit() { if (!disposed) changed(slices.map(slice => slice && { ...slice })); }
+  // Detected hits of the visible audio; with `force` false only empty pads are filled.
+  function autoSlice(force = false) {
+    if (!force && slices.some(Boolean)) return false;
+    const { startMs, endMs } = timeline.viewport();
+    const found = detectDrumSlices(buffer, { startMs, endMs, count: KEYS.length });
+    if (!found.length) return false;
+    slices.forEach((_, i) => { slices[i] = found[i] ?? null; revisions[i]++; stop(i); });
+    selected = 0; armed = null; render(); emit(); return true;
   }
   function stop(i) {
     const voice = voices.get(i); if (!voice) return;
-    voices.delete(i); buttons[i].classList.remove('is-active');
+    voices.delete(i); active.delete(i);
     const now = voice.source.context.currentTime;
     voice.envelope.gain.cancelAndHoldAtTime(now);
     voice.envelope.gain.linearRampToValueAtTime(0, now + .003);
@@ -231,21 +189,20 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
     let voice;
     try {
       const context = audioContext(); await context.resume();
-      if (disposed || panel.hidden || version !== revisions[i]) return;
+      if (disposed || version !== revisions[i]) return;
       stop(i);
       const slice = slices[i], length = slice.end - slice.start, now = context.currentTime;
-      const source = context.createBufferSource(), gain = context.createGain(), envelope = context.createGain();
+      const source = context.createBufferSource(), envelope = context.createGain();
       source.buffer = buffer;
       scheduleDrumEnvelope(envelope.gain, slice, now);
-      gain.gain.value = level();
-      voice = { source, gain, envelope, cleanup() {
-        envelope.disconnect(); source.disconnect(); gain.disconnect(); liveVoices.delete(voice);
-        if (voices.get(i) === voice) { voices.delete(i); buttons[i].classList.remove('is-active'); }
+      voice = { source, envelope, cleanup() {
+        envelope.disconnect(); source.disconnect(); liveVoices.delete(voice);
+        if (voices.get(i) === voice) { voices.delete(i); active.delete(i); render(); }
       } };
-      liveVoices.add(voice); voices.set(i, voice);
+      liveVoices.add(voice); voices.set(i, voice); active.add(i);
       source.onended = voice.cleanup;
-      source.connect(envelope).connect(gain).connect(output());
-      source.start(now, slice.start, length); buttons[i].classList.add('is-active');
+      source.connect(envelope).connect(output());
+      source.start(now, slice.start, length); render();
     } catch (error) { voice?.cleanup(); report(error); }
   }
   function update(i, kind, time) {
@@ -256,7 +213,7 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
     const handle = document.createElement('button'); handle.type = 'button';
     handle.className = `stem-sample-handle stem-sample-${kind}`;
     handle.dataset.sampleHandle = kind; handle.setAttribute('role', 'slider'); handle.setAttribute('aria-orientation', 'horizontal');
-    if (kind === 'start') handle.textContent = keys[i];
+    if (kind === 'start') handle.textContent = KEYS[i];
     handle.addEventListener('pointerdown', event => {
       if (event.button !== 0) return;
       event.preventDefault(); event.stopPropagation();
@@ -265,18 +222,18 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
       selected = i; armed = null; handle.focus({ preventScroll: true }); handle.setPointerCapture(event.pointerId); render();
     }, options);
     handle.addEventListener('pointermove', event => {
-      if (!drag || drag.id !== event.pointerId) return;
+      if (drag?.id !== event.pointerId || drag.selection) return;
       if (!drag.moved && Math.abs(event.clientX - drag.x) < 2) return;
       drag.moved = true;
       update(i, kind, (drag.viewport.startMs + (event.clientX - drag.rect.left) / drag.rect.width * (drag.viewport.endMs - drag.viewport.startMs)) / 1000);
     }, options);
     const finish = event => {
-      if (!drag || drag.id !== event.pointerId) return;
+      if (drag?.id !== event.pointerId || drag.selection) return;
       const moved = drag.moved; drag = null;
       if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
-      if (moved) changed();
+      if (moved) emit();
     };
-    for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) handle.addEventListener(event, finish, options);
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) handle.addEventListener(type, finish, options);
     handle.addEventListener('click', event => { event.stopPropagation(); selected = i; armed = null; render(); }, options);
     handle.addEventListener('dblclick', event => { event.stopPropagation(); }, options);
     handle.addEventListener('keydown', event => {
@@ -286,16 +243,11 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
       const next = event.key === 'Home' ? Number(handle.getAttribute('aria-valuemin')) / 1000 :
         event.key === 'End' ? Number(handle.getAttribute('aria-valuemax')) / 1000 :
           slice[kind] + (['ArrowLeft', 'ArrowDown'].includes(event.key) ? -1 : 1) * (event.shiftKey ? .01 : .001);
-      update(i, kind, kind === 'fadeIn' ? slice.start + next : kind === 'fadeOut' ? slice.end - next : next); changed();
+      update(i, kind, kind === 'fadeIn' ? slice.start + next : kind === 'fadeOut' ? slice.end - next : next); emit();
     }, options);
     return handle;
   }
-  for (const [i, key] of [...keys].entries()) {
-    const slot = document.createElement('div'); slot.className = 'drum-slot';
-    const button = document.createElement('button'); button.type = 'button'; button.className = 'drum-pad';
-    const caption = document.createElement('span'); caption.className = 'drum-key'; caption.textContent = key;
-    button.append(caption); button.setAttribute('aria-label', keyboard ? `${pt('Sampler')} ${key}` : pt('Select piano sample'));
-    button.onclick = () => { selected = i; armed = i; render(); trigger(i); };
+  for (let i = 0; i < KEYS.length; i++) {
     const marker = document.createElement('span'); marker.className = 'stem-pad-marker';
     const region = document.createElement('div'); region.className = 'stem-pad-region';
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -304,83 +256,56 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
     const controls = Object.fromEntries(['start', 'end', 'fadeIn', 'fadeOut'].map(kind => [kind, makeHandle(i, kind)]));
     marker.append(controls.start); region.append(controls.end, controls.fadeIn, controls.fadeOut);
     waveform.append(region, marker); markers.push(marker); regions.push(region); envelopes.push(envelope); handles.push(controls);
-    buttons.push(button); slot.append(button); pads.append(slot);
   }
-  toggle.onclick = () => {
-    panel.hidden = !panel.hidden; toggle.setAttribute('aria-expanded', String(!panel.hidden)); armed = null;
-    if (panel.hidden) buttons.forEach((_, i) => { revisions[i]++; stop(i); }); render();
-    // Slice after the panel paints; a whole song costs one long frame.
-    if (!panel.hidden && autoSlice) requestAnimationFrame(() => setTimeout(() => { if (!disposed && !panel.hidden) slice(); }));
+  const time = event => clamp((drag.viewport.startMs + (event.clientX - drag.rect.left) / drag.rect.width *
+    (drag.viewport.endMs - drag.viewport.startMs)) / 1000, 0, buffer.duration - 1 / buffer.sampleRate);
+  waveform.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || event.target.closest('.stem-sample-handle')) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    drag = { selection: true, armed: armed !== null, i: armed ?? selected, id: event.pointerId, x: event.clientX, rect: waveform.getBoundingClientRect(),
+      viewport: { ...timeline.viewport() }, previous: slices[armed], moved: false };
+    drag.anchor = time(event); waveform.setPointerCapture(event.pointerId);
+  }, options);
+  waveform.addEventListener('pointermove', event => {
+    if (!drag?.selection || drag.id !== event.pointerId) return;
+    if (Math.abs(event.clientX - drag.x) < 3 && !drag.moved) return;
+    drag.moved = true;
+    slices[drag.i] = normalizeDrumSlice({ start: Math.min(drag.anchor, time(event)), end: Math.max(drag.anchor, time(event)) }, buffer);
+    render();
+  }, options);
+  const finishSelection = event => {
+    if (!drag?.selection || drag.id !== event.pointerId) return;
+    const gesture = drag; drag = null;
+    if (waveform.hasPointerCapture(event.pointerId)) waveform.releasePointerCapture(event.pointerId);
+    if (!gesture.moved && !gesture.armed) return;
+    if (event.type === 'pointercancel') slices[gesture.i] = gesture.previous;
+    else if (!gesture.moved) slices[gesture.i] = normalizeDrumSlice({ start: gesture.anchor, end: gesture.anchor + defaultLength }, buffer);
+    revisions[gesture.i]++; stop(gesture.i); armed = null; render();
+    if (event.type !== 'pointercancel') { emit(); trigger(gesture.i); }
   };
-  // The melodic selector captures a drag as a sample cut, independently of A–B.
-  // Drum pads retain their existing click-to-place and drag-to-loop behavior.
-  if (!keyboard) {
-    const capture = { ...options, capture: true };
-    const time = event => clamp((drag.viewport.startMs + (event.clientX - drag.rect.left) / drag.rect.width *
-      (drag.viewport.endMs - drag.viewport.startMs)) / 1000, 0, buffer.duration - 1 / buffer.sampleRate);
-    waveform.addEventListener('pointerdown', event => {
-      if (armed === null || panel.hidden || event.button !== 0) return;
-      event.preventDefault(); event.stopImmediatePropagation();
-      drag = { selection: true, i: armed, id: event.pointerId, x: event.clientX, rect: waveform.getBoundingClientRect(),
-        viewport: { ...timeline.viewport() }, previous: slices[armed], moved: false };
-      drag.anchor = time(event); waveform.setPointerCapture(event.pointerId);
-    }, capture);
-    waveform.addEventListener('pointermove', event => {
-      if (!drag?.selection || drag.id !== event.pointerId) return;
-      event.stopImmediatePropagation();
-      if (Math.abs(event.clientX - drag.x) < 3 && !drag.moved) return;
-      drag.moved = true;
-      slices[drag.i] = normalizeDrumSlice({ start: Math.min(drag.anchor, time(event)), end: Math.max(drag.anchor, time(event)) }, buffer);
-      render();
-    }, capture);
-    const finishSelection = event => {
-      if (!drag?.selection || drag.id !== event.pointerId) return;
-      event.stopImmediatePropagation();
-      const gesture = drag; drag = null;
-      if (event.type === 'pointercancel') slices[gesture.i] = gesture.previous;
-      else if (!gesture.moved) slices[gesture.i] = normalizeDrumSlice({ start: gesture.anchor, end: gesture.anchor + defaultLength }, buffer);
-      revisions[gesture.i]++; stop(gesture.i); armed = null; render();
-      if (waveform.hasPointerCapture(event.pointerId)) waveform.releasePointerCapture(event.pointerId);
-      if (event.type !== 'pointercancel') changed();
-    };
-    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) waveform.addEventListener(type, finishSelection, capture);
-  }
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) waveform.addEventListener(type, finishSelection, options);
   document.addEventListener('keydown', event => {
-    if (panel.hidden || event.ctrlKey || event.metaKey || event.altKey || document.querySelector('dialog[open]') ||
-      event.target.closest('input,textarea,select,[contenteditable="true"]')) return;
-    if (event.key === 'Escape') { armed = null; render(); return; }
-    if (!keyboard || !keyboardActive() || row.hidden || event.defaultPrevented || row.classList.contains('is-collapsed') || event.target.closest('.stem-piano')) return;
-    const index = keys.indexOf(event.code?.startsWith('Key') ? event.code.slice(3) : event.key.toUpperCase());
+    if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented || document.querySelector('dialog[open]') ||
+      event.target.closest?.('input,textarea,select,[contenteditable="true"]') || !keyboardActive(event)) return;
+    if (event.key === 'Escape') { if (armed !== null) { armed = null; render(); } return; }
+    const index = KEYS.indexOf(event.code?.startsWith('Key') ? event.code.slice(3) : event.key.toUpperCase());
     if (index < 0 || event.repeat) return;
     event.preventDefault(); selected = index; armed = null; render(); trigger(index);
   }, options);
-  panel.append(pads, toolbar, hint); row.append(panel); render();
+  render();
   return {
-    render, snapshot: () => slices.map(slice => slice ? { ...slice } : null),
-    cancelPlacement() { armed = null; render(); },
-    assignPad(i) {
-      if (!Number.isInteger(i) || i < 0 || i >= keys.length) return;
-      panel.hidden = false; toggle.setAttribute('aria-expanded', 'true'); selected = i; armed = i; render();
-    },
-    editPad(i) {
-      if (!Number.isInteger(i) || i < 0 || i >= keys.length) return;
-      panel.hidden = false; toggle.setAttribute('aria-expanded', 'true');
-      selected = i; armed = slices[i] ? null : i;
-      if (slices[i]) timeline.focusRange(slices[i].start * 1000, slices[i].end * 1000);
-      render();
-    },
-    place(seconds) {
-      if (armed === null || panel.hidden || !Number.isFinite(seconds)) return false;
-      const start = clamp(seconds, 0, buffer.duration - 1 / buffer.sampleRate);
-      slices[armed] = normalizeDrumSlice({ start, end: start + defaultLength }, buffer);
-      revisions[armed]++; stop(armed); armed = null; render(); changed(); return true;
-    },
-    updateGain() { for (const voice of liveVoices) voice.gain.gain.value = level(); },
+    render, state, trigger, autoSlice,
+    snapshot: () => slices.map(slice => slice ? { ...slice } : null),
+    select(i) { if (Number.isInteger(i) && i >= 0 && i < KEYS.length) { selected = i; render(); } },
+    // Arming waits for a click or drag on the waveform. Esc or `cancel` releases it.
+    arm(i) { if (Number.isInteger(i) && i >= 0 && i < KEYS.length) { selected = i; armed = i; render(); } },
+    cancel() { if (armed !== null) { armed = null; render(); } },
+    focus(i = selected) { const slice = slices[i]; if (slice) timeline.focusRange(slice.start * 1000, slice.end * 1000); },
     dispose() {
       disposed = true; controller.abort();
       for (const voice of liveVoices) { voice.source.stop(); voice.cleanup(); }
       markers.forEach(marker => marker.remove()); regions.forEach(region => region.remove());
-      peers.delete(activity); renderActivity(); panel.remove(); toggle.remove();
+      waveform.classList.remove('is-placing-pad');
     },
   };
 }
