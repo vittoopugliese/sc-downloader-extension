@@ -7,6 +7,7 @@
     "vendor:stems": "node scripts/vendor-stem-runtime.cjs",
     "test:stems": "node --test scripts/stems.test.mjs scripts/stem-playlist.test.mjs",
     "test:e2e:stems-ui": "node scripts/stems-ui.browser-test.cjs",
+    "test:e2e:track-editors": "node scripts/stem-track-editors.browser-test.cjs",
     "test:e2e:stems-levels": "node scripts/stems-waveform-levels.browser-test.cjs",
     "test:e2e:stems": "node scripts/stems.browser-test.cjs",
     "test:e2e:playlist": "node scripts/stem-playlist.browser-test.cjs",

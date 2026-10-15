@@ -62,7 +62,7 @@ const { chromium } = require('playwright');
         reset: SCPlayerToolsText.t('Reset speed and tone'),
         record: SCPlayerToolsText.t('Record the final mix'),
       }));
-      assert.equal(await page.locator('.stem[data-stem=drums] .stem-sampler-hint').textContent(), copy.hint);
+      assert.equal(await page.locator('#pads-drums .stem-sampler-hint').textContent(), copy.hint);
       assert.equal(await page.locator('#stem-rate').getAttribute('title'), await page.evaluate(() => SCPlayerToolsText.t('Double-click to reset')));
       assert.equal(await page.locator('.record-start').getAttribute('title'), copy.record);
       for (const width of [1000, 390, 320]) {
@@ -79,7 +79,7 @@ const { chromium } = require('playwright');
           window.postMessage({ source: 'scdl-pad-content', id: event.data.id, result: { success: true, pads: [], presets: [] } }, location.origin);
         });
       });
-      const scripts = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8')).content_scripts.find(entry => entry.js.includes('scripts/tempo-control-main.js')).js;
+      const scripts = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8')).content_scripts.find(entry => entry.js?.includes('scripts/tempo-control-main.js')).js;
       for (const script of scripts) await page.addScriptTag({ url: `${origin}/${script}` });
       await page.locator('#scdl-tempo-control .trigger').click();
       assert.equal(await page.locator('#scdl-tempo-control .record-section .tool-section-title').textContent(), record);

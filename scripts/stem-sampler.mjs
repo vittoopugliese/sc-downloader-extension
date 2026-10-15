@@ -114,6 +114,7 @@ export function detectDrumSlices(buffer, { startMs = 0, endMs = buffer.duration 
   });
 }
 
+const waveformSamplers = new WeakMap();
 // Pads share PCM, but own their trim and envelope; no pad depends on its neighbor.
 export function mountDrumSampler({ row, actions, waveform, buffer, timeline, audioContext, output, level, changed, saved, locale, report,
   keys = KEYS, id = 'drums', keyboard = true, keyboardActive = () => true, autoSlice = keyboard, defaultLength = .154, title = 'Sampler' }) {
@@ -129,6 +130,12 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
   actions.insertBefore(toggle, actions.querySelector('.download'));
   const panel = document.createElement('div'); panel.className = 'stem-sampler'; panel.id = `pads-${id}`; panel.hidden = true;
   if (!keyboard) { toggle.className = 'stem-piano-sample-toggle'; toggle.hidden = true; }
+  const peers = waveformSamplers.get(waveform) || new Set(); waveformSamplers.set(waveform, peers);
+  const activity = () => ({ visible: !panel.hidden, armed: armed !== null }); peers.add(activity);
+  function renderActivity() {
+    waveform.classList.toggle('is-placing-pad', [...peers].some(peer => peer().armed));
+    waveform.classList.toggle('is-sampling', [...peers].some(peer => peer().visible));
+  }
   const pads = document.createElement('div'); pads.className = 'drum-pads stem-pads';
   const hint = document.createElement('p'); hint.className = 'stem-sampler-hint'; hint.setAttribute('role', 'status');
   const toolbar = document.createElement('div'); toolbar.className = 'stem-sample-tools'; toolbar.hidden = true;
@@ -151,11 +158,10 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
   function render() {
     hint.textContent = armed === null
       ? pt('A S D F G H J K to play. Edit sample to zoom; drag its edges and fades.')
-      : keyboard ? pt('Pad $1: click the drum waveform to set its start. Esc cancels.', keys[armed]) : pt('Click the instruments waveform to select a sample. Drag its edges and fades.');
+      : keyboard ? pt('Pad $1: click the waveform of this track to set its start. Esc cancels.', keys[armed]) : pt('Click the waveform of this track to select a sample. Drag its edges and fades.');
     hint.hidden = armed === null;
     pads.title = keyboard ? pt('A S D F G H J K to play. Edit sample to zoom; drag its edges and fades.') : pt('Select piano sample');
-    waveform.classList.toggle('is-placing-pad', armed !== null);
-    waveform.classList.toggle('is-sampling', !panel.hidden);
+    renderActivity();
     edit.hidden = !slices[selected]; toolbar.hidden = edit.hidden && !autoSlice;
     if (!edit.hidden) {
       const slice = slices[selected];
@@ -288,7 +294,7 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
     const slot = document.createElement('div'); slot.className = 'drum-slot';
     const button = document.createElement('button'); button.type = 'button'; button.className = 'drum-pad';
     const caption = document.createElement('span'); caption.className = 'drum-key'; caption.textContent = key;
-    button.append(caption); button.setAttribute('aria-label', keyboard ? `${pt('Drums')} ${key}` : pt('Select piano sample'));
+    button.append(caption); button.setAttribute('aria-label', keyboard ? `${pt('Sampler')} ${key}` : pt('Select piano sample'));
     button.onclick = () => { selected = i; armed = i; render(); trigger(i); };
     const marker = document.createElement('span'); marker.className = 'stem-pad-marker';
     const region = document.createElement('div'); region.className = 'stem-pad-region';
@@ -374,7 +380,7 @@ export function mountDrumSampler({ row, actions, waveform, buffer, timeline, aud
       disposed = true; controller.abort();
       for (const voice of liveVoices) { voice.source.stop(); voice.cleanup(); }
       markers.forEach(marker => marker.remove()); regions.forEach(region => region.remove());
-      waveform.classList.remove('is-placing-pad', 'is-sampling'); panel.remove(); toggle.remove();
+      peers.delete(activity); renderActivity(); panel.remove(); toggle.remove();
     },
   };
 }

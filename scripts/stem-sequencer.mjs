@@ -54,7 +54,7 @@ export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, s
     if (!playing && range()) { state.enabled = true; emit(true); }
     Promise.resolve(togglePlayback()).catch(report);
   }, true);
-  // One switch: off plays the separated drums, on replaces them with the pattern.
+  // One switch: off plays the source audio, on replaces it with the pattern.
   const mode = button('seq-switch', '', () => { if (state.enabled || range()) { state.enabled = !state.enabled; emit(state.enabled); } });
   mode.setAttribute('role', 'switch'); mode.setAttribute('aria-label', pt('Pattern'));
   mode.innerHTML = `${svg(ICONS.wave)}<span class="seq-switch-track" aria-hidden="true"></span>${svg(ICONS.sequencer)}`;
@@ -256,7 +256,7 @@ export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, s
     song.title = state.song ? pt('Song mode · the pattern repeats along the track inside its clip; drag the clip edges') :
       pt('Pattern mode · the A–B loop follows the pattern bars');
     song.setAttribute('aria-label', song.title);
-    mode.title = state.enabled ? pt('Pattern replaces the drum stem · click for the original drums') : pt('Original drums · click to play the pattern');
+    mode.title = state.enabled ? pt('Pattern replaces this track · click for the original audio') : pt('Original audio · click to play the pattern');
     play.disabled = !playing && !range(); focus.disabled = !range();
     setStart.setAttribute('aria-pressed', String(armed));
     const assigned = sampler.snapshot();
@@ -308,6 +308,7 @@ export function mountDrumSequencer({ row, actions, waveform, timeline, buffer, s
     matchesRange: value => { const expected = range(); return expected && Math.abs(value.startMs - expected.startMs) < .01 && Math.abs(value.endMs - expected.endMs) < .01; },
     deactivate() { state.enabled = false; emit(); },
     samplesChanged() { emit(); },
+    cancelPlacement() { armed = false; renderMarker(); },
     place(seconds) {
       if (!armed || panel.hidden) return false;
       state.start = Math.max(0, Math.min(buffer.duration, seconds)); armed = false; emit(true); return true;

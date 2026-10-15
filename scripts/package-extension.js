@@ -33,7 +33,7 @@ function smokePackage(zipPath, apiPermission) {
     'scripts/stem-worker.mjs', 'scripts/stem-model.mjs', 'scripts/stem-audio.mjs', 'scripts/stem-jobs.js',
     'scripts/stem-presets.mjs', 'scripts/stem-library-ui.mjs', 'scripts/stem-tone-processor.mjs',
     'scripts/stem-playlist.mjs', 'scripts/stem-playlist-core.mjs', 'scripts/stem-playlist-audio.mjs', 'scripts/stem-playlist-stretch.mjs', 'scripts/stem-playlist-worker.mjs', 'assets/stem-playlist.css',
-    'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/stem-sequencer-core.mjs', 'scripts/stem-sequencer.mjs', 'scripts/stem-piano-core.mjs', 'scripts/stem-piano.mjs', 'assets/icons/mute.svg',
+    'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/stem-sequencer-core.mjs', 'scripts/stem-sequencer.mjs', 'scripts/stem-piano-core.mjs', 'scripts/stem-piano.mjs', 'scripts/stem-track-editor.mjs', 'assets/icons/mute.svg',
     'scripts/vendor/onnxruntime/ort.wasm.min.mjs', 'scripts/vendor/onnxruntime/ort-wasm-simd-threaded.mjs',
     'scripts/vendor/onnxruntime/ort-wasm-simd-threaded.wasm', 'scripts/background.js', 'THIRD_PARTY_LICENSES.md']) {
     if (!entries.has(required)) throw new Error(`Package smoke check: missing ${required}.`);

@@ -13,8 +13,12 @@ export function mountTrackEditor({ saved, changed, ...options }) {
     getGrid: () => sequencer.grid(), setGrid: value => sequencer.setGrid(value), changed });
   // Selecting a sample or a beat must have exactly one recipient on this waveform.
   const cancelOther = event => {
-    if (event.target.closest('.piano-sample,.stem-piano-toggle')) sampler.cancelPlacement();
-    else if (event.target.closest('.stem-sampler-toggle,.stem-pad,.seq-set-start,.seq-sample')) piano.sampler.cancelPlacement();
+    if (event.target.closest('.piano-sample,.stem-piano-toggle') || event.target.closest('.stem-sampler')?.id === `pads-piano-${options.id}`) {
+      sampler.cancelPlacement(); sequencer.cancelPlacement();
+    } else if (event.target.closest('.stem-sampler-toggle,.drum-pad,.seq-set-start,.seq-pad')) {
+      piano.sampler.cancelPlacement();
+      if (!event.target.closest('.seq-set-start')) sequencer.cancelPlacement();
+    }
   };
   options.actions.addEventListener('click', cancelOther);
   options.row.addEventListener('click', cancelOther);

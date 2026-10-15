@@ -62,7 +62,7 @@ export function mountStemPiano({ row, actions, waveform, buffer, timeline, saved
   const root = select('piano-root', 'Root note', Array.from({ length: 73 }, (_, i) => [i + 24, noteName(i + 24)]), () => {
     state.root = Number(root.value); stopPreview(); emit();
   });
-  const mode = select('piano-mode', 'Piano playback', [ ['off', pt('Original instruments')], ['layer', pt('Layer piano')], ['replace', pt('Replace instruments')] ], () => {
+  const mode = select('piano-mode', 'Piano playback', [ ['off', pt('Original audio')], ['layer', pt('Layer piano')], ['replace', pt('Replace audio')] ], () => {
     state.mode = mode.value; emit(state.mode !== 'off');
   });
   const bpm = element('input', 'piano-bpm'); bpm.type = 'number'; bpm.min = '1'; bpm.max = '900'; bpm.step = '.1';
@@ -195,7 +195,7 @@ export function mountStemPiano({ row, actions, waveform, buffer, timeline, saved
     clear.disabled = !state.notes.length; undoButton.disabled = !undo.length; redoButton.disabled = !redo.length;
     sample.classList.toggle('is-assigned', !!state.sample);
     sample.title = `${pt('Select piano sample')}${state.sample ? ` · ${state.sample.start.toFixed(3)}–${state.sample.end.toFixed(3)} s` : ''}`;
-    hint.textContent = !state.sample ? pt('Choose a sample from the instruments stem, assign its root note, then draw your melody.') :
+    hint.textContent = !state.sample ? pt('Choose a sample from this track, assign its root note, then draw your melody.') :
       !range() ? pt('The pattern exceeds the audio. Move the first beat, use fewer bars or raise the BPM.') :
         state.notes.length >= MAX_PIANO_NOTES ? pt('Piano note limit reached (512).') : '';
     hint.hidden = !hint.textContent;

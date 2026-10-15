@@ -71,6 +71,7 @@ $packageItems = @(
     "scripts/stem-sequencer.mjs",
     "scripts/stem-piano-core.mjs",
     "scripts/stem-piano.mjs",
+    "scripts/stem-track-editor.mjs",
     "scripts/stem-playlist.mjs",
     "scripts/stem-playlist-core.mjs",
     "scripts/stem-playlist-audio.mjs",

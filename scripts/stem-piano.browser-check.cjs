@@ -18,8 +18,8 @@ module.exports = async function verifyPiano(page, root) {
   await page.mouse.move(wave.x + wave.width * .1, wave.y + 35); await page.mouse.down();
   await page.mouse.move(wave.x + wave.width * .25, wave.y + 35, { steps: 5 }); await page.mouse.up();
   assert.equal(await page.locator('.stem-loop-selection:visible').count(), 0, 'Sample selection does not change A–B');
-  const start = Number(await otherWave.locator('.stem-pad-marker').getAttribute('data-start'));
-  const end = Number(await otherWave.locator('.stem-pad-region').getAttribute('data-end'));
+  const start = Number(await otherWave.locator('.stem-pad-marker').last().getAttribute('data-start'));
+  const end = Number(await otherWave.locator('.stem-pad-region').last().getAttribute('data-end'));
   assert.ok(Math.abs(start - .3) < .01 && Math.abs(end - .75) < .01, `Own melodic sample can be drawn on the instruments waveform: ${start}–${end}`);
   await piano.locator('.piano-root').selectOption('60');
   async function point(pitch, step) {
@@ -66,18 +66,18 @@ module.exports = async function verifyPiano(page, root) {
   await page.mouse.move(rect.x + 3 + width / 16 * 2, rect.y + 10, { steps: 4 }); await page.mouse.up();
   assert.equal(await note.getAttribute('data-length'), '6');
   // Both editors read/write the same grid and shared speed slider.
-  await page.locator('.pl-stem-head[data-stem=drums] .stem-sequencer-toggle').click();
+  await otherHead.locator('.stem-sequencer-toggle').click();
   await piano.locator('.piano-bpm').fill('180'); await piano.locator('.piano-bpm').press('Tab');
-  await page.waitForFunction(() => document.querySelector('.seq-bpm').value === '180');
+  await page.waitForFunction(() => document.querySelector('[data-stem=other] .seq-bpm').value === '180');
   assert.equal(await page.locator('#stem-rate').inputValue(), '1.5');
   await page.locator('#stem-rate').dblclick();
   await piano.locator('.piano-double').click();
-  assert.equal(await page.locator('.seq-bpm').inputValue(), '240');
+  assert.equal(await other.locator('.seq-bpm').inputValue(), '240');
   await piano.locator('.piano-bars').selectOption('2');
-  assert.equal(await page.locator('.seq-bars').inputValue(), '2');
-  await page.locator('.seq-bars').selectOption('1');
+  assert.equal(await other.locator('.seq-bars').inputValue(), '2');
+  await other.locator('.seq-bars').selectOption('1');
   assert.equal(await piano.locator('.piano-bars').inputValue(), '1');
-  await page.locator('.seq-half').click();
+  await other.locator('.seq-half').click();
   assert.equal(await piano.locator('.piano-bpm').inputValue(), '120');
   await piano.locator('.piano-play').click();
   await page.waitForFunction(() => document.querySelector('#play').getAttribute('aria-label') === 'Pausar');
@@ -85,7 +85,7 @@ module.exports = async function verifyPiano(page, root) {
   const sources = await page.evaluate(() => stemTestSources.filter(source => source.testStart).slice(-5).map(source => source.testStart[0]));
   assert.equal(sources.length, 5);
   assert.ok(sources.every(when => Math.abs(when - sources[0]) < 1e-9), 'Piano lane and stems start on the same audio clock');
-  await page.waitForFunction(() => !document.querySelector('.piano-cursor').hidden);
+  await page.waitForFunction(() => !document.querySelector('[data-stem=other] .piano-cursor').hidden);
   // Edits replace derived audio while the transport keeps running.
   await piano.locator('.piano-root').selectOption('57');
   await page.waitForTimeout(100);
@@ -128,6 +128,7 @@ module.exports = async function verifyPiano(page, root) {
     record.settings.states.forEach((state, i) => { state.muted = i !== 2; state.gain = 1; });
     record.settings.piano = { root: 69, mode: 'replace', sustain: true, sample: { start: .1, end: .3 },
       notes: [{ pitch: 81, start: 0, length: 16, velocity: 1 }] };
+    delete record.settings.trackEditors; // Exercise migration of the legacy piano/grid preset.
     await library.update(id, record.settings);
   }, id);
   await page.reload(); await page.locator('#stem-presets:not(:disabled)').waitFor();

@@ -584,7 +584,9 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
       });
       const clips = restore && Array.isArray(saved?.clips) ? saved.clips.map(clip => ({ ...clip })) :
         sources.map(source => newClip(next.get(source.id), `track-${source.stem}`, 0));
-      return { version: 1, bpm: restore && Number.isFinite(saved?.bpm) ? saved.bpm : state.bpm, monitor, tracks: [...tracks, ...userTracks], clips: [...clips, ...userClips] };
+      const restoredUsers = restore && Array.isArray(saved?.userTracks) ? saved.userTracks.filter(track => !track.stem) : [];
+      const users = [...restoredUsers, ...userTracks.filter(track => !restoredUsers.some(saved => saved.id === track.id) && (!restoredUsers.length || userClips.some(clip => clip.track === track.id)))];
+      return { version: 1, bpm: restore && Number.isFinite(saved?.bpm) ? saved.bpm : state.bpm, monitor, tracks: [...tracks, ...users], clips: [...clips, ...userClips] };
     };
     let candidate = build(!!saved);
     try { validateArrangement(candidate, next); } catch { candidate = build(false); validateArrangement(candidate, next); }
@@ -594,6 +596,18 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
   function sourceClip(stem) {
     const track = state.tracks.find(track => track.id === stem || track.stem === stem);
     return state.clips.find(clip => clip.track === track?.id && (!track.stem || clip.asset === `audio-${track.stem}`)) || null;
+  }
+  function sourceTime(stem, seconds) {
+    const clip = sourceClip(stem);
+    return clip ? (clip.reverse ? clip.out - (seconds - clip.at) * clipRate(clip) : clip.in + (seconds - clip.at) * clipRate(clip)) : seconds;
+  }
+  function sourceRange(stem, range, toTimeline = false) {
+    const clip = sourceClip(stem); if (!clip || !range) return range;
+    const convert = seconds => toTimeline
+      ? clip.at + (clip.reverse ? clip.out - seconds : seconds - clip.in) / clipRate(clip)
+      : sourceTime(stem, seconds);
+    const a = convert(range.startMs / 1000), b = convert(range.endMs / 1000);
+    return { ...range, startMs: Math.min(a, b) * 1000, endMs: Math.max(a, b) * 1000 };
   }
   container.addEventListener('keydown', event => {
     if (event.target.closest('input,select,textarea,.pl-drawer') || event.target.isContentEditable) return;
@@ -615,6 +629,8 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     toggle: safe(toggle), pause: () => stop(), seek, now, playing, setSession, edit, draw,
     track: stem => state.tracks.find(track => track.id === stem || track.stem === stem),
     tracks: () => state.tracks,
+    duration: () => arrangementEnd(state),
+    sourceTime, sourceRange,
     audible: track => trackAudible(state, track),
     monitor: () => state.monitor,
     sourceWindow(stem) {
@@ -666,7 +682,8 @@ export function mountPlaylist({ container, audio, channel, onChange, onTransport
     },
     // Channel mix is saved by the host; the arrangement saves tempo and clips.
     snapshot: () => ({ bpm: state.bpm,
-      clips: state.clips.filter(clip => trackOf(clip.track)?.stem && assets.get(clip.asset)?.session).map(clip => ({ ...clip })) }),
+      userTracks: state.tracks.filter(track => !track.stem && state.clips.filter(clip => clip.track === track.id).every(clip => assets.get(clip.asset)?.session)).map(track => ({ ...track })),
+      clips: state.clips.filter(clip => assets.get(clip.asset)?.session && (trackOf(clip.track)?.stem || state.clips.filter(other => other.track === clip.track).every(other => assets.get(other.asset)?.session))).map(clip => ({ ...clip })) }),
     dispose() {
       exporting?.abort(); engine?.dispose(); cache.dispose(); viewObserver.disconnect();
       cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();

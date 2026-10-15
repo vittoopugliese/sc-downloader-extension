@@ -4,6 +4,15 @@
   'use strict';
   const locales = ['en', 'es', 'de', 'pt-BR', 'ru'];
   const rows = `
+Choose a sample from this track, assign its root note, then draw your melody.¦Elegí un sample de esta pista, asigná su nota raíz y dibujá tu melodía.¦Wähle ein Sample aus dieser Spur, lege seinen Grundton fest und zeichne deine Melodie.¦Escolha uma amostra desta faixa, atribua sua nota base e desenhe sua melodia.¦Выберите сэмпл из этой дорожки, задайте основную ноту и нарисуйте мелодию.
+Click the waveform of this track to select a sample. Drag its edges and fades.¦Clic o arrastrá en la onda de esta pista para seleccionar un sample. Editá sus bordes y fades.¦Klicke auf die Wellenform dieser Spur, um ein Sample auszuwählen. Ziehe seine Ränder und Fades.¦Clique na onda desta faixa para selecionar uma amostra. Arraste suas bordas e fades.¦Нажмите на волну этой дорожки, чтобы выбрать сэмпл. Перетащите края и затухания.
+Pad $1: click the waveform of this track to set its start. Esc cancels.¦Pad $1: clic en la onda de esta pista para fijar el inicio. Esc cancela.¦Pad $1: Wellenform dieser Spur anklicken, um den Start festzulegen. Esc bricht ab.¦Pad $1: clique na onda desta faixa para definir o início. Esc cancela.¦Пэд $1: нажмите на волну этой дорожки, чтобы задать начало. Esc — отмена.
+Original audio¦Audio original¦Originalaudio¦Áudio original¦Исходное аудио
+Pattern replaces this track · click for the original audio¦El patrón reemplaza esta pista · clic para escuchar el audio original¦Pattern ersetzt diese Spur · klicken für Originalaudio¦O padrão substitui esta faixa · clique para ouvir o áudio original¦Паттерн заменяет эту дорожку · нажмите для исходного аудио
+Original audio · click to play the pattern¦Audio original · clic para reproducir el patrón¦Originalaudio · klicken, um das Pattern abzuspielen¦Áudio original · clique para reproduzir o padrão¦Исходное аудио · нажмите для воспроизведения паттерна
+Replace audio¦Reemplazar audio¦Audio ersetzen¦Substituir áudio¦Заменить аудио
+Add a sample to this track to use its editors.¦Agregá un sample a esta pista para usar sus editores.¦Füge dieser Spur ein Sample hinzu, um ihre Editoren zu verwenden.¦Adicione uma amostra a esta faixa para usar seus editores.¦Добавьте сэмпл на эту дорожку, чтобы использовать её редакторы.
+
 Stem Extractor¦Separador de stems¦Stem-Extraktor¦Separador de stems¦Разделение на стемы
 MINI DAW¦MINI DAW¦MINI DAW¦MINI DAW¦МИНИ-DAW
 Tone & Velocity¦Tono y velocidad¦Tonhöhe & Tempo¦Tom e velocidade¦Тон и скорость

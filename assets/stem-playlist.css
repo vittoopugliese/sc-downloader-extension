@@ -64,17 +64,17 @@
 
 /* Stem channel headers reuse the stem controls: fold, enable, tools, WAV and volume. */
 .pl-track-head.stem{display:flex;align-items:stretch;grid-template-columns:none;margin:0;border-radius:0;border-top:0;border-right:1px solid var(--pl-edge);background:var(--pl-head-bg)}
-.playlist .pl-stem-head .stem-collapse{justify-content:flex-start;min-height:0;padding:0;border:0;background:none;color:#f2f2f2;font:700 12px Arial,Helvetica,sans-serif}
-.playlist .pl-stem-head .stem-collapse:hover:enabled{background:none;color:#ff7b38}
-.pl-stem-head h2{display:flex;align-items:center;gap:7px;margin:0;font-size:12px;min-width:0}
-.pl-stem-head h2 .icon{width:15px;height:15px;color:var(--track-color)}
-.pl-stem-head .stem-collapse:disabled{cursor:default;opacity:1}
-.pl-stem-head .stem-collapse:disabled .stem-chevron{display:none}
-.pl-stem-head.is-folded .stem-chevron{transform:rotate(-90deg)}
-.pl-stem-head .stem-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:4px}
-.playlist .pl-stem-head .stem-actions button:not(.pad-knob),.pl-stem-head .download{width:28px;height:28px;min-height:0;padding:5px}
-.playlist .pl-stem-head .stem-solo{width:20px;padding:0;border:0;background:transparent}
-.pl-stem-head.is-silent h2{opacity:.5}
+.playlist .pl-track-head.stem .stem-collapse{justify-content:flex-start;min-height:0;padding:0;border:0;background:none;color:#f2f2f2;font:700 12px Arial,Helvetica,sans-serif}
+.playlist .pl-track-head.stem .stem-collapse:hover:enabled{background:none;color:#ff7b38}
+.pl-track-head.stem h2{display:flex;align-items:center;gap:7px;margin:0;font-size:12px;min-width:0}
+.pl-track-head.stem h2 .icon{width:15px;height:15px;color:var(--track-color)}
+.pl-track-head.stem .stem-collapse:disabled{cursor:default;opacity:1}
+.pl-track-head.stem .stem-collapse:disabled .stem-chevron{display:none}
+.pl-track-head.stem.is-folded .stem-chevron{transform:rotate(-90deg)}
+.pl-track-head.stem .stem-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:4px}
+.playlist .pl-track-head.stem .stem-actions button:not(.pad-knob),.pl-track-head.stem .download{width:28px;height:28px;min-height:0;padding:5px}
+.playlist .pl-track-head.stem .stem-solo{width:20px;padding:0;border:0;background:transparent}
+.pl-track-head.stem.is-silent h2{opacity:.5}
 .pl-drawer-row{position:relative;border-bottom:1px solid #2c2b29;background:#151515}
 .pl-drawer{position:sticky;left:0;width:var(--pl-view,100%);box-sizing:border-box;margin:0;border:0;border-left:3px solid var(--track-color,#8c8c8c);border-radius:0;background:linear-gradient(180deg,#232120,#1d1c1b)}
 .pl-drawer[data-stem=drums]{--track-color:#ff8a4c}.pl-drawer[data-stem=bass]{--track-color:#ffb98f}.pl-drawer[data-stem=other]{--track-color:#8c8c8c}.pl-drawer[data-stem=vocals]{--track-color:#ff5500}
@@ -111,4 +111,8 @@
 .pl-clip.is-stretching::after{content:'';position:absolute;inset:19px 0 0;background:repeating-linear-gradient(135deg,#ffffff14 0 6px,transparent 6px 12px);animation:pl-stretch 1s linear infinite;pointer-events:none}
 @keyframes pl-stretch{to{background-position:17px 0}}
 @media(prefers-reduced-motion:reduce){.pl-clip.is-stretching::after{animation:none}}
-@media(max-width:600px){.playlist{--pl-head:150px;padding:12px 14px 14px}.pl-track-head{padding:6px 7px}.pl-stem-head h2{font-size:11px}.pl-toolbar{gap:8px}.pl-spacer{display:none}}
+@media(max-width:600px){.playlist{--pl-head:150px;padding:12px 14px 14px}.pl-track-head{padding:6px 7px}.pl-track-head.stem h2{font-size:11px}.pl-toolbar{gap:8px}.pl-spacer{display:none}}
+
+.pl-user-head h2 .stem-collapse{flex-shrink:0}
+.pl-user-head .pl-track-name{min-width:0;flex:1}
+.pl-drawer>.stem-sampler,.pl-drawer>.stem-sequencer,.pl-drawer>.stem-piano{grid-row:auto}
