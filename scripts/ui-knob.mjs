@@ -19,7 +19,7 @@ export function createKnob({ label, min, max, step, coarse, value, reset, format
     current = next; const text = format(next);
     dial.style.setProperty('--knob-angle', `${-135 + clamp(unit(next), 0, 1) * 270}deg`);
     dial.setAttribute('aria-valuenow', String(next)); dial.setAttribute('aria-valuetext', text);
-    dial.title = hint ? `${label}: ${text} · ${hint}` : `${label}: ${text}`; output.textContent = text;
+    dial.dataset.scdlTooltip = hint ? `${label}: ${text} · ${hint}` : `${label}: ${text}`; output.textContent = text;
   }
   const finish = (next, previous) => { if (next !== previous) onCommit(next, previous); };
   dial.onpointerdown = event => {

@@ -56,7 +56,7 @@ export function mountChannelRack({ container, instruments, audioContext, output,
   });
   const element = (tag, className, text) => { const node = document.createElement(tag); node.className = className; if (text) node.textContent = text; return node; };
   const button = (className, title, html, action) => {
-    const node = element('button', className); node.type = 'button'; node.title = title; node.setAttribute('aria-label', title);
+    const node = element('button', className); node.type = 'button'; node.dataset.scdlTooltip = title; node.setAttribute('aria-label', title);
     node.innerHTML = html; node.addEventListener('click', action); return node;
   };
   const toolbar = element('div', 'plugin-toolbar');
@@ -84,7 +84,7 @@ export function mountChannelRack({ container, instruments, audioContext, output,
   function renderClear() {
     const { key } = instruments.focused(), empty = !sampler?.state().slices.some(Boolean), undo = cleared?.key === key && empty;
     const label = undo ? pt('Restore cleared slices') : pt('Clear all slices');
-    clearSlices.title = label; clearSlices.setAttribute('aria-label', label); clearSlices.setAttribute('aria-pressed', String(undo));
+    clearSlices.dataset.scdlTooltip = label; clearSlices.setAttribute('aria-label', label); clearSlices.setAttribute('aria-pressed', String(undo));
     clearSlices.innerHTML = iconMarkup(undo ? PLUGIN_ICONS.restore : PLUGIN_ICONS.clearSlices);
     clearSlices.disabled = !sampler || (empty && !undo);
   }
@@ -276,8 +276,8 @@ export function mountChannelRack({ container, instruments, audioContext, output,
       const slice = state?.slices[row];
       pad.classList.toggle('is-assigned', !!slice); pad.classList.toggle('is-selected', state?.selected === row);
       pad.classList.toggle('is-armed', state?.armed === row); pad.classList.toggle('is-active', !!state?.playing.has(row));
-      pad.title = slice ? `${PAD_KEYS[row]} · ${pt('Click to play · right-click to choose another sample')}` : `${PAD_KEYS[row]} · ${pt('Assign a sample')}`;
-      pad.setAttribute('aria-label', pad.title);
+      pad.dataset.scdlTooltip = slice ? `${PAD_KEYS[row]} · ${pt('Click to play · right-click to choose another sample')}` : `${PAD_KEYS[row]} · ${pt('Assign a sample')}`;
+      pad.setAttribute('aria-label', pad.dataset.scdlTooltip);
     });
     const armed = state?.armed;
     hint.textContent = rackView === 'channels' ? pt('Each row is a sample in this pattern. Choose One-shot for the full sound, or Chops to sequence its selected pad.') : armed !== null && armed !== undefined
@@ -295,14 +295,14 @@ export function mountChannelRack({ container, instruments, audioContext, output,
       cell.disabled = !state?.slices[row]; cell.dataset.step = String(step); cell.dataset.velocity = String(velocity);
       cell.classList.toggle('is-on', velocity > 0); cell.setAttribute('aria-pressed', String(velocity > 0));
       cell.style.setProperty('--velocity', String(velocity));
-      cell.title = `${PAD_KEYS[row]} · ${pt('Bar $1', bar + 1)} · ${pt('Step $1', column + 1)}${velocity ? ` · ${Math.round(velocity * 100)}%` : ''}`;
-      cell.setAttribute('aria-label', cell.title);
+      cell.dataset.scdlTooltip = `${PAD_KEYS[row]} · ${pt('Bar $1', bar + 1)} · ${pt('Step $1', column + 1)}${velocity ? ` · ${Math.round(velocity * 100)}%` : ''}`;
+      cell.setAttribute('aria-label', cell.dataset.scdlTooltip);
     }));
   }
   function renderTransport() {
     const playing = instruments.playing();
     play.innerHTML = iconMarkup(PLUGIN_ICONS[playing ? 'pause' : 'play']); play.setAttribute('aria-pressed', String(playing));
-    play.title = pt(playing ? 'Pause' : 'Play pattern'); play.setAttribute('aria-label', play.title);
+    play.dataset.scdlTooltip = pt(playing ? 'Pause' : 'Play pattern'); play.setAttribute('aria-label', play.dataset.scdlTooltip);
     cancelAnimationFrame(frame);
     const step = () => {
       const phase = instruments.phase(), current = phase < 0 ? -1 : Math.floor(phase * count());

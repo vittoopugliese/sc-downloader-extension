@@ -8,7 +8,7 @@ import { MODEL } from './stem-model.mjs';
 import { mountStemLibrary } from './stem-library-ui.mjs';
 import { CHANNEL_COLORS, contextMenu, mountPlaylist } from './stem-playlist.mjs';
 import { createKnob } from './ui-knob.mjs';
-import { setButtonContent } from './ui-button.mjs';
+import { createButton, setButtonContent } from './ui-button.mjs';
 import { mountExtractDialog } from './stem-extract-dialog.mjs';
 import { toast, dismissToast, configureToasts } from './ui-toast.mjs';
 import { mountModuleWindow } from './stem-module-window.mjs';
@@ -119,10 +119,10 @@ document.documentElement.lang = locale;
 document.title = text('pageTitle');
 globalThis.SCPlayerToolsText.localize(document.querySelector('main'));
 document.querySelectorAll('[data-copy]').forEach(node => { node.textContent = text(node.dataset.copy); });
-document.querySelectorAll('[data-copy-title]').forEach(node => { node.title = text(node.dataset.copyTitle); node.setAttribute('aria-label', node.title); });
+document.querySelectorAll('[data-copy-title]').forEach(node => { node.dataset.scdlTooltip = text(node.dataset.copyTitle); node.setAttribute('aria-label', node.dataset.scdlTooltip); });
 document.querySelectorAll('[data-copy-aria-label]').forEach(node => { node.setAttribute('aria-label', text(node.dataset.copyAriaLabel)); });
 const icon = name => globalThis.SCIcons.create(name, "icon");
-$('toggle-game').title = text('gameTip'); $('toggle-game').setAttribute('aria-label', text('playGame'));
+$('toggle-game').dataset.scdlTooltip = text('gameTip'); $('toggle-game').setAttribute('aria-label', text('playGame'));
 $('transport').setAttribute('aria-label', text('transport'));
 // Inside the shared buttons the icon takes the button's own size.
 document.querySelectorAll('[data-icon]').forEach(node => {
@@ -132,7 +132,7 @@ document.querySelectorAll('[data-icon]').forEach(node => {
 function playLabel(active) {
   const label = text(active ? 'stop' : 'play');
   setButtonContent($('play'), { icon: active ? 'pause' : 'play' });
-  $('play').title = text(active ? 'pauseTip' : 'playTip'); $('play').setAttribute('aria-label', label);
+  $('play').dataset.scdlTooltip = text(active ? 'pauseTip' : 'playTip'); $('play').setAttribute('aria-label', label);
   $('play').setAttribute('aria-pressed', String(active));
 }
 playLabel(false);
@@ -156,7 +156,7 @@ for (const [label, title, action] of [
   ['fit', pt('Show all audio'), () => stemLoop.resetZoom()],
 ]) {
   const button = document.createElement('button'); button.type = 'button'; button.append(icon(label));
-  button.title = title; button.setAttribute('aria-label', title); button.onclick = action; zoomTools.append(button);
+  button.dataset.scdlTooltip = title; button.setAttribute('aria-label', title); button.onclick = action; zoomTools.append(button);
 }
 const zoomHint = document.createElement('span');
 zoomHint.textContent = pt('Wheel: zoom · Shift + wheel: pan');
@@ -305,11 +305,18 @@ const WINDOWS = [
 const extractDialog = mountExtractDialog({ t: say, stemName: stem => text(stem),
   onExtract: options => separate(options), onCancel: () => cancel(), onClearModel: () => clearModel() });
 setButtonContent($('clear-cache'), { icon: 'trash', label: text('clearCache') });
-$('clear-cache').title = text('clearCacheTip'); $('clear-cache').setAttribute('aria-label', text('clearCache'));
-$('separate').title = text('details');
+$('clear-cache').dataset.scdlTooltip = text('clearCacheTip'); $('clear-cache').setAttribute('aria-label', text('clearCache'));
+$('separate').dataset.scdlTooltip = text('details');
+// Tooltips on/off for the extension's pages (fast-tooltips.js); Player Tools has its own
+// switch on SoundCloud. Ghost, beside the playlist help and the header pin.
+const tooltipsToggle = createButton({ icon: 'info', title: pt('Toggle tooltips'), variant: 'ghost', className: 'tooltips-toggle', pressed: globalThis.SCTooltips?.isEnabled() ?? true,
+  onClick: () => globalThis.SCTooltips?.setEnabled(!globalThis.SCTooltips.isEnabled()) });
+const renderTooltipsToggle = () => tooltipsToggle.setAttribute('aria-pressed', String(globalThis.SCTooltips?.isEnabled() ?? true));
+document.addEventListener('scdl:tooltips-changed', renderTooltipsToggle);
+window.addEventListener('storage', renderTooltipsToggle);
 const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('transport'), playButton: false, windows: WINDOWS, windowHome: $('mix-tools'),
   // One line: play, tempo and speed, then the game, the windows and the export.
-  toolbarStart: [$('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [$('header-pin'), $('toggle-game')],
+  toolbarStart: [$('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [tooltipsToggle, $('header-pin'), $('toggle-game')],
   // Right-click > Extract stems… on any audio clip opens the extraction window.
   onSeparate: target => openExtract(target),
   onPatternAction(action, id) { const pattern = id.slice('pattern:'.length); if (action === 'duplicate') instruments?.duplicatePattern(pattern); else instruments?.deletePattern(pattern); },
@@ -348,12 +355,12 @@ function runMeters() {
 }
 // Pin: the header stays at the top while scrolling, or scrolls away with the page.
 const header = document.querySelector('.workspace-header'), pin = $('header-pin');
-document.querySelector('.workspace-header .brand').title = text('workspace');
+document.querySelector('.workspace-header .brand').dataset.scdlTooltip = text('workspace');
 function setPinned(pinned) {
   header.dataset.pinned = String(pinned);
   pin.setAttribute('aria-pressed', String(pinned));
   setButtonContent(pin, { icon: pinned ? 'detach' : 'pin' });
-  pin.title = pinned ? say('Header pinned to the top · click to let it scroll', 'Header fijo arriba · clic para que se desplace') : say('Pin the header to the top', 'Fijar el header arriba');
+  pin.dataset.scdlTooltip = pinned ? say('Header pinned to the top · click to let it scroll', 'Header fijo arriba · clic para que se desplace') : say('Pin the header to the top', 'Fijar el header arriba');
   pin.setAttribute('aria-label', say('Pin header', 'Fijar header'));
   try { localStorage.setItem('stems.headerPinned', pinned ? '1' : '0'); } catch {}
 }
@@ -442,7 +449,7 @@ eqTargetSelect = document.createElement('select');
   const row = document.createElement('label'); row.className = 'peq-target';
   const caption = document.createElement('span'); caption.textContent = say('Channel', 'Canal');
   eqTargetSelect.setAttribute('aria-label', say('EQ channel', 'Canal del EQ'));
-  eqTargetSelect.title = say('Which channel this EQ edits: the master, or one track (its clips, patterns, pads and notes)', 'Qué canal edita este EQ: el master o una pista (sus clips, patrones, pads y notas)');
+  eqTargetSelect.dataset.scdlTooltip = say('Which channel this EQ edits: the master, or one track (its clips, patterns, pads and notes)', 'Qué canal edita este EQ: el master o una pista (sus clips, patrones, pads y notas)');
   eqTargetSelect.onchange = () => selectEqChannel(eqTargetSelect.value);
   row.append(caption, eqTargetSelect);
   $('scdl-parametric-eq').querySelector('.peq-body').prepend(row);
@@ -501,7 +508,7 @@ for (const [id, index] of Object.entries({ 'import-title': 2, 'import-confirm': 
   'import-name-label': 3, 'import-start-label': 4, 'import-end-label': 5, 'import-cancel': 6, 'import-range-hint': 1 })) $(id).textContent = localCopy[index];
 let importDraft = null;
 $('import-audio-label').textContent = ({ es: 'Cargar', en: 'Load', de: 'Laden', 'pt-BR': 'Carregar', ru: 'Загрузить' })[locale] || 'Load';
-$('import-audio').title = localCopy[0];
+$('import-audio').dataset.scdlTooltip = localCopy[0];
 $('import-audio').onclick = () => $('audio-file').click();
 $('audio-file').onchange = async event => {
   const file = event.target.files[0]; event.target.value = '';
@@ -635,7 +642,7 @@ function changeTempo(value = rate, preserve = keepTone) {
 $('stem-rate').oninput = event => changeTempo(event.target.value);
 $('stem-rate').ondblclick = () => changeTempo(1);
 $('stem-keep-tone').onchange = event => changeTempo(rate, event.target.checked);
-$('stem-rate').title = $('stem-rate-value').title = pt('Playback speed of the whole session (0.1×–3×). Unlike BPM, it changes how fast the audio plays. Double-click to reset to 1×.');
+$('stem-rate').dataset.scdlTooltip = $('stem-rate-value').dataset.scdlTooltip = pt('Playback speed of the whole session (0.1×–3×). Unlike BPM, it changes how fast the audio plays. Double-click to reset to 1×.');
 renderTempo();
 
 async function prepareTone() {
@@ -734,7 +741,7 @@ function buildChannel(stem, wav, trackName = null) {
   }
   const enable = document.createElement('button'); enable.type = 'button'; enable.className = 'stem-enable stem-solo';
   enable.setAttribute('role', 'switch'); enable.setAttribute('aria-label', pt('Enable $1', name));
-  enable.title = pt('Enable/disable $1 · Right-click: hear only this track', name);
+  enable.dataset.scdlTooltip = pt('Enable/disable $1 · Right-click: hear only this track', name);
   enable.onclick = () => editChannel(stem, track => { track.mute = !track.mute; });
   const hearOnly = () => playlist.edit(state => { for (const track of state.tracks) { track.mute = (track.stem || track.id) !== stem; track.solo = false; } });
   enable.oncontextmenu = event => { event.preventDefault(); event.stopPropagation(); hearOnly(); };
@@ -758,7 +765,7 @@ function buildChannel(stem, wav, trackName = null) {
   ]);
   const more = document.createElement('button'); more.type = 'button'; more.className = 'stem-more';
   more.innerHTML = '<sc-icon name="more" class="icon" aria-hidden="true"></sc-icon>';
-  more.title = pt('Track options: $1 · or right-click the track', name); more.setAttribute('aria-label', more.title); more.setAttribute('aria-haspopup', 'menu');
+  more.dataset.scdlTooltip = pt('Track options: $1 · or right-click the track', name); more.setAttribute('aria-label', more.dataset.scdlTooltip); more.setAttribute('aria-haspopup', 'menu');
   more.onclick = menu;
   head.oncontextmenu = event => { if (!event.target.closest('input')) menu(event); };
   head.append(enable, heading, volume.wrap, more);
@@ -982,7 +989,7 @@ $('toggle-game').onclick = () => {
   panel.hidden = !open;
   $('toggle-game').setAttribute('aria-expanded', String(open));
   setButtonContent($('toggle-game'), { icon: open ? 'close' : 'game' });
-  $('toggle-game').title = open ? text('hideGame') : text('gameTip');
+  $('toggle-game').dataset.scdlTooltip = open ? text('hideGame') : text('gameTip');
   $('toggle-game').setAttribute('aria-label', text(open ? 'hideGame' : 'playGame'));
 };
 async function clearModel() {
@@ -1038,7 +1045,7 @@ function renderInfo(value) {
     artwork.src = info.artworkUrl;
   }
   track.dataset.range = `A ${formatTwoDecimals.format(info.trimRange.startMs / 1000)} s → B ${formatTwoDecimals.format(info.trimRange.endMs / 1000)} s · ${formatTwoDecimals.format((info.trimRange.endMs - info.trimRange.startMs) / 1000)} s`;
-  track.title = [title, track.dataset.meta, track.dataset.range].filter(Boolean).join('\n');
+  track.dataset.scdlTooltip = [title, track.dataset.meta, track.dataset.range].filter(Boolean).join('\n');
 }
 try {
   if (jobId) { renderInfo(await message('STEM_LOOP_INFO')); initialized = true; await loadJobLoop(); }

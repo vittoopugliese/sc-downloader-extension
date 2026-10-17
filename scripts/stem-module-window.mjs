@@ -76,7 +76,7 @@ export function mountModuleWindow({ id, section, header, home, t, size, setVisib
   const maximizeButton = control(ICONS.maximize, () => setMaximized(!maximized));
   const closeButton = control(ICONS.close, () => close());
   const closeLabel = t('Close', 'Cerrar');
-  closeButton.title = closeLabel; closeButton.setAttribute('aria-label', closeLabel);
+  closeButton.dataset.scdlTooltip = closeLabel; closeButton.setAttribute('aria-label', closeLabel);
   controls.append(dockButton, maximizeButton, closeButton); header.append(controls);
   const persist = () => write(key, { open, docked, maximized, rect, collapsed });
   const saveRect = () => {
@@ -104,11 +104,11 @@ export function mountModuleWindow({ id, section, header, home, t, size, setVisib
     section.classList.toggle('is-maximized', open && !docked && maximized);
     const sizeLabel = maximized && !docked ? t('Restore size', 'Restaurar tamaño') : t('Maximize', 'Maximizar');
     maximizeButton.innerHTML = iconMarkup(maximized && !docked ? ICONS.restore : ICONS.maximize);
-    maximizeButton.title = sizeLabel; maximizeButton.setAttribute('aria-label', sizeLabel);
+    maximizeButton.dataset.scdlTooltip = sizeLabel; maximizeButton.setAttribute('aria-label', sizeLabel);
     maximizeButton.setAttribute('aria-pressed', String(maximized && !docked));
     const label = docked ? t('Detach: float this window', 'Desacoplar: ventana flotante') : t('Dock under the Playlist', 'Acoplar debajo de la Playlist');
     dockButton.innerHTML = iconMarkup(docked ? ICONS.detach : ICONS.dock);
-    dockButton.title = label; dockButton.setAttribute('aria-label', label);
+    dockButton.dataset.scdlTooltip = label; dockButton.setAttribute('aria-label', label);
     if (docked) {
       if (section.parentElement !== home) anchor.after(section);
       for (const prop of ['left', 'top', 'width', 'height', 'zIndex']) section.style[prop] = '';

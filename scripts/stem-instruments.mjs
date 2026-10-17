@@ -219,11 +219,11 @@ export function patternControls(instruments, { manage = false } = {}) {
   const pt = globalThis.SCPlayerToolsText.t;
   const element = (tag, className) => { const node = document.createElement(tag); node.className = className; return node; };
   const select = (className, title, action) => {
-    const node = element('select', className); node.title = pt(title); node.setAttribute('aria-label', pt(title));
+    const node = element('select', className); node.dataset.scdlTooltip = pt(title); node.setAttribute('aria-label', pt(title));
     node.addEventListener('change', action); return node;
   };
   const button = (className, title, html, action) => {
-    const node = element('button', className); node.type = 'button'; node.title = pt(title); node.setAttribute('aria-label', pt(title));
+    const node = element('button', className); node.type = 'button'; node.dataset.scdlTooltip = pt(title); node.setAttribute('aria-label', pt(title));
     node.innerHTML = html; node.addEventListener('click', action); return node;
   };
   const wrap = element('div', 'plugin-focus');

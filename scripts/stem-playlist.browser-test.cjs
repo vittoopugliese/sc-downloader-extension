@@ -60,7 +60,7 @@ const { chromium } = require('playwright');
       const control = host.getByRole('button', { name, exact: true });
       assert.equal(await control.textContent(), '');
       assert.equal(await control.locator('svg').count(), 1);
-      assert.match(await control.getAttribute('title'), new RegExp('^' + name + (name === 'Export WAV' ? '' : ' \\([A-Z]\\d*\\)') + ': '));
+      assert.match(await control.getAttribute('data-scdl-tooltip'), new RegExp('^' + name + (name === 'Export WAV' ? '' : ' \\([A-Z]\\d*\\)') + ': '));
     }
     // One row of sixteen tools, each with a hotkey; window buttons live in the transport bar.
     const tools = playlist.locator('.pl-tools > button');
@@ -73,7 +73,7 @@ const { chromium } = require('playwright');
     // Every header button shares one size.
     assert.deepEqual([...new Set(await transport.locator('button.ui-btn--icon').evaluateAll(nodes => nodes.filter(n => n.offsetParent).map(n => n.offsetWidth + 'x' + n.offsetHeight)))], ['34x32']);
     const ruler = playlist.locator('.pl-ruler'), band = playlist.locator('.pl-loop-band');
-    assert.match(await ruler.getAttribute('title'), /drag inside.*edges.*double-click/i);
+    assert.match(await ruler.getAttribute('data-scdl-tooltip'), /drag inside.*edges.*double-click/i);
     const dragRuler = async (from, to) => {
       const bounds = await ruler.boundingBox();
       await page.mouse.move(bounds.x + from, bounds.y + 14); await page.mouse.down();

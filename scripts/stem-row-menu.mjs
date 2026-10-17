@@ -35,7 +35,7 @@ export function createRowMenu({ className = '', label, empty = '', placeholder =
   const wrap = document.createElement('div'); wrap.className = `row-menu ${className}`.trim();
   const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'row-menu-toggle';
   toggle.setAttribute('aria-haspopup', 'menu'); toggle.setAttribute('aria-expanded', 'false'); toggle.setAttribute('aria-controls', id);
-  toggle.title = label; toggle.setAttribute('aria-label', label);
+  toggle.dataset.scdlTooltip = label; toggle.setAttribute('aria-label', label);
   const value = document.createElement('span'); value.className = 'row-menu-value';
   toggle.append(value);
   toggle.insertAdjacentHTML('beforeend', '<sc-icon name="down" aria-hidden="true"></sc-icon>');
@@ -59,13 +59,13 @@ export function createRowMenu({ className = '', label, empty = '', placeholder =
       const row = document.createElement('div'); row.className = 'row-menu-row'; row.dataset.id = item.id;
       const load = document.createElement('button'); load.type = 'button'; load.className = 'row-menu-load';
       load.setAttribute('role', 'menuitemradio'); load.setAttribute('aria-checked', String(item.id === current));
-      load.textContent = item.name; load.title = item.title || item.name;
+      load.textContent = item.name; load.dataset.scdlTooltip = item.title || item.name;
       load.onclick = () => { close(); if (item.id !== current) onSelect?.(item.id); };
       row.append(load);
       if (onDelete && item.deletable !== false) {
         const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'row-menu-delete';
-        remove.replaceChildren(globalThis.SCIcons.create('close')); remove.title = deleteLabel(item.name); remove.setAttribute('aria-label', remove.title);
-        const disarm = () => { delete remove.dataset.armed; remove.classList.remove('is-armed'); remove.replaceChildren(globalThis.SCIcons.create('close')); remove.setAttribute('aria-label', remove.title); };
+        remove.replaceChildren(globalThis.SCIcons.create('close')); remove.dataset.scdlTooltip = deleteLabel(item.name); remove.setAttribute('aria-label', remove.dataset.scdlTooltip);
+        const disarm = () => { delete remove.dataset.armed; remove.classList.remove('is-armed'); remove.replaceChildren(globalThis.SCIcons.create('close')); remove.setAttribute('aria-label', remove.dataset.scdlTooltip); };
         remove.onclick = event => {
           event.stopPropagation();
           if (confirm && !remove.dataset.armed) {

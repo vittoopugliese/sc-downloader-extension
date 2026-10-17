@@ -20,7 +20,7 @@ export function createStemLoop({ duration, changed, viewportChanged = () => {} }
       for (const [button, value] of [[start, current.startMs], [end, current.endMs]]) {
         button.setAttribute('aria-valuenow', (value / 1000).toFixed(3));
         button.setAttribute('aria-valuemax', String(duration()));
-        button.title = `${button.textContent}: ${(value / 1000).toFixed(3)} s`;
+        button.dataset.scdlTooltip = `${button.textContent}: ${(value / 1000).toFixed(3)} s`;
       }
     }
   }

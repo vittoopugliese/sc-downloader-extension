@@ -32,7 +32,7 @@ const { chromium } = require('playwright');
     for (const id of Object.keys(windows)) {
       assert.equal(await section(id).isVisible(), false, `${id} starts closed`);
       assert.equal(await button(id).getAttribute('aria-keyshortcuts'), windows[id][2]);
-      assert.match(await button(id).getAttribute('title'), new RegExp(`^${windows[id][0]} \\(${windows[id][2]}\\): `));
+      assert.match(await button(id).getAttribute('data-scdl-tooltip'), new RegExp(`^${windows[id][0]} \\(${windows[id][2]}\\): `));
     }
     // A button opens a floating window; F-keys open the others from anywhere.
     await button('rack').click();

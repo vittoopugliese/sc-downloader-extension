@@ -67,7 +67,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
   $('stem-presets').replaceWith(presetMenu.element);
   presetMenu.toggle.id = 'stem-presets'; presetMenu.menu.id = 'stem-presets-menu'; presetMenu.toggle.setAttribute('aria-controls', 'stem-presets-menu');
   $('preset-folder').ariaLabel = copy.folder;
-  $('preset-reset').title = $('preset-reset').ariaLabel = copy.reset;
+  $('preset-reset').dataset.scdlTooltip = $('preset-reset').ariaLabel = copy.reset;
   $('save-title').textContent = copy.confirm;
   $('save-description').textContent = copy.description;
   $('save-cancel').textContent = copy.cancel;
@@ -87,13 +87,13 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
     for (const id of ['preset-folder', 'preset-reset', 'preset-reconnect', 'save-locally']) $(id).disabled = operating || inference || !library;
     presetMenu.setDisabled(operating || inference || !library); presetMenu.setBusy(operating);
     toggle.setAttribute('aria-pressed', String(enabled));
-    toggle.title = enabled ? `${copy.save} · ${copy.off}` : copy.save;
+    toggle.dataset.scdlTooltip = enabled ? `${copy.save} · ${copy.off}` : copy.save;
     toggle.setAttribute('aria-label', copy.save);
     toggle.disabled ||= !snapshot().info;
     $('preset-reset').hidden = !library?.directory;
     $('preset-folder').classList.toggle('has-custom-folder', !!library?.directory);
     // Where separations are stored: the browser, or the chosen folder (the cross resets it).
-    $('preset-folder').title = `${copy.destination}: ${library?.directory?.name || copy.browser} · ${copy.folder}`;
+    $('preset-folder').dataset.scdlTooltip = `${copy.destination}: ${library?.directory?.name || copy.browser} · ${copy.folder}`;
   }
   async function refresh() {
     records = await library.list();

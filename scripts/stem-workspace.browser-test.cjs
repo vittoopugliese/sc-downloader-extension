@@ -34,6 +34,28 @@ const { chromium } = require('playwright');
     await page.locator('#import-audio:not(:disabled)').waitFor();
     assert.equal(await page.locator('.studio-card, .workspace-edition, #workspace-title, .pl-notes, #status').count(), 0);
     assert.equal(await page.locator('#header-pin').evaluate(e => e.nextElementSibling.id), 'toggle-game');
+    // Help, tooltips and pin are ghost buttons, in that order; every tooltip is the shared one.
+    const headerEnd = await page.locator('#header-pin').evaluate(pin => [pin.previousElementSibling.previousElementSibling, pin.previousElementSibling, pin]
+      .map(e => [e.getAttribute('aria-label'), e.classList.contains('ui-btn--ghost')]));
+    assert.deepEqual(headerEnd, [['Playlist shortcuts', true], ['Toggle tooltips', true], ['Pin header', true]]);
+    const nativeTitles = await page.evaluate(() => [...document.querySelectorAll('main [title], dialog [title]')]
+      .filter(e => e.tagName !== 'IFRAME').map(e => e.className || e.id));
+    assert.deepEqual(nativeTitles, [], 'Stem Extractor controls use data-scdl-tooltip, never a native title');
+    const tip = page.locator('#scdl-fast-tooltip');
+    await page.locator('.tooltips-toggle').hover();
+    await page.waitForFunction(() => document.querySelector('#scdl-fast-tooltip')?.style.visibility === 'visible');
+    assert.equal(await tip.textContent(), 'Toggle tooltips');
+    await page.locator('#play').hover();
+    await page.waitForFunction(() => document.querySelector('#scdl-fast-tooltip')?.textContent.startsWith('Play'));
+    await page.mouse.down(); assert.equal(await tip.evaluate(e => e.style.visibility), 'hidden', 'A press hides the tooltip'); await page.mouse.up();
+    await page.locator('#play').click();
+    await page.locator('.tooltips-toggle').click();
+    assert.equal(await page.locator('.tooltips-toggle').getAttribute('aria-pressed'), 'false');
+    await page.locator('#header-pin').hover(); await page.waitForTimeout(450);
+    assert.equal(await tip.evaluate(e => getComputedStyle(e).display), 'none', 'Off hides every tooltip');
+    assert.equal(await page.locator('#header-pin').getAttribute('title'), null, 'No native title replaces it');
+    await page.locator('.tooltips-toggle').click();
+    assert.equal(await page.evaluate(() => localStorage.getItem('scdl.tooltips.enabled')), 'true');
     assert.equal(await page.getByRole('spinbutton', { name: 'BPM', exact: true }).evaluate(e => e.getBoundingClientRect().height), 32);
     const dials = await page.locator('#playlist .ui-knob-dial').evaluateAll(nodes => nodes.map(e => ({ width: e.offsetWidth, height: e.offsetHeight, radius: getComputedStyle(e).borderRadius })));
     assert.ok(dials.length > 0 && dials.every(d => d.width === d.height && d.radius === '50%'));
@@ -69,6 +91,10 @@ const { chromium } = require('playwright');
     await sample.click({ button: 'right' });
     await page.locator('.pl-menu-item', { hasText: 'Extract stems' }).click();
     assert.equal(await page.locator('#separate').isEnabled(), true, 'Library samples can be separated without an Original or any clip');
+    // The tooltip sits in the top layer, above the modal window.
+    await page.locator('.extract-close').hover();
+    await page.waitForFunction(() => document.querySelector('#scdl-fast-tooltip')?.style.visibility === 'visible');
+    assert.deepEqual(await page.locator('#scdl-fast-tooltip').evaluate(e => [e.matches(':popover-open'), e.textContent]), [true, 'Close']);
     for (const input of await page.locator('[name=extract-stem]').all()) await input.uncheck();
     assert.equal(await page.locator('#separate').isDisabled(), true, 'At least one output must be chosen');
     await page.locator('[name=extract-stem][value=drums]').check();

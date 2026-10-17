@@ -49,7 +49,7 @@ export function contextMenu(event, items) {
       for (const choice of item.choices) {
         const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'pl-menu-item pl-menu-choice';
         chip.setAttribute('role', 'menuitemradio'); chip.setAttribute('aria-checked', String(!!choice.checked)); chip.setAttribute('aria-label', choice.label);
-        chip.title = choice.title ? `${choice.label} — ${choice.title}` : choice.label;
+        chip.dataset.scdlTooltip = choice.title ? `${choice.label} — ${choice.title}` : choice.label;
         chip.innerHTML = `${iconMarkup(choice.icon)}${choice.checked ? `<span class="pl-menu-choice-check">${iconMarkup(ICONS.check)}</span>` : ''}`;
         chip.onclick = () => { close(); choice.action?.(); };
         row.append(chip);
@@ -61,7 +61,7 @@ export function contextMenu(event, items) {
     entry.setAttribute('role', checkable ? (item.radio ? 'menuitemradio' : 'menuitemcheckbox') : 'menuitem');
     if (checkable) entry.setAttribute('aria-checked', String(!!item.checked));
     entry.classList.toggle('is-danger', !!item.danger); entry.disabled = !!item.disabled;
-    if (item.title) entry.title = item.title;
+    if (item.title) entry.dataset.scdlTooltip = item.title;
     const icon = checkable && !item.icon ? (item.checked ? ICONS.check : '') : item.icon;
     entry.innerHTML = `<span class="pl-menu-icon">${icon ? iconMarkup(icon) : ''}</span><span class="pl-menu-label"></span>${item.shortcut ? '<kbd></kbd>' : ''}`;
     entry.querySelector('.pl-menu-label').textContent = item.label;
@@ -130,7 +130,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   let TRACK_HEAD = 165;
   let drawSource = null, timeSelection = null, clipboard = null, activeTrack = null, selecting = false;
   const node = (tag, className = '', text = '') => { const e = document.createElement(tag); e.className = className; e.textContent = text; return e; };
-  const button = (text, title, action) => { const e = node('button', '', text); e.type = 'button'; e.title = title; e.setAttribute('aria-label', title); e.onclick = action; return e; };
+  const button = (text, title, action) => { const e = node('button', '', text); e.type = 'button'; e.dataset.scdlTooltip = title; e.setAttribute('aria-label', title); e.onclick = action; return e; };
   // Messages are toasts (ui-toast.mjs): errors in red, notices in yellow, results in green.
   // A loading message (reading samples, rendering) stays until the next one replaces it.
   const report = (value, variant = value instanceof Error ? 'error' : 'warning') => {
@@ -163,7 +163,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   let task = '';
   function renderBusy() {
     const label = task || stretchStatus;
-    busy.hidden = !task && !cache.busy(); busy.title = label; busy.setAttribute('aria-label', label);
+    busy.hidden = !task && !cache.busy(); busy.dataset.scdlTooltip = label; busy.setAttribute('aria-label', label);
   }
   const stretching = clip => needsStretch(clip) && !cache.has(clip, assets.get(clip.asset));
   const cache = createStretchCache({ onChange() {
@@ -227,7 +227,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   }
   function toolButton({ icon, name, detail = '', key, keys, color, repeat = false, variant = 'neutral', size = 'tool' }, action) {
     const control = iconButton(icon, name, () => { flash(control); action(); }, { variant, size });
-    control.title = `${name} (${key})${detail ? ': ' + detail : ''}`;
+    control.dataset.scdlTooltip = `${name} (${key})${detail ? ': ' + detail : ''}`;
     control.setAttribute('aria-keyshortcuts', key.replace('Ctrl', 'Control').replace('Del', 'Delete').replace('Supr', 'Delete'));
     control.classList.add('pl-key'); control.style.setProperty('--key-color', color);
     for (const combo of keys) hotkeys.set(combo, { control, repeat });
@@ -235,13 +235,13 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   }
   const play = playButton ? button('', t('Play / pause (Space)', 'Reproducir / pausar (Espacio)'), safe(toggle)) : null;
   if (play) { play.append(globalThis.SCIcons.create('play')); play.className = 'pl-play'; play.setAttribute('aria-pressed', 'false'); }
-  const time = node('output', 'pl-time', '0:00.00'); time.title = t('Playhead position (minutes:seconds)', 'Posición del cursor (minutos:segundos)');
+  const time = node('output', 'pl-time', '0:00.00'); time.dataset.scdlTooltip = t('Playhead position (minutes:seconds)', 'Posición del cursor (minutos:segundos)');
   function field(text, type, value, min, max, step) {
     const label = node('label', 'pl-field', text), input = node('input'); input.type = type; input.value = String(value);
     input.setAttribute('aria-label', text); if (min !== undefined) input.min = min; if (max !== undefined) input.max = max; if (step !== undefined) input.step = step;
     label.append(input); return { label, input };
   }
-  const tempo = field('BPM', 'number', 120, 20, 300, .01); tempo.label.title = tempo.input.title = t('Project tempo (20–300 BPM): grid, channel rack and piano roll. It does not change the audio speed; the speed slider next to it does.', 'Tempo del proyecto (20–300 BPM): grilla, channel rack y piano roll. No cambia la velocidad del audio; para eso está el slider de velocidad al lado.');
+  const tempo = field('BPM', 'number', 120, 20, 300, .01); tempo.label.dataset.scdlTooltip = tempo.input.dataset.scdlTooltip = t('Project tempo (20–300 BPM): grid, channel rack and piano roll. It does not change the audio speed; the speed slider next to it does.', 'Tempo del proyecto (20–300 BPM): grilla, channel rack y piano roll. No cambia la velocidad del audio; para eso está el slider de velocidad al lado.');
   function changeLoop(range) {
     loopRange = range; if (range) marker = range.start;
     engine?.update(playbackState(), transport()); renderLoopBand();
@@ -337,7 +337,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   () => commit(() => state.tracks.push({ id: uid(), name: `${t('Track', 'Pista')} ${state.tracks.filter(item => !item.stem).length + 1}`, gain: 1, mute: false, solo: false })));
   const exportButton = iconButton(ICONS.export, t('Export WAV', 'Exportar WAV'), safe(exportMix), { variant: 'accent' });
   exportButton.classList.add('pl-export');
-  exportButton.title = t('Export WAV: renders the whole playlist (or the A–B loop) with mute, solo, volume, FXs and EQ into a stereo WAV file', 'Exportar WAV: renderiza toda la playlist (o el loop A–B) con mute, solo, volumen, FXs y EQ en un WAV estéreo');
+  exportButton.dataset.scdlTooltip = t('Export WAV: renders the whole playlist (or the A–B loop) with mute, solo, volume, FXs and EQ into a stereo WAV file', 'Exportar WAV: renderiza toda la playlist (o el loop A–B) con mute, solo, volumen, FXs y EQ en un WAV estéreo');
   // Slice tool, like FL Studio's: a click cuts the clip under the mouse; dragging up or down
   // cuts every lane the line crosses.
   const sliceButton = toolButton({ icon: ICONS.slice, name: t('Slice tool', 'Herramienta de corte'), key: 'C', keys: ['c'], color: '#ff5d8f',
@@ -357,10 +357,10 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     pencilButton.setAttribute('aria-pressed', String(!on && !selecting)); selectButton.setAttribute('aria-pressed', String(selecting));
     container.classList.toggle('is-drawing', !on && !selecting); container.classList.toggle('is-selecting', selecting);
   }
-  const help = iconButton('help', t('Playlist shortcuts', 'Atajos de la playlist'), () => showHint());
+  const help = iconButton('help', t('Playlist shortcuts', 'Atajos de la playlist'), () => showHint(), { variant: 'ghost' });
   toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.label, tapButton, metronomeButton, fitTempo, ...tempoControls, node('span', 'pl-spacer'), help, ...toolbarEnd, windowGroup, exportButton, fileInput);
   const shelf = node('div', 'pl-shelf'); shelf.setAttribute('aria-label', t('Sample library', 'Biblioteca de samples'));
-  shelf.title = t('Library: click to select for drawing, double-click to add at the cursor, drag onto a track. Right-click for more.', 'Biblioteca: clic para elegir qué dibujar, doble clic para agregar en el cursor, arrastrá a una pista. Clic derecho para más.');
+  shelf.dataset.scdlTooltip = t('Library: click to select for drawing, double-click to add at the cursor, drag onto a track. Right-click for more.', 'Biblioteca: clic para elegir qué dibujar, doble clic para agregar en el cursor, arrastrá a una pista. Clic derecho para más.');
   shelf.addEventListener('wheel', event => {
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || shelf.scrollWidth <= shelf.clientWidth) return;
     event.preventDefault(); shelf.scrollLeft += event.deltaY;
@@ -376,8 +376,8 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const rulerRow = node('div', 'pl-grid-row pl-ruler-row'), corner = node('div', 'pl-track-head', t('CHANNELS', 'CANALES')), ruler = node('div', 'pl-ruler');
   const rulerMarks = node('div', 'pl-ruler-marks'), loopBand = node('div', 'pl-loop-band'), markerLine = node('div', 'pl-marker');
   let rulerKey = '', rulerWidth = 0;
-  ruler.title = t('Drag on the ruler to create a loop · drag inside the selection to move it · drag its edges to resize · double-click to clear (without a loop: play from the start) · click to seek.', 'Arrastrá en la regla para crear un loop · arrastrá dentro de la selección para moverla · arrastrá sus bordes para ajustar · doble clic para eliminar (sin loop: reproduce desde el inicio) · clic para mover el cursor.');
-  ruler.setAttribute('aria-label', ruler.title);
+  ruler.dataset.scdlTooltip = t('Drag on the ruler to create a loop · drag inside the selection to move it · drag its edges to resize · double-click to clear (without a loop: play from the start) · click to seek.', 'Arrastrá en la regla para crear un loop · arrastrá dentro de la selección para moverla · arrastrá sus bordes para ajustar · doble clic para eliminar (sin loop: reproduce desde el inicio) · clic para mover el cursor.');
+  ruler.setAttribute('aria-label', ruler.dataset.scdlTooltip);
   rulerRow.append(corner, ruler); grid.prepend(rulerRow);
   let loopDrag;
   const rulerTime = event => clamp((event.clientX - ruler.getBoundingClientRect().left) / zoom, 0, LIMITS.seconds);
@@ -848,7 +848,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     const id = initial.id;
     const item = node('div', 'pl-clip'); item.dataset.clip = id; item.tabIndex = 0; item.setAttribute('role', 'button');
     item.append(node('span', 'pl-clip-title'));
-    for (const edge of ['left', 'right']) { const handle = node('span', `pl-edge pl-edge-${edge}`); handle.dataset.edge = edge; handle.title = t('Drag to trim', 'Arrastrar para recortar'); item.append(handle); }
+    for (const edge of ['left', 'right']) { const handle = node('span', `pl-edge pl-edge-${edge}`); handle.dataset.edge = edge; handle.dataset.scdlTooltip = t('Drag to trim', 'Arrastrar para recortar'); item.append(handle); }
     // Remembered for the contextmenu event, which older Chrome versions fire without pointerType.
     item.onpointerdown = event => { item.dataset.pointer = event.pointerType; beginDrag(event, state.clips.find(c => c.id === id), item); };
     // Like FL Studio: right click on the name bar opens the menu, on the waveform removes the clip.

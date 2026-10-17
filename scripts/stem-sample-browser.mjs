@@ -26,7 +26,7 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
 
   const node = (tag, className = '', text = '') => { const e = document.createElement(tag); if (className) e.className = className; if (text) e.textContent = text; return e; };
   const iconButton = (icon, label, action) => {
-    const b = node('button', 'sb-icon'); b.type = 'button'; b.title = label; b.setAttribute('aria-label', label);
+    const b = node('button', 'sb-icon'); b.type = 'button'; b.dataset.scdlTooltip = label; b.setAttribute('aria-label', label);
     b.innerHTML = iconMarkup(icon); b.onclick = action; return b;
   };
   // Same title bar as the other tool windows: a Player Tools disclosure header.
@@ -47,13 +47,13 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
   const crumb = node('span', 'sb-crumb'); pathRow.append(upButton, crumb);
   const list = node('div', 'sb-list'); list.tabIndex = 0;
   list.setAttribute('role', 'listbox'); list.setAttribute('aria-label', t('Folders and samples', 'Carpetas y samples'));
-  list.title = t('Click a file to preview it · drag it onto a track · Enter adds it at the playhead · Space plays or stops · Backspace goes up', 'Clic en un archivo para escucharlo · arrastralo a una pista · Enter lo agrega en el cursor · Espacio reproduce o detiene · Retroceso sube de carpeta');
+  list.dataset.scdlTooltip = t('Click a file to preview it · drag it onto a track · Enter adds it at the playhead · Space plays or stops · Backspace goes up', 'Clic en un archivo para escucharlo · arrastralo a una pista · Enter lo agrega en el cursor · Espacio reproduce o detiene · Retroceso sube de carpeta');
   const rows = node('div', 'sb-rows'); list.append(rows);
   const empty = node('div', 'sb-empty'), emptyText = node('p'), emptyAction = node('button', 'sb-action');
   emptyAction.type = 'button'; empty.append(emptyText, emptyAction);
   const viewer = node('div', 'sb-viewer');
   const wave = node('div', 'sb-wave'), canvas = node('canvas'), line = node('div', 'sb-line');
-  wave.title = t('Click: play from the start · right-click: play from that point', 'Clic: reproduce desde el inicio · clic derecho: reproduce desde ese punto');
+  wave.dataset.scdlTooltip = t('Click: play from the start · right-click: play from that point', 'Clic: reproduce desde el inicio · clic derecho: reproduce desde ese punto');
   wave.append(canvas, line); line.hidden = true;
   const controls = node('div', 'sb-controls');
   const playButton = iconButton(ICONS.play, t('Play preview (Space)', 'Escuchar (Espacio)'), () => togglePreview());
@@ -62,7 +62,7 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
   const volumeLabel = node('label', 'sb-volume'), volume = node('input');
   volume.type = 'range'; volume.min = '0'; volume.max = '100'; volume.step = '1';
   volume.setAttribute('aria-label', t('Preview volume', 'Volumen de preview'));
-  volumeLabel.title = t('Preview volume; it does not reach the mix, export or recorder', 'Volumen de preview; no pasa por la mezcla, la exportación ni el grabador');
+  volumeLabel.dataset.scdlTooltip = t('Preview volume; it does not reach the mix, export or recorder', 'Volumen de preview; no pasa por la mezcla, la exportación ni el grabador');
   volumeLabel.innerHTML = iconMarkup(ICONS.volume); volumeLabel.append(volume);
   const savedVolume = read(VOLUME_KEY);
   volume.value = String(Number.isFinite(savedVolume) ? Math.min(100, Math.max(0, savedVolume)) : 80);
@@ -146,7 +146,7 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
   async function showFolder(select = null) {
     listing?.abort();
     const controller = listing = new AbortController(), folder = stack.at(-1), key = pathOf() || '/';
-    crumb.textContent = `/${pathOf()}`; crumb.title = `${root.name}/${pathOf()}`;
+    crumb.textContent = `/${pathOf()}`; crumb.dataset.scdlTooltip = `${root.name}/${pathOf()}`;
     upButton.disabled = stack.length < 2;
     entries = []; active = -1; list.scrollTop = 0; scheduleRows();
     const slow = setTimeout(() => setStatus(t('Reading folder…', 'Leyendo carpeta…'), true), 150);
@@ -193,7 +193,7 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
       row.setAttribute('aria-setsize', String(entries.length)); row.setAttribute('aria-posinset', String(i + 1));
       row.classList.toggle('is-current', entry.kind === 'file' && current?.entry === entry);
       row.innerHTML = iconMarkup(entry.kind === 'directory' ? ICONS.folder : ICONS.audio);
-      const label = node('span', '', entry.name); row.title = entry.name; row.append(label);
+      const label = node('span', '', entry.name); row.dataset.scdlTooltip = entry.name; row.append(label);
       if (entry.kind === 'file') row.draggable = true;
       shown.push(row);
     }
@@ -309,7 +309,7 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
   function renderViewer() {
     const sample = current?.sample;
     sampleName.textContent = current ? current.entry.name : t('No sample selected', 'Ningún sample seleccionado');
-    sampleName.title = current?.path || '';
+    sampleName.dataset.scdlTooltip = current?.path || '';
     duration.textContent = sample ? clock(sample.buffer.duration) : current?.loading ? '…' : '';
     playButton.disabled = !current || !!current.error; rackButton.disabled = addButton.disabled = !current || current.entry.kind !== 'file';
     viewer.classList.toggle('is-error', !!current?.error);
@@ -351,7 +351,7 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
     const on = !!sample;
     playButton.setAttribute('aria-pressed', String(on)); playButton.innerHTML = iconMarkup(on ? ICONS.stop : ICONS.play);
     const label = on ? t('Stop preview (Space)', 'Detener (Espacio)') : t('Play preview (Space)', 'Escuchar (Espacio)');
-    playButton.title = label; playButton.setAttribute('aria-label', label);
+    playButton.dataset.scdlTooltip = label; playButton.setAttribute('aria-label', label);
     line.hidden = !on; cancelAnimationFrame(headFrame); headFrame = 0;
     if (on) headFrame = requestAnimationFrame(function follow() {
       const at = previewer.position();

@@ -12,11 +12,11 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
   const shell = pluginShell({ container, id: 'stem-piano-roll', title: pt('Piano roll'), icon: PLUGIN_ICONS.piano, className: 'stem-piano-roll' });
   const element = (tag, className, text) => { const node = document.createElement(tag); node.className = className; if (text) node.textContent = text; return node; };
   const button = (className, title, html, action) => {
-    const node = element('button', className); node.type = 'button'; node.title = title; node.setAttribute('aria-label', title);
+    const node = element('button', className); node.type = 'button'; node.dataset.scdlTooltip = title; node.setAttribute('aria-label', title);
     node.innerHTML = html; node.addEventListener('click', action); return node;
   };
   const select = (className, title, values, action) => {
-    const node = element('select', className); node.title = title; node.setAttribute('aria-label', title);
+    const node = element('select', className); node.dataset.scdlTooltip = title; node.setAttribute('aria-label', title);
     for (const [value, label] of values) node.add(new Option(label, String(value)));
     node.addEventListener('change', action); return node;
   };
@@ -121,7 +121,7 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
       node.dataset.length = String(note.length); node.dataset.velocity = String(note.velocity);
       if (drag?.kind === 'velocity' && drag.index === index) { node.classList.add('is-velocity'); node.dataset.tip = percent; }
       node.setAttribute('aria-label', `${noteName(note.pitch)} · ${pt('Step $1', note.start + 1)} · ${note.length} · ${percent}`);
-      node.setAttribute('aria-pressed', String(selected === index)); node.title = node.getAttribute('aria-label');
+      node.setAttribute('aria-pressed', String(selected === index)); node.dataset.scdlTooltip = node.getAttribute('aria-label');
       node.style.left = `${note.start / count() * 100}%`; node.style.width = `${Math.min(note.length, count() - note.start) / count() * 100}%`;
       node.style.top = `${(high() - note.pitch) * ROW + 1}px`; node.style.setProperty('--note-velocity', String(note.velocity));
       const edge = element('span', 'piano-note-end'); edge.setAttribute('aria-hidden', 'true'); node.append(edge);
@@ -158,7 +158,7 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
   function renderTransport() {
     const playing = instruments.playing();
     play.innerHTML = iconMarkup(PLUGIN_ICONS[playing ? 'pause' : 'play']); play.setAttribute('aria-pressed', String(playing));
-    play.title = pt(playing ? 'Pause' : 'Play pattern'); play.setAttribute('aria-label', play.title);
+    play.dataset.scdlTooltip = pt(playing ? 'Pause' : 'Play pattern'); play.setAttribute('aria-label', play.dataset.scdlTooltip);
     cancelAnimationFrame(frame);
     const step = () => {
       const phase = instruments.previewing(current().pattern?.id) ? instruments.phase() : -1;

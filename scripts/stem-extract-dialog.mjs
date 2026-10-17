@@ -27,7 +27,7 @@ export function mountExtractDialog({ t, stemName, onExtract, onCancel, onClearMo
     const wrap = document.createElement('label'); wrap.className = 'extract-check';
     const input = document.createElement('input'); input.type = 'checkbox'; input.checked = checked;
     const text = document.createElement('span'); text.textContent = label;
-    if (hint) wrap.title = hint;
+    if (hint) wrap.dataset.scdlTooltip = hint;
     wrap.append(input, text);
     return { wrap, input };
   };
@@ -71,7 +71,7 @@ export function mountExtractDialog({ t, stemName, onExtract, onCancel, onClearMo
   function render() {
     const none = !options().stems.length;
     extract.disabled = running || !ready || none;
-    extract.title = none ? t('Choose at least one stem', 'Elegí al menos un stem') : '';
+    extract.dataset.scdlTooltip = none ? t('Choose at least one stem', 'Elegí al menos un stem') : '';
     for (const input of [...stemInputs.values(), action, group.input]) input.disabled = running;
     // The original's stems always have their own four tracks under it, and it stays.
     group.wrap.hidden = original; removeOption.hidden = removeOption.disabled = original;
@@ -91,7 +91,7 @@ export function mountExtractDialog({ t, stemName, onExtract, onCancel, onClearMo
     element: dialog,
     // `name`: the sample; `original`: it is the session's source audio.
     open({ name = '', isOriginal = false } = {}) {
-      original = isOriginal; source.textContent = name; source.title = name;
+      original = isOriginal; source.textContent = name; source.dataset.scdlTooltip = name;
       if (!running) message.textContent = '';
       render();
       if (!dialog.open) dialog.showModal();

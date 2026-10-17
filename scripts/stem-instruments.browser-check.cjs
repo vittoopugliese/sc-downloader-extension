@@ -158,7 +158,7 @@ module.exports = async function verifyInstruments(page) {
   // Clear All empties every pad of the focused track; a second click restores them, and a
   // cleared track is not auto-sliced again when it is focused later.
   const clearAll = rack.locator('.rack-clear-slices');
-  assert.equal(await clearAll.getAttribute('title'), 'Borrar todos los cortes');
+  assert.equal(await clearAll.getAttribute('data-scdl-tooltip'), 'Borrar todos los cortes');
   await clearAll.click();
   assert.equal(await rack.locator('.rack-pad.is-assigned').count(), 0);
   assert.equal(await clearAll.getAttribute('aria-pressed'), 'true');

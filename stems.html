@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <script src="scripts/fast-tooltips.js"></script>
   <script src="scripts/icons.js"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,8 +22,8 @@
       <div class="daw-row daw-row-main">
         <div class="brand"><img src="assets/icons/player-toolkit.png" width="22" height="22" alt="" draggable="false"><span>PLAYER TOOLS</span></div>
       <!-- Every header button is the shared ui-btn (scripts/ui-button.mjs, assets/ui-button.css). -->
-      <div id="transport" class="transport-bar" role="toolbar" aria-label="Transport"><button id="play" class="ui-btn ui-btn--accent ui-btn--icon" type="button" aria-label="Play" aria-pressed="false" title="Play"><span data-icon="play"></span></button>
-      <div class="stem-tempo" role="group" aria-label="Playback speed"><div class="slider-wrap"><div class="limits" aria-hidden="true"><span>0.1x</span><span>3x</span></div><span class="range-label" aria-hidden="true">Tone &amp; Velocity</span><input id="stem-rate" class="slider" type="range" min="0.1" max="3" step="0.0125" value="1" aria-label="Playback speed"></div><label class="keep-tone" title="Keep tone: change playback speed without changing the pitch."><input id="stem-keep-tone" type="checkbox" aria-label="Keep tone"></label><output id="stem-rate-value" for="stem-rate">1.000x</output></div>
+      <div id="transport" class="transport-bar" role="toolbar" aria-label="Transport"><button id="play" class="ui-btn ui-btn--accent ui-btn--icon" type="button" aria-label="Play" aria-pressed="false" data-scdl-tooltip="Play"><span data-icon="play"></span></button>
+      <div class="stem-tempo" role="group" aria-label="Playback speed"><div class="slider-wrap"><div class="limits" aria-hidden="true"><span>0.1x</span><span>3x</span></div><span class="range-label" aria-hidden="true">Tone &amp; Velocity</span><input id="stem-rate" class="slider" type="range" min="0.1" max="3" step="0.0125" value="1" aria-label="Playback speed"></div><label class="keep-tone" data-scdl-tooltip="Keep tone: change playback speed without changing the pitch."><input id="stem-keep-tone" type="checkbox" aria-label="Keep tone"></label><output id="stem-rate-value" for="stem-rate">1.000x</output></div>
       <button id="header-pin" class="header-pin ui-btn ui-btn--ghost ui-btn--icon" type="button" aria-pressed="true"><span data-icon="pin"></span></button>
       <button id="toggle-game" class="ui-btn ui-btn--accent ui-btn--icon" type="button" aria-expanded="false" aria-controls="game-panel"><span data-icon="game"></span></button></div>
       </div>

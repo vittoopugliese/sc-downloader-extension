@@ -68,7 +68,7 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('.prepare').getAttribute('aria-label'), 'Separación');
     assert.equal(await page.locator('#audition').getAttribute('aria-label'), 'Escuchar y comparar');
     assert.equal(await page.locator('#clear-cache').getAttribute('aria-label'), 'Eliminar modelo');
-    assert.match(await page.locator('#clear-cache').getAttribute('title'), /^Eliminar modelo: borra .*166 MB/);
+    assert.match(await page.locator('#clear-cache').getAttribute('data-scdl-tooltip'), /^Eliminar modelo: borra .*166 MB/);
     assert.equal(await page.locator('#toggle-game').isVisible(), true, 'Lumberjack is always available');
     assert.equal(await page.locator('.pl-play').count(), 0, 'One play button: the header one');
     assert.equal(await page.locator('#track').getAttribute('data-meta'), 'Fixture artist · 3:05');

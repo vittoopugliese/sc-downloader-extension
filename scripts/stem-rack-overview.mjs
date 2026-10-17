@@ -52,11 +52,11 @@ export function mountRackOverview({ container, instruments, audioContext, output
     mode.onchange = () => { stop(track.key); instruments.editInstrument(value => { value.mode = mode.value; }, track.key); };
     const root = node('select', 'rack-channel-root');
     for (let i = 24; i <= 96; i++) root.add(new Option(noteName(i), String(i)));
-    root.title = pt('Root note'); root.setAttribute('aria-label', pt('Root note'));
+    root.dataset.scdlTooltip = pt('Root note'); root.setAttribute('aria-label', pt('Root note'));
     root.onchange = () => { stop(track.key); instruments.editInstrument(value => { value.piano.root = Number(root.value); }, track.key); };
     const chops = button('rack-channel-chops', '', () => openChops(track.key));
     chops.append(globalThis.SCIcons.create('slice'));
-    chops.title = pt('Edit chops'); chops.setAttribute('aria-label', pt('Edit chops'));
+    chops.dataset.scdlTooltip = pt('Edit chops'); chops.setAttribute('aria-label', pt('Edit chops'));
     heading.append(play, name, mode, root, chops); row.append(heading);
     const steps = Array.from({ length: STEPS_PER_BAR }, (_, column) => {
       const cell = button(`rack-step${column % 4 === 0 ? ' is-beat' : ''}`, '', () => {});
@@ -116,7 +116,7 @@ export function mountRackOverview({ container, instruments, audioContext, output
         const revision = JSON.stringify([instrument.mode, instrument.piano, instrument.slices]);
         if (row.revision !== revision || row.buffer !== track.buffer) stop(track.key);
         row.revision = revision; row.buffer = track.buffer;
-        row.name.textContent = track.name; row.name.title = track.name;
+        row.name.textContent = track.name; row.name.dataset.scdlTooltip = track.name;
         row.name.setAttribute('aria-pressed', String(selected)); row.row.classList.toggle('is-selected', selected);
         row.play.setAttribute('aria-label', `${pt('Preview note')} · ${track.name}`);
         row.mode.value = instrument.mode; row.root.value = String(instrument.piano.root);
@@ -126,8 +126,8 @@ export function mountRackOverview({ container, instruments, audioContext, output
           cell.disabled = !sample; cell.dataset.velocity = String(velocity); cell.dataset.step = String(bar() * STEPS_PER_BAR + column);
           cell.classList.toggle('is-on', velocity > 0); cell.setAttribute('aria-pressed', String(velocity > 0));
           cell.style.setProperty('--velocity', String(velocity));
-          cell.title = `${track.name}${instrument.mode === 'slices' ? ` · ${PAD_KEYS[instrument.piano.pad]}` : ''} · ${pt('Step $1', column + 1)} · ${Math.round(velocity * 100)}%`;
-          cell.setAttribute('aria-label', cell.title);
+          cell.dataset.scdlTooltip = `${track.name}${instrument.mode === 'slices' ? ` · ${PAD_KEYS[instrument.piano.pad]}` : ''} · ${pt('Step $1', column + 1)} · ${Math.round(velocity * 100)}%`;
+          cell.setAttribute('aria-label', cell.dataset.scdlTooltip);
         });
       }
     },

@@ -14,7 +14,7 @@ export function createButton({ icon = '', label = '', title = '', variant = 'neu
   control.type = 'button';
   control.classList.add(...buttonClasses({ variant, size }), ...className.split(/\s+/).filter(Boolean));
   setButtonContent(control, { icon, label });
-  if (title) { control.title = title; control.setAttribute('aria-label', title); }
+  if (title) { control.dataset.scdlTooltip = title; control.setAttribute('aria-label', title); }
   else if (label) control.setAttribute('aria-label', label);
   if (pressed !== undefined) control.setAttribute('aria-pressed', String(!!pressed));
   if (onClick) control.addEventListener('click', onClick);

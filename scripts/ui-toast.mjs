@@ -104,7 +104,7 @@ export function toast({ title, message = '', variant = 'info', duration, id = ''
   const node = document.createElement('div'); node.className = 'ui-toast-content';
   node.innerHTML = '<span class="ui-toast-icon" aria-hidden="true"></span><div class="ui-toast-text"><strong class="ui-toast-title"></strong><p class="ui-toast-message"></p><span class="ui-toast-progress" hidden></span></div><button class="ui-toast-close" type="button"></button>';
   const close = node.querySelector('.ui-toast-close');
-  close.setAttribute('aria-label', settings.closeLabel); close.title = settings.closeLabel;
+  close.setAttribute('aria-label', settings.closeLabel); close.dataset.scdlTooltip = settings.closeLabel;
   close.append(globalThis.SCIcons.create('close'));
   const entry = { node, variant };
   fill(entry, { title, message, variant, progress });

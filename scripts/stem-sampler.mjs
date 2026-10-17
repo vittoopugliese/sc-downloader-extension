@@ -160,7 +160,7 @@ export function mountPadSampler({ waveform, buffer, timeline, audioContext, outp
         handle.setAttribute('aria-label', `${KEYS[i]} · ${labels[kind]}`);
         handle.setAttribute('aria-valuemin', String(minimum * 1000)); handle.setAttribute('aria-valuemax', String(maximum * 1000));
         handle.setAttribute('aria-valuenow', String(value * 1000)); handle.setAttribute('aria-valuetext', milliseconds(value));
-        handle.title = `${KEYS[i]} · ${labels[kind]}: ${milliseconds(value)}`;
+        handle.dataset.scdlTooltip = `${KEYS[i]} · ${labels[kind]}: ${milliseconds(value)}`;
       }
     });
     onRender(state());

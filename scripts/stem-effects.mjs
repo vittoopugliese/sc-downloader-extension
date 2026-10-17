@@ -116,7 +116,7 @@ export function mountEffects({ container, effects, changed, pauseForFreeze, repo
     for (const [name, control] of toggles) {
       if (state[name] > 0) wetMemory.set(name, state[name]);
       control.setAttribute('aria-pressed', String(state[name] > 0));
-      control.title = pt(state[name] > 0 ? 'Disable $1 ($2% wet)' : 'Enable $1 ($2% wet)', control.textContent, state[name] || wetMemory.get(name) || 35);
+      control.dataset.scdlTooltip = pt(state[name] > 0 ? 'Disable $1 ($2% wet)' : 'Enable $1 ($2% wet)', control.textContent, state[name] || wetMemory.get(name) || 35);
       cards.get(name).classList.toggle('is-active', state[name] > 0 && !state.bypassed);
     }
     for (const [name, control] of presets) control.setAttribute('aria-pressed', String(state.preset === name));
