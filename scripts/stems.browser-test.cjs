@@ -156,7 +156,7 @@ const { chromium } = require('playwright');
     const stats = [];
     for (let index = 0; index < 4; index++) {
       const download = page.waitForEvent('download');
-      await page.locator('.pl-stem-head:not([data-stem=original]) .stem-more').nth(index).click(); await page.locator('.pl-menu-item').nth(2).click();
+      await page.locator('.pl-stem-head:not([data-stem=original]) .stem-more').nth(index).click(); await page.locator('.pl-menu-item').nth(3).click();
       const file = await download;
       const destination = path.join(artifacts, file.suggestedFilename());
       await file.saveAs(destination);

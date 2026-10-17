@@ -141,7 +141,7 @@ export function createKnob({ label, min, max, step, coarse, value, reset, format
 // `toolbarEnd` sits before the download button;
 // `inspectorControls` share the library row. Pattern library entries are owned by
 // the host: their Duplicate/Delete go through `onPatternAction(action, assetId)`.
-export function mountPlaylist({ container, windows = [], toolbarHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect }) {
+export function mountPlaylist({ container, windows = [], toolbarHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect }) {
   const es = document.documentElement.lang === 'es', t = (en, spanish) => es ? spanish : en;
   let state = emptyArrangement(), assets = new Map(), selected = null, extra = new Set(), zoom = 48, snap = .25;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
@@ -918,7 +918,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     if (exporting) return;
     exporting = new AbortController(); exportButton.disabled = true;
     try {
-      const rendered = await renderArrangement(structuredClone(playbackState()), new Map(assets), cache, { signal: exporting.signal,
+      const rendered = await renderArrangement(structuredClone(playbackState()), new Map(assets), cache, { signal: exporting.signal, masterEq: structuredClone(masterEq?.() ?? null),
         progress: p => report(`${t('Rendering', 'Renderizando')} ${Math.round(p * 100)}%`) });
       const blob = new Blob([encodeWav([rendered.getChannelData(0), rendered.getChannelData(1)], rendered.sampleRate)], { type: 'audio/wav' });
       const url = URL.createObjectURL(blob), link = node('a'); link.href = url; link.download = 'playlist.wav'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -950,6 +950,11 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
       return { version: 1, bpm: restore && Number.isFinite(saved?.bpm) ? saved.bpm : state.bpm, tracks: [...tracks, ...users], clips: [...clips, ...userClips] };
     };
     let candidate = build(!!saved);
+    // Stem channels get their saved EQ back; user tracks carry theirs.
+    if (saved?.trackEq && typeof saved.trackEq === 'object') for (const track of candidate.tracks) {
+      const eq = saved.trackEq[track.id];
+      if (track.stem && eq && typeof eq === 'object' && Array.isArray(eq.bands)) track.eq = structuredClone(eq);
+    }
     try { validateArrangement(candidate, next); } catch { candidate = build(false); validateArrangement(candidate, next); }
     state = candidate; assets = next; history = []; future = []; pick(null); liveBefore = null; position = marker = loopRange?.start ?? 0;
     changed(); draw(); requestAnimationFrame(fit);
@@ -985,6 +990,24 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     tracks: () => state.tracks,
     duration: () => arrangementEnd(state),
     trackSource,
+    // Per-channel EQ, like a mixer insert. Edits apply at once and reach onChange for saving.
+    trackEq: key => structuredClone(state.tracks.find(track => track.id === key || track.stem === key)?.eq ?? null),
+    setTrackEq(key, eq) {
+      const track = state.tracks.find(item => item.id === key || item.stem === key);
+      if (!track) return false;
+      track.eq = structuredClone(eq); engine?.mix(state); onChange?.();
+      return true;
+    },
+    // The track's insert on the playlist context, for its instruments (PAT preview).
+    async trackAudio(key) {
+      const track = state.tracks.find(item => item.id === key || item.stem === key);
+      await connect(); engine.mix(state);
+      return { context: engineIO.context, output: track ? engine.trackInput(track.id) : engineIO.output };
+    },
+    trackGraph(key) {
+      const track = state.tracks.find(item => item.id === key || item.stem === key);
+      return track ? engine?.trackGraph(track.id) || null : null;
+    },
     // The toolbar button of a window ('browser' or a host window id).
     windowButton: id => windowButtons.get(id),
     audible: track => trackAudible(state, track),
@@ -1034,6 +1057,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     },
     // Channel mix is saved by the host; the arrangement saves tempo and clips.
     snapshot: () => ({ bpm: state.bpm,
+      trackEq: Object.fromEntries(state.tracks.filter(track => track.stem && track.eq).map(track => [track.id, structuredClone(track.eq)])),
       userTracks: state.tracks.filter(track => !track.stem && state.clips.filter(clip => clip.track === track.id).every(clip => savable(clip.asset))).map(track => ({ ...track })),
       clips: state.clips.filter(clip => savable(clip.asset) && (trackOf(clip.track)?.stem || state.clips.filter(other => other.track === clip.track).every(other => savable(other.asset)))).map(clip => ({ ...clip })) }),
     dispose() {

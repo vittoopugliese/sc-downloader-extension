@@ -417,3 +417,6 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .module-window.is-floating .piano-scroll{flex:1 1 auto;max-height:none;min-height:160px}
 .module-window.is-floating .stem-plugin-body>*{flex-shrink:0}
 .module-window.is-floating .stem-plugin-body>.piano-scroll{flex-shrink:1}
+/* EQ channel selector: Master or one playlist channel. */
+.peq-target{display:flex;align-items:center;gap:6px;margin:0 0 6px;font:10px system-ui,sans-serif;color:#b8b3ad}
+.peq-target select{height:24px;max-width:220px;padding:0 6px;border:1px solid #514c44;border-radius:5px;background:#121313;color:#eee;font:11px system-ui,sans-serif}

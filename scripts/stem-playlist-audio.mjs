@@ -162,13 +162,28 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     const versions = [...new Set(state.clips.map(clip => clip.asset))].map(id => assets().get(id)?.version || 0);
     return JSON.stringify([state.clips, transport.loop, transport.rate, versions]);
   }
-  function trackGain(id) {
-    let gain = tracks.get(id);
-    if (!gain) { gain = context.createGain(); gain.connect(master); tracks.set(id, gain); }
-    return gain;
+  // Each track is a mixer insert: its EQ (track.eq), then its fader. Clips and the track's
+  // instruments enter at the EQ input.
+  function trackBus(id) {
+    let bus = tracks.get(id);
+    if (!bus) {
+      const gain = context.createGain(), eq = globalThis.SCParametricEQ?.createGraph(context, { analyse: true }) || null;
+      gain.connect(master);
+      if (eq) { eq.apply(null, false, true); eq.output.connect(gain); }
+      bus = { gain, eq, input: eq ? eq.input : gain, settings: 'null' };
+      tracks.set(id, bus);
+    }
+    return bus;
   }
+  const trackGain = id => trackBus(id).input;
   function mixTracks(state) {
-    for (const track of state.tracks) trackGain(track.id).gain.setTargetAtTime(trackAudible(state, track) ? track.gain : 0, context.currentTime, .005);
+    for (const track of state.tracks) {
+      const bus = trackBus(track.id), settings = JSON.stringify(track.eq || null);
+      bus.gain.gain.setTargetAtTime(trackAudible(state, track) ? track.gain : 0, context.currentTime, .005);
+      if (bus.eq && settings !== bus.settings) { bus.eq.apply(track.eq || null); bus.settings = settings; }
+    }
+    const ids = new Set(state.tracks.map(track => track.id));
+    for (const [id, bus] of tracks) if (!ids.has(id)) { bus.eq?.dispose(); bus.gain.disconnect(); tracks.delete(id); }
   }
   function retire(clipId = null) {
     const at = context.currentTime;
@@ -285,7 +300,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     // Track mix changes ramp the track gains; clip edits replace only the edited clips.
     // Speed changes, and loop or end changes right at a wrap, restart from the position.
     update(state, transport) {
-      if (!session) return;
+      if (!session) { mixTracks(state); return; }
       const next = signatureOf(state, transport);
       if (next === signature) { mixTracks(state); return; }
       if (!patch(state, transport)) { begin(state, now(), transport, true); return; }
@@ -293,7 +308,12 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     },
     stop, now,
     playing: () => !!session,
-    dispose() { stop(); master.disconnect(); for (const gain of tracks.values()) gain.disconnect(); tracks.clear(); },
+    // Mixer state (faders, mute/solo, track EQ) applies while stopped too.
+    mix: mixTracks,
+    // Where a track's instruments play into, and the EQ graph whose spectrum the editor shows.
+    trackInput: id => trackBus(id).input,
+    trackGraph: id => tracks.get(id)?.eq || null,
+    dispose() { stop(); master.disconnect(); for (const bus of tracks.values()) { bus.eq?.dispose(); bus.gain.disconnect(); } tracks.clear(); },
   };
 }
 
@@ -305,14 +325,22 @@ export function prefetchStretches(state, assets, cache, onError) {
   }
 }
 
-export async function renderArrangement(state, assets, cache, { signal, progress } = {}) {
+// The export follows the realtime insert order: track EQ, fader, then the master EQ.
+export async function renderArrangement(state, assets, cache, { signal, progress, masterEq = null } = {}) {
   validateArrangement(state, assets); signal?.throwIfAborted();
   const end = arrangementEnd(state);
   if (!end) throw new Error('Add a sample to the playlist first.');
   const sampleRate = 44100, offline = new OfflineAudioContext(2, Math.ceil(end * sampleRate), sampleRate);
+  const equalizer = globalThis.SCParametricEQ;
+  const insert = (settings, destination) => {
+    if (!equalizer?.isActive(settings)) return destination;
+    const graph = equalizer.createGraph(offline); graph.apply(settings, false, true); graph.output.connect(destination);
+    return graph.input;
+  };
+  const master = insert(masterEq, offline.destination);
   const gains = new Map(state.tracks.map(track => {
-    const gain = offline.createGain(); gain.gain.value = track.gain; gain.connect(offline.destination);
-    return [track.id, gain];
+    const gain = offline.createGain(); gain.gain.value = track.gain; gain.connect(master);
+    return [track.id, insert(track.eq, gain)];
   }));
   const clips = audibleClips(state);
   for (let i = 0; i < clips.length; i++) {

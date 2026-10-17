@@ -48,7 +48,7 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
   const empty = element('p', 'plugin-empty', pt('Separate or import audio to start.'));
   shell.body.append(toolbar, editing, scroll, hint, instructions, empty);
 
-  let selected = -1, drag = null, renderedGrid = '', previewBus = null, frame = 0, owner = null;
+  let selected = -1, drag = null, renderedGrid = '', frame = 0, owner = null;
   // The next note copies the last clicked or edited note, as in FL Studio.
   let template = { length: 1, velocity: .8 };
   const voices = new Set(), undo = [], redo = [];
@@ -86,8 +86,8 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
       context.resume().then(() => {
         if (!shell.active()) return;
         if (voices.size >= 16) voices.values().next().value.stop();
-        if (!previewBus || previewBus.context !== context) { previewBus = context.createGain(); previewBus.connect(output()); }
-        const voice = schedulePianoNote(context, previewBus, track.buffer, slice(), instrument.piano, { pitch, velocity }, context.currentTime, .6);
+        // Notes play through the focused track's EQ.
+        const voice = schedulePianoNote(context, output(current().key), track.buffer, slice(), instrument.piano, { pitch, velocity }, context.currentTime, .6);
         if (!voice) return;
         voices.add(voice); voice.source.onended = () => { voice.cleanup(); voices.delete(voice); };
       }, report);
@@ -252,6 +252,6 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
   render(); renderTransport();
   return {
     ...shell,
-    dispose() { cancelAnimationFrame(frame); stopVoices(); previewBus?.disconnect(); window.removeEventListener('blur', stopVoices); shell.section.remove(); },
+    dispose() { cancelAnimationFrame(frame); stopVoices(); window.removeEventListener('blur', stopVoices); shell.section.remove(); },
   };
 }

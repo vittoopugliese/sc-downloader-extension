@@ -303,7 +303,7 @@ function reconcileChannels() {
 // the speed slider next to the tempo controls.
 // Tool windows (FL Studio's F6–F10): buttons in the Playlist tool rows, windows created below.
 const say = (en, es) => locale === 'es' ? es : en;
-let moduleWindows = {};
+let moduleWindows = {}, eqTargetSelect = null;
 const WINDOWS = [
   { id: 'rack', icon: PLUGIN_ICONS.rack, name: say('Channel rack', 'Channel rack'), key: 'F6', keys: ['f6'], color: '#7bd88f',
     detail: say('the focused track cut into eight pads and its step patterns', 'la pista enfocada cortada en ocho pads y sus patrones de pasos') },
@@ -319,8 +319,10 @@ const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('trans
   toolbarStart: [$('separate'), $('cancel'), $('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [$('clear-cache'), $('toggle-game')],
   onPatternAction(action, id) { const pattern = id.slice('pattern:'.length); if (action === 'duplicate') instruments?.duplicatePattern(pattern); else instruments?.deletePattern(pattern); },
   audio: playlistAudio, channel: channelForTrack,
+  // The master EQ is the last insert of the WAV export too.
+  masterEq: () => mixOutput.snapshot().eq,
   onLoopChange(range) { stemLoop.setRange(range ? { startMs: range.start * 1000, endMs: range.end * 1000, durationMs: original?.duration * 1000 || range.end * 1000 } : null); },
-  onChange() { reconcileChannels(); renderChannels(); instruments?.sync(); libraryUI?.changed(); },
+  onChange() { reconcileChannels(); renderChannels(); instruments?.sync(); syncChannelEq(); libraryUI?.changed(); },
   // Selecting a pattern clip opens that pattern, as double-clicking one does in FL Studio.
   onSelect(asset) { if (asset?.pattern) instruments?.focusPattern(asset.id.slice('pattern:'.length)); },
   onTransport(active) {
@@ -333,12 +335,55 @@ const instrumentTracks = () => playlist.tracks().map(track => ({ key: track.stem
   name: track.stem ? text(track.stem) : track.name, buffer: playlist.trackSource(track.id)?.buffer || null }));
 const instruments = createInstruments({ playlist, tracks: instrumentTracks, rate: () => rate, report: playbackError,
   changed: () => libraryUI?.changed(),
-  async audio() { const io = await playlistAudio(); toneNode?.port.postMessage({ rate, keepTone, reset: true }); return io; } });
-const pluginAudio = { audioContext: () => mixOutput.getPlaybackContext(), output: () => mixOutput.input() };
+  // A pattern preview plays through its track's insert, then Keep Tone and the master.
+  async audio(key) { const io = key ? await playlist.trackAudio(key) : await playlistAudio(); toneNode?.port.postMessage({ rate, keepTone, reset: true }); return io; } });
+// Pads and piano notes are auditions: they skip the playlist fader and Keep Tone, but go
+// through their track's EQ and then the master, like an FL Studio mixer insert.
+const auditionBuses = new Map();
+function auditionInput(key) {
+  const context = mixOutput.getPlaybackContext();
+  if (!key) return mixOutput.input();
+  let bus = auditionBuses.get(key);
+  if (!bus || bus.context !== context) {
+    bus?.graph.dispose();
+    const graph = globalThis.SCParametricEQ.createGraph(context, { analyse: true });
+    graph.output.connect(mixOutput.input());
+    bus = { context, graph, settings: '' }; auditionBuses.set(key, bus);
+  }
+  applyAuditionEq(key, bus);
+  return bus.graph.input;
+}
+function applyAuditionEq(key, bus = auditionBuses.get(key)) {
+  if (!bus) return;
+  const eq = playlist.trackEq(key), settings = JSON.stringify(eq);
+  if (settings !== bus.settings) { bus.graph.apply(eq, false, !bus.settings); bus.settings = settings; }
+}
+const pluginAudio = { audioContext: () => mixOutput.getPlaybackContext(), output: auditionInput };
+// The EQ window edits the master or one channel; one editor follows the selected target.
+let eqTarget = 'master';
+const eqChannel = () => eqTarget !== 'master' && playlist.track(eqTarget) ? eqTarget : null;
+const eqEffects = {
+  snapshot() {
+    const key = eqChannel();
+    return key ? { eq: globalThis.SCParametricEQ.normalize(playlist.trackEq(key)), initialized: true, available: true, bypassed: false } : mixOutput.snapshot();
+  },
+  setEqualizer(value) {
+    const key = eqChannel();
+    if (!key) { mixOutput.setEqualizer(value); return; }
+    playlist.setTrackEq(key, globalThis.SCParametricEQ.validate(value)); applyAuditionEq(key);
+  },
+  // The spectrum of what is sounding: the song insert while playing, else the auditions.
+  analyseEqualizer() {
+    const key = eqChannel();
+    if (!key) return mixOutput.analyseEqualizer();
+    const song = playlist.trackGraph(key), audition = auditionBuses.get(key)?.graph || null;
+    return playlist.playing() ? song || audition : audition || song;
+  },
+};
 const channelRack = mountChannelRack({ container: $('mix-tools'), instruments, ...pluginAudio, locale, report: playbackError });
 const pianoRoll = mountPianoRoll({ container: $('mix-tools'), instruments, ...pluginAudio, report: playbackError });
 const equalizerUI = globalThis.SCParametricEQUI.mount({
-  container: $('mix-tools'), effects: mixOutput, isAllowed: () => true, authorize: async () => true,
+  container: $('mix-tools'), effects: eqEffects, isAllowed: () => true, authorize: async () => true,
   onChange: () => libraryUI?.changed(), pro: false,
   iconUrl: new URL('../assets/icons/eq.svg', import.meta.url).href,
   resetIconUrl: new URL('../assets/icons/cross.svg', import.meta.url).href,
@@ -350,6 +395,39 @@ const recorderUI = globalThis.SCRecordUI.mount({
 });
 equalizerUI.setCollapsed(false);
 recorderUI.setCollapsed(false);
+// Channel selector of the EQ window: Master, then every playlist channel.
+eqTargetSelect = document.createElement('select');
+{
+  const row = document.createElement('label'); row.className = 'peq-target';
+  const caption = document.createElement('span'); caption.textContent = say('Channel', 'Canal');
+  eqTargetSelect.setAttribute('aria-label', say('EQ channel', 'Canal del EQ'));
+  eqTargetSelect.title = say('Which channel this EQ edits: the master, or one track (its clips, patterns, pads and notes)', 'Qué canal edita este EQ: el master o una pista (sus clips, patrones, pads y notas)');
+  eqTargetSelect.onchange = () => selectEqChannel(eqTargetSelect.value);
+  row.append(caption, eqTargetSelect);
+  $('scdl-parametric-eq').querySelector('.peq-body').prepend(row);
+}
+function channelName(track) { return track.stem ? text(track.stem) : track.name; }
+function renderEqTargets() {
+  const options = [['master', 'Master'], ...playlist.tracks().map(track => [track.stem || track.id, channelName(track)])];
+  const key = options.map(option => option.join(':')).join('|');
+  if (eqTargetSelect.dataset.key !== key) { eqTargetSelect.dataset.key = key; eqTargetSelect.replaceChildren(...options.map(([value, label]) => new Option(label, value))); }
+  if (!eqChannel()) eqTarget = 'master';
+  eqTargetSelect.value = eqTarget;
+  const track = eqChannel() && playlist.track(eqTarget);
+  $('scdl-parametric-eq').querySelector('.tool-section-title').textContent = track ? `${pt('Parametric EQ')} · ${channelName(track)}` : `${pt('Parametric EQ')} · Master`;
+}
+function selectEqChannel(key) { eqTarget = key || 'master'; renderEqTargets(); equalizerUI.reset(); }
+// Track changes (undo, presets, new tracks) reach the selector, the editor and the auditions.
+function syncChannelEq() {
+  if (!eqTargetSelect) return;
+  const before = eqTarget; renderEqTargets();
+  if (before !== eqTarget) equalizerUI.reset(); else equalizerUI.sync();
+  for (const [key, bus] of auditionBuses) {
+    if (playlist.track(key)) applyAuditionEq(key, bus);
+    else { bus.graph.dispose(); auditionBuses.delete(key); }
+  }
+}
+renderEqTargets();
 channelRack.setCollapsed(false); pianoRoll.setCollapsed(false);
 // The four modules are windows now: always expanded, opened from their buttons or keys.
 {
@@ -597,6 +675,7 @@ function buildChannel(stem, wav, trackName = null) {
   const menu = event => contextMenu(event, [
     { label: pt('Channel rack'), icon: PLUGIN_ICONS.rack, disabled: !wav, title: editorHint, action: () => { instruments.focus(stem); moduleWindows.rack.reveal(); channelRack.open(); } },
     { label: pt('Piano roll'), icon: PLUGIN_ICONS.piano, disabled: !wav, title: editorHint, action: () => { instruments.focus(stem); moduleWindows.piano.reveal(); pianoRoll.open(); } },
+    { label: say('Channel EQ', 'EQ del canal'), icon: 'M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6', action: () => { selectEqChannel(stem); moduleWindows.eq.reveal(); } },
     { label: pt('Download WAV'), icon: iconPaths.download, disabled: !wav, action: () => link.click() },
     '-',
     { label: pt('Hear only this track'), icon: iconPaths.music, action: hearOnly },

@@ -218,7 +218,8 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     sampler?.dispose(); sampler = null; mounted = null;
     if (!buffer) return;
     mounted = { key, buffer }; view = { startMs: 0, endMs: buffer.duration * 1000 }; drawn = '';
-    sampler = mountPadSampler({ waveform: wave, buffer, timeline, audioContext, output, locale, report,
+    // Pads play through this track's EQ.
+    sampler = mountPadSampler({ waveform: wave, buffer, timeline, audioContext, output: () => output(key), locale, report,
       saved: instruments.instrument(key).slices,
       keyboardActive: event => shell.active() && !event.target.closest?.('.pl-ui,.stem-piano-roll'),
       changed: slices => instruments.editInstrument(instrument => { instrument.slices = slices; }, key),

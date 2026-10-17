@@ -130,7 +130,8 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
     const token = preview = { id: pattern.id };
     emit('transport');
     try {
-      const [io, buffer] = await Promise.all([audio(), bufferOf(pattern)]);
+      // The preview plays through its track's insert (EQ and fader).
+      const [io, buffer] = await Promise.all([audio(pattern.track), bufferOf(pattern)]);
       if (preview !== token) return;
       token.io = io; startVoice(token, buffer, 0); emit('transport');
     } catch (error) { if (preview === token) preview = null; emit('transport'); report(error); }

@@ -21,7 +21,8 @@ export function validateArrangement(state, assets) {
   for (const track of state.tracks) {
     if (typeof track.id !== 'string' || tracks.has(track.id) || typeof track.name !== 'string' || track.name.length > 160 ||
         (track.stem !== undefined && typeof track.stem !== 'string') ||
-        !Number.isFinite(track.gain) || track.gain < 0 || track.gain > 2 || typeof track.mute !== 'boolean' || typeof track.solo !== 'boolean') throw new Error('Invalid track.');
+        !Number.isFinite(track.gain) || track.gain < 0 || track.gain > 2 || typeof track.mute !== 'boolean' || typeof track.solo !== 'boolean' ||
+        (track.eq != null && (typeof track.eq !== 'object' || !Array.isArray(track.eq.bands)))) throw new Error('Invalid track.');
     tracks.add(track.id);
   }
   for (const clip of state.clips) {

@@ -140,11 +140,11 @@ const { chromium } = require('playwright');
     await knob.dblclick();
     // Rack, piano roll and WAV live in the header menu: ⋮ or right-click on the header.
     await drumHead.locator('.stem-more').click();
-    assert.equal(await page.locator('.pl-menu-item').count(), 4);
+    assert.equal(await page.locator('.pl-menu-item').count(), 5);
     await page.locator('.pl-menu-item').nth(0).click();
     assert.equal(await page.locator('#stem-rack .plugin-track').inputValue(), 'drums', 'The header menu focuses its track in the rack');
     await drumHead.locator('h2').click({ button: 'right' });
-    const downloadEvent = page.waitForEvent('download'); await page.locator('.pl-menu-item').nth(2).click();
+    const downloadEvent = page.waitForEvent('download'); await page.locator('.pl-menu-item').nth(3).click();
     assert.match((await downloadEvent).suggestedFilename(), /drums\.wav$/);
     // One frame: opening the rack scrolls smoothly, so separate reads could straddle a scroll.
     const [eqBounds, recorderBounds, playlistBounds] = await page.evaluate(() => ['.peq', '.record-section', '#playlist']
