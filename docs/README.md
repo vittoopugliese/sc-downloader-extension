@@ -1,5 +1,7 @@
 # Documentación y estado
 
+**17/10/2026 — Stems estilo FL Studio:** [Browser de samples, ventanas F6–F10, EQ por canal, Channel Rack con One-shot y Chops, quitar vs. eliminar samples y guardado de samples importados](stem-workspace-fl-20261017.md). Plan y evidencia en [stem-browser-channel-rack-plan.md](stem-browser-channel-rack-plan.md). Implementado localmente; no publicado.
+
 **14/10/2026 — Likes Explorer y Player Tools:** [botón adicional verde agua para reproducción nativa, conservando el iframe de preview](LIKES-EXPLORER-NATIVE-PLAYBACK-RESEARCH-20261014.md#implementación-posterior-del-14102026). Implementado localmente; no publicado.
 
 **09/10/2026 — Likes Explorer:** [selección y reproducción con widget compacto integrado, y apertura en otra pestaña](LIKES-EXPLORER-PLAYBACK-20261009.md), con validación del widget real de SoundCloud.

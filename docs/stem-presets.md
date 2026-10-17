@@ -1,5 +1,7 @@
 # Presets locales de Stems — 2026-10-04
 
+> Actualización 17/10/2026: el Channel Rack, el Piano Roll, el EQ por canal, el Browser de samples y el guardado de samples importados cambiaron. Ver [stem-workspace-fl-20261017.md](stem-workspace-fl-20261017.md).
+
 Implementado en el checkout. Este alcance reemplaza la exclusión anterior de
 persistencia en `stems-roadmap.md`. No convierte Stems en una web independiente.
 

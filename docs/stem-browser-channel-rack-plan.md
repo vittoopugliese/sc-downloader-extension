@@ -1,6 +1,6 @@
 # Plan técnico: Browser de samples, Channel Rack y borrado independiente
 
-Fecha: 2026-10-16. Estado: implementado completo (2026-10-17); ver «Estado de implementación» al final.
+Fecha: 2026-10-16. Estado: implementado completo (secciones 1–6). Guía de uso y detalle técnico: [stem-workspace-fl-20261017.md](stem-workspace-fl-20261017.md).
 
 ## Resultado esperado
 
