@@ -47,7 +47,7 @@ const { chromium } = require('playwright');
     assert.match(await page.locator('#track').getAttribute('title'), /Grabación del Likes Explorer/);
     assert.match(await page.locator('#track').getAttribute('title'), /A 0,00 s → B 2,00 s/);
     assert.equal(await page.locator('#audition').evaluate(node => node.hidden), false, 'the audition area is revealed as for imported audio');
-    assert.match(await page.locator('#status').textContent(), /^Listo/);
+    assert.equal(await page.locator('#extract-dialog').isVisible(), true);
     assert.ok(await page.locator('[data-stem="original"]').count() > 0, 'the take is the Original track');
     await page.waitForTimeout(400);
     assert.equal(await page.evaluate(() => workerRuns), 0, 'loading never starts the separation');

@@ -31,6 +31,7 @@ $packageItems = @(
     "assets/stem-playlist.css",
     "assets/ui-button.css",
     "assets/ui-knob.css",
+    "assets/ui-toast.css",
     "assets/icon-cursors.css",
     "assets/likes-player.css",
     "assets/icon48.png",
@@ -86,6 +87,7 @@ $packageItems = @(
     "scripts/stem-row-menu.mjs",
     "scripts/ui-button.mjs",
     "scripts/ui-knob.mjs",
+    "scripts/ui-toast.mjs",
     "scripts/stem-extract-dialog.mjs",
     "scripts/stem-metronome.mjs",
     "scripts/stem-sample-browser.mjs",
@@ -140,6 +142,7 @@ $packageItems = @(
     "scripts/track-download-execution.js",
     "scripts/vendor/id3-writer.js",
     "scripts/vendor/signalsmith/wasm-factory.mjs",
+    "scripts/vendor/toastify",
     "THIRD_PARTY_LICENSES.md"
   )
 

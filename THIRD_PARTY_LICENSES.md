@@ -49,6 +49,13 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+## Toastify JS 1.12.0
+
+The files in `scripts/vendor/toastify` come from the npm package `toastify-js@1.12.0`
+by Varun A P. `toastify.min.mjs` is its ES module (`src/toastify-es.js`) minified with
+terser; `toastify.css` is unchanged. MIT License; the complete license is included in
+that directory. Source: https://github.com/apvarun/toastify-js
+
 ## Signalsmith Stretch
 
 The bundled `scripts/vendor/signalsmith/wasm-factory.mjs` is a pinned generated

@@ -6,6 +6,7 @@ import { mountSampleBrowser } from './stem-sample-browser.mjs';
 import { createButton } from './ui-button.mjs';
 import { createMetronome } from './stem-metronome.mjs';
 import { createKnob } from './ui-knob.mjs';
+import { toast, dismissToast } from './ui-toast.mjs';
 
 const MIN_ZOOM = 8, MAX_ZOOM = 600;
 // The workspace header's stem palette; user tracks continue in warm tints.
@@ -115,11 +116,12 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   let drawSource = null, timeSelection = null, clipboard = null, activeTrack = null, selecting = false;
   const node = (tag, className = '', text = '') => { const e = document.createElement(tag); e.className = className; e.textContent = text; return e; };
   const button = (text, title, action) => { const e = node('button', '', text); e.type = 'button'; e.title = title; e.setAttribute('aria-label', title); e.onclick = action; return e; };
-  let messageTimer = 0;
-  const report = value => {
-    const text = value instanceof Error ? value.message : value;
-    message.textContent = text; clearTimeout(messageTimer);
-    if (text) messageTimer = setTimeout(() => { if (message.textContent === text) message.textContent = ''; }, 10000);
+  // Messages are toasts (ui-toast.mjs): errors in red, notices in yellow, results in green.
+  // A loading message (reading samples, rendering) stays until the next one replaces it.
+  const report = (value, variant = value instanceof Error ? 'error' : 'warning') => {
+    const title = value instanceof Error ? value.message : value;
+    if (variant !== 'loading') dismissToast('playlist-task');
+    if (title) toast({ title, variant, id: variant === 'loading' ? 'playlist-task' : '' });
   };
   const safe = fn => async (...args) => { try { await fn(...args); } catch (error) { if (error.name !== 'AbortError') report(error); } };
   const picked = () => state.clips.find(c => c.id === selected);
@@ -567,21 +569,21 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     if (pan) { scroll.scrollLeft += event.deltaX || event.deltaY; return; }
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
-  const hint = node('p', 'pl-hint', t('P: pencil · select a sample or clip, then click empty grid space to draw · Q: select time, including silence · Ctrl+C/V: copy/paste at cursor · Ctrl+D: repeat selection · drag clips to move, edges to trim · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 tracks / 5 minutes.', 'P: lápiz · elegí un sample o clip y hacé clic en la grilla vacía para dibujar · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar en el cursor · Ctrl+D: repetir selección · arrastrá clips para mover, bordes para recortar · Espacio reproduce · S corta en el cursor · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 pistas / 5 minutos.'));
-  const message = node('p', 'pl-message'); message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite');
+  // The playlist shortcuts show once, as an info toast, when the first session loads.
+  const hintText = t('P: pencil · select a sample or clip, then click empty grid space to draw · Q: select time, including silence · Ctrl+C/V: copy/paste at cursor · Ctrl+D: repeat selection · drag clips to move, edges to trim · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 tracks / 5 minutes.', 'P: lápiz · elegí un sample o clip y hacé clic en la grilla vacía para dibujar · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar en el cursor · Ctrl+D: repetir selección · arrastrá clips para mover, bordes para recortar · Espacio reproduce · S corta en el cursor · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 pistas / 5 minutos.');
+  let hinted = false;
+  function showHint() {
+    if (hinted) return;
+    hinted = true; toast({ id: 'playlist-hint', variant: 'info', title: t('Playlist shortcuts', 'Atajos de la playlist'), message: hintText, duration: 12000 });
+  }
   container.classList.add('playlist', 'pl-ui'); container.tabIndex = -1;
-  // Messages, help and the clip inspector sit above the timeline, under the transport.
-  const notes = node('div', 'pl-notes'); notes.append(message, hint);
-  let hintTimer = 0;
-  function showHint() { hint.hidden = false; clearTimeout(hintTimer); hintTimer = setTimeout(() => { hint.hidden = true; }, 10000); }
-  showHint();
   // The timeline scrollbar spans only the lanes, not the channel headers.
   const hbarRow = node('div', 'pl-hbar-row'), hbar = node('div', 'pl-hbar'), hbarSize = node('div');
   hbarRow.setAttribute('aria-hidden', 'true'); hbar.append(hbarSize); hbarRow.append(node('div', 'pl-hbar-corner'), hbar);
   hbar.addEventListener('scroll', () => { if (scroll.scrollLeft !== hbar.scrollLeft) scroll.scrollLeft = hbar.scrollLeft; });
   scroll.addEventListener('scroll', () => { if (hbar.scrollLeft !== scroll.scrollLeft) hbar.scrollLeft = scroll.scrollLeft; });
   (toolbarHost === container ? container : toolbarHost).append(toolbar);
-  container.append(notes, inspector, library, scroll, hbarRow);
+  container.append(inspector, library, scroll, hbarRow);
 
   function travel(forward) {
     const from = forward ? future : history, to = forward ? history : future;
@@ -610,7 +612,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   // Track and time are fixed when the import starts. Resolves true when added.
   async function importSamples(items, track = firstUserTrack(), at = position) {
     if (operating || !items.length) return false;
-    operating = true; report(t('Reading samples…', 'Leyendo samples…'));
+    operating = true; report(t('Reading samples…', 'Leyendo samples…'), 'loading');
     try {
       const next = new Map(assets), additions = [];
       for (const item of items) {
@@ -630,11 +632,11 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
       });
       if (!added) { assets = previous; changed(); draw(); }
       else {
-        report(t('Samples ready.', 'Samples listos.'));
+        report(t('Samples ready.', 'Samples listos.'), 'success');
         if (track === null) onRackSample?.(`sample-${additions.at(-1).id}`);
       }
       return added;
-    } finally { operating = false; }
+    } finally { operating = false; dismissToast('playlist-task'); }
   }
   // Placement is free, like FL Studio with snap off: clips, edges, loops and selections
   // land exactly where the mouse is.
@@ -1050,11 +1052,11 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     exporting = new AbortController(); exportButton.disabled = true;
     try {
       const rendered = await renderArrangement(structuredClone(playbackState()), new Map(assets), cache, { signal: exporting.signal, masterEq: structuredClone(masterEq?.() ?? null), masterFx: structuredClone(masterFx?.() ?? null),
-        progress: p => report(`${t('Rendering', 'Renderizando')} ${Math.round(p * 100)}%`) });
+        progress: p => toast({ id: 'playlist-task', variant: 'loading', title: `${t('Rendering WAV', 'Renderizando WAV')} ${Math.round(p * 100)}%`, progress: p }) });
       const blob = new Blob([encodeWav([rendered.getChannelData(0), rendered.getChannelData(1)], rendered.sampleRate)], { type: 'audio/wav' });
       const url = URL.createObjectURL(blob), link = node('a'); link.href = url; link.download = 'playlist.wav'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-      report(t('WAV exported. Peaks above 0 dB were normalized.', 'WAV exportado. Los picos sobre 0 dB se normalizaron.'));
-    } finally { exporting = null; exportButton.disabled = false; }
+      report(t('WAV exported. Peaks above 0 dB were normalized.', 'WAV exportado. Los picos sobre 0 dB se normalizaron.'), 'success');
+    } finally { exporting = null; exportButton.disabled = false; dismissToast('playlist-task'); }
   }
   // Replace the host's channels (original and stems); user tracks with clips stay.
   // `saved` restores channel mix and clips from a preset; invalid data falls back.
@@ -1256,7 +1258,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     },
     dispose() {
       exporting?.abort(); metronome.stop(); engine?.dispose(); cache.dispose(); viewObserver.disconnect(); sampleBrowser?.dispose();
-      document.removeEventListener('keydown', onWindowKey); clearTimeout(messageTimer); clearTimeout(hintTimer); cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();
+      document.removeEventListener('keydown', onWindowKey); cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();
     },
   };
 }

@@ -186,7 +186,7 @@ async function reopenExtract(page) {
     await page.locator('#preset-folder').click();
     await page.locator('#stem-presets:not(:disabled)').waitFor();
     await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${folderId}"] .row-menu-load`).click();
-    await page.locator('#status.error').waitFor();
+    await page.locator('.ui-toast-content[data-variant=error]').first().waitFor();
     assert.equal(await page.locator('.pl-stem-head').count(), 5);
     assert.equal(await page.locator('#stem-rate').inputValue(), '0.5');
     // Real Signalsmith AudioWorklet, real audio: rate affects frequency only when

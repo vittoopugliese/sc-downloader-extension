@@ -10,6 +10,7 @@ import { CHANNEL_COLORS, contextMenu, mountPlaylist } from './stem-playlist.mjs'
 import { createKnob } from './ui-knob.mjs';
 import { setButtonContent } from './ui-button.mjs';
 import { mountExtractDialog } from './stem-extract-dialog.mjs';
+import { toast, dismissToast, configureToasts } from './ui-toast.mjs';
 import { mountModuleWindow } from './stem-module-window.mjs';
 import { mountEffects } from './stem-effects.mjs';
 import { spectrumOf } from './stem-spectrum.mjs';
@@ -359,6 +360,8 @@ let storedPin = null;
 try { storedPin = localStorage.getItem('stems.headerPinned'); } catch {}
 setPinned(storedPin !== '0');
 pin.onclick = () => setPinned(header.dataset.pinned !== 'true');
+// Toasts drop in under the header while it is on screen.
+configureToasts({ top: () => Math.max(0, header.getBoundingClientRect().bottom - 7), closeLabel: say('Close', 'Cerrar') });
 const mixOutput =createEqualizedOutput({ audioContext: () => context ||= new AudioContext({ sampleRate: SAMPLE_RATE }) });
 // Tracks are instruments: their own audio is what the channel rack cuts into pads.
 const instrumentTracks = () => playlist.instrumentSources().map(track => ({ ...track,
@@ -501,7 +504,7 @@ $('import-audio').onclick = () => $('audio-file').click();
 $('audio-file').onchange = async event => {
   const file = event.target.files[0]; event.target.value = '';
   if (!file || busy || libraryOperating) return;
-  setBusy(true); status(localCopy[7]);
+  setBusy(true); status(localCopy[7], 'loading');
   try {
     if (!file.size || file.size > 256 * 1024 * 1024) throw new Error('Invalid file size (maximum 256 MiB)');
     const decoded = await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(await file.arrayBuffer());
@@ -515,8 +518,8 @@ $('audio-file').onchange = async event => {
     $('import-start').max = $('import-end').max = String(duration);
     $('import-error').textContent = '';
     $('import-dialog').showModal();
-    status(original || initialized ? text('ready') : localCopy[10]);
-  } catch (error) { console.error('[Stems import]', error); importDraft = null; setBusy(false); status(localCopy[8], true); }
+    dismissToast('task');
+  } catch (error) { console.error('[Stems import]', error); importDraft = null; setBusy(false); status(localCopy[8], 'error'); }
 };
 $('import-cancel').onclick = () => $('import-dialog').close();
 $('import-dialog').addEventListener('close', () => { importDraft = null; setBusy(false); });
@@ -535,7 +538,7 @@ $('import-form').onsubmit = event => {
   loadLocalAudio(audioBuffer(channels), { title: $('import-name').value.trim() || file.name, artist: '', artworkUrl: '', durationMs: decoded.duration * 1000,
     trimRange: { startMs: first / SAMPLE_RATE * 1000, endMs: last / SAMPLE_RATE * 1000 },
     localFile: { name: file.name, type: file.type, size: file.size, lastModified: file.lastModified, channels: decoded.numberOfChannels } });
-  $('import-dialog').close(); status(text('ready'));
+  $('import-dialog').close();
 };
 // Imported files and Likes Explorer recordings become the Original, ready to separate.
 function loadLocalAudio(next, value) {
@@ -558,7 +561,7 @@ async function loadRecording() {
     if (typeof result?.error === 'string') error.message += ` ${result.error.slice(0, 300)}`;
     throw error;
   }
-  status(text('preparing'));
+  status(text('preparing'), 'loading');
   const response = await (await caches.open('scdl-recording-jobs')).match(result.audioUrl);
   if (!response) throw localizedError('infoFailed');
   const decoded = await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(await response.arrayBuffer());
@@ -662,15 +665,16 @@ async function playlistAudio() {
   catch (error) { console.error('[Stems tone]', error); return { context: playback, output: mixOutput.input() }; }
 }
 
-// Status lines go away after 10 s; progress messages stay while a task runs.
-let statusTimer = 0;
-function status(message, error = false) {
-  $('status').textContent = message; $('status').classList.toggle('error', error);
-  clearTimeout(statusTimer);
-  if (message && !busy) statusTimer = setTimeout(() => { if (!busy) { $('status').textContent = ''; $('status').classList.remove('error'); } }, 10000);
+// Messages are toasts (ui-toast.mjs). A running task (reading, preparing, separating, saving)
+// has one loading toast that updates in place; its result replaces it. `variant` is
+// 'success', 'error', 'warning', 'info' or 'loading'.
+function status(message, variant = 'info') {
+  if (variant === 'loading') { toast({ id: 'task', variant, title: message }); return; }
+  dismissToast('task');
+  if (message) toast({ title: message, variant });
 }
 function localizedError(key) { const error = new Error(text(key)); error.localized = true; return error; }
-function playbackError(error) { console.error('[Stems playback]', error); status(text('playbackFailed'), true); }
+function playbackError(error) { console.error('[Stems playback]', error); status(text('playbackFailed'), 'error'); }
 async function message(type) {
   const result = await chrome.runtime.sendMessage({ type, jobId });
   if (!result?.success) {
@@ -689,10 +693,9 @@ function setBusy(value) {
   extractDialog.setReady(!value && !libraryOperating && canSeparate());
   extractDialog.setRunning(value && separating);
   $('progress').hidden = !value;
-  $('status').classList.toggle('is-loading', value);
   libraryUI?.setBusy(value);
-  // The last message of a finished task also expires.
-  if (!value && $('status').textContent) status($('status').textContent, $('status').classList.contains('error'));
+  // A task that ends without a result message also ends its loading toast.
+  if (!value) dismissToast('task');
 }
 function audioBuffer(channels) {
   const buffer = new AudioBuffer({ numberOfChannels: 2, length: channels[0].length, sampleRate: SAMPLE_RATE });
@@ -822,7 +825,6 @@ function showResults(result, saved = null, samples = []) {
   instruments.restore(saved);
   startSession(saved, samples); instruments.focus(stemChoice[0]);
   syncLoop();
-  status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`);
 }
 
 function runWorker(channels) {
@@ -849,10 +851,10 @@ function runWorker(channels) {
     worker.postMessage({ type: 'separate', channels }, channels.map(channel => channel.buffer));
   });
 }
-// Separation progress shows in the header bar and in the extraction window.
+// Separation progress shows in the header bar, a loading toast and the extraction window.
 function progress(value, message) {
   if (value === null) $('progress').removeAttribute('value'); else $('progress').value = value;
-  status(message); extractDialog.setProgress(value, message);
+  toast({ id: 'task', variant: 'loading', title: message, progress: value }); extractDialog.setProgress(value, message);
 }
 // What the extraction window separates: the session's original (its stems get the four
 // stem tracks) or any other audio clip (its stems become new tracks next to it).
@@ -895,6 +897,7 @@ async function separate(options) {
       if (target.original) {
         stemChoice = STEMS.filter(stem => options.stems.includes(stem)); muteOriginal = options.when === 'mute';
         showResults(result); extractDialog.close();
+        status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`, 'success');
         await libraryUI.completed();
         return;
       }
@@ -906,13 +909,13 @@ async function separate(options) {
       try { if (!playlist.addStemTracks({ clip: target.id, stems, group: options.group, muteSource: options.when === 'mute' })) return; }
       catch (error) { error.localized = true; throw error; }
       extractDialog.close();
-      status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`);
+      status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`, 'success');
     });
   } catch (error) {
     if (version === revision) {
       console.error('[Stems]', error);
       const message = error.localized ? error.message : text('failed');
-      status(message, true); extractDialog.setMessage(message);
+      status(message, 'error'); extractDialog.setMessage(message);
     }
   } finally {
     if (version === revision) { worker?.terminate(); worker = null; rejectWorker = null; separating = false; setBusy(false); }
@@ -922,7 +925,7 @@ async function cancel() {
   revision++;
   rejectWorker?.(new DOMException('Cancelled', 'AbortError')); rejectWorker = null;
   worker?.terminate(); worker = null;
-  separating = false; setBusy(false); status(text('cancelled')); extractDialog.setMessage(text('cancelled'));
+  separating = false; setBusy(false); status(text('cancelled'), 'info'); extractDialog.setMessage(text('cancelled'));
 }
 // A loop sent from Player Tools: its audio is rendered on arrival and placed as the
 // Original, then the extraction window opens. If that fails, the window still opens with
@@ -934,7 +937,7 @@ async function loadJobLoop() {
   catch (error) {
     console.error('[Stems loop]', error);
     reason = error.localized ? error.message : text('prepareFailed');
-    setBusy(false); status(reason, true);
+    setBusy(false); status(reason, 'error');
   } finally { setBusy(false); }
   openExtract(originalTarget());
   if (reason) extractDialog.setMessage(reason);
@@ -973,8 +976,8 @@ $('toggle-game').onclick = () => {
   $('toggle-game').setAttribute('aria-label', text(open ? 'hideGame' : 'playGame'));
 };
 async function clearModel() {
-  try { await caches.delete(MODEL.cache); status(text('cleared')); extractDialog.setMessage(text('cleared')); }
-  catch (error) { console.error('[Stems cache]', error); status(text('cacheClearFailed'), true); extractDialog.setMessage(text('cacheClearFailed')); }
+  try { await caches.delete(MODEL.cache); status(text('cleared'), 'success'); extractDialog.setMessage(text('cleared')); }
+  catch (error) { console.error('[Stems cache]', error); status(text('cacheClearFailed'), 'error'); extractDialog.setMessage(text('cacheClearFailed')); }
 }
 function togglePlayback() { playlist.toggle(); }
 $('play').onclick = togglePlayback;
@@ -1031,6 +1034,7 @@ try {
   if (jobId) { renderInfo(await message('STEM_LOOP_INFO')); initialized = true; await loadJobLoop(); }
   else if (recordingId) await loadRecording();
   setBusy(false);
-  if (!$('status').classList.contains('error')) status(jobId || recordingId ? text('ready') : localCopy[10]);
-} catch (error) { console.error('[Stems initialization]', error); status(error.localized ? error.message : text('infoFailed'), true); }
+  // An empty page says where audio comes from; a loop or recording opens the extraction window.
+  if (!jobId && !recordingId) status(localCopy[10], 'info');
+} catch (error) { console.error('[Stems initialization]', error); status(error.localized ? error.message : text('infoFailed'), 'error'); }
 finally { importReady = true; setBusy(false); }

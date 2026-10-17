@@ -79,7 +79,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
   let library, active = null, enabled = false, operating = false, inference = false, pending = Promise.resolve(), nextWrite = null, writing = false, writeError = null;
   let ready = initialize();
   function error(cause) {
-    console.error('[Stem presets]', cause); report(copy.failed, true);
+    console.error('[Stem presets]', cause); report(copy.failed, 'error');
     if (library?.directory) $('preset-reconnect').hidden = false;
   }
   function controls() {
@@ -138,7 +138,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
     const data = snapshot();
     if (!enabled || !data.blobs) return;
     if (active) { changed(); return; }
-    operating = true; controls(); report(copy.saving);
+    operating = true; controls(); report(copy.saving, 'loading');
     try {
       const info = { ...data.info, title: $('save-name').value.trim() || data.info.title };
       stored = new Set();
@@ -146,7 +146,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
       // Include adjustments made while the WAVs were being written.
       changed(); await pending;
       if (writeError) throw writeError;
-      await refresh(); report(copy.stored);
+      await refresh(); report(copy.stored, 'success');
     } catch (cause) { enabled = false; error(cause); }
     finally { operating = false; controls(); }
   }
@@ -167,7 +167,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
       await authorization;
       if (!library.directory) await navigator.storage?.persist?.().catch(() => false);
       enabled = true; controls();
-      if (snapshot().blobs) await save(); else report(copy.pending);
+      if (snapshot().blobs) await save(); else report(copy.pending, 'info');
     } catch (cause) { enabled = false; error(cause); }
     finally { operating = false; controls(); }
   };
@@ -198,7 +198,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
       await restore(data);
       active = data.record; enabled = true;
       $('save-name').value = active.title;
-      report(copy.stored);
+      report(copy.stored, 'success');
     } catch (cause) { presetMenu.setValue(active?.id || null); error(cause); }
     finally { operating = false; controls(); }
   }
@@ -213,7 +213,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
       await pending;
       await library.remove(id);
       if (active?.id === id) active = null;
-      await refresh(); report(copy.removed);
+      await refresh(); report(copy.removed, 'success');
     } catch (cause) { error(cause); }
     finally { operating = false; controls(); }
   }

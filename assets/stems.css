@@ -18,8 +18,6 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 /* Hint panel, as in FL: the loaded track, then status and progress messages. */
 .daw-hint{display:flex;align-items:center;gap:10px;flex:1 1 240px;min-width:0;height:34px;padding:0 4px}
 .daw-hint .source-mini{flex:0 1 auto;max-width:60%}
-.daw-hint:has(#status:empty) .source-mini{max-width:100%}
-.workspace-header #status{flex:1 1 0;min-width:0;min-height:0;margin:0;overflow:hidden;font:11px/1.3 ui-monospace,monospace;white-space:nowrap;text-overflow:ellipsis}
 .workspace-header #progress{position:absolute;inset:auto 10px -2px;width:auto;height:4px;margin:0}
 .brand{display:flex;align-items:center;flex-wrap:wrap;gap:9px;font-size:10px;font-weight:800;letter-spacing:1.5px}
 .brand img,.brand sc-icon{object-fit:contain}
@@ -105,14 +103,8 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
 [data-icon]{display:inline-flex}
 .utility-actions{display:flex;align-items:center;gap:7px;margin-left:auto;min-width:0}
 progress{width:100%;height:6px;margin-top:22px;accent-color:var(--orange)}
-#status{margin:16px 0 0;font-size:12px;min-height:19px;color:#a5bc91}
-#status.error{color:#ff9494}
-#status.is-loading{display:flex;align-items:center;gap:9px}
-#status.is-loading::before{content:'';width:14px;height:14px;flex-shrink:0;border:2px solid #ffffff40;border-top-color:#fff;border-radius:50%;animation:stem-spin .8s linear infinite}
-@keyframes stem-spin{to{transform:rotate(360deg)}}
 #game-panel{margin-top:16px}
 #game-panel iframe{display:block;width:100%;max-width:300px;height:auto;aspect-ratio:2/3;margin:auto;border:0;border-radius:8px;background:#111}
-@media(prefers-reduced-motion:reduce){#status.is-loading::before{animation:none}}
 #audition{padding:24px;background:#202020;border:1px solid #3b3b3b;border-radius:12px}
 #mix-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start;margin-top:20px}
 #mix-tools>section{min-width:0;margin:0;overflow:hidden}
@@ -279,7 +271,6 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 
 
 /* One line: cover, title, Separate and utilities; transport, mix, speed and legend. */
-#status:empty{display:none}
 #audition{padding-top:12px}
 .prepare .utility-actions{margin-left:auto}
 

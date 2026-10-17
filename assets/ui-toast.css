@@ -1,0 +1,27 @@
+/* Toast alerts (scripts/ui-toast.mjs), over the vendored Toastify stylesheet: dark cards
+   with an edge, icon and progress bar in the variant color. */
+.ui-toast-viewport{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;padding:0;border:0;background:transparent;overflow:visible;pointer-events:none}
+.ui-toast-viewport::backdrop{background:transparent;pointer-events:none}
+.ui-toast-viewport .ui-toast{pointer-events:auto;transform:translateY(var(--toast-offset,0px))}
+.ui-toast:not(.on){pointer-events:none}
+.toastify.ui-toast{--toast-color:#4fc3f7;display:flex;width:max-content;max-width:min(520px,calc(100vw - 24px));padding:0;border:1px solid #45423e;border-left:3px solid var(--toast-color);border-radius:9px;background:#242321f5;box-shadow:0 14px 34px #000c,0 0 0 1px #0006;color:#ece8e2;font:12px/1.4 Arial,Helvetica,sans-serif;cursor:default;transition:top .35s cubic-bezier(.215,.61,.355,1),opacity .35s}
+.ui-toast:has([data-variant=success]){--toast-color:#7bd88f}
+.ui-toast:has([data-variant=error]){--toast-color:#ff6b6b}
+.ui-toast:has([data-variant=warning]){--toast-color:#ffd166}
+.ui-toast:has([data-variant=loading]){--toast-color:#ff7b38}
+.ui-toast-content{display:flex;align-items:flex-start;gap:10px;min-width:0;padding:9px 8px 9px 11px}
+.ui-toast-icon{display:grid;place-items:center;flex:0 0 22px;width:22px;height:22px;border-radius:50%;background:color-mix(in srgb,var(--toast-color) 18%,transparent);color:var(--toast-color)}
+.ui-toast-icon sc-icon{width:13px;height:13px}
+[data-variant=loading] .ui-toast-icon::before{content:'';width:12px;height:12px;border:2px solid color-mix(in srgb,var(--toast-color) 30%,transparent);border-top-color:var(--toast-color);border-radius:50%;animation:ui-toast-spin .8s linear infinite}
+@keyframes ui-toast-spin{to{transform:rotate(360deg)}}
+.ui-toast-text{display:grid;gap:2px;flex:1;min-width:0;padding-top:2px}
+.ui-toast-title{overflow-wrap:anywhere;font-weight:700;color:#f4f0ea}
+.ui-toast-message{margin:0;overflow-wrap:anywhere;font-size:11px;line-height:1.5;color:#b8b3ad}
+.ui-toast-progress{display:block;height:3px;margin-top:5px;overflow:hidden;border-radius:2px;background:#ffffff14}
+.ui-toast-progress::after{content:'';display:block;height:100%;background:var(--toast-color);transform:scaleX(var(--toast-progress,0));transform-origin:left;transition:transform .2s}
+.ui-toast-close{display:grid;place-items:center;flex:0 0 22px;width:22px;height:22px;margin:0;padding:0;border:0;border-radius:5px;background:none;color:#8f8a84;cursor:pointer}
+.ui-toast-close:hover{background:#ffffff14;color:#fff}
+.ui-toast-close:focus-visible{outline:2px solid var(--toast-color);outline-offset:1px}
+.ui-toast-close sc-icon{width:11px;height:11px}
+.ui-toast-announcer{position:fixed;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+@media(prefers-reduced-motion:reduce){.toastify.ui-toast,.ui-toast-progress::after{transition:none}[data-variant=loading] .ui-toast-icon::before{animation-duration:2.4s}}

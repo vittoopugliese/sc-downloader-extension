@@ -111,10 +111,6 @@
 /* Hotkey flash: an overlay in the button's color whose opacity is animated from JS. */
 .pl-key{position:relative;isolation:isolate}
 .pl-key::after{content:'';position:absolute;inset:-1px;z-index:-1;border-radius:inherit;background:var(--key-color);box-shadow:0 0 14px 1px var(--key-color);opacity:0;pointer-events:none}
-.pl-notes{margin:0 2px 10px}
-.pl-hint,.pl-message{margin:0;font-size:10px;line-height:1.6;color:var(--pl-muted)}
-.pl-message{color:#ffad80}
-.pl-message:empty{display:none}
 
 .pl-clip.is-stretching::after{content:'';position:absolute;inset:19px 0 0;background:repeating-linear-gradient(135deg,#ffffff14 0 6px,transparent 6px 12px);animation:pl-stretch 1s linear infinite;pointer-events:none}
 @keyframes pl-stretch{to{background-position:17px 0}}
@@ -151,7 +147,6 @@
 .pl-menu-choice>sc-icon{width:17px;height:17px;}
 .pl-menu-choice-check{position:absolute;top:-5px;right:-5px;display:grid;place-items:center;width:12px;height:12px;border-radius:50%;background:var(--orange,#ff5500)}
 .pl-menu-choice-check sc-icon{width:9px;height:9px;}
-.pl-notes:has(> .pl-message:empty):has(> .pl-hint[hidden]){display:none}
 
 /* Sample browser: a floating, movable window over the page; the Playlist stays usable. */
 .sb-window{position:fixed;z-index:900;display:flex;flex-direction:column;min-width:280px;min-height:300px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:hidden;resize:both;border:1px solid #45423e;border-radius:10px;background:#202020;box-shadow:0 18px 48px #000c,0 0 0 1px #0006;color:#ece8e2;font:11.5px Arial,Helvetica,sans-serif}

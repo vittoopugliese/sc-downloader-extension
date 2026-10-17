@@ -90,7 +90,7 @@ async function reopenExtract(page) {
     assert.equal(await page.locator('#stem-presets').evaluate(node => node.value), id);
     assert.equal(await page.locator('.pl-stem-head').count(), 5, 'The separation stays loaded');
     await page.locator('#audio-file').setInputFiles({ name: 'broken.mp3', mimeType: 'audio/mpeg', buffer: Buffer.from('broken') });
-    await page.waitForFunction(() => document.querySelector('#status').classList.contains('error'));
+    await page.locator('.ui-toast-content[data-variant=error]').first().waitFor();
     assert.equal(await page.locator('#stem-presets').evaluate(node => node.value), id);
     assert.equal(await page.locator('.pl-stem-head').count(), 5, 'The separation stays loaded');
     await page.reload();

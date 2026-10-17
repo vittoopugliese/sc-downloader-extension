@@ -158,7 +158,7 @@ const { chromium } = require('playwright');
     const beforeLimit = (await state()).clips;
     await page.evaluate(() => editor.seek(300)); await scroll.focus(); await page.keyboard.press('Control+v');
     assert.deepEqual((await state()).clips, beforeLimit);
-    assert.match(await ui.locator('.pl-message').textContent(), /5 minutes/);
+    assert.match(await page.locator('.ui-toast-title').filter({ hasText: '5 minutes' }).first().textContent(), /5 minutes/);
     // Repaint after resizing even if the CSS header breakpoint did not change.
     for (let i = 0; i < 14; i++) { await ui.getByLabel('Zoom out', { exact: true }).click(); await settle(); }
     for (const width of [1000, 1400, 390, 320, 1600]) {

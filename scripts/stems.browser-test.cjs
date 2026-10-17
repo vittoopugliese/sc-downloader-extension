@@ -139,15 +139,15 @@ async function reopenExtract(page) {
     await page.waitForURL('**/stems.html?job=*', { timeout: 30000 }).catch(async error => {
       console.log('Tab URL:', page.url()); console.log(await source.locator('#scdl-tempo-control').innerText()); throw error;
     });
-    await page.waitForFunction(() => !document.getElementById('separate').disabled || document.getElementById('status').classList.contains('error'), null, { timeout: 30000 }).catch(async error => {
-      console.log('Page status:', await page.locator('#status').textContent(), errors); throw error;
+    await page.waitForFunction(() => !document.getElementById('separate').disabled || document.querySelector('.ui-toast-content[data-variant=error]'), null, { timeout: 30000 }).catch(async error => {
+      console.log('Page status:', await page.locator('.ui-toast-title').allTextContents(), errors); throw error;
     });
-    assert.equal(await page.locator('#status').evaluate(node => node.classList.contains('error')), false, await page.locator('#status').textContent());
+    assert.equal(await page.locator('.ui-toast-content[data-variant=error]').count(), 0, await page.locator('.ui-toast-title').allTextContents());
     assert.match(await page.locator('#track').getAttribute('data-range'), /3[.,]00.*5[.,]00/);
     await page.locator('#separate').click();
-    heartbeat = setInterval(() => page.locator('#status').textContent().then(value => console.log(`[Stems] ${value}`)).catch(() => {}), 15000);
-    await page.waitForFunction(() => document.querySelectorAll('.pl-stem-head:not([data-stem=original])').length === 4 || document.getElementById('status').classList.contains('error'), null, { timeout: 900000 });
-    assert.equal(await page.locator('#status').evaluate(node => node.classList.contains('error')), false, await page.locator('#status').textContent());
+    heartbeat = setInterval(() => page.locator('.ui-toast-title').allTextContents().then(value => console.log(`[Stems] ${value}`)).catch(() => {}), 15000);
+    await page.waitForFunction(() => document.querySelectorAll('.pl-stem-head:not([data-stem=original])').length === 4 || document.querySelector('.ui-toast-content[data-variant=error]'), null, { timeout: 900000 });
+    assert.equal(await page.locator('.ui-toast-content[data-variant=error]').count(), 0, await page.locator('.ui-toast-title').allTextContents());
     clearInterval(heartbeat);
     const args = await background.evaluate(() => globalThis.stemRenderArgs);
     assert.deepEqual(args.slice(1, 4), [{ startMs: 3000, endMs: 5000 }, { rate: 1, preservePitch: false }, {}]);
@@ -202,7 +202,7 @@ async function reopenExtract(page) {
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.screenshot({ path: path.join(artifacts, 'stems-mobile.png'), fullPage: true });
-    const completed = await page.locator('#status').textContent();
+    const completed = await page.locator('.ui-toast-title').allTextContents();
     await reopenExtract(page);
     await page.locator('#separate').click();
     await page.locator('#cancel').click();
@@ -233,8 +233,8 @@ async function reopenExtract(page) {
     await localPage.locator('#import-confirm').click();
     await localPage.locator('#separate').click();
     await localPage.locator('#extract-dialog').waitFor({ state: 'hidden', timeout: 900000 }).catch(() => {});
-    await localPage.waitForFunction(() => document.querySelectorAll('.pl-stem-head:not([data-stem=original])').length === 4 || document.getElementById('status').classList.contains('error'), null, { timeout: 900000 });
-    assert.equal(await localPage.locator('.pl-stem-head:not([data-stem=original])').count(), 4, await localPage.locator('#status').textContent());
+    await localPage.waitForFunction(() => document.querySelectorAll('.pl-stem-head:not([data-stem=original])').length === 4 || document.querySelector('.ui-toast-content[data-variant=error]'), null, { timeout: 900000 });
+    assert.equal(await localPage.locator('.pl-stem-head:not([data-stem=original])').count(), 4, await localPage.locator('.ui-toast-title').allTextContents());
     await localPage.locator('#save-locally').click();
     await localPage.locator('#save-confirm').click();
     await localPage.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));

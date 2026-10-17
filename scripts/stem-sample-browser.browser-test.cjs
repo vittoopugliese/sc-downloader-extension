@@ -254,7 +254,7 @@ const { chromium } = require('playwright');
       document.querySelector('#stem-rack').dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }));
     }, names);
     await dropFiles(['tone 2.wav', 'broken.wav']);
-    await page.locator('#status.error').waitFor();
+    await page.locator('.ui-toast-content[data-variant=error]').first().waitFor();
     assert.equal(await rackRows.count(), 2);
     await dropFiles(['tone 2.wav', 'tone 10.wav']);
     await page.waitForFunction(() => document.querySelectorAll('.rack-channel').length === 4);
