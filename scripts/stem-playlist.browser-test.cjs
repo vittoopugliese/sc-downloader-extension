@@ -159,15 +159,15 @@ const { chromium } = require('playwright');
     // Right-click menus: library entries duplicate/delete; clips add pitch mode and edit tool.
     const menu = page.locator('.pl-menu');
     await playlist.locator('.pl-shelf button', { hasText: 'tone.wav' }).first().click({ button: 'right' });
-    assert.deepEqual(await menu.locator('.pl-menu-label').allTextContents(), ['Duplicate', 'Delete']);
-    assert.equal(await menu.locator('.pl-menu-item.is-danger .pl-menu-label').textContent(), 'Delete');
+    assert.deepEqual(await menu.locator('.pl-menu-label').allTextContents(), ['Duplicate', 'Delete from project']);
+    assert.equal(await menu.locator('.pl-menu-item.is-danger .pl-menu-label').textContent(), 'Delete from project');
     assert.equal(await menu.locator('.pl-menu-item svg').count(), 2);
     assert.equal(await menu.locator('.pl-menu-item.is-danger').evaluate(e => getComputedStyle(e).color), 'rgb(255, 107, 107)');
     await menu.getByRole('menuitem', { name: 'Duplicate' }).click();
     assert.equal(await menu.count(), 0, 'Choosing an item closes the menu');
     const copy = playlist.locator('.pl-shelf button', { hasText: 'tone.wav (2)' });
     await copy.waitFor();
-    await copy.click({ button: 'right' }); await menu.getByRole('menuitem', { name: 'Delete' }).click();
+    await copy.click({ button: 'right' }); await menu.getByRole('menuitem', { name: 'Delete from project' }).click();
     await copy.waitFor({ state: 'detached' });
     await playlist.locator('.pl-clip').first().click({ button: 'right' });
     assert.ok((await menu.locator('.pl-menu-heading').allTextContents()).includes('Pitch mode'));
@@ -217,6 +217,21 @@ const { chromium } = require('playwright');
     assert.equal(await time(), headAt, "The playhead stays put");
     await page.keyboard.press('Escape');
     assert.equal(await sliceTool.getAttribute('aria-pressed'), 'false');
+    // Removing every clip from the playlist keeps the sample as its track's instrument.
+    await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Delete');
+    assert.equal(await clipCount(), 0);
+    await page.keyboard.press('F6');
+    const rackTracks = page.locator('#stem-rack .plugin-track option');
+    assert.ok(await rackTracks.count() >= 1, 'The track keeps its instrument without clips');
+    // Deleting the sample from the project lets the instrument go; undo brings it back.
+    await page.keyboard.press('F6');
+    await playlist.locator('.pl-shelf button', { hasText: 'tone.wav' }).first().click({ button: 'right' });
+    await menu.getByRole('menuitem', { name: 'Delete from project' }).click();
+    assert.equal(await playlist.locator('.pl-shelf button', { hasText: 'tone.wav' }).count(), 0);
+    assert.equal(await rackTracks.count(), 0, 'No track has an instrument any more');
+    await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('Control+z');
+    await playlist.locator('.pl-shelf button', { hasText: 'tone.wav' }).first().waitFor();
+    assert.ok(await rackTracks.count() >= 1, 'Undo restores the sample and the instrument');
     assert.deepEqual(errors, []);
     console.log('Playlist browser test passed.', result);
   } finally {

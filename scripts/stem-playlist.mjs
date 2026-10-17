@@ -201,10 +201,31 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     prefetchStretches(playbackState(), assets, cache, report);
     onChange?.();
   }
+  // A user track keeps the sample its instrument is cut from (`source`): the first sample
+  // placed on it. Removing or moving clips never changes it; only deleting the sample from
+  // the project, or "Use as track instrument", does.
+  function assignSources() {
+    for (const track of state.tracks) {
+      if (track.stem || (track.source && assets.has(track.source))) continue;
+      const clip = state.clips.find(item => item.track === track.id && !isPattern(item) && assets.has(item.asset));
+      if (clip) track.source = clip.asset; else delete track.source;
+    }
+  }
+  // Samples deleted from the project stay here while the undo history still needs them.
+  const graveyard = new Map();
+  function pruneGraveyard() {
+    if (!graveyard.size) return;
+    const used = new Set();
+    for (const snapshot of [...history, ...future]) {
+      for (const clip of snapshot.clips) used.add(clip.asset);
+      for (const track of snapshot.tracks) if (track.source) used.add(track.source);
+    }
+    for (const id of graveyard.keys()) if (!used.has(id)) graveyard.delete(id);
+  }
   function commit(action, before = copy()) {
-    try { action(); validateArrangement(state, assets); }
+    try { action(); assignSources(); validateArrangement(state, assets); }
     catch (error) { state = before; report(error); draw(); return false; }
-    history.push(before); if (history.length > 50) history.shift(); future = [];
+    history.push(before); if (history.length > 50) history.shift(); future = []; pruneGraveyard();
     changed(); draw(); return true;
   }
   const toolbar = node('div', 'pl-toolbar pl-ui');
@@ -440,7 +461,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const crossfade = toolButton({ icon: ICONS.crossfade, name: t('Crossfade overlaps', 'Fundir superposiciones'), key: 'X', keys: ['x'], color: '#4fc3f7', detail: t('fades clips that overlap on the same track so the joins do not click', 'aplica fundidos a los clips que se pisan en la misma pista para que los cortes no hagan clic') }, () => commit(() => crossfadeClips(state.clips)));
   const duplicate = toolButton({ icon: ICONS.duplicate, name: t('Duplicate', 'Duplicar'), key: 'Ctrl+D', keys: ['ctrl+d'], color: '#66d17a', detail: t('copies the selected clip right after it', 'copia el clip seleccionado justo después') }, () => commit(() => { const clip = picked(); if (clip) { const next = { ...clip, id: uid(), at: clip.at + clipDuration(clip) }; state.clips.push(next); pick(next.id); } }));
   const split = toolButton({ icon: ICONS.split, name: t('Split at cursor', 'Cortar en cursor'), key: 'S', keys: ['s'], color: '#ffb02e', detail: t('cuts every selected clip at the playhead. Ctrl/Shift+click clips, or drag on empty space, to select several.', 'corta todos los clips seleccionados en la posición del cursor. Ctrl/Shift+clic en los clips, o arrastrá en un espacio vacío, para seleccionar varios.') }, () => cutClips(chosen(), now()));
-  const remove = toolButton({ icon: ICONS.trash, name: t('Delete clips', 'Eliminar clips'), key: t('Del', 'Supr'), keys: ['delete', 'backspace'], color: '#ff4d4d', detail: t('deletes the selected clips', 'elimina los clips seleccionados') }, () => commit(() => { state.clips = state.clips.filter(c => !isChosen(c.id)); pick(null); }));
+  const remove = toolButton({ icon: ICONS.trash, name: t('Remove from playlist', 'Quitar de la playlist'), key: t('Del', 'Supr'), keys: ['delete', 'backspace'], color: '#ff4d4d', detail: t('removes the selected clips from the song; the sample stays in the library and the track keeps it as its instrument', 'quita los clips seleccionados de la canción; el sample queda en la biblioteca y la pista lo conserva como instrumento') }, () => commit(() => { state.clips = state.clips.filter(c => !isChosen(c.id)); pick(null); }));
   // Cuts every clip in `clips` that crosses `seconds`; both halves of a selected clip stay selected.
   function cutClips(clips, seconds) {
     const targets = clips.filter(clip => splitClip(clip, seconds));
@@ -473,8 +494,13 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
         action: () => commit(() => { const current = state.clips.find(c => c.id === clip.id); if (current) current.keepLength = value === 'stretch'; }) })),
       '-', { heading: t('Edit tool', 'Herramienta') },
       ...TOOLS.map(([value, label, title]) => ({ label, title, radio: true, checked: editMode === value, action: () => { editMode = value; } })),
+      ...(!isPattern(clip) && trackOf(clip.track) && !trackOf(clip.track).stem && trackOf(clip.track).source !== clip.asset ? [
+        { label: t('Use as track instrument', 'Usar como instrumento de la pista'), icon: ICONS.slice,
+          title: t('The channel rack and piano roll of this track cut this sample from now on', 'El channel rack y el piano roll de esta pista cortan este sample desde ahora'),
+          action: () => commit(() => { const track = trackOf(clip.track); if (track) track.source = clip.asset; }) }] : []),
       '-',
-      { label: t('Delete', 'Eliminar'), icon: ICONS.trash, shortcut: t('Del', 'Supr'), danger: true, action: () => remove.click() },
+      { label: t('Remove from playlist', 'Quitar de la playlist'), icon: ICONS.trash, shortcut: t('Del', 'Supr'), danger: true,
+        title: t('The sample stays in the library and the track keeps its instrument', 'El sample queda en la biblioteca y la pista conserva su instrumento'), action: () => remove.click() },
     ]);
   }
   function uniqueName(name) {
@@ -489,10 +515,14 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
         const next = new Map(assets), copyOf = { id: uid(), name: uniqueName(asset.name), buffer: asset.buffer, version: 0 };
         next.set(copyOf.id, copyOf); checkBudget(next); assets = next; draw();
       }) },
-      { label: t('Delete', 'Eliminar'), icon: ICONS.trash, danger: true, disabled: !!asset.session, title: deleteTitle, action: () => {
+      { label: asset.pattern ? t('Delete', 'Eliminar') : t('Delete from project', 'Eliminar del proyecto'), icon: ICONS.trash, danger: true, disabled: !!asset.session,
+        title: deleteTitle || (asset.pattern ? '' : t('Removes the sample and all its clips; tracks that used it as their instrument let it go. Undo brings the clips back.', 'Quita el sample y todos sus clips; las pistas que lo usaban como instrumento lo sueltan. Deshacer devuelve los clips.')), action: () => {
         if (asset.pattern) { onPatternAction?.('delete', asset.id); return; }
-        commit(() => { state.clips = state.clips.filter(clip => clip.asset !== asset.id); if (selected && !picked()) selected = null; });
-        assets.delete(asset.id); cache.forget(asset.id); draw();
+        commit(() => {
+          state.clips = state.clips.filter(clip => clip.asset !== asset.id); if (selected && !picked()) selected = null;
+          for (const track of state.tracks) if (track.source === asset.id) delete track.source;
+        });
+        graveyard.set(asset.id, asset); assets.delete(asset.id); cache.forget(asset.id); draw();
       } },
     ]);
   }
@@ -544,7 +574,11 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     const from = forward ? future : history, to = forward ? history : future;
     if (!from.length) return;
     to.push(copy()); state = from.pop();
-    state.clips = state.clips.filter(clip => assets.has(clip.asset)); changed(); draw();
+    // Undo of "Delete from project" brings the sample back from the graveyard.
+    for (const id of [...state.clips.map(clip => clip.asset), ...state.tracks.map(track => track.source)]) {
+      if (id && !assets.has(id) && graveyard.has(id)) { assets.set(id, graveyard.get(id)); graveyard.delete(id); }
+    }
+    state.clips = state.clips.filter(clip => assets.has(clip.asset)); assignSources(); pruneGraveyard(); changed(); draw();
   }
   function checkBudget(next) {
     // Preview audio held by the sample browser counts too.
@@ -874,7 +908,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
       if (item.hasPointerCapture(gesture.id)) item.releasePointerCapture(gesture.id);
       item.style.transform = '';
       if (cancel) { state = gesture.before; changed(); }
-      else if (gesture.changed) { history.push(gesture.before); if (history.length > 50) history.shift(); future = []; changed(); }
+      else if (gesture.changed) { assignSources(); history.push(gesture.before); if (history.length > 50) history.shift(); future = []; changed(); }
       draw(); grid.querySelector(`.pl-clip[data-clip="${selected}"]`)?.focus({ preventScroll: true });
     };
     item.onpointerup = () => finish(false); item.onpointercancel = item.onlostpointercapture = () => finish(true);
@@ -950,21 +984,22 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
       return { version: 1, bpm: restore && Number.isFinite(saved?.bpm) ? saved.bpm : state.bpm, tracks: [...tracks, ...users], clips: [...clips, ...userClips] };
     };
     let candidate = build(!!saved);
+    // A saved track may name a sample that is not in this session.
+    for (const track of candidate.tracks) if (track.source && !next.has(track.source)) delete track.source;
     // Stem channels get their saved EQ back; user tracks carry theirs.
     if (saved?.trackEq && typeof saved.trackEq === 'object') for (const track of candidate.tracks) {
       const eq = saved.trackEq[track.id];
       if (track.stem && eq && typeof eq === 'object' && Array.isArray(eq.bands)) track.eq = structuredClone(eq);
     }
     try { validateArrangement(candidate, next); } catch { candidate = build(false); validateArrangement(candidate, next); }
-    state = candidate; assets = next; history = []; future = []; pick(null); liveBefore = null; position = marker = loopRange?.start ?? 0;
+    state = candidate; assets = next; assignSources(); history = []; future = []; graveyard.clear(); pick(null); liveBefore = null; position = marker = loopRange?.start ?? 0;
     changed(); draw(); requestAnimationFrame(fit);
   }
   // The audio a track's instrument is cut from: the stem, or the first non-pattern clip.
   function trackSource(id) {
     const track = state.tracks.find(item => item.id === id || item.stem === id);
     if (!track) return null;
-    const asset = track.stem ? assets.get(`audio-${track.stem}`) :
-      assets.get(state.clips.find(clip => clip.track === track.id && !isPattern(clip))?.asset);
+    const asset = assets.get(track.stem ? `audio-${track.stem}` : track.source);
     return asset ? { id: asset.id, name: asset.name, buffer: asset.buffer } : null;
   }
   for (const root of new Set([container, toolbar])) root.addEventListener('keydown', event => {
