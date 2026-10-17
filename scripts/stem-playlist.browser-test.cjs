@@ -50,17 +50,19 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('.pl-play').count(), 0);
     assert.equal(await transport.locator('#stem-rate').count(), 1, 'Speed sits next to the tempo controls');
     for (const name of ['Import audio files', 'Sample browser', 'Add track', 'Download WAV']) {
-      const host = name === 'Download WAV' ? transport : playlist.locator('.pl-tools');
+      const host = name === 'Download WAV' || name === 'Sample browser' ? transport : playlist.locator('.pl-tools');
       const control = host.getByRole('button', { name, exact: true });
       assert.equal(await control.textContent(), '');
       assert.equal(await control.locator('svg').count(), 1);
       assert.match(await control.getAttribute('title'), new RegExp('^' + name + (name === 'Download WAV' ? '' : ' \\([A-Z]\\d*\\)') + ': '));
     }
-    // Two rows of seven tools, then a row of window buttons; each has a hotkey.
+    // Two rows of seven tools, each with a hotkey; window buttons live in the transport bar.
     const tools = playlist.locator('.pl-tools > button');
-    assert.equal(await tools.count(), 19);
-    assert.equal(new Set(await tools.evaluateAll(nodes => nodes.map(n => Math.round(n.getBoundingClientRect().top)))).size, 3);
-    assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 19);
+    assert.equal(await tools.count(), 14);
+    assert.equal(await transport.locator('.pl-window-tool').count(), 5);
+    assert.equal(await transport.locator('.pl-window-tool').first().evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(255, 85, 0)');
+    assert.equal(new Set(await tools.evaluateAll(nodes => nodes.map(n => Math.round(n.getBoundingClientRect().top)))).size, 2);
+    assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 14);
     assert.equal(await transport.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(255, 85, 0)');
     const ruler = playlist.locator('.pl-ruler'), band = playlist.locator('.pl-loop-band');
     assert.match(await ruler.getAttribute('title'), /drag inside.*edges.*double-click/i);

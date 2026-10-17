@@ -22,7 +22,7 @@ const { chromium } = require('playwright');
     const page = await browser.newPage({ locale: 'en-US', viewport: { width: 1280, height: 1000 } });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html`);
-    const tools = page.locator('#playlist .pl-tools');
+    const tools = page.locator('#transport');
     const windows = { rack: ['Channel rack', '#stem-rack', 'F6'], piano: ['Piano roll', '#stem-piano-roll', 'F7'], eq: ['Parametric EQ', '#scdl-parametric-eq', 'F9'], recorder: ['Recorder', '#scdl-record', 'F10'] };
     const section = id => page.locator(windows[id][1]);
     const button = id => tools.getByRole('button', { name: windows[id][0], exact: true });
@@ -71,6 +71,28 @@ const { chromium } = require('playwright');
     assert.equal(await section('rack').evaluate(node => getComputedStyle(node).position), 'fixed');
     const again = await section('rack').boundingBox();
     assert.ok(Math.abs(again.x - after.x) < 2 && Math.abs(again.y - after.y) < 2, 'Floating keeps its last rectangle');
+    // Maximize (button or double-click on the title bar) fills the page and grows the editors.
+    await page.keyboard.press('F9');
+    const stage = section('eq').locator('.peq-stage'), small = await stage.boundingBox();
+    await section('eq').getByRole('button', { name: 'Maximize' }).click();
+    const full = await section('eq').boundingBox();
+    assert.ok(full.width > 1240 && full.height > 960, 'Maximized EQ fills the page');
+    await page.waitForTimeout(50);
+    assert.ok((await stage.boundingBox()).height > small.height + 300, 'The EQ graph grows with the window');
+    const eqTitle = await section('eq').locator('.tool-section-title').boundingBox();
+    await page.mouse.dblclick(eqTitle.x + 4, eqTitle.y + 4);
+    assert.ok(Math.abs((await section('eq').boundingBox()).height - small.height) > 100 || (await section('eq').boundingBox()).width < 1000, 'Double-click restores');
+    await page.keyboard.press('F10');
+    const take = section('recorder').locator('.record-stage'), takeBefore = await take.boundingBox();
+    await section('recorder').getByRole('button', { name: 'Maximize' }).click();
+    assert.ok((await take.boundingBox()).height > takeBefore.height + 300, 'The recorder take grows with the window');
+    await section('recorder').getByRole('button', { name: 'Restore size' }).click();
+    await page.keyboard.press('F7');
+    await section('piano').getByRole('button', { name: 'Maximize' }).click();
+    // Without a track the roll is empty; its scroll area is set to fill the window.
+    assert.deepEqual(await section('piano').locator('.piano-scroll').evaluate(node => [getComputedStyle(node).maxHeight, getComputedStyle(node).flexGrow]), ['none', '1']);
+    await section('piano').getByRole('button', { name: 'Restore size' }).click();
+    await page.keyboard.press('F7');
     // Escape closes the focused floating window; X closes too.
     await section('eq').locator('.module-control').first().focus();
     await page.keyboard.press('Escape');

@@ -369,9 +369,9 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 /* Header and transport are one block: source row, then the playlist transport with the
    speed slider next to BPM. Remove model and the game are icon buttons with tooltips. */
 .transport-bar{margin:0}
-.transport-bar .pl-toolbar{padding:0;border:0;border-radius:0;background:none}
+.transport-bar .pl-toolbar{gap:5px;padding:0;border:0;border-radius:0;background:none}
 .pl-toolbar .stem-tempo{flex:0 1 auto}
-.pl-toolbar .stem-tempo .slider-wrap{flex:0 1 200px;min-width:160px}
+.pl-toolbar .stem-tempo .slider-wrap{flex:0 1 200px;min-width:105px}
 .pl-toolbar #stem-rate-value{width:auto;min-width:6ch;font-size:12px}
 .prepare #clear-cache [data-copy]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .prepare #clear-cache{display:grid;place-items:center;width:34px;height:34px;padding:0;border-color:transparent}
@@ -399,7 +399,7 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .module-window[hidden]{display:none!important}
 .module-window .tool-section-chevron{display:none}
 .module-window .tool-section-toggle{justify-content:flex-start;border-radius:0;letter-spacing:normal;pointer-events:none}
-.module-window .tool-section-actions{right:62px}
+.module-window .tool-section-actions{right:90px}
 .module-controls{position:absolute;z-index:6;top:4px;right:6px;display:flex;gap:4px}
 .module-window .module-control{display:inline-grid;place-items:center;width:23px;height:22px;min-height:22px;padding:1px;border:1px solid #474747;border-radius:5px;background:#262626;color:#eee;cursor:pointer}
 .module-window .module-control:hover{border-color:#ff7b38;background:#3a251b;color:#fff}
@@ -409,3 +409,11 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .module-window.is-floating>.tool-section-header{flex:0 0 auto;cursor:move;touch-action:none;user-select:none}
 .module-window.is-floating>:not(.tool-section-header):not(style){flex:1 1 auto;min-height:0;overflow:auto}
 @media(max-width:600px){.module-window.is-floating{left:12px!important;right:12px;top:auto!important;bottom:12px;width:auto!important;height:min(75vh,520px)!important;resize:none}.module-window.is-floating>.tool-section-header{cursor:default}}
+.module-window.is-maximized{left:8px!important;top:8px!important;width:calc(100vw - 16px)!important;height:calc(100vh - 16px)!important;resize:none}
+.module-window.is-maximized>.tool-section-header{cursor:default}
+/* Floating windows hand their height to the editors: EQ graph, recorder take, piano roll. */
+.module-window.is-floating .peq-body:not([hidden]),.module-window.is-floating .record-body:not([hidden]),.module-window.is-floating .stem-plugin-body{display:flex;flex-direction:column;box-sizing:border-box}
+.module-window.is-floating .peq-stage,.module-window.is-floating .record-stage{flex:1 1 auto;height:auto;min-height:120px}
+.module-window.is-floating .piano-scroll{flex:1 1 auto;max-height:none;min-height:160px}
+.module-window.is-floating .stem-plugin-body>*{flex-shrink:0}
+.module-window.is-floating .stem-plugin-body>.piano-scroll{flex-shrink:1}

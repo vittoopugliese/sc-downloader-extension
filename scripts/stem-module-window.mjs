@@ -6,6 +6,8 @@
 // rectangle are per-viewer conveniences kept in localStorage.
 const ICONS = {
   dock: 'M4 5h16v14H4zM4 15h16',
+  maximize: 'M5 5h14v14H5z',
+  restore: 'M8 8h11v11H8zM5 16V5h11',
   detach: 'M14 4h6v6m0-6-8 8M10 5H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-5',
   close: 'M6 6l12 12M18 6 6 18',
 };
@@ -23,7 +25,7 @@ export const isOnTop = element => Number(element.style.zIndex) === topLayer;
 // Moves `element` by dragging `handle`, keeping at least part of it on screen.
 export function dragWindow(element, handle, { ignore = 'button,input,select,textarea,a', onEnd } = {}) {
   const down = event => {
-    if (event.button !== 0 || event.target.closest(ignore) || !element.classList.contains('is-floating') && element.dataset.floating !== 'always') return;
+    if (event.button !== 0 || event.target.closest(ignore) || element.classList.contains('is-maximized') || !element.classList.contains('is-floating') && element.dataset.floating !== 'always') return;
     event.preventDefault();
     const box = element.getBoundingClientRect(), dx = event.clientX - box.left, dy = event.clientY - box.top;
     handle.setPointerCapture(event.pointerId);
@@ -44,7 +46,7 @@ export function dragWindow(element, handle, { ignore = 'button,input,select,text
 export function mountModuleWindow({ id, section, header, home, t, size, setVisible, onShow, onChange }) {
   const key = `stem-module-${id}`;
   const saved = read(key) || {};
-  let open = false, docked = saved.docked === true, rect = saved.rect || null;
+  let open = false, docked = saved.docked === true, maximized = saved.maximized === true, rect = saved.rect || null;
   const anchor = document.createComment(`${id} home`);
   section.before(anchor);
   section.classList.add('module-window');
@@ -61,13 +63,14 @@ export function mountModuleWindow({ id, section, header, home, t, size, setVisib
     b.innerHTML = svg(icon); b.onclick = event => { event.stopPropagation(); action(); }; return b;
   };
   const dockButton = control(ICONS.dock, () => setDocked(!docked));
+  const maximizeButton = control(ICONS.maximize, () => setMaximized(!maximized));
   const closeButton = control(ICONS.close, () => close());
   const closeLabel = t('Close', 'Cerrar');
   closeButton.title = closeLabel; closeButton.setAttribute('aria-label', closeLabel);
-  controls.append(dockButton, closeButton); header.append(controls);
-  const persist = () => write(key, { open, docked, rect });
+  controls.append(dockButton, maximizeButton, closeButton); header.append(controls);
+  const persist = () => write(key, { open, docked, maximized, rect });
   const saveRect = () => {
-    if (!section.classList.contains('is-floating')) return;
+    if (!section.classList.contains('is-floating') || maximized) return;
     const box = section.getBoundingClientRect();
     rect = { left: box.left, top: box.top, width: box.width, height: box.height }; persist();
   };
@@ -87,6 +90,11 @@ export function mountModuleWindow({ id, section, header, home, t, size, setVisib
     section.hidden = !open;
     section.classList.toggle('is-floating', open && !docked);
     section.classList.toggle('is-docked', docked);
+    section.classList.toggle('is-maximized', open && !docked && maximized);
+    const sizeLabel = maximized && !docked ? t('Restore size', 'Restaurar tamaño') : t('Maximize', 'Maximizar');
+    maximizeButton.innerHTML = svg(maximized && !docked ? ICONS.restore : ICONS.maximize);
+    maximizeButton.title = sizeLabel; maximizeButton.setAttribute('aria-label', sizeLabel);
+    maximizeButton.setAttribute('aria-pressed', String(maximized && !docked));
     const label = docked ? t('Detach: float this window', 'Desacoplar: ventana flotante') : t('Dock under the Playlist', 'Acoplar debajo de la Playlist');
     dockButton.innerHTML = svg(docked ? ICONS.detach : ICONS.dock);
     dockButton.title = label; dockButton.setAttribute('aria-label', label);
@@ -115,6 +123,13 @@ export function mountModuleWindow({ id, section, header, home, t, size, setVisib
     saveRect(); docked = value; render(); persist();
     requestAnimationFrame(() => onShow?.());
   }
+  // Maximized fills the viewport; a docked window floats first.
+  function setMaximized(value) {
+    saveRect(); maximized = value; if (value) docked = false;
+    render(); persist();
+    requestAnimationFrame(() => onShow?.());
+  }
+  header.addEventListener('dblclick', event => { if (!event.target.closest('button:not(.tool-section-toggle),input,select,a')) setMaximized(!(maximized && !docked)); });
   const onWindowResize = () => { if (open && !docked) { const box = section.getBoundingClientRect(); rect = { left: box.left, top: box.top, width: box.width, height: box.height }; place(); } };
   window.addEventListener('resize', onWindowResize);
   section.addEventListener('keydown', event => {
@@ -130,7 +145,8 @@ export function mountModuleWindow({ id, section, header, home, t, size, setVisib
     reveal() { if (!open) show(); else if (!docked) bringToFront(section); else section.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
     isOpen: () => open,
     isDocked: () => docked,
-    setDocked,
+    setDocked, setMaximized,
+    isMaximized: () => maximized && !docked,
     dispose() { stopDrag(); observer.disconnect(); window.removeEventListener('resize', onWindowResize); clearTimeout(resizeTimer); anchor.remove(); },
   };
 }

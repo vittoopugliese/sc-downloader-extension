@@ -155,7 +155,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   // Clips of pattern and session audio are saved; imported files are not.
   const savable = id => !!(assets.get(id)?.session || assets.get(id)?.pattern);
   const rowViews = new Map(), clipViews = new Map(), analyzing = new WeakSet();
-  let paintFrame = 0, shelfKey = '', editMode = 'move', reported = null, slicing = false, slice = null;
+  let paintFrame = 0, dragAudio = 0, shelfKey = '', editMode = 'move', reported = null, slicing = false, slice = null;
   // Channel header width comes from CSS (--pl-head), narrower on phones.
   let TRACK_HEAD = 236;
   const node = (tag, className = '', text = '') => { const e = document.createElement(tag); e.className = className; e.textContent = text; return e; };
@@ -289,7 +289,8 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const importButton = toolButton({ icon: ICONS.import, name: t('Import audio files', 'Importar archivos de audio'), key: 'I', keys: ['i'], color: '#ff7a2f',
     detail: t('WAV, MP3, FLAC, M4A or OGG land at the playhead on the first free track. You can also drop them on a track.', 'WAV, MP3, FLAC, M4A u OGG se agregan en el cursor, en la primera pista libre. También podés soltarlos sobre una pista.') }, () => fileInput.click());
   // Floating sample browser (F8, or B on the Playlist): created on first use; its drops go
-  // through importSamples. It leads the row of window buttons the host adds with `windows`.
+  // through importSamples. It leads the orange window buttons of the transport bar; the host
+  // adds the others with `windows`.
   let sampleBrowser = null;
   const windowKeys = new Map(), windowButtons = new Map();
   function windowButton({ id, icon, name, detail, key, keys, color, toggle }) {
@@ -307,6 +308,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
       sampleBrowser.toggle(control);
     } });
   const windowTools = [browserButton, ...windows.map(windowButton)];
+  const windowGroup = node('span', 'pl-windows'); windowGroup.setAttribute('role', 'group'); windowGroup.setAttribute('aria-label', t('Windows', 'Ventanas')); windowGroup.append(...windowTools);
   // Window keys work anywhere on the page, like FL Studio's F6–F9.
   const onWindowKey = event => {
     if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
@@ -330,7 +332,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     slicing = on; slice = null; sliceLine.hidden = true;
     sliceButton.setAttribute('aria-pressed', String(on)); container.classList.toggle('is-slicing', on);
   }
-  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.label, tapButton, fitTempo, ...tempoControls, snapLabel, node('span', 'pl-spacer'), ...toolbarEnd, exportButton, fileInput);
+  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.label, tapButton, fitTempo, ...tempoControls, snapLabel, node('span', 'pl-spacer'), ...toolbarEnd, windowGroup, exportButton, fileInput);
   const shelf = node('div', 'pl-shelf'); shelf.setAttribute('aria-label', t('Sample library', 'Biblioteca de samples'));
   shelf.title = t('Library: click to add at the cursor, drag onto a track, right-click to duplicate or delete. Wheel scrolls.', 'Biblioteca: clic para agregar en el cursor, arrastrá a una pista, clic derecho para duplicar o eliminar. La rueda desplaza.');
   shelf.addEventListener('wheel', event => {
@@ -344,6 +346,8 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const playhead = node('div', 'pl-playhead'); playhead.setAttribute('aria-hidden', 'true'); grid.append(playhead);
   const sliceLine = node('div', 'pl-slice-line'); sliceLine.hidden = true; sliceLine.setAttribute('aria-hidden', 'true'); grid.append(sliceLine);
   const rulerRow = node('div', 'pl-grid-row pl-ruler-row'), corner = node('div', 'pl-track-head', t('CHANNELS', 'CANALES')), ruler = node('div', 'pl-ruler');
+  const rulerMarks = node('div', 'pl-ruler-marks'), loopBand = node('div', 'pl-loop-band'), markerLine = node('div', 'pl-marker');
+  let rulerKey = '', rulerWidth = 0;
   ruler.title = t('Drag on the ruler to create a loop · drag inside the selection to move it · drag its edges to resize · double-click to clear (without a loop: play from the start) · click to seek · Alt bypasses snap.', 'Arrastrá en la regla para crear un loop · arrastrá dentro de la selección para moverla · arrastrá sus bordes para ajustar · doble clic para eliminar (sin loop: reproduce desde el inicio) · clic para mover el cursor · Alt desactiva snap.');
   ruler.setAttribute('aria-label', ruler.title);
   rulerRow.append(corner, ruler); grid.prepend(rulerRow);
@@ -498,9 +502,9 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const zoomOut = toolButton({ icon: ICONS.zoomOut, name: t('Zoom out', 'Alejar'), detail: wheelHint, key: '-', keys: ['-', '_'], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1 / 1.5));
   const zoomIn = toolButton({ icon: ICONS.zoomIn, name: t('Zoom in', 'Acercar'), detail: wheelHint, key: '+', keys: ['+', '='], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1.5));
   const fitButton = toolButton({ icon: ICONS.fit, name: t('Show the whole arrangement', 'Ver todo el arreglo'), detail: t('fits every clip in view', 'ajusta el zoom para ver todos los clips'), key: 'F', keys: ['f'], color: '#e6e1da' }, fit);
-  // Two rows of seven tools (clip edits, then history, view and tracks), then the windows.
+  // Two rows of seven tools: clip edits, then history, view and tracks.
   const tools = node('div', 'pl-tools');
-  tools.append(muteClip, reverseClip, crossfade, duplicate, split, sliceButton, remove, undo, redo, zoomOut, zoomIn, fitButton, importButton, addTrack, ...windowTools);
+  tools.append(muteClip, reverseClip, crossfade, duplicate, split, sliceButton, remove, undo, redo, zoomOut, zoomIn, fitButton, importButton, addTrack);
   inspector.append(selectionLabel, pitch.wrap, fine.wrap, speed.wrap, ...fades.map(f => f.wrap), tools);
   let zoomFrame = 0, zoomTarget = null, zoomAnchor = null;
   function zoomAround(x, factor) {
@@ -510,7 +514,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     zoomAnchor.x = x; zoomTarget = clamp((zoomTarget ?? zoom) * factor, MIN_ZOOM, MAX_ZOOM);
     zoomFrame ||= requestAnimationFrame(() => {
       const anchor = zoomAnchor; zoom = zoomTarget; zoomFrame = 0; zoomTarget = zoomAnchor = null;
-      draw(); scroll.scrollLeft = anchor.at * zoom - anchor.x; paintSoon(); onViewChange?.();
+      draw({ paint: false }); scroll.scrollLeft = anchor.at * zoom - anchor.x; paint(); onViewChange?.();
     });
   }
   scroll.addEventListener('wheel', event => {
@@ -578,7 +582,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   function paintSoon() {
     paintFrame ||= requestAnimationFrame(() => { paintFrame = 0; paint(); });
   }
-  function drawWave(ctx, clip, left, top, width, height) {
+  function drawWave(ctx, clip, left, top, width, height, viewport) {
     const buffer = assets.get(clip.asset)?.buffer;
     if (!buffer) return;
     const spectrum = spectrumNow(buffer);
@@ -587,7 +591,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     }
     const data = buffer.getChannelData(0), bins = spectrum?.peaks.length, loop = assets.get(clip.asset)?.loop ? buffer.duration : 0;
     const binSeconds = spectrum ? spectrum.durationMs / 1000 / bins : 0;
-    const startX = Math.max(TRACK_HEAD, Math.floor(left)), endX = Math.min(scroll.clientWidth, Math.ceil(left + width));
+    const startX = Math.max(TRACK_HEAD, Math.floor(left)), endX = Math.min(viewport, Math.ceil(left + width));
     let lastPass = null;
     for (let x = startX; x < endX; x++) {
       const a = clamp((x - left) / width, 0, 1), b = clamp((x + 1 - left) / width, 0, 1), span = clip.out - clip.in;
@@ -636,12 +640,16 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     if (waveCanvas.width !== Math.ceil(width * scale)) waveCanvas.width = Math.ceil(width * scale);
     if (waveCanvas.height !== Math.ceil(height * scale)) waveCanvas.height = Math.ceil(height * scale);
     const ctx = waveCanvas.getContext('2d'); ctx.setTransform(scale, 0, 0, scale, 0, 0); ctx.clearRect(0, 0, width, height);
+    renderRuler();
+    // Measure every lane before any clip is written, so layout is read once per paint.
+    const laneTops = new Map();
+    for (const [id, view] of rowViews) laneTops.set(id, view.lane.getBoundingClientRect().top - rect.top - y + 25);
     const visible = new Set();
     for (const clip of state.clips) {
       const view = rowViews.get(clip.track);
       if (!view) continue;
       const left = TRACK_HEAD + clip.at * zoom - scroll.scrollLeft, clipWidth = Math.max(8, clipDuration(clip) * zoom);
-      const top = view.lane.getBoundingClientRect().top - rect.top - y + 25;
+      const top = laneTops.get(clip.track);
       const shown = left + clipWidth >= TRACK_HEAD && left < width && top + 44 >= 0 && top < height;
       if (shown || drag?.clip.id === clip.id || clipViews.get(clip.id)?.contains(document.activeElement)) {
         let item = clipViews.get(clip.id);
@@ -651,7 +659,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
       }
       if (!shown) continue;
       ctx.globalAlpha = clip.mute || !trackAudible(state, trackOf(clip.track)) ? .35 : 1;
-      drawWave(ctx, clip, left + 1, top, clipWidth - 2, 44);
+      drawWave(ctx, clip, left + 1, top, clipWidth - 2, 44, width);
     }
     ctx.globalAlpha = 1;
     for (const [id, item] of clipViews) if (!visible.has(id)) { item.remove(); clipViews.delete(id); }
@@ -673,15 +681,14 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     head.volume = volume; volume.wrap.classList.add('is-inline'); controls.append(volume.wrap); head.append(name, controls);
     return head;
   }
-  function draw() {
+  function draw({ paint: paintNow = true } = {}) {
     TRACK_HEAD = parseFloat(getComputedStyle(container).getPropertyValue('--pl-head')) || 236;
     tempo.input.value = String(Math.round(state.bpm * 100) / 100); undo.disabled = !history.length; redo.disabled = !future.length;
     const extent = Math.min(LIMITS.seconds, Math.max(16, arrangementEnd(state) + 8)), width = Math.max(640, extent * zoom);
     grid.style.width = (width + TRACK_HEAD) + 'px'; grid.style.setProperty('--beat', (60 / state.bpm * zoom) + 'px');
-    ruler.style.width = width + 'px'; ruler.replaceChildren();
-    const barSeconds = 240 / state.bpm, barStep = Math.max(1, Math.ceil(55 / (barSeconds * zoom)));
-    for (let bar = 0; bar * barSeconds * zoom < width; bar += barStep) { const mark = node('span', '', String(bar + 1)); mark.style.left = (bar * barSeconds * zoom) + 'px'; ruler.append(mark); }
-    const band = node('div', 'pl-loop-band'), mark = node('div', 'pl-marker'); ruler.append(band, mark); renderLoopBand(band);
+    ruler.style.width = width + 'px'; rulerWidth = width;
+    if (loopBand.parentElement !== ruler) ruler.append(rulerMarks, loopBand, markerLine);
+    renderRuler(); renderLoopBand();
     const rows = [rulerRow];
     state.tracks.forEach((track, index) => {
       const host = channel?.(track, trackSource(track.id)) || null;
@@ -728,7 +735,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
         b.oncontextmenu = event => shelfMenu(event, asset); shelf.append(b);
       }
     }
-    updateSelection(); paint(); onViewChange?.();
+    updateSelection(); if (paintNow) paint(); onViewChange?.();
   }
   function updateClip(item, clip) {
     const name = assets.get(clip.asset).name;
@@ -756,11 +763,22 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     };
     return item;
   }
-  function renderLoopBand(band = grid.querySelector('.pl-loop-band')) {
+  // Bar numbers exist only around the visible span, so deep zoom stays light.
+  function renderRuler() {
+    const barSeconds = 240 / state.bpm, barPixels = barSeconds * zoom, barStep = Math.max(1, Math.ceil(55 / barPixels));
+    const view = scroll.clientWidth || 1200, from = Math.max(0, scroll.scrollLeft - view), to = Math.min(rulerWidth, scroll.scrollLeft + 2 * view);
+    const first = Math.floor(from / (barPixels * barStep)) * barStep, key = [zoom, state.bpm, rulerWidth, first, Math.ceil(to / (barPixels * barStep))].join('|');
+    if (key === rulerKey) return;
+    rulerKey = key;
+    const marks = [];
+    for (let bar = first; bar * barPixels < to; bar += barStep) { const mark = node('span', '', String(bar + 1)); mark.style.left = (bar * barPixels) + 'px'; marks.push(mark); }
+    rulerMarks.replaceChildren(...marks);
+  }
+  function renderLoopBand(band = loopBand) {
     if (!band) return;
     band.hidden = !loopRange;
     if (loopRange) { band.style.left = `${loopRange.start * zoom}px`; band.style.width = `${(loopRange.end - loopRange.start) * zoom}px`; }
-    const mark = grid.querySelector('.pl-marker'); if (mark) mark.style.left = `${marker * zoom}px`;
+    markerLine.style.left = `${marker * zoom}px`;
   }
   function updateSelection() {
     for (const id of extra) if (id === selected || !state.clips.some(c => c.id === id)) extra.delete(id);
@@ -843,11 +861,15 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
         if (lane) { clip.track = lane.dataset.track; item.style.transform = `translateY(${lane.getBoundingClientRect().top - home}px)`; }
       }
       drag.changed = true; item.style.left = `${clip.at * zoom}px`; item.style.width = `${Math.max(8, clipDuration(clip) * zoom)}px`;
-      engine?.update(playbackState(), transport()); paintSoon();
+      // One engine update per frame; a stretch-edge drag would queue a render per move,
+      // so its new speed is heard on release.
+      if (!(editMode === 'stretch' && drag.edge === 'right')) dragAudio ||= requestAnimationFrame(() => { dragAudio = 0; engine?.update(playbackState(), transport()); });
+      paintSoon();
     };
     const finish = cancel => {
       if (!drag) return;
       const gesture = drag; drag = null;
+      cancelAnimationFrame(dragAudio); dragAudio = 0;
       item.onpointermove = item.onpointerup = item.onpointercancel = item.onlostpointercapture = null;
       if (item.hasPointerCapture(gesture.id)) item.releasePointerCapture(gesture.id);
       item.style.transform = '';

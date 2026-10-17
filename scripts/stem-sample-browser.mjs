@@ -16,6 +16,8 @@ const ICONS = {
   up: 'M12 19V6m-6 6 6-6 6 6',
   refresh: 'M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5',
   close: 'M6 6l12 12M18 6 6 18',
+  maximize: 'M5 5h14v14H5z',
+  restore: 'M8 8h11v11H8zM5 16V5h11',
   play: 'M8 5v14l11-7z',
   stop: 'M7 7h10v10H7z',
   add: 'M12 5v14M5 12h14',
@@ -47,8 +49,17 @@ export function mountSampleBrowser({ t, importSamples, onToggle }) {
   const chooseButton = iconButton(ICONS.choose, t('Choose samples folder', 'Elegir carpeta de samples'), () => choose());
   const refreshButton = iconButton(ICONS.refresh, t('Refresh folder', 'Actualizar carpeta'), () => refresh());
   const closeButton = iconButton(ICONS.close, t('Close browser (Esc)', 'Cerrar browser (Esc)'), () => close());
-  head.title = t('Drag to move', 'Arrastrá para mover');
-  head.append(title, rootLabel, chooseButton, refreshButton, closeButton);
+  const maximizeButton = iconButton(ICONS.maximize, t('Maximize', 'Maximizar'), () => setMaximized(!win.classList.contains('is-maximized')));
+  head.title = t('Drag to move · double-click to maximize', 'Arrastrá para mover · doble clic para maximizar');
+  head.append(title, rootLabel, chooseButton, refreshButton, maximizeButton, closeButton);
+  function setMaximized(value) {
+    win.classList.toggle('is-maximized', value);
+    const label = value ? t('Restore size', 'Restaurar tamaño') : t('Maximize', 'Maximizar');
+    maximizeButton.innerHTML = svg(value ? ICONS.restore : ICONS.maximize);
+    maximizeButton.title = label; maximizeButton.setAttribute('aria-label', label); maximizeButton.setAttribute('aria-pressed', String(value));
+    scheduleRows(); requestAnimationFrame(drawWave);
+  }
+  head.addEventListener('dblclick', event => { if (!event.target.closest('button')) setMaximized(!win.classList.contains('is-maximized')); });
   const pathRow = node('div', 'sb-path');
   const upButton = iconButton(ICONS.up, t('Parent folder (Backspace)', 'Carpeta superior (Retroceso)'), () => parent());
   const crumb = node('span', 'sb-crumb'); pathRow.append(upButton, crumb);
@@ -109,9 +120,9 @@ export function mountSampleBrowser({ t, importSamples, onToggle }) {
     const top = Math.min(innerHeight - 48, Math.max(8, rect?.top ?? 96));
     Object.assign(win.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
   }
-  const saveRect = () => { const box = win.getBoundingClientRect(); write(RECT_KEY, { left: box.left, top: box.top, width: box.width, height: box.height }); };
+  const saveRect = () => { if (win.classList.contains('is-maximized')) return; const box = win.getBoundingClientRect(); write(RECT_KEY, { left: box.left, top: box.top, width: box.width, height: box.height }); };
   head.onpointerdown = event => {
-    if (event.button !== 0 || event.target.closest('button')) return;
+    if (event.button !== 0 || event.target.closest('button') || win.classList.contains('is-maximized')) return;
     event.preventDefault();
     const box = win.getBoundingClientRect(), dx = event.clientX - box.left, dy = event.clientY - box.top;
     head.setPointerCapture(event.pointerId);

@@ -84,3 +84,42 @@ test('Signalsmith stretch shifts pitch while keeping length, and changes length 
   assert.equal(slow[0].length, tone.length * 2);
   assert.ok(Math.abs(frequency(slow[0], rate, rate, rate * 3) - 440) < 10, 'pitch kept at half speed');
 });
+
+test('engine edits replace only the edited clip; untouched clips keep sounding', async () => {
+  const { createPlaylistEngine } = await import('./stem-playlist-audio.mjs');
+  globalThis.AudioContext ||= class {};
+  const param = () => ({ value: 1, setValueAtTime() {}, linearRampToValueAtTime() {}, setTargetAtTime() {}, cancelAndHoldAtTime() {} });
+  const starts = [], stops = [];
+  const context = Object.assign(Object.create(AudioContext.prototype), {
+    currentTime: 1,
+    createGain: () => ({ gain: param(), connect: node => node, disconnect() {} }),
+    createBufferSource() {
+      const source = { playbackRate: { value: 1 }, connect: node => node, disconnect() {}, addEventListener() {},
+        start: (when, offset) => starts.push({ buffer: source.buffer, when, offset }), stop: at => stops.push({ buffer: source.buffer, at }) };
+      return source;
+    },
+  });
+  const buffer = name => ({ name, duration: 8, sampleRate: 44100, length: 8 * 44100, numberOfChannels: 1 });
+  const assets = new Map([['a', { id: 'a', buffer: buffer('a'), version: 0 }], ['b', { id: 'b', buffer: buffer('b'), version: 0 }]]);
+  const engine = createPlaylistEngine({ context, output: {}, cache: { has: () => true, lookup: () => null, request: async () => {} }, assets: () => assets });
+  const state = { version: 1, bpm: 120, tracks: [{ id: 't1', gain: 1 }, { id: 't2', gain: 1 }],
+    clips: [clip(0, 8, { id: 'x', asset: 'a', track: 't1' }), clip(0, 8, { id: 'y', asset: 'b', track: 't2' })] };
+  const transport = { rate: 1, loop: { start: 0, end: 8 } };
+  engine.play(state, 0, transport);
+  try {
+  assert.equal(starts.length, 2);
+  context.currentTime = 2;
+  // Ten trims of clip x while both play: only x is replaced.
+  for (let i = 1; i <= 10; i++) { state.clips[0] = { ...state.clips[0], out: 7.9 - i * .01 }; engine.update(state, transport); }
+  assert.equal(starts.filter(s => s.buffer.name === 'b').length, 1, 'Clip y never restarts');
+  assert.equal(stops.filter(s => s.buffer.name === 'b').length, 1, 'Clip y only has its natural end');
+  assert.equal(starts.filter(s => s.buffer.name === 'a').length, 11);
+  // The replacement starts where the transport is (playback began at 1.03), not at the clip start.
+  assert.ok(Math.abs(starts.at(-1).offset - .975) < .01, `offset ${starts.at(-1).offset}`);
+  // Track gain only: nothing restarts. Speed: a full restart.
+  state.tracks[1] = { ...state.tracks[1], gain: .5 }; engine.update(state, transport);
+  assert.equal(starts.length, 12);
+  engine.update(state, { ...transport, rate: 1.5 });
+  assert.equal(starts.length, 14);
+  } finally { engine.stop(); }
+});

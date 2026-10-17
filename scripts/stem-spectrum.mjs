@@ -13,8 +13,15 @@ export function spectrumOf(buffer) {
 
 export const spectrumNow = buffer => ready.get(buffer);
 
-// Same mapping as the stem waveforms: bass red, mids green, treble blue.
+// Same mapping as the stem waveforms: bass red, mids green, treble blue. Painters call
+// this once per pixel column, so colors are built once and reused.
+const colors = new Map();
 export function spectrumColor(low, mid, high) {
   const energy = Math.max(low, mid, high);
-  return energy > 0 ? `rgb(${[low, mid, high].map(value => Math.round(55 + 190 * Math.sqrt(value / energy))).join(',')})` : '#858d96';
+  if (!(energy > 0)) return '#858d96';
+  const r = Math.round(55 + 190 * Math.sqrt(low / energy)), g = Math.round(55 + 190 * Math.sqrt(mid / energy)), b = Math.round(55 + 190 * Math.sqrt(high / energy));
+  const key = r << 16 | g << 8 | b;
+  let color = colors.get(key);
+  if (!color) { color = `rgb(${r},${g},${b})`; if (colors.size < 65536) colors.set(key, color); }
+  return color;
 }

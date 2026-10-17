@@ -150,10 +150,14 @@ export function createStretchCache({ budget = 192 * 1024 * 1024, onChange = () =
 // ahead, so edits are heard on the next block instead of after a full mix render.
 // Stretched clips not rendered yet join in place as soon as their render lands.
 // `transport` is { loop: {start, end} | null, rate }; rate scales the timeline.
+// Edits replace only the clips that changed: untouched clips keep sounding.
 export function createPlaylistEngine({ context, output, cache, assets, onEnded, onError }) {
   const master = context.createGain(), tracks = new Map(), live = new Set();
   master.connect(output);
   let session = null, signature = '', timer = 0;
+  const versionOf = clip => assets().get(clip.asset)?.version || 0;
+  // A clip's identity for scheduling: its fields plus the version of its audio.
+  const clipSignature = clip => JSON.stringify([clip, versionOf(clip)]);
   function signatureOf(state, transport) {
     const versions = [...new Set(state.clips.map(clip => clip.asset))].map(id => assets().get(id)?.version || 0);
     return JSON.stringify([state.clips, transport.loop, transport.rate, versions]);
@@ -166,13 +170,13 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
   function mixTracks(state) {
     for (const track of state.tracks) trackGain(track.id).gain.setTargetAtTime(trackAudible(state, track) ? track.gain : 0, context.currentTime, .005);
   }
-  function retire() {
+  function retire(clipId = null) {
     const at = context.currentTime;
-    for (const { source, gain } of live) {
-      gain.gain.cancelAndHoldAtTime(at); gain.gain.linearRampToValueAtTime(0, at + RESTART_FADE);
-      source.stop(at + RESTART_FADE);
+    for (const node of [...live]) {
+      if (clipId !== null && node.clipId !== clipId) continue;
+      node.gain.gain.cancelAndHoldAtTime(at); node.gain.gain.linearRampToValueAtTime(0, at + RESTART_FADE);
+      node.source.stop(at + RESTART_FADE); live.delete(node);
     }
-    live.clear();
   }
   function schedule(owner, clip, when, offset, limit) {
     const asset = assets().get(clip.asset);
@@ -183,10 +187,19 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
       const stretched = stretch ? cache.lookup(clip, asset) : null;
       if (stretch && !stretched) return;
       const node = startClip(context, trackGain(clip.track), clip, asset, stretched, when, offset, { rate: owner.rate, limit });
-      if (node) { live.add(node); node.source.addEventListener('ended', () => live.delete(node)); }
+      if (node) { node.clipId = clip.id; live.add(node); node.source.addEventListener('ended', () => live.delete(node)); }
     };
     if (!stretch || cache.has(clip, asset)) start();
     else cache.request(clip, asset).then(start, onError);
+  }
+  // Every pass of `clips` between timeline elapsed `a` and `b`; the first window also
+  // picks up clips already sounding at `a`.
+  function scheduleRange(owner, clips, a, b) {
+    transportWindows(a, b, owner.from, owner.length, owner.loop).forEach((window, index) => {
+      for (const item of clipsInWindow(clips, window.from, window.to, window.entry || index === 0)) {
+        schedule(owner, item.clip, owner.ctxStart + (window.zero + item.at) / owner.rate, item.offset, window.end - item.at);
+      }
+    });
   }
   function tick() {
     const owner = session;
@@ -202,11 +215,12 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     }
     owner.horizon = target;
   }
+  const loopOf = transport => transport.loop && transport.loop.end > transport.loop.start ? { ...transport.loop } : null;
   function begin(state, from, transport, editing = false) {
     retire();
     clearInterval(timer);
     const snapshot = structuredClone(state), length = arrangementEnd(snapshot);
-    const loop = transport.loop && transport.loop.end > transport.loop.start ? { ...transport.loop } : null;
+    const loop = loopOf(transport);
     if (!(length > 0) || (loop && loop.start >= length)) { session = null; return false; }
     if (loop ? from < loop.start || from >= loop.end : from >= length) from = loop ? loop.start : 0;
     mixTracks(snapshot);
@@ -228,14 +242,54 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     retire(); session = null; clearInterval(timer);
     return at;
   }
+  const sameLoop = (a, b) => (!a && !b) || (!!a && !!b && Math.abs(a.start - b.start) < 1e-9 && Math.abs(a.end - b.end) < 1e-9);
+  // Applies an edit without a restart: changed, added and removed clips are replaced
+  // over the span already scheduled. Returns false when a restart is needed instead.
+  function patch(state, transport) {
+    const owner = session, loop = loopOf(transport), length = arrangementEnd(state);
+    if ((transport.rate || 1) !== owner.rate || !(length > 0) || (loop && loop.start >= length)) return false;
+    if (!sameLoop(loop, owner.loop) || length !== owner.length) {
+      const position = now(), elapsed = Math.max(0, context.currentTime - owner.ctxStart) * owner.rate;
+      // A new loop or end only matters at the wrap: restart when one is close.
+      const reach = position + (owner.horizon - elapsed) + .05;
+      const wrap = item => item ? item.end : Infinity;
+      if (owner.loop && reach >= wrap(owner.loop)) return false;
+      if (loop && (reach >= loop.end || position < loop.start || position >= loop.end)) return false;
+      if (!loop && position >= length) return false;
+      // Rebase the clock on the current position; the scheduled span stays valid.
+      owner.from = position; owner.ctxStart += elapsed / owner.rate; owner.horizon = Math.max(0, owner.horizon - elapsed);
+      owner.loop = loop; owner.length = length;
+    }
+    const before = new Map(owner.state.clips.map(clip => [clip.id, clipSignature(clip)]));
+    const snapshot = structuredClone(state);
+    const changed = snapshot.clips.filter(clip => before.get(clip.id) !== clipSignature(clip));
+    const kept = new Set(snapshot.clips.map(clip => clip.id));
+    owner.state = snapshot;
+    mixTracks(snapshot);
+    for (const id of before.keys()) if (!kept.has(id)) retire(id);
+    for (const clip of changed) {
+      const asset = assets().get(clip.asset), wanted = clipSignature(clip);
+      const replace = () => {
+        if (session !== owner || !owner.state.clips.some(item => item.id === clip.id && clipSignature(item) === wanted)) return;
+        retire(clip.id);
+        scheduleRange(owner, [clip], Math.max(0, (context.currentTime + .005 - owner.ctxStart) * owner.rate), owner.horizon);
+      };
+      // A stretched clip keeps its previous version audible until the new render lands.
+      if (asset && before.has(clip.id) && needsStretch(clip) && !cache.has(clip, asset)) cache.request(clip, asset).then(replace, onError);
+      else replace();
+    }
+    return true;
+  }
   return {
     play: begin,
-    // Track mix changes ramp the track gains; any clip, audio, loop or speed change
-    // restarts the schedule from the current position with a 10 ms crossfade.
+    // Track mix changes ramp the track gains; clip edits replace only the edited clips.
+    // Speed changes, and loop or end changes right at a wrap, restart from the position.
     update(state, transport) {
       if (!session) return;
-      if (signatureOf(state, transport) === signature) mixTracks(state);
-      else begin(state, now(), transport, true);
+      const next = signatureOf(state, transport);
+      if (next === signature) { mixTracks(state); return; }
+      if (!patch(state, transport)) { begin(state, now(), transport, true); return; }
+      signature = next;
     },
     stop, now,
     playing: () => !!session,

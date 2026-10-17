@@ -73,7 +73,7 @@ const { chromium } = require('playwright');
       await Promise.all(Array.from({ length: 1500 }, (_, i) => put(big, `f${i}.wav`, tiny)));
     });
     const playlist = page.locator('#playlist'), dialog = page.getByRole('dialog', { name: 'Browser' });
-    const browserButton = playlist.locator('.pl-tools').getByRole('button', { name: 'Sample browser', exact: true });
+    const browserButton = page.locator('#transport').getByRole('button', { name: 'Sample browser', exact: true });
     const names = () => dialog.locator('.sb-row span').allTextContents();
     const row = name => dialog.locator('.sb-row', { hasText: name });
     const playButton = dialog.locator('.sb-controls .sb-icon').first();
@@ -195,6 +195,12 @@ const { chromium } = require('playwright');
     assert.ok(Math.abs(after.x - (before.x - 200)) < 2 && Math.abs(after.y - (before.y + 50)) < 2, 'The window moved');
     await playlist.locator('.pl-scroll').click({ position: { x: 300, y: 4 } });
     assert.equal(await dialog.isVisible(), true, 'Clicking the Playlist keeps the browser open');
+    // Maximize fills the viewport and restores the moved rectangle.
+    await dialog.getByRole('button', { name: 'Maximize' }).click();
+    const full = await dialog.boundingBox();
+    assert.ok(full.width > 1150 && full.height > 950, 'Maximized browser fills the page');
+    await dialog.getByRole('button', { name: 'Restore size' }).click();
+    assert.ok(Math.abs((await dialog.boundingBox()).x - after.x) < 2);
     // The root is remembered: reopening needs no picker.
     await page.reload();
     await browserButton.click();
