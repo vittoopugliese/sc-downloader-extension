@@ -1,5 +1,5 @@
 import { pluginShell } from './stem-channel-rack.mjs';
-import { createKnob } from './stem-playlist.mjs';
+import { createKnob } from './ui-knob.mjs';
 
 export const FX_ICON = 'plugin';
 

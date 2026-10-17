@@ -5,6 +5,7 @@ import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
 import { mountSampleBrowser } from './stem-sample-browser.mjs';
 import { createButton } from './ui-button.mjs';
 import { createMetronome } from './stem-metronome.mjs';
+import { createKnob } from './ui-knob.mjs';
 
 const MIN_ZOOM = 8, MAX_ZOOM = 600;
 // The workspace header's stem palette; user tracks continue in warm tints.
@@ -81,51 +82,6 @@ export function contextMenu(event, items) {
   openMenu = { menu, close };
   entries()[0]?.focus({ preventScroll: true });
   return openMenu;
-}
-
-// Rotary control: vertical drag (Shift for fine), arrows (Shift for coarse), Home/End,
-// double-click resets. onInput runs while dragging; onCommit once with the previous value.
-export function createKnob({ label, min, max, step, coarse, value, reset, format, log = false, hint = '', onInput, onCommit }) {
-  const wrap = document.createElement('div'), dial = document.createElement('button'), caption = document.createElement('span'), output = document.createElement('output');
-  wrap.className = 'pl-knob'; caption.className = 'pl-knob-label'; caption.textContent = label; output.className = 'pl-knob-value';
-  dial.type = 'button'; dial.className = 'pad-knob'; dial.setAttribute('role', 'slider'); dial.setAttribute('aria-label', label);
-  dial.setAttribute('aria-valuemin', String(min)); dial.setAttribute('aria-valuemax', String(max)); dial.setAttribute('aria-orientation', 'vertical');
-  const unit = v => log ? Math.log(v / min) / Math.log(max / min) : (v - min) / (max - min);
-  const snapValue = v => clamp(Number((Math.round(v / step) * step).toFixed(4)), min, max);
-  const fromUnit = u => snapValue(log ? min * (max / min) ** clamp(u, 0, 1) : min + clamp(u, 0, 1) * (max - min));
-  let current = value, drag = null;
-  function show(next) {
-    current = next; const text = format(next);
-    dial.style.setProperty('--knob-angle', `${-135 + clamp(unit(next), 0, 1) * 270}deg`);
-    dial.setAttribute('aria-valuenow', String(next)); dial.setAttribute('aria-valuetext', text);
-    dial.title = hint ? `${label}: ${text} · ${hint}` : `${label}: ${text}`; output.textContent = text;
-  }
-  const finish = (next, previous) => { if (next !== previous) onCommit(next, previous); };
-  dial.onpointerdown = event => {
-    if (event.button !== 0 || dial.disabled) return;
-    event.preventDefault(); event.stopPropagation(); dial.setPointerCapture(event.pointerId); dial.focus({ preventScroll: true });
-    drag = { id: event.pointerId, y: event.clientY, unit: unit(current), start: current };
-  };
-  dial.onpointermove = event => {
-    if (drag?.id !== event.pointerId) return;
-    const next = fromUnit(drag.unit + (drag.y - event.clientY) / (event.shiftKey ? 1200 : 150));
-    if (next !== current) { show(next); onInput?.(next); }
-  };
-  dial.onpointerup = dial.onpointercancel = event => {
-    if (drag?.id !== event.pointerId) return;
-    const start = drag.start; drag = null; finish(current, start);
-  };
-  dial.ondblclick = () => { const previous = current; show(reset); finish(reset, previous); };
-  dial.onkeydown = event => {
-    const keys = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 };
-    if (!(event.key in keys) && event.key !== 'Home' && event.key !== 'End') return;
-    event.preventDefault(); event.stopPropagation();
-    const previous = current;
-    show(event.key === 'Home' ? min : event.key === 'End' ? max : snapValue(current + keys[event.key] * (event.shiftKey ? coarse : step)));
-    finish(current, previous);
-  };
-  show(value); wrap.append(caption, dial, output);
-  return { wrap, dial, show, value: () => current };
 }
 
 // The arrangement and the only transport of the Stem Extractor. The host page adds
@@ -784,9 +740,9 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     }
     // Track volume is heard while dragging; one undo step on release.
     const volume = createKnob({ label: `${t('Volume', 'Volumen')} ${track.name}`, min: 0, max: 200, step: 1, coarse: 10, value: Math.round(track.gain * 100), reset: 100,
-      hint: resetHint, format: v => `${v}%`, onInput: v => edit(() => { trackOf(trackId).gain = v / 100; }, { live: true }),
+      size: 'sm', inline: true, hint: resetHint, format: v => `${v}%`, onInput: v => edit(() => { trackOf(trackId).gain = v / 100; }, { live: true }),
       onCommit: v => edit(() => { trackOf(trackId).gain = v / 100; }) });
-    head.volume = volume; volume.wrap.classList.add('is-inline'); controls.append(volume.wrap); head.append(name, controls);
+    head.volume = volume; controls.append(volume.wrap); head.append(name, controls);
     return head;
   }
   function draw({ paint: paintNow = true } = {}) {

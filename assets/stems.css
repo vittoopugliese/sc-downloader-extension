@@ -232,12 +232,8 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .stem-volume>span{display:none}
 #original-waveform{margin-left:11px;margin-right:11px}
 .stem output{grid-column:auto;grid-row:auto;font:9px ui-monospace,monospace;text-align:center}
-.stem .pad-knob{position:relative;width:24px;height:24px;padding:0;border:1px solid #555;border-radius:50%;background:radial-gradient(circle at 35% 30%,#484848,#222);cursor:ns-resize;touch-action:none}
-.pad-knob::after{content:'';position:absolute;width:2.5px;height:7px;left:calc(50% - 1.25px);top:2.5px;border-radius:2px;background:#ff8a4c;transform-origin:50% 8.5px;transform:rotate(var(--knob-angle))}
-.stem .pad-knob:hover{border-color:#ff8a4c}
-.stem .pad-knob:focus-visible{outline:2px solid #ff8a4c;outline-offset:2px}
 @media(max-width:600px){.prepare,#audition{padding:14px}.stem{padding:8px;gap:6px}#original-waveform{margin-left:9px;margin-right:9px}}
-@media(max-width:380px){.stem h2{font-size:11px;gap:4px}.stem-actions{gap:3px}.stem-actions button,.stem .download{padding:4px 5px;font-size:9px}.stem-actions .pad-knob{padding:0}.stem .download .icon{width:12px;height:12px}.source-cover{width:52px;height:52px}}
+@media(max-width:380px){.stem h2{font-size:11px;gap:4px}.stem-actions{gap:3px}.stem-actions button,.stem .download{padding:4px 5px;font-size:9px}.stem .download .icon{width:12px;height:12px}.source-cover{width:52px;height:52px}}
 #import-dialog{width:min(480px,calc(100vw - 40px))}
 #import-name{box-sizing:border-box;width:100%;margin:8px 0 16px}
 #import-dialog input{padding:8px;border:1px solid #555;border-radius:5px;background:#191919;color:var(--ink)}
@@ -434,11 +430,8 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .stem-fx .fx-enable::before{content:'';width:8px;height:8px;border:1px solid #777;border-radius:50%;background:#303030}
 .stem-fx .fx-enable[aria-pressed=true]::before{background:#ff9955;border-color:#ffbb88;box-shadow:0 0 8px #ff995555}
 .stem-fx .fx-parameters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 8px;align-items:center}
-.stem-fx .pl-knob{min-width:0;display:grid;justify-items:center;gap:5px}
-.stem-fx .pl-knob-label,.stem-fx .fx-room{font-size:10px;color:#c2b9b0;text-align:center}
-.stem-fx .pl-knob-value{font-size:10px;color:#ffbc8e}
-.stem-fx .pad-knob{position:relative;width:32px;height:32px;min-height:32px;padding:0;border:1px solid #655344;border-radius:50%;background:radial-gradient(circle at 35% 30%,#484038,#222);cursor:ns-resize;touch-action:none}
-.stem-fx .pad-knob::after{height:9px;transform-origin:50% 12.5px}
+.stem-fx .ui-knob{min-width:0;gap:5px}
+.stem-fx .ui-knob-label,.stem-fx .fx-room{font-size:10px;color:#c2b9b0;text-align:center}
 .stem-fx .fx-room{display:grid;gap:6px;min-width:0}
 .stem-fx .fx-room select{width:100%;min-width:0;padding:4px;background:#222;border:1px solid #655344;border-radius:4px;color:#eee;font-size:11px}
 .stem-fx .fx-freeze{grid-column:span 2;align-self:center;white-space:normal}

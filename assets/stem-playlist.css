@@ -12,11 +12,11 @@
 .playlist{padding:0 18px 18px}
 .pl-ui button,.pl-ui select,.pl-ui input{font:11px Arial,Helvetica,sans-serif}
 /* Plain playlist buttons (track mute/solo, library chips). Toolbar and tool buttons are the
-   shared ui-btn (assets/ui-button.css). */
-.pl-ui button:not(.ui-btn){min-height:30px;padding:6px 10px;border:1px solid #45423e;border-radius:6px;background:#242321;color:#ece8e2;cursor:pointer}
-.pl-ui button:not(.ui-btn):hover:enabled{border-color:#897564;background:#35312b}
-.pl-ui button:not(.ui-btn):disabled{opacity:.4;cursor:default}
-.pl-ui button:not(.ui-btn)[aria-pressed=true]{border-color:var(--orange);background:#42291d;color:#ffad80}
+   shared ui-btn (assets/ui-button.css); knobs are the shared ui-knob (assets/ui-knob.css). */
+.pl-ui button:not(.ui-btn,.ui-knob-dial){min-height:30px;padding:6px 10px;border:1px solid #45423e;border-radius:6px;background:#242321;color:#ece8e2;cursor:pointer}
+.pl-ui button:not(.ui-btn,.ui-knob-dial):hover:enabled{border-color:#897564;background:#35312b}
+.pl-ui button:not(.ui-btn,.ui-knob-dial):disabled{opacity:.4;cursor:default}
+.pl-ui button:not(.ui-btn,.ui-knob-dial)[aria-pressed=true]{border-color:var(--orange);background:#42291d;color:#ffad80}
 .pl-ui :focus-visible{outline:2px solid var(--orange);outline-offset:2px}
 .pl-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:7px}
 .pl-toolbar{padding:9px 12px;border:1px solid var(--pl-edge);border-radius:10px;background:linear-gradient(180deg,#2b2a28,#242321)}
@@ -64,7 +64,7 @@
 .pl-ruler-row .pl-track-head{border-left-color:#45423e;background:var(--pl-panel);font:9px ui-monospace,monospace;letter-spacing:1.3px;color:#b9b3ab}
 .pl-track-name{width:100%;border:0;background:transparent;color:#f2f2f2;font-weight:bold!important;outline-offset:0}
 .pl-track-controls{display:flex;align-items:center;gap:4px}
-.pl-ui .pl-track-controls button:not(.pad-knob){min-height:22px;padding:1px 6px;font-size:9px}
+.pl-ui .pl-track-controls button:not(.ui-knob-dial){min-height:22px;padding:1px 6px;font-size:9px}
 .pl-grid-row.is-silent .pl-lane{opacity:.45}
 .pl-lane{position:relative;flex-shrink:0;min-height:76px;border-bottom:1px solid #2c2b29;background:repeating-linear-gradient(90deg,#ffffff07 0 1px,transparent 1px var(--beat)),repeating-linear-gradient(90deg,#ffffff12 0 1px,transparent 1px calc(var(--beat)*4)),var(--pl-night)}
 .pl-ruler{position:relative;flex-shrink:0;border-bottom:1px solid var(--pl-edge);background:var(--pl-panel);color:#97938e;font:10px ui-monospace,monospace;cursor:crosshair;touch-action:none;user-select:none}
@@ -79,7 +79,7 @@
 .pl-track-head.stem h2 .icon{width:15px;height:15px;flex-shrink:0;color:var(--track-color)}
 .pl-ui .pl-track-head.stem .stem-solo{flex-shrink:0;width:20px;height:28px;padding:0;border:0;background:transparent}
 .pl-track-head.stem .stem-volume{flex-direction:column;gap:1px;flex-shrink:0;margin:0}
-.pl-track-head.stem .stem-volume .pl-knob-value{min-width:0;text-align:center}
+.pl-track-head.stem .stem-volume .ui-knob-value{min-width:0;text-align:center}
 .pl-ui .pl-track-head.stem .stem-more{flex-shrink:0;width:22px;height:30px;min-height:0;padding:0;border:0;border-radius:5px;background:transparent;box-shadow:none;color:#b9b3ab}
 .pl-ui .pl-track-head.stem .stem-more:hover,.pl-ui .pl-track-head.stem .stem-more:focus-visible{background:#ffffff14;color:#fff}
 .stem-more .icon{width:16px;height:16px;fill:currentColor;stroke:none}
@@ -115,19 +115,6 @@
 .pl-hint,.pl-message{margin:0;font-size:10px;line-height:1.6;color:var(--pl-muted)}
 .pl-message{color:#ffad80}
 .pl-message:empty{display:none}
-
-/* Knobs: vertical drag, arrows, double-click resets. Same dial as the stem volume. */
-.pl-knob{display:grid;justify-items:center;gap:3px;min-width:52px}
-.pl-knob-label{font:9px ui-monospace,monospace;letter-spacing:1px;color:#b9b3ab;text-transform:uppercase}
-.pl-knob-value{font:10px ui-monospace,monospace;color:#f2f2f2}
-.pl-ui .pad-knob{position:relative;width:32px;height:32px;min-height:0;padding:0;border:1px solid #555;border-radius:50%;background:radial-gradient(circle at 35% 30%,#484848,#222);cursor:ns-resize;touch-action:none}
-.pl-ui .pad-knob::after{top:3px;height:9px;transform-origin:50% 12px}
-.pl-ui .pad-knob:hover:enabled{border-color:#ff8a4c;background:radial-gradient(circle at 35% 30%,#4d4642,#222)}
-.pl-knob.is-inline{display:flex;align-items:center;gap:4px;min-width:0;margin-left:2px}
-.pl-knob.is-inline .pl-knob-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
-.pl-ui .pl-knob.is-inline .pad-knob{width:24px;height:24px}
-.pl-ui .pl-knob.is-inline .pad-knob::after{top:2.5px;height:7px;transform-origin:50% 8.5px}
-.pl-knob.is-inline .pl-knob-value{min-width:30px;font-size:9px;color:var(--pl-muted)}
 
 .pl-clip.is-stretching::after{content:'';position:absolute;inset:19px 0 0;background:repeating-linear-gradient(135deg,#ffffff14 0 6px,transparent 6px 12px);animation:pl-stretch 1s linear infinite;pointer-events:none}
 @keyframes pl-stretch{to{background-position:17px 0}}

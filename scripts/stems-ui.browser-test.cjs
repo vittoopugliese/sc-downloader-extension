@@ -100,7 +100,7 @@ const { chromium } = require('playwright');
       assert.ok(canvas.width <= view.width && canvas.height <= await page.evaluate(() => innerHeight), 'Canvas is bounded to the viewport');
     };
     await checkAlignment();
-    const knob = drumHead.locator('.pad-knob');
+    const knob = drumHead.locator('.ui-knob-dial');
     await knob.press('Home'); assert.equal(await knob.getAttribute('aria-valuenow'), '0');
     await knob.press('ArrowUp'); assert.equal(await knob.getAttribute('aria-valuenow'), '1');
     await knob.dblclick(); assert.equal(await knob.getAttribute('aria-valuenow'), '100');

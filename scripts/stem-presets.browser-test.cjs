@@ -91,8 +91,8 @@ async function reopenExtract(page) {
       return saved.samples[sampleId]?.size > 44 && saved.record.settings.playlist.samples.some(sample => sample.id === sampleId);
     }, rackSampleId);
     assert.equal((await stored()).record.settings.playlist.clips.length, clipsBeforeRackImport);
-    await page.locator('.pl-stem-head[data-stem=drums] .pad-knob').press('Home');
-    await page.locator('.pl-stem-head[data-stem=drums] .pad-knob').press('Shift+ArrowUp');
+    await page.locator('.pl-stem-head[data-stem=drums] .ui-knob-dial').press('Home');
+    await page.locator('.pl-stem-head[data-stem=drums] .ui-knob-dial').press('Shift+ArrowUp');
     await page.locator('.pl-stem-head[data-stem=drums] .stem-enable').click();
     // Pad A of the drums, cut by hand in the channel rack (right-click arms it).
     { await page.locator('.pl-stem-head[data-stem=drums] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
@@ -117,13 +117,13 @@ async function reopenExtract(page) {
     await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 1);
     assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'false');
     await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
-    await page.locator('.pl-stem-head[data-stem=drums] .pad-knob').waitFor();
+    await page.locator('.pl-stem-head[data-stem=drums] .ui-knob-dial').waitFor();
     assert.equal(await page.evaluate(() => inferences), 0, 'Loading never starts model inference');
     assert.equal(await page.locator('#track').textContent(), 'My saved mix');
     assert.equal(await rackSample.getAttribute('data-channel'), rackSampleKey, 'Rack-only sample survives reopening');
     assert.equal(await rackSample.locator('.rack-channel-mode').inputValue(), 'oneShot');
     assert.equal((await stored()).record.settings.playlist.clips.length, clipsBeforeRackImport);
-    assert.equal(await page.locator('.pl-stem-head[data-stem=drums] .pad-knob').getAttribute('aria-valuenow'), '10');
+    assert.equal(await page.locator('.pl-stem-head[data-stem=drums] .ui-knob-dial').getAttribute('aria-valuenow'), '10');
     assert.equal(await page.locator('.pl-stem-head[data-stem=drums] .stem-enable').getAttribute('aria-checked'), 'false');
     { await page.locator('.pl-stem-head[data-stem=drums] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
     assert.equal(Number(await page.locator('#stem-rack .stem-pad-marker').first().getAttribute('data-start')), savedStart);

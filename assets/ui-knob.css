@@ -1,0 +1,16 @@
+/* The shared knob (scripts/ui-knob.mjs): a round dial with an orange tick, its label above
+   and its value below. Sizes: md 32 px (clip inspector, FX window), sm 24 px (track volume).
+   `button.ui-knob-dial` outranks the page's generic button rules, so the dial stays round. */
+.ui-knob{--knob-size:32px;--knob-tick-top:3px;--knob-tick-height:9px;--knob-tick-origin:12px;display:grid;justify-items:center;gap:4px;min-width:52px}
+.ui-knob--sm{--knob-size:24px;--knob-tick-top:2.5px;--knob-tick-height:7px;--knob-tick-origin:8.5px}
+.ui-knob-label{font:9px ui-monospace,monospace;letter-spacing:1px;color:#c2b9b0;text-align:center;text-transform:uppercase}
+.ui-knob-value{font:10px ui-monospace,monospace;color:#ffbc8e;text-align:center}
+button.ui-knob-dial{position:relative;display:block;flex-shrink:0;width:var(--knob-size);height:var(--knob-size);min-width:0;min-height:0;margin:0;padding:0;border:1px solid #655344;border-radius:50%;background:radial-gradient(circle at 35% 30%,#484038,#222);box-shadow:none;cursor:ns-resize;touch-action:none;transition:border-color .15s}
+button.ui-knob-dial::after{content:'';position:absolute;top:var(--knob-tick-top);left:calc(50% - 1.25px);width:2.5px;height:var(--knob-tick-height);border-radius:2px;background:#ff8a4c;transform-origin:50% var(--knob-tick-origin);transform:rotate(var(--knob-angle,-135deg))}
+button.ui-knob-dial:hover:enabled{border-color:#ff8a4c;background:radial-gradient(circle at 35% 30%,#4d4642,#222)}
+button.ui-knob-dial:focus-visible{outline:2px solid #ff8a4c;outline-offset:2px}
+button.ui-knob-dial:disabled{opacity:.4;cursor:default}
+/* Inline: dial and value side by side; the label is for screen readers only. */
+.ui-knob--inline{display:flex;align-items:center;gap:4px;min-width:0}
+.ui-knob--inline .ui-knob-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.ui-knob--inline .ui-knob-value{min-width:30px;font-size:9px;color:#b8b3ad}

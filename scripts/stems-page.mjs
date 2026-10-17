@@ -6,7 +6,8 @@ import { createStemLoop } from './stem-loop.mjs';
 import { SAMPLE_RATE, MAX_SECONDS, STEMS, encodeWav } from './stem-audio.mjs';
 import { MODEL } from './stem-model.mjs';
 import { mountStemLibrary } from './stem-library-ui.mjs';
-import { CHANNEL_COLORS, contextMenu, createKnob, mountPlaylist } from './stem-playlist.mjs';
+import { CHANNEL_COLORS, contextMenu, mountPlaylist } from './stem-playlist.mjs';
+import { createKnob } from './ui-knob.mjs';
 import { setButtonContent } from './ui-button.mjs';
 import { mountExtractDialog } from './stem-extract-dialog.mjs';
 import { mountModuleWindow } from './stem-module-window.mjs';
@@ -732,10 +733,10 @@ function buildChannel(stem, wav, trackName = null) {
   const hearOnly = () => playlist.edit(state => { for (const track of state.tracks) { track.mute = (track.stem || track.id) !== stem; track.solo = false; } });
   enable.oncontextmenu = event => { event.preventDefault(); event.stopPropagation(); hearOnly(); };
   const volume = createKnob({ label: `${text('volume')} ${name}`, min: 0, max: 200, step: 1, coarse: 10, value: 100, reset: 100,
-    hint: text('resetVolume'), format: value => `${value}%`,
+    size: 'sm', inline: true, hint: text('resetVolume'), format: value => `${value}%`,
     onInput: value => editChannel(stem, track => { track.gain = value / 100; }, { live: true }),
     onCommit: value => editChannel(stem, track => { track.gain = value / 100; }) });
-  volume.wrap.classList.add('is-inline', 'stem-volume');
+  volume.wrap.classList.add('stem-volume');
   const link = document.createElement('a'); link.className = 'download';
   const url = wav ? URL.createObjectURL(wav) : ''; if (url) urls.push(url);
   link.href = url; link.download = `${title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 80)}_${stem}.wav`;
