@@ -500,7 +500,8 @@
     if (!ui) return;
     const logoUrl = document.documentElement.getAttribute(EXTENSION_LOGO_ATTRIBUTE);
     if (logoUrl) { ui.brandLogo.src = logoUrl; ui.brandLogo.hidden = false; }
-    ui.triggerLogo.hidden = false;
+    const toolkitUrl = document.documentElement.getAttribute("data-scdl-extension-toolkit-url");
+    if (toolkitUrl) { ui.triggerLogo.src = toolkitUrl; ui.triggerLogo.hidden = false; }
     ui.detachIcon.hidden = false;
     ui.trashIcon.hidden = false;
   }
@@ -3729,7 +3730,7 @@
           aria-label="Playback speed 1x"
           aria-haspopup="dialog"
           aria-expanded="false"
-        ><sc-icon name="toolkit" class="trigger-icon" hidden style="--icon-size:24px" aria-hidden="true"></sc-icon><span class="trigger-rate">1x</span></button>
+        ><img class="trigger-icon" width="20" height="20" alt="" draggable="false" hidden /><span class="trigger-rate">1x</span></button>
         <button class="clear-rate" type="button" aria-label="Reset Player Tools" title="Reset Player Tools" hidden><sc-icon name="close" class="cross-icon" aria-hidden="true"></sc-icon></button>
       </span>
       <section

@@ -63,6 +63,10 @@ function exposeTempoControlAssets() {
     chrome.runtime.getURL("assets/LooperPlayerToolkit.png")
   );
   document.documentElement?.setAttribute?.(
+    "data-scdl-extension-toolkit-url",
+    chrome.runtime.getURL("assets/icons/player-toolkit.png")
+  );
+  document.documentElement?.setAttribute?.(
     EXTENSION_DRUM_SAMPLES_ATTRIBUTE,
     chrome.runtime.getURL("assets/drums/")
   );
