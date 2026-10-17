@@ -595,12 +595,12 @@ libraryUI = mountStemLibrary({ locale, report: status,
       decoded.push(buffer);
     }
     // Imported samples: one that cannot be decoded is skipped, with its clips.
-    const names = new Map((record.settings?.playlist?.samples || []).map(item => [item?.id, item?.name]));
+    const names = new Map((record.settings?.playlist?.samples || []).map(item => [item?.id, item]));
     const restoredSamples = [];
     for (const [id, blob] of Object.entries(samples)) {
       try {
         const buffer = await decoder.decodeAudioData(await blob.arrayBuffer());
-        if (buffer.duration <= MAX_SAMPLE_SECONDS && buffer.numberOfChannels <= 2) restoredSamples.push({ id, name: names.get(id) || 'Sample', buffer });
+        if (buffer.duration <= MAX_SAMPLE_SECONDS && buffer.numberOfChannels <= 2) restoredSamples.push({ id, name: names.get(id)?.name || 'Sample', group: names.get(id)?.group, buffer });
       } catch (cause) { console.warn('[Stem presets] Skipped sample', id, cause); }
     }
     disposeResults();
@@ -694,7 +694,8 @@ function setBusy(value) {
   busy = value;
   extractDialog.setReady(!value && !libraryOperating && canSeparate());
   extractDialog.setRunning(value && separating);
-  $('progress').hidden = !value;
+  // The library row's spinner says work is running; its title names the step.
+  playlist.setTask(value ? say('Working…', 'Trabajando…') : '');
   libraryUI?.setBusy(value);
   // A task that ends without a result message also ends its loading toast.
   if (!value) dismissToast('task');
@@ -853,9 +854,10 @@ function runWorker(channels) {
     worker.postMessage({ type: 'separate', channels }, channels.map(channel => channel.buffer));
   });
 }
-// Separation progress shows in the header bar, a loading toast and the extraction window.
+// Separation progress shows in a loading toast, the library spinner's title and the
+// extraction window's status line.
 function progress(value, message) {
-  if (value === null) $('progress').removeAttribute('value'); else $('progress').value = value;
+  if (busy) playlist.setTask(message);
   toast({ id: 'task', variant: 'loading', title: message, progress: value }); extractDialog.setProgress(value, message);
 }
 // What the extraction window separates: the session's original (its stems get the four
@@ -887,7 +889,7 @@ async function clipChannels(target) {
   const rendered = await offline.startRendering();
   return [rendered.getChannelData(0).slice(), rendered.getChannelData(1).slice()];
 }
-// `options` come from the window: { stems, when: 'mute' | 'none', group }.
+// `options` come from the window: { stems, when: 'mute' | 'delete' | 'none', group }.
 async function separate(options) {
   const target = extractTarget;
   if (busy || libraryOperating || !target || !canSeparate() || !options.stems.length) return;
@@ -914,7 +916,7 @@ async function separate(options) {
           return { name, track: name, color: CHANNEL_COLORS[stem], buffer: audioBuffer(output) };
         });
       try { if (!playlist.addStemTracks({ clip: target.id, sample: target.library ? target.asset : null, track: target.track, at: target.at,
-        stems, group: options.group, muteSource: options.when === 'mute' })) throw new Error(say('The stems could not fit in the playlist.', 'Los stems no entran en la playlist.')); }
+        stems, group: options.group, muteSource: options.when === 'mute', removeSource: options.when === 'delete' })) throw new Error(say('The stems could not fit in the playlist.', 'Los stems no entran en la playlist.')); }
       catch (error) { error.localized = true; throw error; }
       extractDialog.close();
       status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`, 'success');

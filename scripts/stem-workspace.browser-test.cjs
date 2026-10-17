@@ -96,6 +96,24 @@ const { chromium } = require('playwright');
     await page.locator('#cancel').click();
     assert.equal(await page.locator('#separate').isEnabled(), true);
     assert.equal(await page.locator('.pl-clip').count(), beforeCancel, 'Cancelling keeps the existing arrangement');
+    assert.equal(await page.locator('#extract-progress, #progress').count(), 0, 'Progress shows as the library spinner, not bars');
+    // Stems separated together share one library color, apart from the source sample's.
+    const edge = name => page.locator('.pl-shelf button', { hasText: name }).first().evaluate(e => [getComputedStyle(e).borderLeftColor, getComputedStyle(e).borderLeftWidth]);
+    const [drumsEdge, bassEdge, sourceEdge] = [await edge(/^Drums · Library tone/), await edge(/^Bass · Library tone/), await edge(/^Library tone\.wav$/)];
+    assert.deepEqual(drumsEdge, bassEdge);
+    assert.notEqual(drumsEdge[0], sourceEdge[0]);
+    assert.equal(drumsEdge[1], '2px');
+    // Remove source leaves only the stems: the sample and its clip leave the project; undo brings them back.
+    await page.evaluate(() => { workerDelay = 30; });
+    await page.locator('#extract-when').selectOption('delete');
+    await page.locator('#separate').click();
+    await page.locator('#extract-dialog').waitFor({ state: 'hidden' });
+    assert.equal(await sample.count(), 0, 'Remove source deletes the library sample');
+    assert.equal(await page.locator('.pl-clip').count(), beforeCancel + 1, 'The source clip goes, two stem clips come');
+    await page.locator('#playlist').focus(); await page.keyboard.press('Control+z');
+    assert.equal(await sample.count(), 1);
+    assert.equal(await page.locator('.pl-clip').count(), beforeCancel);
+    await page.evaluate(() => localStorage.removeItem('stems.extractOptions'));
     await page.keyboard.press('Escape');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => notifications.toast({ title: 'A long message', message: 'A detailed explanation that wraps safely in a small viewport without making the page wider.', duration: -1 }));

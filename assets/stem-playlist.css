@@ -45,7 +45,10 @@
 @keyframes pl-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.pl-busy{animation-duration:2.4s}}
 .pl-shelf>span{align-self:center}
-.pl-shelf button{max-width:180px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:3px solid var(--orange);cursor:grab}
+/* The left edge carries the sample's group color: stems separated together share it. */
+.pl-shelf button{max-width:180px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:grab}
+.pl-ui .pl-shelf button:not(.ui-btn){border-left:2px solid var(--group-color,var(--orange))}
+.pl-ui .pl-shelf button:not(.ui-btn):is(:hover,[aria-pressed=true]){border-left-color:var(--group-color,var(--orange))}
 .pl-scroll{position:relative;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;border:1px solid var(--pl-edge);background:var(--pl-night);scrollbar-width:none}
 .pl-scroll::-webkit-scrollbar{display:none}
 /* Scrollbar under the lanes only. */
@@ -105,12 +108,15 @@
 .playlist.is-slicing .pl-lane,.playlist.is-slicing .pl-clip,.playlist.is-slicing .pl-edge{cursor:var(--sc-cursor-slice,crosshair)}
 .playlist.is-slicing .pl-edge:hover{background:none}
 .pl-inspector{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:10px 12px;border:1px solid var(--pl-edge);border-radius:10px 10px 0 0;background:var(--pl-panel)}
-.pl-selected{flex:0 1 auto;max-width:140px;overflow:hidden;font-size:11px;color:#ffad80;white-space:nowrap;text-overflow:ellipsis}
-.pl-tools{display:flex;gap:4px;margin-left:auto}
+/* One row that scrolls sideways when it is wider than the inspector, as on phones. The
+   vertical padding keeps focus rings and hotkey flashes inside the scroll box. */
+.pl-tools{display:flex;gap:4px;min-width:0;max-width:100%;margin-left:auto;padding:3px 2px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:#4a4642 transparent}
+.pl-tools>*{flex-shrink:0}
 .pl-tools .pl-tool-group{margin-left:6px}
-/* Clip inspector knobs run 20% under the shared md knob so the tools fit beside them. */
-.pl-inspector .ui-knob{--knob-size:26px;--knob-tick-top:2.5px;--knob-tick-height:7px;--knob-tick-origin:9.5px;gap:3px;min-width:42px}
-.pl-inspector .ui-knob-label{font-size:7px}
+/* Clip inspector knobs run 20% under the shared md knob so the tools fit beside them.
+   A fixed width keeps changing values from moving the row. */
+.pl-inspector .ui-knob{--knob-size:26px;--knob-tick-top:2.5px;--knob-tick-height:7px;--knob-tick-origin:9.5px;gap:3px;width:54px;min-width:0}
+.pl-inspector .ui-knob-label{font-size:7px;white-space:nowrap}
 .pl-inspector .ui-knob-value{font-size:8px}
 /* Window buttons are accent ui-btns; an open window stays pressed. */
 .pl-windows{display:inline-flex;align-items:center;gap:5px}
@@ -126,7 +132,6 @@
 .pl-user-head .pl-track-name{min-width:0;flex:1}
 
 /* Pattern clips and library entries: FL Studio draws patterns apart from audio. */
-.pl-shelf button.is-pattern{border-left-color:#6fc3cf}
 .pl-clip.is-pattern .pl-clip-title{background:repeating-linear-gradient(135deg,var(--clip-color) 0 8px,color-mix(in srgb,var(--clip-color) 80%,#fff) 8px 16px)}
 
 /* Context menu: small, dark, icon + label + shortcut; Delete in red. */

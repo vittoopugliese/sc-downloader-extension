@@ -123,6 +123,13 @@ const { chromium } = require('playwright');
     // Shift + ArrowUp on the pitch knob is one octave.
     await playlist.getByRole('slider', { name: 'Pitch', exact: true }).press('Shift+ArrowUp');
     assert.equal(await playlist.getByRole('slider', { name: 'Pitch', exact: true }).getAttribute('aria-valuenow'), '12');
+    // The clip has its own volume, first in the inspector; the track knob stays the channel master.
+    const clipVolume = playlist.getByRole('slider', { name: 'Volume', exact: true });
+    assert.equal(await playlist.locator('.pl-inspector .ui-knob-dial').first().getAttribute('aria-label'), 'Volume');
+    await clipVolume.press('Shift+ArrowDown');
+    assert.equal(await clipVolume.getAttribute('aria-valuenow'), '90');
+    await clipVolume.dblclick();
+    assert.equal(await clipVolume.getAttribute('aria-valuenow'), '100');
     await page.waitForFunction(() => !document.querySelector('.pl-clip.is-stretching'), null, { timeout: 15000 });
     assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'true', 'still playing after the edit');
     assert.ok(Math.abs((await playlist.locator('.pl-clip').first().boundingBox()).width - width) < 1, 'stretch keeps the clip length');
@@ -228,19 +235,21 @@ const { chromium } = require('playwright');
     await playlist.getByLabel('Show the whole arrangement').click();
     await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('Control+a');
     assert.equal(await clipCount(), 2);
-    assert.equal(await playlist.locator('.pl-selected').textContent(), '2 clips');
+    const pressed = () => playlist.locator('.pl-clip[aria-pressed=true]').count();
+    assert.equal(await pressed(), 2);
+    assert.equal(await playlist.locator('.pl-selected').count(), 0, 'No selection name shifts the knobs');
     for (const index of [0, 1]) await clips.nth(index).click({ modifiers: ['Control'] });
     assert.equal(await playlist.locator('.pl-clip[aria-pressed=true]').count(), 0, 'Ctrl+click toggles clips off');
     const [laneBox, firstBox, secondBox] = await Promise.all([playlist.locator('.pl-lane').first().boundingBox(), clips.nth(0).boundingBox(), clips.nth(1).boundingBox()]);
     const timelineBox = await playlist.locator('.pl-scroll').boundingBox();
     await page.mouse.move(timelineBox.x + timelineBox.width - 6, laneBox.y + 3); await page.mouse.down();
     await page.mouse.move(Math.min(firstBox.x, secondBox.x) + 4, laneBox.y + laneBox.height - 4, { steps: 5 }); await page.mouse.up();
-    assert.equal(await playlist.locator('.pl-selected').textContent(), '2 clips', 'A box drag on empty space selects clips');
+    assert.equal(await pressed(), 2, 'A box drag on empty space selects clips');
     const target = firstBox.x < secondBox.x ? firstBox : secondBox, rulerBox = await ruler.boundingBox();
     await page.mouse.click(target.x + target.width / 2, rulerBox.y + 14);
     await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('s');
     assert.equal(await clipCount(), 3);
-    assert.equal(await playlist.locator('.pl-selected').textContent(), '3 clips', 'Both halves stay selected');
+    assert.equal(await pressed(), 3, 'Both halves stay selected');
     // The slice tool cuts at the mouse, without moving the playhead.
     const sliceTool = playlist.getByRole('button', { name: 'Slice tool', exact: true });
     await page.keyboard.press('c');

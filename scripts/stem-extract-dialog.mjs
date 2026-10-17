@@ -2,8 +2,9 @@ import { createButton } from './ui-button.mjs';
 
 // "Extract stems from sample", like FL Studio's dialog: which stems become tracks, what
 // happens to the source when done, and whether the new tracks sit under the source.
-// The host runs the separation; the dialog shows its progress. While it runs, Cancel
-// stops it and the window stays open to retry; the close button only hides the window.
+// The host runs the separation and shows its progress in the library spinner and a toast;
+// the dialog keeps one status line. While it runs, Cancel stops it and the window stays
+// open to retry; the close button only hides the window.
 // Choices are remembered per browser.
 const STORE = 'stems.extractOptions';
 const ORDER = ['drums', 'bass', 'other', 'vocals'];
@@ -22,8 +23,8 @@ export function mountExtractDialog({ t, stemName, onExtract, onCancel, onClearMo
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch {}
   const chosen = new Set(Array.isArray(saved.stems) && saved.stems.some(stem => ORDER.includes(stem)) ? saved.stems.filter(stem => ORDER.includes(stem)) : ORDER);
-  const led = (label, checked, hint = '') => {
-    const wrap = document.createElement('label'); wrap.className = 'extract-led';
+  const check = (label, checked, hint = '') => {
+    const wrap = document.createElement('label'); wrap.className = 'extract-check';
     const input = document.createElement('input'); input.type = 'checkbox'; input.checked = checked;
     const text = document.createElement('span'); text.textContent = label;
     if (hint) wrap.title = hint;
@@ -34,23 +35,22 @@ export function mountExtractDialog({ t, stemName, onExtract, onCancel, onClearMo
   const legend = document.createElement('legend'); legend.textContent = t('Stems', 'Stems'); stems.append(legend);
   const stemInputs = new Map();
   for (const stem of ORDER) {
-    const item = led(stemName(stem), chosen.has(stem));
+    const item = check(stemName(stem), chosen.has(stem));
     item.input.name = 'extract-stem'; item.input.value = stem; item.wrap.dataset.stem = stem;
     stemInputs.set(stem, item.input); stems.append(item.wrap);
   }
   const when = document.createElement('div'); when.className = 'extract-when';
   const action = document.createElement('select'); action.id = 'extract-when';
-  action.append(new Option(t('Mute source', 'Silenciar origen'), 'mute'), new Option(t('Do nothing', 'No hacer nada'), 'none'));
-  action.value = saved.when === 'none' ? 'none' : 'mute';
+  // Remove source leaves only the chosen stems; a library sample leaves the project too.
+  const removeOption = new Option(t('Remove source', 'Eliminar origen'), 'delete');
+  action.append(new Option(t('Mute source', 'Silenciar origen'), 'mute'), removeOption, new Option(t('Do nothing', 'No hacer nada'), 'none'));
+  action.value = ['none', 'delete'].includes(saved.when) ? saved.when : 'mute';
   const whenLabel = document.createElement('label'); whenLabel.htmlFor = action.id; whenLabel.textContent = t('when done', 'al terminar');
   when.append(action, whenLabel);
-  const group = led(t('Group playlist tracks', 'Agrupar pistas en la playlist'), saved.group !== false,
+  const group = check(t('Group playlist tracks', 'Agrupar pistas en la playlist'), saved.group !== false,
     t('The new tracks go right under the source track; otherwise they go at the end.', 'Las pistas nuevas van justo debajo de la pista de origen; si no, van al final.'));
   group.wrap.classList.add('extract-group'); group.input.id = 'extract-group';
-  const meter = document.createElement('div'); meter.className = 'extract-meter';
-  const progress = document.createElement('progress'); progress.id = 'extract-progress'; progress.max = 1; progress.value = 0;
   const message = document.createElement('p'); message.className = 'extract-message'; message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite');
-  meter.append(progress, message);
   const note = document.createElement('p'); note.className = 'extract-note';
   note.textContent = t('Runs on this device. The first time downloads a 166 MB model. Up to 2 minutes of audio.', 'Corre en tu equipo. La primera vez descarga un modelo de 166 MB. Hasta 2 minutos de audio.');
   const footer = document.createElement('footer'); footer.className = 'extract-actions';
@@ -61,7 +61,7 @@ export function mountExtractDialog({ t, stemName, onExtract, onCancel, onClearMo
   const spacer = document.createElement('span'); spacer.className = 'extract-spacer';
   footer.append(clear, spacer, cancel, extract);
   const body = document.createElement('div'); body.className = 'extract-body';
-  body.append(stems, when, group.wrap, meter, note);
+  body.append(stems, when, group.wrap, message, note);
   dialog.append(head, body, footer);
   document.body.append(dialog);
 
@@ -73,10 +73,10 @@ export function mountExtractDialog({ t, stemName, onExtract, onCancel, onClearMo
     extract.disabled = running || !ready || none;
     extract.title = none ? t('Choose at least one stem', 'Elegí al menos un stem') : '';
     for (const input of [...stemInputs.values(), action, group.input]) input.disabled = running;
-    // The original's stems always have their own four tracks under it.
-    group.wrap.hidden = original;
+    // The original's stems always have their own four tracks under it, and it stays.
+    group.wrap.hidden = original; removeOption.hidden = removeOption.disabled = original;
+    if (original && action.value === 'delete') action.value = 'mute';
     clear.disabled = running;
-    meter.classList.toggle('is-running', running);
   }
   for (const input of [...stemInputs.values(), action, group.input]) input.addEventListener('change', () => { remember(); render(); });
   extract.onclick = () => { if (!extract.disabled) { remember(); onExtract(options()); } };
@@ -92,7 +92,7 @@ export function mountExtractDialog({ t, stemName, onExtract, onCancel, onClearMo
     // `name`: the sample; `original`: it is the session's source audio.
     open({ name = '', isOriginal = false } = {}) {
       original = isOriginal; source.textContent = name; source.title = name;
-      if (!running) { progress.value = 0; message.textContent = ''; }
+      if (!running) message.textContent = '';
       render();
       if (!dialog.open) dialog.showModal();
       (extract.disabled ? cancel : extract).focus({ preventScroll: true });
@@ -101,12 +101,9 @@ export function mountExtractDialog({ t, stemName, onExtract, onCancel, onClearMo
     isOpen: () => dialog.open,
     // Extract is enabled once there is audio to separate.
     setReady(value) { ready = !!value; render(); },
-    setRunning(value) { running = !!value; if (!running) progress.value = 0; render(); },
-    // `value` 0..1, or null while the step has no measurable progress.
-    setProgress(value, text = message.textContent) {
-      if (value === null) progress.removeAttribute('value'); else progress.value = value;
-      message.textContent = text;
-    },
+    setRunning(value) { running = !!value; render(); },
+    // The step's text; `value` (0..1 or null) shows in the toast, not here.
+    setProgress(value, text = message.textContent) { message.textContent = text; },
     setMessage(text) { message.textContent = text; },
   };
 }
