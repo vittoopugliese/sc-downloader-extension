@@ -21,6 +21,8 @@ const STYLES = `
 .row-menu-list .row-menu-delete.is-armed{flex:0 0 auto;padding:3px 8px;background:#4a2020;color:#ff8f8f;font-size:11px;font-weight:700}
 .row-menu-list .row-menu-footer{width:100%;margin-top:4px;padding-top:6px;border-top:1px solid #414141;border-radius:0 0 4px 4px;color:#ff934d}
 .row-menu-list :disabled{opacity:.5;cursor:wait}
+/* With a mouse, a row's delete cross shows while the row is hovered or focused. */
+@media(hover:hover){.row-menu-row:not(:hover):not(:focus-within) .row-menu-delete:not(.is-armed){visibility:hidden}}
 `;
 let menus = 0;
 

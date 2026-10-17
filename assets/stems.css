@@ -47,11 +47,8 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 /* The wave is dim; --level (set while playing) lights it from the left. */
 .preview-wave{position:relative;opacity:1;background:repeating-linear-gradient(90deg,color-mix(in srgb,currentColor 32%,transparent) 0 2px,transparent 2px 4px)}
 .preview-wave::after{content:'';position:absolute;inset:0 auto 0 0;width:calc(var(--level,0) * 100%);background:repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 4px);background-size:inherit}
-.header-library{display:flex;align-items:center;gap:10px;flex:1 1 320px;min-width:0}
-.library-heading{display:flex;flex-direction:column;flex-shrink:0;max-width:30%;min-width:0;line-height:1.25}
+.header-library{display:flex;align-items:center;gap:10px;flex:1 1 280px;min-width:0}
 .header-library .preset-toolbar{flex:1;min-width:0}
-.header-library label{font-size:10px;font-weight:600;color:#c4c0ba}
-#preset-destination{min-width:0;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:9px ui-monospace,monospace;color:#97938e}
 .preset-toolbar{display:flex;gap:6px;min-width:0}
 .preset-toolbar select{flex:1;min-width:0;width:0;height:32px;padding:0 8px;border:1px solid #45423e;border-radius:6px;background:#242321;color:var(--ink);font:11px Arial,Helvetica,sans-serif;cursor:pointer}
 .preset-toolbar select:disabled{opacity:.4;cursor:not-allowed}
@@ -59,14 +56,15 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 .preset-toolbar .preset-menu{flex:1;min-width:0}
 .workspace-header .preset-toolbar .row-menu-toggle{flex:1;width:100%;min-width:0;height:32px;padding:0 8px;border:1px solid #45423e;border-radius:6px;background:#242321;color:var(--ink);font:11px Arial,Helvetica,sans-serif}
 .workspace-header .preset-toolbar .row-menu-toggle:disabled{opacity:.4;cursor:not-allowed}
-.workspace-header .preset-toolbar .row-menu-list button{width:auto;height:auto;flex-shrink:1;padding:3px 6px;border:0;background:transparent}
+/* Saved separation rows: names start at the left; the delete cross shows on hover. */
+.workspace-header .preset-toolbar .row-menu-list button{display:block;width:auto;height:auto;flex-shrink:1;padding:3px 8px;border:0;background:transparent;text-align:left}
 .workspace-header .preset-toolbar .row-menu-list button:hover:enabled{background:#383838}
-.workspace-header .preset-toolbar .row-menu-list .row-menu-delete{flex:0 0 28px}
-.workspace-header .preset-toolbar .row-menu-list .row-menu-delete.is-armed{flex:0 0 auto;background:#4a2020}
+.workspace-header .preset-toolbar .row-menu-list .row-menu-delete{display:grid;place-items:center;flex:0 0 26px;padding:0}
+.workspace-header .preset-toolbar .row-menu-list .row-menu-delete sc-icon{width:11px;height:11px}
+.workspace-header .preset-toolbar .row-menu-list .row-menu-delete.is-armed{flex:0 0 auto;padding:3px 8px;background:#4a2020}
 .preset-toolbar .ui-btn-icon{width:16px;height:16px}
 .workspace-header #preset-folder.has-custom-folder{border-color:var(--orange);background:#42291d;color:#ffad80}
 #preset-reconnect{justify-self:start;white-space:normal}
-#preset-destination{max-width:100%}
 /* Narrow windows: the rows wrap; the identity block shares its line with the pin. */
 @media(max-width:1100px){
   .daw-row-main .workspace-intro{flex:1 1 auto;flex-direction:row;align-items:center;justify-content:flex-start;gap:12px;padding-right:0;border-right:0}
@@ -80,7 +78,6 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 @media(max-width:600px){
   .workspace-edition{font-size:8px;padding-left:8px;margin-left:0}
   .stem-preview{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .library-heading{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 }
 .eyebrow{font:10px/1.5 ui-monospace,SFMono-Regular,monospace;letter-spacing:1.6px;display:flex;align-items:center;gap:9px}
 main>.eyebrow{margin-top:34px}

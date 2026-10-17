@@ -66,8 +66,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
     onSelect: id => open(id), onDelete: id => remove(id) });
   $('stem-presets').replaceWith(presetMenu.element);
   presetMenu.toggle.id = 'stem-presets'; presetMenu.menu.id = 'stem-presets-menu'; presetMenu.toggle.setAttribute('aria-controls', 'stem-presets-menu');
-  $('preset-label').textContent = copy.saved;
-  $('preset-folder').title = $('preset-folder').ariaLabel = copy.folder;
+  $('preset-folder').ariaLabel = copy.folder;
   $('preset-reset').title = $('preset-reset').ariaLabel = copy.reset;
   $('save-title').textContent = copy.confirm;
   $('save-description').textContent = copy.description;
@@ -93,8 +92,8 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
     toggle.disabled ||= !snapshot().info;
     $('preset-reset').hidden = !library?.directory;
     $('preset-folder').classList.toggle('has-custom-folder', !!library?.directory);
-    $('preset-destination').textContent = library?.directory?.name || copy.browser;
-    $('preset-destination').title = copy.destination;
+    // Where separations are stored: the browser, or the chosen folder (the cross resets it).
+    $('preset-folder').title = `${copy.destination}: ${library?.directory?.name || copy.browser} · ${copy.folder}`;
   }
   async function refresh() {
     records = await library.list();
