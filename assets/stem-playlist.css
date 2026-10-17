@@ -92,7 +92,9 @@
 .playlist.is-slicing .pl-edge:hover{background:none}
 .pl-inspector{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:10px 12px;border:1px solid var(--pl-edge);border-radius:10px 10px 0 0;background:var(--pl-panel)}
 .pl-selected{flex:0 1 auto;max-width:140px;overflow:hidden;font-size:11px;color:#ffad80;white-space:nowrap;text-overflow:ellipsis}
-.pl-tools{display:grid;grid-template-columns:repeat(8,32px);gap:5px;margin-left:auto}
+.pl-tools{display:grid;grid-template-columns:repeat(7,32px);gap:5px;margin-left:auto}
+/* Window buttons start a third row, slightly apart from the edit tools. */
+.pl-tools>.pl-window-tool{margin-top:4px}
 /* Hotkey flash: an overlay in the button's color whose opacity is animated from JS. */
 .pl-key{position:relative;isolation:isolate}
 .pl-key::after{content:'';position:absolute;inset:-1px;z-index:-1;border-radius:inherit;background:var(--key-color);box-shadow:0 0 14px 1px var(--key-color);opacity:0;pointer-events:none}

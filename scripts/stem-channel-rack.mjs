@@ -30,7 +30,8 @@ export function pluginShell({ container, id, title, icon, className }) {
     collapsed: disclosure.isCollapsed,
     open() {
       section.hidden = false; disclosure.setCollapsed(false);
-      requestAnimationFrame(() => section.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+      // A floating window is already in view.
+      if (!section.classList.contains('is-floating')) requestAnimationFrame(() => section.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
     },
     setVisible(value) { section.hidden = !value; },
     setCollapsed: disclosure.setCollapsed,

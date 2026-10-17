@@ -6,13 +6,18 @@ module.exports = async function verifyInstruments(page) {
   await page.locator('#separate:not(:disabled)').click();
   await page.locator('.pl-stem-head[data-stem=vocals]').waitFor();
   const rack = page.locator('#stem-rack'), piano = page.locator('#stem-piano-roll'), playlist = page.locator('#playlist');
-  assert.deepEqual(await page.locator('#mix-tools > section').evaluateAll(nodes => nodes.map(node => node.className.split(' ')[0])),
-    ['stem-plugin', 'stem-plugin', 'peq', 'record-section'], 'Rack and piano roll come before the EQ and recorder');
+  // The four modules are windows: closed until opened from the toolbar, a key or a track menu.
+  assert.equal(await page.locator('.module-window').count(), 4);
+  assert.equal(await page.locator('.module-window:visible').count(), 0, 'Windows start closed');
+  // Docked windows keep the old order under the playlist: rack and piano roll before EQ and recorder.
+  const dock = async section => { await section.locator('.module-control').first().click(); assert.equal(await section.evaluate(node => node.parentElement.id), 'mix-tools'); };
   for (const removed of ['.piano-bpm', '.piano-half', '.piano-double', '.piano-align', '.piano-velocity', '.piano-mode', '.seq-bpm'])
     assert.equal(await page.locator(removed).count(), 0, `${removed} is gone`);
 
   // Focusing a whole bass stem slices it at once and exposes eight playable pads.
   { await page.locator('.pl-stem-head[data-stem=bass] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
+  assert.equal(await rack.evaluate(node => node.classList.contains('is-floating')), true, 'The track menu opens a floating channel rack');
+  await dock(rack);
   assert.equal(await rack.locator('.plugin-track').inputValue(), 'bass');
   const wave = rack.locator('.rack-wave'), pads = rack.locator('.rack-pad');
   await page.waitForFunction(() => document.querySelectorAll('#stem-rack .rack-pad.is-assigned').length > 0, null, { timeout: 5000 });
@@ -91,6 +96,8 @@ module.exports = async function verifyInstruments(page) {
 
   // Piano roll: same track and pattern; the next note copies the last clicked one.
   { await page.locator('.pl-stem-head[data-stem=bass] .stem-more').click(); await page.locator('.pl-menu-item').nth(1).click(); }
+  await dock(piano);
+  assert.deepEqual(await page.locator('#mix-tools > section:visible').evaluateAll(nodes => nodes.map(node => node.id)), ['stem-rack', 'stem-piano-roll']);
   assert.equal(await piano.locator('.plugin-track').inputValue(), 'bass');
   assert.equal(await piano.locator('.plugin-pattern option:checked').textContent(), 'Pat 1');
   const grid = piano.locator('.piano-grid');

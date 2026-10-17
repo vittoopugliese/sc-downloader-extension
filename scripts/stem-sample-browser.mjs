@@ -1,6 +1,7 @@
 import { createSamplePreview } from './stem-sample-preview.mjs';
 import { chooseRoot, createFolderCache, readPermission, savedRoot } from './stem-sample-library.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
+import { bringToFront, isOnTop } from './stem-module-window.mjs';
 
 // Floating sample browser, like FL Studio's: pick a root folder, walk it, click a file to
 // preview it and drag it onto a Playlist track. It is not modal; the Playlist keeps working.
@@ -79,6 +80,7 @@ export function mountSampleBrowser({ t, importSamples, onToggle }) {
   viewer.append(wave, controls);
   const status = node('p', 'sb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   win.append(head, pathRow, list, empty, viewer, status);
+  win.addEventListener('pointerdown', () => bringToFront(win), true);
   document.body.append(win);
 
   function setStatus(text, sticky = false) {
@@ -388,7 +390,7 @@ export function mountSampleBrowser({ t, importSamples, onToggle }) {
   function open(from = document.activeElement) {
     if (!win.hidden) { list.hidden ? (emptyAction.hidden ? closeButton : emptyAction).focus() : list.focus(); return; }
     back = from instanceof HTMLElement && !win.contains(from) ? from : null;
-    win.hidden = false; place(); onToggle?.(true); renderViewer(); scheduleRows();
+    win.hidden = false; place(); bringToFront(win); onToggle?.(true); renderViewer(); scheduleRows();
     const focus = () => (access === 'granted' ? list : emptyAction.hidden ? closeButton : emptyAction).focus({ preventScroll: true });
     if (!loaded) { loaded = true; renderAccess(); connectSaved().then(focus, error => setStatus(errorText(error))); }
     focus();
@@ -401,7 +403,8 @@ export function mountSampleBrowser({ t, importSamples, onToggle }) {
   renderAccess(); renderViewer();
   return {
     open, close,
-    toggle(from) { if (win.hidden) open(from); else close(); },
+    // A browser hidden behind another window comes to the front first.
+    toggle(from) { if (win.hidden) open(from); else if (!isOnTop(win)) bringToFront(win); else close(); },
     isOpen: () => !win.hidden,
     // Items for a drop on the Playlist, or null when the drag did not start here.
     resolveDrop(dataTransfer) {

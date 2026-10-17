@@ -28,6 +28,8 @@ const { chromium } = require('playwright');
     await page.route('https://i1.sndcdn.com/stems-fixture.jpg', route => route.fulfill({ path: path.join(root, 'assets/icons/player-toolkit.png'), contentType: 'image/png' }));
     await page.route('https://tbot.xyz/lumber/', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Lumberjack fixture</title>' }));
     await page.addInitScript(({ dataUrl }) => {
+      // This suite checks the modules in their docked place under the Playlist.
+      for (const id of ['rack', 'piano', 'eq', 'recorder']) localStorage.setItem(`stem-module-${id}`, JSON.stringify({ open: true, docked: true }));
       globalThis.stemTestSources = [];
       const createSource = AudioContext.prototype.createBufferSource;
       AudioContext.prototype.createBufferSource = function () {

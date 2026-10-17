@@ -19,6 +19,8 @@ const { chromium } = require('playwright');
   const context = await chromium.launchPersistentContext('', { channel: 'chromium', headless: true, locale: 'en-US', args: ['--autoplay-policy=no-user-gesture-required'] });
   try {
     await context.addInitScript(({ dataUrl }) => {
+      // This suite checks the modules in their docked place under the Playlist.
+      for (const id of ['rack', 'piano', 'eq', 'recorder']) localStorage.setItem(`stem-module-${id}`, JSON.stringify({ open: true, docked: true }));
       window.inferences = 0;
       window.chrome = { runtime: { sendMessage: async ({ type }) => type === 'STEM_LOOP_INFO'
         ? { success: true, title: 'Saved 440 Hz loop', artist: 'Test artist', trimRange: { startMs: 2000, endMs: 122000 } }

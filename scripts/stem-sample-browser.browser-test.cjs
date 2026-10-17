@@ -78,7 +78,7 @@ const { chromium } = require('playwright');
     const row = name => dialog.locator('.sb-row', { hasText: name });
     const playButton = dialog.locator('.sb-controls .sb-icon').first();
     const lastStart = () => page.evaluate(() => window.starts.at(-1));
-    assert.equal(await browserButton.getAttribute('aria-keyshortcuts'), 'B');
+    assert.equal(await browserButton.getAttribute('aria-keyshortcuts'), 'F8');
     await browserButton.click();
     assert.equal(await dialog.isVisible(), true);
     assert.equal(await browserButton.getAttribute('aria-pressed'), 'true');
@@ -174,6 +174,11 @@ const { chromium } = require('playwright');
     assert.equal(await browserButton.getAttribute('aria-pressed'), 'false');
     assert.equal(await browserButton.evaluate(node => node === document.activeElement), true);
     await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('b');
+    assert.equal(await dialog.isVisible(), true);
+    // F8 works from anywhere on the page.
+    await page.locator('body').click({ position: { x: 5, y: 5 } }); await page.keyboard.press('F8');
+    assert.equal(await dialog.isVisible(), false);
+    await page.keyboard.press('F8');
     assert.equal(await dialog.isVisible(), true);
     // Large folders render only the visible rows.
     await row('Big').click();

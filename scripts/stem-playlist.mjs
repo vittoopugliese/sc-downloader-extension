@@ -141,7 +141,7 @@ export function createKnob({ label, min, max, step, coarse, value, reset, format
 // `toolbarEnd` sits before the download button;
 // `inspectorControls` share the library row. Pattern library entries are owned by
 // the host: their Duplicate/Delete go through `onPatternAction(action, assetId)`.
-export function mountPlaylist({ container, toolbarHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect }) {
+export function mountPlaylist({ container, windows = [], toolbarHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect }) {
   const es = document.documentElement.lang === 'es', t = (en, spanish) => es ? spanish : en;
   let state = emptyArrangement(), assets = new Map(), selected = null, extra = new Set(), zoom = 48, snap = .25;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
@@ -210,7 +210,8 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   const toolbar = node('div', 'pl-toolbar pl-ui');
   function iconButton(path, title, action) {
     const control = button('', title, action); control.className = 'pl-icon-button';
-    control.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
+    // An icon is a path, or SVG markup when it starts with '<'.
+    control.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path.startsWith('<') ? path : `<path d="${path}"/>`}</svg>`;
     return control;
   }
   // Tool buttons carry a hotkey and a color: a click or the hotkey flashes the button in its
@@ -287,15 +288,33 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   fileInput.onchange = safe(async () => { const files = [...fileInput.files]; fileInput.value = ''; await importSamples(files); });
   const importButton = toolButton({ icon: ICONS.import, name: t('Import audio files', 'Importar archivos de audio'), key: 'I', keys: ['i'], color: '#ff7a2f',
     detail: t('WAV, MP3, FLAC, M4A or OGG land at the playhead on the first free track. You can also drop them on a track.', 'WAV, MP3, FLAC, M4A u OGG se agregan en el cursor, en la primera pista libre. También podés soltarlos sobre una pista.') }, () => fileInput.click());
-  // Floating sample browser (B): created on first use; its drops go through importSamples.
+  // Floating sample browser (F8, or B on the Playlist): created on first use; its drops go
+  // through importSamples. It leads the row of window buttons the host adds with `windows`.
   let sampleBrowser = null;
-  const browserButton = toolButton({ icon: ICONS.browser, name: t('Sample browser', 'Browser de samples'), key: 'B', keys: ['b'], color: '#3dd6c6',
-    detail: t('a floating window for a samples folder: click a file to preview it, drag it onto a track', 'una ventana flotante para una carpeta de samples: hacé clic en un archivo para escucharlo y arrastralo a una pista') }, () => {
-    sampleBrowser ||= mountSampleBrowser({ t, onToggle: open => browserButton.setAttribute('aria-pressed', String(open)),
-      async importSamples(items) { try { return await importSamples(items); } catch (error) { report(error); return false; } } });
-    sampleBrowser.toggle(browserButton);
-  });
-  browserButton.setAttribute('aria-pressed', 'false');
+  const windowKeys = new Map(), windowButtons = new Map();
+  function windowButton({ id, icon, name, detail, key, keys, color, toggle }) {
+    const control = toolButton({ icon, name, detail, key, keys, color }, () => toggle(control));
+    control.classList.add('pl-window-tool'); control.setAttribute('aria-pressed', 'false');
+    for (const combo of keys) if (/^f\d+$/.test(combo)) windowKeys.set(combo, control);
+    windowButtons.set(id, control);
+    return control;
+  }
+  const browserButton = windowButton({ id: 'browser', icon: ICONS.browser, name: t('Sample browser', 'Browser de samples'), key: 'F8', keys: ['f8', 'b'], color: '#3dd6c6',
+    detail: t('a floating window for a samples folder: click a file to preview it, drag it onto a track · B also opens it from the Playlist', 'una ventana flotante para una carpeta de samples: hacé clic en un archivo para escucharlo y arrastralo a una pista · B también lo abre desde la Playlist'),
+    toggle(control) {
+      sampleBrowser ||= mountSampleBrowser({ t, onToggle: open => control.setAttribute('aria-pressed', String(open)),
+        async importSamples(items) { try { return await importSamples(items); } catch (error) { report(error); return false; } } });
+      sampleBrowser.toggle(control);
+    } });
+  const windowTools = [browserButton, ...windows.map(windowButton)];
+  // Window keys work anywhere on the page, like FL Studio's F6–F9.
+  const onWindowKey = event => {
+    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+    const control = windowKeys.get(event.key.toLowerCase());
+    if (!control || control.disabled) return;
+    event.preventDefault(); if (!event.repeat) control.click();
+  };
+  document.addEventListener('keydown', onWindowKey);
   const addTrack = toolButton({ icon: ICONS.addTrack, name: t('Add track', 'Agregar pista'), key: 'N', keys: ['n'], color: '#ffd166',
     detail: t('an empty lane for samples and patterns (up to 16 tracks)', 'un carril vacío para samples y patrones (hasta 16 pistas)') },
   () => commit(() => state.tracks.push({ id: uid(), name: `${t('Track', 'Pista')} ${state.tracks.filter(item => !item.stem).length + 1}`, gain: 1, mute: false, solo: false })));
@@ -479,9 +498,9 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   const zoomOut = toolButton({ icon: ICONS.zoomOut, name: t('Zoom out', 'Alejar'), detail: wheelHint, key: '-', keys: ['-', '_'], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1 / 1.5));
   const zoomIn = toolButton({ icon: ICONS.zoomIn, name: t('Zoom in', 'Acercar'), detail: wheelHint, key: '+', keys: ['+', '='], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1.5));
   const fitButton = toolButton({ icon: ICONS.fit, name: t('Show the whole arrangement', 'Ver todo el arreglo'), detail: t('fits every clip in view', 'ajusta el zoom para ver todos los clips'), key: 'F', keys: ['f'], color: '#e6e1da' }, fit);
-  // Every tool in two rows: clip edits, then history, view, samples and tracks.
+  // Two rows of seven tools (clip edits, then history, view and tracks), then the windows.
   const tools = node('div', 'pl-tools');
-  tools.append(muteClip, reverseClip, crossfade, duplicate, split, sliceButton, remove, undo, redo, zoomOut, zoomIn, fitButton, importButton, browserButton, addTrack);
+  tools.append(muteClip, reverseClip, crossfade, duplicate, split, sliceButton, remove, undo, redo, zoomOut, zoomIn, fitButton, importButton, addTrack, ...windowTools);
   inspector.append(selectionLabel, pitch.wrap, fine.wrap, speed.wrap, ...fades.map(f => f.wrap), tools);
   let zoomFrame = 0, zoomTarget = null, zoomAnchor = null;
   function zoomAround(x, factor) {
@@ -501,7 +520,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) { scroll.scrollLeft += event.deltaX || event.deltaY; return; }
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
-  const hint = node('p', 'pl-hint', t('Drag clips to move · edges to trim · right-click for more · Alt bypasses snap · Space plays, twice restarts from the last ruler click (or loop start) · Ctrl/Shift+click or drag on empty space selects several clips · S splits the selection at the playhead · C toggles the slice tool · T taps tempo · B opens the sample browser · drop audio files on a track. Select a loop on the ruler; hover for controls. 16 tracks / 5 minutes.', 'Arrastrá clips para mover · bordes para recortar · clic derecho para más · Alt desactiva snap · Espacio reproduce, dos veces reinicia desde el último clic en la regla (o el inicio del loop) · Ctrl/Shift+clic o arrastrar en un espacio vacío selecciona varios clips · S corta la selección en el cursor · C activa la herramienta de corte · T marca el tempo · B abre el browser de samples · soltá audio en una pista. Seleccioná un loop en la regla; pasá el cursor para ver los controles. 16 pistas / 5 minutos.'));
+  const hint = node('p', 'pl-hint', t('Drag clips to move · edges to trim · right-click for more · Alt bypasses snap · Space plays, twice restarts from the last ruler click (or loop start) · Ctrl/Shift+click or drag on empty space selects several clips · S splits the selection at the playhead · C toggles the slice tool · T taps tempo · B or F8 opens the sample browser · drop audio files on a track. Select a loop on the ruler; hover for controls. 16 tracks / 5 minutes.', 'Arrastrá clips para mover · bordes para recortar · clic derecho para más · Alt desactiva snap · Espacio reproduce, dos veces reinicia desde el último clic en la regla (o el inicio del loop) · Ctrl/Shift+clic o arrastrar en un espacio vacío selecciona varios clips · S corta la selección en el cursor · C activa la herramienta de corte · T marca el tempo · B o F8 abre el browser de samples · soltá audio en una pista. Seleccioná un loop en la regla; pasá el cursor para ver los controles. 16 pistas / 5 minutos.'));
   const message = node('p', 'pl-message'); message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite');
   container.classList.add('playlist', 'pl-ui'); container.tabIndex = -1;
   // Messages, help and the clip inspector sit above the timeline, under the transport.
@@ -923,7 +942,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     const modifier = event.ctrlKey || event.metaKey;
     if (event.altKey) return;
     if (event.code === 'Space') { event.preventDefault(); event.stopPropagation(); if (!event.repeat) safe(space)(); return; }
-    const combo = (modifier ? 'ctrl+' : '') + (modifier && event.shiftKey ? 'shift+' : '') + event.key.toLowerCase(), tool = hotkeys.get(combo);
+    const combo = (modifier ? 'ctrl+' : '') + (modifier && event.shiftKey ? 'shift+' : '') + event.key.toLowerCase(), tool = windowKeys.has(combo) ? null : hotkeys.get(combo);
     if (tool) { event.preventDefault(); if ((!event.repeat || tool.repeat) && !tool.control.disabled) tool.control.click(); }
     else if (event.key === 'Escape' && slicing) { event.preventDefault(); setSlicing(false); }
     else if (combo === 'ctrl+a') { event.preventDefault(); selected = state.clips[0]?.id ?? null; extra = new Set(state.clips.slice(1).map(c => c.id)); updateSelection(); }
@@ -941,6 +960,8 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     tracks: () => state.tracks,
     duration: () => arrangementEnd(state),
     trackSource,
+    // The toolbar button of a window ('browser' or a host window id).
+    windowButton: id => windowButtons.get(id),
     audible: track => trackAudible(state, track),
     // The host's A–B loop in timeline seconds; null loops the whole arrangement.
     setLoopRange(range) {
@@ -992,7 +1013,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
       clips: state.clips.filter(clip => savable(clip.asset) && (trackOf(clip.track)?.stem || state.clips.filter(other => other.track === clip.track).every(other => savable(other.asset)))).map(clip => ({ ...clip })) }),
     dispose() {
       exporting?.abort(); engine?.dispose(); cache.dispose(); viewObserver.disconnect(); sampleBrowser?.dispose();
-      clearTimeout(messageTimer); clearTimeout(hintTimer); cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();
+      document.removeEventListener('keydown', onWindowKey); clearTimeout(messageTimer); clearTimeout(hintTimer); cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();
     },
   };
 }

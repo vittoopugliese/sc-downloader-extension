@@ -7,6 +7,7 @@ import { SAMPLE_RATE, MAX_SECONDS, STEMS, encodeWav } from './stem-audio.mjs';
 import { MODEL } from './stem-model.mjs';
 import { mountStemLibrary } from './stem-library-ui.mjs';
 import { contextMenu, createKnob, mountPlaylist } from './stem-playlist.mjs';
+import { mountModuleWindow } from './stem-module-window.mjs';
 import { spectrumOf } from './stem-spectrum.mjs';
 
 const translations = {
@@ -305,7 +306,20 @@ function reconcileChannels() {
 }
 // The header play button is the transport; the playlist toolbar joins the header with
 // the speed slider next to the tempo controls.
-const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('transport'), playButton: false,
+// Tool windows (FL Studio's F6–F10): buttons in the Playlist tool rows, windows created below.
+const say = (en, es) => locale === 'es' ? es : en;
+let moduleWindows = {};
+const WINDOWS = [
+  { id: 'rack', icon: PLUGIN_ICONS.rack, name: say('Channel rack', 'Channel rack'), key: 'F6', keys: ['f6'], color: '#7bd88f',
+    detail: say('the focused track cut into eight pads and its step patterns', 'la pista enfocada cortada en ocho pads y sus patrones de pasos') },
+  { id: 'piano', icon: PLUGIN_ICONS.piano, name: say('Piano roll', 'Piano roll'), key: 'F7', keys: ['f7'], color: '#c792ea',
+    detail: say('notes of the focused pattern', 'las notas del patrón enfocado') },
+  { id: 'eq', icon: 'M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6', name: say('Parametric EQ', 'EQ paramétrico'), key: 'F9', keys: ['f9'], color: '#4fc3f7',
+    detail: say('equalizer of the selected channel, or of the master', 'ecualizador del canal seleccionado o del master') },
+  { id: 'recorder', icon: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/>', name: say('Recorder', 'Grabadora'), key: 'F10', keys: ['f10'], color: '#ff4d6d',
+    detail: say('records the final mix to a WAV', 'graba la mezcla final en un WAV') },
+].map(item => ({ ...item, toggle: () => moduleWindows[item.id]?.toggle() }));
+const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('transport'), playButton: false, windows: WINDOWS,
   // One line: separate and play, tempo and speed, edits, then model and game utilities.
   toolbarStart: [$('separate'), $('cancel'), $('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [$('clear-cache'), $('toggle-game')],
   onPatternAction(action, id) { const pattern = id.slice('pattern:'.length); if (action === 'duplicate') instruments?.duplicatePattern(pattern); else instruments?.deletePattern(pattern); },
@@ -341,13 +355,25 @@ const recorderUI = globalThis.SCRecordUI.mount({
 });
 equalizerUI.setCollapsed(false);
 recorderUI.setCollapsed(false);
+channelRack.setCollapsed(false); pianoRoll.setCollapsed(false);
+// The four modules are windows now: always expanded, opened from their buttons or keys.
+{
+  const sections = { rack: $('stem-rack'), piano: $('stem-piano-roll'), eq: $('scdl-parametric-eq'), recorder: $('scdl-record') };
+  const sizes = { rack: { width: 940, height: 470, offset: 0 }, piano: { width: 940, height: 470, offset: 28 }, eq: { width: 680, height: 380, offset: 56 }, recorder: { width: 600, height: 300, offset: 84 } };
+  const visibility = { eq: value => equalizerUI.setVisible(value), recorder: value => recorderUI.setVisible(value) };
+  const shown = { rack: () => channelRack.open(), piano: () => pianoRoll.open() };
+  for (const item of WINDOWS) {
+    const section = sections[item.id];
+    section.hidden = false;
+    moduleWindows[item.id] = mountModuleWindow({ id: item.id, section, header: section.querySelector('.tool-section-header'), home: $('mix-tools'),
+      t: say, size: sizes[item.id], setVisible: visibility[item.id], onShow: shown[item.id],
+      onChange: open => playlist.windowButton(item.id)?.setAttribute('aria-pressed', String(open)) });
+  }
+}
 function revealAudition() {
   $('audition').hidden = false;
   // With results, the source row also holds the transport: keep it to one line.
   document.querySelector('.prepare').classList.add('has-results');
-  equalizerUI.setVisible(true);
-  recorderUI.setVisible(true);
-  channelRack.setVisible(true); pianoRoll.setVisible(true);
 }
 const localCopy = ({
   es: ['Cargar audio del equipo', 'Elegí un archivo y un fragmento de hasta 2 minutos.', 'Cargar fragmento', 'Nombre', 'Inicio (s)', 'Fin (s)', 'Cancelar', 'Leyendo audio…', 'No se pudo leer el audio. Probá otro archivo o un formato compatible con Chrome.', 'Elegí un rango válido de hasta 2 minutos dentro del archivo.', 'Elegí un audio del equipo o una separación guardada.'],
@@ -574,8 +600,8 @@ function buildChannel(stem, wav, trackName = null) {
   // FL's channel options: focus this track in the channel rack or the piano roll, or save its WAV.
   const editorHint = wav ? '' : pt('Add a sample to this track to use its editors.');
   const menu = event => contextMenu(event, [
-    { label: pt('Channel rack'), icon: PLUGIN_ICONS.rack, disabled: !wav, title: editorHint, action: () => { instruments.focus(stem); channelRack.open(); } },
-    { label: pt('Piano roll'), icon: PLUGIN_ICONS.piano, disabled: !wav, title: editorHint, action: () => { instruments.focus(stem); pianoRoll.open(); } },
+    { label: pt('Channel rack'), icon: PLUGIN_ICONS.rack, disabled: !wav, title: editorHint, action: () => { instruments.focus(stem); moduleWindows.rack.reveal(); channelRack.open(); } },
+    { label: pt('Piano roll'), icon: PLUGIN_ICONS.piano, disabled: !wav, title: editorHint, action: () => { instruments.focus(stem); moduleWindows.piano.reveal(); pianoRoll.open(); } },
     { label: pt('Download WAV'), icon: iconPaths.download, disabled: !wav, action: () => link.click() },
     '-',
     { label: pt('Hear only this track'), icon: iconPaths.music, action: hearOnly },
@@ -756,6 +782,7 @@ window.addEventListener('pagehide', () => {
   equalizerUI.dispose(); recorderUI.dispose(); mixOutput.dispose();
   cancelAnimationFrame(animationFrame);
   for (const view of waveforms) view.dispose();
+  for (const item of Object.values(moduleWindows)) item.dispose();
   instruments.dispose(); channelRack.dispose(); pianoRoll.dispose();
   worker?.terminate(); toneNode?.port.postMessage({ type: 'dispose' }); context?.close(); urls.forEach(url => URL.revokeObjectURL(url));
   if (jobId) chrome.runtime.sendMessage({ type: 'STEM_LOOP_CANCEL', jobId }).catch(() => {});
