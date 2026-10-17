@@ -5,6 +5,7 @@ const os = require('node:os');
 const { execFileSync } = require('node:child_process');
 const provenance = require('./package-provenance.js');
 const root = path.resolve(__dirname,'..');
+require('./build-icons.cjs').build(root, { check: true });
 const edition = process.env.PACKAGE_EDITION || 'full';
 if (!['full', 'tools'].includes(edition)) throw new Error('PACKAGE_EDITION must be "full" or "tools".');
 const zipBaseName = edition === 'tools' ? 'soundcloud-player-tools' : 'soundcloud-track-downloader';
@@ -28,12 +29,13 @@ function smokePackage(zipPath, apiPermission) {
   const files = [...entries].filter(entry => !entry.endsWith('/'));
   const forbidden = /(^|\/)(?:\.git|\.agents|\.codex|docs|services|repos|node_modules|dist|test|tests)(?:\/|$)|(^|\/)verify-[^/]+\.js$|uninstall-feedback-emails|(^|\/)(?:\.DS_Store|Thumbs\.db|\.dev\.vars[^/]*)$/;
   const prohibited = files.filter(entry => forbidden.test(entry));
+  prohibited.push(...files.filter(entry => /^(?:scripts\/(?:icon-(?:vectors|aliases|include)\.json|build-icons\.cjs|icons-runtime\.js)|assets\/icons\/.*\.svg|[._]fl-studio-icons\/)/.test(entry)));
   if (prohibited.length) throw new Error(`Package contains development-only files: ${prohibited.join(', ')}`);
-  for (const required of ['manifest.json', 'popup.html', 'offscreen.html', 'stems.html', 'assets/stems.css', 'assets/icon-cursors.css', 'scripts/icons.js', 'scripts/local-audio-output.mjs',
+  for (const required of ['manifest.json', 'popup.html', 'offscreen.html', 'stems.html', 'assets/stems.css', 'assets/icon-cursors.css', 'scripts/icons.js', 'scripts/icons-client.js', 'scripts/local-audio-output.mjs',
     'scripts/stem-worker.mjs', 'scripts/stem-model.mjs', 'scripts/stem-audio.mjs', 'scripts/stem-jobs.js', 'scripts/stem-effects.mjs',
     'scripts/stem-presets.mjs', 'scripts/stem-library-ui.mjs', 'scripts/stem-tone-processor.mjs',
     'scripts/stem-playlist.mjs', 'scripts/stem-playlist-core.mjs', 'scripts/stem-playlist-audio.mjs', 'scripts/stem-playlist-stretch.mjs', 'scripts/stem-playlist-worker.mjs', 'assets/stem-playlist.css',
-    'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/stem-pattern-core.mjs', 'scripts/stem-instruments.mjs', 'scripts/stem-channel-rack.mjs', 'scripts/stem-piano.mjs', 'scripts/stem-spectrum.mjs', 'assets/icons/mute.svg',
+    'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/stem-pattern-core.mjs', 'scripts/stem-instruments.mjs', 'scripts/stem-channel-rack.mjs', 'scripts/stem-piano.mjs', 'scripts/stem-spectrum.mjs',
     'scripts/stem-sample-browser.mjs', 'scripts/stem-sample-library.mjs', 'scripts/stem-sample-preview.mjs', 'scripts/stem-module-window.mjs', 'scripts/stem-row-menu.mjs', 'scripts/stem-rack-overview.mjs',
     'scripts/vendor/onnxruntime/ort.wasm.min.mjs', 'scripts/vendor/onnxruntime/ort-wasm-simd-threaded.mjs',
     'scripts/vendor/onnxruntime/ort-wasm-simd-threaded.wasm', 'scripts/background.js', 'THIRD_PARTY_LICENSES.md']) {

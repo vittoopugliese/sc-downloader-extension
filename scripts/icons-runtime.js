@@ -1,9 +1,12 @@
 // Included inside icons.js by build-icons.cjs; the catalog is private to this module.
 if (!globalThis.SCIcons) {
   const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
-  const resolve = name => Object.hasOwn(names, name) ? names[name] : (Object.hasOwn(vectors, name) ? name : names.help);
+  const resolve = name => Object.hasOwn(names, name) ? names[name] : names.help;
   const templates = new Map();
-  const style = ':host{display:inline-flex;width:var(--icon-size,1em);height:var(--icon-size,1em);vertical-align:middle;flex-shrink:0;pointer-events:none;line-height:1;filter:none!important}:host([hidden]){display:none!important}svg{display:block;width:100%;height:100%;fill:currentColor;stroke:none}';
+  // One scale for every control, including explicit CSS sizes and nested shadow roots.
+  // Scale the drawing so button hit areas, alignment and host animations stay intact.
+  const ICON_SCALE = 0.8;
+  const style = `:host{display:inline-flex;width:var(--icon-size,1em);height:var(--icon-size,1em);vertical-align:middle;flex-shrink:0;pointer-events:none;line-height:1;filter:none!important}:host([hidden]){display:none!important}svg{display:block;width:100%;height:100%;fill:currentColor;stroke:none;transform:scale(${ICON_SCALE});transform-origin:center}`;
   const sheet = globalThis.customElements ? new CSSStyleSheet() : null;
   sheet?.replaceSync(style);
   class Icon extends HTMLElement {

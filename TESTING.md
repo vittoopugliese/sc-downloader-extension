@@ -19,10 +19,13 @@ It includes the loop renderer contract, an integrity check for the
 pinned Signalsmith factory, and a real WASM render that verifies a slowed test
 tone keeps its original pitch.
 
-Run `npm run test:e2e:icons` for the shared icon catalog, color inheritance,
-visibility, state changes, shadow roots and Chrome's MAIN/ISOLATED registration.
+Run `node scripts/verify-icons.js` for build subsetting, deduplication and package
+selection. Run `npm run test:e2e:icons` for the shared icon catalog, global 80%
+scale, color inheritance, visibility, state changes, shadow roots and Chrome's
+MAIN/ISOLATED registration.
 It also writes `test-results/icons-catalog.png`. After changing icon mappings,
-run `npm run build:icons` first. See [the icon guide](docs/icon-system.md).
+run `npm run build:icons` first. Packaging rejects stale generated icons.
+See [the icon guide](docs/icon-system.md).
 
 Run the deterministic looper browser test. It loads the unpacked extension in
 Chromium, selects A-B, exports WAV, and verifies the downloaded samples. The

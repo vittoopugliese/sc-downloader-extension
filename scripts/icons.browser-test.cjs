@@ -4,7 +4,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { chromium } = require('playwright');
 const root = path.resolve(__dirname, '..');
-const aliases = require('./icon-aliases.json');
+const { names } = require('./build-icons.cjs').build(root, { check: true });
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -17,10 +17,11 @@ const aliases = require('./icon-aliases.json');
         const cell = document.createElement('article'); cell.append(SCIcons.create(name), document.createElement('br'), name);
         document.querySelector('main').append(cell);
       }
-    }, Object.keys(aliases));
+    }, Object.keys(names));
     const result = await page.evaluate(() => {
       const icons = [...document.querySelectorAll('sc-icon')];
-      const invalid = icons.filter(node => !node.shadowRoot?.querySelector('svg path') || node.getBoundingClientRect().width < 1).map(node => node.getAttribute('name'));
+      const invalid = icons.filter(node => !SCIcons.has(node.getAttribute('name')) || !node.shadowRoot?.querySelector('svg path') || node.getBoundingClientRect().width < 1).map(node => node.getAttribute('name'));
+      icons[0].setAttribute('name', 'play');
       const before = icons[0].shadowRoot.firstChild;
       icons[0].setAttribute('name', 'play');
       const stable = before === icons[0].shadowRoot.firstChild;
@@ -39,9 +40,27 @@ const aliases = require('./icon-aliases.json');
     });
     assert.deepEqual(result, { invalid: [], stable: true, changed: true, hidden: true, color: 'rgb(255, 85, 0)', nested: true });
     await page.screenshot({ path: path.join(root, 'test-results/icons-catalog.png'), fullPage: true });
-    // All extracted families are available, and arbitrary input cannot become markup.
+    // Every drawing is 20% smaller, including explicit sizing and nested roots.
+    await page.evaluate(() => {
+      for (const size of [16, 24, 42]) {
+        const host = document.createElement('div'); document.body.append(host);
+        const shadow = host.attachShadow({ mode: 'open' });
+        const icon = SCIcons.create('play'); shadow.append(icon);
+        icon.style.setProperty('--icon-size', size + 'px');
+        const box = icon.getBoundingClientRect();
+        const drawing = icon.shadowRoot.querySelector('svg').getBoundingClientRect();
+        if (Math.abs(box.width - size) > 0.01 || Math.abs(drawing.width / box.width - 0.8) > 0.001) throw Error('Global icon scale failed');
+        host.remove();
+      }
+      for (const icon of document.querySelectorAll('sc-icon')) {
+        const ratio = icon.shadowRoot.querySelector('svg').getBoundingClientRect().width / icon.getBoundingClientRect().width;
+        if (Math.abs(ratio - 0.8) > 0.001) throw Error('Explicit CSS size bypassed global scale');
+      }
+    });
+    // Unselected original names are absent; arbitrary input cannot become markup.
     await page.evaluate(() => {
       const node = SCIcons.create('cursor:0041'); document.body.append(node);
+      if (SCIcons.has('cursor:0041')) throw Error('Unused catalog leaked into runtime');
       node.setAttribute('name', '"><img src=x onerror=alert(1)>');
       if (node.shadowRoot.querySelector('img') || !node.shadowRoot.querySelector('path')) throw Error('Fallback failed');
       node.remove();

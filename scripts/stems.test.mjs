@@ -156,7 +156,7 @@ test('the shipping allow-list contains the analyzer and every local runtime depe
   const items = [...list.matchAll(/"([^"]+)"/g)].map(match => match[1]);
   const required = ['stems.html', 'assets/stems.css', 'scripts/stems-page.mjs', 'scripts/stem-audio.mjs',
     'scripts/stem-presets.mjs', 'scripts/stem-library-ui.mjs', 'scripts/stem-tone-processor.mjs',
-    'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/local-audio-output.mjs', 'assets/icons/mute.svg',
+    'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/local-audio-output.mjs', 'scripts/icons.js', 'scripts/icons-client.js',
     'scripts/stem-pattern-core.mjs', 'scripts/stem-instruments.mjs', 'scripts/stem-channel-rack.mjs', 'scripts/stem-piano.mjs',
     'scripts/stem-effects.mjs', 'scripts/stem-module-window.mjs', 'scripts/stem-rack-overview.mjs', 'scripts/stem-row-menu.mjs',
     'scripts/stem-sample-browser.mjs', 'scripts/stem-sample-library.mjs', 'scripts/stem-sample-preview.mjs',

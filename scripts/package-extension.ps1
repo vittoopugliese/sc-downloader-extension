@@ -9,6 +9,8 @@ $ErrorActionPreference = "Stop"
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
+& node (Join-Path $PSScriptRoot "build-icons.cjs") --check
+if ($LASTEXITCODE -ne 0) { throw "Icon build is stale. Run npm run build:icons before packaging." }
 $manifestPath = Join-Path $projectRoot "manifest.json"
 $manifest = Get-Content -Raw -Encoding utf8 $manifestPath | ConvertFrom-Json
 $version = $manifest.version
@@ -32,12 +34,13 @@ $packageItems = @(
     "assets/icon48.png",
     "assets/icon128.png",
     "assets/LooperPlayerToolkit.png",
-    "assets/icons",
+    "assets/icons/player-toolkit.png",
     "assets/drums",
     "assets/images/default_avatar.png",
     "assets/images/likes-explorer.png",
     "_locales",
     "scripts/icons.js",
+    "scripts/icons-client.js",
     "scripts/background.js",
     "scripts/release-config.js",
     "scripts/soundcloud-likes-source.js",
@@ -159,20 +162,13 @@ Get-ChildItem -LiteralPath $stagingRoot -Recurse -Force -File |
 
 $requiredRuntimeAssets = @(
     "scripts/icons.js",
+    "scripts/icons-client.js",
     "assets/icon-cursors.css",
     "assets/LooperPlayerToolkit.png",
     "assets/images/default_avatar.png",
     "assets/images/likes-explorer.png",
     "assets/icons/player-toolkit.png",
-    "assets/icons/eq.svg",
-    "assets/icons/record.svg",
-    "scripts/record-processor.js",
-    "assets/icons/megaphone.svg",
-    "assets/icons/sound-cloud-social-badge.svg",
-    "assets/icons/detach.svg",
-    "assets/icons/trash.svg",
-    "assets/icons/expand.svg",
-    "assets/icons/cross.svg"
+    "scripts/record-processor.js"
 )
 $missingRuntimeAssets = @($requiredRuntimeAssets | Where-Object {
     -not (Test-Path -LiteralPath (Join-Path $stagingRoot $_) -PathType Leaf)

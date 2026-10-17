@@ -110,7 +110,7 @@
         "https://soundcloud.com/*"
       ],
       "js": [
-        "scripts/icons.js",
+        "scripts/icons-client.js",
         "scripts/fast-tooltips.js",
         "scripts/i18n.js",
         "scripts/player-tools-client.js",
@@ -139,7 +139,7 @@
       ],
       "all_frames": true,
       "js": [
-        "scripts/icons.js",
+        "scripts/icons-client.js",
         "scripts/i18n.js",
         "scripts/looper-core.js",
         "scripts/looper.js"
