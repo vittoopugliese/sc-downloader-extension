@@ -1,4 +1,4 @@
-import { LIMITS, uid, clamp, emptyArrangement, newClip, clipDuration, clipRate, clipPitch, clipEnvelope, slipClip, crossfadeClips, arrangementEnd, snapTime, splitClip, validateArrangement, needsStretch, trackAudible, loopSegments, retimePatternClips } from './stem-playlist-core.mjs';
+import { LIMITS, uid, clamp, emptyArrangement, newClip, clipDuration, clipRate, clipPitch, clipEnvelope, slipClip, crossfadeClips, arrangementEnd, snapTime, splitClip, clipsInRange, validateArrangement, needsStretch, trackAudible, loopSegments, retimePatternClips } from './stem-playlist-core.mjs';
 import { createPlaylistEngine, createStretchCache, prefetchStretches, renderArrangement } from './stem-playlist-audio.mjs';
 import { encodeWav } from './stem-audio.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
@@ -10,6 +10,8 @@ export const CHANNEL_COLORS = Object.freeze({ original: '#c8c2ba', drums: '#ff8a
 const EXTRA_COLORS = ['#ffd2b3', '#c56a3a', '#e9a27a', '#a39a90', '#ff7a2f', '#d9cfc4'];
 // Stroke icons (24×24). The download arrow is the one the popup's download button uses.
 const ICONS = {
+  pencil: 'm4 16-1 5 5-1L21 7l-4-4zm10-10 4 4',
+  select: 'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5',
   undo: 'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',
   redo: 'M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3',
   download: 'M21 15v1.2c0 1.68 0 2.52-.327 3.162a3 3 0 0 1-1.311 1.311C18.72 21 17.88 21 16.2 21H7.8c-1.68 0-2.52 0-3.162-.327a3 3 0 0 1-1.311-1.311C3 18.72 3 17.88 3 16.2V15m14-5-5 5m0 0-5-5m5 5V3',
@@ -157,7 +159,8 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const rowViews = new Map(), clipViews = new Map(), analyzing = new WeakSet();
   let paintFrame = 0, dragAudio = 0, shelfKey = '', editMode = 'move', reported = null, slicing = false, slice = null;
   // Channel header width comes from CSS (--pl-head), narrower on phones.
-  let TRACK_HEAD = 236;
+  let TRACK_HEAD = 165;
+  let drawSource = null, timeSelection = null, clipboard = null, activeTrack = null, selecting = false;
   const node = (tag, className = '', text = '') => { const e = document.createElement(tag); e.className = className; e.textContent = text; return e; };
   const button = (text, title, action) => { const e = node('button', '', text); e.type = 'button'; e.title = title; e.setAttribute('aria-label', title); e.onclick = action; return e; };
   let messageTimer = 0;
@@ -171,7 +174,11 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   // `selected` is the clip the inspector shows; Ctrl/Shift+click or a box drag adds `extra` clips.
   const isChosen = id => id === selected || extra.has(id);
   const chosen = () => state.clips.filter(c => isChosen(c.id));
-  const pick = id => { selected = id; extra.clear(); };
+  const pick = id => {
+    selected = id; extra.clear(); timeSelection = null;
+    const clip = picked();
+    if (clip) { drawSource = { ...clip }; activeTrack = clip.track; }
+  };
   const copy = () => structuredClone({ ...state, sampleIds: importedSamples().map(asset => asset.id) });
   const trackOf = id => state.tracks.find(track => track.id === id);
   const color = track => CHANNEL_COLORS[track?.stem] || EXTRA_COLORS[Math.max(0, state.tracks.filter(item => !item.stem).indexOf(track)) % EXTRA_COLORS.length];
@@ -350,13 +357,23 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const sliceButton = toolButton({ icon: ICONS.slice, name: t('Slice tool', 'Herramienta de corte'), key: 'C', keys: ['c'], color: '#ff5d8f',
     detail: t('click a clip to cut it at the mouse; drag up or down to cut several tracks at once · Alt bypasses snap · Esc exits', 'hacé clic en un clip para cortarlo donde está el mouse; arrastrá hacia arriba o abajo para cortar varias pistas a la vez · Alt desactiva snap · Esc sale') }, () => setSlicing(!slicing));
   sliceButton.setAttribute('aria-pressed', 'false');
+  const pencilButton = toolButton({ icon: ICONS.pencil, name: t('Draw tool', 'Lápiz'), key: 'P', keys: ['p'], color: '#ffad80',
+    detail: t('select a sample or clip, then click empty grid space to place it; drag to select a time range', 'seleccioná un sample o clip y hacé clic en la grilla vacía para colocarlo; arrastrá para seleccionar un rango') }, () => setTool('draw'));
+  const selectButton = toolButton({ icon: ICONS.select, name: t('Time selection tool', 'Seleccionar rango'), key: 'Q', keys: ['q'], color: '#ffd166',
+    detail: t('drag across tracks to select time, including silence; Ctrl+C/V copies/pastes, Ctrl+D repeats the whole range', 'arrastrá sobre las pistas para seleccionar tiempo, incluido el silencio; Ctrl+C/V copia/pega, Ctrl+D repite el rango completo') }, () => setTool('select'));
+  function setTool(tool) {
+    selecting = tool === 'select'; setSlicing(tool === 'slice');
+  }
   function setSlicing(on) {
+    if (on) selecting = false;
     slicing = on; slice = null; sliceLine.hidden = true;
     sliceButton.setAttribute('aria-pressed', String(on)); container.classList.toggle('is-slicing', on);
+    pencilButton.setAttribute('aria-pressed', String(!on && !selecting)); selectButton.setAttribute('aria-pressed', String(selecting));
+    container.classList.toggle('is-drawing', !on && !selecting); container.classList.toggle('is-selecting', selecting);
   }
   toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.label, tapButton, fitTempo, ...tempoControls, snapLabel, node('span', 'pl-spacer'), ...toolbarEnd, windowGroup, exportButton, fileInput);
   const shelf = node('div', 'pl-shelf'); shelf.setAttribute('aria-label', t('Sample library', 'Biblioteca de samples'));
-  shelf.title = t('Library: click to add at the cursor, drag onto a track, right-click to duplicate or delete. Wheel scrolls.', 'Biblioteca: clic para agregar en el cursor, arrastrá a una pista, clic derecho para duplicar o eliminar. La rueda desplaza.');
+  shelf.title = t('Library: click to select for drawing, double-click to add at the cursor, drag onto a track. Right-click for more.', 'Biblioteca: clic para elegir qué dibujar, doble clic para agregar en el cursor, arrastrá a una pista. Clic derecho para más.');
   shelf.addEventListener('wheel', event => {
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || shelf.scrollWidth <= shelf.clientWidth) return;
     event.preventDefault(); shelf.scrollLeft += event.deltaY;
@@ -367,6 +384,8 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const waveCanvas = node('canvas', 'pl-wave-layer'); waveCanvas.setAttribute('aria-hidden', 'true'); grid.append(waveCanvas);
   const playhead = node('div', 'pl-playhead'); playhead.setAttribute('aria-hidden', 'true'); grid.append(playhead);
   const sliceLine = node('div', 'pl-slice-line'); sliceLine.hidden = true; sliceLine.setAttribute('aria-hidden', 'true'); grid.append(sliceLine);
+  const rangeBox = node('div', 'pl-marquee'); rangeBox.hidden = true; rangeBox.setAttribute('aria-hidden', 'true'); grid.append(rangeBox);
+  setTool('draw');
   const rulerRow = node('div', 'pl-grid-row pl-ruler-row'), corner = node('div', 'pl-track-head', t('CHANNELS', 'CANALES')), ruler = node('div', 'pl-ruler');
   const rulerMarks = node('div', 'pl-ruler-marks'), loopBand = node('div', 'pl-loop-band'), markerLine = node('div', 'pl-marker');
   let rulerKey = '', rulerWidth = 0;
@@ -418,6 +437,11 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     sliceLine.hidden = false;
   }
   grid.addEventListener('pointerdown', event => {
+    if (selecting && event.button === 0 && !event.target.closest('.pl-track-head, .pl-ruler-row')) {
+      const lane = event.target.closest('.pl-lane');
+      if (lane) { event.stopPropagation(); beginMarquee(event, lane); }
+      return;
+    }
     if (!slicing || event.button !== 0 || event.target.closest('.pl-track-head, .pl-ruler-row')) return;
     const lane = laneIndex(event.clientY); if (lane < 0) return;
     event.preventDefault(); event.stopPropagation(); scroll.focus({ preventScroll: true });
@@ -441,9 +465,12 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   grid.addEventListener('pointercancel', () => { slice = null; sliceLine.hidden = true; });
   scroll.addEventListener('scroll', () => { paintSoon(); onViewChange?.(); });
   window.addEventListener('scroll', paintSoon, { passive: true });
+  let viewportWidth = 0;
   const viewObserver = new ResizeObserver(() => {
     scroll.style.setProperty('--pl-view', `${scroll.clientWidth}px`);
-    if ((parseFloat(getComputedStyle(container).getPropertyValue('--pl-head')) || 236) !== TRACK_HEAD) draw();
+    if (viewportWidth !== scroll.clientWidth || (parseFloat(getComputedStyle(container).getPropertyValue('--pl-head')) || 165) !== TRACK_HEAD) {
+      viewportWidth = scroll.clientWidth; draw();
+    }
     paintSoon();
   });
   viewObserver.observe(scroll);
@@ -460,7 +487,9 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const muteClip = toolButton({ icon: ICONS.mute, name: t('Mute clip', 'Silenciar clip'), key: 'M', keys: ['m'], color: '#9aa3ad', detail: t('silences only the selected clips; the track keeps playing', 'calla solo los clips seleccionados; la pista sigue sonando') }, () => setClip('mute', !picked()?.mute));
   const reverseClip = toolButton({ icon: ICONS.reverse, name: t('Reverse', 'Invertir'), key: 'R', keys: ['r'], color: '#b48cff', detail: t('plays the selected clips backwards', 'reproduce los clips seleccionados al revés') }, () => setClip('reverse', !picked()?.reverse));
   const crossfade = toolButton({ icon: ICONS.crossfade, name: t('Crossfade overlaps', 'Fundir superposiciones'), key: 'X', keys: ['x'], color: '#4fc3f7', detail: t('fades clips that overlap on the same track so the joins do not click', 'aplica fundidos a los clips que se pisan en la misma pista para que los cortes no hagan clic') }, () => commit(() => crossfadeClips(state.clips)));
-  const duplicate = toolButton({ icon: ICONS.duplicate, name: t('Duplicate', 'Duplicar'), key: 'Ctrl+D', keys: ['ctrl+d'], color: '#66d17a', detail: t('copies the selected clip right after it', 'copia el clip seleccionado justo después') }, () => commit(() => { const clip = picked(); if (clip) { const next = { ...clip, id: uid(), at: clip.at + clipDuration(clip) }; state.clips.push(next); pick(next.id); } }));
+  const duplicate = toolButton({ icon: ICONS.duplicate, name: t('Duplicate', 'Duplicar'), key: 'Ctrl+D', keys: ['ctrl+d'], color: '#66d17a', detail: t('repeats selected clips or the whole time range, including silence', 'repite los clips o el rango completo seleccionado, incluido el silencio') }, () => {
+    const selection = captureSelection(); if (selection) pasteSelection(selection, selection.end);
+  });
   const split = toolButton({ icon: ICONS.split, name: t('Split at cursor', 'Cortar en cursor'), key: 'S', keys: ['s'], color: '#ffb02e', detail: t('cuts every selected clip at the playhead. Ctrl/Shift+click clips, or drag on empty space, to select several.', 'corta todos los clips seleccionados en la posición del cursor. Ctrl/Shift+clic en los clips, o arrastrá en un espacio vacío, para seleccionar varios.') }, () => cutClips(chosen(), now()));
   const remove = toolButton({ icon: ICONS.trash, name: t('Remove from playlist', 'Quitar de la playlist'), key: t('Del', 'Supr'), keys: ['delete', 'backspace'], color: '#ff4d4d', detail: t('removes the selected clips from the song; the sample stays in the library and the track keeps it as its instrument', 'quita los clips seleccionados de la canción; el sample queda en la biblioteca y la pista lo conserva como instrumento') }, () => commit(() => { state.clips = state.clips.filter(c => !isChosen(c.id)); pick(null); }));
   // Cuts every clip in `clips` that crosses `seconds`; both halves of a selected clip stay selected.
@@ -534,9 +563,9 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const zoomOut = toolButton({ icon: ICONS.zoomOut, name: t('Zoom out', 'Alejar'), detail: wheelHint, key: '-', keys: ['-', '_'], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1 / 1.5));
   const zoomIn = toolButton({ icon: ICONS.zoomIn, name: t('Zoom in', 'Acercar'), detail: wheelHint, key: '+', keys: ['+', '='], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1.5));
   const fitButton = toolButton({ icon: ICONS.fit, name: t('Show the whole arrangement', 'Ver todo el arreglo'), detail: t('fits every clip in view', 'ajusta el zoom para ver todos los clips'), key: 'F', keys: ['f'], color: '#e6e1da' }, fit);
-  // Two rows of seven tools: clip edits, then history, view and tracks.
+  // Drawing and time selection lead two rows of eight tools.
   const tools = node('div', 'pl-tools');
-  tools.append(muteClip, reverseClip, crossfade, duplicate, split, sliceButton, remove, undo, redo, zoomOut, zoomIn, fitButton, importButton, addTrack);
+  tools.append(pencilButton, selectButton, muteClip, reverseClip, crossfade, duplicate, split, sliceButton, remove, undo, redo, zoomOut, zoomIn, fitButton, importButton, addTrack);
   inspector.append(selectionLabel, pitch.wrap, fine.wrap, speed.wrap, ...fades.map(f => f.wrap), tools);
   let zoomFrame = 0, zoomTarget = null, zoomAnchor = null;
   function zoomAround(x, factor) {
@@ -556,7 +585,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) { scroll.scrollLeft += event.deltaX || event.deltaY; return; }
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
-  const hint = node('p', 'pl-hint', t('Drag clips to move · edges to trim · right-click for more · Alt bypasses snap · Space plays, twice restarts from the last ruler click (or loop start) · Ctrl/Shift+click or drag on empty space selects several clips · S splits the selection at the playhead · C toggles the slice tool · T taps tempo · B or F8 opens the sample browser · drop audio files on a track. Select a loop on the ruler; hover for controls. 16 tracks / 5 minutes.', 'Arrastrá clips para mover · bordes para recortar · clic derecho para más · Alt desactiva snap · Espacio reproduce, dos veces reinicia desde el último clic en la regla (o el inicio del loop) · Ctrl/Shift+clic o arrastrar en un espacio vacío selecciona varios clips · S corta la selección en el cursor · C activa la herramienta de corte · T marca el tempo · B o F8 abre el browser de samples · soltá audio en una pista. Seleccioná un loop en la regla; pasá el cursor para ver los controles. 16 pistas / 5 minutos.'));
+  const hint = node('p', 'pl-hint', t('P: pencil · select a sample or clip, then click empty grid space to draw · Q: select time, including silence · Ctrl+C/V: copy/paste at cursor · Ctrl+D: repeat selection · drag clips to move, edges to trim · Alt bypasses snap · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 tracks / 5 minutes.', 'P: lápiz · elegí un sample o clip y hacé clic en la grilla vacía para dibujar · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar en el cursor · Ctrl+D: repetir selección · arrastrá clips para mover, bordes para recortar · Alt desactiva snap · Espacio reproduce · S corta en el cursor · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 pistas / 5 minutos.'));
   const message = node('p', 'pl-message'); message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite');
   container.classList.add('playlist', 'pl-ui'); container.tabIndex = -1;
   // Messages, help and the clip inspector sit above the timeline, under the transport.
@@ -575,7 +604,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   function travel(forward) {
     const from = forward ? future : history, to = forward ? history : future;
     if (!from.length) return;
-    to.push(copy()); state = from.pop();
+    to.push(copy()); state = from.pop(); timeSelection = null;
     if (state.sampleIds) {
       const ids = new Set(state.sampleIds);
       for (const asset of importedSamples()) if (!ids.has(asset.id)) { graveyard.set(asset.id, asset); assets.delete(asset.id); cache.forget(asset.id); }
@@ -680,7 +709,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     if (waveCanvas.width !== Math.ceil(width * scale)) waveCanvas.width = Math.ceil(width * scale);
     if (waveCanvas.height !== Math.ceil(height * scale)) waveCanvas.height = Math.ceil(height * scale);
     const ctx = waveCanvas.getContext('2d'); ctx.setTransform(scale, 0, 0, scale, 0, 0); ctx.clearRect(0, 0, width, height);
-    renderRuler();
+    renderRuler(); renderTimeSelection();
     // Measure every lane before any clip is written, so layout is read once per paint.
     const laneTops = new Map();
     for (const [id, view] of rowViews) laneTops.set(id, view.lane.getBoundingClientRect().top - rect.top - y + 25);
@@ -722,9 +751,10 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     return head;
   }
   function draw({ paint: paintNow = true } = {}) {
-    TRACK_HEAD = parseFloat(getComputedStyle(container).getPropertyValue('--pl-head')) || 236;
+    TRACK_HEAD = parseFloat(getComputedStyle(container).getPropertyValue('--pl-head')) || 165;
     tempo.input.value = String(Math.round(state.bpm * 100) / 100); undo.disabled = !history.length; redo.disabled = !future.length;
-    const extent = Math.min(LIMITS.seconds, Math.max(16, arrangementEnd(state) + 8)), width = Math.max(640, extent * zoom);
+    const extent = Math.min(LIMITS.seconds, Math.max(16, arrangementEnd(state) + 8, timeSelection?.end || 0));
+    const width = Math.max(scroll.clientWidth - TRACK_HEAD, extent * zoom);
     grid.style.width = (width + TRACK_HEAD) + 'px'; grid.style.setProperty('--beat', (60 / state.bpm * zoom) + 'px');
     ruler.style.width = width + 'px'; rulerWidth = width;
     if (loopBand.parentElement !== ruler) ruler.append(rulerMarks, loopBand, markerLine);
@@ -746,7 +776,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
           if (browsed) { await importSamples(browsed, track.id, at); return; }
           if (event.dataTransfer.files.length) { await importSamples([...event.dataTransfer.files], track.id, at); return; }
           const asset = assets.get(event.dataTransfer.getData('application/x-stem-sample'));
-          if (asset) commit(() => { const clip = newClip(asset, track.id, at); pick(clip.id); state.clips.push(clip); });
+          if (asset) commit(() => { const clip = newClip(asset, track.id, at); state.clips.push(clip); pick(clip.id); });
         });
         view = { row, lane, head, host }; rowViews.set(track.id, view);
       }
@@ -767,9 +797,10 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     if (nextShelf !== shelfKey) {
       shelfKey = nextShelf; shelf.replaceChildren();
       for (const asset of shelfAssets) {
-        const b = button(asset.name, t('Drag onto a track, or click to add at cursor · right-click: duplicate or delete', 'Arrastrá a una pista o hacé clic para agregar en el cursor · clic derecho: duplicar o eliminar'), () => commit(() => {
-          const clip = newClip(asset, picked()?.track || firstUserTrack(), position); state.clips.push(clip); pick(clip.id);
-        }));
+        const b = button(asset.name, t('Click to draw this sample · double-click: add at cursor · drag onto a track', 'Clic para dibujar este sample · doble clic: agregar en el cursor · arrastrá a una pista'), () => {
+          pick(null); drawSource = newClip(asset, activeTrack || firstUserTrack()); setTool('draw'); updateSelection(); scroll.focus({ preventScroll: true });
+        });
+        b.ondblclick = () => placeDrawSource(activeTrack || firstUserTrack(), position);
         b.classList.toggle('is-pattern', !!asset.pattern); b.dataset.asset = asset.id;
         b.draggable = true; b.ondragstart = event => event.dataTransfer.setData('application/x-stem-sample', asset.id);
         b.oncontextmenu = event => shelfMenu(event, asset); shelf.append(b);
@@ -830,40 +861,97 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     muteClip.setAttribute('aria-pressed', String(!!clip?.mute)); reverseClip.setAttribute('aria-pressed', String(!!clip?.reverse));
     pitch.show(clip?.pitch ?? 0); speed.show(clip?.speed ?? 1);
     for (const item of grid.querySelectorAll('.pl-clip')) item.setAttribute('aria-pressed', String(isChosen(item.dataset.clip)));
+    for (const item of shelf.children) item.setAttribute('aria-pressed', String(item.dataset.asset === drawSource?.asset));
+    duplicate.disabled = !clip && !timeSelection;
+    renderTimeSelection();
     // Reported on change only: redraws must not move the host's focus.
     if (selected !== reported) { reported = selected; onSelect?.(clip && assets.get(clip.asset)); }
   }
   function toggleClip(id) {
+    timeSelection = null;
     if (id === selected) { selected = extra.values().next().value ?? null; extra.delete(selected); }
     else if (extra.has(id)) extra.delete(id);
     else { if (selected) extra.add(selected); selected = id; }
     updateSelection();
   }
-  // Dragging on empty lane space selects every clip the box touches; Ctrl/Shift adds to the selection.
-  function beginMarquee(event) {
+  function renderTimeSelection() {
+    rangeBox.hidden = !timeSelection;
+    if (!timeSelection) return;
+    const views = timeSelection.tracks.map(id => rowViews.get(id)).filter(Boolean);
+    if (!views.length) { rangeBox.hidden = true; return; }
+    const origin = grid.getBoundingClientRect(), first = views[0].lane.getBoundingClientRect(), last = views.at(-1).lane.getBoundingClientRect();
+    Object.assign(rangeBox.style, { left: `${TRACK_HEAD + timeSelection.start * zoom}px`, top: `${first.top - origin.top}px`,
+      width: `${(timeSelection.end - timeSelection.start) * zoom}px`, height: `${last.bottom - first.top}px` });
+  }
+  function placeDrawSource(track, at) {
+    const source = picked() || drawSource;
+    if (!source || !assets.has(source.asset)) return;
+    commit(() => {
+      const clip = { ...source, id: uid(), track, at };
+      state.clips.push(clip); pick(clip.id);
+    });
+  }
+  function captureSelection() {
+    const clips = timeSelection ? clipsInRange(state.clips, timeSelection) : chosen();
+    if (!timeSelection && !clips.length) return null;
+    const start = timeSelection?.start ?? Math.min(...clips.map(c => c.at));
+    const end = timeSelection?.end ?? Math.max(...clips.map(c => c.at + clipDuration(c)));
+    const tracks = timeSelection?.tracks || state.tracks.filter(track => clips.some(c => c.track === track.id)).map(track => track.id);
+    return { start, end, tracks: [...tracks], range: !!timeSelection, clips: clips.map(c => ({ ...c })) };
+  }
+  function pasteSelection(selection, at, targetTrack = null) {
+    const startIndex = state.tracks.findIndex(track => track.id === selection.tracks[0]);
+    const targetIndex = targetTrack ? state.tracks.findIndex(track => track.id === targetTrack) : startIndex;
+    const mapTrack = id => state.tracks[state.tracks.findIndex(track => track.id === id) + targetIndex - startIndex]?.id;
+    const tracks = selection.tracks.map(mapTrack);
+    if (startIndex < 0 || targetIndex < 0 || tracks.some(id => !id) || selection.clips.some(c => !assets.has(c.asset))) {
+      report(t('The copied samples or tracks are no longer available here.', 'Los samples o pistas copiados ya no están disponibles acá.')); return;
+    }
+    const end = at + selection.end - selection.start;
+    if (end > LIMITS.seconds + 1e-6) { report(t('The selection exceeds 5 minutes.', 'La selección supera los 5 minutos.')); return; }
+    const previousRange = timeSelection, previousSelected = selected, previousExtra = new Set(extra);
+    if (!commit(() => {
+      const clips = selection.clips.map(c => ({ ...c, id: uid(), track: mapTrack(c.track), at: at + c.at - selection.start }));
+      state.clips.push(...clips); selected = clips[0]?.id ?? null; extra = new Set(clips.slice(1).map(c => c.id));
+      timeSelection = selection.range ? { start: at, end, tracks } : null;
+    })) { timeSelection = previousRange; selected = previousSelected; extra = previousExtra; updateSelection(); }
+  }
+  // A click draws; a drag selects time and entire lanes, retaining the empty space.
+  // Ctrl/Shift dragging retains the additive clip-only marquee behavior.
+  function beginMarquee(event, lane = event.currentTarget) {
     if (event.button !== 0) return;
     event.preventDefault(); scroll.focus({ preventScroll: true });
-    const lane = event.currentTarget, add = event.ctrlKey || event.metaKey || event.shiftKey;
-    const base = add ? chosen().map(c => c.id) : [], box = node('div', 'pl-marquee');
+    const add = event.ctrlKey || event.metaKey || event.shiftKey;
+    const base = add ? chosen().map(c => c.id) : [];
+    const previous = { range: timeSelection, selected, extra: new Set(extra) };
     const start = grid.getBoundingClientRect(), x0 = event.clientX - start.left, y0 = event.clientY - start.top;
     let moved = false;
+    activeTrack = lane.dataset.track;
     lane.setPointerCapture(event.pointerId);
     lane.onpointermove = move => {
       const origin = grid.getBoundingClientRect(), x1 = move.clientX - origin.left, y1 = move.clientY - origin.top;
       if (!moved && Math.hypot(x1 - x0, y1 - y0) < 4) return;
-      if (!moved) { moved = true; grid.append(box); }
+      moved = true;
       const left = Math.min(x0, x1), right = Math.max(x0, x1), top = Math.min(y0, y1), bottom = Math.max(y0, y1);
-      Object.assign(box.style, { left: left + 'px', top: top + 'px', width: (right - left) + 'px', height: (bottom - top) + 'px' });
-      const from = (left - TRACK_HEAD) / zoom, to = (right - TRACK_HEAD) / zoom;
-      const tracks = new Set([...rowViews].filter(([, view]) => { const r = view.lane.getBoundingClientRect(); return r.top - origin.top < bottom && r.bottom - origin.top > top; }).map(([id]) => id));
+      const from = snapAt((left - TRACK_HEAD) / zoom, move.altKey), to = snapAt((right - TRACK_HEAD) / zoom, move.altKey);
+      const tracks = new Set(state.tracks.filter(track => { const r = rowViews.get(track.id).lane.getBoundingClientRect(); return r.top - origin.top <= bottom && r.bottom - origin.top >= top; }).map(track => track.id));
+      timeSelection = !add && to > from ? { start: from, end: to, tracks: [...tracks] } : null;
       const ids = [...new Set([...base, ...state.clips.filter(c => tracks.has(c.track) && c.at < to && c.at + clipDuration(c) > from).map(c => c.id)])];
       selected = ids.includes(selected) ? selected : ids[0] ?? null; extra = new Set(ids.filter(id => id !== selected));
       updateSelection();
     };
-    lane.onpointerup = lane.onpointercancel = () => {
-      lane.onpointermove = lane.onpointerup = lane.onpointercancel = null; box.remove();
-      if (!moved && !add) { pick(null); updateSelection(); }
+    const finish = cancel => {
+      lane.onpointermove = lane.onpointerup = lane.onpointercancel = lane.onlostpointercapture = null;
+      if (lane.hasPointerCapture(event.pointerId)) lane.releasePointerCapture(event.pointerId);
+      if (cancel) { timeSelection = previous.range; selected = previous.selected; extra = previous.extra; updateSelection(); return; }
+      if (!moved && !add) {
+        const at = snapAt((x0 - TRACK_HEAD) / zoom, event.altKey);
+        if (!selecting && drawSource && assets.has(drawSource.asset)) placeDrawSource(lane.dataset.track, at);
+        else { pick(null); seek(at); updateSelection(); }
+      }
+      if (timeSelection) activeTrack = timeSelection.tracks[0];
     };
+    lane.onpointerup = () => finish(false); lane.onpointercancel = lane.onlostpointercapture = () => finish(true);
   }
   function beginDrag(event, clip, item) {
     if (event.button !== 0) return;
@@ -951,7 +1039,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     stop(true); return toggle();
   }
   function seek(seconds) {
-    position = clamp(seconds, 0, Math.max(arrangementEnd(state), loopRange?.end ?? 0));
+    position = clamp(seconds, 0, LIMITS.seconds);
     if (playing()) engine.play(playbackState(), position, transport());
   }
   async function exportMix() {
@@ -1001,7 +1089,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
       if (track.stem && eq && typeof eq === 'object' && Array.isArray(eq.bands)) track.eq = structuredClone(eq);
     }
     try { validateArrangement(candidate, next); } catch { candidate = build(false); validateArrangement(candidate, next); }
-    state = candidate; assets = next; assignSources(); history = []; future = []; graveyard.clear(); pick(null); liveBefore = null; position = marker = loopRange?.start ?? 0;
+    state = candidate; assets = next; assignSources(); history = []; future = []; graveyard.clear(); pick(null); drawSource = clipboard = activeTrack = null; liveBefore = null; position = marker = loopRange?.start ?? 0;
     changed(); draw(); requestAnimationFrame(fit);
   }
   // The audio a track's instrument is cut from: the stem, or the first non-pattern clip.
@@ -1018,8 +1106,10 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     if (event.code === 'Space') { event.preventDefault(); event.stopPropagation(); if (!event.repeat) safe(space)(); return; }
     const combo = (modifier ? 'ctrl+' : '') + (modifier && event.shiftKey ? 'shift+' : '') + event.key.toLowerCase(), tool = windowKeys.has(combo) ? null : hotkeys.get(combo);
     if (tool) { event.preventDefault(); if ((!event.repeat || tool.repeat) && !tool.control.disabled) tool.control.click(); }
-    else if (event.key === 'Escape' && slicing) { event.preventDefault(); setSlicing(false); }
-    else if (combo === 'ctrl+a') { event.preventDefault(); selected = state.clips[0]?.id ?? null; extra = new Set(state.clips.slice(1).map(c => c.id)); updateSelection(); }
+    else if (event.key === 'Escape') { event.preventDefault(); setTool('draw'); pick(null); updateSelection(); }
+    else if (combo === 'ctrl+c') { event.preventDefault(); clipboard = captureSelection(); }
+    else if (combo === 'ctrl+v') { event.preventDefault(); if (clipboard) pasteSelection(clipboard, snapAt(position), activeTrack); }
+    else if (combo === 'ctrl+a') { event.preventDefault(); timeSelection = null; selected = state.clips[0]?.id ?? null; extra = new Set(state.clips.slice(1).map(c => c.id)); updateSelection(); }
     else if (combo === 't') { event.preventDefault(); if (!event.repeat) tapTempo(); }
   });
   function animate() {

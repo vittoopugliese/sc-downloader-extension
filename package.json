@@ -12,6 +12,7 @@
     "test:e2e:stems-levels": "node scripts/stems-waveform-levels.browser-test.cjs",
     "test:e2e:stems": "node scripts/stems.browser-test.cjs",
     "test:e2e:playlist": "node scripts/stem-playlist.browser-test.cjs",
+    "test:e2e:playlist-editing": "node scripts/stem-playlist-editing.browser-test.cjs",
     "test:e2e:sample-browser": "node scripts/stem-sample-browser.browser-test.cjs",
     "test:e2e:module-windows": "node scripts/stem-module-window.browser-test.cjs",
     "test:e2e:channel-eq": "node scripts/stem-channel-eq.browser-test.cjs",

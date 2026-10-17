@@ -44,6 +44,12 @@ const { chromium } = require('playwright');
     assert.equal(await playlist.isVisible(), true);
     await transport.locator('input[type=file]').setInputFiles({ name: 'tone.wav', mimeType: 'audio/wav', buffer: wav });
     await playlist.locator('.pl-clip').first().waitFor();
+    // Import selects the drawing source immediately; no extra library click is needed.
+    const initialLane = await playlist.locator('.pl-lane').first().boundingBox();
+    await page.mouse.click(initialLane.x + 3 * 48, initialLane.y + 36);
+    assert.equal(await playlist.locator('.pl-clip').count(), 2, 'Clicking the grid draws the imported sample');
+    await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('Control+z');
+    assert.equal(await playlist.locator('.pl-clip').count(), 1);
     assert.equal(await transport.locator('.pl-toolbar [aria-label="Loop A"], .pl-toolbar [aria-label="Loop B"]').count(), 0);
     assert.equal(await page.getByRole('button', { name: 'Clear A–B loop' }).count(), 0);
     // The transport bar lives in the header: the header play button is the only one.
@@ -56,13 +62,13 @@ const { chromium } = require('playwright');
       assert.equal(await control.locator('svg').count(), 1);
       assert.match(await control.getAttribute('title'), new RegExp('^' + name + (name === 'Download WAV' ? '' : ' \\([A-Z]\\d*\\)') + ': '));
     }
-    // Two rows of seven tools, each with a hotkey; window buttons live in the transport bar.
+    // Two rows of eight tools, each with a hotkey; window buttons live in the transport bar.
     const tools = playlist.locator('.pl-tools > button');
-    assert.equal(await tools.count(), 14);
+    assert.equal(await tools.count(), 16);
     assert.equal(await transport.locator('.pl-window-tool').count(), 6);
     assert.equal(await transport.locator('.pl-window-tool').first().evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(255, 85, 0)');
     assert.equal(new Set(await tools.evaluateAll(nodes => nodes.map(n => Math.round(n.getBoundingClientRect().top)))).size, 2);
-    assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 14);
+    assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 16);
     assert.equal(await transport.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(255, 85, 0)');
     const ruler = playlist.locator('.pl-ruler'), band = playlist.locator('.pl-loop-band');
     assert.match(await ruler.getAttribute('title'), /drag inside.*edges.*double-click/i);

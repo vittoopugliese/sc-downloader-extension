@@ -24,10 +24,51 @@ el Chrome del usuario ni publicado.
 
 ## Uso
 
+### Playlist: lápiz, selección de tiempo y zoom
+
+- **Lápiz (P)** es la primera herramienta y está activa al abrir. Importar un
+  sample o tocar un clip lo elige para dibujar: clic en una parte vacía de la
+  grilla coloca otra aparición en esa pista, con snap. Desde un clip se conservan
+  sus recortes, pitch, velocidad, volumen y demás ajustes.
+- En la biblioteca, **un clic elige** el sample o patrón; **doble clic lo agrega
+  en el cursor**. También se puede seguir arrastrando a las pistas.
+- **Seleccionar rango (Q)** permite arrastrar desde cualquier punto, incluso
+  sobre un clip. También se puede iniciar el arrastre desde espacio vacío con
+  el lápiz. La selección queda visible y conserva el silencio de ambos lados,
+  además de las pistas abarcadas. Alt omite el snap.
+- **Ctrl+C / Ctrl+V** copia y pega en el cursor. Con Q, clic en una pista vacía
+  fija el tiempo y la pista de destino; también se puede mover el cursor desde
+  la regla. **Ctrl+D** repite todo el rango inmediatamente después y selecciona
+  la copia para seguir repitiendo. Una snare a mitad de un compás sigue a mitad
+  del compás siguiente. Las selecciones totalmente vacías conservan su duración.
+- Si un borde del rango atraviesa un clip, se copia solamente el audio dentro
+  del rango. Sin rango explícito, Ctrl+D duplica todos los clips seleccionados
+  manteniendo sus distancias. Ctrl/Shift+clic conserva la selección aditiva.
+- **Esc** limpia la selección y vuelve al lápiz. Dibujar, pegar y duplicar
+  entran en Deshacer/Rehacer. La selección de tiempo es independiente del loop
+  A–B de la regla.
+- Canales de escritorio: **165 px** (antes 236 px); `main`: **1294 px** de ancho
+  máximo. Se ajustaron los espacios internos para conservar los nombres junto
+  al volumen.
+
+El hueco oscuro al alejar el zoom provenía de un mínimo fijo de 640 px para los
+carriles: la grilla podía quedar más angosta que su ventana. Ahora el mínimo es
+el ancho visible menos los canales y se recalcula al redimensionar. La grilla
+recorta sus capas con `overflow: clip`, para que el canvas desplazado durante un
+cambio de zoom no amplíe el área desplazable. Esto mantiene alineados canales,
+regla, clips, scrollbar y waveforms, también después de hacer pan y alejar.
+
+Verificado en Chromium con `npm.cmd run test:e2e:playlist-editing`,
+`npm.cmd run test:e2e:playlist` y `npm.cmd run test:e2e:stems-ui`. La prueba de
+Stems mide además los píxeles del canvas: no hay waveform fuera de sus clips al
+mínimo zoom. Las capturas quedan en `test-results/stems-ui/playlist-min-zoom.png`
+y `test-results/playlist-editing-min-zoom.png`.
+
 ### Botones de ventanas y atajos
 
 En la barra de transporte, junto al tacho, el gamepad y la descarga, hay cinco
-botones naranjas, más FXs. Las herramientas de la Playlist volvieron a 7 + 7.
+botones naranjas, más FXs. Las herramientas de la Playlist son 8 + 8,
+empezando por el lápiz y la selección de rango.
 
 | Ventana | Tecla |
 | --- | --- |
@@ -217,6 +258,7 @@ aplica los mismos inserts en la exportación.
 | `npm run test:e2e:instruments` | Rack (Chops), Piano Roll, patrones, Clear All, presets. |
 | `npm run test:e2e:rack-modes` | Vista Channel Rack, One-shot con nota raíz, modos sin pérdida, recarga, 390/320 px. |
 | `npm run test:e2e:playlist` | Playlist, quitar vs. eliminar, deshacer. |
+| `npm run test:e2e:playlist-editing` | Lápiz, rangos con silencio, copia/duplicación entre pistas, recortes, límites, zoom/pan y resize. |
 | `npm run test:e2e:stem-presets` | Guardado, samples importados, borrado de separaciones. |
 
 Todas pasaban al cerrar el 17/10/2026, junto con `stems-ui`, `stem-local-audio` y

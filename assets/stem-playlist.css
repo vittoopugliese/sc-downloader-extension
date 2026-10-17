@@ -7,7 +7,7 @@
 #mixer:not(:has(#mix-tools>section:not([hidden]))){display:none}
 @media(max-width:600px){#mixer{padding:0 14px 14px}}
 
-.pl-ui{--pl-head:236px;--pl-edge:#3b3b3b;--pl-panel:#292929;--pl-head-bg:#202020;--pl-night:#191919;--pl-muted:#b8b3ad}
+.pl-ui{--pl-head:165px;--pl-edge:#3b3b3b;--pl-panel:#292929;--pl-head-bg:#202020;--pl-night:#191919;--pl-muted:#b8b3ad}
 /* The playlist continues the header card: no divider, the transport bar lives in the header. */
 .playlist{padding:0 18px 18px}
 .pl-ui button,.pl-ui select,.pl-ui input{font:11px Arial,Helvetica,sans-serif}
@@ -49,7 +49,7 @@
 .pl-hbar-corner{flex:0 0 var(--pl-head);border-right:1px solid var(--pl-edge)}
 .pl-hbar{flex:1 1 auto;min-width:0;height:14px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:#5a554f transparent}
 .pl-hbar>div{height:1px}
-.pl-grid{position:relative}
+.pl-grid{position:relative;overflow:clip}
 .pl-wave-layer{position:absolute;z-index:3;pointer-events:none}
 .pl-clip.is-muted .pl-clip-title{opacity:.4}
 .pl-clip[aria-pressed=true]{background:transparent}
@@ -68,9 +68,9 @@
 .pl-marker{position:absolute;bottom:0;width:0;margin-left:-5px;border-bottom:7px solid var(--orange);border-left:5px solid transparent;border-right:5px solid transparent;pointer-events:none}
 
 /* Stem channel headers reuse the stem controls: fold, enable, tools, WAV and volume. */
-.pl-track-head.stem{display:flex;flex-direction:row;align-items:center;gap:6px;grid-template-columns:none;margin:0;border-radius:0;border-top:0;border-right:1px solid var(--pl-edge);background:var(--pl-head-bg)}
+.pl-track-head.stem{display:flex;flex-direction:row;align-items:center;gap:4px;grid-template-columns:none;margin:0;padding:8px 6px;border-radius:0;border-top:0;border-right:1px solid var(--pl-edge);background:var(--pl-head-bg)}
 .pl-ui .pl-track-head.stem .stem-name{justify-content:flex-start;min-height:0;padding:0;overflow:hidden;border:0;background:none;color:#f2f2f2;font:700 12px Arial,Helvetica,sans-serif;white-space:nowrap}
-.pl-track-head.stem h2{display:flex;align-items:center;gap:7px;flex:1;margin:0;font-size:12px;min-width:0}
+.pl-track-head.stem h2{display:flex;align-items:center;gap:4px;flex:1;margin:0;font-size:12px;min-width:0}
 .pl-track-head.stem h2 .icon{width:15px;height:15px;flex-shrink:0;color:var(--track-color)}
 .pl-ui .pl-track-head.stem .stem-solo{flex-shrink:0;width:20px;height:28px;padding:0;border:0;background:transparent}
 .pl-track-head.stem .stem-volume{flex-direction:column;gap:1px;flex-shrink:0;margin:0}
@@ -91,12 +91,16 @@
 .pl-playhead{position:absolute;top:0;bottom:0;z-index:4;width:1px;background:#fff;box-shadow:0 0 5px #fff8;pointer-events:none}
 .pl-playhead:before{content:'';position:absolute;top:0;left:-4px;border-top:7px solid #fff;border-left:4px solid transparent;border-right:4px solid transparent}
 .pl-slice-line{position:absolute;z-index:6;width:0;margin-left:-1px;border-left:2px dashed #fff;filter:drop-shadow(0 0 2px #000);pointer-events:none}
-.pl-marquee{position:absolute;z-index:6;border:1px solid var(--orange);background:#ff55001f;pointer-events:none}
+.pl-marquee{position:absolute;z-index:4;border:1px solid var(--orange);background:#ff55001f;pointer-events:none}
+.pl-marquee[hidden]{display:none}
+.playlist.is-drawing .pl-lane{cursor:crosshair}
+.playlist.is-selecting .pl-lane,.playlist.is-selecting .pl-clip{cursor:crosshair}
+.pl-lane{touch-action:none;user-select:none}
 .playlist.is-slicing .pl-lane,.playlist.is-slicing .pl-clip,.playlist.is-slicing .pl-edge{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M12 1v22' stroke='%23000' stroke-width='4'/%3E%3Cpath d='M12 1v22' stroke='%23fff' stroke-width='2'/%3E%3Cpath d='M6 4h12' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E") 12 12,crosshair}
 .playlist.is-slicing .pl-edge:hover{background:none}
 .pl-inspector{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:10px 12px;border:1px solid var(--pl-edge);border-radius:10px 10px 0 0;background:var(--pl-panel)}
 .pl-selected{flex:0 1 auto;max-width:140px;overflow:hidden;font-size:11px;color:#ffad80;white-space:nowrap;text-overflow:ellipsis}
-.pl-tools{display:grid;grid-template-columns:repeat(7,32px);gap:5px;margin-left:auto}
+.pl-tools{display:grid;grid-template-columns:repeat(8,32px);gap:5px;margin-left:auto}
 .pl-windows{display:inline-flex;align-items:center;gap:3px}
 .pl-ui .pl-windows .pl-icon-button{width:28px;padding:5px}
 /* Window buttons: orange like the transport's main actions; an open window stays pressed. */

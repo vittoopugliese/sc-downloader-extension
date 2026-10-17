@@ -76,6 +76,18 @@ export function splitClip(clip, seconds) {
   return [{ ...clip, out: cut, fadeOut: 0 }, { ...clip, id: uid(), at: seconds, in: cut, fadeIn: 0 }];
 }
 
+// Copy only the audio inside a time selection, retaining its leading/trailing silence.
+// Reverse and resampled clips express their source window in different coordinates.
+export function clipsInRange(clips, { start, end, tracks }) {
+  return clips.filter(clip => tracks.includes(clip.track)).flatMap(clip => {
+    const from = Math.max(start, clip.at), to = Math.min(end, clip.at + clipDuration(clip));
+    if (to <= from) return [];
+    const rate = clipRate(clip), left = (from - clip.at) * rate, right = (clip.at + clipDuration(clip) - to) * rate;
+    return [{ ...clip, at: from, in: clip.in + (clip.reverse ? right : left), out: clip.out - (clip.reverse ? left : right),
+      fadeIn: from > clip.at ? 0 : clip.fadeIn, fadeOut: to < clip.at + clipDuration(clip) ? 0 : clip.fadeOut }];
+  });
+}
+
 // Slip changes the source window, retaining the clip's timeline edges.
 export function slipClip(clip, delta, duration) {
   const shift = clamp(delta * clipRate(clip), -clip.in, duration - clip.out);

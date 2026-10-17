@@ -194,7 +194,30 @@ const { chromium } = require('playwright');
     const filteredRms = await captureRms();
     assert.ok(filteredRms < dryRms * .8, `Recorder captures post-EQ audio: ${filteredRms} < ${dryRms}`);
     await page.locator('#play').click();
+    assert.ok(await page.locator('.pl-stem-head .stem-name').evaluateAll(names => names.every(name => name.scrollWidth <= name.clientWidth)), 'Stem names fit beside the knobs in narrower headers');
     await page.screenshot({ path: path.join(artifacts, 'desktop.png'), fullPage: true });
+    // Reproduce the reported zoom-out hole with real stem headers and shared waveforms.
+    for (let i = 0; i < 14; i++) { await playlist.getByLabel('Alejar', { exact: true }).click(); await page.evaluate(() => new Promise(requestAnimationFrame)); }
+    await checkAlignment();
+    assert.ok(await playlist.evaluate(el => {
+      const scroll = el.querySelector('.pl-scroll'), right = scroll.getBoundingClientRect().right;
+      return scroll.scrollWidth <= scroll.clientWidth + 1 && [...el.querySelectorAll('.pl-lane')].every(lane => lane.getBoundingClientRect().right >= right - 2);
+    }), 'Every lane fills the viewport without a dark hole or phantom overflow');
+    const waveformBounds = await playlist.evaluate(el => {
+      const canvas = el.querySelector('canvas'), box = canvas.getBoundingClientRect(), scale = canvas.width / box.width;
+      const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      const clips = [...el.querySelectorAll('.pl-clip')].map(clip => clip.getBoundingClientRect());
+      let painted = 0, outside = 0;
+      for (let i = 3; i < pixels.length; i += 4) if (pixels[i]) {
+        painted++;
+        const pixel = (i - 3) / 4, x = box.x + (pixel % canvas.width) / scale, y = box.y + Math.floor(pixel / canvas.width) / scale;
+        if (!clips.some(clip => x >= clip.left - 1 && x <= clip.right + 1 && y >= clip.top && y <= clip.bottom)) outside++;
+      }
+      return { painted, outside };
+    });
+    assert.ok(waveformBounds.painted > 0, 'The waveform canvas actually contains audio');
+    assert.equal(waveformBounds.outside, 0, 'No ghost waveforms outside their clips');
+    await playlist.screenshot({ path: path.join(artifacts, 'playlist-min-zoom.png') });
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 844 });
       await page.waitForTimeout(80);

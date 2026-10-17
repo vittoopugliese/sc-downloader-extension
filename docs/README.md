@@ -1,5 +1,7 @@
 # Documentación y estado
 
+**17/10/2026 — Edición de Playlist:** [lápiz, selección de tiempo con silencio, copiar/pegar y duplicar rangos; arreglo de grilla y waveforms al alejar, canales más angostos y main de 1294 px](stem-workspace-fl-20261017.md#playlist-lápiz-selección-de-tiempo-y-zoom). Implementado localmente; no publicado.
+
 **17/10/2026 — Stems estilo FL Studio:** [Browser de samples, ventanas F6–F10, EQ por canal, Channel Rack con One-shot y Chops, quitar vs. eliminar samples y guardado de samples importados](stem-workspace-fl-20261017.md). Plan y evidencia en [stem-browser-channel-rack-plan.md](stem-browser-channel-rack-plan.md). Implementado localmente; no publicado.
 
 **14/10/2026 — Likes Explorer y Player Tools:** [botón adicional verde agua para reproducción nativa, conservando el iframe de preview](LIKES-EXPLORER-NATIVE-PLAYBACK-RESEARCH-20261014.md#implementación-posterior-del-14102026). Implementado localmente; no publicado.

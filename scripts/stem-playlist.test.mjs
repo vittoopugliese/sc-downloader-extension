@@ -1,10 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audibleClips, clipEnvelope, clipsInWindow, crossfadeClips, needsStretch, slipClip, splitClip, stretchKey, trackAudible, transportWindows } from './stem-playlist-core.mjs';
+import { audibleClips, clipEnvelope, clipsInWindow, clipsInRange, crossfadeClips, needsStretch, slipClip, splitClip, stretchKey, trackAudible, transportWindows } from './stem-playlist-core.mjs';
 import { stretchChannels } from './stem-playlist-stretch.mjs';
 import createSignalsmith from './vendor/signalsmith/wasm-factory.mjs';
 
 const clip = (at, seconds, extra = {}) => ({ id: `c${at}`, asset: 'a', track: 't', at, in: 0, out: seconds, pitch: 0, speed: 1, keepLength: true, gain: 1, ...extra });
+
+test('time ranges retain silent offsets, crop source windows at playback rate and exclude other lanes', () => {
+  const snare = clip(.5, .1), other = clip(.75, .1, { track: 'other' });
+  assert.deepEqual(clipsInRange([snare, other], { start: 0, end: 2, tracks: ['t'] }).map(c => [c.at, c.in, c.out]), [[.5, 0, .1]]);
+  assert.deepEqual(clipsInRange([snare], { start: 1, end: 2, tracks: ['t'] }), [], 'A wholly silent range is valid');
+  const source = clip(2, 10, { in: 2, speed: 2, fadeIn: .2, fadeOut: .3 });
+  for (const reverse of [false, true]) {
+    const [cropped] = clipsInRange([{ ...source, reverse }], { start: 2.5, end: 4, tracks: ['t'] });
+    assert.deepEqual([cropped.at, cropped.in, cropped.out, cropped.fadeIn, cropped.fadeOut], reverse ? [2.5, 6, 9, 0, 0] : [2.5, 3, 6, 0, 0]);
+  }
+  const [resampled] = clipsInRange([clip(0, 8, { pitch: 12, keepLength: false })], { start: 1, end: 2, tracks: ['t'] });
+  assert.deepEqual([resampled.at, resampled.in, resampled.out], [1, 2, 4]);
+  assert.deepEqual([source.at, source.in, source.out, source.fadeIn, source.fadeOut], [2, 2, 10, .2, .3], 'Copy never edits the original');
+});
 
 test('transport windows cover the span once, wrap inside the loop and stop without one', () => {
   const pick = windows => windows.map(w => [w.from, w.to, w.zero, w.end, w.entry]);
