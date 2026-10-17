@@ -307,7 +307,7 @@ const extractDialog = mountExtractDialog({ t: say, stemName: stem => text(stem),
 setButtonContent($('clear-cache'), { icon: 'trash', label: text('clearCache') });
 $('clear-cache').title = text('clearCacheTip'); $('clear-cache').setAttribute('aria-label', text('clearCache'));
 $('separate').title = text('details');
-const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('transport'), playButton: false, windows: WINDOWS,
+const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('transport'), playButton: false, windows: WINDOWS, windowHome: $('mix-tools'),
   // One line: play, tempo and speed, then the game, the windows and the export.
   toolbarStart: [$('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [$('header-pin'), $('toggle-game')],
   // Right-click > Extract stems… on any audio clip opens the extraction window.

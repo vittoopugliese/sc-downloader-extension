@@ -3,6 +3,7 @@ import { createPlaylistEngine, createStretchCache, prefetchStretches, renderArra
 import { encodeWav } from './stem-audio.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
 import { mountSampleBrowser } from './stem-sample-browser.mjs';
+import { wasOpen } from './stem-module-window.mjs';
 import { createButton } from './ui-button.mjs';
 import { createMetronome } from './stem-metronome.mjs';
 import { createKnob } from './ui-knob.mjs';
@@ -96,7 +97,7 @@ export function contextMenu(event, items) {
 // the host: their Duplicate/Delete go through `onPatternAction(action, assetId)`.
 // `onSeparate(clip)` adds "Extract stems…" to the menu of every audio clip; the host
 // separates it and hands the result back with `addStemTracks`.
-export function mountPlaylist({ container, windows = [], toolbarHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect, onRackSample, onSeparate }) {
+export function mountPlaylist({ container, windows = [], windowHome = null, toolbarHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect, onRackSample, onSeparate }) {
   const es = document.documentElement.lang === 'es', t = (en, spanish) => es ? spanish : en;
   let state = emptyArrangement(), assets = new Map(), selected = null, extra = new Set(), zoom = 48;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
@@ -279,10 +280,11 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   fileInput.onchange = safe(async () => { const files = [...fileInput.files]; fileInput.value = ''; await importSamples(files); });
   const importButton = toolButton({ icon: ICONS.import, name: t('Import audio files', 'Importar archivos de audio'), key: 'I', keys: ['i'], color: '#ff7a2f',
     detail: t('WAV, MP3, FLAC, M4A or OGG land at the playhead on the first free track. You can also drop them on a track.', 'WAV, MP3, FLAC, M4A u OGG se agregan en el cursor, en la primera pista libre. También podés soltarlos sobre una pista.') }, () => fileInput.click());
-  // Floating sample browser (F8, or B on the Playlist): created on first use; its drops go
+  // Sample browser (F8, or B on the Playlist): a tool window that docks into `windowHome`
+  // like the others. Created on first use, or on load when it was left open; its drops go
   // through importSamples. It leads the orange window buttons of the transport bar; the host
   // adds the others with `windows`.
-  let sampleBrowser = null;
+  let sampleBrowser = null, disposed = false;
   const windowKeys = new Map(), windowButtons = new Map();
   function windowButton({ id, icon, name, detail, key, keys, color, toggle }) {
     const control = toolButton({ icon, name, detail, key, keys, color, variant: 'accent', size: 'icon' }, () => toggle(control));
@@ -293,12 +295,13 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   }
   const browserButton = windowButton({ id: 'browser', icon: ICONS.browser, name: t('Sample browser', 'Browser de samples'), key: 'F8', keys: ['f8', 'b'], color: '#3dd6c6',
     detail: t('a floating window for a samples folder: click a file to preview it, drag it onto a track · B also opens it from the Playlist', 'una ventana flotante para una carpeta de samples: hacé clic en un archivo para escucharlo y arrastralo a una pista · B también lo abre desde la Playlist'),
-    toggle(control) {
-      sampleBrowser ||= mountSampleBrowser({ t, onToggle: open => control.setAttribute('aria-pressed', String(open)),
-        importToRack: items => importSamples(items, null),
-        async importSamples(items) { try { return await importSamples(items); } catch (error) { report(error); return false; } } });
-      sampleBrowser.toggle(control);
-    } });
+    toggle(control) { ensureBrowser().toggle(control); } });
+  function ensureBrowser() {
+    return sampleBrowser ||= mountSampleBrowser({ t, home: windowHome, onToggle: open => browserButton.setAttribute('aria-pressed', String(open)),
+      importToRack: items => importSamples(items, null),
+      async importSamples(items) { try { return await importSamples(items); } catch (error) { report(error); return false; } } });
+  }
+  if (wasOpen('browser')) queueMicrotask(() => { if (!disposed) ensureBrowser(); });
   const windowTools = [browserButton, ...windows.map(windowButton)];
   const windowGroup = node('span', 'pl-windows'); windowGroup.setAttribute('role', 'group'); windowGroup.setAttribute('aria-label', t('Windows', 'Ventanas')); windowGroup.append(...windowTools);
   // Window keys work anywhere on the page, like FL Studio's F6–F9.
@@ -1266,7 +1269,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
       return done;
     },
     dispose() {
-      exporting?.abort(); metronome.stop(); engine?.dispose(); cache.dispose(); viewObserver.disconnect(); sampleBrowser?.dispose();
+      disposed = true; exporting?.abort(); metronome.stop(); engine?.dispose(); cache.dispose(); viewObserver.disconnect(); sampleBrowser?.dispose();
       document.removeEventListener('keydown', onWindowKey); cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();
     },
   };

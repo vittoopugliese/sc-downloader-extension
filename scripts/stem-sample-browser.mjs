@@ -1,52 +1,47 @@
 import { createSamplePreview } from './stem-sample-preview.mjs';
 import { chooseRoot, createFolderCache, readPermission, savedRoot } from './stem-sample-library.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
-import { bringToFront, isOnTop } from './stem-module-window.mjs';
+import { mountModuleWindow } from './stem-module-window.mjs';
 
-// Floating sample browser, like FL Studio's: pick a root folder, walk it, click a file to
-// preview it and drag it onto a Playlist track or the channel rack. It is not modal.
+// Sample browser, like FL Studio's: pick a root folder, walk it, click a file to preview it
+// and drag it onto a Playlist track or the channel rack. It is a tool window like the
+// others (stem-module-window.mjs): floating and not modal, or docked under the Playlist.
 // Files are only read when previewed or imported. `importSamples` and `importToRack`
 // receive { name, read() } items; read() resolves to { buffer } or { file }.
 export const BROWSER_DRAG_TYPE = 'application/x-stem-browser';
-const ROW = 26, RECT_KEY = 'stem-sample-browser-rect', VOLUME_KEY = 'stem-sample-browser-volume';
-const ICONS = Object.freeze({"folder": "folder", "audio": "audio", "choose": "folder-add", "up": "up", "refresh": "refresh", "close": "close", "maximize": "maximize", "restore": "restore", "play": "play", "stop": "stop", "add": "add", "rack": "rack", "volume": "volume"});
+const ROW = 26, VOLUME_KEY = 'stem-sample-browser-volume';
+const ICONS = Object.freeze({"browser": "browser", "folder": "folder", "audio": "audio", "choose": "folder-add", "up": "up", "refresh": "refresh", "play": "play", "stop": "stop", "add": "add", "rack": "rack", "volume": "volume"});
 const iconMarkup = name => globalThis.SCIcons.html(name, "icon");
 const clock = seconds => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, '0')}`;
 const read = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
 const write = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage blocked */ } };
 let instances = 0;
 
-export function mountSampleBrowser({ t, importSamples, importToRack, onToggle }) {
+export function mountSampleBrowser({ t, home, importSamples, importToRack, onToggle }) {
   const id = `sb-${++instances}`;
   const previewer = createSamplePreview({ onState: renderPlaying });
   const folders = createFolderCache();
   let root = null, access = 'unknown', stack = [], entries = [], active = -1, current = null;
-  let listing = null, ticket = 0, loaded = false, dragging = null, back = null, rowFrame = 0, headFrame = 0, arrowTimer = 0, statusTimer = 0;
+  let listing = null, ticket = 0, loaded = false, dragging = null, back = null, rowFrame = 0, headFrame = 0, arrowTimer = 0, statusTimer = 0, frame = null;
 
   const node = (tag, className = '', text = '') => { const e = document.createElement(tag); if (className) e.className = className; if (text) e.textContent = text; return e; };
   const iconButton = (icon, label, action) => {
     const b = node('button', 'sb-icon'); b.type = 'button'; b.title = label; b.setAttribute('aria-label', label);
     b.innerHTML = iconMarkup(icon); b.onclick = action; return b;
   };
-  const win = node('section', 'sb-window pl-ui'); win.hidden = true;
-  win.setAttribute('role', 'dialog'); win.setAttribute('aria-modal', 'false'); win.setAttribute('aria-labelledby', `${id}-title`);
-  const head = node('header', 'sb-head');
-  const title = node('h2', 'sb-title', 'Browser'); title.id = `${id}-title`;
+  // Same title bar as the other tool windows: a Player Tools disclosure header.
+  const collapsible = globalThis.SCPlayerToolsCollapsible;
+  if (!document.getElementById('stem-plugin-styles')) {
+    const style = document.createElement('style'); style.id = 'stem-plugin-styles'; style.textContent = collapsible.styles; document.head.append(style);
+  }
+  const win = node('section', 'sb-window'); win.id = 'stem-browser'; win.hidden = true;
+  win.setAttribute('aria-label', 'Browser');
+  win.innerHTML = collapsible.header({ title: 'Browser', bodyId: `${id}-body`, icon: globalThis.SCIcons.html(ICONS.browser, 'tool-section-icon'), actions: ' ', actionsClass: 'sb-actions pl-ui' });
+  const head = win.querySelector('.tool-section-header');
   const rootLabel = node('span', 'sb-root');
   const chooseButton = iconButton(ICONS.choose, t('Choose samples folder', 'Elegir carpeta de samples'), () => choose());
   const refreshButton = iconButton(ICONS.refresh, t('Refresh folder', 'Actualizar carpeta'), () => refresh());
-  const closeButton = iconButton(ICONS.close, t('Close browser (Esc)', 'Cerrar browser (Esc)'), () => close());
-  const maximizeButton = iconButton(ICONS.maximize, t('Maximize', 'Maximizar'), () => setMaximized(!win.classList.contains('is-maximized')));
-  head.title = t('Drag to move · double-click to maximize', 'Arrastrá para mover · doble clic para maximizar');
-  head.append(title, rootLabel, chooseButton, refreshButton, maximizeButton, closeButton);
-  function setMaximized(value) {
-    win.classList.toggle('is-maximized', value);
-    const label = value ? t('Restore size', 'Restaurar tamaño') : t('Maximize', 'Maximizar');
-    maximizeButton.innerHTML = iconMarkup(value ? ICONS.restore : ICONS.maximize);
-    maximizeButton.title = label; maximizeButton.setAttribute('aria-label', label); maximizeButton.setAttribute('aria-pressed', String(value));
-    scheduleRows(); requestAnimationFrame(drawWave);
-  }
-  head.addEventListener('dblclick', event => { if (!event.target.closest('button')) setMaximized(!win.classList.contains('is-maximized')); });
+  head.querySelector('.tool-section-actions').replaceChildren(rootLabel, chooseButton, refreshButton);
   const pathRow = node('div', 'sb-path');
   const upButton = iconButton(ICONS.up, t('Parent folder (Backspace)', 'Carpeta superior (Retroceso)'), () => parent());
   const crumb = node('span', 'sb-crumb'); pathRow.append(upButton, crumb);
@@ -79,9 +74,10 @@ export function mountSampleBrowser({ t, importSamples, importToRack, onToggle })
   controls.append(playButton, sampleName, duration, volumeLabel, addButton, rackButton);
   viewer.append(wave, controls);
   const status = node('p', 'sb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-  win.append(head, pathRow, list, empty, viewer, status);
-  win.addEventListener('pointerdown', () => bringToFront(win), true);
-  document.body.append(win);
+  const body = node('div', 'sb-body pl-ui'); body.id = `${id}-body`;
+  body.append(pathRow, list, empty, viewer, status); win.append(body);
+  (home || document.body).append(win);
+  collapsible.mount({ section: win, toggle: head.querySelector('.tool-section-toggle'), body });
 
   function setStatus(text, sticky = false) {
     status.textContent = text; clearTimeout(statusTimer);
@@ -101,34 +97,8 @@ export function mountSampleBrowser({ t, importSamples, importToRack, onToggle })
     access = 'prompt'; renderAccess(); return true;
   }
 
-  // Window placement is a per-viewer convenience kept in localStorage.
-  function place(rect = read(RECT_KEY)) {
-    const width = Math.min(innerWidth - 16, Math.max(280, rect?.width || 360));
-    const height = Math.min(innerHeight - 16, Math.max(300, rect?.height || 480));
-    const left = Math.min(innerWidth - width - 8, Math.max(8, rect?.left ?? innerWidth - width - 24));
-    const top = Math.min(innerHeight - 48, Math.max(8, rect?.top ?? 96));
-    Object.assign(win.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
-  }
-  const saveRect = () => { if (win.classList.contains('is-maximized')) return; const box = win.getBoundingClientRect(); write(RECT_KEY, { left: box.left, top: box.top, width: box.width, height: box.height }); };
-  head.onpointerdown = event => {
-    if (event.button !== 0 || event.target.closest('button') || win.classList.contains('is-maximized')) return;
-    event.preventDefault();
-    const box = win.getBoundingClientRect(), dx = event.clientX - box.left, dy = event.clientY - box.top;
-    head.setPointerCapture(event.pointerId);
-    head.onpointermove = move => {
-      win.style.left = `${Math.min(innerWidth - 60, Math.max(60 - box.width, move.clientX - dx))}px`;
-      win.style.top = `${Math.min(innerHeight - 32, Math.max(0, move.clientY - dy))}px`;
-    };
-    head.onpointerup = head.onpointercancel = () => { head.onpointermove = head.onpointerup = head.onpointercancel = null; saveRect(); };
-  };
-  let resizeTimer = 0;
-  const sizeObserver = new ResizeObserver(() => {
-    scheduleRows(); drawWave();
-    clearTimeout(resizeTimer); if (!win.hidden) resizeTimer = setTimeout(saveRect, 300);
-  });
+  const sizeObserver = new ResizeObserver(() => { scheduleRows(); drawWave(); });
   sizeObserver.observe(win);
-  const onWindowResize = () => { if (!win.hidden) place(win.getBoundingClientRect()); };
-  window.addEventListener('resize', onWindowResize);
 
   function renderAccess() {
     const ready = access === 'granted';
@@ -277,7 +247,7 @@ export function mountSampleBrowser({ t, importSamples, importToRack, onToggle })
   // The panel owns its keys: Space, pad letters and Playlist hotkeys do not leak out.
   win.addEventListener('keydown', event => {
     const typing = event.target.closest('input:not([type=range]),textarea,select');
-    if (event.key === 'Escape' || (!typing && event.key.toLowerCase() === 'b' && !event.ctrlKey && !event.metaKey && !event.altKey)) { event.preventDefault(); close(); }
+    if ((event.key === 'Escape' && !frame?.isDocked()) || (!typing && event.key.toLowerCase() === 'b' && !event.ctrlKey && !event.metaKey && !event.altKey)) { event.preventDefault(); close(); }
     else if (event.key === ' ' && event.target !== list && !event.target.closest('button')) { event.preventDefault(); togglePreview(); }
     event.stopPropagation();
   });
@@ -391,25 +361,31 @@ export function mountSampleBrowser({ t, importSamples, importToRack, onToggle })
     });
   }
 
+  const focusInside = () => (access === 'granted' ? list : emptyAction.hidden ? win.querySelector('.module-control:last-child') : emptyAction)?.focus({ preventScroll: true });
+  // The window frame calls this when it opens or closes.
+  function setVisible(value) {
+    onToggle?.(value);
+    if (!value) {
+      stopPreview(); clearTimeout(arrowTimer);
+      if (back?.isConnected) back.focus({ preventScroll: true });
+      back = null; return;
+    }
+    renderViewer(); scheduleRows();
+    if (!loaded) { loaded = true; renderAccess(); connectSaved().then(() => { if (!win.hidden) focusInside(); }, error => setStatus(errorText(error))); }
+  }
   function open(from = document.activeElement) {
-    if (!win.hidden) { list.hidden ? (emptyAction.hidden ? closeButton : emptyAction).focus() : list.focus(); return; }
-    back = from instanceof HTMLElement && !win.contains(from) ? from : null;
-    win.hidden = false; place(); bringToFront(win); onToggle?.(true); renderViewer(); scheduleRows();
-    const focus = () => (access === 'granted' ? list : emptyAction.hidden ? closeButton : emptyAction).focus({ preventScroll: true });
-    if (!loaded) { loaded = true; renderAccess(); connectSaved().then(focus, error => setStatus(errorText(error))); }
-    focus();
+    if (!frame.isOpen()) back = from instanceof HTMLElement && !win.contains(from) ? from : null;
+    frame.reveal(); focusInside();
   }
-  function close() {
-    if (win.hidden) return;
-    stopPreview(); clearTimeout(arrowTimer); win.hidden = true; onToggle?.(false);
-    if (back?.isConnected) back.focus({ preventScroll: true }); back = null;
-  }
+  function close() { frame.close(); }
   renderAccess(); renderViewer();
+  frame = mountModuleWindow({ id: 'browser', section: win, header: head, home: home || document.body, t,
+    size: { width: 360, height: 480, right: 24, top: 96 }, setVisible, onShow() { scheduleRows(); drawWave(); } });
   return {
     open, close,
     // A browser hidden behind another window comes to the front first.
-    toggle(from) { if (win.hidden) open(from); else if (!isOnTop(win)) bringToFront(win); else close(); },
-    isOpen: () => !win.hidden,
+    toggle(from) { if (!frame.isOpen()) open(from); else frame.toggle(); },
+    isOpen: () => frame.isOpen(),
     // Items for a drop on the Playlist or rack, or null if the drag did not start here.
     resolveDrop(dataTransfer) {
       if (!dragging || !dataTransfer?.types?.includes(BROWSER_DRAG_TYPE)) return null;
@@ -419,8 +395,8 @@ export function mountSampleBrowser({ t, importSamples, importToRack, onToggle })
     // Preview audio held in memory; the Playlist adds it to its budget.
     reservedBytes: () => previewer.bytes(),
     dispose() {
-      listing?.abort(); previewer.dispose(); sizeObserver.disconnect(); window.removeEventListener('resize', onWindowResize);
-      cancelAnimationFrame(rowFrame); cancelAnimationFrame(headFrame); clearTimeout(arrowTimer); clearTimeout(statusTimer); clearTimeout(resizeTimer);
+      listing?.abort(); previewer.dispose(); sizeObserver.disconnect(); frame.dispose();
+      cancelAnimationFrame(rowFrame); cancelAnimationFrame(headFrame); clearTimeout(arrowTimer); clearTimeout(statusTimer);
       win.remove();
     },
   };

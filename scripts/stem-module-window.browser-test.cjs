@@ -1,6 +1,7 @@
 // Channel Rack, Piano Roll, EQ and Recorder as FL Studio style windows in real Chromium:
 // toolbar buttons and F-keys toggle them; they float, move, come to the front, dock under
-// the Playlist and float again, never collapse, close with X or Escape and are remembered.
+// the Playlist and float again, collapse from the title bar only while docked, close with X
+// or Escape and are remembered.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -67,8 +68,19 @@ const { chromium } = require('playwright');
     await section('rack').getByRole('button', { name: 'Dock under the Playlist' }).click();
     assert.equal(await section('rack').evaluate(node => node.parentElement.id), 'mix-tools');
     assert.equal(await section('rack').evaluate(node => getComputedStyle(node).position), 'static');
+    // Docked, the title bar collapses and expands it like a Player Tools section.
+    const dockedTitle = await section('rack').locator('.tool-section-title').boundingBox();
+    assert.equal(await section('rack').locator('.tool-section-chevron').isVisible(), true);
+    await page.mouse.click(dockedTitle.x + 4, dockedTitle.y + 4);
+    assert.equal(await body.isVisible(), false, 'Docked title bar collapses');
+    await page.mouse.dblclick(dockedTitle.x + 4, dockedTitle.y + 4);
+    assert.equal(await section('rack').evaluate(node => getComputedStyle(node).position), 'static', 'Double-click does not undock');
+    await page.mouse.click(dockedTitle.x + 4, dockedTitle.y + 4);
+    assert.equal(await body.isVisible(), true, 'Docked title bar expands');
+    await page.mouse.click(dockedTitle.x + 4, dockedTitle.y + 4);
     await section('rack').getByRole('button', { name: 'Detach: float this window' }).click();
     assert.equal(await section('rack').evaluate(node => getComputedStyle(node).position), 'fixed');
+    assert.equal(await body.isVisible(), true, 'A floating window is never collapsed');
     const again = await section('rack').boundingBox();
     assert.ok(Math.abs(again.x - after.x) < 2 && Math.abs(again.y - after.y) < 2, 'Floating keeps its last rectangle');
     // Maximize (button or double-click on the title bar) fills the page and grows the editors.

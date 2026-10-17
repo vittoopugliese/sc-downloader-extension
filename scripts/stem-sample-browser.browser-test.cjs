@@ -188,7 +188,7 @@ const { chromium } = require('playwright');
     await row('f1499.wav').waitFor();
     assert.equal(await row('f1499.wav').getAttribute('aria-selected'), 'true');
     // The window moves by its header and stays non-modal.
-    const before = await dialog.boundingBox(), title = await dialog.locator('.sb-title').boundingBox();
+    const before = await dialog.boundingBox(), title = await dialog.locator('.tool-section-title').boundingBox();
     await page.mouse.move(title.x + 4, title.y + 4); await page.mouse.down();
     await page.mouse.move(title.x - 196, title.y + 54, { steps: 4 }); await page.mouse.up();
     const after = await dialog.boundingBox();
@@ -201,9 +201,29 @@ const { chromium } = require('playwright');
     assert.ok(full.width > 1150 && full.height > 950, 'Maximized browser fills the page');
     await dialog.getByRole('button', { name: 'Restore size' }).click();
     assert.ok(Math.abs((await dialog.boundingBox()).x - after.x) < 2);
-    // The root is remembered: reopening needs no picker.
+    // Like the other tool windows it docks under the Playlist, where its title bar collapses it.
+    const docked = page.getByRole('region', { name: 'Browser' }), browserBody = docked.locator('.sb-body');
+    await dialog.getByRole('button', { name: 'Dock under the Playlist' }).click();
+    assert.equal(await docked.evaluate(node => node.parentElement.id), 'mix-tools');
+    assert.equal(await docked.evaluate(node => getComputedStyle(node).position), 'static');
+    assert.equal(await page.locator('#mixer').isVisible(), true, 'Docked plugins get their card');
+    const playlistBottom = (await playlist.boundingBox()).y + (await playlist.boundingBox()).height;
+    assert.ok((await page.locator('#mixer').boundingBox()).y - playlistBottom >= 16, 'The plugins card keeps its distance from the Playlist');
+    const dockedTitle = await docked.locator('.tool-section-title').boundingBox();
+    await page.mouse.click(dockedTitle.x + dockedTitle.width + 40, dockedTitle.y + 4);
+    assert.equal(await browserBody.isVisible(), false, 'A click on the docked title bar collapses it');
+    assert.equal(await docked.locator('.tool-section-toggle').getAttribute('aria-expanded'), 'false');
+    await page.mouse.click(dockedTitle.x + 4, dockedTitle.y + 4);
+    assert.equal(await browserBody.isVisible(), true, 'A second click expands it');
+    await docked.getByRole('button', { name: 'Choose samples folder' }).evaluate(node => node.blur());
+    assert.equal(await browserBody.isVisible(), true);
+    await docked.getByRole('button', { name: 'Detach: float this window' }).click();
+    assert.ok(Math.abs((await dialog.boundingBox()).x - after.x) < 2, 'Floating again keeps its rectangle');
+    assert.equal(await page.locator('#mixer').isVisible(), false, 'Without docked plugins there is no card');
+    // An open browser comes back after a reload, and the root is remembered: no picker.
     await page.reload();
-    await browserButton.click();
+    await dialog.waitFor();
+    assert.equal(await browserButton.getAttribute('aria-pressed'), 'true');
     await row('tone 2.wav').waitFor();
     assert.equal(await page.evaluate(() => window.pickerCalls), 0);
     const placed = await dialog.boundingBox();
@@ -211,7 +231,7 @@ const { chromium } = require('playwright');
     // Lost permission asks to reconnect with a click.
     await page.evaluate(() => sessionStorage.setItem('revoke', '1'));
     await page.reload();
-    await browserButton.click();
+    await dialog.waitFor();
     const reconnect = dialog.getByRole('button', { name: 'Reconnect folder' });
     await reconnect.waitFor();
     await reconnect.click();

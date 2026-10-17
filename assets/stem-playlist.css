@@ -1,11 +1,12 @@
 /* Playlist: the stems are its channels. Palette of the workspace header and landing:
    night #191919, panel #202020, panel-2 #292929, accent #ff5500 / #ff7b38. */
 #audition{padding-bottom:6px}
-#mixer{padding:0 18px 18px}
-#mixer #mix-tools{margin-top:4px}
-/* With every tool window closed or floating, the card ends at the playlist. */
+/* Docked plugins sit in their own card under the Playlist, which stays outside it. */
+#mixer{margin-top:24px;padding:16px 18px 18px;border:1px solid var(--line);border-radius:12px;background:#202020}
+#mixer #mix-tools{margin-top:0}
+/* With every tool window closed or floating, there is no card. */
 #mixer:not(:has(#mix-tools>section:not([hidden]))){display:none}
-@media(max-width:600px){#mixer{padding:0 14px 14px}}
+@media(max-width:600px){#mixer{margin-top:18px;padding:12px}}
 
 .pl-ui{--pl-head:165px;--pl-edge:#3b3b3b;--pl-panel:#292929;--pl-head-bg:#202020;--pl-night:#191919;--pl-muted:#b8b3ad}
 /* The playlist continues the header card: no divider, the transport bar lives in the header. */
@@ -153,12 +154,20 @@
 .pl-menu-choice-check{position:absolute;top:-5px;right:-5px;display:grid;place-items:center;width:12px;height:12px;border-radius:50%;background:var(--orange,#ff5500)}
 .pl-menu-choice-check sc-icon{width:9px;height:9px;}
 
-/* Sample browser: a floating, movable window over the page; the Playlist stays usable. */
-.sb-window{position:fixed;z-index:900;display:flex;flex-direction:column;min-width:280px;min-height:300px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:hidden;resize:both;border:1px solid #45423e;border-radius:10px;background:#202020;box-shadow:0 18px 48px #000c,0 0 0 1px #0006;color:#ece8e2;font:11.5px Arial,Helvetica,sans-serif}
-.sb-window[hidden]{display:none}
-.sb-head{display:flex;align-items:center;gap:6px;padding:6px 6px 6px 12px;border-bottom:1px solid #3b3936;background:linear-gradient(180deg,#2b2a28,#242321);cursor:move;user-select:none;touch-action:none}
-.sb-title{margin:0;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#ffad80}
-.sb-root{flex:1;min-width:0;overflow:hidden;color:var(--pl-muted);white-space:nowrap;text-overflow:ellipsis}
+/* Sample browser: a tool window (stem-module-window.mjs), floating over the page or docked
+   under the Playlist; the Playlist stays usable. */
+.sb-window{display:flex;flex-direction:column;overflow:hidden;border:1px solid #45423e;border-radius:10px;background:#202020;color:#ece8e2;font:11.5px Arial,Helvetica,sans-serif}
+.sb-window.is-floating{min-height:300px}
+.sb-window>.tool-section-header{border-bottom:1px solid #3b3936}
+.sb-window .sb-actions{gap:4px}
+.pl-ui.sb-actions .sb-icon{width:23px;height:22px;min-height:22px;padding:2px;border-radius:5px}
+.sb-actions .sb-icon sc-icon{width:14px;height:14px}
+.sb-root{max-width:140px;overflow:hidden;color:#b8b3ad;white-space:nowrap;text-overflow:ellipsis}
+.sb-window .sb-body{display:flex;flex-direction:column;min-height:0}
+.sb-window .sb-body[hidden]{display:none}
+.sb-window.module-window.is-floating>.sb-body{overflow:hidden}
+.sb-window.is-docked .sb-body{height:440px}
+#mix-tools>.sb-window{min-width:0}
 .pl-ui .sb-icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:28px;min-height:28px;padding:4px}
 .sb-icon sc-icon,.sb-row sc-icon,.sb-volume sc-icon{width:16px;height:16px;flex-shrink:0;pointer-events:none}
 .sb-path{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #3b3936}
@@ -190,7 +199,4 @@
 .sb-volume input{width:64px;accent-color:var(--orange)}
 .sb-status{margin:0;padding:0 8px 6px;background:var(--pl-head-bg);font-size:10px;line-height:1.5;color:#ffad80}
 .sb-status:empty{display:none}
-.sb-window.is-maximized{left:8px!important;top:8px!important;width:calc(100vw - 16px)!important;height:calc(100vh - 16px)!important;resize:none}
-.sb-window.is-maximized .sb-head{cursor:default}
 .sb-window.is-maximized .sb-wave{height:96px}
-@media(max-width:600px){.sb-window{left:12px!important;right:12px;top:auto!important;bottom:12px;width:auto!important;height:min(70vh,460px)!important;resize:none}.sb-head{cursor:default}}

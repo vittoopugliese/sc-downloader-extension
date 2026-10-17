@@ -377,6 +377,13 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .module-window .tool-section-chevron{display:none}
 .module-window .tool-section-toggle{justify-content:flex-start;border-radius:0;letter-spacing:normal;pointer-events:none}
 .module-window .tool-section-actions{right:90px}
+/* Docked, the title bar collapses the module like a Player Tools section: chevron left of the controls. */
+.module-window.is-docked>.tool-section-header{cursor:pointer}
+.module-window.is-docked .tool-section-chevron{display:block;right:90px}
+.module-window.is-docked .tool-section-actions{right:110px}
+.module-window.is-docked .tool-section-toggle:focus-visible{outline:2px solid var(--orange);outline-offset:-2px}
+/* Phones: actions wrap to a second row, so the chevron stays on the title row. */
+@media(max-width:420px){.module-window.is-docked .tool-section-chevron{top:15px}}
 .module-controls{position:absolute;z-index:6;top:4px;right:6px;display:flex;gap:4px}
 .module-window .module-control{display:inline-grid;place-items:center;width:23px;height:22px;min-height:22px;padding:1px;border:1px solid #474747;border-radius:5px;background:#262626;color:#eee;cursor:pointer}
 .module-window .module-control:hover{border-color:#ff7b38;background:#3a251b;color:#fff}
