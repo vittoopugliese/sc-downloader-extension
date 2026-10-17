@@ -243,7 +243,7 @@ async function reopenExtract(page) {
     await localPage.locator('#stem-presets:not(:disabled)').waitFor();
     await localPage.locator('#stem-presets').click(); await localPage.locator(`#stem-presets-menu .row-menu-row[data-id="${localId}"] .row-menu-load`).click();
     await localPage.locator('.pl-stem-head').first().waitFor();
-    assert.equal(await localPage.locator('#track').textContent(), 'Local fixture');
+    assert.equal(await localPage.locator('#stem-presets .row-menu-value').textContent(), 'Local fixture');
     await localPage.close();
     assert.deepEqual(errors, []);
     fs.writeFileSync(path.join(artifacts, 'verification.json'), JSON.stringify({ completed, actualFrames, trimError, stats, errors }, null, 2));

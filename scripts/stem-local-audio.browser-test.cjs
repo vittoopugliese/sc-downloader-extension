@@ -67,7 +67,7 @@ async function reopenExtract(page) {
     await page.screenshot({ path: path.join(artifacts, 'import-desktop.png') });
     await page.locator('#import-confirm').click();
     await page.locator('#import-dialog').waitFor({ state: 'hidden' });
-    assert.equal(await page.locator('#track').textContent(), 'Mi grabación');
+    assert.equal(await page.locator('#stem-presets .row-menu-value').textContent(), 'Mi grabación');
     assert.match(await page.locator('#track').getAttribute('data-meta'), /My recording.wav.*1 ch.*2:05/);
     assert.match(await page.locator('#track').getAttribute('data-range'), /122,00.*125,00.*3,00/);
     await closeExtract(page);

@@ -309,7 +309,7 @@ $('clear-cache').title = text('clearCacheTip'); $('clear-cache').setAttribute('a
 $('separate').title = text('details');
 const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('transport'), playButton: false, windows: WINDOWS,
   // One line: play, tempo and speed, then the game, the windows and the export.
-  toolbarStart: [$('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [$('toggle-game')],
+  toolbarStart: [$('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [$('header-pin'), $('toggle-game')],
   // Right-click > Extract stems… on any audio clip opens the extraction window.
   onSeparate: target => openExtract(target),
   onPatternAction(action, id) { const pattern = id.slice('pattern:'.length); if (action === 'duplicate') instruments?.duplicatePattern(pattern); else instruments?.deletePattern(pattern); },
@@ -348,10 +348,11 @@ function runMeters() {
 }
 // Pin: the header stays at the top while scrolling, or scrolls away with the page.
 const header = document.querySelector('.workspace-header'), pin = $('header-pin');
-document.querySelector('.workspace-intro').title = text('workspace');
+document.querySelector('.workspace-header .brand').title = text('workspace');
 function setPinned(pinned) {
   header.dataset.pinned = String(pinned);
   pin.setAttribute('aria-pressed', String(pinned));
+  setButtonContent(pin, { icon: pinned ? 'detach' : 'pin' });
   pin.title = pinned ? say('Header pinned to the top · click to let it scroll', 'Header fijo arriba · clic para que se desplace') : say('Pin the header to the top', 'Fijar el header arriba');
   pin.setAttribute('aria-label', say('Pin header', 'Fijar header'));
   try { localStorage.setItem('stems.headerPinned', pinned ? '1' : '0'); } catch {}
@@ -477,6 +478,7 @@ channelRack.setCollapsed(false); pianoRoll.setCollapsed(false);
   const shown = { rack: () => channelRack.open(), piano: () => pianoRoll.open() };
   for (const item of WINDOWS) {
     const section = sections[item.id];
+    section.querySelector('.tool-section-icon')?.setAttribute('name', item.icon);
     section.hidden = false;
     moduleWindows[item.id] = mountModuleWindow({ id: item.id, section, header: section.querySelector('.tool-section-header'), home: $('mix-tools'),
       t: say, size: sizes[item.id], setVisible: visibility[item.id], onShow: shown[item.id],
@@ -1009,7 +1011,7 @@ window.addEventListener('pagehide', () => {
 });
 function renderInfo(value) {
   info = value;
-  title = info.title; $('track').textContent = title;
+  title = info.title; libraryUI?.setProjectName(title);
   const metadata = [info.artist];
   if (info.localFile) metadata.push(info.localFile.name, `${info.localFile.channels} ch`);
   if (info.recording) metadata.push(pt('Likes Explorer recording'));

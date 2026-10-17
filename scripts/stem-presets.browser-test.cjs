@@ -119,7 +119,7 @@ async function reopenExtract(page) {
     await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
     await page.locator('.pl-stem-head[data-stem=drums] .ui-knob-dial').waitFor();
     assert.equal(await page.evaluate(() => inferences), 0, 'Loading never starts model inference');
-    assert.equal(await page.locator('#track').textContent(), 'My saved mix');
+    assert.equal(await page.locator('#stem-presets .row-menu-value').textContent(), 'My saved mix');
     assert.equal(await rackSample.getAttribute('data-channel'), rackSampleKey, 'Rack-only sample survives reopening');
     assert.equal(await rackSample.locator('.rack-channel-mode').inputValue(), 'oneShot');
     assert.equal((await stored()).record.settings.playlist.clips.length, clipsBeforeRackImport);

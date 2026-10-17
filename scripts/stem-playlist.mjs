@@ -334,7 +334,8 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     pencilButton.setAttribute('aria-pressed', String(!on && !selecting)); selectButton.setAttribute('aria-pressed', String(selecting));
     container.classList.toggle('is-drawing', !on && !selecting); container.classList.toggle('is-selecting', selecting);
   }
-  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.label, tapButton, metronomeButton, fitTempo, ...tempoControls, node('span', 'pl-spacer'), ...toolbarEnd, windowGroup, exportButton, fileInput);
+  const help = iconButton('help', t('Playlist shortcuts', 'Atajos de la playlist'), () => showHint());
+  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.label, tapButton, metronomeButton, fitTempo, ...tempoControls, node('span', 'pl-spacer'), help, ...toolbarEnd, windowGroup, exportButton, fileInput);
   const shelf = node('div', 'pl-shelf'); shelf.setAttribute('aria-label', t('Sample library', 'Biblioteca de samples'));
   shelf.title = t('Library: click to select for drawing, double-click to add at the cursor, drag onto a track. Right-click for more.', 'Biblioteca: clic para elegir qué dibujar, doble clic para agregar en el cursor, arrastrá a una pista. Clic derecho para más.');
   shelf.addEventListener('wheel', event => {
@@ -569,12 +570,10 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     if (pan) { scroll.scrollLeft += event.deltaX || event.deltaY; return; }
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
-  // The playlist shortcuts show once, as an info toast, when the first session loads.
+  // Help stays available in the header without automatically covering the timeline.
   const hintText = t('P: pencil · select a sample or clip, then click empty grid space to draw · Q: select time, including silence · Ctrl+C/V: copy/paste at cursor · Ctrl+D: repeat selection · drag clips to move, edges to trim · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 tracks / 5 minutes.', 'P: lápiz · elegí un sample o clip y hacé clic en la grilla vacía para dibujar · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar en el cursor · Ctrl+D: repetir selección · arrastrá clips para mover, bordes para recortar · Espacio reproduce · S corta en el cursor · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 pistas / 5 minutos.');
-  let hinted = false;
   function showHint() {
-    if (hinted) return;
-    hinted = true; toast({ id: 'playlist-hint', variant: 'info', title: t('Playlist shortcuts', 'Atajos de la playlist'), message: hintText, duration: 12000 });
+    toast({ id: 'playlist-hint', variant: 'info', title: t('Playlist shortcuts', 'Atajos de la playlist'), message: hintText, duration: 12000 });
   }
   container.classList.add('playlist', 'pl-ui'); container.tabIndex = -1;
   // The timeline scrollbar spans only the lanes, not the channel headers.
@@ -1062,7 +1061,6 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   // `saved` restores channel mix and clips from a preset; invalid data falls back.
   // `samples` are the imported samples a preset stored: [{ id, name, buffer }].
   function setSession({ sources, saved = null, samples = [] }) {
-    showHint();
     stop(true);
     for (const old of assets.values()) if (old.session) cache.forget(old.id);
     const next = new Map([...assets].filter(([, asset]) => !asset.session));

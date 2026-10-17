@@ -97,7 +97,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
   }
   async function refresh() {
     records = await library.list();
-    presetMenu.setItems(records.map(record => ({ id: record.id, name: `${record.title} · ${new Date(record.createdAt).toLocaleDateString(locale)}`, title: record.title })));
+    presetMenu.setItems(records.map(record => ({ id: record.id, name: record.title, title: `${record.title} · ${new Date(record.createdAt).toLocaleDateString(locale)}` })));
     presetMenu.setValue(active?.id || null);
     $('preset-reconnect').hidden = true;
   }
@@ -219,6 +219,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
   }
   return {
     ready, changed,
+    setProjectName(name) { presetMenu.setPlaceholder(name || copy.current); },
     setBusy(value) { inference = value; controls(); },
     newExtraction() { active = null; enabled = false; presetMenu.setValue(null); controls(); },
     async completed() { await ready; await save(); },

@@ -43,7 +43,7 @@ const { chromium } = require('playwright');
     }, { id, audioUrl });
     await page.goto(`${origin}/stems.html?recording=${id}`);
     await page.waitForFunction(() => !document.querySelector('#separate').disabled);
-    assert.equal(await page.locator('#track').textContent(), 'Set largo (grabación)');
+    assert.equal(await page.locator('#stem-presets .row-menu-value').textContent(), 'Set largo (grabación)');
     assert.match(await page.locator('#track').getAttribute('title'), /Grabación del Likes Explorer/);
     assert.match(await page.locator('#track').getAttribute('title'), /A 0,00 s → B 2,00 s/);
     assert.equal(await page.locator('#audition').evaluate(node => node.hidden), false, 'the audition area is revealed as for imported audio');

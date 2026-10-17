@@ -125,6 +125,7 @@ export function createRowMenu({ className = '', label, empty = '', placeholder =
     // [{ id, name, title?, deletable? }]
     setItems(list) { items = list.map(item => ({ ...item })); render(); },
     setValue(id) { current = id ?? null; toggle.value = current ?? ''; render(); },
+    setPlaceholder(text) { placeholder = text; render(); },
     value: () => current,
     setDisabled(value) { disabled = !!value; if (disabled) close(); render(); },
     setBusy(value) { busy = !!value; render(); },
