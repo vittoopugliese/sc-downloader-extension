@@ -93,7 +93,10 @@ module.exports = async function (page) {
     const { StemPresets } = await import('./scripts/stem-presets.mjs');
     return Object.keys((await (await StemPresets.current()).load(id)).samples).length === 2;
   }, id);
-  await page.reload(); await page.locator('#stem-presets:not(:disabled)').click();
+  await page.reload();
+  // The extraction window opens on arrival; close it to use the header.
+  await page.locator('#extract-dialog[open]').waitFor(); await page.keyboard.press('Escape'); await page.locator('#extract-dialog').waitFor({ state: 'hidden' });
+  await page.locator('#stem-presets:not(:disabled)').click();
   await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
   await page.keyboard.press('F6');
   if (!await rack.isVisible()) await page.keyboard.press('F6');

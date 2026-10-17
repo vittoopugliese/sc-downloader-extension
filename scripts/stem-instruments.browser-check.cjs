@@ -197,6 +197,8 @@ module.exports = async function verifyInstruments(page) {
     return Object.keys((await (await StemPresets.current()).load(id)).samples).length === 1;
   }, id);
   await page.reload();
+  // The extraction window opens on arrival; close it to use the header.
+  await page.locator('#extract-dialog[open]').waitFor(); await page.keyboard.press('Escape'); await page.locator('#extract-dialog').waitFor({ state: 'hidden' });
   await page.locator('#stem-presets:not(:disabled)').waitFor(); await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
   // Off-screen clips are virtualized: bring the user track into view.
   await page.locator('.pl-user-head').waitFor(); await page.locator('.pl-user-head').scrollIntoViewIfNeeded();
