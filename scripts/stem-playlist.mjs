@@ -2,6 +2,7 @@ import { LIMITS, uid, clamp, emptyArrangement, newClip, clipDuration, clipRate, 
 import { createPlaylistEngine, createStretchCache, prefetchStretches, renderArrangement } from './stem-playlist-audio.mjs';
 import { encodeWav } from './stem-audio.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
+import { mountSampleBrowser } from './stem-sample-browser.mjs';
 
 const MIN_ZOOM = 8, MAX_ZOOM = 600;
 // The workspace header's stem palette; user tracks continue in warm tints.
@@ -13,6 +14,7 @@ const ICONS = {
   redo: 'M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3',
   download: 'M21 15v1.2c0 1.68 0 2.52-.327 3.162a3 3 0 0 1-1.311 1.311C18.72 21 17.88 21 16.2 21H7.8c-1.68 0-2.52 0-3.162-.327a3 3 0 0 1-1.311-1.311C3 18.72 3 17.88 3 16.2V15m14-5-5 5m0 0-5-5m5 5V3',
   import: 'M3 10v4m4-7v10m4-13v16m4-10v4m1-9h6m-3-3v6',
+  browser: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm8 4.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zm2 4 2.5 2.5',
   addTrack: 'M3 4h18v4H3zM3 12h10M3 18h10m3-3h6m-3-3v6',
   magnet: 'M6 3v8a6 6 0 0 0 12 0V3h-4v8a2 2 0 0 1-4 0V3zM6 7h4m4 0h4',
   zoomOut: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4-4M8 11h6',
@@ -282,9 +284,18 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   const undo = toolButton({ icon: ICONS.undo, name: t('Undo', 'Deshacer'), detail: t('the last playlist edit', 'la última edición de la playlist'), key: 'Ctrl+Z', keys: ['ctrl+z'], color: '#5aa9ff', repeat: true }, () => travel(false));
   const redo = toolButton({ icon: ICONS.redo, name: t('Redo', 'Rehacer'), key: 'Ctrl+Y', keys: ['ctrl+y', 'ctrl+shift+z'], color: '#5aa9ff', repeat: true }, () => travel(true));
   const fileInput = node('input'); fileInput.type = 'file'; fileInput.accept = 'audio/*,.wav,.mp3,.flac,.m4a,.ogg'; fileInput.multiple = true; fileInput.hidden = true;
-  fileInput.onchange = safe(async () => { const files = [...fileInput.files]; fileInput.value = ''; await importFiles(files); });
+  fileInput.onchange = safe(async () => { const files = [...fileInput.files]; fileInput.value = ''; await importSamples(files); });
   const importButton = toolButton({ icon: ICONS.import, name: t('Import audio files', 'Importar archivos de audio'), key: 'I', keys: ['i'], color: '#ff7a2f',
     detail: t('WAV, MP3, FLAC, M4A or OGG land at the playhead on the first free track. You can also drop them on a track.', 'WAV, MP3, FLAC, M4A u OGG se agregan en el cursor, en la primera pista libre. También podés soltarlos sobre una pista.') }, () => fileInput.click());
+  // Floating sample browser (B): created on first use; its drops go through importSamples.
+  let sampleBrowser = null;
+  const browserButton = toolButton({ icon: ICONS.browser, name: t('Sample browser', 'Browser de samples'), key: 'B', keys: ['b'], color: '#3dd6c6',
+    detail: t('a floating window for a samples folder: click a file to preview it, drag it onto a track', 'una ventana flotante para una carpeta de samples: hacé clic en un archivo para escucharlo y arrastralo a una pista') }, () => {
+    sampleBrowser ||= mountSampleBrowser({ t, onToggle: open => browserButton.setAttribute('aria-pressed', String(open)),
+      async importSamples(items) { try { return await importSamples(items); } catch (error) { report(error); return false; } } });
+    sampleBrowser.toggle(browserButton);
+  });
+  browserButton.setAttribute('aria-pressed', 'false');
   const addTrack = toolButton({ icon: ICONS.addTrack, name: t('Add track', 'Agregar pista'), key: 'N', keys: ['n'], color: '#ffd166',
     detail: t('an empty lane for samples and patterns (up to 16 tracks)', 'un carril vacío para samples y patrones (hasta 16 pistas)') },
   () => commit(() => state.tracks.push({ id: uid(), name: `${t('Track', 'Pista')} ${state.tracks.filter(item => !item.stem).length + 1}`, gain: 1, mute: false, solo: false })));
@@ -468,9 +479,9 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
   const zoomOut = toolButton({ icon: ICONS.zoomOut, name: t('Zoom out', 'Alejar'), detail: wheelHint, key: '-', keys: ['-', '_'], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1 / 1.5));
   const zoomIn = toolButton({ icon: ICONS.zoomIn, name: t('Zoom in', 'Acercar'), detail: wheelHint, key: '+', keys: ['+', '='], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1.5));
   const fitButton = toolButton({ icon: ICONS.fit, name: t('Show the whole arrangement', 'Ver todo el arreglo'), detail: t('fits every clip in view', 'ajusta el zoom para ver todos los clips'), key: 'F', keys: ['f'], color: '#e6e1da' }, fit);
-  // Every tool in two rows of seven: clip edits, then history, view and tracks.
+  // Every tool in two rows: clip edits, then history, view, samples and tracks.
   const tools = node('div', 'pl-tools');
-  tools.append(muteClip, reverseClip, crossfade, duplicate, split, sliceButton, remove, undo, redo, zoomOut, zoomIn, fitButton, importButton, addTrack);
+  tools.append(muteClip, reverseClip, crossfade, duplicate, split, sliceButton, remove, undo, redo, zoomOut, zoomIn, fitButton, importButton, browserButton, addTrack);
   inspector.append(selectionLabel, pitch.wrap, fine.wrap, speed.wrap, ...fades.map(f => f.wrap), tools);
   let zoomFrame = 0, zoomTarget = null, zoomAnchor = null;
   function zoomAround(x, factor) {
@@ -490,7 +501,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) { scroll.scrollLeft += event.deltaX || event.deltaY; return; }
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
-  const hint = node('p', 'pl-hint', t('Drag clips to move · edges to trim · right-click for more · Alt bypasses snap · Space plays, twice restarts from the last ruler click (or loop start) · Ctrl/Shift+click or drag on empty space selects several clips · S splits the selection at the playhead · C toggles the slice tool · T taps tempo · drop audio files on a track. Select a loop on the ruler; hover for controls. 16 tracks / 5 minutes.', 'Arrastrá clips para mover · bordes para recortar · clic derecho para más · Alt desactiva snap · Espacio reproduce, dos veces reinicia desde el último clic en la regla (o el inicio del loop) · Ctrl/Shift+clic o arrastrar en un espacio vacío selecciona varios clips · S corta la selección en el cursor · C activa la herramienta de corte · T marca el tempo · soltá audio en una pista. Seleccioná un loop en la regla; pasá el cursor para ver los controles. 16 pistas / 5 minutos.'));
+  const hint = node('p', 'pl-hint', t('Drag clips to move · edges to trim · right-click for more · Alt bypasses snap · Space plays, twice restarts from the last ruler click (or loop start) · Ctrl/Shift+click or drag on empty space selects several clips · S splits the selection at the playhead · C toggles the slice tool · T taps tempo · B opens the sample browser · drop audio files on a track. Select a loop on the ruler; hover for controls. 16 tracks / 5 minutes.', 'Arrastrá clips para mover · bordes para recortar · clic derecho para más · Alt desactiva snap · Espacio reproduce, dos veces reinicia desde el último clic en la regla (o el inicio del loop) · Ctrl/Shift+clic o arrastrar en un espacio vacío selecciona varios clips · S corta la selección en el cursor · C activa la herramienta de corte · T marca el tempo · B abre el browser de samples · soltá audio en una pista. Seleccioná un loop en la regla; pasá el cursor para ver los controles. 16 pistas / 5 minutos.'));
   const message = node('p', 'pl-message'); message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite');
   container.classList.add('playlist', 'pl-ui'); container.tabIndex = -1;
   // Messages, help and the clip inspector sit above the timeline, under the transport.
@@ -513,23 +524,34 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
     state.clips = state.clips.filter(clip => assets.has(clip.asset)); changed(); draw();
   }
   function checkBudget(next) {
-    let bytes = 0; for (const asset of next.values()) bytes += asset.buffer.length * asset.buffer.numberOfChannels * 4;
+    // Preview audio held by the sample browser counts too.
+    let bytes = sampleBrowser?.reservedBytes() || 0;
+    for (const asset of next.values()) bytes += asset.buffer.length * asset.buffer.numberOfChannels * 4;
     if (bytes > LIMITS.pcmBytes || next.size > 64) throw new Error(t('Sample library limit: 256 MiB / 64 samples.', 'Límite de biblioteca: 256 MiB / 64 samples.'));
   }
   const firstUserTrack = () => state.tracks.find(track => !track.stem)?.id || state.tracks[0].id;
-  async function importFiles(files, track = firstUserTrack(), at = position) {
-    if (operating) return;
+  // The one importer for the file picker, external drops and the sample browser. Items are
+  // Files or { name, read() }, where read() resolves to { file } or an already decoded
+  // { buffer }. Track and time are fixed when the import starts. Resolves true when added.
+  async function importSamples(items, track = firstUserTrack(), at = position) {
+    if (operating) return false;
     operating = true; report(t('Reading samples…', 'Leyendo samples…'));
     try {
       const next = new Map(assets), additions = [];
-      for (const file of files) {
-        if (file.size > 64 * 1024 * 1024) throw new Error(t('Each file must be smaller than 64 MiB.', 'Cada archivo debe pesar menos de 64 MiB.'));
-        const buffer = await new OfflineAudioContext(2, 1, 44100).decodeAudioData(await file.arrayBuffer());
+      for (const item of items) {
+        const source = item instanceof Blob ? { file: item } : await item.read();
+        let buffer = source.buffer;
+        if (!buffer) {
+          if (source.file.size > 64 * 1024 * 1024) throw new Error(t('Each file must be smaller than 64 MiB.', 'Cada archivo debe pesar menos de 64 MiB.'));
+          buffer = await new OfflineAudioContext(2, 1, 44100).decodeAudioData(await source.file.arrayBuffer());
+        }
         if (buffer.duration > LIMITS.seconds || buffer.numberOfChannels > 2) throw new Error(t('Use mono/stereo samples up to 5 minutes.', 'Usá samples mono/estéreo de hasta 5 minutos.'));
-        const asset = { id: uid(), name: file.name.slice(0, 160), buffer, version: 0 }; next.set(asset.id, asset); additions.push(asset); checkBudget(next);
+        const asset = { id: uid(), name: String(item.name || source.file?.name || 'Sample').slice(0, 160), buffer, version: 0 }; next.set(asset.id, asset); additions.push(asset); checkBudget(next);
       }
       assets = next;
-      if (commit(() => { for (const asset of additions) { const clip = newClip(asset, track, at); state.clips.push(clip); pick(clip.id); at += clipDuration(clip); } })) report(t('Samples ready.', 'Samples listos.'));
+      const added = commit(() => { for (const asset of additions) { const clip = newClip(asset, track, at); state.clips.push(clip); pick(clip.id); at += clipDuration(clip); } });
+      if (added) report(t('Samples ready.', 'Samples listos.'));
+      return added;
     } finally { operating = false; }
   }
   const snapAt = (seconds, bypass = false) => clamp(bypass ? seconds : snapTime(seconds, state.bpm, snap), 0, LIMITS.seconds);
@@ -651,7 +673,9 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
         lane.ondragover = event => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; };
         lane.ondrop = safe(async event => {
           event.preventDefault(); const at = snapAt((event.clientX - lane.getBoundingClientRect().left) / zoom, event.altKey);
-          if (event.dataTransfer.files.length) { await importFiles([...event.dataTransfer.files], track.id, at); return; }
+          const browsed = sampleBrowser?.resolveDrop(event.dataTransfer);
+          if (browsed) { await importSamples(browsed, track.id, at); return; }
+          if (event.dataTransfer.files.length) { await importSamples([...event.dataTransfer.files], track.id, at); return; }
           const asset = assets.get(event.dataTransfer.getData('application/x-stem-sample'));
           if (asset) commit(() => { const clip = newClip(asset, track.id, at); pick(clip.id); state.clips.push(clip); });
         });
@@ -967,7 +991,7 @@ export function mountPlaylist({ container, toolbarHost = container, toolbarStart
       userTracks: state.tracks.filter(track => !track.stem && state.clips.filter(clip => clip.track === track.id).every(clip => savable(clip.asset))).map(track => ({ ...track })),
       clips: state.clips.filter(clip => savable(clip.asset) && (trackOf(clip.track)?.stem || state.clips.filter(other => other.track === clip.track).every(other => savable(other.asset)))).map(clip => ({ ...clip })) }),
     dispose() {
-      exporting?.abort(); engine?.dispose(); cache.dispose(); viewObserver.disconnect();
+      exporting?.abort(); engine?.dispose(); cache.dispose(); viewObserver.disconnect(); sampleBrowser?.dispose();
       clearTimeout(messageTimer); clearTimeout(hintTimer); cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();
     },
   };

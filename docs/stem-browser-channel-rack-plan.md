@@ -1,6 +1,6 @@
 # Plan técnico: Browser de samples, Channel Rack y borrado independiente
 
-Fecha: 2026-10-16. Estado: propuesta; sin cambios de implementación.
+Fecha: 2026-10-16. Estado: sección 4 (Browser) implementada; secciones 1, 2, 3 y 5 pendientes.
 
 ## Resultado esperado
 
@@ -158,8 +158,22 @@ asíncrona dentro de `dragstart`. Mantener snap, límites de clips, duración y
 presupuesto de memoria existentes. Preview debe tener su propio presupuesto
 pequeño y sumarse al consumo total de audio.
 
-Módulos propuestos: `stem-sample-browser.mjs` (UI), `stem-sample-library.mjs`
+Módulos: `stem-sample-browser.mjs` (UI), `stem-sample-library.mjs`
 (carpeta/handles), `stem-sample-preview.mjs` (audio/waveform).
+
+**Implementado (2026-10-16).** Botón B en la barra (15 herramientas, 8 + 7).
+`importSamples()` en `stem-playlist.mjs` es el importador único de File picker,
+drop externo y Browser; el drop fija pista y posición al soltar y reutiliza el
+buffer del preview si el archivo no cambió (clave ruta + tamaño + fecha).
+Preview en su propio `AudioContext` (fuera de mezcla, exportación y grabador),
+caché LRU de 32 MiB que suma al presupuesto de Playlist y se libera al importar.
+Lista virtualizada (filas de 26 px), lectura de carpetas por bloques con caché
+de 24 carpetas. Enter agrega en el cursor; Espacio reproduce/detiene; Retroceso
+sube de carpeta; Escape o B cierran. La ventana se mueve desde la cabecera, se
+redimensiona y recuerda posición, tamaño y volumen. Prueba:
+`npm run test:e2e:sample-browser` (usa perfil persistente: Chromium incógnito
+cierra la página al leer un handle desde IndexedDB). Los samples importados
+siguen sin guardarse en el preset hasta la sección 5.
 
 ## 5. Guardado y compatibilidad
 
@@ -179,7 +193,7 @@ El handle de navegación es una preferencia independiente del proyecto.
 1. Desacoplar la fuente del instrumento y cubrir borrado/undo.
 2. Clear All y persistencia del estado vaciado.
 3. Dropdown compartido y eliminación real de separaciones.
-4. Browser, preview y drag/drop sobre el importador unificado.
+4. Browser, preview y drag/drop sobre el importador unificado. **Hecho.**
 5. Persistencia de assets importados y verificación integral antes de entrega.
 
 - Importar un 808, Clear All, elegir su recorte en la waveform y quitar su último
@@ -207,5 +221,4 @@ verificar también el selector existente de Player Tools tras extraerlo.
 ## Decisiones de UX
 
 Resueltas por el usuario (2026-10-16): se mantiene el Auto-slice inicial y
-Clear All vacía todos los pads. No hay decisiones pendientes. No se ha ejecutado
-ninguna modificación funcional ni prueba de comportamiento nuevo en esta etapa.
+Clear All vacía todos los pads. No hay decisiones pendientes.

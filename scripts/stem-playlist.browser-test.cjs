@@ -49,18 +49,18 @@ const { chromium } = require('playwright');
     // The transport bar lives in the header: the header play button is the only one.
     assert.equal(await page.locator('.pl-play').count(), 0);
     assert.equal(await transport.locator('#stem-rate').count(), 1, 'Speed sits next to the tempo controls');
-    for (const name of ['Import audio files', 'Add track', 'Download WAV']) {
+    for (const name of ['Import audio files', 'Sample browser', 'Add track', 'Download WAV']) {
       const host = name === 'Download WAV' ? transport : playlist.locator('.pl-tools');
       const control = host.getByRole('button', { name, exact: true });
       assert.equal(await control.textContent(), '');
       assert.equal(await control.locator('svg').count(), 1);
       assert.match(await control.getAttribute('title'), new RegExp('^' + name + (name === 'Download WAV' ? '' : ' \\([A-Z]\\)') + ': '));
     }
-    // Every tool sits in two rows of seven, each with a hotkey.
+    // Every tool sits in two rows (eight and seven), each with a hotkey.
     const tools = playlist.locator('.pl-tools > button');
-    assert.equal(await tools.count(), 14);
+    assert.equal(await tools.count(), 15);
     assert.equal(new Set(await tools.evaluateAll(nodes => nodes.map(n => Math.round(n.getBoundingClientRect().top)))).size, 2);
-    assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 14);
+    assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 15);
     assert.equal(await transport.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(255, 85, 0)');
     const ruler = playlist.locator('.pl-ruler'), band = playlist.locator('.pl-loop-band');
     assert.match(await ruler.getAttribute('title'), /drag inside.*edges.*double-click/i);
