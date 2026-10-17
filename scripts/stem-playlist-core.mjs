@@ -6,7 +6,6 @@ export const clipPitch = clip => clip.pitch + (clip.cents || 0) / 100;
 export const clipRate = clip => clip.speed * (clip.keepLength ? 1 : 2 ** (clipPitch(clip) / 12));
 export const clipDuration = clip => (clip.out - clip.in) / clipRate(clip);
 export const arrangementEnd = state => Math.max(0, ...state.clips.map(c => c.at + clipDuration(c)));
-export const snapTime = (seconds, bpm, division) => division ? Math.round(seconds / (60 / bpm * division)) * 60 / bpm * division : seconds;
 export function emptyArrangement() {
   return { version: 1, bpm: 120, tracks: Array.from({ length: 4 }, (_, i) => ({ id: uid(), name: `Track ${i + 1}`, gain: 1, mute: false, solo: false })), clips: [] };
 }

@@ -108,10 +108,8 @@ const { chromium } = require('playwright');
     const selectLoop = async (start, end) => {
       const bounds = await ruler.boundingBox();
       const scale = (await playlist.locator('.pl-clip').first().boundingBox()).width / 3;
-      await page.keyboard.down('Alt');
       await page.mouse.move(bounds.x + start * scale, bounds.y + 14); await page.mouse.down();
       await page.mouse.move(bounds.x + end * scale, bounds.y + 14, { steps: 5 }); await page.mouse.up();
-      await page.keyboard.up('Alt');
     };
     await selectLoop(0, 3);
     await page.locator('#play').click(); await page.waitForTimeout(250);
