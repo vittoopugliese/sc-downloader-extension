@@ -296,7 +296,7 @@ const { chromium } = require("playwright");
     page.on("pageerror", (error) => errors.push(error.message));
     await page.route("https://soundcloud.com/**", (route) => route.fulfill({ contentType: "text/html", body: '<div id="container" style="width:380px"></div>' }));
     await page.goto("https://soundcloud.com/");
-    for (const file of ["parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js"]) await page.addScriptTag({ path: path.join(__dirname, file) });
+    for (const file of ["parametric-eq.js", "audio-effects-core.js", "icons.js", "player-tools-collapsible.js", "parametric-eq-ui.js"]) await page.addScriptTag({ path: path.join(__dirname, file) });
     await page.evaluate(() => {
       window.allowed = true;
       window.fx = SCTempoEffects.create();

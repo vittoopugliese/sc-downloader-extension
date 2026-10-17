@@ -27,6 +27,7 @@ $packageItems = @(
     "stems.html",
     "assets/stems.css",
     "assets/stem-playlist.css",
+    "assets/icon-cursors.css",
     "assets/likes-player.css",
     "assets/icon48.png",
     "assets/icon128.png",
@@ -36,6 +37,7 @@ $packageItems = @(
     "assets/images/default_avatar.png",
     "assets/images/likes-explorer.png",
     "_locales",
+    "scripts/icons.js",
     "scripts/background.js",
     "scripts/release-config.js",
     "scripts/soundcloud-likes-source.js",
@@ -156,6 +158,8 @@ Get-ChildItem -LiteralPath $stagingRoot -Recurse -Force -File |
     Remove-Item -Force
 
 $requiredRuntimeAssets = @(
+    "scripts/icons.js",
+    "assets/icon-cursors.css",
     "assets/LooperPlayerToolkit.png",
     "assets/images/default_avatar.png",
     "assets/images/likes-explorer.png",

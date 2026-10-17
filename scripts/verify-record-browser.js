@@ -22,7 +22,7 @@ const { chromium } = require("playwright");
       const page = await browser.newPage();
       const errors = []; page.on("pageerror", error => errors.push(error.message));
       await page.goto(`http://127.0.0.1:${server.address().port}`);
-      for (const file of ["parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "record-core.js", "record-ui.js"]) {
+      for (const file of ["parametric-eq.js", "audio-effects-core.js", "icons.js", "player-tools-collapsible.js", "record-core.js", "record-ui.js"]) {
         await page.addScriptTag({ path: path.join(__dirname, file) });
       }
       const result = await page.evaluate(async mode => {
@@ -102,7 +102,7 @@ const { chromium } = require("playwright");
     }
     const page = await browser.newPage({ viewport: { width: 460, height: 400 } });
     await page.goto(`http://127.0.0.1:${server.address().port}`);
-    for (const file of ["parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "record-core.js", "record-ui.js"]) await page.addScriptTag({ path: path.join(__dirname, file) });
+    for (const file of ["parametric-eq.js", "audio-effects-core.js", "icons.js", "player-tools-collapsible.js", "record-core.js", "record-ui.js"]) await page.addScriptTag({ path: path.join(__dirname, file) });
     const icon = `data:image/svg+xml;base64,${fs.readFileSync(path.join(__dirname, "../assets/icons/record.svg")).toString("base64")}`;
     await page.evaluate(icon => {
       document.documentElement.setAttribute("data-scdl-extension-record-url", icon);
@@ -116,7 +116,7 @@ const { chromium } = require("playwright");
       recordUI.setVisible(true);
     }, icon);
     await page.locator(".record-toggle").click();
-    assert.equal(await page.locator(".record-icon").evaluate(icon => icon.complete && icon.naturalWidth > 0), true);
+    assert.equal(await page.locator(".record-icon").evaluate(icon => !!icon.shadowRoot?.querySelector("svg path")), true);
     await page.locator(".record-start").click();
     await page.waitForTimeout(250);
     await page.locator(".record-toggle").click();
@@ -213,7 +213,7 @@ const { chromium } = require("playwright");
         if (data?.source === "scdl-pad-main" && data.action === "list") window.postMessage({ source: "scdl-pad-content", id: data.id, result: { success: true, pads: [] } }, location.origin);
       });
     }, icon);
-    for (const file of ["tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "record-core.js", "record-ui.js", "tempo-control-main.js"]) {
+    for (const file of ["tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "icons.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "record-core.js", "record-ui.js", "tempo-control-main.js"]) {
       await integrated.addScriptTag({ path: path.join(__dirname, file) });
     }
     const host = integrated.locator("#scdl-tempo-control");
@@ -292,7 +292,7 @@ const { chromium } = require("playwright");
     const savedOrder = await visualOrder();
     await integrated.screenshot({ path: path.join(__dirname, "../test-results/controls-reordered.png") });
     await integrated.reload();
-    for (const file of ["tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "record-core.js", "record-ui.js"]) {
+    for (const file of ["tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "icons.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "record-core.js", "record-ui.js"]) {
       await integrated.addScriptTag({ path: path.join(__dirname, file) });
     }
     await integrated.evaluate(() => {

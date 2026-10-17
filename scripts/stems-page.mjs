@@ -117,30 +117,7 @@ globalThis.SCPlayerToolsText.localize(document.querySelector('main'));
 document.querySelectorAll('[data-copy]').forEach(node => { node.textContent = text(node.dataset.copy); });
 document.querySelectorAll('[data-copy-title]').forEach(node => { node.title = text(node.dataset.copyTitle); node.setAttribute('aria-label', node.title); });
 document.querySelectorAll('[data-copy-aria-label]').forEach(node => { node.setAttribute('aria-label', text(node.dataset.copyAriaLabel)); });
-// Local inline icons keep the extension page self-contained.
-const iconPaths = {
-  music: '<path d="M9 18V5l12-2v13M9 8l12-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="18" cy="16" rx="3" ry="3"/>',
-  layers: '<path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/>',
-  sliders: '<path d="M4 4v6m0 4v6M12 4v10m0 4v2M20 4v2m0 4v10M1 10h6m2 4h6m2-8h6"/>',
-  shield: '<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/>',
-  trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>',
-  close: '<path d="m6 6 12 12M6 18 18 6"/>',
-  play: '<path d="m8 4 12 8-12 8V4Z"/>', pause: '<path d="M8 4v16M16 4v16"/>',
-  download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
-  drums: '<ellipse cx="12" cy="9" rx="9" ry="4"/><path d="M3 9v8c0 5 18 5 18 0V9M7 13v6m10-6v6M5 2l6 4m8-4-5 4"/>',
-  bass: '<path d="M5 12v2m4-7v12m4-16v18m4-15v12m4-9v6"/>',
-  other: '<path d="M3 4h18v16H3zM7 4v9h3V4m4 0v9h3V4M9 13v7m6-7v7"/>',
-  vocals: '<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/>',
-  game: '<rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 10v5M4.5 12.5h5M15 11h.01M18 14h.01"/>',
-  save: '<path d="M5 3h11l5 5v13H3V3h2Zm2 0v6h8V3M7 21v-7h10v7"/>',
-  upload: '<path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/>',
-};
-function icon(name) {
-  const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  node.setAttribute('viewBox', '0 0 24 24'); node.setAttribute('aria-hidden', 'true');
-  node.classList.add('icon'); node.innerHTML = iconPaths[name] || iconPaths.music;
-  return node;
-}
+const icon = name => globalThis.SCIcons.create(name, "icon");
 $('separate').title = `${text('separate')} · ${text('details')}`;
 $('toggle-game').title = text('gameTip'); $('toggle-game').setAttribute('aria-label', text('playGame'));
 $('clear-cache').title = text('clearCacheTip'); $('clear-cache').setAttribute('aria-label', text('clearCache'));
@@ -168,11 +145,11 @@ function syncLoop() {
 }
 const zoomTools = document.createElement('div'); zoomTools.className = 'stem-zoom-tools';
 for (const [label, title, action] of [
-  ['−', pt('Zoom out'), () => stemLoop.zoomAt(offset() * 1000, 1)],
-  ['+', pt('Zoom in'), () => stemLoop.zoomAt(offset() * 1000, -1)],
-  ['↔', pt('Show all audio'), () => stemLoop.resetZoom()],
+  ['zoom-out', pt('Zoom out'), () => stemLoop.zoomAt(offset() * 1000, 1)],
+  ['zoom-in', pt('Zoom in'), () => stemLoop.zoomAt(offset() * 1000, -1)],
+  ['fit', pt('Show all audio'), () => stemLoop.resetZoom()],
 ]) {
-  const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
+  const button = document.createElement('button'); button.type = 'button'; button.append(icon(label));
   button.title = title; button.setAttribute('aria-label', title); button.onclick = action; zoomTools.append(button);
 }
 const zoomHint = document.createElement('span');
@@ -312,9 +289,9 @@ const WINDOWS = [
     detail: say('notes of the focused pattern', 'las notas del patrón enfocado') },
   { id: 'fx', icon: FX_ICON, name: 'FXs', key: 'F4', keys: ['f4'], color: '#ff9955',
     detail: say('all six Player Tools effects and their settings on the master', 'los seis efectos de Player Tools y todos sus ajustes en el master') },
-  { id: 'eq', icon: 'M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6', name: say('Parametric EQ', 'EQ paramétrico'), key: 'F9', keys: ['f9'], color: '#4fc3f7',
+  { id: 'eq', icon: 'eq', name: say('Parametric EQ', 'EQ paramétrico'), key: 'F9', keys: ['f9'], color: '#4fc3f7',
     detail: say('equalizer of the selected channel, or of the master', 'ecualizador del canal seleccionado o del master') },
-  { id: 'recorder', icon: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/>', name: say('Recorder', 'Grabadora'), key: 'F10', keys: ['f10'], color: '#ff4d6d',
+  { id: 'recorder', icon: 'record', name: say('Recorder', 'Grabadora'), key: 'F10', keys: ['f10'], color: '#ff4d6d',
     detail: say('records the final mix to a WAV', 'graba la mezcla final en un WAV') },
 ].map(item => ({ ...item, toggle: () => moduleWindows[item.id]?.toggle() }));
 const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('transport'), playButton: false, windows: WINDOWS,
@@ -333,8 +310,43 @@ const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('trans
   onTransport(active) {
     if (active) instruments?.stop();
     toneNode?.port.postMessage({ rate, keepTone, reset: true }); playLabel(active); updatePlayheads();
+    metersActive = active; if (active) runMeters();
   } });
-const mixOutput = createEqualizedOutput({ audioContext: () => context ||= new AudioContext({ sampleRate: SAMPLE_RATE }) });
+// Header meters: each stem's peak lights its wave, falling back smoothly after the peak.
+const meters = [...document.querySelectorAll('.preview-track')].map(row => ({ stem: row.dataset.channel, wave: row.querySelector('.preview-wave'), level: 0 }));
+let meterFrame = 0, metersActive = false;
+function runMeters() {
+  if (meterFrame) return;
+  const tick = () => {
+    let lit = false;
+    for (const meter of meters) {
+      const peak = playlist.trackLevel(meter.stem);
+      const target = peak > 0 ? Math.min(1, Math.max(0, (20 * Math.log10(peak) + 48) / 48)) : 0;
+      meter.level = target >= meter.level ? target : meter.level * .86;
+      if (meter.level < .01) meter.level = 0;
+      meter.wave.style.setProperty('--level', meter.level.toFixed(3));
+      lit ||= meter.level > 0;
+    }
+    meterFrame = lit || metersActive ? requestAnimationFrame(tick) : 0;
+  };
+  meterFrame = requestAnimationFrame(tick);
+}
+// Pin: the header stays at the top while scrolling, or scrolls away with the page.
+const header = document.querySelector('.workspace-header'), pin = $('header-pin');
+document.querySelector('.workspace-intro').title = text('workspace');
+function setPinned(pinned) {
+  header.dataset.pinned = String(pinned);
+  pin.setAttribute('aria-pressed', String(pinned));
+  pin.title = pinned ? say('Header pinned to the top · click to let it scroll', 'Header fijo arriba · clic para que se desplace') : say('Pin the header to the top', 'Fijar el header arriba');
+  pin.setAttribute('aria-label', say('Pin header', 'Fijar header'));
+  pin.replaceChildren(icon('pin'));
+  try { localStorage.setItem('stems.headerPinned', pinned ? '1' : '0'); } catch {}
+}
+let storedPin = null;
+try { storedPin = localStorage.getItem('stems.headerPinned'); } catch {}
+setPinned(storedPin !== '0');
+pin.onclick = () => setPinned(header.dataset.pinned !== 'true');
+const mixOutput =createEqualizedOutput({ audioContext: () => context ||= new AudioContext({ sampleRate: SAMPLE_RATE }) });
 // Tracks are instruments: their own audio is what the channel rack cuts into pads.
 const instrumentTracks = () => playlist.instrumentSources().map(track => ({ ...track,
   name: STEMS.includes(track.key) || track.key === 'original' ? text(track.key) : track.name }));
@@ -400,13 +412,10 @@ const effectsUI = mountEffects({ container: $('mix-tools'), effects: mixOutput.e
 const equalizerUI = globalThis.SCParametricEQUI.mount({
   container: $('mix-tools'), effects: eqEffects, isAllowed: () => true, authorize: async () => true,
   onChange: () => libraryUI?.changed(), pro: false,
-  iconUrl: new URL('../assets/icons/eq.svg', import.meta.url).href,
-  resetIconUrl: new URL('../assets/icons/cross.svg', import.meta.url).href,
 });
 const recorderUI = globalThis.SCRecordUI.mount({
   container: $('mix-tools'), effects: mixOutput,
   moduleUrl: new URL('./record-processor.js', import.meta.url).href,
-  iconUrl: new URL('../assets/icons/record.svg', import.meta.url).href,
 });
 equalizerUI.setCollapsed(false);
 recorderUI.setCollapsed(false);
@@ -723,13 +732,13 @@ function buildChannel(stem, wav, trackName = null) {
   const menu = event => contextMenu(event, [
     { label: pt('Channel rack'), icon: PLUGIN_ICONS.rack, disabled: !wav, title: editorHint, action: () => { instruments.focus(stem); moduleWindows.rack.reveal(); channelRack.open(); } },
     { label: pt('Piano roll'), icon: PLUGIN_ICONS.piano, disabled: !wav, title: editorHint, action: () => { instruments.focus(stem); moduleWindows.piano.reveal(); pianoRoll.open(); } },
-    { label: say('Channel EQ', 'EQ del canal'), icon: 'M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6', action: () => { selectEqChannel(stem); moduleWindows.eq.reveal(); } },
-    { label: pt('Download WAV'), icon: iconPaths.download, disabled: !wav, action: () => link.click() },
+    { label: say('Channel EQ', 'EQ del canal'), icon: 'eq', action: () => { selectEqChannel(stem); moduleWindows.eq.reveal(); } },
+    { label: pt('Download WAV'), icon: 'download', disabled: !wav, action: () => link.click() },
     '-',
-    { label: pt('Hear only this track'), icon: iconPaths.music, action: hearOnly },
+    { label: pt('Hear only this track'), icon: 'music', action: hearOnly },
   ]);
   const more = document.createElement('button'); more.type = 'button'; more.className = 'stem-more';
-  more.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>';
+  more.innerHTML = '<sc-icon name="more" class="icon" aria-hidden="true"></sc-icon>';
   more.title = pt('Track options: $1 · or right-click the track', name); more.setAttribute('aria-label', more.title); more.setAttribute('aria-haspopup', 'menu');
   more.onclick = menu;
   head.oncontextmenu = event => { if (!event.target.closest('input')) menu(event); };

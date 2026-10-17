@@ -26,6 +26,7 @@ const messages = JSON.parse(fs.readFileSync(path.join(root, "_locales/en/message
         document.querySelector(".playbackSoundBadge__titleLink").setAttribute("title", "Next track");
       };
     }, messages);
+    await page.addScriptTag({ path: path.join(__dirname, 'icons.js') });
     await page.addScriptTag({ path: path.join(__dirname, "listening-view.js") });
     await page.addScriptTag({ path: path.join(__dirname, "listening-content.js") });
     const cover = page.locator(".playbackSoundBadge__avatar");
@@ -79,6 +80,7 @@ const messages = JSON.parse(fs.readFileSync(path.join(root, "_locales/en/message
       document.querySelector("#downloadBtn").classList.remove("is-hidden");
       document.querySelector("#downloadFormat").classList.remove("is-hidden");
     }, { messages, state });
+    await popup.addScriptTag({ path: path.join(__dirname, 'icons.js') });
     await popup.addScriptTag({ path: path.join(__dirname, "listening-view.js") });
     await popup.addScriptTag({ path: path.join(__dirname, "listening-popup.js") });
     await popup.locator("body.listening-active").waitFor();

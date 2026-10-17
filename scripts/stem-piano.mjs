@@ -3,7 +3,7 @@ import { PLUGIN_ICONS, pluginShell } from './stem-channel-rack.mjs';
 import { patternControls } from './stem-instruments.mjs';
 
 const ROW = 22;
-const svg = paths => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
+const iconMarkup = name => globalThis.SCIcons.html(name, "icon");
 
 // FL Studio's piano roll for the focused track and pattern: one pad of the track,
 // pitched from its root note. Tempo and length come from the project and the pattern.
@@ -24,7 +24,7 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
   const piano = mutate => instruments.editInstrument(instrument => mutate(instrument.piano));
 
   const toolbar = element('div', 'plugin-toolbar'), editing = element('div', 'plugin-toolbar piano-editing');
-  const play = button('plugin-play', pt('Play pattern'), svg(PLUGIN_ICONS.play), () => instruments.playing() ? instruments.stop() : instruments.play());
+  const play = button('plugin-play', pt('Play pattern'), iconMarkup(PLUGIN_ICONS.play), () => instruments.playing() ? instruments.stop() : instruments.play());
   const focus = patternControls(instruments);
   const sample = select('piano-sample', pt('Piano sample'), [...PAD_KEYS].map((key, i) => [i, key]), () => { stopVoices(); piano(value => { value.pad = Number(sample.value); }); });
   const root = select('piano-root', pt('Root note'), Array.from({ length: 73 }, (_, i) => [i + 24, noteName(i + 24)]), () => { stopVoices(); piano(value => { value.root = Number(root.value); }); });
@@ -33,12 +33,13 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
   const octave = select('piano-octave', pt('Keyboard range'), [1, 2, 3, 4, 5].map(value => [value, `C${value}–C${value + 2}`]), () => piano(value => { value.octave = Number(octave.value); }));
   const sustain = element('input', 'piano-sustain'); sustain.type = 'checkbox';
   sustain.onchange = () => { stopVoices(); piano(value => { value.sustain = sustain.checked; }); };
-  const undoButton = button('piano-undo', pt('Undo notes'), '↶', () => history(undo, redo));
-  const redoButton = button('piano-redo', pt('Redo notes'), '↷', () => history(redo, undo));
-  const clear = button('piano-clear', pt('Clear piano notes'), svg(PLUGIN_ICONS.clear), () => commit([]));
+  const undoButton = button('piano-undo', pt('Undo notes'), iconMarkup('undo'), () => history(undo, redo));
+  const redoButton = button('piano-redo', pt('Redo notes'), iconMarkup('redo'), () => history(redo, undo));
+  const clear = button('piano-clear', pt('Clear piano notes'), iconMarkup(PLUGIN_ICONS.clear), () => commit([]));
   editing.append(field(pt('Snap notes'), snap), octave, field(pt('Loop sample during notes'), sustain), undoButton, redoButton, clear);
   const scroll = element('div', 'piano-scroll');
-  const sheet = element('div', 'piano-sheet'), corner = element('span', 'piano-corner', '♪');
+  const sheet = element('div', 'piano-sheet'), corner = element('span', 'piano-corner');
+  corner.append(globalThis.SCIcons.create('music'));
   const ruler = element('div', 'piano-ruler'), keyboard = element('div', 'piano-keys'), grid = element('div', 'piano-grid');
   grid.tabIndex = 0; grid.setAttribute('role', 'group'); grid.setAttribute('aria-label', pt('Piano notes'));
   const noteLayer = element('div', 'piano-notes'), cursor = element('span', 'piano-cursor'); cursor.setAttribute('aria-hidden', 'true');
@@ -156,7 +157,7 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
   }
   function renderTransport() {
     const playing = instruments.playing();
-    play.innerHTML = svg(PLUGIN_ICONS[playing ? 'pause' : 'play']); play.setAttribute('aria-pressed', String(playing));
+    play.innerHTML = iconMarkup(PLUGIN_ICONS[playing ? 'pause' : 'play']); play.setAttribute('aria-pressed', String(playing));
     play.title = pt(playing ? 'Pause' : 'Play pattern'); play.setAttribute('aria-label', play.title);
     cancelAnimationFrame(frame);
     const step = () => {

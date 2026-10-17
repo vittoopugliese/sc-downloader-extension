@@ -1,7 +1,7 @@
 import { pluginShell } from './stem-channel-rack.mjs';
 import { createKnob } from './stem-playlist.mjs';
 
-export const FX_ICON = '<path d="M3 12h2l2-7 4 14 3-11 2 7h2l1-3h2"/>';
+export const FX_ICON = 'fx';
 
 // All the Player Tools FX parameters, with the same ranges and defaults.
 // Unlike the compact player panel, every character control stays visible.

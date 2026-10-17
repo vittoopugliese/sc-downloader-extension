@@ -53,28 +53,14 @@ for (const item of [
   }
 }
 const contentCode = fs.readFileSync(contentPath, "utf8");
-if (!fs.existsSync(path.join(projectRoot, "assets/icons/eq.svg")) ||
-    !manifest.web_accessible_resources?.some((entry) => entry.resources?.includes("assets/icons/eq.svg")) ||
-    !packageScript.includes('"assets/icons"')) {
-  throw new Error("The EQ icon must be packaged and exposed to SoundCloud.");
+if (!mainWorldEntry.js.includes('scripts/icons.js') || !packageScript.includes('"scripts/icons.js"')) {
+  throw new Error('The shared icon catalog must load before the player UI and be packaged.');
 }
-for (const name of ["cross", "detach", "trash", "expand"]) {
-  const asset = `assets/icons/${name}.svg`;
-  if (!fs.existsSync(path.join(projectRoot, asset)) ||
-      !manifest.web_accessible_resources?.some((entry) => entry.resources?.includes(asset)) ||
-      !contentCode.includes(asset)) {
-    throw new Error(`The ${name} icon must be loaded from its packaged asset file.`);
-  }
+const iconNames = JSON.parse(fs.readFileSync(path.join(__dirname, 'icon-aliases.json'), 'utf8'));
+for (const name of ['eq', 'close', 'detach', 'trash', 'expand', 'toolkit']) {
+  if (!iconNames[name]) throw new Error('Missing shared icon: ' + name);
 }
 
-if (
-  !contentCode.includes(panelLogo) ||
-  !manifest.web_accessible_resources?.some((entry) =>
-    entry.resources?.includes(panelLogo)
-  )
-) {
-  throw new Error("The tempo panel logo is not exposed to SoundCloud.");
-}
 if (
   !contentCode.includes("assets/drums/") ||
   !manifest.web_accessible_resources?.some((entry) => entry.resources?.includes("assets/drums/*.wav"))

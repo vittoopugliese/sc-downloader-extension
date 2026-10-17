@@ -8,36 +8,8 @@ const MIN_ZOOM = 8, MAX_ZOOM = 600;
 // The workspace header's stem palette; user tracks continue in warm tints.
 export const CHANNEL_COLORS = Object.freeze({ original: '#c8c2ba', drums: '#ff8a4c', bass: '#ffb98f', other: '#8c8c8c', vocals: '#ff5500' });
 const EXTRA_COLORS = ['#ffd2b3', '#c56a3a', '#e9a27a', '#a39a90', '#ff7a2f', '#d9cfc4'];
-// Stroke icons (24×24). The download arrow is the one the popup's download button uses.
-const ICONS = {
-  pencil: 'm4 16-1 5 5-1L21 7l-4-4zm10-10 4 4',
-  select: 'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5',
-  undo: 'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',
-  redo: 'M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3',
-  download: 'M21 15v1.2c0 1.68 0 2.52-.327 3.162a3 3 0 0 1-1.311 1.311C18.72 21 17.88 21 16.2 21H7.8c-1.68 0-2.52 0-3.162-.327a3 3 0 0 1-1.311-1.311C3 18.72 3 17.88 3 16.2V15m14-5-5 5m0 0-5-5m5 5V3',
-  import: 'M3 10v4m4-7v10m4-13v16m4-10v4m1-9h6m-3-3v6',
-  browser: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm8 4.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zm2 4 2.5 2.5',
-  addTrack: 'M3 4h18v4H3zM3 12h10M3 18h10m3-3h6m-3-3v6',
-  magnet: 'M6 3v8a6 6 0 0 0 12 0V3h-4v8a2 2 0 0 1-4 0V3zM6 7h4m4 0h4',
-  zoomOut: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4-4M8 11h6',
-  zoomIn: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4-4M8 11h6m-3-3v6',
-  fit: 'M3 12h18M7 8l-4 4 4 4m10-8 4 4-4 4',
-  mute: 'M4 9h4l5-4v14l-5-4H4zm13 0 4 6m0-6-4 6',
-  reverse: 'M4 8h14l-3-3M20 16H6l3 3',
-  crossfade: 'M3 6c6 0 12 12 18 12M3 18c6 0 12-12 18-12',
-  duplicate: 'M8 8h12v12H8zM4 16V4h12',
-  slice: 'M12 2v4m0 4v4m0 4v4M4 8l4 4-4 4m16-8-4 4 4 4',
-  split: 'M6 3a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zm0 13a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM8 7l12 11M8 17 20 6',
-  trash: 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7',
-  check: 'm5 12 5 5 9-10',
-  // Pitch modes: fixed length with the pitch moving inside it, and a turntable.
-  keepLength: 'M4 5v14M20 5v14M4 12h3m10 0h3M12 5v14M9 8l3-3 3 3M9 16l3 3 3-3',
-  resample: '<circle cx="10" cy="13" r="7"/><circle cx="10" cy="13" r="1.5"/><path d="M20 3v9l-4 4"/>',
-  // Edit tools: move/trim, slip the audio inside the clip, stretch from the edge.
-  moveTool: 'M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3',
-  slipTool: 'M3 6h18v12H3zM7 12h10M9 10l-2 2 2 2M15 10l2 2-2 2',
-  stretchTool: 'M3 7h10v10H3M17 4v16M13 12h8M19 10l2 2-2 2',
-};
+// Semantic names from the shared FL icon catalog.
+const ICONS = Object.freeze({"pencil": "draw", "select": "select", "undo": "undo", "redo": "redo", "download": "download", "browser": "browser", "addTrack": "add-track", "magnet": "snap", "zoomOut": "zoom-out", "zoomIn": "zoom-in", "fit": "fit", "mute": "mute", "reverse": "reverse", "crossfade": "crossfade", "duplicate": "copy", "slice": "slice", "split": "cut", "trash": "trash", "check": "check", "keepLength": "keep-length", "resample": "resample", "moveTool": "move", "slipTool": "slip", "stretchTool": "stretch", "import": "upload"});
 
 // Small context menu at the pointer. Items: { label, icon, shortcut, danger, checked,
 // disabled, title, action }, '-' for a separator, { heading }, or { choices: [{ label, icon,
@@ -48,8 +20,8 @@ export function contextMenu(event, items) {
   openMenu?.close();
   const back = document.activeElement, menu = document.createElement('div');
   menu.className = 'pl-menu'; menu.setAttribute('role', 'menu');
-  // An icon is a path, or SVG markup when it starts with '<'.
-  const svg = path => `<svg viewBox="0 0 24 24" aria-hidden="true">${path.startsWith('<') ? path : `<path d="${path}"/>`}</svg>`;
+  // Menu entries use the same semantic icon names as every other control.
+  const iconMarkup = name => globalThis.SCIcons.html(name, "icon");
   for (const item of items) {
     if (item === '-') { const line = document.createElement('div'); line.className = 'pl-menu-sep'; line.setAttribute('role', 'separator'); menu.append(line); continue; }
     if (item.heading) { const head = document.createElement('div'); head.className = 'pl-menu-heading'; head.textContent = item.heading; menu.append(head); continue; }
@@ -59,7 +31,7 @@ export function contextMenu(event, items) {
         const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'pl-menu-item pl-menu-choice';
         chip.setAttribute('role', 'menuitemradio'); chip.setAttribute('aria-checked', String(!!choice.checked)); chip.setAttribute('aria-label', choice.label);
         chip.title = choice.title ? `${choice.label} — ${choice.title}` : choice.label;
-        chip.innerHTML = `${svg(choice.icon)}${choice.checked ? `<span class="pl-menu-choice-check">${svg(ICONS.check)}</span>` : ''}`;
+        chip.innerHTML = `${iconMarkup(choice.icon)}${choice.checked ? `<span class="pl-menu-choice-check">${iconMarkup(ICONS.check)}</span>` : ''}`;
         chip.onclick = () => { close(); choice.action?.(); };
         row.append(chip);
       }
@@ -72,7 +44,7 @@ export function contextMenu(event, items) {
     entry.classList.toggle('is-danger', !!item.danger); entry.disabled = !!item.disabled;
     if (item.title) entry.title = item.title;
     const icon = checkable && !item.icon ? (item.checked ? ICONS.check : '') : item.icon;
-    entry.innerHTML = `<span class="pl-menu-icon">${icon ? svg(icon) : ''}</span><span class="pl-menu-label"></span>${item.shortcut ? '<kbd></kbd>' : ''}`;
+    entry.innerHTML = `<span class="pl-menu-icon">${icon ? iconMarkup(icon) : ''}</span><span class="pl-menu-label"></span>${item.shortcut ? '<kbd></kbd>' : ''}`;
     entry.querySelector('.pl-menu-label').textContent = item.label;
     if (item.shortcut) entry.querySelector('kbd').textContent = item.shortcut;
     entry.onclick = () => { close(); item.action?.(); };
@@ -219,7 +191,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     }
     busy.hidden = !cache.busy();
   } });
-  function renderPlay(active) { if (!play) return; play.textContent = active ? 'Ⅱ' : '▶'; play.setAttribute('aria-pressed', String(active)); }
+  function renderPlay(active) { if (!play) return; play.replaceChildren(globalThis.SCIcons.create(active ? 'pause' : 'play')); play.setAttribute('aria-pressed', String(active)); }
   function stop(reset = false) {
     const was = playing(), at = engine?.stop();
     position = reset ? marker : at ?? position;
@@ -260,10 +232,10 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     changed(); draw(); return true;
   }
   const toolbar = node('div', 'pl-toolbar pl-ui');
-  function iconButton(path, title, action) {
+  function iconButton(name, title, action) {
     const control = button('', title, action); control.className = 'pl-icon-button';
-    // An icon is a path, or SVG markup when it starts with '<'.
-    control.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path.startsWith('<') ? path : `<path d="${path}"/>`}</svg>`;
+    // Menu entries use the same semantic icon names as every other control.
+    control.innerHTML = globalThis.SCIcons.html(name);
     return control;
   }
   // Tool buttons carry a hotkey and a color: a click or the hotkey flashes the button in its
@@ -281,8 +253,8 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     for (const combo of keys) hotkeys.set(combo, { control, repeat });
     return control;
   }
-  const play = playButton ? button('▶', t('Play / pause (Space)', 'Reproducir / pausar (Espacio)'), safe(toggle)) : null;
-  if (play) { play.className = 'pl-play'; play.setAttribute('aria-pressed', 'false'); }
+  const play = playButton ? button('', t('Play / pause (Space)', 'Reproducir / pausar (Espacio)'), safe(toggle)) : null;
+  if (play) { play.append(globalThis.SCIcons.create('play')); play.className = 'pl-play'; play.setAttribute('aria-pressed', 'false'); }
   const time = node('output', 'pl-time', '0:00.00'); time.title = t('Playhead position (minutes:seconds)', 'Posición del cursor (minutos:segundos)');
   function field(text, type, value, min, max, step) {
     const label = node('label', 'pl-field', text), input = node('input'); input.type = type; input.value = String(value);
@@ -330,7 +302,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   });
   fitTempo.className = 'pl-fit-tempo';
   const snapLabel = node('label', 'pl-field'), snapSelect = node('select'); snapSelect.setAttribute('aria-label', 'Snap');
-  snapLabel.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICONS.magnet}"/></svg>`;
+  snapLabel.innerHTML = globalThis.SCIcons.html("snap");
   snapLabel.title = snapSelect.title = t('Snap: grid that clips, edges and loops stick to. Hold Alt while dragging to ignore it.', 'Snap: grilla a la que se pegan clips, bordes y loops. Mantené Alt al arrastrar para ignorarla.');
   for (const [value, label] of [[0, 'Off'], [.25, '1/16'], [.5, '1/8'], [1, '1/4'], [4, t('Bar', 'Compás')]]) snapSelect.add(new Option(label, value));
   snapSelect.value = snap; snapSelect.onchange = () => { snap = Number(snapSelect.value); }; snapLabel.append(snapSelect);
@@ -858,7 +830,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     item.setAttribute('aria-pressed', String(isChosen(clip.id)));
     item.style.left = (clip.at * zoom) + 'px'; item.style.width = Math.max(8, clipDuration(clip) * zoom) + 'px'; item.style.setProperty('--clip-color', color(trackOf(clip.track)));
     item.classList.toggle('is-stretching', stretching(clip)); item.classList.toggle('is-muted', !!clip.mute); item.classList.toggle('is-pattern', isPattern(clip));
-    item.querySelector('.pl-clip-title').textContent = (clip.reverse ? '↶ ' : '') + name + (clipPitch(clip) ? '  ' + signed(clipPitch(clip)) + ' st' : '') + (clip.speed !== 1 ? '  ' + clip.speed.toFixed(2) + '×' : '');
+    item.querySelector('.pl-clip-title').replaceChildren(...(clip.reverse ? [globalThis.SCIcons.create('reverse')] : []), document.createTextNode(name + (clipPitch(clip) ? '  ' + signed(clipPitch(clip)) + ' st' : '') + (clip.speed !== 1 ? '  ' + clip.speed.toFixed(2) + '×' : '')));
   }
   function clipElement(initial) {
     const id = initial.id;
@@ -1218,6 +1190,11 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     trackGraph(key) {
       const track = state.tracks.find(item => item.id === key || item.stem === key);
       return track ? engine?.trackGraph(track.id) || null : null;
+    },
+    // Peak level of a track (by id or stem) while the playlist plays; 0 when stopped.
+    trackLevel(key) {
+      const track = state.tracks.find(item => item.id === key || item.stem === key);
+      return track && engine?.playing() ? engine.trackLevel(track.id) : 0;
     },
     // The toolbar button of a window ('browser' or a host window id).
     windowButton: id => windowButtons.get(id),

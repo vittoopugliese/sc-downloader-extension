@@ -4,14 +4,8 @@
 // the detach button floats it again; X closes it. The module keeps its own DOM, canvases and
 // audio state: only its parent and position change. Open/docked state and the floating
 // rectangle are per-viewer conveniences kept in localStorage.
-const ICONS = {
-  dock: 'M4 5h16v14H4zM4 15h16',
-  maximize: 'M5 5h14v14H5z',
-  restore: 'M8 8h11v11H8zM5 16V5h11',
-  detach: 'M14 4h6v6m0-6-8 8M10 5H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-5',
-  close: 'M6 6l12 12M18 6 6 18',
-};
-const svg = path => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
+const ICONS = Object.freeze({"dock": "dock", "maximize": "maximize", "restore": "restore", "detach": "detach", "close": "close"});
+const iconMarkup = name => globalThis.SCIcons.html(name, "icon");
 const read = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
 const write = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage blocked */ } };
 
@@ -60,7 +54,7 @@ export function mountModuleWindow({ id, section, header, home, t, size, setVisib
   const controls = document.createElement('div'); controls.className = 'module-controls';
   const control = (icon, action) => {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'module-control';
-    b.innerHTML = svg(icon); b.onclick = event => { event.stopPropagation(); action(); }; return b;
+    b.innerHTML = iconMarkup(icon); b.onclick = event => { event.stopPropagation(); action(); }; return b;
   };
   const dockButton = control(ICONS.dock, () => setDocked(!docked));
   const maximizeButton = control(ICONS.maximize, () => setMaximized(!maximized));
@@ -92,11 +86,11 @@ export function mountModuleWindow({ id, section, header, home, t, size, setVisib
     section.classList.toggle('is-docked', docked);
     section.classList.toggle('is-maximized', open && !docked && maximized);
     const sizeLabel = maximized && !docked ? t('Restore size', 'Restaurar tamaño') : t('Maximize', 'Maximizar');
-    maximizeButton.innerHTML = svg(maximized && !docked ? ICONS.restore : ICONS.maximize);
+    maximizeButton.innerHTML = iconMarkup(maximized && !docked ? ICONS.restore : ICONS.maximize);
     maximizeButton.title = sizeLabel; maximizeButton.setAttribute('aria-label', sizeLabel);
     maximizeButton.setAttribute('aria-pressed', String(maximized && !docked));
     const label = docked ? t('Detach: float this window', 'Desacoplar: ventana flotante') : t('Dock under the Playlist', 'Acoplar debajo de la Playlist');
-    dockButton.innerHTML = svg(docked ? ICONS.detach : ICONS.dock);
+    dockButton.innerHTML = iconMarkup(docked ? ICONS.detach : ICONS.dock);
     dockButton.title = label; dockButton.setAttribute('aria-label', label);
     if (docked) {
       if (section.parentElement !== home) anchor.after(section);

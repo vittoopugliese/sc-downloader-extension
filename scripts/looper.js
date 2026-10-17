@@ -826,28 +826,7 @@ const SCLooper = (() => {
   }
 
   function loopIcon(active) {
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", "0 0 24 24");
-    svg.setAttribute("aria-hidden", "true");
-    svg.classList.add("scdl-loop-button-icon");
-
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    if (active) {
-      path.setAttribute("d", "M5 5 19 19M19 5 5 19");
-      path.setAttribute("fill", "none");
-      path.setAttribute("stroke", "currentColor");
-      path.setAttribute("stroke-width", "1.8");
-      path.setAttribute("stroke-linecap", "round");
-      path.setAttribute("stroke-linejoin", "round");
-    } else {
-      path.setAttribute(
-        "d",
-        "M17.6 6.4A7.5 7.5 0 0 0 5.1 9H2.75l3.1 3.1L9 9H6.7a5.75 5.75 0 0 1 9.65-1.35L17.6 6.4Zm.55 5.5L15 15h2.3a5.75 5.75 0 0 1-9.65 1.35L6.4 17.6A7.5 7.5 0 0 0 18.9 15h2.35l-3.1-3.1Z"
-      );
-      path.setAttribute("fill", "currentColor");
-    }
-    svg.appendChild(path);
-    return svg;
+    return globalThis.SCIcons.create(active ? "close" : "loop", "scdl-loop-button-icon");
   }
 
   function createButton(menuButton) {
@@ -906,11 +885,7 @@ const SCLooper = (() => {
     button.type = "button";
     button.className = menuButton.className;
     button.setAttribute(DOWNLOAD_ATTRIBUTE, "true");
-    const icon = document.createElement("img");
-    icon.className = "scdl-loop-download-icon";
-    icon.src = chrome.runtime.getURL("assets/icons/download.svg");
-    icon.alt = "";
-    icon.draggable = false;
+    const icon = globalThis.SCIcons.create("download", "scdl-loop-download-icon");
     button.appendChild(icon);
     button.addEventListener("click", handleDownloadClick);
     setDownloadButtonState(button);

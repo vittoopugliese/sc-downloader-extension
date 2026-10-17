@@ -62,7 +62,7 @@ const { chromium } = require('playwright');
         });
       }, shared);
       for (const file of ['tempo-control-core.js', 'looper-core.js', 'sampler-core.js', 'parametric-eq.js',
-        'audio-effects-core.js', 'player-tools-collapsible.js', 'parametric-eq-ui.js', 'tempo-control-main.js']) {
+        'audio-effects-core.js', 'icons.js', 'player-tools-collapsible.js', 'parametric-eq-ui.js', 'tempo-control-main.js']) {
         if (file !== 'tempo-control-main.js') await page.addScriptTag({ path: path.join(__dirname, file) });
         else {
           // Inspect retained AudioBuffers without adding production debug exports.

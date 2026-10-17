@@ -6,7 +6,7 @@
   if (globalThis.SCLikesText) {
     title.textContent = SCLikesText('title');
     detail.textContent = SCLikesText('tagline');
-    button.textContent = `${SCLikesText('open')} ↗`;
+    button.replaceChildren(document.createTextNode(SCLikesText('open')), globalThis.SCIcons.create('detach'));
     button.title = SCLikesText('title');
   }
   button.addEventListener('click', async () => {

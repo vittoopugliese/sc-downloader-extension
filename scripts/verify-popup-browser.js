@@ -17,7 +17,6 @@ const iconDataUrls = Object.fromEntries(
     `data:image/svg+xml;base64,${fs.readFileSync(path.resolve(__dirname, "..", "assets", "icons", fileName)).toString("base64")}`,
   ])
 );
-
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -29,6 +28,7 @@ const iconDataUrls = Object.fromEntries(
     const html = fs.readFileSync(path.resolve(__dirname, "..", "popup.html"), "utf8")
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
     await page.setContent(html);
+    await page.addScriptTag({ path: path.join(__dirname, "icons.js") });
     await page.evaluate(() => document.body.classList.remove("policy-pending"));
     await page.addScriptTag({ path: path.join(__dirname, "fast-tooltips.js") });
     await page.evaluate(({ logoUrl, playerToolsUrl, likesExplorerUrl, icons }) => {
@@ -38,7 +38,6 @@ const iconDataUrls = Object.fromEntries(
       document.querySelector("#title").textContent = "t t o r i o - Tracks";
       document.querySelector("#artist").textContent = "t t o r i o";
       document.querySelector("#artistArtwork").src = logoUrl;
-      document.querySelector(".player-tools-offer img").src = playerToolsUrl;
       document.querySelector(".likes-explorer-thumb").src = likesExplorerUrl;
       document.querySelector("#playerToolsTrialStatus").textContent = "7 days left in your free trial";
       document.querySelectorAll("img[src]").forEach((image) => {
@@ -175,7 +174,7 @@ const iconDataUrls = Object.fromEntries(
         titleSize: style("#title").fontSize,
         divider: style(".track-info").borderBottomStyle,
         selectionDivider: style(".selection-header").borderBottomStyle,
-        offerImageSize: size(document.querySelector(".player-tools-offer img")),
+        offerImageSize: size(document.querySelector(".player-tools-offer sc-icon")),
         offerTitleSize: style(".player-tools-offer-title").fontSize,
         offerDetailSize: style(".player-tools-offer-detail").fontSize,
         offerTrialSize: style("#playerToolsTrialStatus").fontSize,

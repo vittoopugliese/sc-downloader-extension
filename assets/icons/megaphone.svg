@@ -1,18 +1,1 @@
-<?xml version="1.0" encoding="utf-8"?>
-
-<!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
-<svg version="1.1" id="Icons" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" 
-	 viewBox="0 0 32 32" xml:space="preserve">
-<style type="text/css">
-	.st0{fill:none;stroke:#000000;stroke-width:2;stroke-linejoin:round;stroke-miterlimit:10;}
-	.st1{fill:none;stroke:#000000;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
-</style>
-<path class="st1" d="M20,19.4V13c0-0.8-0.7-1.5-1.5-1.5h0c-0.8,0-1.5,0.7-1.5,1.5v9.7l-2.2-3.9c-0.4-0.7-1.4-0.9-2.1-0.5l0,0
-	c-0.6,0.4-0.8,1.1-0.6,1.7l0,0c1.2,3.2,3,6.2,5.3,8.9"/>
-<path class="st1" d="M20,19.4v-7.9c0-0.8,0.7-1.5,1.5-1.5h0c0.8,0,1.5,0.7,1.5,1.5v7.9"/>
-<path class="st1" d="M23,19.4V13c0-0.8,0.7-1.5,1.5-1.5h0c0.8,0,1.5,0.7,1.5,1.5v6.4"/>
-<path class="st1" d="M26,19.4v-5c0-0.8,0.7-1.5,1.5-1.5h0c0.8,0,1.5,0.7,1.5,1.5v6v0c0,2.9-0.6,5.9-1.8,8.6"/>
-<path class="st1" d="M15,27C8.4,27,3,21.6,3,15S8.4,3,15,3c6,0,11,4.4,11.9,10.1"/>
-<path class="st1" d="M13.5,18.1c-1.1-0.6-1.9-1.7-1.9-3.1c0-1.9,1.5-3.4,3.4-3.4c0.8,0,1.5,0.3,2.1,0.7"/>
-<path class="st1" d="M15,7c-4.4,0-8,3.6-8,8"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-72 -1192 2063 1615"><path transform="scale(1,-1)" fill="currentColor" d="M864 1088V640V512Q864 640 608 640H384Q128 640 128 512V640L208 1072Q224 1152 288 1152H800Q864 1152 864 1088ZM1120 1152H1632Q1696 1152 1712 1072L1792 640V512Q1792 640 1536 640H1312Q1056 640 1056 512V640V1088Q1056 1152 1120 1152ZM864 320V-256V-384Q864 -256 608 -256H224Q-32 -256 -32 -384V-256L80 304Q96 384 160 384H800Q864 384 864 320ZM1120 384H1760Q1824 384 1840 304L1952 -256V-384Q1952 -256 1696 -256H1312Q1056 -256 1056 -384V-256V320Q1056 384 1120 384Z"/></svg>

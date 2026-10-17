@@ -32,14 +32,10 @@
   const RATE_ATTRIBUTE = "data-scdl-tempo-rate";
   const PITCH_ATTRIBUTE = "data-scdl-tempo-preserve-pitch";
   const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
-  const EXTENSION_PLAYER_ICON_ATTRIBUTE = "data-scdl-extension-player-icon-url";
+
   const EXTENSION_DRUM_SAMPLES_ATTRIBUTE = "data-scdl-extension-drum-samples-url";
-  const EXTENSION_MEGAPHONE_ATTRIBUTE = "data-scdl-extension-megaphone-url";
-  const EXTENSION_SOCIAL_BADGE_ATTRIBUTE = "data-scdl-extension-social-badge-url";
-  const EXTENSION_DETACH_ICON_ATTRIBUTE = "data-scdl-extension-detach-icon-url";
-  const EXTENSION_TRASH_ICON_ATTRIBUTE = "data-scdl-extension-trash-icon-url";
-  const EXTENSION_EXPAND_ICON_ATTRIBUTE = "data-scdl-extension-expand-icon-url";
-  const EXTENSION_CROSS_ICON_ATTRIBUTE = "data-scdl-extension-cross-url";
+
+
   const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
   const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
   const OPEN_PLAYER_TOOLS_PANEL_EVENT = "scdl:open-player-tools-panel";
@@ -91,10 +87,8 @@
     ".playbackTimeline__progressHandle",
     ".playbackTimeline__progressContainer",
   ].join(",");
-  // Inline copy of assets/icons/bypass.svg for the MAIN-world shadow UI.
-  const BYPASS_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17.2C22 19.85 19.85 22 17.2 22C15.78 22 14.51 21.38 13.63 20.4C12.87 19.55 12.4 18.43 12.4 17.2C12.4 14.55 14.55 12.4 17.2 12.4C18.57 12.4 19.81 12.98 20.69 13.91C20.68 13.91 20.68 13.91 20.69 13.92C21.5 14.78 22 15.93 22 17.2Z"/><path d="M18.48 18.54L15.95 16M18.45 16.03L15.92 18.57"/><path d="M22 8.69C22 10.66 21.49 12.4 20.69 13.91C19.81 12.98 18.57 12.4 17.2 12.4C14.55 12.4 12.4 14.55 12.4 17.2C12.4 18.43 12.87 19.55 13.63 20.4C13.26 20.57 12.92 20.71 12.62 20.81C12.28 20.93 11.72 20.93 11.38 20.81C8.48 19.82 2 15.69 2 8.69C2 5.6 4.49 3.09998 7.56 3.09998C9.37 3.09998 10.99 3.98002 12 5.33002C13.01 3.98002 14.63 3.09998 16.44 3.09998C19.51 3.09998 22 5.6 22 8.69Z"/></svg>`;
-  // Inline copy of assets/icons/settings.svg so the tempo panel matches popup.html.
-  const SETTINGS_ICON = `<svg viewBox="0 0 512 512" aria-hidden="true"><path d="M502.325 307.303 463.319 276.498a25.82 25.82 0 0 1-9.668-20.348v-.252a25.88 25.88 0 0 1 9.667-20.396l39.007-30.806a25.89 25.89 0 0 0 7.737-29.701l-17.134-41.366a25.89 25.89 0 0 0-26.472-15.532l-49.366 5.8a25.9 25.9 0 0 1-21.258-7.586l-.354-.356a25.88 25.88 0 0 1-7.552-21.225l5.799-49.363a25.89 25.89 0 0 0-15.531-26.472L337.004 1.939a25.89 25.89 0 0 0-29.701 7.736L276.498 48.68a25.82 25.82 0 0 1-20.349 9.668h-.252a25.88 25.88 0 0 1-20.395-9.667L204.697 9.675a25.89 25.89 0 0 0-29.702-7.736L133.63 19.072a25.89 25.89 0 0 0-15.532 26.473l5.799 49.366a25.9 25.9 0 0 1-7.585 21.257l-.356.356a25.88 25.88 0 0 1-21.226 7.552l-49.363-5.799a25.89 25.89 0 0 0-26.472 15.531L1.939 174.996a25.89 25.89 0 0 0 7.736 29.701l39.006 30.805a25.82 25.82 0 0 1 9.668 20.348v.251a25.88 25.88 0 0 1-9.667 20.395L9.675 307.303a25.89 25.89 0 0 0-7.736 29.701l17.134 41.365a25.89 25.89 0 0 0 26.472 15.532l49.366-5.799a25.9 25.9 0 0 1 21.258 7.586l.356.356a25.88 25.88 0 0 1 7.552 21.226l-5.799 49.364a25.89 25.89 0 0 0 15.532 26.472l41.366 17.134a25.89 25.89 0 0 0 29.701-7.736l30.804-39.005a25.82 25.82 0 0 1 20.348-9.669h.251a25.88 25.88 0 0 1 20.396 9.667l30.806 39.007a25.89 25.89 0 0 0 29.701 7.736l41.366-17.134a25.89 25.89 0 0 0 15.532-26.472l-5.8-49.366a25.9 25.9 0 0 1 7.586-21.257l.356-.356a25.88 25.88 0 0 1 21.225-7.552l49.364 5.799a25.89 25.89 0 0 0 26.472-15.531l17.134-41.365a25.89 25.89 0 0 0-7.737-29.701ZM281.292 329.698a77.75 77.75 0 1 1-59.52-143.695 77.75 77.75 0 0 1 59.52 143.695Z"/></svg>`;
+  const BYPASS_ICON = `<sc-icon name="bypass" aria-hidden="true"></sc-icon>`;
+  const SETTINGS_ICON = `<sc-icon name="settings" aria-hidden="true"></sc-icon>`;
   if (window[INSTALLED_FLAG] || !globalThis.SCTempoControl || !globalThis.SCSamplerCore) return;
   Object.defineProperty(window, INSTALLED_FLAG, { value: true });
 
@@ -505,27 +499,10 @@
   function syncBrandLogo() {
     if (!ui) return;
     const logoUrl = document.documentElement.getAttribute(EXTENSION_LOGO_ATTRIBUTE);
-    const playerIconUrl = document.documentElement.getAttribute(EXTENSION_PLAYER_ICON_ATTRIBUTE);
-    const megaphoneUrl = document.documentElement.getAttribute(EXTENSION_MEGAPHONE_ATTRIBUTE);
-    const socialBadgeUrl = document.documentElement.getAttribute(EXTENSION_SOCIAL_BADGE_ATTRIBUTE);
-    const detachIconUrl = document.documentElement.getAttribute(EXTENSION_DETACH_ICON_ATTRIBUTE);
-    const trashIconUrl = document.documentElement.getAttribute(EXTENSION_TRASH_ICON_ATTRIBUTE);
-    const expandIconUrl = document.documentElement.getAttribute(EXTENSION_EXPAND_ICON_ATTRIBUTE);
-    const crossIconUrl = document.documentElement.getAttribute(EXTENSION_CROSS_ICON_ATTRIBUTE);
-    if (logoUrl) {
-      ui.brandLogo.src = logoUrl;
-      ui.brandLogo.hidden = false;
-    }
-    if (playerIconUrl) {
-      ui.triggerLogo.src = playerIconUrl;
-      ui.triggerLogo.hidden = false;
-    }
-    if (megaphoneUrl && ui.samplerIcon) ui.samplerIcon.src = megaphoneUrl;
-    if (socialBadgeUrl && ui.planBadgeIcon) ui.planBadgeIcon.src = socialBadgeUrl;
-    if (detachIconUrl && ui.detachIcon) { ui.detachIcon.src = detachIconUrl; ui.detachIcon.hidden = false; }
-    if (trashIconUrl && ui.trashIcon) { ui.trashIcon.src = trashIconUrl; ui.trashIcon.hidden = false; }
-    if (expandIconUrl && ui.visibilityExpandIcon) ui.visibilityExpandIcon.src = expandIconUrl;
-    if (crossIconUrl) ui.crossIcons.forEach((icon) => { icon.src = crossIconUrl; });
+    if (logoUrl) { ui.brandLogo.src = logoUrl; ui.brandLogo.hidden = false; }
+    ui.triggerLogo.hidden = false;
+    ui.detachIcon.hidden = false;
+    ui.trashIcon.hidden = false;
   }
 
   document.addEventListener(EXTENSION_ASSETS_EVENT, syncBrandLogo);
@@ -2689,7 +2666,7 @@
       row.className = "sampler-preset-row";
       const kind = document.createElement("span");
       kind.className = "sampler-preset-kind";
-      kind.textContent = preset.kind === "piano" ? "♫" : "▦";
+      kind.replaceChildren(globalThis.SCIcons.create(preset.kind === "piano" ? "piano" : "sampler"));
       kind.title = preset.kind === "piano" ? pt("Piano · 1 sample") : pt("8 pads");
       kind.setAttribute("aria-label", kind.title);
       const load = document.createElement("button");
@@ -2701,7 +2678,7 @@
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "sampler-preset-delete";
-      remove.textContent = "×";
+      remove.replaceChildren(globalThis.SCIcons.create("close"));
       remove.setAttribute("aria-label", `${samplerCopy("deleteState")}: ${preset.name}`);
       remove.title = remove.getAttribute("aria-label");
       remove.addEventListener("click", () => runSamplerPreset("delete", preset));
@@ -3443,7 +3420,7 @@
         .rate-input:focus-visible { outline: none; }
         .current:focus-visible { outline: 1px solid #f50; outline-offset: 2px; }
         .current[hidden], .rate-input[hidden] { display: none; }
-        .bypass svg { width: 20px; height: 20px; animation: heart-float 3s ease-in-out infinite; }
+        .bypass sc-icon{ width: 20px; height: 20px; animation: heart-float 3s ease-in-out infinite; }
         @keyframes heart-float {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-3px); }
@@ -3505,7 +3482,7 @@
         .speed-status { margin-left: auto; gap: 4px; }
         .current, .rate-input { font-size: 15px; }
         .bypass { width: 26px; height: 26px; }
-        .bypass svg { width: 21px; height: 21px; }
+        .bypass sc-icon{ width: 21px; height: 21px; }
         .slider-wrap { height: 26px; margin: 0 0 5px; }
         .slider { height: 26px; background-size: 100% 10px; }
         .slider::-webkit-slider-runnable-track { height: 10px; }
@@ -3524,7 +3501,7 @@
         .save-loop-pad, .loop-instrument, .slice-loop, .sampler-preset-toggle { display: grid; place-items: center; width: 24px; height: 26px; padding: 0; border: 1px solid #484848; border-radius: 5px; color: #d6d6d6; background: #292929; cursor: pointer; }
         .save-loop-pad:hover, .save-loop-pad[aria-pressed="true"], .loop-instrument:hover, .loop-instrument[aria-pressed="true"], .slice-loop:hover { color: #fff; border-color: #ff7b38; }
         .loop-instrument[aria-pressed="true"] { color: #ff8a4c; background: #462619; }
-        .loop-instrument.is-preparing svg { animation: instrument-pulse .8s ease-in-out infinite alternate; }
+        .loop-instrument.is-preparing sc-icon{ animation: instrument-pulse .8s ease-in-out infinite alternate; }
         .instrument-controls { padding: 5px 7px 7px; }
         .instrument-controls[hidden],
         .drum-section.is-collapsed:not(.is-instrument) .instrument-controls,
@@ -3549,9 +3526,9 @@
         .instrument-cut-label[hidden], .instrument-adsr-label[hidden] { display: none; }
         .instrument-cut-itself, .instrument-adsr-toggle { width: 16px; height: 16px; accent-color: #ff7b38; margin: 0; }
         @keyframes instrument-pulse { to { opacity: .35; transform: scale(.88); } }
-        .save-loop-pad svg, .loop-instrument svg, .slice-loop svg, .sampler-preset-toggle svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+        .save-loop-pad sc-icon,.loop-instrument sc-icon,.slice-loop sc-icon,.sampler-preset-toggle sc-icon{ width: 13px; height: 13px;      }
         .clear-loop:disabled, .download-loop:disabled, .separate-stems:disabled, .save-loop-pad:disabled, .loop-instrument:disabled, .slice-loop:disabled { cursor: not-allowed; opacity: .45; }
-        .clear-loop svg, .clear-loop img, .download-loop svg { width: 12px; height: 12px; flex: 0 0 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .clear-loop img,.clear-loop sc-icon,.download-loop sc-icon{ width: 12px; height: 12px; flex: 0 0 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .status { margin-top: 5px; }
 
         /* Expanded player editor, compact enough to stay clear of the player. */
@@ -3622,7 +3599,7 @@
         .current, .rate-input { width: 6ch; flex: 0 0 auto; font-size: 13px; }
         .current.is-bypassed { color: #d6d6d6; }
         .bypass { width: 20px; height: 22px; }
-        .bypass svg { width: 19px; height: 19px; }
+        .bypass sc-icon{ width: 19px; height: 19px; }
         .slider-wrap { height: 26px; margin: 0; border: 1px solid #30373e; border-radius: 7px; background: rgba(255,255,255,.025); padding: 0; }
         .slider { height: 24px; border-radius: 6px; background-size: 100% 100%; }
         .slider::-webkit-slider-runnable-track { height: 9px; border-radius: 999px; }
@@ -3692,9 +3669,10 @@
         .panel-tool:disabled { opacity: .48; cursor: wait; }
         .panel-tool.is-unavailable:disabled { cursor: not-allowed; }
         .panel-tool[aria-pressed="true"] { color: #ff6a1a; border-color: #ff6a1a; }
-        .panel-tool svg { display: block; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .panel-tool sc-icon{ display: block; width: 12px; height: 12px;      }
         .panel-tool .cross-icon { display:block; width:12px; height:12px; }
-        .panel-tool-icon { display:block; width:13px; height:13px; object-fit:contain; filter:brightness(0) invert(1); }
+        .panel-tool .panel-tool-icon { display:block; width:13px; height:13px; }
+        .trigger .trigger-icon { width:20px; height:20px; }
         .detach-button[aria-pressed="true"] .panel-tool-icon { filter:brightness(0) saturate(100%) invert(56%) sepia(93%) saturate(1985%) hue-rotate(336deg) brightness(104%) contrast(101%); }
         @media (max-width: 360px) {
           .panel-header { grid-template-columns: 28px minmax(0, 1fr) auto; column-gap: 3px; }
@@ -3704,13 +3682,13 @@
           .current, .rate-input { font-size: 11px; }
           .panel-tool { width: 20px; }
           .drum-pad { padding-inline: 4px; }
-          .bypass, .bypass svg { width: 16px; height: 16px; }
+          .bypass,.bypass sc-icon{ width: 16px; height: 16px; }
         }
         .clear-loop, .download-loop, .separate-stems { height: 22px; padding: 0 6px; border-radius: 6px; opacity: .82; }
         .save-loop-pad, .loop-instrument, .slice-loop, .sampler-preset-toggle { width: 22px; height: 22px; }
         .editor-track { display: grid; place-items: center; width: 22px; height: 22px; padding: 3px; border: 1px solid #484848; border-radius: 6px; color: #ddd; background: #292929; cursor: pointer; }
         .editor-track[hidden] { display: none; }
-        .editor-track svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+        .editor-track sc-icon{ width: 14px; height: 14px;      }
         ${collapsible.styles}
         .drum-section, .waveform-shell, .effects-shell { transition:height 160ms ease; }
         .drum-section > .tool-section-header .tool-section-heading { padding-right:110px; }
@@ -3751,8 +3729,8 @@
           aria-label="Playback speed 1x"
           aria-haspopup="dialog"
           aria-expanded="false"
-        ><img class="trigger-icon" width="24" height="24" alt="" draggable="false" hidden /><span class="trigger-rate">1x</span></button>
-        <button class="clear-rate" type="button" aria-label="Reset Player Tools" title="Reset Player Tools" hidden><img class="cross-icon" alt="" aria-hidden="true" /></button>
+        ><sc-icon name="toolkit" class="trigger-icon" hidden style="--icon-size:24px" aria-hidden="true"></sc-icon><span class="trigger-rate">1x</span></button>
+        <button class="clear-rate" type="button" aria-label="Reset Player Tools" title="Reset Player Tools" hidden><sc-icon name="close" class="cross-icon" aria-hidden="true"></sc-icon></button>
       </span>
       <section
         class="panel"
@@ -3764,25 +3742,25 @@
         <div class="brand">
           <img class="brand-logo" width="42" height="42" alt="" draggable="false" hidden />
           <div class="brand-copy">
-            <div class="brand-title-line"><button class="brand-name" type="button" aria-label="Open the Looper guide">${TOOLS_EDITION ? "Player Tools" : "SCTD Player Tools"}</button><span class="free-badge" aria-label="Player Tools Free plan"><img class="plan-badge-icon" alt="" aria-hidden="true" /><span class="plan-badge-label">FREE</span></span></div>
+            <div class="brand-title-line"><button class="brand-name" type="button" aria-label="Open the Looper guide">${TOOLS_EDITION ? "Player Tools" : "SCTD Player Tools"}</button><span class="free-badge" aria-label="Player Tools Free plan"><sc-icon name="soundcloud" class="plan-badge-icon" aria-hidden="true"></sc-icon><span class="plan-badge-label">FREE</span></span></div>
           </div>
         </div>
         <div class="panel-tools" role="group" aria-label="Panel options">
           <button class="panel-tool download-track-button${TOOLS_EDITION ? " is-unavailable" : ""}" type="button" aria-label="${TOOLS_EDITION ? "Full-track downloads are not available in this version" : "Download current playing"}" title="${TOOLS_EDITION ? "Full-track downloads are not available in this version" : "Download current playing"}">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+            <sc-icon name="download" aria-hidden="true"></sc-icon>
           </button>
           <button class="panel-tool tooltips-button" type="button" aria-label="Tooltips" aria-pressed="true" data-scdl-tooltip="Toggle tooltips">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-7l-5 4v-4H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M10 8a2 2 0 1 1 3 1.7c-1 .5-1 1-1 2M12 14h.01"/></svg>
+            <sc-icon name="help" aria-hidden="true"></sc-icon>
           </button>
           <button class="panel-tool reset-tools-button" type="button" aria-label="Reset playback, Loop, FX and EQ. Samples are kept." title="Reset playback, Loop, FX and EQ. Samples are kept.">
-            <img class="panel-tool-icon trash-icon" alt="" aria-hidden="true" hidden />
+            <sc-icon name="trash" class="panel-tool-icon trash-icon" hidden aria-hidden="true"></sc-icon>
           </button>
           <button class="panel-tool detach-button" type="button" aria-label="Keep panel open when clicking outside" aria-pressed="false" title="Keep panel open when clicking outside">
-            <img class="panel-tool-icon detach-icon" alt="" aria-hidden="true" hidden />
+            <sc-icon name="detach" class="panel-tool-icon detach-icon" hidden aria-hidden="true"></sc-icon>
           </button>
-          <button class="panel-tool visibility-button" type="button" aria-controls="scdl-sampler scdl-loop-region scdl-audio-effects scdl-parametric-eq scdl-record" aria-label="Collapse all controls" title="Collapse all controls"><svg class="visibility-symbol visibility-up-icon" viewBox="0 0 16 16" aria-hidden="true" hidden><path d="M3.5 8h9" /></svg><svg class="visibility-symbol visibility-down-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 6.5 4.5 4 4.5-4" /></svg><svg class="visibility-symbol visibility-grid-icon" viewBox="0 0 16 16" aria-hidden="true" hidden><rect x="2" y="2" width="4" height="4"/><rect x="10" y="2" width="4" height="4"/><rect x="2" y="10" width="4" height="4"/><rect x="10" y="10" width="4" height="4"/></svg><img class="panel-tool-icon visibility-expand-icon" alt="" aria-hidden="true" hidden /></button>
+          <button class="panel-tool visibility-button" type="button" aria-controls="scdl-sampler scdl-loop-region scdl-audio-effects scdl-parametric-eq scdl-record" aria-label="Collapse all controls" title="Collapse all controls"><sc-icon name="minimize" class="visibility-symbol visibility-up-icon" hidden aria-hidden="true"></sc-icon><sc-icon name="down" class="visibility-symbol visibility-down-icon" aria-hidden="true"></sc-icon><sc-icon name="sampler" class="visibility-symbol visibility-grid-icon" hidden aria-hidden="true"></sc-icon><sc-icon name="expand" class="panel-tool-icon visibility-expand-icon" hidden aria-hidden="true"></sc-icon></button>
           <button class="panel-tool close-button" type="button" aria-label="Close panel" title="Close panel">
-            <img class="cross-icon" alt="" aria-hidden="true" />
+            <sc-icon name="close" class="cross-icon" aria-hidden="true"></sc-icon>
           </button>
         </div>
         </div>
@@ -3811,7 +3789,7 @@
         </div>
         </div>
         <section class="drum-section is-collapsed" id="scdl-sampler" aria-label="Sampler">
-          ${collapsible.header({ title: pt("Sampler"), bodyId: "scdl-sampler-pads", expanded: false, toggleClass: "sampler-toggle", actionsClass: "sampler-actions", icon: '<img class="tool-section-icon sampler-icon" alt="" aria-hidden="true" />', actions: '<button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button><button class="loop-instrument" type="button" aria-label="Play selected loop in piano mode" aria-pressed="false" title="Play selected loop in piano mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM7 5v8M12 5v8M17 5v8M5 13h4M10 13h4M15 13h4"/></svg></button><button class="slice-loop" type="button" aria-label="Slice selected loop into 8 pads"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM6 5v14M9 5v14M12 5v14M15 5v14M18 5v14"/></svg></button><button class="sampler-preset-toggle" type="button" aria-expanded="false" aria-haspopup="dialog" aria-controls="scdl-sampler-presets"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l4 4v14H3V3zM7 3v6h10V3M7 21v-8h10v8"/></svg></button>' })}
+          ${collapsible.header({ title: pt("Sampler"), bodyId: "scdl-sampler-pads", expanded: false, toggleClass: "sampler-toggle", actionsClass: "sampler-actions", icon: '<sc-icon name="sampler" class="tool-section-icon sampler-icon" aria-hidden="true"></sc-icon>', actions: '<button class="save-loop-pad" type="button" aria-label="Save loop to a pad" aria-pressed="false" title="Save loop to a pad"><sc-icon name="sampler" aria-hidden="true"></sc-icon></button><button class="loop-instrument" type="button" aria-label="Play selected loop in piano mode" aria-pressed="false" title="Play selected loop in piano mode"><sc-icon name="piano" aria-hidden="true"></sc-icon></button><button class="slice-loop" type="button" aria-label="Slice selected loop into 8 pads"><sc-icon name="slice" aria-hidden="true"></sc-icon></button><button class="sampler-preset-toggle" type="button" aria-expanded="false" aria-haspopup="dialog" aria-controls="scdl-sampler-presets"><sc-icon name="save" aria-hidden="true"></sc-icon></button>' })}
           <dialog class="slice-dialog" aria-labelledby="slice-title" aria-describedby="slice-description"><h3 id="slice-title"></h3><p id="slice-description"></p><div><button class="slice-cancel" type="button" autofocus></button><button class="slice-replace" type="button"></button></div></dialog>
           <div class="sampler-preset-menu" id="scdl-sampler-presets" popover="manual" role="dialog" aria-label="Saved sampler states">
             <div class="sampler-preset-list"></div>
@@ -3834,7 +3812,7 @@
           </div>
         </section>
         <section class="waveform-shell" id="scdl-loop-region" role="group" aria-label="Loop Region">
-          ${collapsible.header({ title: pt("Loop Region"), bodyId: "scdl-loop-region-body", toggleClass: "waveform-toggle", headerClass: "waveform-header", actionsClass: "waveform-actions", icon: '<svg class="tool-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5 5 6 2.5 8.5M5 6v7a3.5 3.5 0 0 0 6 2.5l2-2a3.5 3.5 0 0 1 6 2.5v2M16.5 15.5 19 18l2.5-2.5"/></svg>', actions: '<button class="editor-track" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-6m6 0V1M4 17h6m-6 0v6M20 7a9 9 0 0 0-15-3M4 17a9 9 0 0 0 15 3"/></svg></button><button class="clear-loop" type="button" aria-label="Clear loop"><img class="cross-icon" alt="" aria-hidden="true" /><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>WAV</span></button>' })}
+          ${collapsible.header({ title: pt("Loop Region"), bodyId: "scdl-loop-region-body", toggleClass: "waveform-toggle", headerClass: "waveform-header", actionsClass: "waveform-actions", icon: '<sc-icon name="loop" class="tool-section-icon" aria-hidden="true"></sc-icon>', actions: '<button class="editor-track" type="button" hidden><sc-icon name="refresh" aria-hidden="true"></sc-icon></button><button class="clear-loop" type="button" aria-label="Clear loop"><sc-icon name="close" class="cross-icon" aria-hidden="true"></sc-icon><span>Clear</span></button><button class="download-loop" type="button" aria-label="Download loop"><sc-icon name="download" aria-hidden="true"></sc-icon><span>WAV</span></button>' })}
           <div class="waveform-body" id="scdl-loop-region-body">
           <div class="waveform-stage">
             <canvas class="waveform-canvas" aria-hidden="true"></canvas>
@@ -3849,7 +3827,7 @@
           </div>
         </section>
         <section class="effects-shell is-collapsed" id="scdl-audio-effects" aria-label="FX">
-          ${collapsible.header({ title: "FX", bodyId: "scdl-audio-effects-body", expanded: false, toggleClass: "effects-toggle", headerClass: "effects-header", actionsClass: "effect-bypasses", icon: '<svg class="tool-section-icon effects-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h2l2-7 4 14 3-11 2 7h2l1-3h2"/></svg>', actions: '<button class="effect-bypass" type="button" data-effect-bypass="reverb" aria-label="Enable reverb" aria-pressed="false">R</button><button class="effect-bypass" type="button" data-effect-bypass="delay" aria-label="Enable echo" aria-pressed="false">E</button><button class="effect-bypass" type="button" data-effect-bypass="flanger" aria-label="Enable flanger" aria-pressed="false">F</button><button class="effect-bypass" type="button" data-effect-bypass="phaser" aria-label="Enable phaser" aria-pressed="false">P</button><button class="effect-bypass" type="button" data-effect-bypass="bitcrusher" aria-label="Enable bitcrusher" aria-pressed="false">B</button><button class="effect-bypass" type="button" data-effect-bypass="saturation" aria-label="Enable saturation" aria-pressed="false">S</button>' })}
+          ${collapsible.header({ title: "FX", bodyId: "scdl-audio-effects-body", expanded: false, toggleClass: "effects-toggle", headerClass: "effects-header", actionsClass: "effect-bypasses", icon: '<sc-icon name="fx" class="tool-section-icon effects-icon" aria-hidden="true"></sc-icon>', actions: '<button class="effect-bypass" type="button" data-effect-bypass="reverb" aria-label="Enable reverb" aria-pressed="false">R</button><button class="effect-bypass" type="button" data-effect-bypass="delay" aria-label="Enable echo" aria-pressed="false">E</button><button class="effect-bypass" type="button" data-effect-bypass="flanger" aria-label="Enable flanger" aria-pressed="false">F</button><button class="effect-bypass" type="button" data-effect-bypass="phaser" aria-label="Enable phaser" aria-pressed="false">P</button><button class="effect-bypass" type="button" data-effect-bypass="bitcrusher" aria-label="Enable bitcrusher" aria-pressed="false">B</button><button class="effect-bypass" type="button" data-effect-bypass="saturation" aria-label="Enable saturation" aria-pressed="false">S</button>' })}
           <div class="effects-body" id="scdl-audio-effects-body">
             <div class="effects-presets" role="group" aria-label="FX presets"><button class="effects-preset" data-fx-preset="subtle" type="button">Subtle</button><button class="effects-preset" data-fx-preset="studio" type="button">Studio</button><button class="effects-preset" data-fx-preset="wide" type="button">Wide</button><button class="effects-preset" data-fx-preset="dub" type="button">Dub</button></div>
             <div class="effect-knob-grid">
@@ -4427,7 +4405,7 @@
     ui.separateStems = document.createElement("button");
     ui.separateStems.type = "button";
     ui.separateStems.className = "separate-stems";
-    ui.separateStems.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg><span>Stems</span>';
+    ui.separateStems.innerHTML = '<sc-icon name="layers" aria-hidden="true"></sc-icon><span>Stems</span>';
     ui.separateStems.title = pt("Separate the selected loop into vocals, drums, bass and other (up to 2 minutes)");
     ui.separateStems.setAttribute("aria-label", ui.separateStems.title);
     ui.downloadLoop.before(ui.separateStems);

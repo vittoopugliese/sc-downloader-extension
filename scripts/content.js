@@ -5,15 +5,7 @@ let urlCheckInterval = null;
 let urlChangeTimeout = null;
 let lastBulkProgressAt = 0;
 const EXTENSION_LOGO_ATTRIBUTE = "data-scdl-extension-logo-url";
-const EXTENSION_PLAYER_ICON_ATTRIBUTE = "data-scdl-extension-player-icon-url";
-const EXTENSION_EQ_ICON_ATTRIBUTE = "data-scdl-extension-eq-url";
-const EXTENSION_CROSS_ICON_ATTRIBUTE = "data-scdl-extension-cross-url";
 const EXTENSION_DRUM_SAMPLES_ATTRIBUTE = "data-scdl-extension-drum-samples-url";
-const EXTENSION_MEGAPHONE_ATTRIBUTE = "data-scdl-extension-megaphone-url";
-const EXTENSION_SOCIAL_BADGE_ATTRIBUTE = "data-scdl-extension-social-badge-url";
-const EXTENSION_DETACH_ICON_ATTRIBUTE = "data-scdl-extension-detach-icon-url";
-const EXTENSION_TRASH_ICON_ATTRIBUTE = "data-scdl-extension-trash-icon-url";
-const EXTENSION_EXPAND_ICON_ATTRIBUTE = "data-scdl-extension-expand-icon-url";
 const EXTENSION_BITCRUSHER_WORKLET_ATTRIBUTE = "data-scdl-extension-bitcrusher-worklet-url";
 const EXTENSION_ASSETS_EVENT = "scdl:extension-assets-ready";
 const OPEN_LOOPER_GUIDE_EVENT = "scdl:open-looper-guide";
@@ -71,28 +63,10 @@ function exposeTempoControlAssets() {
     chrome.runtime.getURL("assets/LooperPlayerToolkit.png")
   );
   document.documentElement?.setAttribute?.(
-    EXTENSION_PLAYER_ICON_ATTRIBUTE,
-    chrome.runtime.getURL("assets/icons/player-toolkit.png")
-  );
-  document.documentElement?.setAttribute?.(
-    EXTENSION_EQ_ICON_ATTRIBUTE,
-    chrome.runtime.getURL("assets/icons/eq.svg")
-  );
-  document.documentElement?.setAttribute?.(
-    EXTENSION_CROSS_ICON_ATTRIBUTE,
-    chrome.runtime.getURL("assets/icons/cross.svg")
-  );
-  document.documentElement?.setAttribute?.(
     EXTENSION_DRUM_SAMPLES_ATTRIBUTE,
     chrome.runtime.getURL("assets/drums/")
   );
-  document.documentElement?.setAttribute?.(EXTENSION_MEGAPHONE_ATTRIBUTE, chrome.runtime.getURL("assets/icons/megaphone.svg"));
-  document.documentElement?.setAttribute?.(EXTENSION_SOCIAL_BADGE_ATTRIBUTE, chrome.runtime.getURL("assets/icons/sound-cloud-social-badge.svg"));
-  document.documentElement?.setAttribute?.(EXTENSION_DETACH_ICON_ATTRIBUTE, chrome.runtime.getURL("assets/icons/detach.svg"));
-  document.documentElement?.setAttribute?.(EXTENSION_TRASH_ICON_ATTRIBUTE, chrome.runtime.getURL("assets/icons/trash.svg"));
-  document.documentElement?.setAttribute?.(EXTENSION_EXPAND_ICON_ATTRIBUTE, chrome.runtime.getURL("assets/icons/expand.svg"));
   document.documentElement?.setAttribute?.(EXTENSION_BITCRUSHER_WORKLET_ATTRIBUTE, chrome.runtime.getURL("scripts/bitcrusher-processor.js"));
-  document.documentElement?.setAttribute?.("data-scdl-extension-record-url", chrome.runtime.getURL("assets/icons/record.svg"));
   document.documentElement?.setAttribute?.("data-scdl-extension-record-worklet-url", chrome.runtime.getURL("scripts/record-processor.js"));
   if (typeof document.dispatchEvent === "function" && typeof CustomEvent === "function") {
     document.dispatchEvent(new CustomEvent(EXTENSION_ASSETS_EVENT));

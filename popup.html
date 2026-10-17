@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <script src="scripts/icons.js"></script>
     <meta charset="UTF-8">
     <script src="./scripts/release-config.js"></script>
     <style>
@@ -602,7 +603,7 @@
         .contact-content p { margin: 0 0 8px; color: #bdbdbd; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
         .contact-content a { display: inline-block; margin: 0 0 10px; color: var(--accent-warm); font-size: 11px; font-weight: 700; text-decoration: underline; overflow-wrap: anywhere; }
         .contact-content a:hover, .contact-content a:focus-visible { color: #fff; text-decoration: underline; }
-        .contact-content img { display: block; width: 100%; height: auto; border-radius: 10px; }
+        .contact-content img,.contact-content sc-icon{ display: block; width: 100%; height: auto; border-radius: 10px; }
         .contact-content [hidden] { display: none !important; }
         @keyframes contact-bypass-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 
@@ -638,7 +639,7 @@
         }
 
         #resetDownloadFolder { width: 32px; flex: 0 0 32px; padding: 0; }
-        #resetDownloadFolder img { display: block; width: 15px; height: 15px; margin: auto; }
+        #resetDownloadFolder img,#resetDownloadFolder sc-icon{ display: block; width: 15px; height: 15px; margin: auto; }
 
         .folder-icon,
         .back-icon {
@@ -967,14 +968,14 @@
             padding: 7px;
         }
         .player-tools-offer[hidden] { display: none; }
-        .player-tools-offer img { flex: 0 0 38px; width: 38px; height: 38px; border-radius: 8px; }
+        .player-tools-offer img,.player-tools-offer sc-icon{ flex: 0 0 38px; width: 38px; height: 38px; border-radius: 8px; }
         .player-tools-offer-copy { min-width: 0; flex: 1; }
         .player-tools-offer-title { margin: 0 0 2px; color: #fff; font-size: 13px; font-weight: 700; line-height: 1.05; letter-spacing: -.01em; }
         .player-tools-offer-detail { margin: 0; color: #bdbdbd; font-size: 9px; line-height: 1.25; }
         #playerToolsTrialStatus { margin-top: 2px; color: #d8d8d8; font-size: 9px; }
         .player-tools-offer-price { margin: 3px 0 0; color: #ff985d; white-space: nowrap; font-size: 10px; font-weight: 700; line-height: 1.15; }
         .player-tools-offer-actions { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; flex: 0 0 auto; }
-        .player-tools-offer-actions img { flex: 0 0 38px; width: 38px; height: 38px; border-radius: 8px; }
+        .player-tools-offer-actions img,.player-tools-offer-actions sc-icon{ flex: 0 0 38px; width: 38px; height: 38px; border-radius: 8px; }
         #playerToolsProBtn { padding: 5px 6px; border: 1px solid #ff6a1a; border-radius: 6px; color: #fff; background: #c94600; font-size: 9px; font-weight: 700; line-height: 1; cursor: pointer; }
         #playerToolsProBtn:hover { background: #ff5a00; }
         #playerToolsProBtn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
@@ -1432,7 +1433,7 @@
         }
         .help-hero-topline { display: flex; align-items: center; gap: 8px; min-height: 24px; }
         .help-brand { display: flex; align-items: center; gap: 7px; color: #f2f2f2; font-size: 10px; font-weight: 800; letter-spacing: 1.4px; }
-        .help-brand img { object-fit: contain; }
+        .help-brand img,.help-brand sc-icon{ object-fit: contain; }
         .help-edition { padding: 2px 6px; border: 1px solid #4a4540; border-radius: 4px; color: #c4c0ba; font-size: 8px; letter-spacing: 1.2px; }
         .help-version { margin-left: auto; color: #8f8b86; font: 9px ui-monospace, monospace; }
         #helpPanel #helpTitle { margin: 11px 0 3px; color: #f2f2f2; font-size: 21px; line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; }
@@ -1576,11 +1577,11 @@
                         </div>
                     </div>
                     <button id="chooseDownloadFolder" type="button" class="popup-control-btn is-hidden" aria-label="Choose download folder" title="Choose download folder" data-i18n-aria-label="choose_folder" data-i18n-title="choose_folder">
-                        <img class="folder-icon" src="./assets/icons/folder-icon.svg" alt="" width="20" height="20" draggable="false">
+                        <sc-icon name="folder" class="folder-icon" style="--icon-size:20px" aria-hidden="true"></sc-icon>
                     </button>
-                    <button id="resetDownloadFolder" type="button" class="popup-control-btn is-hidden" aria-label="Reset to browser Downloads" title="Reset to browser Downloads" data-i18n-aria-label="reset_download_folder" data-i18n-title="reset_download_folder"><img src="./assets/icons/cross.svg" alt="" width="15" height="15" draggable="false"></button>
+                    <button id="resetDownloadFolder" type="button" class="popup-control-btn is-hidden" aria-label="Reset to browser Downloads" title="Reset to browser Downloads" data-i18n-aria-label="reset_download_folder" data-i18n-title="reset_download_folder"><sc-icon name="close" style="--icon-size:15px" aria-hidden="true"></sc-icon></button>
                     <button id="downloadBtn" type="button" aria-label="Download" title="Download" data-i18n-aria-label="download" data-i18n-title="download" class="is-hidden">
-                        <img class="dl-icon" src="./assets/icons/download.svg" alt="" width="22" height="22" draggable="false">
+                        <sc-icon name="download" class="dl-icon" style="--icon-size:22px" aria-hidden="true"></sc-icon>
                         <span class="dl-spinner" aria-hidden="true"></span>
                     </button>
                 </div>
@@ -1590,16 +1591,16 @@
         <div id="selectionPanel" class="is-hidden" aria-label="Track selection" data-i18n-aria-label="track_selection">
             <div class="selection-header">
                 <button id="selectionBackBtn" type="button" class="selection-header-btn popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back">
-                    <img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false">
+                    <sc-icon name="back" class="back-icon" style="--icon-size:16px" aria-hidden="true"></sc-icon>
                 </button>
                 <div id="selectionHeaderOptions" class="selection-header-group"></div>
                 <span class="selection-header-spacer"></span>
                 <div class="selection-header-actions">
                     <button id="clearAllBtn" type="button" class="selection-header-btn popup-control-btn" aria-label="Clear selected tracks" title="Clear selected tracks" data-i18n-aria-label="clear_selected_tracks" data-i18n-title="clear_selected_tracks">
-                        <img class="selection-action-icon" src="./assets/icons/deselect-all.svg" alt="" width="20" height="20" draggable="false">
+                        <sc-icon name="deselect-all" class="selection-action-icon" style="--icon-size:20px" aria-hidden="true"></sc-icon>
                     </button>
                     <button id="selectAllBtn" type="button" class="selection-header-btn popup-control-btn" aria-label="Select all tracks" title="Select all tracks" data-i18n-aria-label="select_all_tracks" data-i18n-title="select_all_tracks">
-                        <img class="selection-action-icon" src="./assets/icons/select-all.svg" alt="" width="20" height="20" draggable="false">
+                        <sc-icon name="select-all" class="selection-action-icon" style="--icon-size:20px" aria-hidden="true"></sc-icon>
                     </button>
                 </div>
             </div>
@@ -1619,7 +1620,7 @@
                 <button id="cancelJobBtn" type="button" class="job-btn is-danger" title="Cancel download" data-i18n="cancel" data-i18n-title="cancel">Cancel</button>
             </div>
             <div id="statusRow" class="status-row">
-                <button id="helpBtn" type="button" class="popup-control-btn" aria-label="Help and settings" title="Help and settings" data-i18n-aria-label="settings_and_help" data-i18n-title="settings_and_help"><img class="settings-icon" src="./assets/icons/help.svg" alt="" width="15" height="15" draggable="false"></button>
+                <button id="helpBtn" type="button" class="popup-control-btn" aria-label="Help and settings" title="Help and settings" data-i18n-aria-label="settings_and_help" data-i18n-title="settings_and_help"><sc-icon name="help" class="settings-icon" style="--icon-size:15px" aria-hidden="true"></sc-icon></button>
                 <p id="downloadStatus" data-i18n="ready_to_download">Ready to download</p>
             </div>
             <p id="downloadAnnouncement" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -1636,7 +1637,7 @@
                     <p class="player-tools-offer-price"><span id="playerToolsPrice">$3.69</span> <span data-i18n="player_tools_lifetime">lifetime</span></p>
                 </div>
                 <div class="player-tools-offer-actions">
-                    <img src="./assets/icons/player-toolkit.png" alt="" width="38" height="38" draggable="false">
+                    <sc-icon name="toolkit" style="--icon-size:38px" aria-hidden="true"></sc-icon>
                     <button id="playerToolsProBtn" type="button" data-i18n="player_tools_get_pro" data-i18n-title="player_tools_get_pro" title="Get Pro">Get Pro</button>
                 </div>
             </section>
@@ -1648,8 +1649,8 @@
                     <span class="likes-explorer-title">Likes Explorer</span>
                     <span class="likes-explorer-detail">Explore your Likes visually</span>
                     <div class="likes-explorer-action-row">
-                        <button id="likesExplorerBtn" type="button" title="Likes Explorer">Open ↗</button>
-                        <img class="likes-explorer-logo" src="./assets/icons/likes-explorer.png" alt="" width="30" height="30" draggable="false">
+                        <button id="likesExplorerBtn" type="button" title="Likes Explorer">Open <sc-icon name="detach" aria-hidden="true"></sc-icon></button>
+                        <sc-icon name="likes" class="likes-explorer-logo" style="--icon-size:30px" aria-hidden="true"></sc-icon>
                     </div>
                 </div>
             </section>
@@ -1676,8 +1677,8 @@
         <section id="helpPanel" aria-labelledby="helpTitle" aria-modal="true" role="dialog">
             <header class="help-hero">
                 <div class="help-hero-topline">
-                    <button id="helpBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><img class="back-icon" src="./assets/icons/back-arrow.svg" alt="" width="16" height="16" draggable="false"></button>
-                    <div class="help-brand"><img src="./assets/icons/player-toolkit.png" width="22" height="22" alt="" draggable="false"><span>PLAYER TOOLS</span><span class="help-edition">MINI DAW</span></div>
+                    <button id="helpBackBtn" type="button" class="popup-control-btn" aria-label="Back" title="Back" data-i18n-aria-label="back" data-i18n-title="back"><sc-icon name="back" class="back-icon" style="--icon-size:16px" aria-hidden="true"></sc-icon></button>
+                    <div class="help-brand"><sc-icon name="toolkit" style="--icon-size:22px" aria-hidden="true"></sc-icon><span>PLAYER TOOLS</span><span class="help-edition">MINI DAW</span></div>
                     <span id="helpVersion" class="help-version"></span>
                 </div>
                 <h2 id="helpTitle"><span data-i18n="help_hero_title">Your SoundCloud studio</span><span class="help-title-dot" aria-hidden="true">.</span></h2>
@@ -1751,7 +1752,7 @@
                 <img id="contactContentImage" alt="" hidden>
             </section>
             <div class="help-section"><h3 data-i18n="help_support_title">Support and reviews</h3><p data-i18n="help_support">Need help or want to share feedback? Use the links below.</p><div class="help-links"><a class="popup-control-btn help-link" href="https://soundcloud.com/tttorio/tracks" target="_blank" rel="noopener noreferrer" data-i18n="message_on_soundcloud">Message me on SC</a><a class="popup-control-btn help-link" href="mailto:it@vpugliese.online" data-i18n="support_email">Email support</a><a class="popup-control-btn help-link help-review-link" href="https://chromewebstore.google.com/detail/gmlijjdgphenebddlpmpiknmmfijfmnk/reviews" target="_blank" rel="noopener noreferrer" data-i18n="write_review">Write a Chrome Web Store review</a></div></div>
-            <p class="help-credit"><span data-i18n="made_with">Made with</span><img class="help-credit-icon" src="./assets/icons/bypass.svg" alt="" width="17" height="17" draggable="false"><span data-i18n="by">by</span><a href="https://vittoriodev.netlify.app/" target="_blank" rel="noopener noreferrer">Vittorio</a><span class="help-credit-separator help-site-credit" aria-hidden="true">·</span><a class="help-site-credit" href="https://sctd.vpugliese.online" target="_blank" rel="noopener noreferrer" data-i18n="sctd_web">SCTD Web</a></p>
+            <p class="help-credit"><span data-i18n="made_with">Made with</span><sc-icon name="heart" class="help-credit-icon" style="--icon-size:17px" aria-hidden="true"></sc-icon><span data-i18n="by">by</span><a href="https://vittoriodev.netlify.app/" target="_blank" rel="noopener noreferrer">Vittorio</a><span class="help-credit-separator help-site-credit" aria-hidden="true">·</span><a class="help-site-credit" href="https://sctd.vpugliese.online" target="_blank" rel="noopener noreferrer" data-i18n="sctd_web">SCTD Web</a></p>
         </section>
         </div>
         </section>

@@ -76,7 +76,7 @@ async function main() {
       path: path.join(__dirname, "tempo-control-core.js"),
     });
     await page.addScriptTag({ path: path.join(__dirname, "sampler-core.js") });
-    for (const file of ["parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "record-core.js", "record-ui.js"]) {
+    for (const file of ["parametric-eq.js", "audio-effects-core.js", "icons.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "record-core.js", "record-ui.js"]) {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
     await page.addScriptTag({ path: path.join(__dirname, "player-tools-policy.js") });
@@ -581,7 +581,7 @@ async function main() {
       const pitchLabel = panel.querySelector(".pitch-label");
       const speedStatus = panel.querySelector(".speed-status");
       const downloadTrackButton = panel.querySelector(".download-track-button");
-      const downloadTrackIcon = downloadTrackButton.querySelector("svg");
+      const downloadTrackIcon = downloadTrackButton.querySelector("sc-icon");
       const detachButton = panel.querySelector(".detach-button");
       const detachIcon = detachButton.querySelector(".detach-icon");
       const brandLogo = panel.querySelector(".brand-logo");
@@ -1289,19 +1289,19 @@ async function main() {
       [null, null, null, null, null], 'Dropdown headers must not expose redundant tooltips');
     const samplerIcon = host.locator('.sampler-icon');
     await page.mouse.move(10, 10);
-    const samplerFilter = await samplerIcon.evaluate((icon) => getComputedStyle(icon).filter);
+    const samplerColor = await samplerIcon.evaluate((icon) => getComputedStyle(icon).color);
     await host.locator('.sampler-toggle').hover();
-    assert.notEqual(await samplerIcon.evaluate((icon) => getComputedStyle(icon).filter), samplerFilter,
-      'The Sampler image icon must inherit the orange header hover treatment');
+    assert.notEqual(await samplerIcon.evaluate((icon) => getComputedStyle(icon).color), samplerColor,
+      'The Sampler vector icon must inherit the orange header hover treatment');
     const eqIcon = host.locator('.peq-icon');
-    const eqFilter = await eqIcon.evaluate((icon) => getComputedStyle(icon).filter);
+    const eqColor = await eqIcon.evaluate((icon) => getComputedStyle(icon).color);
     await host.locator('.peq-toggle').hover();
-    assert.notEqual(await eqIcon.evaluate((icon) => getComputedStyle(icon).filter), eqFilter,
-      'The EQ image icon must inherit the orange header hover treatment');
+    assert.notEqual(await eqIcon.evaluate((icon) => getComputedStyle(icon).color), eqColor,
+      'The EQ vector icon must inherit the orange header hover treatment');
     const visibility = host.locator('.visibility-button');
     for (const [selector, name] of [['.detach-icon', 'detach'], ['.trash-icon', 'trash']]) {
       const icon = host.locator(selector);
-      assert.equal(await icon.getAttribute('src'), headerIconDataUrls[name], `${name} must load from its asset file`);
+      assert.equal(await icon.getAttribute('name'), name, `${name} must use the shared catalog`);
       assert.equal(await icon.isVisible(), true, `${name} icon must be visible`);
     }
     assert.equal(await visibility.getAttribute('data-state'), 'normal');
@@ -1323,7 +1323,7 @@ async function main() {
       'The collapsed state must use the medium dash.');
     await visibility.click();
     assert.equal(await visibility.getAttribute('data-state'), 'hidden');
-    assert.equal(await host.locator('.visibility-expand-icon').getAttribute('src'), headerIconDataUrls.expand,
+    assert.equal(await host.locator('.visibility-expand-icon').getAttribute('name'), 'expand',
       'The maximize state must load the expand asset');
     assert.equal(await host.locator('.visibility-expand-icon').isVisible(), true,
       'The maximize state must show the expand asset instead of a plus character');
@@ -1791,7 +1791,7 @@ async function main() {
     // Exercise the EQ inside the real panel, including the access bridge and persistence.
     await page.setViewportSize({ width: 720, height: 780 });
     await host.locator(".peq-toggle").click();
-    assert.equal(await host.locator(".peq-icon").evaluate((icon) => icon.complete && icon.naturalWidth > 0), true,
+    assert.equal(await host.locator(".peq-icon").evaluate((icon) => !!icon.shadowRoot?.querySelector("svg path")), true,
       "The EQ header must load its packaged icon");
     assert.equal(await host.locator(".peq .tool-section-chevron").count(), 1);
     await host.locator(".peq-canvas").dblclick({ position: { x: 180, y: 130 } });
@@ -1913,7 +1913,7 @@ async function main() {
         plan: "pro", state: "pro", capabilities: { freeEffects: true, premiumEffects: true, saveLoopPad: true, loopInstrument: true, tempo: true, parametricEq: true },
       }));
     });
-    for (const file of ["tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
+    for (const file of ["tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "icons.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
     await host.locator(".trigger").click();

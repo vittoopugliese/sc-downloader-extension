@@ -47,7 +47,9 @@
     "package:extension": "node scripts/package-extension.js",
     "test:e2e:stem-presets": "node scripts/stem-presets.browser-test.cjs",
     "test:e2e:stem-local-audio": "node scripts/stem-local-audio.browser-test.cjs",
-    "test:e2e:i18n": "node scripts/player-tools-i18n.browser-test.cjs"
+    "test:e2e:i18n": "node scripts/player-tools-i18n.browser-test.cjs",
+    "build:icons": "node scripts/build-icons.cjs",
+    "test:e2e:icons": "node scripts/icons.browser-test.cjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

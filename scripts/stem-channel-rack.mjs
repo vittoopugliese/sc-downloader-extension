@@ -5,18 +5,8 @@ import { patternControls } from './stem-instruments.mjs';
 import { mountRackOverview } from './stem-rack-overview.mjs';
 import { BROWSER_DRAG_TYPE } from './stem-sample-browser.mjs';
 
-const svg = paths => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
-export const PLUGIN_ICONS = Object.freeze({
-  rack: '<path d="M3 5h18M3 12h18M3 19h18"/><path d="M5 3v4m8 3v4m5 3v4" stroke-width="4"/>',
-  piano: '<path d="M3 4h18v16H3zM7 4v9h3V4m4 0v9h3V4M9 13v7m6-7v7"/>',
-  play: '<path d="M8 5v14l11-7z"/>', pause: '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>',
-  place: '<path d="M3 6h11M3 12h7M3 18h7m7-9v12m-6-6h12"/>',
-  slice: '<path d="M3 21 15 9M14 4v3M19 9h3M17.5 5.5l2-2M10 6.5 8 4.5M17.5 12.5l2 2"/>',
-  clear: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15"/>',
-  // Eight pads with a line through them: Clear All, apart from the trash cans.
-  clearSlices: '<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6zM2 22 22 2"/>',
-  restore: '<path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/>',
-});
+const iconMarkup = name => globalThis.SCIcons.html(name, "icon");
+export const PLUGIN_ICONS = Object.freeze({"rack": "rack", "piano": "piano", "play": "play", "pause": "pause", "place": "place", "slice": "auto-slice", "clear": "clear", "clearSlices": "clear-slices", "restore": "undo"});
 
 // One collapsible plugin shell, shared with the piano roll: header, body, visibility.
 export function pluginShell({ container, id, title, icon, className }) {
@@ -26,7 +16,7 @@ export function pluginShell({ container, id, title, icon, className }) {
   }
   const section = document.createElement('section');
   section.className = `stem-plugin ${className}`; section.id = id; section.setAttribute('aria-label', title); section.hidden = true;
-  section.innerHTML = collapsible.header({ title, bodyId: `${id}-body`, icon: `<svg class="tool-section-icon" viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>` });
+  section.innerHTML = collapsible.header({ title, bodyId: `${id}-body`, icon: globalThis.SCIcons.html(icon, "tool-section-icon") });
   const body = document.createElement('div'); body.className = 'stem-plugin-body'; body.id = `${id}-body`; section.append(body);
   container.append(section);
   const disclosure = collapsible.mount({ section, toggle: section.querySelector('.tool-section-toggle'), body });
@@ -79,13 +69,13 @@ export function mountChannelRack({ container, instruments, audioContext, output,
   mode.add(new Option('One-shot', 'oneShot')); mode.add(new Option(pt('Chops'), 'slices'));
   mode.onchange = () => instruments.editInstrument(instrument => { instrument.mode = mode.value; });
   function setRackView(value) { rackView = value; overview.stop(); render(); requestAnimationFrame(drawWave); }
-  const play = button('plugin-play', pt('Play pattern'), svg(PLUGIN_ICONS.play), () => instruments.playing() ? instruments.stop() : instruments.play());
+  const play = button('plugin-play', pt('Play pattern'), iconMarkup(PLUGIN_ICONS.play), () => instruments.playing() ? instruments.stop() : instruments.play());
   const focus = patternControls(instruments, { manage: true });
-  const place = button('rack-place', pt('Add to playlist'), `${svg(PLUGIN_ICONS.place)}<span>${pt('Playlist')}</span>`, () => instruments.place());
-  const slice = button('rack-slice', pt('Auto-slice the visible audio into the eight pads'), svg(PLUGIN_ICONS.slice), () => { sampler?.autoSlice(true); });
+  const place = button('rack-place', pt('Add to playlist'), `${iconMarkup(PLUGIN_ICONS.place)}<span>${pt('Playlist')}</span>`, () => instruments.place());
+  const slice = button('rack-slice', pt('Auto-slice the visible audio into the eight pads'), iconMarkup(PLUGIN_ICONS.slice), () => { sampler?.autoSlice(true); });
   // Clear All empties the eight pads (steps and notes stay); a second click restores them.
   let cleared = null;
-  const clearSlices = button('rack-clear-slices', pt('Clear all slices'), svg(PLUGIN_ICONS.clearSlices), () => {
+  const clearSlices = button('rack-clear-slices', pt('Clear all slices'), iconMarkup(PLUGIN_ICONS.clearSlices), () => {
     const { key } = instruments.focused();
     if (cleared?.key === key && sampler && !sampler.state().slices.some(Boolean)) { const { slices } = cleared; cleared = null; sampler.restore(slices); renderClear(); return; }
     const before = sampler?.snapshot();
@@ -95,10 +85,10 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     const { key } = instruments.focused(), empty = !sampler?.state().slices.some(Boolean), undo = cleared?.key === key && empty;
     const label = undo ? pt('Restore cleared slices') : pt('Clear all slices');
     clearSlices.title = label; clearSlices.setAttribute('aria-label', label); clearSlices.setAttribute('aria-pressed', String(undo));
-    clearSlices.innerHTML = svg(undo ? PLUGIN_ICONS.restore : PLUGIN_ICONS.clearSlices);
+    clearSlices.innerHTML = iconMarkup(undo ? PLUGIN_ICONS.restore : PLUGIN_ICONS.clearSlices);
     clearSlices.disabled = !sampler || (empty && !undo);
   }
-  const clear = button('rack-clear', pt('Clear steps'), svg(PLUGIN_ICONS.clear), () => instruments.editPattern(pattern => {
+  const clear = button('rack-clear', pt('Clear steps'), iconMarkup(PLUGIN_ICONS.clear), () => instruments.editPattern(pattern => {
     const rows = rackView === 'channels' && instruments.focused().instrument?.mode === 'oneShot' ? [pattern.hits] : pattern.steps;
     for (const row of rows) row.fill(0, bar * STEPS_PER_BAR, (bar + 1) * STEPS_PER_BAR);
   }));
@@ -311,7 +301,7 @@ export function mountChannelRack({ container, instruments, audioContext, output,
   }
   function renderTransport() {
     const playing = instruments.playing();
-    play.innerHTML = svg(PLUGIN_ICONS[playing ? 'pause' : 'play']); play.setAttribute('aria-pressed', String(playing));
+    play.innerHTML = iconMarkup(PLUGIN_ICONS[playing ? 'pause' : 'play']); play.setAttribute('aria-pressed', String(playing));
     play.title = pt(playing ? 'Pause' : 'Play pattern'); play.setAttribute('aria-label', play.title);
     cancelAnimationFrame(frame);
     const step = () => {

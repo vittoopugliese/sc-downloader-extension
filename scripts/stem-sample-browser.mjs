@@ -9,22 +9,8 @@ import { bringToFront, isOnTop } from './stem-module-window.mjs';
 // receive { name, read() } items; read() resolves to { buffer } or { file }.
 export const BROWSER_DRAG_TYPE = 'application/x-stem-browser';
 const ROW = 26, RECT_KEY = 'stem-sample-browser-rect', VOLUME_KEY = 'stem-sample-browser-volume';
-const ICONS = {
-  folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
-  audio: 'M9 18V5l11-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm11-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0z',
-  choose: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm9 3v6m-3-3h6',
-  up: 'M12 19V6m-6 6 6-6 6 6',
-  refresh: 'M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5',
-  close: 'M6 6l12 12M18 6 6 18',
-  maximize: 'M5 5h14v14H5z',
-  restore: 'M8 8h11v11H8zM5 16V5h11',
-  play: 'M8 5v14l11-7z',
-  stop: 'M7 7h10v10H7z',
-  add: 'M12 5v14M5 12h14',
-  rack: 'M3 5h4v4H3zM10 5h3m4 0h4M3 14h4v4H3zM10 16h3m4-3v8m-4-4h8',
-  volume: 'M4 9h4l5-4v14l-5-4H4zm12.5-.5a5 5 0 0 1 0 7',
-};
-const svg = path => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
+const ICONS = Object.freeze({"folder": "folder", "audio": "audio", "choose": "folder-add", "up": "up", "refresh": "refresh", "close": "close", "maximize": "maximize", "restore": "restore", "play": "play", "stop": "stop", "add": "add", "rack": "rack", "volume": "volume"});
+const iconMarkup = name => globalThis.SCIcons.html(name, "icon");
 const clock = seconds => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, '0')}`;
 const read = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
 const write = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage blocked */ } };
@@ -40,7 +26,7 @@ export function mountSampleBrowser({ t, importSamples, importToRack, onToggle })
   const node = (tag, className = '', text = '') => { const e = document.createElement(tag); if (className) e.className = className; if (text) e.textContent = text; return e; };
   const iconButton = (icon, label, action) => {
     const b = node('button', 'sb-icon'); b.type = 'button'; b.title = label; b.setAttribute('aria-label', label);
-    b.innerHTML = svg(icon); b.onclick = action; return b;
+    b.innerHTML = iconMarkup(icon); b.onclick = action; return b;
   };
   const win = node('section', 'sb-window pl-ui'); win.hidden = true;
   win.setAttribute('role', 'dialog'); win.setAttribute('aria-modal', 'false'); win.setAttribute('aria-labelledby', `${id}-title`);
@@ -56,7 +42,7 @@ export function mountSampleBrowser({ t, importSamples, importToRack, onToggle })
   function setMaximized(value) {
     win.classList.toggle('is-maximized', value);
     const label = value ? t('Restore size', 'Restaurar tamaño') : t('Maximize', 'Maximizar');
-    maximizeButton.innerHTML = svg(value ? ICONS.restore : ICONS.maximize);
+    maximizeButton.innerHTML = iconMarkup(value ? ICONS.restore : ICONS.maximize);
     maximizeButton.title = label; maximizeButton.setAttribute('aria-label', label); maximizeButton.setAttribute('aria-pressed', String(value));
     scheduleRows(); requestAnimationFrame(drawWave);
   }
@@ -82,7 +68,7 @@ export function mountSampleBrowser({ t, importSamples, importToRack, onToggle })
   volume.type = 'range'; volume.min = '0'; volume.max = '100'; volume.step = '1';
   volume.setAttribute('aria-label', t('Preview volume', 'Volumen de preview'));
   volumeLabel.title = t('Preview volume; it does not reach the mix, export or recorder', 'Volumen de preview; no pasa por la mezcla, la exportación ni el grabador');
-  volumeLabel.innerHTML = svg(ICONS.volume); volumeLabel.append(volume);
+  volumeLabel.innerHTML = iconMarkup(ICONS.volume); volumeLabel.append(volume);
   const savedVolume = read(VOLUME_KEY);
   volume.value = String(Number.isFinite(savedVolume) ? Math.min(100, Math.max(0, savedVolume)) : 80);
   previewer.setVolume(Number(volume.value) / 100);
@@ -236,7 +222,7 @@ export function mountSampleBrowser({ t, importSamples, importToRack, onToggle })
       row.setAttribute('role', 'option'); row.setAttribute('aria-selected', String(i === active));
       row.setAttribute('aria-setsize', String(entries.length)); row.setAttribute('aria-posinset', String(i + 1));
       row.classList.toggle('is-current', entry.kind === 'file' && current?.entry === entry);
-      row.innerHTML = svg(entry.kind === 'directory' ? ICONS.folder : ICONS.audio);
+      row.innerHTML = iconMarkup(entry.kind === 'directory' ? ICONS.folder : ICONS.audio);
       const label = node('span', '', entry.name); row.title = entry.name; row.append(label);
       if (entry.kind === 'file') row.draggable = true;
       shown.push(row);
@@ -393,7 +379,7 @@ export function mountSampleBrowser({ t, importSamples, importToRack, onToggle })
   }
   function renderPlaying(sample) {
     const on = !!sample;
-    playButton.setAttribute('aria-pressed', String(on)); playButton.innerHTML = svg(on ? ICONS.stop : ICONS.play);
+    playButton.setAttribute('aria-pressed', String(on)); playButton.innerHTML = iconMarkup(on ? ICONS.stop : ICONS.play);
     const label = on ? t('Stop preview (Space)', 'Detener (Espacio)') : t('Play preview (Space)', 'Escuchar (Espacio)');
     playButton.title = label; playButton.setAttribute('aria-label', label);
     line.hidden = !on; cancelAnimationFrame(headFrame); headFrame = 0;

@@ -43,7 +43,7 @@ const { chromium, expect } = require("@playwright/test");
         } }));
       });
     });
-    for (const file of ["player-tools-client.js", "tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
+    for (const file of ["player-tools-client.js", "tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "icons.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
     const host = page.locator("#scdl-tempo-control");

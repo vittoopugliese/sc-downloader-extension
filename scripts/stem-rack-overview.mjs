@@ -42,7 +42,8 @@ export function mountRackOverview({ container, instruments, audioContext, output
   function create(track) {
     const row = node('div', 'rack-channel'); row.dataset.channel = track.key;
     const heading = node('div', 'rack-channel-controls');
-    const play = button('rack-channel-play', '▶', () => preview(track.key));
+    const play = button('rack-channel-play', '', () => preview(track.key));
+    play.append(globalThis.SCIcons.create('play'));
     const name = button('rack-channel-name', track.name, () => instruments.focus(track.key));
     name.addEventListener('dblclick', () => openChops(track.key));
     const mode = node('select', 'rack-channel-mode');
@@ -53,7 +54,8 @@ export function mountRackOverview({ container, instruments, audioContext, output
     for (let i = 24; i <= 96; i++) root.add(new Option(noteName(i), String(i)));
     root.title = pt('Root note'); root.setAttribute('aria-label', pt('Root note'));
     root.onchange = () => { stop(track.key); instruments.editInstrument(value => { value.piano.root = Number(root.value); }, track.key); };
-    const chops = button('rack-channel-chops', '✂', () => openChops(track.key));
+    const chops = button('rack-channel-chops', '', () => openChops(track.key));
+    chops.append(globalThis.SCIcons.create('slice'));
     chops.title = pt('Edit chops'); chops.setAttribute('aria-label', pt('Edit chops'));
     heading.append(play, name, mode, root, chops); row.append(heading);
     const steps = Array.from({ length: STEPS_PER_BAR }, (_, column) => {

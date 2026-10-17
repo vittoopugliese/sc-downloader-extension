@@ -29,7 +29,7 @@ function smokePackage(zipPath, apiPermission) {
   const forbidden = /(^|\/)(?:\.git|\.agents|\.codex|docs|services|repos|node_modules|dist|test|tests)(?:\/|$)|(^|\/)verify-[^/]+\.js$|uninstall-feedback-emails|(^|\/)(?:\.DS_Store|Thumbs\.db|\.dev\.vars[^/]*)$/;
   const prohibited = files.filter(entry => forbidden.test(entry));
   if (prohibited.length) throw new Error(`Package contains development-only files: ${prohibited.join(', ')}`);
-  for (const required of ['manifest.json', 'popup.html', 'offscreen.html', 'stems.html', 'assets/stems.css', 'scripts/local-audio-output.mjs',
+  for (const required of ['manifest.json', 'popup.html', 'offscreen.html', 'stems.html', 'assets/stems.css', 'assets/icon-cursors.css', 'scripts/icons.js', 'scripts/local-audio-output.mjs',
     'scripts/stem-worker.mjs', 'scripts/stem-model.mjs', 'scripts/stem-audio.mjs', 'scripts/stem-jobs.js', 'scripts/stem-effects.mjs',
     'scripts/stem-presets.mjs', 'scripts/stem-library-ui.mjs', 'scripts/stem-tone-processor.mjs',
     'scripts/stem-playlist.mjs', 'scripts/stem-playlist-core.mjs', 'scripts/stem-playlist-audio.mjs', 'scripts/stem-playlist-stretch.mjs', 'scripts/stem-playlist-worker.mjs', 'assets/stem-playlist.css',

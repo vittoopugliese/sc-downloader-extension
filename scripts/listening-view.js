@@ -24,10 +24,10 @@
       @media(prefers-reduced-motion:reduce){*{transition:none!important}}
     </style><section class="player ${cinema ? "cinema" : ""}">
       <div class="glow"></div>
-      ${cinema ? '<button class="close" type="button">×</button>' : ""}
+      ${cinema ? '<button class="close" type="button"><sc-icon name="close" aria-hidden="true"></sc-icon></button>' : ""}
       <button class="cover" type="button"><span class="hint"></span></button>
       <div class="meta"><div class="eyebrow"></div><div class="title"></div><div class="artist"></div>
-      <div class="controls"><button type="button" data-command="previous">&#9198;</button><button type="button" class="play" data-command="play">&#9654;</button><button type="button" data-command="next">&#9197;</button></div></div>
+      <div class="controls"><button type="button" data-command="previous"><sc-icon name="previous" aria-hidden="true"></sc-icon></button><button type="button" class="play" data-command="play"><sc-icon name="play" aria-hidden="true"></sc-icon></button><button type="button" data-command="next"><sc-icon name="next" aria-hidden="true"></sc-icon></button></div></div>
       <div class="timeline"><span class="elapsed">0:00</span><progress max="1" value="0"></progress><span class="duration">0:00</span></div>
     </section>`;
     const el = (selector) => root.querySelector(selector);
@@ -58,7 +58,7 @@
         el(".cover").style.backgroundImage = background;
         el(".glow").style.backgroundImage = background;
         if (cinema) el(".cover").setAttribute("aria-label", state.title);
-        el(".play").textContent = state.playing ? "Ⅱ" : "▶";
+        el(".play sc-icon").setAttribute('name', state.playing ? "pause" : "play");
         el(".play").setAttribute("aria-label", t(state.playing ? "pause" : "play"));
         for (const action of ["play", "previous", "next"]) el(`[data-command="${action}"]`).disabled = !state.controls[action];
         el(".elapsed").textContent = time(state.elapsed);

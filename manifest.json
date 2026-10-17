@@ -5,17 +5,25 @@
   "description": "Speed, loops, sampler pads, FX, EQ, recorder and on-device stem separation for SoundCloud, plus a private Likes Explorer.",
   "default_locale": "en",
   "version": "2026.10.15",
-  "permissions": ["cookies", "tabs", "downloads", "offscreen", "notifications", "storage", "alarms"],
+  "permissions": [
+    "cookies",
+    "tabs",
+    "downloads",
+    "offscreen",
+    "notifications",
+    "storage",
+    "alarms"
+  ],
   "host_permissions": [
     "https://soundcloud.com/*",
     "https://api.soundcloud.com/*",
     "https://api-v2.soundcloud.com/*",
     "https://*.sndcdn.com/*",
     "https://*.media-streaming.soundcloud.cloud/*",
-    "https://playback.media-streaming.soundcloud.cloud/*"
-    ,"https://huggingface.co/*"
-    ,"https://*.hf.co/*"
-    ,"https://sctd.vpugliese.online/*"
+    "https://playback.media-streaming.soundcloud.cloud/*",
+    "https://huggingface.co/*",
+    "https://*.hf.co/*",
+    "https://sctd.vpugliese.online/*"
   ],
   "background": {
     "service_worker": "scripts/background.js"
@@ -36,41 +44,73 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://w.soundcloud.com/player/*"],
-      "include_globs": ["*scdl_likes_player=1*"],
+      "matches": [
+        "https://w.soundcloud.com/player/*"
+      ],
+      "include_globs": [
+        "*scdl_likes_player=1*"
+      ],
       "all_frames": true,
       "run_at": "document_start",
-      "css": ["assets/likes-player.css"]
+      "css": [
+        "assets/likes-player.css"
+      ]
     },
     {
-      "matches": ["https://w.soundcloud.com/player/*"],
-      "include_globs": ["*scdl_likes_player=1*"],
+      "matches": [
+        "https://w.soundcloud.com/player/*"
+      ],
+      "include_globs": [
+        "*scdl_likes_player=1*"
+      ],
       "all_frames": true,
       "run_at": "document_start",
       "world": "MAIN",
-      "js": ["scripts/widget-record-tap.js"]
+      "js": [
+        "scripts/widget-record-tap.js"
+      ]
     },
     {
-      "matches": ["https://soundcloud.com/*"],
+      "matches": [
+        "https://soundcloud.com/*"
+      ],
       "all_frames": true,
       "match_origin_as_fallback": true,
       "run_at": "document_start",
       "world": "MAIN",
       "js": [
+        "scripts/icons.js",
         "scripts/looper-core.js",
         "scripts/loop-session.js",
         "scripts/looper-main-bridge.js"
       ]
     },
     {
-      "matches": ["https://soundcloud.com/*"],
+      "matches": [
+        "https://soundcloud.com/*"
+      ],
       "run_at": "document_start",
       "world": "MAIN",
-      "js": ["scripts/player-tools-i18n.js", "scripts/tempo-control-core.js", "scripts/sampler-core.js", "scripts/parametric-eq.js", "scripts/audio-effects-core.js", "scripts/player-tools-collapsible.js", "scripts/parametric-eq-ui.js", "scripts/record-core.js", "scripts/record-ui.js", "scripts/tempo-control-main.js"]
+      "js": [
+        "scripts/icons.js",
+        "scripts/player-tools-i18n.js",
+        "scripts/tempo-control-core.js",
+        "scripts/sampler-core.js",
+        "scripts/parametric-eq.js",
+        "scripts/audio-effects-core.js",
+        "scripts/player-tools-collapsible.js",
+        "scripts/parametric-eq-ui.js",
+        "scripts/record-core.js",
+        "scripts/record-ui.js",
+        "scripts/tempo-control-main.js"
+      ]
     },
     {
-      "matches": ["https://soundcloud.com/*"],
+      "matches": [
+        "https://soundcloud.com/*"
+      ],
       "js": [
+        "scripts/icons.js",
         "scripts/fast-tooltips.js",
         "scripts/i18n.js",
         "scripts/player-tools-client.js",
@@ -94,9 +134,12 @@
       ]
     },
     {
-      "matches": ["https://soundcloud.com/*"],
+      "matches": [
+        "https://soundcloud.com/*"
+      ],
       "all_frames": true,
       "js": [
+        "scripts/icons.js",
         "scripts/i18n.js",
         "scripts/looper-core.js",
         "scripts/looper.js"
@@ -105,12 +148,25 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["assets/icon48.png", "assets/icon128.png", "assets/LooperPlayerToolkit.png", "assets/icons/player-toolkit.png", "assets/icons/eq.svg", "assets/icons/record.svg", "assets/icons/cross.svg", "assets/icons/download.svg", "assets/icons/teleport-to-selected-track.svg", "assets/icons/refresh.svg", "assets/icons/storage.svg", "assets/icons/megaphone.svg", "assets/icons/sound-cloud-social-badge.svg", "assets/icons/detach.svg", "assets/icons/trash.svg", "assets/icons/expand.svg", "assets/drums/*.wav", "scripts/bitcrusher-processor.js", "scripts/record-processor.js"],
-      "matches": ["https://soundcloud.com/*"]
+      "resources": [
+        "assets/icon48.png",
+        "assets/icon128.png",
+        "assets/LooperPlayerToolkit.png",
+        "assets/drums/*.wav",
+        "scripts/bitcrusher-processor.js",
+        "scripts/record-processor.js"
+      ],
+      "matches": [
+        "https://soundcloud.com/*"
+      ]
     },
     {
-      "resources": ["scripts/record-processor.js"],
-      "matches": ["https://w.soundcloud.com/*"]
+      "resources": [
+        "scripts/record-processor.js"
+      ],
+      "matches": [
+        "https://w.soundcloud.com/*"
+      ]
     }
   ]
 }

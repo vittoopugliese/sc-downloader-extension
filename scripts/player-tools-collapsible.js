@@ -4,7 +4,7 @@
   const pt = (source, ...values) => globalThis.SCPlayerToolsText?.t(source, ...values) ?? source.replace(/\$(\d+)/g, (match, index) => values[index - 1] ?? match);
   if (globalThis.SCPlayerToolsCollapsible) return;
 
-  const CHEVRON = `<svg class="tool-section-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>`;
+  const CHEVRON = `<sc-icon name="down" class="tool-section-chevron" aria-hidden="true"></sc-icon>`;
   const styles = `
     .tool-section-header { position:relative; min-height:31px; }
     .tool-section-toggle { display:flex; align-items:center; width:100%; min-height:31px; padding:0 9px; border:0; color:#fff; background:#1b1b1b; font:700 11px/1 system-ui,sans-serif; text-align:left; cursor:pointer; }
@@ -12,11 +12,8 @@
     .tool-section-toggle:focus-visible { outline:2px solid #ff5500; outline-offset:-2px; }
     .tool-section-heading { display:inline-flex; align-items:center; min-width:0; gap:5px; }
     .tool-section-icon { display:block; flex:0 0 auto; width:16px; height:16px; object-fit:contain; color:currentColor; }
-    img.tool-section-icon { filter:brightness(0) invert(1); transition:filter 160ms ease; }
-    .tool-section-toggle:hover img.tool-section-icon, .tool-section-header:hover > .tool-section-toggle img.tool-section-icon { filter:brightness(0) saturate(100%) invert(56%) sepia(93%) saturate(1985%) hue-rotate(336deg) brightness(104%) contrast(101%); }
-    svg.tool-section-icon { fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
     .tool-section-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .tool-section-chevron { position:absolute; top:50%; right:9px; width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; transform:translateY(-50%); transition:transform 160ms ease; }
+    .tool-section-chevron { position:absolute; top:50%; right:9px; width:12px; height:12px; transform:translateY(-50%); transition:transform 160ms ease; }
     .is-collapsed > .tool-section-header .tool-section-chevron { transform:translateY(-50%) rotate(180deg); }
     .tool-section-actions { position:absolute; z-index:5; top:4px; right:27px; display:flex; align-items:center; gap:4px; }
   `;

@@ -129,7 +129,9 @@ const context = vm.createContext({
       isProfileTracksPage: () => true,
     },
   },
-  globalThis: { SCDLI18n: { t: (key) => key } },
+  globalThis: { SCDLI18n: { t: (key) => key }, SCIcons: { create(name, className) {
+    const icon = document.createElement('sc-icon'); icon.setAttribute('name', name); icon.className = className; return icon;
+  } } },
   chrome: {
     runtime: {
       getURL: (assetPath) => `chrome-extension://test/${assetPath}`,

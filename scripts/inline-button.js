@@ -537,11 +537,7 @@ function createInlineDownloadButton() {
     ? "sc-button sc-button-secondary sc-button-medium sc-button-responsive scdl-profile-download"
     : "sc-button sc-button-secondary sc-button-medium sc-button-icon sc-button-responsive";
 
-  const icon = document.createElement("img");
-  icon.className = "scdl-inline-icon scdl-filtered";
-  icon.src = chrome.runtime.getURL("assets/icons/download.svg");
-  icon.alt = "";
-  icon.draggable = false;
+  const icon = globalThis.SCIcons.create("download", "scdl-inline-icon");
   button.appendChild(icon);
 
   if (profileTracksPage) {

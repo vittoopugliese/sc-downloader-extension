@@ -17,4 +17,4 @@ repos
 debug.log
 
 # FL Studio icon extraction (Image-Line proprietary, local reference only)
-_fl-studio-icons/
+.fl-studio-icons/

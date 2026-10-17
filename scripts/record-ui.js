@@ -4,7 +4,7 @@
   const pt = (source, ...values) => globalThis.SCPlayerToolsText?.t(source, ...values) ?? source.replace(/\$(\d+)/g, (match, index) => values[index - 1] ?? match);
   // variant "pill": compact, always open, for the Likes Explorer. `recorder`
   // replaces the built-in one; `extraActions` are buttons added to the toolbar.
-  function mount({ container, effects, onCollapsedChange, moduleUrl, iconUrl, recorder: injected, variant, extraActions = [], onChange, maxSeconds, emptyText }) {
+  function mount({ container, effects, onCollapsedChange, moduleUrl, recorder: injected, variant, extraActions = [], onChange, maxSeconds, emptyText }) {
     const pill = variant === "pill";
     const collapsible = globalThis.SCPlayerToolsCollapsible;
     const section = document.createElement("section");
@@ -13,9 +13,9 @@
     const transport = `
         <span class="record-status" hidden><span class="record-dot" aria-hidden="true"></span><output class="record-time" aria-label="Recording duration">00:00.000</output></span>
         <button type="button" class="record-start" aria-label="Start recording" aria-pressed="false"><span class="record-dot" aria-hidden="true"></span>Rec</button>
-        <button type="button" class="record-stop" aria-label="Stop recording or playback; hold to clear" data-scdl-tooltip="Stop · Hold to clear" disabled>■</button>
-        <button type="button" class="record-play" aria-label="Play recorded sample" disabled>▶</button>
-        <button type="button" class="record-download" aria-label="Download WAV" data-scdl-tooltip="Download WAV" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button>`;
+        <button type="button" class="record-stop" aria-label="Stop recording or playback; hold to clear" data-scdl-tooltip="Stop · Hold to clear" disabled><sc-icon name="stop" aria-hidden="true"></sc-icon></button>
+        <button type="button" class="record-play" aria-label="Play recorded sample" disabled><sc-icon name="play" aria-hidden="true"></sc-icon></button>
+        <button type="button" class="record-download" aria-label="Download WAV" data-scdl-tooltip="Download WAV" disabled><sc-icon name="download" aria-hidden="true"></sc-icon></button>`;
     const stage = `
       <div class="record-stage">
         <canvas class="record-canvas" tabindex="0" role="slider" aria-label="Recorded sample position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" data-scdl-tooltip="Wheel to zoom at the cursor. Drag or Shift + wheel to scroll. Click to seek. Keyboard: + / - zoom, Shift + arrows scroll, 0 resets the view."></canvas>
@@ -29,7 +29,7 @@
       .record-toolbar button { pointer-events:auto; }
       .record-section .tool-section-toggle { padding-right:245px; }
       .record-section button.record-download:not(.tool-section-toggle) { height:22px; min-height:22px; padding:0 6px; border-radius:6px; border:1px solid #b84400; color:#fff; background:#ff5500; opacity:.82; }
-      .record-download svg { width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+      .record-download sc-icon{ width:12px; height:12px;      }
       .record-section button.record-download:disabled:not(.tool-section-toggle) { opacity:.45; }
       .record-status { display:inline-flex; align-items:center; gap:5px; }
       .record-status[hidden], .record-status .record-dot[hidden] { display:none; }
@@ -56,7 +56,7 @@
       .record-pill .record-notice { inset:auto 4px 4px; padding:2px 6px; }
     </style>
     ${pill ? `<div class="record-bar">${transport}</div>
-    <div class="record-body">${stage}</div>` : `${collapsible.header({ title: pt("Record"), bodyId: "scdl-record-body", expanded: false, toggleClass: "record-toggle", icon: '<img class="tool-section-icon record-icon" alt="" aria-hidden="true" />', actionsClass: "record-toolbar", actions: transport })}
+    <div class="record-body">${stage}</div>` : `${collapsible.header({ title: pt("Record"), bodyId: "scdl-record-body", expanded: false, toggleClass: "record-toggle", icon: '<sc-icon name="record" class="tool-section-icon record-icon" aria-hidden="true"></sc-icon>', actionsClass: "record-toolbar", actions: transport })}
     <div class="record-body" id="scdl-record-body" hidden>${stage}
     </div>`}`;
     globalThis.SCPlayerToolsText?.localize(section);
@@ -87,8 +87,6 @@
     const report = error => notice(error.message || pt("Could not record audio."));
     const syncIcon = () => {
       globalThis.SCPlayerToolsText?.refresh(section);
-      const url = iconUrl || document.documentElement.getAttribute("data-scdl-extension-record-url");
-      if (url && find("icon")) find("icon").src = url;
     };
     syncIcon(); document.addEventListener("scdl:extension-assets-ready", syncIcon);
     const disclosure = pill ? { isCollapsed: () => false, setCollapsed() {} }
@@ -104,7 +102,7 @@
       find("start").title = state.frames ? pt("Start a new take (replaces this sample)") : pt("Record the final mix");
       find("stop").disabled = state.state === "preparing" || (!capturing && !state.frames);
       find("play").disabled = busy || !state.frames;
-      find("play").textContent = state.state === "playing" ? "Ⅱ" : "▶";
+      find("play").querySelector('sc-icon').setAttribute('name', state.state === "playing" ? "pause" : "play");
       find("play").setAttribute("aria-label", state.state === "playing" ? pt("Pause recorded sample") : pt("Play recorded sample"));
       find("download").disabled = busy || !state.frames;
       canvas.setAttribute("aria-valuemax", String(state.duration));

@@ -63,7 +63,7 @@ const { chromium } = require("playwright");
         });
         document.documentElement.setAttribute("data-scdl-player-waveform", JSON.stringify({ trackUrl: location.href, samples: Array.from({ length: 240 }, () => 60) }));
       });
-      for (const script of ["tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
+      for (const script of ["tempo-control-core.js", "sampler-core.js", "parametric-eq.js", "audio-effects-core.js", "icons.js", "player-tools-collapsible.js", "parametric-eq-ui.js", "tempo-control-main.js"]) {
         await page.addScriptTag({ path: path.join(__dirname, script) });
       }
       const host = page.locator("#scdl-tempo-control");

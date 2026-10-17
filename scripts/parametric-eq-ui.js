@@ -2,8 +2,8 @@
 (() => {
   "use strict";
   const pt = (source, ...values) => globalThis.SCPlayerToolsText?.t(source, ...values) ?? source.replace(/\$(\d+)/g, (match, index) => values[index - 1] ?? match);
-  const HEART_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17.2C22 19.85 19.85 22 17.2 22C15.78 22 14.51 21.38 13.63 20.4C12.87 19.55 12.4 18.43 12.4 17.2C12.4 14.55 14.55 12.4 17.2 12.4C18.57 12.4 19.81 12.98 20.69 13.91C20.68 13.91 20.68 13.91 20.69 13.92C21.5 14.78 22 15.93 22 17.2Z"/><path d="M18.48 18.54L15.95 16M18.45 16.03L15.92 18.57"/><path d="M22 8.69C22 10.66 21.49 12.4 20.69 13.91C19.81 12.98 18.57 12.4 17.2 12.4C14.55 12.4 12.4 14.55 12.4 17.2C12.4 18.43 12.87 19.55 13.63 20.4C13.26 20.57 12.92 20.71 12.62 20.81C12.28 20.93 11.72 20.93 11.38 20.81C8.48 19.82 2 15.69 2 8.69C2 5.6 4.49 3.09998 7.56 3.09998C9.37 3.09998 10.99 3.98002 12 5.33002C13.01 3.98002 14.63 3.09998 16.44 3.09998C19.51 3.09998 22 5.6 22 8.69Z"/></svg>`;
-  function mount({ container, effects, authorize, isAllowed, onChange, onCollapsedChange, iconUrl, resetIconUrl, pro = true }) {
+  const HEART_ICON = `<sc-icon name="bypass" aria-hidden="true"></sc-icon>`;
+  function mount({ container, effects, authorize, isAllowed, onChange, onCollapsedChange, pro = true }) {
     const api = globalThis.SCParametricEQ;
     const collapsible = globalThis.SCPlayerToolsCollapsible;
     const section = document.createElement("section");
@@ -20,20 +20,20 @@
         .peq-pro { padding:2px 4px; border:1px solid #8b5cf6; border-radius:4px; color:#f5f3ff; background:#32105e; font-size:8px; line-height:1; }
         .peq.is-collapsed .peq-header-control { display:none !important; }
         .peq-header-control { width:23px; height:22px; padding:1px !important; }
-        .peq-header-control svg, .peq-header-control img { display:block; width:15px; height:15px; }
+        .peq-header-control img,.peq-header-control sc-icon{ display:block; width:15px; height:15px; }
         .peq-body { padding:0 9px 8px; }
         .peq-toolbar { display:flex; align-items:center; gap:5px; margin-bottom:6px; }
         .peq button:not(.tool-section-toggle) { box-sizing:border-box; min-width:0; border:1px solid #474747; border-radius:5px; background:#262626; color:#eee; font:inherit; font-size:10px; }
         .peq button:not(.tool-section-toggle) { display:inline-grid; place-items:center; min-height:23px; padding:3px 7px; cursor:pointer; }
         .peq-toolbar button:hover:not(:disabled) { border-color:#ff7b38; color:#fff; background:#3a251b; }
         .peq .tool-section-actions button:hover:not(:disabled) { border-color:#ff7b38; color:#fff; background:#3a251b; }
-        .peq-toolbar button svg { display:block; width:15px; height:15px; }
+        .peq-toolbar button sc-icon{ display:block; width:15px; height:15px; }
         .peq-bypass { color:#fa5858 !important; }
         .peq-bypass[aria-pressed="true"] { color:#fff !important; border-color:#777 !important; }
         .peq-header-bypass { width:23px; height:22px; padding:1px !important; border-color:transparent !important; background:transparent !important; }
-        .peq-header-bypass svg { width:17px !important; height:17px !important; }
+        .peq-header-bypass sc-icon{ width:17px !important; height:17px !important; }
         .peq-clip[aria-pressed="true"] { color:#ff925a; }
-        .peq-add svg, .peq-clip svg { fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+        .peq-add sc-icon,.peq-clip sc-icon{      }
         .peq button[aria-pressed="true"] { border-color:#ff7b38; color:#ffad7b; }
         .peq button:disabled { opacity:.45; cursor:not-allowed; }
         .peq :focus-visible { outline:2px solid #ff8b47; outline-offset:2px; }
@@ -43,7 +43,7 @@
         .peq .peq-point[aria-pressed="true"] { background:#ff9c5b; color:#111; box-shadow:0 0 0 3px #ff7b3838; }
         .peq-message { position:absolute; z-index:2; top:4px; left:28px; right:6px; margin:0; padding:2px 4px; border-radius:3px; color:#ffb68b; background:#17100be8; font-size:9px; line-height:1.4; pointer-events:none; }
       </style>
-      ${collapsible.header({ title: pt("Parametric EQ"), bodyId, expanded: true, toggleClass: "peq-toggle", icon: '<img class="tool-section-icon peq-icon" alt="" aria-hidden="true" />', actions: `<button type="button" class="peq-bypass peq-header-bypass" aria-pressed="false" aria-label="Bypass EQ" title="Bypass EQ only">${HEART_ICON}</button><button type="button" class="peq-add peq-header-control" aria-label="Add EQ point" title="Add a parametric EQ point"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button><button type="button" class="peq-clip peq-header-control" aria-pressed="false" aria-label="Enable hard clip" title="Enable hard clipping after EQ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 17h4V7h12v10h4" /></svg></button><button type="button" class="peq-reset peq-header-control" aria-label="Reset EQ" title="Reset all EQ points and clipping"><img class="peq-cross-icon" alt="" aria-hidden="true" /></button><span class="peq-pro">PRO</span>` })}
+      ${collapsible.header({ title: pt("Parametric EQ"), bodyId, expanded: true, toggleClass: "peq-toggle", icon: '<sc-icon name="eq" class="tool-section-icon peq-icon" aria-hidden="true"></sc-icon>', actions: `<button type="button" class="peq-bypass peq-header-bypass" aria-pressed="false" aria-label="Bypass EQ" title="Bypass EQ only">${HEART_ICON}</button><button type="button" class="peq-add peq-header-control" aria-label="Add EQ point" title="Add a parametric EQ point"><sc-icon name="add" aria-hidden="true"></sc-icon></button><button type="button" class="peq-clip peq-header-control" aria-pressed="false" aria-label="Enable hard clip" title="Enable hard clipping after EQ"><sc-icon name="clip" aria-hidden="true"></sc-icon></button><button type="button" class="peq-reset peq-header-control" aria-label="Reset EQ" title="Reset all EQ points and clipping"><sc-icon name="close" class="peq-cross-icon" aria-hidden="true"></sc-icon></button><span class="peq-pro">PRO</span>` })}
       <div class="peq-body" id="${bodyId}">
         <div class="peq-stage"><canvas class="peq-canvas" aria-label="Equalizer response and live frequency spectrum. Double click near the left or right edge for a high-pass or low-pass cutoff. Drag to edit; scroll on a point to adjust Q; double click a point to delete it."></canvas><p class="peq-message" role="status" aria-live="polite" hidden></p></div>
       </div>`;
@@ -56,10 +56,6 @@
     const ctx = canvas.getContext("2d");
     const syncIcon = () => {
       globalThis.SCPlayerToolsText?.refresh(section);
-      const url = iconUrl || document.documentElement.getAttribute("data-scdl-extension-eq-url");
-      if (url) find("icon").src = url;
-      const crossUrl = resetIconUrl || document.documentElement.getAttribute("data-scdl-extension-cross-url");
-      if (crossUrl) find("cross-icon").src = crossUrl;
     };
     syncIcon();
     document.addEventListener("scdl:extension-assets-ready", syncIcon);

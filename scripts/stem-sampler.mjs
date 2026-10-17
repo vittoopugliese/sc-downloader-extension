@@ -214,6 +214,7 @@ export function mountPadSampler({ waveform, buffer, timeline, audioContext, outp
     handle.className = `stem-sample-handle stem-sample-${kind}`;
     handle.dataset.sampleHandle = kind; handle.setAttribute('role', 'slider'); handle.setAttribute('aria-orientation', 'horizontal');
     if (kind === 'start') handle.textContent = KEYS[i];
+    else handle.append(globalThis.SCIcons.create(({ end: 'fit', fadeIn: 'fade-in', fadeOut: 'fade-out' })[kind]));
     handle.addEventListener('pointerdown', event => {
       if (event.button !== 0) return;
       event.preventDefault(); event.stopPropagation();

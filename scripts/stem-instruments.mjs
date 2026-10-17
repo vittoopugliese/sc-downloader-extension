@@ -238,8 +238,8 @@ export function patternControls(instruments, { manage = false } = {}) {
   wrap.append(trackSelect, patternMenu.element);
   let add, copy;
   if (manage) {
-    add = button('plugin-new', 'New pattern', '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>', () => instruments.createPattern());
-    copy = button('plugin-duplicate', 'Duplicate pattern', '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V4H4v12h4"/></svg>', () => instruments.duplicatePattern());
+    add = button('plugin-new', 'New pattern', '<sc-icon name="add" class="icon" aria-hidden="true"></sc-icon>', () => instruments.createPattern());
+    copy = button('plugin-duplicate', 'Duplicate pattern', '<sc-icon name="copy" class="icon" aria-hidden="true"></sc-icon>', () => instruments.duplicatePattern());
     wrap.append(add, copy);
   }
   wrap.append(bars);

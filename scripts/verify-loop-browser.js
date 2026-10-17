@@ -267,8 +267,8 @@ async function installFixtureFetch(worker, fixtureUrl) {
       "An active loop button whose contents SoundCloud rerenders must restore its close icon"
     );
     assert.equal(
-      await loopButton.locator(".scdl-loop-button-icon path").getAttribute("d"),
-      "M5 5 19 19M19 5 5 19",
+      await loopButton.locator(".scdl-loop-button-icon").getAttribute("name"),
+      "close",
       "The remounted active loop control must show the close cross"
     );
     const waveform = page.locator('[role="slider"][aria-label="Waveform"]');
@@ -356,8 +356,8 @@ async function installFixtureFetch(worker, fixtureUrl) {
       "Closing comment mode must remount the looper controls without losing A-B"
     );
     assert.equal(
-      await loopButton.locator(".scdl-loop-button-icon path").getAttribute("d"),
-      "M5 5 19 19M19 5 5 19",
+      await loopButton.locator(".scdl-loop-button-icon").getAttribute("name"),
+      "close",
       "Closing comment mode must restore the active loop close icon"
     );
     await loopButton.click();

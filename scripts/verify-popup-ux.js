@@ -35,7 +35,7 @@ assert(
 );
 assert(
   /#looperPanel\.is-visible\s*\{\s*display:\s*block/.test(popup) &&
-    /id="helpBackBtn"[^>]*>[\s\S]*class="back-icon"[^>]*src="\.\/assets\/icons\/back-arrow\.svg"/.test(popup),
+    /id="helpBackBtn"[^>]*>[\s\S]*name="back"[^>]*class="back-icon"/.test(popup),
   "Help and its Looper tab must reuse the compact existing back-arrow icon."
 );
 assert(
@@ -120,18 +120,18 @@ assert(
   "The compact folder-picker button is missing."
 );
 assert(
-  /id="resetDownloadFolder"[^>]*data-i18n-title="reset_download_folder"[^>]*>[\s\S]*assets\/icons\/cross\.svg[\s\S]*<\/button>/.test(popup) &&
+  /id="resetDownloadFolder"[^>]*data-i18n-title="reset_download_folder"[^>]*>[\s\S]*name="close"[\s\S]*<\/button>/.test(popup) &&
     /SCDownloadDirectory\.clearCurrent\(\)/.test(popupScript),
   "The popup must provide a way back to the browser Downloads folder."
 );
 assert(
-  /id="selectionBackBtn"[^>]*aria-label="Back"[^>]*>[\s\S]*class="back-icon"[^>]*src="\.\/assets\/icons\/back-arrow\.svg"/.test(
+  /id="selectionBackBtn"[^>]*aria-label="Back"[^>]*>[\s\S]*name="back"[^>]*class="back-icon"/.test(
     popup
   ),
   "The selection back button should use the compact back-arrow icon."
 );
 assert(
-  /class="folder-icon"[^>]*src="\.\/assets\/icons\/folder-icon\.svg"/.test(popup),
+  /name="folder"[^>]*class="folder-icon"/.test(popup),
   "The folder-picker icon asset is missing."
 );
 assert(
@@ -154,10 +154,10 @@ assert(
   "The folder icon should use 20px and the back icon should use 16px."
 );
 assert(
-  /id="selectAllBtn"[^>]*aria-label="Select all tracks"[^>]*>[\s\S]*src="\.\/assets\/icons\/select-all\.svg"/.test(
+  /id="selectAllBtn"[^>]*aria-label="Select all tracks"[^>]*>[\s\S]*name="select-all"/.test(
     popup
   ) &&
-    /id="clearAllBtn"[^>]*aria-label="Clear selected tracks"[^>]*>[\s\S]*src="\.\/assets\/icons\/deselect-all\.svg"/.test(
+    /id="clearAllBtn"[^>]*aria-label="Clear selected tracks"[^>]*>[\s\S]*name="deselect-all"/.test(
       popup
     ),
   "The selection action buttons should use their icon assets."

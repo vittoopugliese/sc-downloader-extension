@@ -1,12 +1,1 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg width="800px" height="800px" viewBox="0 0 24 24" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-    <!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
-    <title>ic_fluent_select_all_off_24_filled</title>
-    <desc>Created with Sketch.</desc>
-    <g id="🔍-Product-Icons" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-        <g id="ic_fluent_select_all_off_24_filled" fill="#212121" fill-rule="nonzero">
-            <path d="M20.4961766,5.62668182 C21.3720675,5.93447702 22,6.76890777 22,7.75 L22,17.75 C22,20.0972102 20.0972102,22 17.75,22 L7.75,22 C6.76890777,22 5.93447702,21.3720675 5.62668182,20.4961766 L7.72396188,20.4995565 L17.75,20.5 C19.2687831,20.5 20.5,19.2687831 20.5,17.75 L20.5,7.75 L20.4960194,7.69901943 L20.4961766,5.62668182 Z M17.246813,2 C18.4894537,2 19.496813,3.00735931 19.496813,4.25 L19.496813,17.246813 C19.496813,18.4894537 18.4894537,19.496813 17.246813,19.496813 L4.25,19.496813 C3.00735931,19.496813 2,18.4894537 2,17.246813 L2,4.25 C2,3.00735931 3.00735931,2 4.25,2 L17.246813,2 Z" id="🎨-Color">
-</path>
-        </g>
-    </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-33 -1313 1731 1731"><path transform="scale(1,-1)" fill="currentColor" d="M640 1280V1152L576 1120Q160 1120 160 704L128 640H0V896Q0 1280 384 1280ZM1088 1120 1024 1152V1280H1280Q1664 1280 1664 896V640H1536L1504 704Q1504 1120 1088 1120ZM384 -384Q0 -384 0 0V256H128L160 192Q160 -224 576 -224L640 -256V-384ZM1504 192 1536 256H1664V0Q1664 -384 1280 -384H1024V-256L1088 -224Q1504 -224 1504 192Z"/></svg>

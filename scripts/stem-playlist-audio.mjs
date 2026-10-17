@@ -170,7 +170,10 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
       const gain = context.createGain(), eq = globalThis.SCParametricEQ?.createGraph(context, { analyse: true }) || null;
       gain.connect(master);
       if (eq) { eq.apply(null, false, true); eq.output.connect(gain); }
-      bus = { gain, eq, input: eq ? eq.input : gain, settings: 'null' };
+      // Post-fader level for the header meters.
+      const meter = context.createAnalyser?.() || null;
+      if (meter) { meter.fftSize = 512; gain.connect(meter); }
+      bus = { gain, eq, meter, samples: new Float32Array(512), input: eq ? eq.input : gain, settings: 'null' };
       tracks.set(id, bus);
     }
     return bus;
@@ -313,6 +316,15 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     // Where a track's instruments play into, and the EQ graph whose spectrum the editor shows.
     trackInput: id => trackBus(id).input,
     trackGraph: id => tracks.get(id)?.eq || null,
+    // Peak level (0..1+) of a track after its fader.
+    trackLevel(id) {
+      const bus = tracks.get(id);
+      if (!bus?.meter) return 0;
+      bus.meter.getFloatTimeDomainData(bus.samples);
+      let peak = 0;
+      for (const value of bus.samples) peak = Math.max(peak, Math.abs(value));
+      return peak;
+    },
     dispose() { stop(); master.disconnect(); for (const bus of tracks.values()) { bus.eq?.dispose(); bus.gain.disconnect(); } tracks.clear(); },
   };
 }

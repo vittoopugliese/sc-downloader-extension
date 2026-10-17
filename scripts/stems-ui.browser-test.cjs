@@ -141,6 +141,7 @@ const { chromium } = require('playwright');
     // Rack, piano roll and WAV live in the header menu: ⋮ or right-click on the header.
     await drumHead.locator('.stem-more').click();
     assert.equal(await page.locator('.pl-menu-item').count(), 5);
+    assert.deepEqual(await page.locator('sc-icon').evaluateAll(nodes => nodes.map(node => node.getAttribute('name')).filter(name => !SCIcons.has(name))), [], 'Every control and channel menu resolves to a catalog icon');
     await page.locator('.pl-menu-item').nth(0).click();
     assert.equal(await page.locator('#stem-rack .plugin-track').inputValue(), 'drums', 'The header menu focuses its track in the rack');
     await drumHead.locator('h2').click({ button: 'right' });

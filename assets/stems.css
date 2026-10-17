@@ -4,33 +4,53 @@
 body{margin:0;-webkit-font-smoothing:antialiased}
 [hidden]{display:none!important}
 main{max-width:1294px;margin:auto;padding:28px 40px 40px}
-/* The header brings the extractor, stem channels and session controls together. */
-.workspace-header{position:relative;isolation:isolate;border:1px solid #42403d;border-radius:14px;background:radial-gradient(ellipse at 12% 0,#ff70200c,transparent 65%),#202020;box-shadow:0 8px 30px #0002;overflow:hidden}
-.workspace-header::before{content:'';position:absolute;inset:0 0 auto;height:2px;background:linear-gradient(90deg,var(--vocals) 0 25%,var(--drums) 25% 50%,var(--bass) 50% 75%,var(--other) 75%);opacity:.85}
+/* FL Studio-style header: identity and transport, then hint/status, stem meters and the
+   library. Pinned (sticky at the top) unless the pin button turns it off. */
+.workspace-header{position:relative;z-index:50;isolation:isolate;border:1px solid #42403d;border-radius:12px;background:radial-gradient(ellipse at 12% 0,#ff70200c,transparent 65%),#202020;box-shadow:0 8px 30px #0002}
+.workspace-header[data-pinned=true]{position:sticky;top:0;box-shadow:0 10px 24px #000b}
+.workspace-header::before{content:'';position:absolute;inset:0 0 auto;height:2px;border-radius:12px 12px 0 0;background:linear-gradient(90deg,var(--vocals) 0 25%,var(--drums) 25% 50%,var(--bass) 50% 75%,var(--other) 75%);opacity:.85}
+.daw-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0;padding:7px 12px}
+.daw-row-main .transport-bar{flex:1 1 520px;min-width:0}
+.header-pin{display:grid;place-items:center;flex-shrink:0;width:30px;height:30px;padding:0;border-color:transparent;background:none;color:#8d8781}
+.header-pin:hover{border-color:#484848;color:#ddd}
+.header-pin[aria-pressed=true]{color:#ff9a62}
+.header-pin .icon{width:15px;height:15px}
+.daw-row-sub{border-top:1px solid #ffffff0c;border-radius:0 0 12px 12px;background:#17171780;padding:5px 12px}
+/* Hint panel, as in FL: the loaded track, then status and progress messages. */
+.daw-hint{display:flex;align-items:center;gap:10px;flex:1 1 240px;min-width:0;height:34px;padding:0 8px;border:1px solid #2c2a27;border-radius:5px;background:#131313}
+.daw-hint .source-mini{flex:0 1 auto;max-width:60%}
+.daw-hint:has(#status:empty) .source-mini{max-width:100%}
+.workspace-header #status{flex:1 1 0;min-width:0;min-height:0;margin:0;overflow:hidden;font:11px/1.3 ui-monospace,monospace;white-space:nowrap;text-overflow:ellipsis}
+.workspace-header #progress{position:absolute;inset:auto 10px -2px;width:auto;height:4px;margin:0}
 .brand{display:flex;align-items:center;flex-wrap:wrap;gap:9px;font-size:10px;font-weight:800;letter-spacing:1.5px}
-.brand img{object-fit:contain}
+.brand img,.brand sc-icon{object-fit:contain}
 .workspace-edition{padding-left:12px;margin-left:3px;border-left:1px solid #555;font:9px ui-monospace,monospace;letter-spacing:1.3px;color:#b9b3ab}
-.workspace-overview{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:start;gap:32px;padding:20px 24px}
-.workspace-intro{min-width:0}
-.workspace-intro .brand{margin-bottom:16px}
-#workspace-title{margin:0;font-size:clamp(28px,3.6vw,42px);font-weight:750;line-height:1.12;letter-spacing:-1.9px}
+.workspace-intro{display:flex;flex-direction:column;justify-content:center;gap:3px;flex-shrink:0;min-width:0;padding-right:12px;border-right:1px solid #ffffff12}
+.workspace-intro .brand{gap:7px;font-size:9px;letter-spacing:1.2px}
+#workspace-title{margin:0;font-size:16px;font-weight:750;line-height:1.1;letter-spacing:-.4px;white-space:nowrap}
 #workspace-title>span:first-child{font-weight:400;color:#ddd7d0}
 .title-dot{color:var(--orange)}
-.workspace-intro p{margin:8px 0 0;font-size:12px;color:#b8b3ad}
-.stem-preview{display:grid;gap:5px;min-width:0}
-.preview-track{--channel:var(--vocals);display:grid;grid-template-columns:14px minmax(42px,auto) minmax(30px,1fr) 17px;align-items:center;gap:9px;padding:5px 9px;border:1px solid color-mix(in srgb,var(--channel) 16%,transparent);border-left:2px solid var(--channel);border-radius:3px;background:color-mix(in srgb,var(--channel) 5%,#1b1b1b);color:var(--channel);font:9px ui-monospace,monospace}
+/* The tagline is the title's tooltip. */
+.workspace-intro p{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+/* Stem meters: the four stems with their live level while the playlist plays. */
+.stem-preview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;flex:1 1 380px;min-width:0}
+.preview-track{--channel:var(--vocals);display:grid;grid-template-columns:13px auto minmax(18px,1fr);align-items:center;gap:6px;padding:4px 7px;border:1px solid color-mix(in srgb,var(--channel) 16%,transparent);border-left:2px solid var(--channel);border-radius:3px;background:color-mix(in srgb,var(--channel) 5%,#1b1b1b);color:var(--channel);font:9px ui-monospace,monospace}
 .preview-track[data-channel=drums]{--channel:var(--drums)}
 .preview-track[data-channel=bass]{--channel:var(--bass)}
 .preview-track[data-channel=other]{--channel:var(--other)}
 .preview-track .icon{width:13px;height:13px}
-.preview-number{opacity:.65;font-size:8px;text-align:right}
+.preview-track>span:nth-child(2){overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.preview-number{display:none}
 .preview-wave{height:14px;background:repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 4px);opacity:.6;clip-path:polygon(0 40%,4% 30%,8% 45%,12% 15%,16% 32%,20% 5%,24% 28%,28% 16%,32% 36%,36% 20%,40% 42%,44% 10%,48% 25%,52% 0,56% 30%,60% 18%,64% 35%,68% 8%,72% 28%,76% 15%,80% 35%,84% 22%,88% 42%,92% 30%,96% 40%,100% 44%,100% 56%,96% 60%,92% 70%,88% 58%,84% 78%,80% 65%,76% 85%,72% 72%,68% 92%,64% 65%,60% 82%,56% 70%,52% 100%,48% 75%,44% 90%,40% 58%,36% 80%,32% 64%,28% 84%,24% 72%,20% 95%,16% 68%,12% 85%,8% 55%,4% 70%,0 60%)}
 .preview-track[data-channel=drums] .preview-wave{background-size:13px 100%;clip-path:polygon(0 5%,8% 45%,15% 45%,16% 0,24% 42%,31% 42%,32% 10%,40% 45%,47% 45%,48% 0,56% 44%,63% 44%,64% 5%,72% 45%,79% 45%,80% 0,88% 43%,95% 43%,96% 12%,100% 35%,100% 65%,96% 88%,95% 57%,88% 57%,80% 100%,79% 55%,72% 55%,64% 95%,63% 56%,56% 56%,48% 100%,47% 55%,40% 55%,32% 90%,31% 58%,24% 58%,16% 100%,15% 55%,8% 55%,0 95%)}
 .preview-track[data-channel=bass] .preview-wave{transform:scaleY(.65)}
 .preview-track[data-channel=other] .preview-wave{transform:scaleY(.8) scaleX(-1)}
-.workspace-toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:center;padding:6px 16px;border-top:1px solid #ffffff0c;background:#17171780}
-.header-library{display:grid;grid-column:2;gap:3px;min-width:0;width:100%}
-.library-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;min-width:0}
+/* The wave is dim; --level (set while playing) lights it from the left. */
+.preview-wave{position:relative;opacity:1;background:repeating-linear-gradient(90deg,color-mix(in srgb,currentColor 32%,transparent) 0 2px,transparent 2px 4px)}
+.preview-wave::after{content:'';position:absolute;inset:0 auto 0 0;width:calc(var(--level,0) * 100%);background:repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 4px);background-size:inherit}
+.header-library{display:flex;align-items:center;gap:10px;flex:1 1 320px;min-width:0}
+.library-heading{display:flex;flex-direction:column;flex-shrink:0;max-width:30%;min-width:0;line-height:1.25}
+.header-library .preset-toolbar{flex:1;min-width:0}
 .header-library label{font-size:10px;font-weight:600;color:#c4c0ba}
 #preset-destination{min-width:0;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:9px ui-monospace,monospace;color:#97938e}
 .preset-toolbar{display:flex;gap:6px;min-width:0}
@@ -46,8 +66,8 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 .workspace-header .preset-toolbar .row-menu-list .row-menu-delete.is-armed{flex:0 0 auto;background:#4a2020}
 .workspace-header .preset-toolbar button{width:32px;height:32px;padding:6px;flex-shrink:0;border-color:#45423e;background:#242321}
 .workspace-header .preset-toolbar button:hover{background:#35312b;border-color:#897564}
-.preset-toolbar img{width:16px;height:16px}
-#preset-folder img{filter:brightness(0) invert(1);opacity:.7}
+.preset-toolbar img,.preset-toolbar sc-icon{width:16px;height:16px}
+#preset-folder img,#preset-folder sc-icon{filter:brightness(0) invert(1);opacity:.7}
 .workspace-header #save-locally .icon{width:16px;height:16px}
 .workspace-header #save-locally[aria-pressed=true]{border-color:var(--orange);background:#42291d;color:#ffad80}
 .workspace-header #preset-folder.has-custom-folder{border-color:var(--orange);background:#42291d}
@@ -55,21 +75,21 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 .workspace-header #import-audio:hover:enabled{background:#ff8a4e;border-color:#ffb182}
 #import-audio .icon{width:14px;height:14px}
 #preset-reconnect{justify-self:start;white-space:normal}
-@media(max-width:760px){
-  .workspace-overview{padding:16px 18px;gap:20px;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}
-  #workspace-title{font-size:30px;letter-spacing:-1.4px}
-  .workspace-toolbar{gap:12px;padding:6px 12px}
+#preset-destination{max-width:100%}
+/* Narrow windows: the rows wrap; the identity block shares its line with the pin. */
+@media(max-width:1100px){
+  .daw-row-main .workspace-intro{flex:1 1 auto;flex-direction:row;align-items:center;justify-content:flex-start;gap:12px;padding-right:0;border-right:0}
+  .daw-row-main .transport-bar{order:3;flex-basis:100%}
+}
+/* On phones and short windows the wrapped header is too tall to pin. */
+@media(max-width:600px),(max-height:480px){
+  .workspace-header[data-pinned=true]{position:relative}
+  .header-pin{display:none}
 }
 @media(max-width:600px){
-  .workspace-intro .brand{font-size:9px;gap:7px;letter-spacing:1px;margin-bottom:12px}
   .workspace-edition{font-size:8px;padding-left:8px;margin-left:0}
-  .workspace-overview{grid-template-columns:minmax(0,1fr);gap:14px}
-  #workspace-title{font-size:35px}
-  .stem-preview{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
-  .preview-track{grid-template-columns:12px auto minmax(12px,1fr);gap:6px;padding:6px}
-  .preview-number{display:none}
-  .workspace-toolbar{grid-template-columns:minmax(0,1fr);gap:8px}
-  .header-library{grid-column:1}
+  .stem-preview{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .library-heading{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 }
 .eyebrow{font:10px/1.5 ui-monospace,SFMono-Regular,monospace;letter-spacing:1.6px;display:flex;align-items:center;gap:9px}
 main>.eyebrow{margin-top:34px}
@@ -205,7 +225,7 @@ select:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
 
 /* Compact PlayerTools workspace. */
 .source-cover{position:relative;display:grid;place-items:center;width:64px;height:64px;flex-shrink:0;overflow:hidden;border-radius:8px;background:var(--paper);border:1px solid var(--line);color:var(--orange)}
-.source-cover img{width:100%;height:100%;object-fit:cover}
+.source-cover img,.source-cover sc-icon{width:100%;height:100%;object-fit:cover}
 #artwork-fallback{display:grid;place-items:center}
 #artwork-fallback .icon{width:24px;height:24px}
 .studio-card{margin-top:16px;background:#202020;border:1px solid var(--line);border-radius:12px;overflow:hidden}
@@ -266,10 +286,10 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .waveform .stem-sample-handle{position:absolute;display:block;min-width:0;width:16px;height:16px;padding:0;border:1px solid #fdbb88;border-radius:3px;background:#6b3d22;color:#fff;font:700 10px Arial;cursor:ew-resize;pointer-events:auto;touch-action:none}
 .waveform .stem-sample-start{left:0;top:0;border-radius:0 3px 3px 0}
 .waveform .stem-sample-end{bottom:0;transform:translateX(-100%);border-radius:3px 0 0 3px}
-.stem-sample-end::after{content:'↔'}
+.stem-sample-handle sc-icon{width:10px;height:10px}
 .waveform .stem-sample-fadeIn,.waveform .stem-sample-fadeOut{top:35%;transform:translate(-50%,-50%);width:18px;height:18px;background:#ffd1ab;border:2px solid #653716}
-.stem-sample-fadeIn::after{content:'↗';color:#51250e}
-.stem-sample-fadeOut::after{content:'↘';color:#51250e}
+.stem-sample-fadeIn sc-icon{color:#51250e}
+.stem-sample-fadeOut sc-icon{color:#51250e}
 .waveform .stem-sample-handle:hover{background:#ffae78;color:#20130b}
 .waveform .stem-sample-handle:focus-visible{outline:2px solid #fff;outline-offset:2px;z-index:7}
 .waveform.is-placing-pad .stem-sample-handle{pointer-events:none}
@@ -284,8 +304,8 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 #play .icon{width:16px;height:16px}
 #audition{padding-top:12px}
 .prepare .utility-actions{margin-left:auto}
-.prepare.has-results #separate [data-copy],#toggle-game [data-copy]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-.prepare.has-results #separate,.prepare #toggle-game{display:grid;place-items:center;width:38px;height:34px;padding:0}
+body:has(.prepare.has-results) #separate [data-copy],#toggle-game [data-copy]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+body:has(.prepare.has-results) #separate,#toggle-game{display:grid;place-items:center;width:38px;height:34px;padding:0}
 
 .piano-scroll{max-width:100%;max-height:360px;overflow:auto;overscroll-behavior:contain;border:1px solid #444;border-radius:5px;background:#171717}
 .piano-sheet{--piano-steps:16;display:grid;grid-template-columns:46px minmax(0,1fr);grid-template-rows:24px 550px;min-width:calc(46px + var(--piano-steps)*26px)}
@@ -383,11 +403,12 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .pl-toolbar .stem-tempo{flex:0 1 auto}
 .pl-toolbar .stem-tempo .slider-wrap{flex:0 1 200px;min-width:105px}
 .pl-toolbar #stem-rate-value{width:auto;min-width:6ch;font-size:12px}
-.prepare #clear-cache [data-copy]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-.prepare #clear-cache{display:grid;place-items:center;width:34px;height:34px;padding:0;border-color:transparent}
-.prepare #clear-cache:hover{border-color:#484848;color:#ff9494}
-.prepare #clear-cache .icon{width:17px;height:17px}
-.prepare #status{margin-top:10px}
+#clear-cache [data-copy]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#clear-cache{display:grid;place-items:center;width:34px;height:34px;padding:0;border-color:transparent}
+#clear-cache:hover{border-color:#484848;color:#ff9494}
+#clear-cache .icon{width:17px;height:17px}
+/* Without the game the separation section is empty: status and progress live in the header. */
+.prepare:has(> #game-panel[hidden]){display:none}
 .prepare{padding-bottom:12px}
 /* Before separation the audition row holds the original waveform; afterwards it is empty. */
 #audition:not(:has(> :not([hidden]))){display:none}
@@ -402,7 +423,7 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .source-mini #artwork-fallback .icon{width:15px;height:15px}
 .source-mini h1.track{min-width:0;max-width:100%;margin:0;overflow:hidden;font-size:12px;line-height:1.3;letter-spacing:0;white-space:nowrap;text-overflow:ellipsis}
 /* One transport line: separate and play open it, model and game close it. */
-.transport-bar #play,.prepare.has-results #separate,.transport-bar #toggle-game,.prepare #clear-cache{width:34px;height:32px;min-height:0}
+.transport-bar #play,body:has(.prepare.has-results) #separate,.transport-bar #toggle-game,#clear-cache{width:34px;height:32px;min-height:0}
 .transport-bar #separate{min-height:32px;padding-block:0}
 
 /* Tool windows (stem-module-window.mjs): floating like FL Studio, or docked under the Playlist. */
@@ -414,7 +435,7 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .module-window .module-control{display:inline-grid;place-items:center;width:23px;height:22px;min-height:22px;padding:1px;border:1px solid #474747;border-radius:5px;background:#262626;color:#eee;cursor:pointer}
 .module-window .module-control:hover{border-color:#ff7b38;background:#3a251b;color:#fff}
 .module-window .module-control:focus-visible{outline:2px solid var(--orange);outline-offset:1px}
-.module-control svg{width:14px;height:14px}
+.module-control sc-icon{width:14px;height:14px}
 .module-window.is-floating{position:fixed;z-index:900;display:flex;flex-direction:column;margin:0;min-width:280px;min-height:160px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:hidden;resize:both;box-shadow:0 18px 48px #000c,0 0 0 1px #0006}
 .module-window.is-floating>.tool-section-header{flex:0 0 auto;cursor:move;touch-action:none;user-select:none}
 .module-window.is-floating>:not(.tool-section-header):not(style){flex:1 1 auto;min-height:0;overflow:auto}

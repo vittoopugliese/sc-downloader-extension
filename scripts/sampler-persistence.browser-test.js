@@ -38,7 +38,7 @@ const { chromium } = require('playwright');
         }, resolve));
       });
       for (const file of ['loop-audio-renderer.js', 'download-core.js', 'offscreen.js', 'tempo-control-core.js', 'sampler-core.js', 'parametric-eq.js',
-        'audio-effects-core.js', 'player-tools-collapsible.js', 'parametric-eq-ui.js', 'tempo-control-main.js']) {
+        'audio-effects-core.js', 'icons.js', 'player-tools-collapsible.js', 'parametric-eq-ui.js', 'tempo-control-main.js']) {
         await page.addScriptTag({ path: path.join(__dirname, file) });
       }
     };

@@ -159,7 +159,7 @@ const button = {
     path.resolve(__dirname, "looper.js"),
     "utf8"
   );
-  assert.match(looperSource, /assets\/icons\/download\.svg/);
+  assert.match(looperSource, /SCIcons\.create\("download"/);
   console.log("Loop click verification passed.");
 })().catch((error) => {
   console.error(error);

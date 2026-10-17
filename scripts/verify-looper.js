@@ -155,7 +155,9 @@ const lifecycleContext = vm.createContext({
   URL,
   document: documentStub,
   window: windowStub,
-  globalThis: {},
+  globalThis: { SCIcons: { create(name, className) {
+    const node = documentStub.createElementNS(null, 'sc-icon'); node.setAttribute('name', name); node.className = className; return node;
+  } } },
   SCLooperCore: core,
   MutationObserver: class {
     observe() {}
@@ -197,8 +199,8 @@ vm.runInContext("globalThis.__setLooperButtonState", lifecycleContext)(
   true
 );
 assert.equal(
-  rerenderedActiveButton.child?.child?.attributes.d,
-  "M5 5 19 19M19 5 5 19",
+  rerenderedActiveButton.child?.attributes.name,
+  "close",
   "An active loop button must restore its close icon after SoundCloud rerenders it"
 );
 

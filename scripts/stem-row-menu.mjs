@@ -6,7 +6,7 @@ const STYLES = `
 .row-menu{position:relative;display:inline-flex;min-width:0}
 .row-menu-toggle{display:inline-flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;max-width:100%;cursor:pointer;text-align:left}
 .row-menu-toggle .row-menu-value{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.row-menu-toggle svg{flex:0 0 auto;width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.row-menu-toggle sc-icon{flex:0 0 auto;width:10px;height:10px}
 .row-menu-toggle[aria-expanded=true]{border-color:#ff7b38}
 .row-menu-list{position:fixed;inset:auto;margin:0;width:max-content;min-width:180px;max-width:min(320px,calc(100vw - 16px));max-height:min(320px,calc(100vh - 16px));overflow:auto;padding:5px;border:1px solid #494949;border-radius:8px;background:#242424;color:#fff;box-shadow:0 8px 24px #0008;font:11px/1.4 system-ui,sans-serif}
 .row-menu-list p{margin:6px 8px;color:#aaa}
@@ -36,7 +36,7 @@ export function createRowMenu({ className = '', label, empty = '', placeholder =
   toggle.title = label; toggle.setAttribute('aria-label', label);
   const value = document.createElement('span'); value.className = 'row-menu-value';
   toggle.append(value);
-  toggle.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg>');
+  toggle.insertAdjacentHTML('beforeend', '<sc-icon name="down" aria-hidden="true"></sc-icon>');
   const menu = document.createElement('div'); menu.className = 'row-menu-list'; menu.id = id;
   menu.popover = 'auto'; menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', label);
   wrap.append(toggle, menu);
@@ -62,8 +62,8 @@ export function createRowMenu({ className = '', label, empty = '', placeholder =
       row.append(load);
       if (onDelete && item.deletable !== false) {
         const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'row-menu-delete';
-        remove.textContent = '×'; remove.title = deleteLabel(item.name); remove.setAttribute('aria-label', remove.title);
-        const disarm = () => { delete remove.dataset.armed; remove.classList.remove('is-armed'); remove.textContent = '×'; remove.setAttribute('aria-label', remove.title); };
+        remove.replaceChildren(globalThis.SCIcons.create('close')); remove.title = deleteLabel(item.name); remove.setAttribute('aria-label', remove.title);
+        const disarm = () => { delete remove.dataset.armed; remove.classList.remove('is-armed'); remove.replaceChildren(globalThis.SCIcons.create('close')); remove.setAttribute('aria-label', remove.title); };
         remove.onclick = event => {
           event.stopPropagation();
           if (confirm && !remove.dataset.armed) {
