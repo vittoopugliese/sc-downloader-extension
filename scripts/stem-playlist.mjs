@@ -624,6 +624,9 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   }
   function paint() {
     hbarSize.style.width = Math.max(0, scroll.scrollWidth - TRACK_HEAD) + 'px';
+    // The scrollbar row only shows when there are clips and something to scroll to.
+    const scrollable = state.clips.length > 0 && scroll.scrollWidth > scroll.clientWidth + 1;
+    if (hbarRow.hidden === scrollable) hbarRow.hidden = !scrollable;
     if (hbar.scrollLeft !== scroll.scrollLeft) hbar.scrollLeft = scroll.scrollLeft;
     const rect = grid.getBoundingClientRect(), y = Math.max(0, -rect.top);
     const height = Math.max(1, Math.min(rect.height - y, innerHeight - Math.max(0, rect.top)));

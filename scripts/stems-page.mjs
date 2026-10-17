@@ -20,7 +20,6 @@ const translations = {
     clearCacheTip: 'Remove model: deletes the 166 MB separation model from the browser cache to free space. Saved separations stay; the next separation downloads it again.', playTip: 'Play / pause the playlist (Space)', pauseTip: 'Pause the playlist (Space)', gameTip: 'Play Lumberjack while the stems are separated', transport: 'Transport',
     listenCompareLabel: 'Listen and compare', listen: 'Find your mix.', play: 'Play', stop: 'Pause', original: 'Original', mix: 'Stem mix',
     lows: 'Lows', mids: 'Mids', highs: 'Highs', position: 'Position',
-    footer: 'Audio stays on this device. Keep this tab open to retain your results.',
     ready: 'Ready. Separate this loop to compare the four stems.', preparing: 'Preparing the selected loop…', downloading: 'Downloading model',
     cache: 'Reading cached model', verify: 'Verifying model…', load: 'Loading separation model…', running: 'Separating segment',
     cancelled: 'Cancelled. You can try again.', cleared: 'Cached model removed.', complete: 'Stems ready. Inference time:',
@@ -39,7 +38,6 @@ const translations = {
     clearCacheTip: 'Eliminar modelo: borra de la caché del navegador el modelo de separación de 166 MB para liberar espacio. Las separaciones guardadas se conservan; la próxima separación lo vuelve a descargar.', playTip: 'Reproducir / pausar la playlist (Espacio)', pauseTip: 'Pausar la playlist (Espacio)', gameTip: 'Jugá a Lumberjack mientras se separan los stems', transport: 'Transporte',
     listenCompareLabel: 'Escuchar y comparar', listen: 'Encontrá tu mezcla.', play: 'Reproducir', stop: 'Pausar', original: 'Original', mix: 'Mezcla de stems',
     lows: 'Graves', mids: 'Medios', highs: 'Agudos', position: 'Posición',
-    footer: 'El audio permanece en este equipo. Mantené esta pestaña abierta para conservar los resultados.',
     ready: 'Listo. Separá este loop para comparar los cuatro stems.', preparing: 'Preparando el loop seleccionado…', downloading: 'Descargando modelo',
     cache: 'Leyendo modelo de la caché', verify: 'Verificando modelo…', load: 'Cargando modelo de separación…', running: 'Separando fragmento',
     cancelled: 'Cancelado. Podés volver a intentarlo.', cleared: 'Modelo eliminado de la caché.', complete: 'Stems listos. Tiempo de inferencia:',
@@ -58,7 +56,6 @@ const translations = {
     clearCacheTip: 'Modell entfernen: löscht das 166-MB-Trennmodell aus dem Browser-Cache, um Platz zu schaffen. Gespeicherte Trennungen bleiben erhalten; die nächste Trennung lädt es erneut herunter.', playTip: 'Playlist abspielen / pausieren (Leertaste)', pauseTip: 'Playlist pausieren (Leertaste)', gameTip: 'Lumberjack spielen, während die Stems getrennt werden', transport: 'Transport',
     listenCompareLabel: 'Anhören und vergleichen', listen: 'Finde deinen Mix.', play: 'Abspielen', stop: 'Pausieren', original: 'Original', mix: 'Stem-Mix',
     lows: 'Bässe', mids: 'Mitten', highs: 'Höhen', position: 'Position',
-    footer: 'Das Audio bleibt auf diesem Gerät. Lass diesen Tab geöffnet, um deine Ergebnisse zu behalten.',
     ready: 'Bereit. Trenne diesen Loop, um die vier Stems zu vergleichen.', preparing: 'Ausgewählter Loop wird vorbereitet…', downloading: 'Modell wird heruntergeladen',
     cache: 'Modell wird aus dem Cache gelesen', verify: 'Modell wird überprüft…', load: 'Trennungsmodell wird geladen…', running: 'Segment wird getrennt',
     cancelled: 'Abgebrochen. Du kannst es erneut versuchen.', cleared: 'Modell aus dem Cache entfernt.', complete: 'Stems sind fertig. Verarbeitungszeit:',
@@ -77,7 +74,6 @@ const translations = {
     clearCacheTip: 'Remover modelo: apaga do cache do navegador o modelo de separação de 166 MB para liberar espaço. As separações salvas continuam; a próxima separação baixa o modelo de novo.', playTip: 'Reproduzir / pausar a playlist (Espaço)', pauseTip: 'Pausar a playlist (Espaço)', gameTip: 'Jogue Lumberjack enquanto os stems são separados', transport: 'Transporte',
     listenCompareLabel: 'Ouvir e comparar', listen: 'Encontre sua mixagem.', play: 'Reproduzir', stop: 'Pausar', original: 'Original', mix: 'Mixagem de stems',
     lows: 'Graves', mids: 'Médios', highs: 'Agudos', position: 'Posição',
-    footer: 'O áudio permanece neste dispositivo. Mantenha esta aba aberta para preservar os resultados.',
     ready: 'Tudo pronto. Separe este loop para comparar os quatro stems.', preparing: 'Preparando o loop selecionado…', downloading: 'Baixando modelo',
     cache: 'Lendo modelo do cache', verify: 'Verificando modelo…', load: 'Carregando modelo de separação…', running: 'Separando segmento',
     cancelled: 'Cancelado. Você pode tentar novamente.', cleared: 'Modelo removido do cache.', complete: 'Stems prontos. Tempo de inferência:',
@@ -96,7 +92,6 @@ const translations = {
     clearCacheTip: 'Удалить модель: стирает из кэша браузера модель разделения на 166 МБ, чтобы освободить место. Сохранённые разделения остаются; при следующем разделении модель загрузится снова.', playTip: 'Воспроизвести / пауза плейлиста (Пробел)', pauseTip: 'Пауза плейлиста (Пробел)', gameTip: 'Играть в Lumberjack, пока стемы разделяются', transport: 'Транспорт',
     listenCompareLabel: 'Прослушать и сравнить', listen: 'Создайте свой микс.', play: 'Воспроизвести', stop: 'Пауза', original: 'Оригинал', mix: 'Микс стемов',
     lows: 'Низкие', mids: 'Средние', highs: 'Высокие', position: 'Позиция',
-    footer: 'Аудио остается на этом устройстве. Не закрывайте вкладку, чтобы сохранить результаты.',
     ready: 'Готово. Разделите этот луп, чтобы сравнить четыре стема.', preparing: 'Подготовка выбранного лупа…', downloading: 'Загрузка модели',
     cache: 'Чтение модели из кеша', verify: 'Проверка модели…', load: 'Загрузка модели разделения…', running: 'Разделение фрагмента',
     cancelled: 'Отменено. Можно попробовать еще раз.', cleared: 'Модель удалена из кеша.', complete: 'Стемы готовы. Время обработки:',
@@ -809,12 +804,6 @@ function renderInfo(value) {
   track.dataset.range = `A ${formatTwoDecimals.format(info.trimRange.startMs / 1000)} s → B ${formatTwoDecimals.format(info.trimRange.endMs / 1000)} s · ${formatTwoDecimals.format((info.trimRange.endMs - info.trimRange.startMs) / 1000)} s`;
   track.title = [title, track.dataset.meta, track.dataset.range].filter(Boolean).join('\n');
 }
-document.querySelector('footer [data-copy="footer"]').textContent = ({
-  es: 'El audio permanece en tu equipo. Activá Guardar localmente para conservar la separación.',
-  de: 'Audio bleibt auf deinem Gerät. Aktiviere „Lokal speichern“, um die Trennung zu behalten.',
-  'pt-BR': 'O áudio fica no seu dispositivo. Ative Salvar localmente para manter a separação.',
-  ru: 'Аудио остаётся на этом устройстве. Включите «Сохранить локально», чтобы сохранить разделение.',
-})[locale] || 'Audio stays on your device. Enable Save locally to keep this separation.';
 try {
   if (jobId) { renderInfo(await message('STEM_LOOP_INFO')); initialized = true; }
   setBusy(false); status(jobId ? text('ready') : localCopy[10]);

@@ -3,6 +3,8 @@
 #audition{padding-bottom:6px}
 #mixer{padding:0 18px 18px}
 #mixer #mix-tools{margin-top:4px}
+/* With every tool window closed or floating, the card ends at the playlist. */
+#mixer:not(:has(#mix-tools>section:not([hidden]))){display:none}
 @media(max-width:600px){#mixer{padding:0 14px 14px}}
 
 .pl-ui{--pl-head:236px;--pl-edge:#3b3b3b;--pl-panel:#292929;--pl-head-bg:#202020;--pl-night:#191919;--pl-muted:#b8b3ad}
@@ -42,6 +44,8 @@
 .pl-scroll::-webkit-scrollbar{display:none}
 /* Scrollbar under the lanes only. */
 .pl-hbar-row{display:flex;border:1px solid var(--pl-edge);border-top:0;border-radius:0 0 10px 10px;background:var(--pl-head-bg);overflow:hidden}
+.pl-hbar-row[hidden]{display:none}
+.pl-scroll:has(+.pl-hbar-row[hidden]){border-radius:0 0 10px 10px}
 .pl-hbar-corner{flex:0 0 var(--pl-head);border-right:1px solid var(--pl-edge)}
 .pl-hbar{flex:1 1 auto;min-width:0;height:14px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:#5a554f transparent}
 .pl-hbar>div{height:1px}

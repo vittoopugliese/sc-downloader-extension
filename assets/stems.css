@@ -138,8 +138,6 @@ input[type=checkbox]{accent-color:var(--orange)}
 .stem .waveform canvas{height:62px}
 .stem.is-silent .waveform{opacity:.38}
 .stem input:focus-visible{outline-offset:0}
-footer{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;padding-top:20px;margin-top:25px;border-top:1px solid var(--line);font-size:10px;color:var(--muted)}
-footer a{color:var(--ink);text-underline-offset:3px}
 ::selection{background:#713516;color:var(--ink)}
 @media(max-width:600px){main{padding:20px 16px 30px}
 h1{letter-spacing:-1.4px;margin-bottom:22px}
