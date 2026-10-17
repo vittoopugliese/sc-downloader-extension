@@ -329,6 +329,7 @@ const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('trans
   onChange() { reconcileChannels(); renderChannels(); instruments?.sync(); syncChannelEq(); libraryUI?.changed(); },
   // Selecting a pattern clip opens that pattern, as double-clicking one does in FL Studio.
   onSelect(asset) { if (asset?.pattern) instruments?.focusPattern(asset.id.slice('pattern:'.length)); },
+  onRackSample(key) { instruments.focus(key); channelRack.showChannels(); moduleWindows.rack?.reveal(); },
   onTransport(active) {
     if (active) instruments?.stop();
     toneNode?.port.postMessage({ rate, keepTone, reset: true }); playLabel(active); updatePlayheads();
@@ -384,7 +385,8 @@ const eqEffects = {
     return playlist.playing() ? song || audition : audition || song;
   },
 };
-const channelRack = mountChannelRack({ container: $('mix-tools'), instruments, ...pluginAudio, locale, report: playbackError });
+const channelRack = mountChannelRack({ container: $('mix-tools'), instruments, ...pluginAudio, locale, report: playbackError,
+  importSamples: dataTransfer => playlist.importRackDrop(dataTransfer) });
 const pianoRoll = mountPianoRoll({ container: $('mix-tools'), instruments, ...pluginAudio, report: playbackError });
 const effectsUI = mountEffects({ container: $('mix-tools'), effects: mixOutput.effects, t: say,
   changed: () => libraryUI?.changed(), report: playbackError,

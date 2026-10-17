@@ -15,3 +15,6 @@ repos
 
 # Chrome writes this in the working directory when launched with logging.
 debug.log
+
+# FL Studio icon extraction (Image-Line proprietary, local reference only)
+_fl-studio-icons/

@@ -216,6 +216,67 @@ const { chromium } = require('playwright');
     await reconnect.waitFor();
     await reconnect.click();
     await row('tone 2.wav').waitFor();
+    // Rack-only import: no lane/clip is created, and the new channel is focused.
+    const rack = page.locator('#stem-rack'), rackRows = rack.locator('.rack-channel');
+    const addToRack = dialog.getByRole('button', { name: 'Add to channel rack only', exact: true });
+    assert.equal(await addToRack.isDisabled(), true);
+    const laneCount = await playlist.locator('.pl-lane').count();
+    await row('tone 2.wav').click();
+    await addToRack.click();
+    await rack.locator('.rack-channel.is-selected', { hasText: 'tone 2.wav' }).waitFor();
+    assert.equal(await clips.count(), 0);
+    assert.equal(await playlist.locator('.pl-lane').count(), laneCount);
+    assert.equal(await rackRows.count(), 1);
+    assert.equal(await rack.locator('.rack-channel-mode').inputValue(), 'oneShot');
+    assert.equal(await playButton.getAttribute('aria-pressed'), 'false');
+    const firstChannel = await rackRows.first().getAttribute('data-channel');
+    // Undo/redo includes the imported asset even though it has no playlist clip.
+    await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('Control+z');
+    await page.waitForFunction(() => !document.querySelector('.rack-channel'));
+    await page.keyboard.press('Control+Shift+z');
+    await rackRows.first().waitFor();
+    assert.equal(await rackRows.first().getAttribute('data-channel'), firstChannel);
+    assert.equal(await clips.count(), 0);
+    // Arrange the two floating windows side by side for a real browser drag.
+    await page.evaluate(() => {
+      Object.assign(document.querySelector('.sb-window').style, { left: '8px', top: '8px', width: '360px', height: '480px' });
+      Object.assign(document.querySelector('#stem-rack').style, { left: '400px', top: '8px', width: '780px', height: '470px' });
+    });
+    await row('tone 10.wav').dragTo(rack.locator('.rack-overview'));
+    await rack.locator('.rack-channel.is-selected', { hasText: 'tone 10.wav' }).waitFor();
+    assert.equal(await rackRows.count(), 2);
+    assert.equal(await clips.count(), 0);
+    // External files use the same importer; an invalid batch leaves no partial samples.
+    const dropFiles = async names => page.evaluate(async names => {
+      const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle('Samples');
+      const dataTransfer = new DataTransfer();
+      for (const name of names) dataTransfer.items.add(await (await folder.getFileHandle(name)).getFile());
+      document.querySelector('#stem-rack').dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }));
+    }, names);
+    await dropFiles(['tone 2.wav', 'broken.wav']);
+    await page.locator('#status.error').waitFor();
+    assert.equal(await rackRows.count(), 2);
+    await dropFiles(['tone 2.wav', 'tone 10.wav']);
+    await page.waitForFunction(() => document.querySelectorAll('.rack-channel').length === 4);
+    assert.equal(await clips.count(), 0);
+    // A loaded library sample selects its existing rack channel without duplicating audio.
+    await page.evaluate(() => {
+      const source = document.querySelector('.pl-shelf button'), dataTransfer = new DataTransfer();
+      source.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer }));
+      document.querySelector('#stem-rack').dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }));
+    });
+    assert.equal(await rackRows.count(), 4);
+    assert.equal(await rack.locator('.rack-channel.is-selected').getAttribute('data-channel'), firstChannel);
+    // The focused sample can immediately make a pattern, and is shared with piano roll.
+    await rack.locator('.rack-channel.is-selected .rack-step').first().click();
+    assert.equal(await rack.locator('.rack-channel.is-selected .rack-step').first().getAttribute('aria-pressed'), 'true');
+    assert.equal(await clips.count(), 0);
+    await page.keyboard.press('F7');
+    await page.locator('#stem-piano-roll').waitFor();
+    assert.equal(await page.locator('#stem-piano-roll .plugin-track').inputValue(), firstChannel);
+    assert.equal(await page.locator('#stem-piano-roll .piano-sample').isVisible(), false, 'One-shot piano uses the whole imported sample');
+    await page.keyboard.press('F7');
+    await page.keyboard.press('F6');
     assert.deepEqual(errors, []);
     const artifacts = path.join(root, 'test-results'); fs.mkdirSync(artifacts, { recursive: true });
     await row('tone 2.wav').click();

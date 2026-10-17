@@ -471,3 +471,4 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .stem-plugin .rack-channel-root{width:56px;min-width:0;font-size:10px;padding:0 3px}
 .stem-plugin .rack-channel-play,.stem-plugin .rack-channel-chops{width:26px;min-width:26px;padding:0}
 @media(max-width:600px){.rack-channel{grid-template-columns:236px repeat(16,22px);min-width:0;width:max-content}.stem-plugin .rack-channel-mode{width:68px}.stem-plugin .rack-channel-root{width:48px}.stem-plugin .rack-channel-name{min-width:44px}}
+.stem-rack.is-sample-drop{outline:2px solid var(--orange,#ff5500);outline-offset:-2px}

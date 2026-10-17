@@ -4,9 +4,9 @@ import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
 import { bringToFront, isOnTop } from './stem-module-window.mjs';
 
 // Floating sample browser, like FL Studio's: pick a root folder, walk it, click a file to
-// preview it and drag it onto a Playlist track. It is not modal; the Playlist keeps working.
-// Files are only read when previewed or imported. `importSamples(items, track, at)` is the
-// Playlist importer; items are { name, read() } and read() resolves to { buffer } or { file }.
+// preview it and drag it onto a Playlist track or the channel rack. It is not modal.
+// Files are only read when previewed or imported. `importSamples` and `importToRack`
+// receive { name, read() } items; read() resolves to { buffer } or { file }.
 export const BROWSER_DRAG_TYPE = 'application/x-stem-browser';
 const ROW = 26, RECT_KEY = 'stem-sample-browser-rect', VOLUME_KEY = 'stem-sample-browser-volume';
 const ICONS = {
@@ -21,6 +21,7 @@ const ICONS = {
   play: 'M8 5v14l11-7z',
   stop: 'M7 7h10v10H7z',
   add: 'M12 5v14M5 12h14',
+  rack: 'M3 5h4v4H3zM10 5h3m4 0h4M3 14h4v4H3zM10 16h3m4-3v8m-4-4h8',
   volume: 'M4 9h4l5-4v14l-5-4H4zm12.5-.5a5 5 0 0 1 0 7',
 };
 const svg = path => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
@@ -29,7 +30,7 @@ const read = key => { try { return JSON.parse(localStorage.getItem(key)); } catc
 const write = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage blocked */ } };
 let instances = 0;
 
-export function mountSampleBrowser({ t, importSamples, onToggle }) {
+export function mountSampleBrowser({ t, importSamples, importToRack, onToggle }) {
   const id = `sb-${++instances}`;
   const previewer = createSamplePreview({ onState: renderPlaying });
   const folders = createFolderCache();
@@ -87,7 +88,9 @@ export function mountSampleBrowser({ t, importSamples, onToggle }) {
   previewer.setVolume(Number(volume.value) / 100);
   volume.oninput = () => { previewer.setVolume(Number(volume.value) / 100); write(VOLUME_KEY, Number(volume.value)); };
   const addButton = iconButton(ICONS.add, t('Add to playlist at the playhead (Enter)', 'Agregar a la playlist en el cursor (Enter)'), () => current && importEntry(current.entry, current.path));
-  controls.append(playButton, sampleName, duration, volumeLabel, addButton);
+  const rackButton = iconButton(ICONS.rack, t('Add to channel rack only', 'Agregar solo al channel rack'), () => current && importEntry(current.entry, current.path, true));
+  rackButton.hidden = !importToRack;
+  controls.append(playButton, sampleName, duration, volumeLabel, addButton, rackButton);
   viewer.append(wave, controls);
   const status = node('p', 'sb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   win.append(head, pathRow, list, empty, viewer, status);
@@ -339,8 +342,12 @@ export function mountSampleBrowser({ t, importSamples, onToggle }) {
     const buffer = previewer.take(path, file); previewer.clear();
     return buffer ? { buffer } : { file };
   } });
-  async function importEntry(entry, path) {
-    if (await importSamples([itemFor(entry, path)])) setStatus(t(`«${entry.name}» added to the playlist.`, `«${entry.name}» agregado a la playlist.`));
+  async function importEntry(entry, path, rack = false) {
+    try {
+      if (await (rack ? importToRack : importSamples)([itemFor(entry, path)])) setStatus(rack
+        ? t(`«${entry.name}» added to the channel rack.`, `«${entry.name}» agregado al channel rack.`)
+        : t(`«${entry.name}» added to the playlist.`, `«${entry.name}» agregado a la playlist.`));
+    } catch (error) { setStatus(errorText(error)); }
   }
 
   function renderViewer() {
@@ -348,7 +355,7 @@ export function mountSampleBrowser({ t, importSamples, onToggle }) {
     sampleName.textContent = current ? current.entry.name : t('No sample selected', 'Ningún sample seleccionado');
     sampleName.title = current?.path || '';
     duration.textContent = sample ? clock(sample.buffer.duration) : current?.loading ? '…' : '';
-    playButton.disabled = !current || !!current.error; addButton.disabled = !current || current.entry.kind !== 'file';
+    playButton.disabled = !current || !!current.error; rackButton.disabled = addButton.disabled = !current || current.entry.kind !== 'file';
     viewer.classList.toggle('is-error', !!current?.error);
     drawWave();
   }
@@ -417,7 +424,7 @@ export function mountSampleBrowser({ t, importSamples, onToggle }) {
     // A browser hidden behind another window comes to the front first.
     toggle(from) { if (win.hidden) open(from); else if (!isOnTop(win)) bringToFront(win); else close(); },
     isOpen: () => !win.hidden,
-    // Items for a drop on the Playlist, or null when the drag did not start here.
+    // Items for a drop on the Playlist or rack, or null if the drag did not start here.
     resolveDrop(dataTransfer) {
       if (!dragging || !dataTransfer?.types?.includes(BROWSER_DRAG_TYPE)) return null;
       const { entry, path } = dragging; dragging = null;

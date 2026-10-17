@@ -3,6 +3,7 @@ import { mountPadSampler } from './stem-sampler.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
 import { patternControls } from './stem-instruments.mjs';
 import { mountRackOverview } from './stem-rack-overview.mjs';
+import { BROWSER_DRAG_TYPE } from './stem-sample-browser.mjs';
 
 const svg = paths => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
 export const PLUGIN_ICONS = Object.freeze({
@@ -45,9 +46,24 @@ export function pluginShell({ container, id, title, icon, className }) {
 
 // FL Studio's channel rack for the focused track: its audio cut into eight pads
 // (A–K) on a waveform of that track, and the steps of the focused pattern.
-export function mountChannelRack({ container, instruments, audioContext, output, locale, report }) {
+export function mountChannelRack({ container, instruments, audioContext, output, locale, report, importSamples }) {
   const pt = globalThis.SCPlayerToolsText.t;
   const shell = pluginShell({ container, id: 'stem-rack', title: pt('Channel rack'), icon: PLUGIN_ICONS.rack, className: 'stem-rack' });
+  const acceptsDrop = event => importSamples && [BROWSER_DRAG_TYPE, 'Files', 'application/x-stem-sample'].some(type => event.dataTransfer?.types.includes(type));
+  shell.section.addEventListener('dragover', event => {
+    if (!acceptsDrop(event)) return;
+    event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'copy';
+    shell.section.classList.add('is-sample-drop');
+  });
+  shell.section.addEventListener('dragleave', event => {
+    if (!shell.section.contains(event.relatedTarget)) shell.section.classList.remove('is-sample-drop');
+  });
+  shell.section.addEventListener('drop', async event => {
+    shell.section.classList.remove('is-sample-drop');
+    if (!acceptsDrop(event)) return;
+    event.preventDefault(); event.stopPropagation();
+    try { await importSamples(event.dataTransfer); } catch (error) { report(error); }
+  });
   const element = (tag, className, text) => { const node = document.createElement(tag); node.className = className; if (text) node.textContent = text; return node; };
   const button = (className, title, html, action) => {
     const node = element('button', className); node.type = 'button'; node.title = title; node.setAttribute('aria-label', title);
@@ -331,6 +347,7 @@ export function mountChannelRack({ container, instruments, audioContext, output,
   render(); renderTransport();
   return {
     ...shell,
+    showChannels() { setRackView('channels'); },
     open() { shell.open(); requestAnimationFrame(() => { drawn = ''; drawWave(); sampler?.render(); }); },
     dispose() { cancelAnimationFrame(frame); waveObserver.disconnect(); overview.dispose(); sampler?.dispose(); shell.section.remove(); },
   };

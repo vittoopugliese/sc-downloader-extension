@@ -60,6 +60,24 @@ const { chromium } = require('playwright');
       return library.load(document.querySelector('#stem-presets').value);
     });
     assert.equal((await stored()).record.title, 'My saved mix');
+    // Rack-only audio is saved with the project, despite having no arrangement clip.
+    const clipsBeforeRackImport = (await stored()).record.settings.playlist.clips.length;
+    await page.evaluate(async () => {
+      const { encodeWav } = await import('./scripts/stem-audio.mjs');
+      const pcm = Float32Array.from({ length: 4410 }, (_, i) => .2 * Math.sin(i * 2 * Math.PI * 220 / 44100));
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(new File([encodeWav([pcm, pcm])], 'rack-only.wav', { type: 'audio/wav' }));
+      document.querySelector('#stem-rack').dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }));
+    });
+    const rackSample = page.locator('.rack-channel', { hasText: 'rack-only.wav' });
+    await rackSample.waitFor();
+    const rackSampleKey = await rackSample.getAttribute('data-channel'), rackSampleId = rackSampleKey.slice('sample-'.length);
+    await page.waitForFunction(async sampleId => {
+      const { StemPresets } = await import('./scripts/stem-presets.mjs');
+      const saved = await (await StemPresets.current()).load(document.querySelector('#stem-presets').value);
+      return saved.samples[sampleId]?.size > 44 && saved.record.settings.playlist.samples.some(sample => sample.id === sampleId);
+    }, rackSampleId);
+    assert.equal((await stored()).record.settings.playlist.clips.length, clipsBeforeRackImport);
     await page.locator('.pl-stem-head[data-stem=drums] .pad-knob').press('Home');
     await page.locator('.pl-stem-head[data-stem=drums] .pad-knob').press('Shift+ArrowUp');
     await page.locator('.pl-stem-head[data-stem=drums] .stem-enable').click();
@@ -89,6 +107,9 @@ const { chromium } = require('playwright');
     await page.locator('.pl-stem-head[data-stem=drums] .pad-knob').waitFor();
     assert.equal(await page.evaluate(() => inferences), 0, 'Loading never starts model inference');
     assert.equal(await page.locator('#track').textContent(), 'My saved mix');
+    assert.equal(await rackSample.getAttribute('data-channel'), rackSampleKey, 'Rack-only sample survives reopening');
+    assert.equal(await rackSample.locator('.rack-channel-mode').inputValue(), 'oneShot');
+    assert.equal((await stored()).record.settings.playlist.clips.length, clipsBeforeRackImport);
     assert.equal(await page.locator('.pl-stem-head[data-stem=drums] .pad-knob').getAttribute('aria-valuenow'), '10');
     assert.equal(await page.locator('.pl-stem-head[data-stem=drums] .stem-enable').getAttribute('aria-checked'), 'false');
     { await page.locator('.pl-stem-head[data-stem=drums] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
@@ -116,11 +137,12 @@ const { chromium } = require('playwright');
       const root = await navigator.storage.getDirectory();
       const directory = await (await root.getDirectoryHandle('PlayerTools-Stems')).getDirectoryHandle(id);
       const names = []; for await (const name of directory.keys()) names.push(name); return names.sort();
-    }, folderId), ['bass.wav', 'drums.wav', 'original.wav', 'other.wav', 'preset.json', 'vocals.wav']);
+    }, folderId), ['bass.wav', 'drums.wav', 'original.wav', 'other.wav', 'preset.json', `sample-${rackSampleId}.wav`, 'vocals.wav']);
     await page.reload();
     await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 1);
     await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${folderId}"] .row-menu-load`).click();
     await page.locator('.stem').first().waitFor();
+    assert.equal(await rackSample.getAttribute('data-channel'), rackSampleKey, 'Rack-only sample survives folder restoration');
     assert.equal(await page.evaluate(() => inferences), 0);
     await page.locator('#preset-reset').click();
     await page.waitForFunction(id => !!document.querySelector(`#stem-presets-menu .row-menu-row[data-id="${id}"]`), id);
@@ -210,7 +232,7 @@ const { chromium } = require('playwright');
       }
       await folder.remove(copy.id);
       return results;
-    }, id), [['kick-808'], [], ['kick-808'], []]);
+    }, id), [[rackSampleId, 'kick-808'], [rackSampleId], ['kick-808'], []]);
     // Delete from the menu: two steps, never opens the row; the open session stays and
     // autosave stops. The folder destination removes only that preset's folder.
     await page.setViewportSize({ width: 1200, height: 1000 });

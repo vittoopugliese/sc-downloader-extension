@@ -163,7 +163,7 @@ export function createKnob({ label, min, max, step, coarse, value, reset, format
 // `toolbarEnd` sits before the download button;
 // `inspectorControls` share the library row. Pattern library entries are owned by
 // the host: their Duplicate/Delete go through `onPatternAction(action, assetId)`.
-export function mountPlaylist({ container, windows = [], toolbarHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect }) {
+export function mountPlaylist({ container, windows = [], toolbarHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect, onRackSample }) {
   const es = document.documentElement.lang === 'es', t = (en, spanish) => es ? spanish : en;
   let state = emptyArrangement(), assets = new Map(), selected = null, extra = new Set(), zoom = 48, snap = .25;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
@@ -356,6 +356,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     detail: t('a floating window for a samples folder: click a file to preview it, drag it onto a track · B also opens it from the Playlist', 'una ventana flotante para una carpeta de samples: hacé clic en un archivo para escucharlo y arrastralo a una pista · B también lo abre desde la Playlist'),
     toggle(control) {
       sampleBrowser ||= mountSampleBrowser({ t, onToggle: open => control.setAttribute('aria-pressed', String(open)),
+        importToRack: items => importSamples(items, null),
         async importSamples(items) { try { return await importSamples(items); } catch (error) { report(error); return false; } } });
       sampleBrowser.toggle(control);
     } });
@@ -659,9 +660,10 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const firstUserTrack = () => state.tracks.find(track => !track.stem)?.id || state.tracks[0].id;
   // The one importer for the file picker, external drops and the sample browser. Items are
   // Files or { name, read() }, where read() resolves to { file } or an already decoded
-  // { buffer }. Track and time are fixed when the import starts. Resolves true when added.
+  // { buffer }. A null track imports into the project/rack without placing clips.
+  // Track and time are fixed when the import starts. Resolves true when added.
   async function importSamples(items, track = firstUserTrack(), at = position) {
-    if (operating) return false;
+    if (operating || !items.length) return false;
     operating = true; report(t('Reading samples…', 'Leyendo samples…'));
     try {
       const next = new Map(assets), additions = [];
@@ -675,9 +677,16 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
         if (buffer.duration > LIMITS.seconds || buffer.numberOfChannels > 2) throw new Error(t('Use mono/stereo samples up to 5 minutes.', 'Usá samples mono/estéreo de hasta 5 minutos.'));
         const asset = { id: uid(), name: String(item.name || source.file?.name || 'Sample').slice(0, 160), buffer, version: 0 }; next.set(asset.id, asset); additions.push(asset); checkBudget(next);
       }
-      assets = next;
-      const added = commit(() => { for (const asset of additions) { const clip = newClip(asset, track, at); state.clips.push(clip); pick(clip.id); at += clipDuration(clip); } });
-      if (added) report(t('Samples ready.', 'Samples listos.'));
+      const previous = assets;
+      const added = commit(() => {
+        assets = next;
+        if (track !== null) for (const asset of additions) { const clip = newClip(asset, track, at); state.clips.push(clip); pick(clip.id); at += clipDuration(clip); }
+      });
+      if (!added) { assets = previous; changed(); draw(); }
+      else {
+        report(t('Samples ready.', 'Samples listos.'));
+        if (track === null) onRackSample?.(`sample-${additions.at(-1).id}`);
+      }
       return added;
     } finally { operating = false; }
   }
@@ -1167,6 +1176,17 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   draw(); animate();
   return {
     toggle: safe(toggle), space: safe(space), pause: () => stop(), seek, now, playing, setSession, edit, draw,
+    async importRackDrop(dataTransfer) {
+      // Capture files/items before awaiting: browser drag data is only readable during drop.
+      const browsed = sampleBrowser?.resolveDrop(dataTransfer);
+      if (browsed) return importSamples(browsed, null);
+      if (dataTransfer.files.length) return importSamples([...dataTransfer.files], null);
+      const asset = assets.get(dataTransfer.getData('application/x-stem-sample'));
+      if (!asset || asset.pattern) return false;
+      const track = state.tracks.find(track => trackSource(track.id)?.id === asset.id);
+      onRackSample?.(track ? track.stem || track.id : `sample-${asset.id}`);
+      return true;
+    },
     track: stem => state.tracks.find(track => track.id === stem || track.stem === stem),
     tracks: () => state.tracks,
     instrumentSources() {
