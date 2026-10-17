@@ -104,7 +104,6 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
 .icon{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 [data-icon]{display:inline-flex}
 .utility-actions{display:flex;align-items:center;gap:7px;margin-left:auto;min-width:0}
-#clear-cache{border-color:transparent;color:var(--muted);font-size:11px}
 progress{width:100%;height:6px;margin-top:22px;accent-color:var(--orange)}
 #status{margin:16px 0 0;font-size:12px;min-height:19px;color:#a5bc91}
 #status.error{color:#ff9494}
@@ -161,7 +160,6 @@ h1{letter-spacing:-1.4px;margin-bottom:22px}
 .local-tag{font-size:9px}
 .actions{gap:8px}
 .utility-actions{margin-left:0;max-width:100%}
-#clear-cache{padding-left:0;white-space:normal;text-align:left}
 .transport{gap:9px;flex-wrap:wrap}
 .transport label{font-size:11px}
 .studio-label{font-size:8px}
@@ -288,8 +286,6 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 #status:empty{display:none}
 #audition{padding-top:12px}
 .prepare .utility-actions{margin-left:auto}
-body:has(.prepare.has-results) #separate [data-copy]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-body:has(.prepare.has-results) #separate{display:grid;place-items:center;width:38px;height:34px;padding:0}
 
 .piano-scroll{max-width:100%;max-height:360px;overflow:auto;overscroll-behavior:contain;border:1px solid #444;border-radius:5px;background:#171717}
 .piano-sheet{--piano-steps:16;display:grid;grid-template-columns:46px minmax(0,1fr);grid-template-rows:24px 550px;min-width:calc(46px + var(--piano-steps)*26px)}
@@ -387,10 +383,6 @@ body:has(.prepare.has-results) #separate{display:grid;place-items:center;width:3
 .pl-toolbar .stem-tempo{flex:0 1 auto}
 .pl-toolbar .stem-tempo .slider-wrap{flex:0 1 200px;min-width:105px}
 .pl-toolbar #stem-rate-value{width:auto;min-width:6ch;font-size:12px}
-#clear-cache [data-copy]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-#clear-cache{display:grid;place-items:center;width:34px;height:34px;padding:0;border-color:transparent}
-#clear-cache:hover{border-color:#484848;color:#ff9494}
-#clear-cache .icon{width:17px;height:17px}
 /* Without the game the separation section is empty: status and progress live in the header. */
 .prepare:has(> #game-panel[hidden]){display:none}
 .prepare{padding-bottom:12px}
@@ -406,9 +398,6 @@ body:has(.prepare.has-results) #separate{display:grid;place-items:center;width:3
 .source-mini .source-cover{width:30px;height:30px;border-radius:5px}
 .source-mini #artwork-fallback .icon{width:15px;height:15px}
 .source-mini h1.track{min-width:0;max-width:100%;margin:0;overflow:hidden;font-size:12px;line-height:1.3;letter-spacing:0;white-space:nowrap;text-overflow:ellipsis}
-/* One transport line: separate and play open it, model and game close it. */
-body:has(.prepare.has-results) #separate,#clear-cache{width:34px;height:32px;min-height:0}
-.transport-bar #separate{min-height:32px;padding-block:0}
 
 /* Tool windows (stem-module-window.mjs): floating like FL Studio, or docked under the Playlist. */
 .module-window[hidden]{display:none!important}
@@ -477,3 +466,36 @@ body:has(.prepare.has-results) #separate,#clear-cache{width:34px;height:32px;min
 .stem-plugin .rack-channel-play,.stem-plugin .rack-channel-chops{width:26px;min-width:26px;padding:0}
 @media(max-width:600px){.rack-channel{grid-template-columns:236px repeat(16,22px);min-width:0;width:max-content}.stem-plugin .rack-channel-mode{width:68px}.stem-plugin .rack-channel-root{width:48px}.stem-plugin .rack-channel-name{min-width:44px}}
 .stem-rack.is-sample-drop{outline:2px solid var(--orange,#ff5500);outline-offset:-2px}
+
+/* Extract stems window (stem-extract-dialog.mjs), after FL Studio's "Extract stems from
+   sample": round LED toggles, a "when done" action, the progress bar and the actions. */
+.extract-dialog{width:min(400px,calc(100vw - 32px));padding:0;overflow:hidden;border:1px solid #4a4744;border-radius:10px;background:#2b2a28;color:var(--ink);box-shadow:0 18px 48px #000c}
+.extract-dialog::backdrop{background:#0009}
+.extract-head{display:flex;align-items:flex-start;gap:10px;padding:12px 10px 10px 16px;border-bottom:1px solid #3b3936;background:linear-gradient(180deg,#33312e,#2b2a28)}
+.extract-head>div{flex:1;min-width:0}
+.extract-head h3{margin:0;font-size:13px;font-weight:700}
+.extract-source{margin:2px 0 0;overflow:hidden;font:10px ui-monospace,monospace;color:#ffad80;white-space:nowrap;text-overflow:ellipsis}
+.extract-source:empty{display:none}
+.extract-body{display:grid;gap:14px;padding:16px}
+.extract-stems{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px;margin:0;padding:0;border:0}
+.extract-stems legend{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.extract-led{display:flex;align-items:center;gap:9px;min-width:0;font-size:12px;cursor:pointer}
+.extract-led input{appearance:none;-webkit-appearance:none;flex-shrink:0;width:15px;height:15px;margin:0;border:1px solid #1a1a1a;border-radius:50%;background:radial-gradient(circle at 40% 35%,#4a4846,#262524);box-shadow:inset 0 1px 2px #000a,0 0 0 1px #ffffff10;cursor:pointer}
+.extract-led input:checked{background:radial-gradient(circle at 40% 35%,#ffe3c9,#ff9a5c 45%,#e15a12);box-shadow:0 0 6px #ff7b3888,inset 0 0 0 1px #ffffff40}
+.extract-led input:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.extract-led input:disabled,.extract-dialog select:disabled{opacity:.5;cursor:not-allowed}
+.extract-when{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700}
+.extract-when select{height:28px;min-width:150px;padding:0 6px;border:1px solid #45423e;border-radius:5px;background:#1d1c1b;color:var(--ink);font:12px Arial,Helvetica,sans-serif}
+.extract-meter{display:grid;gap:6px}
+.extract-meter progress{width:100%;height:14px;margin:0;appearance:none;-webkit-appearance:none;border:1px solid #3b3936;border-radius:3px;background:#1d1c1b;overflow:hidden;clip-path:polygon(0 0,calc(100% - 9px) 0,100% 50%,calc(100% - 9px) 100%,0 100%)}
+.extract-meter progress::-webkit-progress-bar{background:#1d1c1b}
+.extract-meter progress::-webkit-progress-value{background:linear-gradient(90deg,#c94000,#ff6b18)}
+.extract-meter progress::-moz-progress-bar{background:linear-gradient(90deg,#c94000,#ff6b18)}
+.extract-message{min-height:15px;margin:0;font:10.5px/1.4 ui-monospace,monospace;color:#c4c0ba}
+.extract-note{margin:0;font-size:10.5px;line-height:1.5;color:var(--muted)}
+.extract-actions{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid #3b3936;background:#242321}
+.extract-spacer{flex:1}
+.extract-actions .extract-clear{padding:0 6px;font-weight:400;color:#a29d97}
+.extract-actions .extract-clear:hover:enabled{color:#ff9494}
+.extract-close .ui-btn-icon{width:13px;height:13px}
+@media(max-width:420px){.extract-actions{flex-wrap:wrap}.extract-actions .extract-clear{order:3;width:100%}}

@@ -53,8 +53,8 @@ const { chromium } = require('playwright');
     await page.locator('#separate').click();
     await page.waitForFunction(() => document.querySelectorAll('.pl-stem-head').length === 5);
     await page.locator('.pl-scroll').scrollIntoViewIfNeeded();
-    // Wait for asynchronous spectral analysis on all five buffers.
-    await page.waitForFunction(() => globalThis.testAnalyzed === 5);
+    // Wait for asynchronous spectral analysis of the four stems (the original was analyzed on arrival).
+    await page.waitForFunction(() => globalThis.testAnalyzed >= 4);
     await page.locator('#play').click();
     // Looping playback schedules passes ahead; the first five sources are the first pass.
     await page.waitForFunction(() => globalThis.testSources.length >= 5);

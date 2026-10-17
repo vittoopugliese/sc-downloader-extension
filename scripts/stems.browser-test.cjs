@@ -7,6 +7,17 @@ const crypto = require('node:crypto');
 const http = require('node:http');
 const { chromium } = require('playwright');
 
+// The extraction window opens on arrival and blocks the page, like FL Studio's. Close it to
+// use the header; reopen it from the Original clip's right-click menu.
+async function closeExtract(page) { await page.locator('#extract-dialog[open]').waitFor(); await page.keyboard.press('Escape'); await page.locator('#extract-dialog').waitFor({ state: 'hidden' }); }
+async function reopenExtract(page) {
+  const title = page.locator('.pl-grid-row:has([data-stem="original"]) .pl-clip-title').first();
+  await title.scrollIntoViewIfNeeded(); const box = await title.boundingBox();
+  await page.mouse.click(box.x + Math.min(box.width - 10, 240), box.y + 5, { button: 'right' });
+  await page.locator('.pl-menu-item', { hasText: /Extract stems|Separar stems/ }).click();
+  await page.locator('#extract-dialog[open]').waitFor();
+}
+
 (async () => {
   const root = path.resolve(__dirname, '..');
   const artifacts = path.join(root, 'test-results/stems');
@@ -180,7 +191,7 @@ const { chromium } = require('playwright');
     await page.locator('#stem-rate').evaluate((node, value) => { node.value = value; node.dispatchEvent(new Event('input', { bubbles: true })); }, '0.5');
     await page.locator('#stem-keep-tone').check();
     await page.locator('#play').click();
-    await page.waitForFunction(() => document.querySelector('#play svg path')?.getAttribute('d') === 'M8 4v16M16 4v16');
+    await page.waitForFunction(() => document.querySelector('#play')?.getAttribute('aria-pressed') === 'true');
     await page.waitForTimeout(250);
     const originalEnable = page.locator('.pl-stem-head[data-stem=original] .stem-enable');
     assert.equal(await originalEnable.getAttribute('aria-checked'), 'false', 'With stems, the original starts muted');
@@ -192,9 +203,10 @@ const { chromium } = require('playwright');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.screenshot({ path: path.join(artifacts, 'stems-mobile.png'), fullPage: true });
     const completed = await page.locator('#status').textContent();
+    await reopenExtract(page);
     await page.locator('#separate').click();
     await page.locator('#cancel').click();
-    await page.waitForFunction(() => document.getElementById('cancel').hidden);
+    await page.waitForFunction(() => !document.getElementById('separate').disabled);
     assert.equal(await page.locator('.pl-stem-head:not([data-stem=original])').count(), 4, 'Cancelling a retry preserves the previous stems.');
     assert.equal(await page.locator('#separate').isEnabled(), true);
     // A separate extension page can restore the actual inference output with no
@@ -208,7 +220,7 @@ const { chromium } = require('playwright');
     assert.equal(await savedPage.locator('#stem-rate').inputValue(), '0.5');
     assert.equal(await savedPage.locator('#stem-keep-tone').isChecked(), true);
     await savedPage.locator('#play').click();
-    await savedPage.waitForFunction(() => document.querySelector('#play svg path')?.getAttribute('d') === 'M8 4v16M16 4v16');
+    await savedPage.waitForFunction(() => document.querySelector('#play')?.getAttribute('aria-pressed') === 'true');
     await savedPage.close();
     // Import through the actual MV3 file input and run the same pinned model,
     // without any SoundCloud job or background rendering.
@@ -220,6 +232,7 @@ const { chromium } = require('playwright');
     await localPage.locator('#import-dialog').waitFor();
     await localPage.locator('#import-confirm').click();
     await localPage.locator('#separate').click();
+    await localPage.locator('#extract-dialog').waitFor({ state: 'hidden', timeout: 900000 }).catch(() => {});
     await localPage.waitForFunction(() => document.querySelectorAll('.pl-stem-head:not([data-stem=original])').length === 4 || document.getElementById('status').classList.contains('error'), null, { timeout: 900000 });
     assert.equal(await localPage.locator('.pl-stem-head:not([data-stem=original])').count(), 4, await localPage.locator('#status').textContent());
     await localPage.locator('#save-locally').click();

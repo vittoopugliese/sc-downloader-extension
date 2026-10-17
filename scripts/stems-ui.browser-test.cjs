@@ -44,6 +44,17 @@ const { chromium } = require('playwright');
       const send = chrome.runtime.sendMessage;
       chrome.runtime.sendMessage = async request => ({ ...await send(request), ...(request.type === 'STEM_LOOP_INFO'
         ? { artist: 'Fixture artist', durationMs: 185000, artworkUrl: 'https://i1.sndcdn.com/stems-fixture.jpg' } : {}) });
+      // The loop renders on arrival; the first render fails so the window offers a retry.
+      const deliver = chrome.runtime.sendMessage;
+      let failRender = true;
+      chrome.runtime.sendMessage = request => {
+        if (request.type === 'STEM_LOOP_RENDER' && failRender) {
+          failRender = false;
+          return Promise.resolve({ success: false, code: 'not_found', status: 404,
+            error: 'Stream link expired (404). https://media.test/audio?token=secret' });
+        }
+        return deliver(request);
+      };
       globalThis.Worker = class {
         postMessage({ channels }) { this.timer = setTimeout(() => this.onmessage?.({ data: { type: 'complete', seconds: .1,
           outputs: [1, .7, .4, .2].map(gain => channels.map(channel => channel.map(value => value * gain))) } }), 30); }
@@ -62,23 +73,13 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('.pl-play').count(), 0, 'One play button: the header one');
     assert.equal(await page.locator('#track').getAttribute('data-meta'), 'Fixture artist · 3:05');
     assert.equal(await page.locator('#artwork-fallback').isVisible(), false);
-    await page.evaluate(() => {
-      const send = chrome.runtime.sendMessage;
-      let fail = true;
-      chrome.runtime.sendMessage = request => {
-        if (request.type === 'STEM_LOOP_RENDER' && fail) {
-          fail = false;
-          return Promise.resolve({ success: false, code: 'not_found', status: 404,
-            error: 'Stream link expired (404). https://media.test/audio?token=secret' });
-        }
-        return send(request);
-      };
-    });
-    await page.locator('#separate').click();
     await page.waitForFunction(() => document.querySelector('#status').classList.contains('error'));
     const preparationError = await page.locator('#status').textContent();
     assert.match(preparationError, /Stream link expired \(404\)/, 'Preparation errors retain the backend reason');
     assert.doesNotMatch(preparationError, /media\.test|token=secret/, 'Signed media URLs are not displayed');
+    assert.equal(await page.locator('#extract-dialog').isVisible(), true, 'The extraction window opens on arrival');
+    assert.match(await page.locator('.extract-message').textContent(), /Stream link expired/);
+    // Separate retries the render, then separates.
     await page.locator('#separate').click();
     await page.locator('.pl-stem-head[data-stem=vocals]').waitFor();
     const playlist = page.locator('#playlist'), drumHead = page.locator('.pl-stem-head[data-stem=drums]');

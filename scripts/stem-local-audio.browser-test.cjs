@@ -6,6 +6,17 @@ const path = require('node:path');
 const http = require('node:http');
 const { chromium } = require('playwright');
 
+// The extraction window opens on arrival and blocks the page, like FL Studio's. Close it to
+// use the header; reopen it from the Original clip's right-click menu.
+async function closeExtract(page) { await page.locator('#extract-dialog[open]').waitFor(); await page.keyboard.press('Escape'); await page.locator('#extract-dialog').waitFor({ state: 'hidden' }); }
+async function reopenExtract(page) {
+  const title = page.locator('.pl-grid-row:has([data-stem="original"]) .pl-clip-title').first();
+  await title.scrollIntoViewIfNeeded(); const box = await title.boundingBox();
+  await page.mouse.click(box.x + Math.min(box.width - 10, 240), box.y + 5, { button: 'right' });
+  await page.locator('.pl-menu-item', { hasText: /Extract stems|Separar stems/ }).click();
+  await page.locator('#extract-dialog[open]').waitFor();
+}
+
 (async () => {
   const root = path.resolve(__dirname, '..');
   const artifacts = path.join(root, 'test-results/stem-local-audio');
@@ -59,7 +70,9 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('#track').textContent(), 'Mi grabación');
     assert.match(await page.locator('#track').getAttribute('data-meta'), /My recording.wav.*1 ch.*2:05/);
     assert.match(await page.locator('#track').getAttribute('data-range'), /122,00.*125,00.*3,00/);
+    await closeExtract(page);
     await page.locator('#save-locally').click(); await page.locator('#save-confirm').click();
+    await reopenExtract(page);
     await page.locator('#separate:not(:disabled)').waitFor(); await page.locator('#separate').click();
     await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
     const id = await page.locator('#stem-presets').evaluate(node => node.value);

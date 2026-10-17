@@ -5,6 +5,17 @@ const path = require('node:path');
 const http = require('node:http');
 const { chromium } = require('playwright');
 
+// The extraction window opens on arrival and blocks the page, like FL Studio's. Close it to
+// use the header; reopen it from the Original clip's right-click menu.
+async function closeExtract(page) { await page.locator('#extract-dialog[open]').waitFor(); await page.keyboard.press('Escape'); await page.locator('#extract-dialog').waitFor({ state: 'hidden' }); }
+async function reopenExtract(page) {
+  const title = page.locator('.pl-grid-row:has([data-stem="original"]) .pl-clip-title').first();
+  await title.scrollIntoViewIfNeeded(); const box = await title.boundingBox();
+  await page.mouse.click(box.x + Math.min(box.width - 10, 240), box.y + 5, { button: 'right' });
+  await page.locator('.pl-menu-item', { hasText: /Extract stems|Separar stems/ }).click();
+  await page.locator('#extract-dialog[open]').waitFor();
+}
+
 (async () => {
   const root = path.resolve(__dirname, '..');
   const { encodeWav } = await import('./stem-audio.mjs');
@@ -72,6 +83,7 @@ const { chromium } = require('playwright');
     const id = await page.locator('#stem-presets').evaluate(node => node.value);
     const savedValues = await fx.locator('[data-fx-setting]').evaluateAll(nodes => Object.fromEntries(nodes.map(n => [n.dataset.fxSetting, n.value || n.getAttribute('aria-valuenow')])));
     await page.reload();
+    await closeExtract(page);
     await page.locator('#stem-presets:not(:disabled)').waitFor();
     await page.locator('#stem-presets').click();
     await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();

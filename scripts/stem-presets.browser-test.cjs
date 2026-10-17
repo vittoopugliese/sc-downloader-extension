@@ -4,6 +4,17 @@ const path = require('node:path');
 const http = require('node:http');
 const { chromium } = require('playwright');
 
+// The extraction window opens on arrival and blocks the page, like FL Studio's. Close it to
+// use the header; reopen it from the Original clip's right-click menu.
+async function closeExtract(page) { await page.locator('#extract-dialog[open]').waitFor(); await page.keyboard.press('Escape'); await page.locator('#extract-dialog').waitFor({ state: 'hidden' }); }
+async function reopenExtract(page) {
+  const title = page.locator('.pl-grid-row:has([data-stem="original"]) .pl-clip-title').first();
+  await title.scrollIntoViewIfNeeded(); const box = await title.boundingBox();
+  await page.mouse.click(box.x + Math.min(box.width - 10, 240), box.y + 5, { button: 'right' });
+  await page.locator('.pl-menu-item', { hasText: /Extract stems|Separar stems/ }).click();
+  await page.locator('#extract-dialog[open]').waitFor();
+}
+
 (async () => {
   const root = path.resolve(__dirname, '..');
   const { encodeWav } = await import('./stem-audio.mjs');
@@ -42,6 +53,7 @@ const { chromium } = require('playwright');
     const url = `http://127.0.0.1:${server.address().port}/stems.html?job=test`;
     await page.goto(url);
     await page.locator('#save-locally:not(:disabled)').waitFor();
+    await closeExtract(page);
     assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'false');
     await page.locator('#save-locally').click();
     await page.locator('#save-cancel').click();
@@ -51,6 +63,7 @@ const { chromium } = require('playwright');
     await page.locator('#save-confirm').click();
     await page.locator('#save-locally[aria-pressed=true]').waitFor();
     assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'true');
+    await reopenExtract(page);
     await page.locator('#separate').click();
     await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
     const id = await page.locator('#stem-presets').evaluate(node => node.value);

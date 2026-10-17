@@ -6,8 +6,9 @@ import { createStemLoop } from './stem-loop.mjs';
 import { SAMPLE_RATE, MAX_SECONDS, STEMS, encodeWav } from './stem-audio.mjs';
 import { MODEL } from './stem-model.mjs';
 import { mountStemLibrary } from './stem-library-ui.mjs';
-import { contextMenu, createKnob, mountPlaylist } from './stem-playlist.mjs';
+import { CHANNEL_COLORS, contextMenu, createKnob, mountPlaylist } from './stem-playlist.mjs';
 import { setButtonContent } from './ui-button.mjs';
+import { mountExtractDialog } from './stem-extract-dialog.mjs';
 import { mountModuleWindow } from './stem-module-window.mjs';
 import { mountEffects } from './stem-effects.mjs';
 import { spectrumOf } from './stem-spectrum.mjs';
@@ -29,7 +30,7 @@ const translations = {
     resetVolume: 'Double-click to reset', another: 'Another tab is separating audio. Wait for it to finish or cancel it first.',
     failed: 'Separation failed. Retry, or try a shorter loop and close other heavy tabs.', prepareFailed: 'The extension could not prepare this loop.',
     infoFailed: 'The selected loop could not be loaded.', timeout: 'Separation timed out. Try a shorter loop.', invalidAudio: 'The loop audio is invalid.',
-    tooLong: 'The rendered loop exceeds 2 minutes.', cacheClearFailed: 'The cached model could not be removed.', playbackFailed: 'Audio playback could not start.', loop: 'Loop',
+    tooLong: 'The rendered loop exceeds 2 minutes.', clipTooLong: 'Trim the clip to 2 minutes or less to separate it.', cacheClearFailed: 'The cached model could not be removed.', playbackFailed: 'Audio playback could not start.', loop: 'Loop',
   },
   es: {
     pageTitle: 'Separador de stems · Player Tools', workspace: 'Separá. Mezclá. Hacelo tuyo.', experimental: 'Experimental', selected: 'LOOP SELECCIONADO',
@@ -47,7 +48,7 @@ const translations = {
     resetVolume: 'Doble clic para restablecer', another: 'Otra pestaña está separando audio. Esperá a que termine o cancelala primero.',
     failed: 'No se pudo separar. Reintentá o probá un loop más corto y cerrá otras pestañas pesadas.', prepareFailed: 'La extensión no pudo preparar este loop.',
     infoFailed: 'No se pudo cargar el loop seleccionado.', timeout: 'La separación tardó demasiado. Probá con un loop más corto.', invalidAudio: 'El audio del loop no es válido.',
-    tooLong: 'El loop procesado supera los 2 minutos.', cacheClearFailed: 'No se pudo eliminar el modelo de la caché.', playbackFailed: 'No se pudo iniciar la reproducción.', loop: 'Loop',
+    tooLong: 'El loop procesado supera los 2 minutos.', clipTooLong: 'Recortá el clip a 2 minutos o menos para separarlo.', cacheClearFailed: 'No se pudo eliminar el modelo de la caché.', playbackFailed: 'No se pudo iniciar la reproducción.', loop: 'Loop',
   },
   de: {
     pageTitle: 'Stem-Extraktor · Player Tools', workspace: 'Trennen. Mischen. Deinen Sound finden.', experimental: 'Experimentell', selected: 'AUSGEWÄHLTER LOOP',
@@ -119,9 +120,7 @@ document.querySelectorAll('[data-copy]').forEach(node => { node.textContent = te
 document.querySelectorAll('[data-copy-title]').forEach(node => { node.title = text(node.dataset.copyTitle); node.setAttribute('aria-label', node.title); });
 document.querySelectorAll('[data-copy-aria-label]').forEach(node => { node.setAttribute('aria-label', text(node.dataset.copyAriaLabel)); });
 const icon = name => globalThis.SCIcons.create(name, "icon");
-$('separate').title = `${text('separate')} · ${text('details')}`;
 $('toggle-game').title = text('gameTip'); $('toggle-game').setAttribute('aria-label', text('playGame'));
-$('clear-cache').title = text('clearCacheTip'); $('clear-cache').setAttribute('aria-label', text('clearCache'));
 $('transport').setAttribute('aria-label', text('transport'));
 // Inside the shared buttons the icon takes the button's own size.
 document.querySelectorAll('[data-icon]').forEach(node => {
@@ -272,7 +271,7 @@ document.addEventListener('visibilitychange', () => {
 });
 const jobId = new URL(location.href).searchParams.get('job');
 let original, buffers = [], context, outputs = [], urls = [];
-let busy = false, revision = 0, worker, rejectWorker, title = text('loop'), initialized = false;
+let busy = false, separating = false, revision = 0, worker, rejectWorker, title = text('loop'), initialized = false;
 let info = null, wavs = [], rate = 1, keepTone = false, toneNode, toneReady, toneLatency = 0, libraryOperating = false;
 let libraryUI, importReady = false;
 // The playlist is the only song transport. Each stem is a channel whose header persists
@@ -299,9 +298,18 @@ const WINDOWS = [
   { id: 'recorder', icon: 'recorder', name: say('Recorder', 'Grabadora'), key: 'F10', keys: ['f10'], color: '#ff4d6d',
     detail: say('records the final mix to a WAV', 'graba la mezcla final en un WAV') },
 ].map(item => ({ ...item, toggle: () => moduleWindows[item.id]?.toggle() }));
+// "Extract stems" window: opened from a clip's right-click menu, and on arrival of a loop,
+// a recording or an imported file.
+const extractDialog = mountExtractDialog({ t: say, stemName: stem => text(stem),
+  onExtract: options => separate(options), onCancel: () => cancel(), onClearModel: () => clearModel() });
+setButtonContent($('clear-cache'), { icon: 'trash', label: text('clearCache') });
+$('clear-cache').title = text('clearCacheTip'); $('clear-cache').setAttribute('aria-label', text('clearCache'));
+$('separate').title = text('details');
 const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('transport'), playButton: false, windows: WINDOWS,
-  // One line: separate and play, tempo and speed, edits, then model and game utilities.
-  toolbarStart: [$('separate'), $('cancel'), $('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [$('clear-cache'), $('toggle-game')],
+  // One line: play, tempo and speed, then the game, the windows and the export.
+  toolbarStart: [$('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [$('toggle-game')],
+  // Right-click > Extract stems… on any audio clip opens the extraction window.
+  onSeparate: target => openExtract(target),
   onPatternAction(action, id) { const pattern = id.slice('pattern:'.length); if (action === 'duplicate') instruments?.duplicatePattern(pattern); else instruments?.deletePattern(pattern); },
   audio: playlistAudio, channel: channelForTrack,
   // The master EQ is the last insert of the WAV export too.
@@ -492,7 +500,7 @@ $('import-audio').onclick = () => $('audio-file').click();
 $('audio-file').onchange = async event => {
   const file = event.target.files[0]; event.target.value = '';
   if (!file || busy || libraryOperating) return;
-  setBusy(true); $('cancel').hidden = true; status(localCopy[7]);
+  setBusy(true); status(localCopy[7]);
   try {
     if (!file.size || file.size > 256 * 1024 * 1024) throw new Error('Invalid file size (maximum 256 MiB)');
     const decoded = await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(await file.arrayBuffer());
@@ -538,6 +546,7 @@ function loadLocalAudio(next, value) {
   revealAudition();
   mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
   showOriginal();
+  openExtract(originalTarget());
 }
 const recordingId = jobId ? null : new URL(location.href).searchParams.get('recording');
 // Loads the take without separating it; the user starts Separate.
@@ -561,9 +570,9 @@ async function loadRecording() {
 const settings = () => ({ ...instruments.snapshot(),
   states: STEMS.map(stem => { const track = playlist.track(stem); return { muted: !!track?.mute, solo: false, gain: track?.gain ?? 1 }; }),
   original: { muted: !!playlist.track('original')?.mute, gain: playlist.track('original')?.gain ?? 1 },
-  rate, keepTone, eq: mixOutput.snapshot().eq, fx: mixOutput.effectsSettings(), playlist: playlist.snapshot() });
+  rate, keepTone, stems: [...stemChoice], eq: mixOutput.snapshot().eq, fx: mixOutput.effectsSettings(), playlist: playlist.snapshot() });
 libraryUI = mountStemLibrary({ locale, report: status,
-  onOperation(value) { libraryOperating = value; $('separate').disabled = value || busy || !initialized; $('cancel').disabled = value; $('import-audio').disabled = value || busy || !importReady; },
+  onOperation(value) { libraryOperating = value; extractDialog.setReady(!value && !busy && canSeparate()); $('import-audio').disabled = value || busy || !importReady; },
   // Imported samples go with the separation; their WAV is encoded only when stored.
   snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : null,
     samples: playlist.samples().map(sample => ({ id: sample.id, name: sample.name, blob: () => sampleWav(sample.buffer) })) }),
@@ -676,9 +685,8 @@ async function message(type) {
 }
 function setBusy(value) {
   busy = value;
-  $('separate').disabled = value || libraryOperating || !initialized;
-  $('cancel').hidden = !value;
-  $('clear-cache').disabled = value;
+  extractDialog.setReady(!value && !libraryOperating && canSeparate());
+  extractDialog.setRunning(value && separating);
   $('progress').hidden = !value;
   $('status').classList.toggle('is-loading', value);
   libraryUI?.setBusy(value);
@@ -760,13 +768,17 @@ function channelForTrack(track, source) {
   item.buffer = source?.buffer;
   return item;
 }
+// Stems chosen in the extraction window. The separation keeps all four WAVs; the others
+// just get no track. `muteOriginal` is the window's "when done" choice.
+let stemChoice = [...STEMS], muteOriginal = true;
 function startSession(saved = null, samples = []) {
+  if (saved) stemChoice = Array.isArray(saved.stems) && saved.stems.some(stem => STEMS.includes(stem)) ? STEMS.filter(stem => saved.stems.includes(stem)) : [...STEMS];
   const sources = [original, ...buffers].map((buffer, index) => {
     const stem = index ? STEMS[index - 1] : 'original';
     // With stems, the original starts muted so the mix is not doubled.
-    const mute = index ? false : saved?.original ? saved.original.muted === true : buffers.length > 0;
+    const mute = index ? false : saved?.original ? saved.original.muted === true : buffers.length > 0 && muteOriginal;
     return { id: `audio-${stem}`, stem, name: index ? text(stem) : text('original'), buffer, mute };
-  });
+  }).filter(source => source.stem === 'original' || stemChoice.includes(source.stem));
   // The stem mix lives in `states` (as before the playlist); the arrangement adds clips.
   const tracks = saved?.states && [...STEMS.map((stem, i) => ({ stem, gain: saved.states[i]?.gain, mute: saved.states[i]?.muted === true })),
     ...(saved.original ? [{ stem: 'original', gain: saved.original.gain, mute: saved.original.muted === true }] : [])];
@@ -807,7 +819,7 @@ function showResults(result, saved = null, samples = []) {
   outputs = [];
   // Patterns first: the saved playlist holds their clips.
   instruments.restore(saved);
-  startSession(saved, samples); instruments.focus('drums');
+  startSession(saved, samples); instruments.focus(stemChoice[0]);
   syncLoop();
   status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`);
 }
@@ -826,59 +838,121 @@ function runWorker(channels) {
       if (data.type === 'error') return finish(reject, localizedError('failed'));
       if (data.type !== 'progress') return;
       if (data.phase === 'download' || data.phase === 'cache') {
-        $('progress').value = data.received / data.total;
-        status(`${text(data.phase === 'download' ? 'downloading' : 'cache')}: ${(data.received / 1e6).toFixed(0)} / 166 MB`);
+        progress(data.received / data.total, `${text(data.phase === 'download' ? 'downloading' : 'cache')}: ${(data.received / 1e6).toFixed(0)} / 166 MB`);
       } else if (data.phase === 'run') {
-        $('progress').value = data.completed / data.total;
-        status(`${text('running')} ${Math.min(data.completed + 1, data.total)} / ${data.total}…`);
+        progress(data.completed / data.total, `${text('running')} ${Math.min(data.completed + 1, data.total)} / ${data.total}…`);
       } else if (data.phase === 'load' || data.phase === 'verify') {
-        $('progress').removeAttribute('value'); status(text(data.phase));
+        progress(null, text(data.phase));
       }
     };
     worker.postMessage({ type: 'separate', channels }, channels.map(channel => channel.buffer));
   });
 }
-async function separate() {
-  if (busy || libraryOperating) return;
-  if (buffers.length) libraryUI.newExtraction();
+// Separation progress shows in the header bar and in the extraction window.
+function progress(value, message) {
+  if (value === null) $('progress').removeAttribute('value'); else $('progress').value = value;
+  status(message); extractDialog.setProgress(value, message);
+}
+// What the extraction window separates: the session's original (its stems get the four
+// stem tracks) or any other audio clip (its stems become new tracks next to it).
+let extractTarget = null;
+function originalTarget() { return { original: true, name: title }; }
+function openExtract(target) {
+  if (!target) return;
+  const isOriginal = !!target.original || (target.session && target.stem === 'original');
+  extractTarget = isOriginal ? originalTarget() : target;
+  extractDialog.open({ name: extractTarget.name, isOriginal });
+}
+// The audio a clip plays (source seconds `from`–`to`) as two channels at the model's rate.
+async function clipChannels(target) {
+  const seconds = target.to - target.from, buffer = target.buffer;
+  if (!(seconds > 0) || seconds > MAX_SECONDS + 1e-3) throw localizedError('clipTooLong');
+  const frames = Math.max(1, Math.round(seconds * SAMPLE_RATE));
+  if (buffer.sampleRate === SAMPLE_RATE) {
+    const first = Math.round(target.from * SAMPLE_RATE);
+    return [0, 1].map(channel => buffer.getChannelData(Math.min(channel, buffer.numberOfChannels - 1)).slice(first, first + frames));
+  }
+  const offline = new OfflineAudioContext(2, frames, SAMPLE_RATE), node = offline.createBufferSource();
+  node.buffer = buffer; node.connect(offline.destination); node.start(0, target.from, seconds);
+  const rendered = await offline.startRendering();
+  return [rendered.getChannelData(0).slice(), rendered.getChannelData(1).slice()];
+}
+// `options` come from the window: { stems, when: 'mute' | 'none', group }.
+async function separate(options) {
+  const target = extractTarget;
+  if (busy || libraryOperating || !target || !canSeparate() || !options.stems.length) return;
+  if (target.original && buffers.length) libraryUI.newExtraction();
   const version = ++revision;
-  setBusy(true); $('progress').removeAttribute('value');
+  separating = true; setBusy(true); progress(null, text('load'));
   try {
     await navigator.locks.request('scdl-stem-inference', { ifAvailable: true }, async lock => {
       if (!lock) throw localizedError('another');
-      if (!original) {
-        status(text('preparing'));
-        const result = await message('STEM_LOOP_RENDER');
-        if (version !== revision) return;
-        if (!/^data:audio\/[^;,]+;base64,/.test(result.instrument?.dataUrl || '')) throw localizedError('invalidAudio');
-        const bytes = await (await fetch(result.instrument.dataUrl)).arrayBuffer();
-        const decoder = new OfflineAudioContext(2, 1, SAMPLE_RATE);
-        const decoded = await decoder.decodeAudioData(bytes);
-        if (version !== revision) return;
-        if (!decoded.length || decoded.duration > MAX_SECONDS + 1 / SAMPLE_RATE) throw localizedError('tooLong');
-        original = audioBuffer([decoded.getChannelData(0), decoded.getChannelData(Math.min(1, decoded.numberOfChannels - 1))]);
-        revealAudition();
-        mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
-        showOriginal();
-      }
+      if (!original) { progress(null, text('preparing')); await renderJobLoop(); }
       if (version !== revision) return;
-      const result = await runWorker([original.getChannelData(0).slice(), original.getChannelData(1).slice()]);
-      if (version === revision) { showResults(result); await libraryUI.completed(); }
+      const result = await runWorker(target.original ? [original.getChannelData(0).slice(), original.getChannelData(1).slice()] : await clipChannels(target));
+      if (version !== revision) return;
+      if (target.original) {
+        stemChoice = STEMS.filter(stem => options.stems.includes(stem)); muteOriginal = options.when === 'mute';
+        showResults(result); extractDialog.close();
+        await libraryUI.completed();
+        return;
+      }
+      const stems = STEMS.map((stem, index) => ({ stem, output: result.outputs[index] })).filter(item => options.stems.includes(item.stem))
+        .map(({ stem, output }) => {
+          const name = `${text(stem)} · ${target.name}`;
+          return { name, track: name, color: CHANNEL_COLORS[stem], buffer: audioBuffer(output) };
+        });
+      try { if (!playlist.addStemTracks({ clip: target.id, stems, group: options.group, muteSource: options.when === 'mute' })) return; }
+      catch (error) { error.localized = true; throw error; }
+      extractDialog.close();
+      status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`);
     });
   } catch (error) {
-    if (version === revision) { console.error('[Stems]', error); status(error.localized ? error.message : text('failed'), true); }
+    if (version === revision) {
+      console.error('[Stems]', error);
+      const message = error.localized ? error.message : text('failed');
+      status(message, true); extractDialog.setMessage(message);
+    }
   } finally {
-    if (version === revision) { worker?.terminate(); worker = null; rejectWorker = null; setBusy(false); }
+    if (version === revision) { worker?.terminate(); worker = null; rejectWorker = null; separating = false; setBusy(false); }
   }
 }
 async function cancel() {
   revision++;
   rejectWorker?.(new DOMException('Cancelled', 'AbortError')); rejectWorker = null;
   worker?.terminate(); worker = null;
-  if (jobId && !info?.localFile) await message('STEM_LOOP_CANCEL').catch(() => {});
-  setBusy(false); status(text('cancelled'));
+  separating = false; setBusy(false); status(text('cancelled')); extractDialog.setMessage(text('cancelled'));
 }
-$('separate').onclick = separate; $('cancel').onclick = cancel;
+// A loop sent from Player Tools: its audio is rendered on arrival and placed as the
+// Original, then the extraction window opens. If that fails, the window still opens with
+// the reason, and Separate retries the render first.
+async function loadJobLoop() {
+  setBusy(true); progress(null, text('preparing'));
+  let reason = '';
+  try { await renderJobLoop(); }
+  catch (error) {
+    console.error('[Stems loop]', error);
+    reason = error.localized ? error.message : text('prepareFailed');
+    setBusy(false); status(reason, true);
+  } finally { setBusy(false); }
+  openExtract(originalTarget());
+  if (reason) extractDialog.setMessage(reason);
+}
+async function renderJobLoop() {
+  {
+    const result = await message('STEM_LOOP_RENDER');
+    if (!/^data:audio\/[^;,]+;base64,/.test(result.instrument?.dataUrl || '')) throw localizedError('invalidAudio');
+    const bytes = await (await fetch(result.instrument.dataUrl)).arrayBuffer();
+    const decoded = await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(bytes);
+    if (!decoded.length || decoded.duration > MAX_SECONDS + 1 / SAMPLE_RATE) throw localizedError('tooLong');
+    original = audioBuffer([decoded.getChannelData(0), decoded.getChannelData(Math.min(1, decoded.numberOfChannels - 1))]);
+    revealAudition();
+    mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
+    showOriginal();
+  }
+}
+// There is something to separate: audio in the session, or a loop still to render.
+const canSeparate = () => !!original || (!!jobId && !info?.localFile);
 $('toggle-game').onclick = () => {
   const panel = $('game-panel');
   const open = panel.hidden;
@@ -897,9 +971,10 @@ $('toggle-game').onclick = () => {
   $('toggle-game').title = open ? text('hideGame') : text('gameTip');
   $('toggle-game').setAttribute('aria-label', text(open ? 'hideGame' : 'playGame'));
 };
-$('clear-cache').onclick = async () => {
-  try { await caches.delete(MODEL.cache); status(text('cleared')); } catch (error) { console.error('[Stems cache]', error); status(text('cacheClearFailed'), true); }
-};
+async function clearModel() {
+  try { await caches.delete(MODEL.cache); status(text('cleared')); extractDialog.setMessage(text('cleared')); }
+  catch (error) { console.error('[Stems cache]', error); status(text('cacheClearFailed'), true); extractDialog.setMessage(text('cacheClearFailed')); }
+}
 function togglePlayback() { playlist.toggle(); }
 $('play').onclick = togglePlayback;
 $('play').setAttribute('aria-keyshortcuts', 'Space');
@@ -952,8 +1027,9 @@ function renderInfo(value) {
   track.title = [title, track.dataset.meta, track.dataset.range].filter(Boolean).join('\n');
 }
 try {
-  if (jobId) { renderInfo(await message('STEM_LOOP_INFO')); initialized = true; }
+  if (jobId) { renderInfo(await message('STEM_LOOP_INFO')); initialized = true; await loadJobLoop(); }
   else if (recordingId) await loadRecording();
-  setBusy(false); status(jobId || recordingId ? text('ready') : localCopy[10]);
+  setBusy(false);
+  if (!$('status').classList.contains('error')) status(jobId || recordingId ? text('ready') : localCopy[10]);
 } catch (error) { console.error('[Stems initialization]', error); status(error.localized ? error.message : text('infoFailed'), true); }
 finally { importReady = true; setBusy(false); }
