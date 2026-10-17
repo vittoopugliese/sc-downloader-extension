@@ -111,22 +111,8 @@ const widgetHtml = `<!doctype html><button id="play">Play</button><script>
     await ui('.launch').click();
     assert.equal(widget(), firstFrame, 'closing/reopening never reloads the iframe');
 
-    // Open preserves the visible search, filter, scroll and playing track.
-    await ui('.toolbar select').first().selectOption('2020-01');
-    await ui('.viewport').evaluate(node => {node.scrollTop = 480;});
-    await page.waitForTimeout(250);
-    await ui('.card-main').nth(12).click();
-    // Selection changes detail height; allow its ResizeObserver to restore the
-    // anchor before measuring the view that the Open action must preserve.
-    await page.waitForTimeout(180);
-    const scroll = await ui('.viewport').evaluate(node => node.scrollTop);
-    await ui('.open-track').click();
-    assert.equal(page.url(), 'https://soundcloud.com/you/likes');
-    assert.equal(await ui('.viewport').evaluate(node => node.scrollTop), scroll);
-    assert.equal(await ui('.toolbar input').inputValue(), 'Other');
-    assert.equal(await ui('.toolbar select').first().inputValue(), '2020-01');
-    assert.equal(widget(), firstFrame);
-    await page.waitForFunction(() => savedView?.period === '2020-01');
+    // The detail row has no separate Open button: the native-play button covers it.
+    assert.equal(await ui('.open-track').count(), 0);
 
     // A slow authorization for A must not start A after a later click on B.
     await ui('.toolbar input').fill(''); await ui('.toolbar select').first().selectOption('');

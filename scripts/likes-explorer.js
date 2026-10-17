@@ -19,6 +19,10 @@
   let selectedContext, player, detailSummary, playerInline, playerStatus, playerWidget;
   let nowTrack = null, playContext = null, playPhase = 'idle', playEpoch = 0;
   let nativeTrack = null, nativeContext = null, nativePhase = 'idle', nativeEpoch = 0, nativeRequest, nativeStatus;
+  // Mini recorder: captures the widget iframe and hands the take to the Stem Extractor.
+  let recordSlot = null, recordUI = null, recordSource = null, recordSend = null, recordTrack = null, recordSending = false;
+  const RECORD_SECONDS = 120, UPLOAD_CHUNK = 3 * 1024 * 1024;
+  const pt = (source, ...values) => globalThis.SCPlayerToolsText?.t(source, ...values) ?? source.replace(/\$(\d+)/g, (match, index) => values[index - 1] ?? match);
   function button(label, action, cls = '') { const b = el('button', cls, label); b.type = 'button'; b.addEventListener('click', () => Promise.resolve(action()).catch(showError)); return b; }
   async function send(type, payload = {}) {
     const epoch = routeEpoch;
@@ -146,11 +150,6 @@
     const d = dimensions(); count = r.matchingCount; canvas.style.height = `${Math.ceil(count/d.columns)*d.height}px`;
     viewport.scrollTop = Math.floor(r.anchor/d.columns)*d.height + Math.min(anchorPixelOffset,d.height-1); await render();
   }
-  async function openTrack(item, context = {}) {
-    persist();
-    await send('OPEN_LIKED_TRACK',{generation,...context,trackId:item.itemId});
-    status.textContent = text('openedTab');
-  }
   function select(item, context) {
     selectedContext = context;
     selected = item; detail.hidden = false; detailSummary.replaceChildren(art(item,48));
@@ -177,6 +176,70 @@
       detailSummary.hidden = current;
       detail.classList.toggle('has-player',current);
     }
+    updateRecorder();
+  }
+  function recordTake() { return recordUI?.recorder.snapshot() || { state: 'idle', frames: 0 }; }
+  // The pill follows the visible player, but a running or finished take stays in view.
+  function updateRecorder() {
+    if (!recordSlot) return;
+    const take = recordTake();
+    const current = !!nowTrack && !!player && selected?.itemId === nowTrack.itemId;
+    recordSlot.hidden = !(current || take.frames > 0 || ['recording','stopping','preparing'].includes(take.state));
+    recordUI?.setVisible(opened && !recordSlot.hidden);
+    if (recordSend) recordSend.disabled = recordSending || !take.frames || !['ready','playing'].includes(take.state);
+  }
+  function mountRecorder() {
+    recordSlot = el('div','record-slot'); recordSlot.hidden = true;
+    if (!globalThis.SCRecordUI || !globalThis.SCRecord || !globalThis.SCWidgetRecordSource) return recordSlot;
+    recordSource = SCWidgetRecordSource.create({ getFrame: () => player?.frame?.() || null,
+      moduleUrl: chrome.runtime.getURL('scripts/record-processor.js') });
+    const recorder = SCRecord.create({ source: recordSource, maxSeconds: RECORD_SECONDS, onChange: () => recordUI?.render() });
+    recordSend = el('button','record-send'); recordSend.type = 'button'; recordSend.disabled = true;
+    recordSend.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h12M11 6l6 6-6 6M20 5v14"/></svg>';
+    recordSend.append(document.createTextNode(pt('Send to Stem Extractor')));
+    recordSend.addEventListener('click', () => sendRecording().catch(error => {
+      console.error('[Likes recorder]', error);
+      if (status) status.textContent = error.localized ? error.message : pt('Could not send the recording to the Stem Extractor.');
+    }));
+    recordUI = SCRecordUI.mount({ container: recordSlot, recorder, variant: 'pill', extraActions: [recordSend],
+      emptyText: pt('Record what is playing · up to 2 min'),
+      onChange: state => {
+        // Never play the take on top of the widget.
+        if (state.state === 'playing' && playPhase === 'playing') player?.pause();
+        updateRecorder();
+      } });
+    return recordSlot;
+  }
+  function base64(bytes) {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(binary);
+  }
+  async function sendRecording() {
+    const recorder = recordUI?.recorder;
+    if (!recorder || recordSending) return;
+    recorder.stopPreview();
+    const bytes = new Uint8Array(await recorder.exportWav().arrayBuffer());
+    const track = recordTrack || {};
+    recordSending = true; updateRecorder();
+    if (status) status.textContent = pt('Opening the Stem Extractor…');
+    try {
+      await new Promise((resolve, reject) => {
+        const port = chrome.runtime.connect({ name: 'stem-recording-upload' });
+        let settled = false;
+        const finish = (error, value) => { if (settled) return; settled = true; try { port.disconnect(); } catch {} if (error) reject(error); else resolve(value); };
+        port.onMessage.addListener(message => {
+          if (message?.success) finish(null, message);
+          else finish(Object.assign(new Error(message?.error || pt('Could not send the recording to the Stem Extractor.')), { localized: !!message?.error }));
+        });
+        port.onDisconnect.addListener(() => finish(new Error(chrome.runtime.lastError?.message || 'Upload interrupted')));
+        port.postMessage({ type: 'begin', size: bytes.length, title: pt('$1 (recording)', track.title || 'SoundCloud'),
+          artist: track.artistName || '', artworkUrl: /^https:\/\//.test(track.artworkUrl || '') ? track.artworkUrl : '', trackUrl: track.permalink || '' });
+        for (let i = 0; i < bytes.length; i += UPLOAD_CHUNK) port.postMessage({ type: 'chunk', data: base64(bytes.subarray(i, i + UPLOAD_CHUNK)) });
+        port.postMessage({ type: 'end' });
+      });
+      if (status) status.textContent = '';
+    } finally { recordSending = false; updateRecorder(); }
   }
   function playerState(phase) {
     playPhase = phase;
@@ -188,6 +251,7 @@
     for (const card of cardNodes.values()) updateCardPlayback(card);
     updateDetailPlayback();
     if (playing) {
+      if (recordTake().state === 'playing') recordUI.recorder.stopPreview();
       cancelNativePlayback();
       const native = document.querySelector('.playControls .playControl.playing');
       native?.click();
@@ -196,6 +260,7 @@
   function stopPlayback() {
     cancelNativePlayback(true);
     playEpoch++; player?.destroy(); player = null; nowTrack = playContext = null;
+    recordSource?.interrupt();
     playPhase = 'idle';
     for (const card of cardNodes.values()) updateCardPlayback(card);
     updateDetailPlayback();
@@ -208,7 +273,7 @@
       return;
     }
     const seq = ++playEpoch;
-    player?.destroy(); player = null;
+    player?.destroy(); player = null; recordSource?.interrupt();
     nowTrack = item; playContext = { ...context };
     playerState('loading');
     try {
@@ -216,6 +281,8 @@
       if (seq !== playEpoch) return;
       player = SCLikesPlayer.create({container:playerWidget,title:text('listen'),onState:playerState,onFinish:()=>{}});
       player.load(result.item);
+      recordTrack = { ...result.item, artworkUrl: item.artworkUrl };
+      updateRecorder();
     } catch (error) {
       if (seq !== playEpoch) return;
       playerState('error'); showError(error);
@@ -272,7 +339,6 @@
     nativeStatus = el('div','native-status'); nativeStatus.hidden = true; nativeStatus.setAttribute('role','status'); media.append(nativeStatus);
     const actions = el('div','detail-actions');
     actions.append(button('▶ '+text('play'),()=>playTrack(selected,selectedContext),'accent detail-play'));
-    const open = button('↗',()=>openTrack(selected),'small open-track'); open.title = text('openHint'); open.setAttribute('aria-label',text('openHint')); actions.append(open);
     const locateButton = button('',()=>locate(selected),'small locate-action');
     const locateIcon = el('img','locate-icon'); locateIcon.src = TELEPORT_ICON_URL; locateIcon.alt = '';
     locateButton.append(locateIcon); locateButton.title = text('locate'); locateButton.setAttribute('aria-label',text('locate')); actions.append(locateButton);
@@ -280,7 +346,7 @@
     nativePlay.title = text('nativePlay'); nativePlay.setAttribute('aria-label',text('nativePlay'));
     nativePlay.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="m3 5 8 7-8 7V5Z" fill="currentColor"/><path d="M15 4v16M21 4v16M13 9h4m2 6h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
     actions.append(nativePlay);
-    detail.append(media,status,actions);
+    detail.append(media,status,actions,mountRecorder());
   }
   async function locate(item) {
     if (nativePhase === 'loading') cancelNativePlayback();
@@ -347,8 +413,8 @@
     settings.append(button(text('removeLibrary'),async()=>{ if (!confirm(text('confirmDelete'))) return; await send('DELETE_LIKES_LIBRARY'); stopPlayback(); routeEpoch++; imageEpoch++; requestEpoch++; statusBusy = false; generation = null; total = count = 0; selected = anchor = null; detail.hidden = true; images.clear(); cardNodes.clear(); settings.hidden = true; restored = false; await poll(); },'danger'));
     settings.append(button(text('close'),()=>{ settings.hidden = true; }));
   }
-  function close() { if (nativePhase === 'loading') cancelNativePlayback(); opened = false; panel.hidden = true; launch.hidden = false; requestEpoch++; SCLikesLocator.cancel(); persist(); focusBefore?.focus?.(); }
-  async function open() { opened = true; focusBefore = document.activeElement; panel.hidden = false; launch.hidden = true; search.focus(); await poll(); }
+  function close() { if (nativePhase === 'loading') cancelNativePlayback(); opened = false; updateRecorder(); panel.hidden = true; launch.hidden = false; requestEpoch++; SCLikesLocator.cancel(); persist(); focusBefore?.focus?.(); }
+  async function open() { opened = true; updateRecorder(); focusBefore = document.activeElement; panel.hidden = false; launch.hidden = true; search.focus(); await poll(); }
   function mount() {
     host = el('div'); host.id = 'scdl-likes-explorer'; shadow = host.attachShadow({mode:'open'});
     const style = el('style'); style.textContent = CSS; shadow.append(style);
@@ -399,7 +465,7 @@
     host.style.setProperty('--top',`${top}px`); host.style.setProperty('--bottom',`${bottom}px`);
   }
   function dispose() {
-    stopPlayback(); cardNodes.clear(); selectedContext = null;
+    stopPlayback(); recordUI?.dispose(); recordUI = recordSource = recordSend = recordSlot = recordTrack = null; cardNodes.clear(); selectedContext = null;
     routeEpoch++; imageEpoch++; opened = false; resizeObserver?.disconnect(); clearTimeout(renderTimer); clearTimeout(searchTimer); clearTimeout(saveTimer); SCLikesLocator.cancel(); host?.remove(); host = teleportOverlay = null; generation = null; ownerId = collectionId = sourceUserId = null; anchor = selected = null; restored = false; previousResults = null; query = filter = ''; statusBusy = false; images.clear(); imageConsumers.clear(); artworkInflight.clear();
   }
   function route() {
@@ -416,6 +482,10 @@
   const CSS = `
     .detail .native-play{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:28px;padding:4px;background:#70d6cb;color:#102d2a;border-color:#70d6cb}.detail .native-play:hover{background:#93e6dd;border-color:#93e6dd}.detail .native-play[aria-busy="true"]{opacity:.65}.native-status{padding-top:5px;font-size:10px;line-height:1.4;color:#93e6dd;overflow-wrap:anywhere}
     .card.is-playing{border-color:#e99b74}
+    .detail{flex-wrap:wrap}.record-slot{flex:0 0 100%;min-width:0}.record-slot .record-section{border-color:#ffffff1f}
+    .record-slot .record-section button.record-send{display:inline-flex;align-items:center;gap:4px;min-height:25px;padding:3px 8px;border:1px solid #70d6cb;border-radius:5px;background:#70d6cb;color:#102d2a;font:600 10px system-ui,sans-serif}
+    .record-slot .record-section button.record-send:hover:not(:disabled){background:#93e6dd;border-color:#93e6dd}.record-slot .record-section button.record-send:disabled{opacity:.4;cursor:default}
+    .record-send svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
     .detail-media{flex:1;min-width:0}.detail-summary{display:flex;align-items:center;gap:7px;min-width:0}.detail-summary>.cover{width:34px;height:34px;flex-shrink:0}
     .player-inline{min-width:0;overflow:hidden;border-radius:5px}.player-widget{height:80px;background:#2c2c2c}.player-widget:empty{height:0}
     .player-status{padding:4px 0;color:#bdb6af;font-size:10px;line-height:1.4}.player-inline[data-state="error"] .player-status,.player-inline[data-state="needs-play"] .player-status{color:#ffd0a9}.detail.has-player>.status{display:none}

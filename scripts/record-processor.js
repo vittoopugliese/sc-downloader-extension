@@ -1,7 +1,9 @@
 /* Capture stereo PCM independently of the page's rendering/animation loop. */
 class SCRecordProcessor extends AudioWorkletProcessor {
-  constructor() {
+  constructor(options) {
     super();
+    const max = Number(options?.processorOptions?.maxSeconds);
+    this.maxSeconds = Number.isFinite(max) && max > 0 && max <= 300 ? max : 300;
     this.recording = false;
     this.reset();
     this.port.onmessage = ({ data }) => {
@@ -29,7 +31,7 @@ class SCRecordProcessor extends AudioWorkletProcessor {
         this.channels[1][this.offset++] = (input?.[1] || input?.[0])?.[i] || 0;
         if (this.offset === 2048) this.flush();
         // Enforce the budget on the audio thread, even if the page is busy.
-        if (++this.frames >= sampleRate * 300) {
+        if (++this.frames >= sampleRate * this.maxSeconds) {
           this.recording = false;
           this.flush();
           this.port.postMessage({ stopped: true, limitReached: true });

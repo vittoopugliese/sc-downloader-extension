@@ -124,11 +124,17 @@ const { chromium } = require('playwright');
     await page.waitForFunction(() => !document.querySelector('.pl-clip.is-stretching'), null, { timeout: 15000 });
     assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'true', 'still playing after the edit');
     assert.ok(Math.abs((await playlist.locator('.pl-clip').first().boundingBox()).width - width) < 1, 'stretch keeps the clip length');
-    // Wheel zooms the timeline around the pointer, like the stem waveforms; Shift pans.
+    // Like FL Studio: a plain wheel over the tracks scrolls the page, over the ruler it zooms; Shift pans.
     const scroller = playlist.locator('.pl-scroll'), box = await scroller.boundingBox();
     await page.mouse.move(box.x + 400, box.y + 120);
     await page.mouse.wheel(0, -300);
+    await page.waitForTimeout(100);
+    assert.ok(Math.abs((await playlist.locator('.pl-clip').first().boundingBox()).width - width) < 1, 'wheel over tracks does not zoom');
+    const wheelRuler = await playlist.locator('.pl-ruler').boundingBox();
+    await page.mouse.move(box.x + 400, wheelRuler.y + wheelRuler.height / 2);
+    await page.mouse.wheel(0, -300);
     await page.waitForFunction(clipWidth => document.querySelector('.pl-clip').getBoundingClientRect().width > clipWidth * 1.4, width);
+    await page.mouse.move(box.x + 400, box.y + 120);
     await page.keyboard.down('Shift'); await page.mouse.wheel(0, 200); await page.keyboard.up('Shift');
     await page.waitForFunction(() => document.querySelector('.pl-scroll').scrollLeft > 0);
     await playlist.getByRole('button', { name: 'Show the whole arrangement' }).click();
@@ -175,13 +181,24 @@ const { chromium } = require('playwright');
     await copy.waitFor();
     await copy.click({ button: 'right' }); await menu.getByRole('menuitem', { name: 'Delete from project' }).click();
     await copy.waitFor({ state: 'detached' });
-    await playlist.locator('.pl-clip').first().click({ button: 'right' });
-    assert.ok((await menu.locator('.pl-menu-heading').allTextContents()).includes('Pitch mode'));
+    // Like FL Studio: right click on the name bar opens the menu, on the waveform removes the clip.
+    const clipHeader = playlist.locator('.pl-clip .pl-clip-title').first();
+    await clipHeader.click({ button: 'right' });
+    assert.ok((await menu.locator('.pl-menu-heading').allTextContents()).includes('Pitch mode · Stretch'));
+    assert.equal(await menu.locator('.pl-menu-choices').count(), 2, 'Pitch mode and edit tool are icon rows');
+    assert.equal(await menu.locator('.pl-menu-choice-check').count(), 2, 'Each row marks its active choice');
     await menu.getByRole('menuitemradio', { name: 'Resample · pitch + speed' }).click();
-    await playlist.locator('.pl-clip').first().click({ button: 'right' });
+    await clipHeader.click({ button: 'right' });
     assert.equal(await menu.getByRole('menuitemradio', { name: 'Resample · pitch + speed' }).getAttribute('aria-checked'), 'true');
+    assert.ok((await menu.locator('.pl-menu-heading').allTextContents()).includes('Pitch mode · Resample'));
     await page.waitForTimeout(300); await page.screenshot({ path: path.join(artifacts, 'playlist-clip-menu.png') });
     await page.keyboard.press('Escape'); assert.equal(await menu.count(), 0);
+    const clipBox = await playlist.locator('.pl-clip').first().boundingBox();
+    await page.mouse.click(clipBox.x + clipBox.width / 2, clipBox.y + clipBox.height - 6, { button: 'right' });
+    assert.equal(await menu.count(), 0, 'Right click on the waveform opens no menu');
+    assert.equal(await playlist.locator('.pl-clip').count(), 0, 'Right click on the waveform removes the clip');
+    await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('Control+z');
+    assert.equal(await playlist.locator('.pl-clip').count(), 1, 'Undo brings the clip back');
     // Space twice rewinds to the loop start and plays, like FL Studio.
     await playlist.locator('.pl-scroll').focus();
     await page.keyboard.press('Space'); await page.waitForTimeout(900);

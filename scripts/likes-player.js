@@ -66,6 +66,8 @@
       },
       play() { wantsPlay = true; if (ready) { post('play'); awaitingPlay(); } },
       pause() { wantsPlay = false; clearTimeout(playTimer); if (ready) post('pause'); state('paused'); },
+      // The Explorer recorder talks to widget-record-tap.js through this iframe.
+      frame() { return frame || null; },
       destroy() {
         clearTimers(); window.removeEventListener('message', receive);
         frame?.remove(); frame = null;

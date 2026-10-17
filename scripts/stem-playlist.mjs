@@ -30,10 +30,18 @@ const ICONS = {
   split: 'M6 3a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zm0 13a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM8 7l12 11M8 17 20 6',
   trash: 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7',
   check: 'm5 12 5 5 9-10',
+  // Pitch modes: fixed length with the pitch moving inside it, and a turntable.
+  keepLength: 'M4 5v14M20 5v14M4 12h3m10 0h3M12 5v14M9 8l3-3 3 3M9 16l3 3 3-3',
+  resample: '<circle cx="10" cy="13" r="7"/><circle cx="10" cy="13" r="1.5"/><path d="M20 3v9l-4 4"/>',
+  // Edit tools: move/trim, slip the audio inside the clip, stretch from the edge.
+  moveTool: 'M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3',
+  slipTool: 'M3 6h18v12H3zM7 12h10M9 10l-2 2 2 2M15 10l2 2-2 2',
+  stretchTool: 'M3 7h10v10H3M17 4v16M13 12h8M19 10l2 2-2 2',
 };
 
 // Small context menu at the pointer. Items: { label, icon, shortcut, danger, checked,
-// disabled, title, action }, '-' for a separator, or { heading }. Arrows move, Escape closes.
+// disabled, title, action }, '-' for a separator, { heading }, or { choices: [{ label, icon,
+// title, checked, action }] } for a row of icon radio buttons. Arrows move, Escape closes.
 let openMenu = null;
 export function contextMenu(event, items) {
   event.preventDefault(); event.stopPropagation();
@@ -45,6 +53,18 @@ export function contextMenu(event, items) {
   for (const item of items) {
     if (item === '-') { const line = document.createElement('div'); line.className = 'pl-menu-sep'; line.setAttribute('role', 'separator'); menu.append(line); continue; }
     if (item.heading) { const head = document.createElement('div'); head.className = 'pl-menu-heading'; head.textContent = item.heading; menu.append(head); continue; }
+    if (item.choices) {
+      const row = document.createElement('div'); row.className = 'pl-menu-choices'; row.setAttribute('role', 'group');
+      for (const choice of item.choices) {
+        const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'pl-menu-item pl-menu-choice';
+        chip.setAttribute('role', 'menuitemradio'); chip.setAttribute('aria-checked', String(!!choice.checked)); chip.setAttribute('aria-label', choice.label);
+        chip.title = choice.title ? `${choice.label} — ${choice.title}` : choice.label;
+        chip.innerHTML = `${svg(choice.icon)}${choice.checked ? `<span class="pl-menu-choice-check">${svg(ICONS.check)}</span>` : ''}`;
+        chip.onclick = () => { close(); choice.action?.(); };
+        row.append(chip);
+      }
+      menu.append(row); continue;
+    }
     const entry = document.createElement('button'); entry.type = 'button'; entry.className = 'pl-menu-item';
     const checkable = item.checked !== undefined;
     entry.setAttribute('role', checkable ? (item.radio ? 'menuitemradio' : 'menuitemcheckbox') : 'menuitem');
@@ -167,7 +187,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const report = value => {
     const text = value instanceof Error ? value.message : value;
     message.textContent = text; clearTimeout(messageTimer);
-    if (text && text !== stretchStatus) messageTimer = setTimeout(() => { if (message.textContent === text) message.textContent = ''; }, 10000);
+    if (text) messageTimer = setTimeout(() => { if (message.textContent === text) message.textContent = ''; }, 10000);
   };
   const safe = fn => async (...args) => { try { await fn(...args); } catch (error) { if (error.name !== 'AbortError') report(error); } };
   const picked = () => state.clips.find(c => c.id === selected);
@@ -186,15 +206,18 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const now = () => engine?.now() ?? position;
   const playing = () => !!engine?.playing();
   const transport = () => ({ rate, loop: loopRange || (arrangementEnd(state) ? { start: 0, end: arrangementEnd(state) } : null) });
-  // Stretched clips render in a worker; their clips show a striped overlay until ready.
+  // Stretched clips render in a worker; their clips show a striped overlay until ready
+  // and a spinner in the library row says work is running, without moving the layout.
   const stretchStatus = t('Stretching clips…', 'Estirando clips…');
+  const busy = node('span', 'pl-busy'); busy.hidden = true;
+  busy.setAttribute('role', 'status'); busy.setAttribute('aria-label', stretchStatus); busy.title = stretchStatus;
   const stretching = clip => needsStretch(clip) && !cache.has(clip, assets.get(clip.asset));
   const cache = createStretchCache({ onChange() {
     for (const item of grid.querySelectorAll('.pl-clip')) {
       const clip = state.clips.find(c => c.id === item.dataset.clip);
       item.classList.toggle('is-stretching', !!clip && stretching(clip));
     }
-    if (cache.busy()) report(stretchStatus); else if (message.textContent === stretchStatus) report('');
+    busy.hidden = !cache.busy();
   } });
   function renderPlay(active) { if (!play) return; play.textContent = active ? 'Ⅱ' : '▶'; play.setAttribute('aria-pressed', String(active)); }
   function stop(reset = false) {
@@ -503,27 +526,35 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
       }
     });
   }
-  library.append(shelf, ...inspectorControls);
+  library.append(shelf, ...inspectorControls, busy);
   // Right-click menus: clips get their actions plus pitch mode and edit tool; library
   // entries can be duplicated or deleted. Session audio (the stems) stays in the library.
-  const MODES = [['stretch', t('Stretch · keep length', 'Stretch · conservar duración'), t('Changing the pitch keeps the clip length', 'Cambiar el pitch conserva la duración del clip')],
-    ['resample', t('Resample · pitch + speed', 'Resample · pitch + velocidad'), t('Pitch and speed change together, like a turntable', 'Pitch y velocidad cambian juntos, como un tocadiscos')]];
-  const TOOLS = [['move', t('Move / trim', 'Mover / recortar'), t('Drag clips and their edges', 'Arrastrá clips y sus bordes')],
-    ['slip', t('Slip content', 'Deslizar contenido'), t('Drag to move the audio inside the clip', 'Arrastrá para mover el audio dentro del clip')],
-    ['stretch', t('Stretch edge', 'Estirar borde'), t('Drag an edge to change the clip speed', 'Arrastrá un borde para cambiar la velocidad del clip')]];
+  const MODES = [['stretch', ICONS.keepLength, t('Stretch · keep length', 'Stretch · conservar duración'), t('Changing the pitch keeps the clip length', 'Cambiar el pitch conserva la duración del clip')],
+    ['resample', ICONS.resample, t('Resample · pitch + speed', 'Resample · pitch + velocidad'), t('Pitch and speed change together, like a turntable', 'Pitch y velocidad cambian juntos, como un tocadiscos')]];
+  const TOOLS = [['move', ICONS.moveTool, t('Move / trim', 'Mover / recortar'), t('Drag clips and their edges', 'Arrastrá clips y sus bordes')],
+    ['slip', ICONS.slipTool, t('Slip content', 'Deslizar contenido'), t('Drag to move the audio inside the clip', 'Arrastrá para mover el audio dentro del clip')],
+    ['stretch', ICONS.stretchTool, t('Stretch edge', 'Estirar borde'), t('Drag an edge to change the clip speed', 'Arrastrá un borde para cambiar la velocidad del clip')]];
+  // The heading names the active choice, since the row itself shows only icons.
+  const choiceHeading = (heading, list, value) => `${heading} · ${list.find(([key]) => key === value)[2].split(' · ')[0]}`;
+  // FL-style right click on the clip body: removes it, or the whole selection when it is part of it.
+  function eraseClip(clip) {
+    if (isChosen(clip.id)) { remove.click(); return; }
+    commit(() => { state.clips = state.clips.filter(c => c.id !== clip.id); });
+  }
   function clipMenu(event, clip) {
     if (!isChosen(clip.id)) pick(clip.id); else if (clip.id !== selected) { extra.delete(clip.id); extra.add(selected); selected = clip.id; }
     updateSelection();
+    const mode = clip.keepLength !== false ? 'stretch' : 'resample';
     contextMenu(event, [
       { label: t('Duplicate', 'Duplicar'), icon: ICONS.duplicate, shortcut: 'Ctrl+D', action: () => duplicate.click() },
       { label: t('Split at cursor', 'Cortar en cursor'), icon: ICONS.split, shortcut: 'S', action: () => split.click() },
       { label: t('Mute clip', 'Silenciar clip'), icon: ICONS.mute, shortcut: 'M', checked: !!clip.mute, action: () => muteClip.click() },
       { label: t('Reverse', 'Invertir'), icon: ICONS.reverse, shortcut: 'R', checked: !!clip.reverse, action: () => reverseClip.click() },
-      '-', { heading: t('Pitch mode', 'Modo de pitch') },
-      ...MODES.map(([value, label, title]) => ({ label, title, radio: true, checked: (clip.keepLength !== false ? 'stretch' : 'resample') === value,
-        action: () => commit(() => { const current = state.clips.find(c => c.id === clip.id); if (current) current.keepLength = value === 'stretch'; }) })),
-      '-', { heading: t('Edit tool', 'Herramienta') },
-      ...TOOLS.map(([value, label, title]) => ({ label, title, radio: true, checked: editMode === value, action: () => { editMode = value; } })),
+      '-', { heading: choiceHeading(t('Pitch mode', 'Modo de pitch'), MODES, mode) },
+      { choices: MODES.map(([value, icon, label, title]) => ({ icon, label, title, checked: mode === value,
+        action: () => commit(() => { const current = state.clips.find(c => c.id === clip.id); if (current) current.keepLength = value === 'stretch'; }) })) },
+      '-', { heading: choiceHeading(t('Edit tool', 'Herramienta'), TOOLS, editMode) },
+      { choices: TOOLS.map(([value, icon, label, title]) => ({ icon, label, title, checked: editMode === value, action: () => { editMode = value; } })) },
       ...(!isPattern(clip) && trackOf(clip.track) && !trackOf(clip.track).stem && trackOf(clip.track).source !== clip.asset ? [
         { label: t('Use as track instrument', 'Usar como instrumento de la pista'), icon: ICONS.slice,
           title: t('The channel rack and piano roll of this track cut this sample from now on', 'El channel rack y el piano roll de esta pista cortan este sample desde ahora'),
@@ -559,7 +590,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   }
   // Same navigation as the stem waveforms: wheel zooms around the pointer, Shift pans.
   const fit = () => { scroll.scrollLeft = 0; zoomAround(0, (scroll.clientWidth - TRACK_HEAD - 12) / Math.max(1, arrangementEnd(state) || 16) / zoom); };
-  const wheelHint = t('on the timeline the mouse wheel zooms and Shift + wheel pans', 'sobre la línea de tiempo la rueda hace zoom y Shift + rueda desplaza');
+  const wheelHint = t('the mouse wheel zooms over the ruler, Ctrl + wheel zooms anywhere and Shift + wheel pans', 'la rueda hace zoom sobre la regla, Ctrl + rueda hace zoom en cualquier lado y Shift + rueda desplaza');
   const zoomOut = toolButton({ icon: ICONS.zoomOut, name: t('Zoom out', 'Alejar'), detail: wheelHint, key: '-', keys: ['-', '_'], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1 / 1.5));
   const zoomIn = toolButton({ icon: ICONS.zoomIn, name: t('Zoom in', 'Acercar'), detail: wheelHint, key: '+', keys: ['+', '='], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1.5));
   const fitButton = toolButton({ icon: ICONS.fit, name: t('Show the whole arrangement', 'Ver todo el arreglo'), detail: t('fits every clip in view', 'ajusta el zoom para ver todos los clips'), key: 'F', keys: ['f'], color: '#e6e1da' }, fit);
@@ -581,8 +612,12 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   scroll.addEventListener('wheel', event => {
     // Channel editors keep their own waveform zoom.
     if (!event.deltaY && !event.deltaX) return;
+    // Like FL Studio: the wheel zooms only over the ruler (or with Ctrl anywhere).
+    // Over tracks and headers a plain wheel scrolls the page.
+    const pan = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY);
+    if (!pan && !event.ctrlKey && !event.metaKey && !event.target.closest('.pl-ruler')) return;
     event.preventDefault();
-    if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) { scroll.scrollLeft += event.deltaX || event.deltaY; return; }
+    if (pan) { scroll.scrollLeft += event.deltaX || event.deltaY; return; }
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
   const hint = node('p', 'pl-hint', t('P: pencil · select a sample or clip, then click empty grid space to draw · Q: select time, including silence · Ctrl+C/V: copy/paste at cursor · Ctrl+D: repeat selection · drag clips to move, edges to trim · Alt bypasses snap · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 tracks / 5 minutes.', 'P: lápiz · elegí un sample o clip y hacé clic en la grilla vacía para dibujar · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar en el cursor · Ctrl+D: repetir selección · arrastrá clips para mover, bordes para recortar · Alt desactiva snap · Espacio reproduce · S corta en el cursor · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 pistas / 5 minutos.'));
@@ -822,7 +857,15 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     item.append(node('span', 'pl-clip-title'));
     for (const edge of ['left', 'right']) { const handle = node('span', `pl-edge pl-edge-${edge}`); handle.dataset.edge = edge; handle.title = t('Drag to trim', 'Arrastrar para recortar'); item.append(handle); }
     item.onpointerdown = event => beginDrag(event, state.clips.find(c => c.id === id), item);
-    item.oncontextmenu = event => { const clip = state.clips.find(c => c.id === id); if (clip) clipMenu(event, clip); };
+    // Like FL Studio: right click on the name bar opens the menu, on the waveform removes the clip.
+    // The keyboard menu key (no pointer position) always opens the menu.
+    item.oncontextmenu = event => {
+      const clip = state.clips.find(c => c.id === id); if (!clip) return;
+      // Measured by height: the trim handles cover the name bar's ends too.
+      const keyboard = !event.clientX && !event.clientY, onHeader = event.clientY < item.querySelector('.pl-clip-title').getBoundingClientRect().bottom;
+      if (keyboard || onHeader) { clipMenu(event, clip); return; }
+      event.preventDefault(); event.stopPropagation(); eraseClip(clip);
+    };
     item.onkeydown = event => {
       const clip = state.clips.find(c => c.id === id), index = state.tracks.findIndex(t => t.id === clip.track);
       if (event.key === 'Enter') { pick(clip.id); updateSelection(); return; }

@@ -508,19 +508,41 @@ $('import-form').onsubmit = event => {
   }
   const channels = [0, Math.min(1, decoded.numberOfChannels - 1)].map(channel => decoded.getChannelData(channel).slice(first, last));
   if (channels.some(channel => !channel.every(Number.isFinite))) { $('import-error').textContent = localCopy[8]; return; }
-  const next = audioBuffer(channels);
+  loadLocalAudio(audioBuffer(channels), { title: $('import-name').value.trim() || file.name, artist: '', artworkUrl: '', durationMs: decoded.duration * 1000,
+    trimRange: { startMs: first / SAMPLE_RATE * 1000, endMs: last / SAMPLE_RATE * 1000 },
+    localFile: { name: file.name, type: file.type, size: file.size, lastModified: file.lastModified, channels: decoded.numberOfChannels } });
+  $('import-dialog').close(); status(text('ready'));
+};
+// Imported files and Likes Explorer recordings become the Original, ready to separate.
+function loadLocalAudio(next, value) {
   disposeResults();
   for (const view of waveforms) view.dispose();
   original = next; wavs = []; rate = 1; keepTone = false; renderTempo(); playlist.setRate(rate);
-  renderInfo({ title: $('import-name').value.trim() || file.name, artist: '', artworkUrl: '', durationMs: decoded.duration * 1000,
-    trimRange: { startMs: first / SAMPLE_RATE * 1000, endMs: last / SAMPLE_RATE * 1000 },
-    localFile: { name: file.name, type: file.type, size: file.size, lastModified: file.lastModified, channels: decoded.numberOfChannels } });
+  renderInfo(value);
   initialized = true; libraryUI.newExtraction();
   revealAudition();
   mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
   showOriginal();
-  $('import-dialog').close(); status(text('ready'));
-};
+}
+const recordingId = jobId ? null : new URL(location.href).searchParams.get('recording');
+// Loads the take without separating it; the user starts Separate.
+async function loadRecording() {
+  const result = await chrome.runtime.sendMessage({ type: 'STEM_RECORDING_INFO', recordingId });
+  if (!result?.success) {
+    const error = localizedError('infoFailed');
+    if (typeof result?.error === 'string') error.message += ` ${result.error.slice(0, 300)}`;
+    throw error;
+  }
+  status(text('preparing'));
+  const response = await (await caches.open('scdl-recording-jobs')).match(result.audioUrl);
+  if (!response) throw localizedError('infoFailed');
+  const decoded = await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(await response.arrayBuffer());
+  if (!decoded.length || decoded.duration > MAX_SECONDS + 1 / SAMPLE_RATE) throw localizedError('tooLong');
+  const channels = [0, Math.min(1, decoded.numberOfChannels - 1)].map(channel => decoded.getChannelData(channel).slice());
+  loadLocalAudio(audioBuffer(channels), { title: result.title || 'SoundCloud recording', artist: result.artist || '',
+    artworkUrl: result.artworkUrl || '', durationMs: decoded.duration * 1000,
+    trimRange: { startMs: 0, endMs: decoded.duration * 1000 }, recording: { trackUrl: result.trackUrl || '' } });
+}
 const settings = () => ({ ...instruments.snapshot(),
   states: STEMS.map(stem => { const track = playlist.track(stem); return { muted: !!track?.mute, solo: false, gain: track?.gain ?? 1 }; }),
   original: { muted: !!playlist.track('original')?.mute, gain: playlist.track('original')?.gain ?? 1 },
@@ -895,6 +917,7 @@ function renderInfo(value) {
   title = info.title; $('track').textContent = title;
   const metadata = [info.artist];
   if (info.localFile) metadata.push(info.localFile.name, `${info.localFile.channels} ch`);
+  if (info.recording) metadata.push(pt('Likes Explorer recording'));
   if (Number.isFinite(info.durationMs) && info.durationMs > 0) {
     const seconds = Math.round(info.durationMs / 1000);
     metadata.push(`${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
@@ -914,6 +937,7 @@ function renderInfo(value) {
 }
 try {
   if (jobId) { renderInfo(await message('STEM_LOOP_INFO')); initialized = true; }
-  setBusy(false); status(jobId ? text('ready') : localCopy[10]);
+  else if (recordingId) await loadRecording();
+  setBusy(false); status(jobId || recordingId ? text('ready') : localCopy[10]);
 } catch (error) { console.error('[Stems initialization]', error); status(error.localized ? error.message : text('infoFailed'), true); }
 finally { importReady = true; setBusy(false); }

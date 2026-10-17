@@ -23,16 +23,50 @@
     }
     return new Blob([bytes], { type: "audio/wav" });
   }
-  function create({ effects, onChange = () => {}, moduleUrl } = {}) {
+  // `source` replaces the local effects tap with another capture, such as the
+  // Likes Explorer widget. It streams stereo blocks through onChunk/onStopped.
+  function create({ effects, onChange = () => {}, moduleUrl, maxSeconds = MAX_SECONDS, source = null } = {}) {
     let context, input, analyser, processor, initialization, unsubscribe;
     let state = "idle", chunks = [], frames = 0, peaks = [], buffer = null;
     let preview = null, previewOffset = 0, previewStart = 0, stopPromise, stopped;
-    let message = "", disposed = false;
+    let message = "", disposed = false, sourceRate = 0;
     let playbackRevision = 0;
     const taps = new Map();
     const notify = () => onChange(snapshot());
-    const snapshot = () => ({ state, duration: frames / (context?.sampleRate || 48000),
-      sampleRate: context?.sampleRate || 48000, frames, message, maxSeconds: MAX_SECONDS });
+    const rate = () => (source ? sourceRate : context?.sampleRate) || 48000;
+    const snapshot = () => ({ state, duration: frames / rate(),
+      sampleRate: rate(), frames, message, maxSeconds });
+    const limitMessage = () => maxSeconds === MAX_SECONDS ? pt("5-minute limit reached. Your sample is ready.")
+      : pt("$1-minute limit reached. Your sample is ready.", String(Math.round(maxSeconds / 60 * 10) / 10));
+    function receive(blockChannels, blockRate) {
+      if (state !== "recording" && state !== "stopping") return;
+      if (source) {
+        if (!frames) sourceRate = blockRate;
+        else if (blockRate !== sourceRate) return;
+      }
+      const remaining = Math.max(0, Math.floor(maxSeconds * rate()) - frames);
+      const channels = blockChannels.map(channel => channel.subarray(0, remaining));
+      if (!channels[0].length) return;
+      chunks.push(channels); frames += channels[0].length;
+      // Small fixed buckets keep drawing proportional to screen width.
+      for (let i = 0; i < channels[0].length; i += 128) {
+        let min = 0, max = 0;
+        for (let j = i; j < Math.min(i + 128, channels[0].length); j++) {
+          min = Math.min(min, channels[0][j], channels[1][j]);
+          max = Math.max(max, channels[0][j], channels[1][j]);
+        }
+        peaks.push([min, max]);
+      }
+      if (source && frames >= Math.floor(maxSeconds * rate())) {
+        Promise.resolve(source.stop()).catch(() => {});
+        finish(true);
+      } else if (source) notify();
+    }
+    function finish(limitReached) {
+      if (state !== "recording" && state !== "stopping") return;
+      if (limitReached) message = limitMessage();
+      state = frames ? "ready" : "idle"; stopped?.(); stopped = null; notify();
+    }
     function attach(sourceContext, output) {
       for (const [oldContext, tap] of taps) if (oldContext.state === "closed") {
         releaseTap(tap); taps.delete(oldContext);
@@ -47,6 +81,13 @@
     async function prepare() {
       if (disposed) throw new Error(pt("Recorder has been closed."));
       if (!initialization) initialization = (async () => {
+        if (source) {
+          // The local context only previews the take; capture happens in the source.
+          context = new AudioContext();
+          await source.prepare({ maxSeconds, onChunk: receive, onStopped: limitReached => finish(limitReached) });
+          if (disposed) throw new Error(pt("Recorder has been closed."));
+          return;
+        }
         const url = moduleUrl || document.documentElement.getAttribute("data-scdl-extension-record-worklet-url");
         if (!url) throw new Error(pt("Reload SoundCloud to enable Record."));
         context = new AudioContext({ sampleRate: 48000 });
@@ -56,29 +97,12 @@
         input.connect(analyser);
         await context.audioWorklet.addModule(url);
         if (disposed) throw new Error(pt("Recorder has been closed."));
-        processor = new AudioWorkletNode(context, "scdl-record", { channelCount: 2, channelCountMode: "explicit", outputChannelCount: [2] });
+        processor = new AudioWorkletNode(context, "scdl-record", { channelCount: 2, channelCountMode: "explicit", outputChannelCount: [2],
+          processorOptions: { maxSeconds } });
         input.connect(processor); processor.connect(context.destination);
         processor.port.onmessage = ({ data }) => {
-          if (data.channels && (state === "recording" || state === "stopping")) {
-            const remaining = Math.max(0, Math.floor(MAX_SECONDS * context.sampleRate) - frames);
-            const channels = data.channels.map(channel => channel.subarray(0, remaining));
-            if (channels[0].length) {
-              chunks.push(channels); frames += channels[0].length;
-              // Small fixed buckets keep drawing proportional to screen width.
-              for (let i = 0; i < channels[0].length; i += 128) {
-                let min = 0, max = 0;
-                for (let j = i; j < Math.min(i + 128, channels[0].length); j++) {
-                  min = Math.min(min, channels[0][j], channels[1][j]);
-                  max = Math.max(max, channels[0][j], channels[1][j]);
-                }
-                peaks.push([min, max]);
-              }
-            }
-          }
-          if (data.stopped && (state === "recording" || state === "stopping")) {
-            if (data.limitReached) message = pt("5-minute limit reached. Your sample is ready.");
-            state = frames ? "ready" : "idle"; stopped?.(); stopped = null; notify();
-          }
+          if (data.channels) receive(data.channels);
+          if (data.stopped) finish(data.limitReached);
         };
         unsubscribe = effects.observeOutput(attach);
       })().catch(async error => {
@@ -105,6 +129,13 @@
       stopPreview(); state = "preparing"; message = ""; notify();
       try {
         await prepare();
+        if (source) {
+          // The source acknowledges before its first block, so a failed start keeps the old take.
+          await source.start();
+          chunks = []; frames = 0; peaks = []; buffer = null; previewOffset = 0; sourceRate = 0;
+          state = "recording"; notify();
+          return;
+        }
         const playback = effects.getPlaybackContext();
         await playback.resume();
         if (!effects.snapshot().available) throw new Error(effects.snapshot().reason || pt("This player cannot be recorded."));
@@ -117,11 +148,13 @@
       if (state !== "recording") { stopPreview(); return Promise.resolve(); }
       state = "stopping";
       stopPromise = new Promise(resolve => { stopped = resolve; });
-      processor.port.postMessage("stop"); notify();
+      if (source) Promise.resolve(source.stop()).catch(() => finish(false));
+      else processor.port.postMessage("stop");
+      notify();
       return stopPromise;
     }
     function position() {
-      return state === "playing" ? Math.min(frames / context.sampleRate, previewOffset + context.currentTime - previewStart) : previewOffset;
+      return state === "playing" ? Math.min(frames / rate(), previewOffset + context.currentTime - previewStart) : previewOffset;
     }
     function stopPreview() {
       playbackRevision++;
@@ -137,7 +170,7 @@
       await context.resume();
       if (disposed || revision !== playbackRevision) return;
       if (!buffer) {
-        buffer = context.createBuffer(2, frames, context.sampleRate);
+        buffer = context.createBuffer(2, frames, rate());
         let at = 0;
         for (const channels of chunks) {
           channels.forEach((channel, index) => buffer.copyToChannel(channel, index, at)); at += channels[0].length;
@@ -161,7 +194,7 @@
     function seek(seconds) {
       if (!frames || ["recording", "stopping", "preparing"].includes(state)) return;
       const playing = state === "playing";
-      stopPreview(); previewOffset = Math.max(0, Math.min(frames / context.sampleRate, seconds));
+      stopPreview(); previewOffset = Math.max(0, Math.min(frames / rate(), seconds));
       if (playing) return play(previewOffset);
       notify();
     }
@@ -170,15 +203,15 @@
       stopPreview(); chunks = []; frames = 0; peaks = []; buffer = null; previewOffset = 0; message = ""; state = "idle"; notify();
     }
     function dispose() {
-      disposed = true; stopPreview(); unsubscribe?.(); detach();
+      disposed = true; stopPreview(); unsubscribe?.(); detach(); source?.dispose?.();
       processor?.port.close(); context?.close().catch(() => {}); stopped?.();
       chunks = []; peaks = []; buffer = null;
     }
     return Object.freeze({ prepare, start, stop, play, stopPreview, seek, clear, dispose, snapshot, position,
       peaks: () => peaks,
       sampleAt(index, channel) { return chunks[Math.floor(index / 2048)]?.[channel]?.[index % 2048] || 0; },
-      readLive(samples) { if (analyser) analyser.getFloatTimeDomainData(samples); else samples.fill(0); },
-      exportWav() { if (!frames || ["recording", "stopping"].includes(state)) throw new Error(pt("Stop recording before downloading.")); return encodeWav(chunks, frames, context.sampleRate); },
+      readLive(samples) { if (source) source.readLive(samples); else if (analyser) analyser.getFloatTimeDomainData(samples); else samples.fill(0); },
+      exportWav() { if (!frames || ["recording", "stopping"].includes(state)) throw new Error(pt("Stop recording before downloading.")); return encodeWav(chunks, frames, rate()); },
     });
   }
   globalThis.SCRecord = Object.freeze({ create, encodeWav, MAX_SECONDS });

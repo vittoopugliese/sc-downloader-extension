@@ -2,12 +2,27 @@
 (() => {
   "use strict";
   const pt = (source, ...values) => globalThis.SCPlayerToolsText?.t(source, ...values) ?? source.replace(/\$(\d+)/g, (match, index) => values[index - 1] ?? match);
-  function mount({ container, effects, onCollapsedChange, moduleUrl, iconUrl }) {
+  // variant "pill": compact, always open, for the Likes Explorer. `recorder`
+  // replaces the built-in one; `extraActions` are buttons added to the toolbar.
+  function mount({ container, effects, onCollapsedChange, moduleUrl, iconUrl, recorder: injected, variant, extraActions = [], onChange, maxSeconds, emptyText }) {
+    const pill = variant === "pill";
     const collapsible = globalThis.SCPlayerToolsCollapsible;
     const section = document.createElement("section");
-    section.className = "record-section"; section.id = "scdl-record"; section.setAttribute("aria-label", pt("Record"));
+    section.className = pill ? "record-section record-pill" : "record-section"; section.id = pill ? "scdl-record-pill" : "scdl-record";
+    section.setAttribute("aria-label", pt("Record"));
+    const transport = `
+        <span class="record-status" hidden><span class="record-dot" aria-hidden="true"></span><output class="record-time" aria-label="Recording duration">00:00.000</output></span>
+        <button type="button" class="record-start" aria-label="Start recording" aria-pressed="false"><span class="record-dot" aria-hidden="true"></span>Rec</button>
+        <button type="button" class="record-stop" aria-label="Stop recording or playback; hold to clear" data-scdl-tooltip="Stop · Hold to clear" disabled>■</button>
+        <button type="button" class="record-play" aria-label="Play recorded sample" disabled>▶</button>
+        <button type="button" class="record-download" aria-label="Download WAV" data-scdl-tooltip="Download WAV" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button>`;
+    const stage = `
+      <div class="record-stage">
+        <canvas class="record-canvas" tabindex="0" role="slider" aria-label="Recorded sample position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" data-scdl-tooltip="Wheel to zoom at the cursor. Drag or Shift + wheel to scroll. Click to seek. Keyboard: + / - zoom, Shift + arrows scroll, 0 resets the view."></canvas>
+        <div class="record-empty">${emptyText ? "" : "Record your mix<br>Track · pads · FX · EQ"}</div>
+      </div>`;
     section.innerHTML = `<style>
-      ${collapsible.styles}
+      ${pill ? "" : collapsible.styles}
       .record-section { overflow:hidden; border:1px solid #343434; border-radius:11px; background:#151515; color:#eee; }
       .record-body { padding:2px 9px 9px; }
       .record-toolbar { gap:5px; pointer-events:none; }
@@ -33,28 +48,28 @@
       .record-empty { position:absolute; inset:0; display:grid; place-content:center; text-align:center; pointer-events:none; color:#cad7d6; font:10px/1.6 system-ui,sans-serif; }
       .record-empty[hidden] { display:none; }
       .record-notice { position:absolute; inset:auto 5px 5px; margin:0; padding:4px 6px; border-radius:3px; color:#eee; background:#20282bee; font:10px/1.4 system-ui,sans-serif; pointer-events:none; }
+      .record-pill { border-radius:14px; }
+      .record-pill .record-bar { display:flex; align-items:center; flex-wrap:wrap; gap:5px; padding:6px 8px 5px; }
+      .record-pill .record-bar .record-status { order:10; margin-left:auto; }
+      .record-pill .record-body { padding:0 8px 8px; }
+      .record-pill .record-stage { height:64px; border-radius:8px; }
+      .record-pill .record-notice { inset:auto 4px 4px; padding:2px 6px; }
     </style>
-    ${collapsible.header({ title: pt("Record"), bodyId: "scdl-record-body", expanded: false, toggleClass: "record-toggle", icon: '<img class="tool-section-icon record-icon" alt="" aria-hidden="true" />', actionsClass: "record-toolbar", actions: `
-        <span class="record-status" hidden><span class="record-dot" aria-hidden="true"></span><output class="record-time" aria-label="Recording duration">00:00.000</output></span>
-        <button type="button" class="record-start" aria-label="Start recording" aria-pressed="false"><span class="record-dot" aria-hidden="true"></span>Rec</button>
-        <button type="button" class="record-stop" aria-label="Stop recording or playback; hold to clear" data-scdl-tooltip="Stop · Hold to clear" disabled>■</button>
-        <button type="button" class="record-play" aria-label="Play recorded sample" disabled>▶</button>
-        <button type="button" class="record-download" aria-label="Download WAV" data-scdl-tooltip="Download WAV" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button>` })}
-    <div class="record-body" id="scdl-record-body" hidden>
-      <div class="record-stage">
-        <canvas class="record-canvas" tabindex="0" role="slider" aria-label="Recorded sample position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" data-scdl-tooltip="Wheel to zoom at the cursor. Drag or Shift + wheel to scroll. Click to seek. Keyboard: + / - zoom, Shift + arrows scroll, 0 resets the view."></canvas>
-        <div class="record-empty">Record your mix<br>Track · pads · FX · EQ</div>
-      </div>
-    </div>`;
+    ${pill ? `<div class="record-bar">${transport}</div>
+    <div class="record-body">${stage}</div>` : `${collapsible.header({ title: pt("Record"), bodyId: "scdl-record-body", expanded: false, toggleClass: "record-toggle", icon: '<img class="tool-section-icon record-icon" alt="" aria-hidden="true" />', actionsClass: "record-toolbar", actions: transport })}
+    <div class="record-body" id="scdl-record-body" hidden>${stage}
+    </div>`}`;
     globalThis.SCPlayerToolsText?.localize(section);
-    container.append(section);
     const find = name => section.querySelector(`.record-${name}`);
+    if (emptyText) find("empty").textContent = emptyText;
+    if (pill) find("download").after(...extraActions);
+    container.append(section);
     const canvas = find("canvas"), painter = canvas.getContext("2d");
     let visible = false, frame = null, lastPaint = 0, liveReady = false, preparing = false;
     let zoom = 1, scroll = 0, lastState = "idle";
     let pan = null;
     const live = new Float32Array(2048);
-    const recorder = globalThis.SCRecord.create({ effects, onChange: render, moduleUrl });
+    const recorder = injected || globalThis.SCRecord.create({ effects, onChange: render, moduleUrl, ...(maxSeconds ? { maxSeconds } : {}) });
     const time = seconds => {
       const ms = Math.round(seconds * 1000);
       return `${String(Math.floor(ms / 60000)).padStart(2, "0")}:${((ms % 60000) / 1000).toFixed(3).padStart(6, "0")}`;
@@ -73,11 +88,12 @@
     const syncIcon = () => {
       globalThis.SCPlayerToolsText?.refresh(section);
       const url = iconUrl || document.documentElement.getAttribute("data-scdl-extension-record-url");
-      if (url) find("icon").src = url;
+      if (url && find("icon")) find("icon").src = url;
     };
     syncIcon(); document.addEventListener("scdl:extension-assets-ready", syncIcon);
-    const disclosure = collapsible.mount({ section, toggle: find("toggle"), body: find("body"), collapsed: true,
-      onChange(value) { updateVisibility(); onCollapsedChange?.(value); } });
+    const disclosure = pill ? { isCollapsed: () => false, setCollapsed() {} }
+      : collapsible.mount({ section, toggle: find("toggle"), body: find("body"), collapsed: true,
+        onChange(value) { updateVisibility(); onCollapsedChange?.(value); } });
     function render() {
       const state = recorder.snapshot();
       const capturing = state.state === "recording" || state.state === "stopping";
@@ -98,6 +114,7 @@
       notice(state.message);
       updateVisibility();
       paint();
+      onChange?.(state);
     }
     function windowRange(state) {
       const span = state.duration / zoom;
@@ -308,7 +325,7 @@
     };
     window.addEventListener("pagehide", onPageHide);
     render();
-    return Object.freeze({ setVisible(value) { if (visible === value) return; visible = value; updateVisibility(); },
+    return Object.freeze({ recorder, render, setVisible(value) { if (visible === value) return; visible = value; updateVisibility(); },
       isCollapsed: disclosure.isCollapsed,
       setCollapsed(value, options) { disclosure.setCollapsed(value, options); updateVisibility(); }, dispose });
   }

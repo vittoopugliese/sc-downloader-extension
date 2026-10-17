@@ -45,5 +45,13 @@ require("./record-core.js");
   const count = messages.length;
   command("stop");
   assert.equal(messages.length, count, "A late stop must not acknowledge an already completed take again");
+  messages.length = 0;
+  const short = new Processor({ processorOptions: { maxSeconds: 120 } });
+  short.port.onmessage({ data: "start" });
+  for (let i = 0; i < 20; i++) short.process([[block]]);
+  assert.equal(messages.filter(m => m.channels).reduce((sum, m) => sum + m.channels[0].length, 0), 120 * 16,
+    "processorOptions.maxSeconds must lower the capture limit (Likes Explorer uses two minutes)");
+  assert.equal(messages.at(-1).limitReached, true);
+  assert.equal(new Processor({ processorOptions: { maxSeconds: 9999 } }).maxSeconds, 300, "The limit can never exceed five minutes");
   console.log("Record PCM verification passed: stereo WAV, clipping, silence, partial-block flush, fresh takes and automatic limit.");
 })().catch(error => { console.error(error); process.exitCode = 1; });

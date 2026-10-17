@@ -35,9 +35,14 @@
 .pl-field{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--pl-muted);white-space:nowrap}
 .pl-field input[type=number]{width:61px}.pl-field input[type=checkbox]{accent-color:var(--orange)}
 .pl-field input[type=number],.pl-ui select{height:28px;padding:4px;border:1px solid #45423e;border-radius:5px;background:var(--pl-night);color:#ece8e2}
-.pl-library{display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 12px;border-inline:1px solid var(--pl-edge);border-top:1px solid #ffffff0d;background:var(--pl-head-bg)}
+.pl-library{position:relative;display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 40px 6px 12px;border-inline:1px solid var(--pl-edge);border-top:1px solid #ffffff0d;background:var(--pl-head-bg)}
 .pl-shelf{display:flex;flex:1 1 auto;gap:6px;min-width:0;padding:2px 0;overflow-x:auto;overflow-y:hidden;color:#97938e;font-size:11px;scrollbar-width:thin;scrollbar-color:#4a4642 transparent}
 .pl-shelf:empty{display:none}
+/* Stretch spinner: absolute inside the right padding the library row always keeps, so it never covers the shelf or shifts layout. */
+.pl-busy{position:absolute;top:50%;right:12px;width:16px;height:16px;margin-top:-8px;border:2px solid #ffad8040;border-top-color:#ffad80;border-radius:50%;pointer-events:none;animation:pl-spin .8s linear infinite}
+.pl-busy[hidden]{display:none}
+@keyframes pl-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.pl-busy{animation-duration:2.4s}}
 .pl-shelf>span{align-self:center}
 .pl-shelf button{max-width:180px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:3px solid var(--orange);cursor:grab}
 .pl-scroll{position:relative;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;border:1px solid var(--pl-edge);background:var(--pl-night);scrollbar-width:none}
@@ -156,6 +161,14 @@
 .pl-menu .pl-menu-item.is-danger:hover:enabled,.pl-menu .pl-menu-item.is-danger:focus-visible{background:#4a2020;color:#ff8f8f}
 .pl-menu-sep{height:1px;margin:4px 6px;background:#3b3936}
 .pl-menu-heading{padding:4px 8px 2px 31px;font:9px ui-monospace,monospace;letter-spacing:1px;text-transform:uppercase;color:#8f8a84}
+/* Icon radio row (pitch mode, edit tool): the check badge marks the active one. */
+/* Choice buttons start on the label column (8px + 15px icon + 8px gap) and end where shortcuts end. */
+.pl-menu-choices{display:flex;gap:4px;padding:5px 8px 2px 31px}
+.pl-menu .pl-menu-item.pl-menu-choice{position:relative;flex:1;justify-content:center;min-width:0;min-height:30px;padding:5px 0;border:1px solid #3b3936;color:#b8b3ad}
+.pl-menu .pl-menu-item.pl-menu-choice[aria-checked=true]{border-color:var(--orange,#ff5500);background:#ff55001f;color:#fff}
+.pl-menu-choice>svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pl-menu-choice-check{position:absolute;top:-5px;right:-5px;display:grid;place-items:center;width:12px;height:12px;border-radius:50%;background:var(--orange,#ff5500)}
+.pl-menu-choice-check svg{width:9px;height:9px;fill:none;stroke:#fff;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round}
 .pl-notes:has(> .pl-message:empty):has(> .pl-hint[hidden]){display:none}
 /* Host buttons placed in the transport keep their page styles. */
 .pl-ui button.primary{border-color:var(--orange);background:var(--orange);color:#fff;box-shadow:0 2px 0 #a83700}

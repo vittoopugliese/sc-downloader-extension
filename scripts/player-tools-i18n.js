@@ -125,6 +125,16 @@ Record the final mix¦Grabar la mezcla final¦Finalen Mix aufnehmen¦Gravar a mi
 Recorder has been closed.¦La grabadora está cerrada.¦Die Aufnahme wurde geschlossen.¦O gravador foi fechado.¦Модуль записи закрыт.
 Reload SoundCloud to enable Record.¦Recargá SoundCloud para activar la grabadora.¦Lade SoundCloud neu, um die Aufnahme zu aktivieren.¦Recarregue o SoundCloud para ativar o gravador.¦Перезагрузите SoundCloud, чтобы включить запись.
 5-minute limit reached. Your sample is ready.¦Se alcanzó el límite de 5 minutos. Tu muestra está lista.¦Das Limit von 5 Minuten ist erreicht. Dein Sample ist fertig.¦Limite de 5 minutos atingido. Sua amostra está pronta.¦Достигнут лимит 5 минут. Ваш сэмпл готов.
+$1-minute limit reached. Your sample is ready.¦Se alcanzó el límite de $1 minutos. Tu muestra está lista.¦Das Limit von $1 Minuten ist erreicht. Dein Sample ist fertig.¦Limite de $1 minutos atingido. Sua amostra está pronta.¦Достигнут лимит $1 мин. Ваш сэмпл готов.
+Press play on the player to record.¦Dale play al reproductor para grabar.¦Starte den Player, um aufzunehmen.¦Dê play no player para gravar.¦Запустите плеер, чтобы записывать.
+The player is already recording.¦El reproductor ya está grabando.¦Der Player nimmt bereits auf.¦O player já está gravando.¦Плеер уже записывает.
+The player did not answer. Reload the track and try again.¦El reproductor no respondió. Volvé a cargar el track e intentá de nuevo.¦Der Player antwortet nicht. Lade den Track neu und versuche es erneut.¦O player não respondeu. Recarregue a faixa e tente novamente.¦Плеер не ответил. Перезагрузите трек и попробуйте снова.
+Record what is playing · up to 2 min¦Grabá lo que suena · hasta 2 min¦Nimm auf, was läuft · bis zu 2 Min.¦Grave o que está tocando · até 2 min¦Запишите то, что играет · до 2 мин
+Send to Stem Extractor¦Enviar al Stem Extractor¦An Stem Extractor senden¦Enviar ao Stem Extractor¦Отправить в Stem Extractor
+Opening the Stem Extractor…¦Abriendo el Stem Extractor…¦Stem Extractor wird geöffnet…¦Abrindo o Stem Extractor…¦Открывается Stem Extractor…
+Could not send the recording to the Stem Extractor.¦No se pudo enviar la grabación al Stem Extractor.¦Die Aufnahme konnte nicht an den Stem Extractor gesendet werden.¦Não foi possível enviar a gravação ao Stem Extractor.¦Не удалось отправить запись в Stem Extractor.
+Likes Explorer recording¦Grabación del Likes Explorer¦Likes-Explorer-Aufnahme¦Gravação do Likes Explorer¦Запись из Likes Explorer
+$1 (recording)¦$1 (grabación)¦$1 (Aufnahme)¦$1 (gravação)¦$1 (запись)
 This player cannot be recorded.¦No se puede grabar este reproductor.¦Dieser Player kann nicht aufgenommen werden.¦Não é possível gravar este player.¦Этот плеер нельзя записать.
 Stop recording before downloading.¦Detené la grabación antes de descargar.¦Stoppe die Aufnahme vor dem Download.¦Pare a gravação antes de baixar.¦Остановите запись перед скачиванием.
 Track¦Pista¦Titel¦Faixa¦Трек
