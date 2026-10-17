@@ -160,10 +160,10 @@
 .pl-menu .pl-menu-item.is-danger,.pl-menu .pl-menu-item.is-danger .pl-menu-icon{color:#ff6b6b}
 .pl-menu .pl-menu-item.is-danger:hover:enabled,.pl-menu .pl-menu-item.is-danger:focus-visible{background:#4a2020;color:#ff8f8f}
 .pl-menu-sep{height:1px;margin:4px 6px;background:#3b3936}
-.pl-menu-heading{padding:4px 8px 2px 31px;font:9px ui-monospace,monospace;letter-spacing:1px;text-transform:uppercase;color:#8f8a84}
+.pl-menu-heading{padding:4px 8px 2px;font:9px ui-monospace,monospace;letter-spacing:1px;text-transform:uppercase;color:#8f8a84}
 /* Icon radio row (pitch mode, edit tool): the check badge marks the active one. */
-/* Choice buttons start on the label column (8px + 15px icon + 8px gap) and end where shortcuts end. */
-.pl-menu-choices{display:flex;gap:4px;padding:5px 8px 2px 31px}
+/* Headings and choice buttons share the 8px left edge of the item icons. */
+.pl-menu-choices{display:flex;gap:4px;padding:5px 8px 2px}
 .pl-menu .pl-menu-item.pl-menu-choice{position:relative;flex:1;justify-content:center;min-width:0;min-height:30px;padding:5px 0;border:1px solid #3b3936;color:#b8b3ad}
 .pl-menu .pl-menu-item.pl-menu-choice[aria-checked=true]{border-color:var(--orange,#ff5500);background:#ff55001f;color:#fff}
 .pl-menu-choice>svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}

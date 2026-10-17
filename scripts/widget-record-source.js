@@ -10,7 +10,7 @@
     channels[0].length === channels[1].length;
 
   function create({ getFrame, moduleUrl, startTimeout = 5000, stopTimeout = 3000 }) {
-    let callbacks = null, active = null, monitored = null, listening = false;
+    let callbacks = null, active = null, monitored = null, listening = false, monitoring = true;
     let scope = null, scopeAt = 0;
     const pending = new Map();
     const post = (target, message) => { try { target?.postMessage({ scdl: PROTOCOL, ...message }, ORIGIN); } catch {} };
@@ -54,7 +54,7 @@
     }
     // Follows the widget when the Explorer loads another track.
     function syncMonitor() {
-      const target = currentWindow();
+      const target = monitoring ? currentWindow() : null;
       if (target === monitored) return;
       post(monitored, { type: "monitor", on: false });
       monitored = target; scope = null;
@@ -95,6 +95,8 @@
         if (active && currentWindow() !== active.window) end(false);
         syncMonitor();
       },
+      // The live scope costs ~20 messages per second; stop it while the pill is hidden.
+      setMonitor(on) { monitoring = on === true; if (callbacks) syncMonitor(); },
       readLive(samples) {
         if (active && currentWindow() !== active.window) end(false);
         syncMonitor();

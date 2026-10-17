@@ -186,6 +186,7 @@
     const current = !!nowTrack && !!player && selected?.itemId === nowTrack.itemId;
     recordSlot.hidden = !(current || take.frames > 0 || ['recording','stopping','preparing'].includes(take.state));
     recordUI?.setVisible(opened && !recordSlot.hidden);
+    recordSource?.setMonitor(opened && !recordSlot.hidden);
     if (recordSend) recordSend.disabled = recordSending || !take.frames || !['ready','playing'].includes(take.state);
   }
   function mountRecorder() {

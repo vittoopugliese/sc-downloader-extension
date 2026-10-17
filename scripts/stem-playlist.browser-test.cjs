@@ -187,6 +187,11 @@ const { chromium } = require('playwright');
     assert.ok((await menu.locator('.pl-menu-heading').allTextContents()).includes('Pitch mode · Stretch'));
     assert.equal(await menu.locator('.pl-menu-choices').count(), 2, 'Pitch mode and edit tool are icon rows');
     assert.equal(await menu.locator('.pl-menu-choice-check').count(), 2, 'Each row marks its active choice');
+    const menuLefts = await menu.evaluate(m => ['.pl-menu-item .pl-menu-icon', '.pl-menu-heading', '.pl-menu-choice'].map(s => {
+      const el = m.querySelector(s); const pad = s === '.pl-menu-heading' ? parseFloat(getComputedStyle(el).paddingLeft) : 0;
+      return Math.round(el.getBoundingClientRect().left + pad);
+    }));
+    assert.deepEqual(new Set(menuLefts).size, 1, `Headings and choice rows start on the item icon column: ${menuLefts}`);
     await menu.getByRole('menuitemradio', { name: 'Resample · pitch + speed' }).click();
     await clipHeader.click({ button: 'right' });
     assert.equal(await menu.getByRole('menuitemradio', { name: 'Resample · pitch + speed' }).getAttribute('aria-checked'), 'true');
