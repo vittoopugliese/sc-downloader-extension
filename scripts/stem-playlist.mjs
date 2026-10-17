@@ -10,7 +10,7 @@ const MIN_ZOOM = 8, MAX_ZOOM = 600;
 export const CHANNEL_COLORS = Object.freeze({ original: '#c8c2ba', drums: '#ff8a4c', bass: '#ffb98f', other: '#8c8c8c', vocals: '#ff5500' });
 const EXTRA_COLORS = ['#ffd2b3', '#c56a3a', '#e9a27a', '#a39a90', '#ff7a2f', '#d9cfc4'];
 // Semantic names from the shared icon catalog.
-const ICONS = Object.freeze({"pencil": "draw", "select": "select", "undo": "undo", "redo": "redo", "download": "download", "browser": "browser", "addTrack": "add-track", "magnet": "snap", "zoomOut": "zoom-out", "zoomIn": "zoom-in", "fit": "fit", "mute": "mute", "reverse": "reverse", "crossfade": "crossfade", "duplicate": "copy", "slice": "slice", "split": "cut", "trash": "trash", "check": "check", "keepLength": "keep-length", "resample": "resample", "moveTool": "move", "slipTool": "slip", "stretchTool": "stretch", "import": "upload"});
+const ICONS = Object.freeze({"pencil": "draw", "select": "select", "undo": "undo", "redo": "redo", "export": "export", "tapTempo": "tap-tempo", "browser": "browser", "addTrack": "add-track", "magnet": "snap", "zoomOut": "zoom-out", "zoomIn": "zoom-in", "fit": "fit", "mute": "mute", "reverse": "reverse", "crossfade": "crossfade", "duplicate": "copy", "slice": "slice", "split": "cut", "trash": "trash", "check": "check", "keepLength": "keep-length", "resample": "resample", "moveTool": "move", "slipTool": "slip", "stretchTool": "stretch", "import": "upload"});
 
 // Small context menu at the pointer. Items: { label, icon, shortcut, danger, checked,
 // disabled, title, action }, '-' for a separator, { heading }, or { choices: [{ label, icon,
@@ -269,7 +269,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   // Tap tempo like FL Studio's tapper: BPM is the average of every interval since the first tap;
   // a pause longer than two beats (3 s minimum) starts over. One tap session is one undo step.
   let taps = [], tapTimer = 0, tapUndo = null;
-  const tapButton = createButton({ label: 'TAP', variant: 'neutral', title: t('Tap tempo (T): tap along with the beat and the BPM follows the average; pause to start over', 'Tap tempo (T): tocá al ritmo y el BPM sigue el promedio; una pausa reinicia') });
+  const tapButton = iconButton(ICONS.tapTempo, t('Tap tempo (T): tap along with the beat and the BPM follows the average; pause to start over', 'Tap tempo (T): tocá al ritmo y el BPM sigue el promedio; una pausa reinicia'), () => {});
   tapButton.classList.add('pl-tap');
   const tapInterval = () => taps.length > 1 ? (taps.at(-1) - taps[0]) / (taps.length - 1) : 0;
   const tapWait = () => Math.max(3000, tapInterval() * 2);
@@ -343,9 +343,9 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const addTrack = toolButton({ icon: ICONS.addTrack, name: t('Add track', 'Agregar pista'), key: 'N', keys: ['n'], color: '#ffd166',
     detail: t('an empty lane for samples and patterns (up to 16 tracks)', 'un carril vacío para samples y patrones (hasta 16 pistas)') },
   () => commit(() => state.tracks.push({ id: uid(), name: `${t('Track', 'Pista')} ${state.tracks.filter(item => !item.stem).length + 1}`, gain: 1, mute: false, solo: false })));
-  const exportButton = iconButton(ICONS.download, t('Download WAV', 'Descargar WAV'), safe(exportMix), { variant: 'accent' });
+  const exportButton = iconButton(ICONS.export, t('Export WAV', 'Exportar WAV'), safe(exportMix), { variant: 'accent' });
   exportButton.classList.add('pl-export');
-  exportButton.title = t('Download WAV: renders the whole playlist (or the A–B loop) with mute, solo, volume, FXs and EQ into a stereo WAV file', 'Descargar WAV: renderiza toda la playlist (o el loop A–B) con mute, solo, volumen, FXs y EQ en un WAV estéreo');
+  exportButton.title = t('Export WAV: renders the whole playlist (or the A–B loop) with mute, solo, volume, FXs and EQ into a stereo WAV file', 'Exportar WAV: renderiza toda la playlist (o el loop A–B) con mute, solo, volumen, FXs y EQ en un WAV estéreo');
   // Slice tool, like FL Studio's: a click cuts the clip under the mouse; dragging up or down
   // cuts every lane the line crosses. Snap applies unless Alt is held.
   const sliceButton = toolButton({ icon: ICONS.slice, name: t('Slice tool', 'Herramienta de corte'), key: 'C', keys: ['c'], color: '#ff5d8f',

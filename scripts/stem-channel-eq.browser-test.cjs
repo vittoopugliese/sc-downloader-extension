@@ -43,7 +43,7 @@ const { chromium } = require('playwright');
     await page.locator('.pl-stem-head[data-stem=vocals]').waitFor();
     // Treble against bass of the exported mix: the 9 kHz second over the 70 Hz second.
     async function trebleRatio() {
-      const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#transport').getByLabel('Download WAV').click()]);
+      const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#transport').getByLabel('Export WAV').click()]);
       const bytes = [...fs.readFileSync(await download.path())];
       return page.evaluate(async bytes => {
         const buffer = await new OfflineAudioContext(2, 1, 44100).decodeAudioData(new Uint8Array(bytes).buffer);

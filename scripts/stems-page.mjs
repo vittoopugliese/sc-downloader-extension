@@ -9,7 +9,7 @@ import { mountStemLibrary } from './stem-library-ui.mjs';
 import { contextMenu, createKnob, mountPlaylist } from './stem-playlist.mjs';
 import { setButtonContent } from './ui-button.mjs';
 import { mountModuleWindow } from './stem-module-window.mjs';
-import { mountEffects, FX_ICON } from './stem-effects.mjs';
+import { mountEffects } from './stem-effects.mjs';
 import { spectrumOf } from './stem-spectrum.mjs';
 
 const translations = {
@@ -292,11 +292,11 @@ const WINDOWS = [
     detail: say('the focused track cut into eight pads and its step patterns', 'la pista enfocada cortada en ocho pads y sus patrones de pasos') },
   { id: 'piano', icon: PLUGIN_ICONS.piano, name: say('Piano roll', 'Piano roll'), key: 'F7', keys: ['f7'], color: '#c792ea',
     detail: say('notes of the focused pattern', 'las notas del patrón enfocado') },
-  { id: 'fx', icon: FX_ICON, name: 'FXs', key: 'F4', keys: ['f4'], color: '#ff9955',
+  { id: 'fx', icon: 'plugin', name: 'FXs', key: 'F4', keys: ['f4'], color: '#ff9955',
     detail: say('all six Player Tools effects and their settings on the master', 'los seis efectos de Player Tools y todos sus ajustes en el master') },
-  { id: 'eq', icon: 'eq', name: say('Parametric EQ', 'EQ paramétrico'), key: 'F9', keys: ['f9'], color: '#4fc3f7',
+  { id: 'eq', icon: 'eq-window', name: say('Parametric EQ', 'EQ paramétrico'), key: 'F9', keys: ['f9'], color: '#4fc3f7',
     detail: say('equalizer of the selected channel, or of the master', 'ecualizador del canal seleccionado o del master') },
-  { id: 'recorder', icon: 'record', name: say('Recorder', 'Grabadora'), key: 'F10', keys: ['f10'], color: '#ff4d6d',
+  { id: 'recorder', icon: 'recorder', name: say('Recorder', 'Grabadora'), key: 'F10', keys: ['f10'], color: '#ff4d6d',
     detail: say('records the final mix to a WAV', 'graba la mezcla final en un WAV') },
 ].map(item => ({ ...item, toggle: () => moduleWindows[item.id]?.toggle() }));
 const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('transport'), playButton: false, windows: WINDOWS,
@@ -736,7 +736,7 @@ function buildChannel(stem, wav, trackName = null) {
   const menu = event => contextMenu(event, [
     { label: pt('Channel rack'), icon: PLUGIN_ICONS.rack, disabled: !wav, title: editorHint, action: () => { instruments.focus(stem); moduleWindows.rack.reveal(); channelRack.open(); } },
     { label: pt('Piano roll'), icon: PLUGIN_ICONS.piano, disabled: !wav, title: editorHint, action: () => { instruments.focus(stem); moduleWindows.piano.reveal(); pianoRoll.open(); } },
-    { label: say('Channel EQ', 'EQ del canal'), icon: 'eq', action: () => { selectEqChannel(stem); moduleWindows.eq.reveal(); } },
+    { label: say('Channel EQ', 'EQ del canal'), icon: 'eq-window', action: () => { selectEqChannel(stem); moduleWindows.eq.reveal(); } },
     { label: pt('Download WAV'), icon: 'download', disabled: !wav, action: () => link.click() },
     '-',
     { label: pt('Hear only this track'), icon: 'music', action: hearOnly },

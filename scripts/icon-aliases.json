@@ -102,5 +102,10 @@
   "flanger": "glyph:F535",
   "phaser": "glyph:F536",
   "bitcrusher": "glyph:F534",
-  "saturation": "glyph:F533"
+  "saturation": "glyph:F533",
+  "recorder": "glyph:F006",
+  "plugin": "glyph:F41B",
+  "eq-window": "glyph:F0B4",
+  "export": "glyph:F008",
+  "tap-tempo": "glyph:F01D"
 }

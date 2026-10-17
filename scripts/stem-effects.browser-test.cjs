@@ -91,7 +91,7 @@ const { chromium } = require('playwright');
     await page.waitForFunction(() => document.querySelector('#play').getAttribute('aria-pressed') === 'true');
     await page.locator('#play').click();
     async function exported() {
-      const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#transport').getByLabel('Download WAV').click()]);
+      const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#transport').getByLabel('Export WAV').click()]);
       return page.evaluate(async bytes => {
         const buffer = await new OfflineAudioContext(2, 1, 44100).decodeAudioData(new Uint8Array(bytes).buffer);
         const data = buffer.getChannelData(0);

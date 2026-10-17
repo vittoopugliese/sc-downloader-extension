@@ -55,12 +55,12 @@ const { chromium } = require('playwright');
     // The transport bar lives in the header: the header play button is the only one.
     assert.equal(await page.locator('.pl-play').count(), 0);
     assert.equal(await transport.locator('#stem-rate').count(), 1, 'Speed sits next to the tempo controls');
-    for (const name of ['Import audio files', 'Sample browser', 'Add track', 'Download WAV']) {
-      const host = name === 'Download WAV' || name === 'Sample browser' ? transport : playlist.locator('.pl-tools');
+    for (const name of ['Import audio files', 'Sample browser', 'Add track', 'Export WAV']) {
+      const host = name === 'Export WAV' || name === 'Sample browser' ? transport : playlist.locator('.pl-tools');
       const control = host.getByRole('button', { name, exact: true });
       assert.equal(await control.textContent(), '');
       assert.equal(await control.locator('svg').count(), 1);
-      assert.match(await control.getAttribute('title'), new RegExp('^' + name + (name === 'Download WAV' ? '' : ' \\([A-Z]\\d*\\)') + ': '));
+      assert.match(await control.getAttribute('title'), new RegExp('^' + name + (name === 'Export WAV' ? '' : ' \\([A-Z]\\d*\\)') + ': '));
     }
     // Two rows of eight tools, each with a hotkey; window buttons live in the transport bar.
     const tools = playlist.locator('.pl-tools > button');
@@ -150,7 +150,7 @@ const { chromium } = require('playwright');
     await page.locator('#play').click();
     assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'false');
     // Export uses the same clip scheduling and cached stretch as playback.
-    const [download] = await Promise.all([page.waitForEvent('download'), transport.getByLabel('Download WAV').click()]);
+    const [download] = await Promise.all([page.waitForEvent('download'), transport.getByLabel('Export WAV').click()]);
     const file = await download.path();
     const result = await page.evaluate(async bytes => {
       const buffer = await new OfflineAudioContext(2, 1, 44100).decodeAudioData(new Uint8Array(bytes).buffer);
