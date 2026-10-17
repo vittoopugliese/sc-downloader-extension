@@ -391,10 +391,12 @@ const stemRecordingJobs = globalThis.SCStemRecordingJobs?.create({
   chrome,
   authorize: sender => playerToolsAccess.authorize(sender, { operation: "export-loop" }),
 });
-stemRecordingJobs?.sweep().catch(error => console.warn("Stem recording cleanup failed", error));
-chrome.runtime.onConnect.addListener((port) => {
-  if (stemRecordingJobs?.acceptsPort(port.name)) stemRecordingJobs.connect(port);
-});
+if (stemRecordingJobs) {
+  stemRecordingJobs.sweep().catch(error => console.warn("Stem recording cleanup failed", error));
+  chrome.runtime.onConnect.addListener((port) => {
+    if (stemRecordingJobs.acceptsPort(port.name)) stemRecordingJobs.connect(port);
+  });
+}
 
 chrome.runtime.onInstalled.addListener((details) => {
   configureUninstallFeedback().catch(() => {});

@@ -203,7 +203,7 @@ const { chromium } = require('playwright');
         openSingleLine:open.scrollHeight<=open.clientHeight,
       };
     });
-    assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['▶ Reproducir','↗','',''],detailOrder:['detail-media','status','detail-actions'],oneLine:true,locateTitle:'Localizar en SoundCloud',locateIcon:true,openSingleLine:true});
+    assert.deepEqual(footerLayout,{toolbarBelowTrack:true,detailButtons:['▶ Reproducir','',''],detailOrder:['detail-media','status','detail-actions','record-slot'],oneLine:true,locateTitle:'Localizar en SoundCloud',locateIcon:true,openSingleLine:true});
     const teleportButton=page.locator('#scdl-likes-explorer .locate-action');
     await page.mouse.move(0,0);
     await teleportButton.hover(); await page.waitForTimeout(400);
