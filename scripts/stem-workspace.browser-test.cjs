@@ -20,6 +20,16 @@ const { chromium } = require('playwright');
     const page = await browser.newPage({ locale: 'en-US', viewport: { width: 1440, height: 1000 } });
     page.setDefaultTimeout(10000);
     const errors = []; page.on('pageerror', e => errors.push(e.message));
+    await page.addInitScript(() => {
+      globalThis.workerDelay = 30;
+      globalThis.Worker = class {
+        postMessage({ channels }) {
+          this.timer = setTimeout(() => this.onmessage?.({ data: { type: 'complete', seconds: .1,
+            outputs: [1, .7, .4, .2].map(gain => channels.map(channel => channel.map(value => value * gain))) } }), globalThis.workerDelay);
+        }
+        terminate() { clearTimeout(this.timer); }
+      };
+    });
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html`);
     await page.locator('#import-audio:not(:disabled)').waitFor();
     assert.equal(await page.locator('.studio-card, .workspace-edition, #workspace-title, .pl-notes, #status').count(), 0);
@@ -48,6 +58,45 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('#playlist').evaluate(e => e.getBoundingClientRect().top), top, 'Notifications never move the playlist');
     await page.evaluate(() => notifications.toast({ id: 'expiry', title: 'Temporary message', duration: 100 }));
     await page.locator('.ui-toast-title', { hasText: 'Temporary message' }).waitFor({ state: 'detached' });
+    const { encodeWav } = await import('./stem-audio.mjs');
+    const pcm = Float32Array.from({ length: 44100 }, (_, i) => Math.sin(i * 2 * Math.PI * 440 / 44100) * .2);
+    await page.locator('#transport input[type=file]').setInputFiles({ name: 'Library tone.wav', mimeType: 'audio/wav', buffer: Buffer.from(encodeWav([pcm, pcm])) });
+    await page.locator('.pl-clip').waitFor();
+    await page.locator('#playlist').focus(); await page.keyboard.press('Delete');
+    assert.equal(await page.locator('.pl-clip').count(), 0);
+    const initialTracks = await page.locator('.pl-grid-row').count();
+    const sample = page.locator('.pl-shelf button', { hasText: /^Library tone\.wav$/ });
+    await sample.click({ button: 'right' });
+    await page.locator('.pl-menu-item', { hasText: 'Extract stems' }).click();
+    assert.equal(await page.locator('#separate').isEnabled(), true, 'Library samples can be separated without an Original or any clip');
+    for (const input of await page.locator('[name=extract-stem]').all()) await input.uncheck();
+    assert.equal(await page.locator('#separate').isDisabled(), true, 'At least one output must be chosen');
+    await page.locator('[name=extract-stem][value=drums]').check();
+    await page.locator('[name=extract-stem][value=bass]').check();
+    await page.locator('[name=extract-stem][value=other]').uncheck();
+    await page.locator('[name=extract-stem][value=vocals]').uncheck();
+    await page.locator('#separate').click();
+    await page.locator('#extract-dialog').waitFor({ state: 'hidden' });
+    assert.equal(await page.locator('.pl-grid-row').count(), initialTracks + 2);
+    assert.equal(await page.locator('.pl-clip').count(), 2);
+    await page.locator('#playlist').focus(); await page.keyboard.press('Control+z');
+    assert.equal(await page.locator('.pl-grid-row').count(), initialTracks);
+    assert.equal(await page.locator('.pl-clip').count(), 0, 'One undo removes the generated tracks and clips');
+    await sample.dblclick();
+    await sample.click({ button: 'right' });
+    await page.locator('.pl-menu-item', { hasText: 'Extract stems' }).click();
+    await page.locator('#separate').click();
+    await page.locator('#extract-dialog').waitFor({ state: 'hidden' });
+    assert.equal(await page.locator('.pl-clip.is-muted').count(), 1, 'Mute source silences existing instances of the library sample');
+    const beforeCancel = await page.locator('.pl-clip').count();
+    await sample.click({ button: 'right' });
+    await page.locator('.pl-menu-item', { hasText: 'Extract stems' }).click();
+    await page.evaluate(() => { workerDelay = 5000; });
+    await page.locator('#separate').click();
+    await page.locator('#cancel').click();
+    assert.equal(await page.locator('#separate').isEnabled(), true);
+    assert.equal(await page.locator('.pl-clip').count(), beforeCancel, 'Cancelling keeps the existing arrangement');
+    await page.keyboard.press('Escape');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => notifications.toast({ title: 'A long message', message: 'A detailed explanation that wraps safely in a small viewport without making the page wider.', duration: -1 }));
     await page.waitForTimeout(450); // Toast entry transition.
@@ -61,6 +110,6 @@ const { chromium } = require('playwright');
     await page.waitForTimeout(450);
     await page.screenshot({ path: path.join(root, 'test-results/workspace/desktop.png'), fullPage: true });
     assert.deepEqual(errors, []);
-    console.log('Workspace: toast updates, safe text, modal dismissal, expiry, stable layout and narrow viewport passed.');
+    console.log('Workspace: shared controls, header layout, modal-safe toasts, library stem extraction without Original, output selection, mute, undo, cancellation and narrow viewport passed.');
   } finally { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

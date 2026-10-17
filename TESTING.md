@@ -27,6 +27,12 @@ It also writes `test-results/icons-catalog.png`. After changing icon mappings,
 run `npm run build:icons` first. Packaging rejects stale generated icons.
 See [the icon guide](docs/icon-system.md).
 
+Run `npm run test:e2e:workspace` for the header, round shared knobs, toast lifecycle
+(including modal dialogs), and extraction from sample-library entries without an
+Original track. It checks selected outputs, source muting, undo, cancellation and
+mobile layout with deterministic audio. Screenshots go to `test-results/workspace`.
+The toasts use the local Toastify module; no CDN or network connection is required.
+
 Run the deterministic looper browser test. It loads the unpacked extension in
 Chromium, selects A-B, exports WAV, and verifies the downloaded samples. The
 separate download browser test covers both Downloads and a remembered folder:

@@ -521,6 +521,13 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   function shelfMenu(event, asset) {
     const deleteTitle = asset.session ? t('Separation audio stays in the library', 'El audio de la separación queda siempre en la biblioteca') : '';
     contextMenu(event, [
+      ...(onSeparate && !asset.pattern ? [{ label: t('Extract stems…', 'Separar stems…'), icon: ICONS.separate,
+        action: () => {
+          const sourceTrack = state.clips.find(clip => clip.asset === asset.id)?.track || activeTrack || state.tracks[0]?.id;
+          onSeparate({ library: true, asset: asset.id, name: asset.name, buffer: asset.buffer,
+            from: 0, to: asset.buffer.duration, track: sourceTrack, at: position,
+            original: asset.session && asset.id === 'audio-original' });
+        } }] : []),
       { label: t('Duplicate', 'Duplicar'), icon: ICONS.duplicate, action: safe(() => {
         if (asset.pattern) { onPatternAction?.('duplicate', asset.id); return; }
         const next = new Map(assets), copyOf = { id: uid(), name: uniqueName(asset.name), buffer: asset.buffer, version: 0 };
@@ -1231,8 +1238,9 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     // and with the same pitch, speed, fades and direction. The stems are project samples, so
     // they are saved with the separation and undo removes them. `group` puts the tracks
     // under the source track; `muteSource` mutes the separated clip. One undo step.
-    addStemTracks({ clip: clipId, stems, group = true, muteSource = true }) {
-      const source = state.clips.find(clip => clip.id === clipId);
+    addStemTracks({ clip: clipId, sample: sampleId, track: trackId, at: position = 0, stems, group = true, muteSource = true }) {
+      const sample = sampleId && assets.get(sampleId);
+      const source = sample ? newClip(sample, trackOf(trackId)?.id || state.tracks[0].id, position) : state.clips.find(clip => clip.id === clipId);
       if (!source) throw new Error(t('The separated clip is no longer in the playlist.', 'El clip separado ya no está en la playlist.'));
       if (state.tracks.length + stems.length > LIMITS.tracks) throw new Error(t('Not enough room: the playlist holds up to 16 tracks.', 'No hay lugar: la playlist admite hasta 16 pistas.'));
       const next = new Map(assets), added = stems.map(stem => ({ id: uid(), name: stem.name.slice(0, 160), buffer: stem.buffer, version: 0 }));
@@ -1248,8 +1256,9 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
         added.forEach((asset, index) => {
           state.clips.push({ ...source, id: uid(), asset: asset.id, track: tracks[index].id, in: 0, out: Math.min(length, asset.buffer.duration), mute: false });
         });
-        const current = state.clips.find(clip => clip.id === clipId);
-        if (muteSource && current) current.mute = true;
+        if (muteSource) for (const clip of state.clips) {
+          if (sampleId ? clip.asset === sampleId : clip.id === clipId) clip.mute = true;
+        }
       });
       if (!done) { assets = previous; changed(); draw(); }
       return done;

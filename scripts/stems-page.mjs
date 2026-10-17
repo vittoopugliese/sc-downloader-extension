@@ -864,9 +864,14 @@ let extractTarget = null;
 function originalTarget() { return { original: true, name: title }; }
 function openExtract(target) {
   if (!target) return;
+  if (separating || libraryOperating) {
+    if (separating) extractDialog.open({ name: extractTarget.name, isOriginal: !!extractTarget.original });
+    return;
+  }
   const isOriginal = !!target.original || (target.session && target.stem === 'original');
   extractTarget = isOriginal ? originalTarget() : target;
   extractDialog.open({ name: extractTarget.name, isOriginal });
+  extractDialog.setReady(!busy && !libraryOperating && canSeparate());
 }
 // The audio a clip plays (source seconds `from`–`to`) as two channels at the model's rate.
 async function clipChannels(target) {
@@ -892,7 +897,7 @@ async function separate(options) {
   try {
     await navigator.locks.request('scdl-stem-inference', { ifAvailable: true }, async lock => {
       if (!lock) throw localizedError('another');
-      if (!original) { progress(null, text('preparing')); await renderJobLoop(); }
+      if (target.original && !original) { progress(null, text('preparing')); await renderJobLoop(); }
       if (version !== revision) return;
       const result = await runWorker(target.original ? [original.getChannelData(0).slice(), original.getChannelData(1).slice()] : await clipChannels(target));
       if (version !== revision) return;
@@ -908,7 +913,8 @@ async function separate(options) {
           const name = `${text(stem)} · ${target.name}`;
           return { name, track: name, color: CHANNEL_COLORS[stem], buffer: audioBuffer(output) };
         });
-      try { if (!playlist.addStemTracks({ clip: target.id, stems, group: options.group, muteSource: options.when === 'mute' })) return; }
+      try { if (!playlist.addStemTracks({ clip: target.id, sample: target.library ? target.asset : null, track: target.track, at: target.at,
+        stems, group: options.group, muteSource: options.when === 'mute' })) throw new Error(say('The stems could not fit in the playlist.', 'Los stems no entran en la playlist.')); }
       catch (error) { error.localized = true; throw error; }
       extractDialog.close();
       status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`, 'success');
@@ -958,7 +964,7 @@ async function renderJobLoop() {
   }
 }
 // There is something to separate: audio in the session, or a loop still to render.
-const canSeparate = () => !!original || (!!jobId && !info?.localFile);
+const canSeparate = () => !!extractTarget?.buffer || !!original || (!!jobId && !info?.localFile);
 $('toggle-game').onclick = () => {
   const panel = $('game-panel');
   const open = panel.hidden;

@@ -173,9 +173,9 @@ const { chromium } = require('playwright');
     // Right-click menus: library entries duplicate/delete; clips add pitch mode and edit tool.
     const menu = page.locator('.pl-menu');
     await playlist.locator('.pl-shelf button', { hasText: 'tone.wav' }).first().click({ button: 'right' });
-    assert.deepEqual(await menu.locator('.pl-menu-label').allTextContents(), ['Duplicate', 'Delete from project']);
+    assert.deepEqual(await menu.locator('.pl-menu-label').allTextContents(), ['Extract stems…', 'Duplicate', 'Delete from project']);
     assert.equal(await menu.locator('.pl-menu-item.is-danger .pl-menu-label').textContent(), 'Delete from project');
-    assert.equal(await menu.locator('.pl-menu-item svg').count(), 2);
+    assert.equal(await menu.locator('.pl-menu-item svg').count(), 3);
     assert.equal(await menu.locator('.pl-menu-item.is-danger').evaluate(e => getComputedStyle(e).color), 'rgb(255, 107, 107)');
     await menu.getByRole('menuitem', { name: 'Duplicate' }).click();
     assert.equal(await menu.count(), 0, 'Choosing an item closes the menu');
