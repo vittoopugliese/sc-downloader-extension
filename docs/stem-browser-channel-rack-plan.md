@@ -239,6 +239,22 @@ Además, fuera del plan original: ventanas flotantes estilo FL para Channel Rack
 Piano Roll, EQ y Grabadora (F6/F7/F9/F10, acoplar, maximizar), EQ por canal con
 Master, y motor de audio que reemplaza solo el clip editado (sin cortes al editar).
 
+6. Channel Rack con dos vistas, como FL Studio (2026-10-17):
+   - **Channel Rack**: una fila por cada sample cargado (stems, samples de pistas
+     y samples importados aunque no tengan clips). Todos comparten el patrón
+     elegido; cada fila tiene preview, modo (One-shot o Chops), nota raíz y tijera
+     para abrir sus chops.
+   - **Chops**: la vista Slicex anterior (ocho pads A–K, Auto-slice, Clear All)
+     del canal elegido.
+   - One-shot toca el sample completo, transpuesto desde la nota raíz, que se
+     comparte con el Piano Roll. Los samples importados empiezan en One-shot; los
+     stems en Chops.
+   - Cambiar de modo no borra cortes ni pasos: One-shot y Chops guardan pasos
+     separados. Todo se guarda con la separación.
+   - Archivos: `stem-rack-overview.mjs` (vista nueva), `stem-pattern-core.mjs`
+     (`mode`, `hits`, `channels` por patrón), `stem-instruments.mjs`.
+     Prueba: `npm run test:e2e:rack-modes`.
+
 ## Decisiones de UX
 
 Resueltas por el usuario (2026-10-16): se mantiene el Auto-slice inicial y

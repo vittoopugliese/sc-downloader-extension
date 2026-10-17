@@ -33,7 +33,16 @@ export function normalizeInstrument(value, buffer = null) {
     if (buffer) return normalizeDrumSlice(slice, buffer);
     return Number.isFinite(slice?.start) ? { ...slice } : null;
   });
-  return { slices, sliced: value?.sliced === true || slices.some(Boolean), piano: normalizePiano(value?.piano) };
+  return { slices, sliced: value?.sliced === true || slices.some(Boolean), mode: value?.mode === 'oneShot' ? 'oneShot' : 'slices', piano: normalizePiano(value?.piano) };
+}
+
+// One-shot and chops keep separate step lanes. Switching the instrument never erases
+// its cuts, notes or the sequence of the other mode.
+export const normalizeHits = value => Array.from({ length: MAX_STEPS }, (_, i) => Number.isFinite(value?.[i]) ? clamp(value[i], 0, 1) : 0);
+export function instrumentSample(instrument, buffer) {
+  return instrument?.mode === 'oneShot' && buffer
+    ? normalizeDrumSlice({ start: 0, end: buffer.duration, fadeIn: .001, fadeOut: .003 }, buffer)
+    : instrument?.slices[instrument.piano.pad] || null;
 }
 
 export function normalizeNotes(notes) {
@@ -59,6 +68,9 @@ export function normalizePattern(value) {
       return Number.isFinite(velocity) ? clamp(velocity, 0, 1) : 0;
     })),
     notes: normalizeNotes(value.notes),
+    hits: normalizeHits(value.hits),
+    channels: Object.fromEntries(Object.entries(value.channels || {}).filter(([key]) => validId(key) && key !== value.track).slice(0, 64)
+      .map(([key, lane]) => [key, { steps: Array.from({ length: 8 }, (_, i) => normalizeHits(lane?.steps?.[i])), notes: normalizeNotes(lane?.notes), hits: normalizeHits(lane?.hits) }])),
   };
 }
 
@@ -105,16 +117,17 @@ export function migrateLegacy(settings, uid = () => crypto.randomUUID()) {
 
 // Shared by preview and offline rendering: MIDI changes sample speed, while the
 // note gate stays in transport seconds. start() duration is in *buffer* seconds.
-export function schedulePianoNote(context, destination, buffer, slice, piano, note, when, seconds) {
+export function schedulePianoNote(context, destination, buffer, slice, piano, note, when, seconds, oneShot = false) {
   slice = normalizeDrumSlice(slice, buffer);
   if (!slice || !(seconds > 0)) return null;
   const ratio = pitchRatio(note.pitch, piano.root), sampleLength = slice.end - slice.start;
-  const length = piano.sustain ? seconds : Math.min(seconds, sampleLength / ratio);
+  const sustain = piano.sustain && !oneShot;
+  const length = oneShot ? sampleLength / ratio : sustain ? seconds : Math.min(seconds, sampleLength / ratio);
   const attack = Math.min(slice.fadeIn / ratio, length / 2);
   const release = Math.min(slice.fadeOut / ratio, length / 2);
   const source = context.createBufferSource(), gain = context.createGain();
-  source.buffer = piano.sustain ? loopSample(buffer, slice) : buffer; source.playbackRate.value = ratio;
-  source.loop = piano.sustain; source.loopStart = 0; source.loopEnd = source.buffer.duration;
+  source.buffer = sustain ? loopSample(buffer, slice) : buffer; source.playbackRate.value = ratio;
+  source.loop = sustain; source.loopStart = 0; source.loopEnd = source.buffer.duration;
   gain.gain.setValueAtTime(0, when);
   gain.gain.linearRampToValueAtTime(note.velocity, when + attack);
   gain.gain.setValueAtTime(note.velocity, when + Math.max(attack, length - release));
@@ -122,7 +135,7 @@ export function schedulePianoNote(context, destination, buffer, slice, piano, no
   source.connect(gain).connect(destination);
   const cleanup = () => { source.disconnect(); gain.disconnect(); };
   source.onended = cleanup;
-  if (piano.sustain) source.start(when, 0);
+  if (sustain) source.start(when, 0);
   else source.start(when, slice.start, sampleLength);
   source.stop(when + length);
   return { source, gain, cleanup, stop() {
@@ -160,7 +173,7 @@ export async function renderPattern(pattern, instrument, buffer, bpm) {
   if (!buffer) return silentPattern(pattern, bpm, sampleRate);
   const length = frames / sampleRate, count = pattern.bars * STEPS_PER_BAR, step = length / count;
   const renderer = new OfflineAudioContext(2, frames, sampleRate);
-  for (let row = 0; row < 8; row++) {
+  for (let row = 0; instrument.mode !== 'oneShot' && row < 8; row++) {
     const slice = normalizeDrumSlice(instrument.slices[row], buffer);
     if (!slice) continue;
     const hits = pattern.steps[row].slice(0, count).flatMap((velocity, index) => velocity > 0 ? [{ index, velocity }] : []);
@@ -175,11 +188,16 @@ export async function renderPattern(pattern, instrument, buffer, bpm) {
       source.start(when, cropped.start, cropped.end - cropped.start);
     });
   }
-  const sample = instrument.slices[instrument.piano.pad];
+  const sample = instrumentSample(instrument, buffer);
+  if (instrument.mode === 'oneShot') for (let i = 0; i < count; i++) {
+    const velocity = pattern.hits?.[i] || 0;
+    if (velocity) schedulePianoNote(renderer, renderer.destination, buffer, sample, instrument.piano,
+      { pitch: instrument.piano.root, velocity }, i * step, length, true);
+  }
   for (const note of pattern.notes) {
     if (note.start >= count) continue;
     schedulePianoNote(renderer, renderer.destination, buffer, sample, instrument.piano, note,
-      note.start * step, Math.min(note.length, count - note.start) * step);
+      note.start * step, Math.min(note.length, count - note.start) * step, instrument.mode === 'oneShot');
   }
   return renderer.startRendering();
 }

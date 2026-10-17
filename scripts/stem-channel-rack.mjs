@@ -2,6 +2,7 @@ import { PAD_KEYS, STEPS_PER_BAR, clamp } from './stem-pattern-core.mjs';
 import { mountPadSampler } from './stem-sampler.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
 import { patternControls } from './stem-instruments.mjs';
+import { mountRackOverview } from './stem-rack-overview.mjs';
 
 const svg = paths => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
 export const PLUGIN_ICONS = Object.freeze({
@@ -53,6 +54,15 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     node.innerHTML = html; node.addEventListener('click', action); return node;
   };
   const toolbar = element('div', 'plugin-toolbar');
+  let rackView = 'channels';
+  const viewTabs = element('div', 'rack-view-tabs'); viewTabs.setAttribute('role', 'group'); viewTabs.setAttribute('aria-label', pt('Rack view'));
+  const channelsTab = button('rack-view-channels', pt('All samples'), pt('Channel rack'), () => setRackView('channels'));
+  const chopsTab = button('rack-view-chops', pt('Edit chops'), pt('Chops'), () => setRackView('chops'));
+  viewTabs.append(channelsTab, chopsTab);
+  const mode = element('select', 'rack-source-mode'); mode.setAttribute('aria-label', pt('Sample mode'));
+  mode.add(new Option('One-shot', 'oneShot')); mode.add(new Option(pt('Chops'), 'slices'));
+  mode.onchange = () => instruments.editInstrument(instrument => { instrument.mode = mode.value; });
+  function setRackView(value) { rackView = value; overview.stop(); render(); requestAnimationFrame(drawWave); }
   const play = button('plugin-play', pt('Play pattern'), svg(PLUGIN_ICONS.play), () => instruments.playing() ? instruments.stop() : instruments.play());
   const focus = patternControls(instruments, { manage: true });
   const place = button('rack-place', pt('Add to playlist'), `${svg(PLUGIN_ICONS.place)}<span>${pt('Playlist')}</span>`, () => instruments.place());
@@ -73,9 +83,10 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     clearSlices.disabled = !sampler || (empty && !undo);
   }
   const clear = button('rack-clear', pt('Clear steps'), svg(PLUGIN_ICONS.clear), () => instruments.editPattern(pattern => {
-    for (const row of pattern.steps) row.fill(0, bar * STEPS_PER_BAR, (bar + 1) * STEPS_PER_BAR);
+    const rows = rackView === 'channels' && instruments.focused().instrument?.mode === 'oneShot' ? [pattern.hits] : pattern.steps;
+    for (const row of rows) row.fill(0, bar * STEPS_PER_BAR, (bar + 1) * STEPS_PER_BAR);
   }));
-  toolbar.append(play, focus.element, place, slice, clearSlices, clear);
+  toolbar.append(viewTabs, play, focus.element, mode, place, slice, clearSlices, clear);
   const wave = element('div', 'waveform rack-wave');
   const canvas = element('canvas', 'rack-wave-canvas'); canvas.setAttribute('aria-hidden', 'true'); wave.append(canvas);
   const tabs = element('div', 'rack-bars');
@@ -93,6 +104,9 @@ export function mountChannelRack({ container, instruments, audioContext, output,
   shell.body.append(toolbar, wave, tabs, grid, hint, empty);
 
   let bar = 0, sampler = null, mounted = null, view = null, template = .8, gesture = null, frame = 0, drawn = '';
+  const overview = mountRackOverview({ container: shell.body, instruments, audioContext, output, report, bar: () => bar,
+    openChops(key) { rackView = 'chops'; instruments.focus(key); instruments.editInstrument(value => { value.mode = 'slices'; }, key); } });
+  shell.body.insertBefore(overview.element, hint);
   const count = () => (instruments.focused().pattern?.bars ?? 1) * STEPS_PER_BAR;
   // The waveform of the focused track, with its own zoom (wheel) and pan (Shift + wheel).
   const timeline = {
@@ -150,7 +164,7 @@ export function mountChannelRack({ container, instruments, audioContext, output,
       context.fillRect(x, (height - bar) / 2, 1, Math.max(1, bar));
     }
   }
-  new ResizeObserver(() => { drawn = ''; drawWave(); sampler?.render(); }).observe(wave);
+  const waveObserver = new ResizeObserver(() => { drawn = ''; drawWave(); sampler?.render(); }); waveObserver.observe(wave);
 
   for (let row = 0; row < PAD_KEYS.length; row++) {
     const pad = button('rack-pad', PAD_KEYS[row], `<span>${PAD_KEYS[row]}</span>`, event => {
@@ -239,7 +253,7 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     // Pads play through this track's EQ.
     sampler = mountPadSampler({ waveform: wave, buffer, timeline, audioContext, output: () => output(key), locale, report,
       saved: instruments.instrument(key).slices,
-      keyboardActive: event => shell.active() && !event.target.closest?.('.pl-ui,.stem-piano-roll'),
+      keyboardActive: event => shell.active() && rackView === 'chops' && instruments.focused().instrument?.mode === 'slices' && !event.target.closest?.('.pl-ui,.stem-piano-roll,.rack-overview'),
       changed: slices => {
         instruments.editInstrument(instrument => { instrument.slices = slices; instrument.sliced = true; }, key);
         if (slices.some(Boolean) && cleared?.key === key) cleared = null;
@@ -260,7 +274,7 @@ export function mountChannelRack({ container, instruments, audioContext, output,
       pad.setAttribute('aria-label', pad.title);
     });
     const armed = state?.armed;
-    hint.textContent = armed !== null && armed !== undefined
+    hint.textContent = rackView === 'channels' ? pt('Each row is a sample in this pattern. Choose One-shot for the full sound, or Chops to sequence its selected pad.') : armed !== null && armed !== undefined
       ? pt('Pad $1: click or drag on the waveform to choose its sample. Esc cancels.', PAD_KEYS[armed])
       : pt('A S D F G H J K play the pads. Drag on the waveform to re-cut the selected pad; wheel zooms. Click a step to add a hit, drag it up or down for velocity.');
     renderSteps(state);
@@ -291,6 +305,7 @@ export function mountChannelRack({ container, instruments, audioContext, output,
         beat.classList.toggle('is-current', active);
         for (const line of cells) line[column].classList.toggle('is-current', active);
       });
+      overview.transport(current);
       if (instruments.playing()) frame = requestAnimationFrame(step);
     };
     step();
@@ -299,6 +314,15 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     const { key, pattern, track } = instruments.focused(), available = instruments.tracks().some(item => item.buffer);
     empty.hidden = available; for (const node of [toolbar, wave, grid, hint]) node.hidden = !available;
     mount(); focus.render(); renderPads();
+    overview.element.hidden = !available || rackView !== 'channels';
+    wave.hidden = grid.hidden = !available || rackView !== 'chops';
+    slice.hidden = clearSlices.hidden = rackView !== 'chops';
+    channelsTab.setAttribute('aria-pressed', String(rackView === 'channels'));
+    chopsTab.setAttribute('aria-pressed', String(rackView === 'chops'));
+    mode.value = instruments.focused().instrument?.mode || 'slices'; mode.disabled = !track?.buffer;
+    // Chops remain editable while the channel is playing its full sample. They become
+    // audible when the user selects Chops mode; viewing never destroys either sequence.
+    overview.render();
     place.disabled = !pattern; clear.disabled = !pattern; slice.disabled = !track?.buffer;
     play.disabled = !pattern && !instruments.playing();
     if (!key) tabs.hidden = true;
@@ -308,6 +332,6 @@ export function mountChannelRack({ container, instruments, audioContext, output,
   return {
     ...shell,
     open() { shell.open(); requestAnimationFrame(() => { drawn = ''; drawWave(); sampler?.render(); }); },
-    dispose() { cancelAnimationFrame(frame); sampler?.dispose(); shell.section.remove(); },
+    dispose() { cancelAnimationFrame(frame); waveObserver.disconnect(); overview.dispose(); sampler?.dispose(); shell.section.remove(); },
   };
 }

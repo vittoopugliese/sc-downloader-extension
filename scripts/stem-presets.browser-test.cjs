@@ -65,6 +65,7 @@ const { chromium } = require('playwright');
     await page.locator('.pl-stem-head[data-stem=drums] .stem-enable').click();
     // Pad A of the drums, cut by hand in the channel rack (right-click arms it).
     { await page.locator('.pl-stem-head[data-stem=drums] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
+    await page.locator('#stem-rack .rack-view-chops').click();
     await page.locator('#stem-rack .rack-pad').first().click({ button: 'right' });
     await page.locator('#stem-rack .rack-wave').click({ position: { x: 100, y: 30 } });
     const savedStart = Number(await page.locator('#stem-rack .stem-pad-marker').first().getAttribute('data-start'));

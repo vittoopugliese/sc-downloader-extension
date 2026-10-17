@@ -1,5 +1,5 @@
 import { createRowMenu } from './stem-row-menu.mjs';
-import { MAX_PATTERNS, migrateLegacy, normalizeInstrument, normalizePattern, normalizeProject, renderPattern, silentPattern } from './stem-pattern-core.mjs';
+import { MAX_PATTERNS, migrateLegacy, normalizeHits, normalizeInstrument, normalizePattern, normalizeProject, renderPattern, silentPattern } from './stem-pattern-core.mjs';
 
 // Shared state of the channel rack and the piano roll, as in FL Studio: one focused
 // track (instrument) and pattern, edited by both plugins. Patterns render to looping
@@ -12,7 +12,19 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
   const assetId = id => `pattern:${id}`;
   const emit = kind => { for (const listener of listeners) listener(kind); };
   const track = key => tracks().find(item => item.key === key) || null;
-  const patternsOf = key => patterns.filter(pattern => pattern.track === key);
+  const patternsOf = () => patterns;
+  const selectedPattern = () => patterns.find(item => item.id === focus.pattern) || null;
+  function lane(pattern, key, create = false) {
+    if (!pattern || !key) return null;
+    if (pattern.track === key) return pattern;
+    if (!pattern.channels[key] && create) pattern.channels[key] = { steps: Array.from({ length: 8 }, () => normalizeHits()), hits: normalizeHits(), notes: [] };
+    return pattern.channels[key] || null;
+  }
+  function channelView(pattern, key) {
+    if (!pattern) return null;
+    const data = lane(pattern, key) || { steps: Array.from({ length: 8 }, () => normalizeHits()), hits: normalizeHits(), notes: [] };
+    return { ...pattern, steps: data.steps, notes: data.notes, hits: data.hits };
+  }
   const bufferId = buffer => { if (!buffer) return 0; if (!bufferIds.has(buffer)) bufferIds.set(buffer, ++buffers); return bufferIds.get(buffer); };
 
   // Slices are bounded by the track's audio; a new source re-bounds them.
@@ -20,14 +32,14 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
     if (!key) return null;
     const buffer = track(key)?.buffer || null;
     if (!instruments[key] || (buffer && bound.get(key) !== buffer)) {
-      instruments[key] = normalizeInstrument(instruments[key], buffer);
+      instruments[key] = normalizeInstrument(instruments[key] || { mode: track(key)?.imported ? 'oneShot' : 'slices' }, buffer);
       if (buffer) bound.set(key, buffer);
     }
     return instruments[key];
   }
   function focused() {
     const key = focus.track;
-    return { key, track: track(key), instrument: instrument(key), pattern: patterns.find(item => item.id === focus.pattern && item.track === key) || null };
+    return { key, track: track(key), instrument: instrument(key), pattern: channelView(selectedPattern(), key) };
   }
   function setFocus(key, id = null) {
     const available = tracks().filter(item => item.buffer);
@@ -48,10 +60,14 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
     return pattern;
   }
   // Editing with no pattern selected starts one, as drawing in an empty FL pattern does.
-  function editPattern(mutate) {
-    const pattern = focused().pattern || createPattern();
+  function editPattern(mutate, key = focus.track) {
+    const pattern = selectedPattern() || createPattern(null, key);
     if (!pattern) return null;
-    mutate(pattern); schedule(); persist(); emit('pattern');
+    const data = lane(pattern, key, true), view = channelView(pattern, key);
+    mutate(view);
+    pattern.bars = view.bars; pattern.name = view.name;
+    data.steps = view.steps; data.notes = view.notes; data.hits = view.hits;
+    schedule(); persist(); emit('pattern');
     return pattern;
   }
   function editInstrument(mutate, key = focus.track) {
@@ -67,21 +83,37 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
   }
 
   // Rendering: placeholders of the right length keep clips valid until audio lands.
-  const contentKey = pattern => JSON.stringify([pattern.bars, pattern.steps.map(row => row.slice(0, pattern.bars * 16)), pattern.notes,
-    instrument(pattern.track), bufferId(track(pattern.track)?.buffer), playlist.bpm()]);
+  const channelKeys = pattern => [pattern.track, ...Object.keys(pattern.channels)];
+  const contentKey = pattern => JSON.stringify([pattern, channelKeys(pattern).map(key => [instrument(key), bufferId(track(key)?.buffer),
+    Object.keys(pattern.channels).length ? playlist.trackEq?.(key) : null]), playlist.bpm()]);
   function placeholder(pattern) {
     const key = `${pattern.bars}/${playlist.bpm()}`, cached = placeholders.get(pattern.id);
     if (cached?.key === key) return cached.buffer;
     const buffer = silentPattern(pattern, playlist.bpm()); placeholders.set(pattern.id, { key, buffer }); return buffer;
   }
-  const nameOf = pattern => `${track(pattern.track)?.name || pattern.track} · ${pattern.name}`;
+  const nameOf = pattern => Object.keys(pattern.channels).length ? pattern.name : `${track(pattern.track)?.name || pattern.track} · ${pattern.name}`;
   function publish() {
     playlist.setPatterns(patterns.map(pattern => ({ id: assetId(pattern.id), name: nameOf(pattern), buffer: rendered.get(pattern.id)?.buffer || placeholder(pattern) })));
   }
   async function bufferOf(pattern) {
     const key = contentKey(pattern), cached = rendered.get(pattern.id);
     if (cached?.key === key) return cached.buffer;
-    const buffer = await renderPattern(pattern, instrument(pattern.track), track(pattern.track)?.buffer, playlist.bpm());
+    let buffer;
+    if (!Object.keys(pattern.channels).length) buffer = await renderPattern(pattern, instrument(pattern.track), track(pattern.track)?.buffer, playlist.bpm());
+    else {
+      const base = placeholder(pattern), renderer = new OfflineAudioContext(2, base.length, base.sampleRate), graphs = [];
+      try {
+        for (const channel of channelKeys(pattern)) {
+          const source = renderer.createBufferSource();
+          source.buffer = await renderPattern({ ...lane(pattern, channel), bars: pattern.bars }, instrument(channel), track(channel)?.buffer, playlist.bpm());
+          const eq = globalThis.SCParametricEQ?.createGraph(renderer);
+          if (eq) { graphs.push(eq); eq.apply(playlist.trackEq?.(channel), false, true); source.connect(eq.input); eq.output.connect(renderer.destination); }
+          else source.connect(renderer.destination);
+          source.start();
+        }
+        buffer = await renderer.startRendering();
+      } finally { for (const graph of graphs) graph.dispose(); }
+    }
     if (patterns.includes(pattern) && contentKey(pattern) === key) rendered.set(pattern.id, { key, buffer });
     return buffer;
   }
@@ -125,14 +157,14 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
     startVoice(preview, buffer, at); retire(old, preview.io.context);
   }
   async function play() {
-    const pattern = focused().pattern;
+    const pattern = selectedPattern();
     if (!pattern) return;
     stopPreview(); playlist.pause();
     const token = preview = { id: pattern.id };
     emit('transport');
     try {
       // The preview plays through its track's insert (EQ and fader).
-      const [io, buffer] = await Promise.all([audio(pattern.track), bufferOf(pattern)]);
+      const [io, buffer] = await Promise.all([audio(Object.keys(pattern.channels).length ? null : pattern.track), bufferOf(pattern)]);
       if (preview !== token) return;
       token.io = io; startVoice(token, buffer, 0); emit('transport');
     } catch (error) { if (preview === token) preview = null; emit('transport'); report(error); }
@@ -146,6 +178,7 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
   return {
     on(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     tracks: () => tracks(), focused, focus: setFocus, patternsOf, instrument,
+    channel: key => channelView(selectedPattern(), key),
     focusPattern(id) { const pattern = patterns.find(item => item.id === id); if (pattern && pattern.id !== focus.pattern) setFocus(pattern.track, id); },
     createPattern: () => createPattern(),
     duplicatePattern: (id = focus.pattern) => { const pattern = patterns.find(item => item.id === id); return pattern && createPattern(pattern, pattern.track); },
@@ -155,7 +188,7 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
     rateChanged() { swap(); },
     // The playlist changed: tempo re-renders every pattern; new names or sources follow.
     sync() {
-      const key = JSON.stringify(tracks().map(item => [item.key, item.name, bufferId(item.buffer)]));
+      const key = JSON.stringify(tracks().map(item => [item.key, item.name, bufferId(item.buffer), playlist.trackEq?.(item.key)]));
       const tempo = playlist.bpm();
       if (key === trackKey && tempo === bpm) return;
       trackKey = key; bpm = tempo;

@@ -436,3 +436,18 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .stem-plugin .plugin-toolbar .row-menu-list .row-menu-delete{flex:0 0 28px;font-size:17px;color:#aaa}
 .stem-plugin .plugin-toolbar .row-menu-list .row-menu-footer{color:#ff934d}
 .stem-plugin .rack-clear-slices[aria-pressed=true]{border-color:#ffb887;color:#ffd2b3}
+.rack-view-tabs{display:flex;gap:2px;padding:3px;border:1px solid #44372d;border-radius:5px}
+.stem-plugin .rack-view-tabs button[aria-pressed=true]{background:#61391e;color:#ffe0c6;border-color:#e79655}
+.rack-overview{overflow:auto;max-height:60vh;border:1px solid #3b332c;border-radius:6px;background:#141414;margin-bottom:8px;padding:5px}
+.rack-channel{display:grid;grid-template-columns: minmax(300px,1.5fr) repeat(16,minmax(18px,1fr));gap:3px;align-items:center;min-width:660px;padding:4px;border-radius:4px}
+.rack-channel:nth-child(even){background:#ffffff04}
+.rack-channel.is-selected{background:#ff9b4912;box-shadow:inset 2px 0 #ef9d60}
+/* The name column stays in view while the steps scroll sideways on narrow windows. */
+.rack-channel-controls{position:sticky;left:-5px;z-index:2;display:flex;align-items:center;gap:4px;align-self:stretch;padding:0 5px 0 0;min-width:0;background:#141414;box-shadow:4px 0 6px -4px #000}
+.rack-channel.is-selected .rack-channel-controls{background:#231a12}
+.stem-plugin .rack-channel-name{display:block;flex:1;min-width:0;height:30px;padding:0 6px;line-height:28px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-size:11px}
+.stem-plugin .rack-channel-name[aria-pressed=true]{color:#ffd2b3;border-color:#b77c50}
+.stem-plugin .rack-channel-mode{width:83px;min-width:0;font-size:10px;padding:0 3px}
+.stem-plugin .rack-channel-root{width:56px;min-width:0;font-size:10px;padding:0 3px}
+.stem-plugin .rack-channel-play,.stem-plugin .rack-channel-chops{width:26px;min-width:26px;padding:0}
+@media(max-width:600px){.rack-channel{grid-template-columns:236px repeat(16,22px);min-width:0;width:max-content}.stem-plugin .rack-channel-mode{width:68px}.stem-plugin .rack-channel-root{width:48px}.stem-plugin .rack-channel-name{min-width:44px}}

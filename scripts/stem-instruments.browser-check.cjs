@@ -18,6 +18,7 @@ module.exports = async function verifyInstruments(page) {
   { await page.locator('.pl-stem-head[data-stem=bass] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
   assert.equal(await rack.evaluate(node => node.classList.contains('is-floating')), true, 'The track menu opens a floating channel rack');
   await dock(rack);
+  await rack.locator('.rack-view-chops').click();
   assert.equal(await rack.locator('.plugin-track').inputValue(), 'bass');
   const wave = rack.locator('.rack-wave'), pads = rack.locator('.rack-pad');
   await page.waitForFunction(() => document.querySelectorAll('#stem-rack .rack-pad.is-assigned').length > 0, null, { timeout: 5000 });
@@ -140,17 +141,18 @@ module.exports = async function verifyInstruments(page) {
   await rack.screenshot({ path: require('node:path').join(artifacts, 'rack.png') });
   await piano.screenshot({ path: require('node:path').join(artifacts, 'piano.png') });
   await playlist.screenshot({ path: require('node:path').join(artifacts, 'playlist.png') });
-  // Another track gets its own patterns; deleting one removes it from the library.
+  // Changing channel keeps the pattern; creating another is an explicit action.
   await rack.locator('.plugin-track').selectOption('drums');
-  assert.equal(await rack.locator('.plugin-pattern .row-menu-toggle').evaluate(node => node.value), '');
+  assert.notEqual(await rack.locator('.plugin-pattern .row-menu-toggle').evaluate(node => node.value), '');
+  await rack.locator('.plugin-new').click();
   await page.waitForFunction(() => document.querySelectorAll('#stem-rack .rack-pad.is-assigned').length > 0, null, { timeout: 5000 }).catch(() => {});
   if (!await rack.locator('.rack-pad.is-assigned').count()) { await pads.first().click(); await wave.click({ position: { x: 30, y: 40 } }); }
   const assigned = Number(await rack.locator('.rack-pad.is-assigned').first().evaluate(node => [...node.parentElement.querySelectorAll('.rack-pad')].indexOf(node)));
   await cell(assigned, 2).click();
-  assert.deepEqual(await shelf.allTextContents(), ['Bajo · Pat 1', 'Batería · Pat 1']);
+  assert.deepEqual(await shelf.allTextContents(), ['Bajo · Pat 1', 'Batería · Pat 2']);
   // Patterns are deleted from their row in the menu, without opening them.
   await rack.locator('.plugin-pattern .row-menu-toggle').click();
-  await rack.locator('.plugin-pattern .row-menu-row').first().locator('.row-menu-delete').click();
+  await rack.locator('.plugin-pattern .row-menu-row').last().locator('.row-menu-delete').click();
   assert.deepEqual(await shelf.allTextContents(), ['Bajo · Pat 1']);
 
   // Clear All empties every pad of the focused track; a second click restores them, and a
@@ -208,7 +210,7 @@ module.exports = async function verifyInstruments(page) {
   { await page.locator('.pl-stem-head[data-stem=bass] .stem-more').click(); await page.locator('.pl-menu-item').nth(1).click(); }
   assert.equal(await piano.locator('.piano-note').count(), 2);
   { await page.locator('.pl-stem-head[data-stem=bass] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
-  assert.equal(await rack.locator('.rack-step.is-on').count(), 2);
+  assert.equal(await rack.locator('.rack-grid .rack-step.is-on').count(), 2);
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Plugins fit ${width}px`);

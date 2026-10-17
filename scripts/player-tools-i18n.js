@@ -4,6 +4,12 @@
   'use strict';
   const locales = ['en', 'es', 'de', 'pt-BR', 'ru'];
   const rows = `
+All samples¦Todos los samples¦Alle Samples¦Todas as amostras¦Все сэмплы
+Chops¦Chops¦Chops¦Chops¦Нарезка
+Edit chops¦Editar chops¦Chops bearbeiten¦Editar chops¦Редактировать нарезку
+Rack view¦Vista del Rack¦Rack-Ansicht¦Vista do Rack¦Вид стойки
+Sample mode¦Modo del sample¦Sample-Modus¦Modo da amostra¦Режим сэмпла
+Each row is a sample in this pattern. Choose One-shot for the full sound, or Chops to sequence its selected pad.¦Cada fila es un sample de este patrón. Elegí One-shot para el sonido completo, o Chops para secuenciar su pad seleccionado.¦Jede Zeile ist ein Sample dieses Patterns. One-shot spielt den ganzen Klang, Chops das gewählte Pad.¦Cada linha é uma amostra deste padrão. One-shot toca o som inteiro; Chops sequencia o pad selecionado.¦Каждая строка — сэмпл паттерна. One-shot играет весь звук, Chops — выбранный пэд.
 Channel rack¦Channel Rack¦Channel Rack¦Channel Rack¦Channel Rack
 Track options: $1 · or right-click the track¦Opciones de pista: $1 · o clic derecho en la pista¦Spuroptionen: $1 · oder Rechtsklick auf die Spur¦Opções da faixa: $1 · ou clique direito na faixa¦Параметры дорожки: $1 · или правый клик по дорожке
 Hear only this track¦Escuchar solo esta pista¦Nur diese Spur hören¦Ouvir só esta faixa¦Слушать только эту дорожку

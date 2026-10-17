@@ -1,4 +1,4 @@
-import { MAX_NOTES, PAD_KEYS, STEPS_PER_BAR, clamp, noteName, schedulePianoNote } from './stem-pattern-core.mjs';
+import { MAX_NOTES, PAD_KEYS, STEPS_PER_BAR, clamp, instrumentSample, noteName, schedulePianoNote } from './stem-pattern-core.mjs';
 import { PLUGIN_ICONS, pluginShell } from './stem-channel-rack.mjs';
 import { patternControls } from './stem-instruments.mjs';
 
@@ -57,7 +57,7 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
   const notes = () => current().pattern?.notes ?? [];
   const count = () => (current().pattern?.bars ?? 1) * STEPS_PER_BAR;
   const low = () => (settings().octave + 1) * 12, high = () => low() + 24;
-  const slice = () => current().instrument?.slices[settings().pad] || null;
+  const slice = () => instrumentSample(current().instrument, current().track?.buffer);
   function commit(next, before = notes()) {
     if (!current().key) return;
     undo.push(structuredClone(before)); if (undo.length > 50) undo.shift(); redo.length = 0;
@@ -87,7 +87,7 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
         if (!shell.active()) return;
         if (voices.size >= 16) voices.values().next().value.stop();
         // Notes play through the focused track's EQ.
-        const voice = schedulePianoNote(context, output(current().key), track.buffer, slice(), instrument.piano, { pitch, velocity }, context.currentTime, .6);
+        const voice = schedulePianoNote(context, output(current().key), track.buffer, slice(), instrument.piano, { pitch, velocity }, context.currentTime, .6, instrument.mode === 'oneShot');
         if (!voice) return;
         voices.add(voice); voice.source.onended = () => { voice.cleanup(); voices.delete(voice); };
       }, report);
@@ -144,6 +144,8 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
     const value = instrument.piano;
     [...sample.options].forEach((option, i) => { option.textContent = instrument.slices[i] ? PAD_KEYS[i] : `${PAD_KEYS[i]} · ${pt('empty')}`; });
     sample.value = String(value.pad); root.value = String(value.root); snap.value = String(value.snap);
+    sample.parentElement.hidden = instrument.mode === 'oneShot';
+    sustain.parentElement.hidden = instrument.mode === 'oneShot';
     octave.value = String(value.octave); sustain.checked = value.sustain;
     clear.disabled = !notes().length; undoButton.disabled = !undo.length; redoButton.disabled = !redo.length;
     play.disabled = !pattern && !instruments.playing();

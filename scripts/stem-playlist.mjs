@@ -152,11 +152,8 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     const asset = assets.get(clip.asset);
     return asset?.loop ? loopSegments(clip, asset.buffer.duration) : [clip];
   }) });
-  // Imported samples used by clips or as a track's instrument; presets store their audio.
-  const importedSamples = () => {
-    const used = new Set([...state.clips.map(clip => clip.asset), ...state.tracks.map(track => track.source)]);
-    return [...assets.values()].filter(asset => !asset.session && !asset.pattern && used.has(asset.id));
-  };
+  // Every loaded sample is available to the rack, even without a playlist clip.
+  const importedSamples = () => [...assets.values()].filter(asset => !asset.session && !asset.pattern);
   const rowViews = new Map(), clipViews = new Map(), analyzing = new WeakSet();
   let paintFrame = 0, dragAudio = 0, shelfKey = '', editMode = 'move', reported = null, slicing = false, slice = null;
   // Channel header width comes from CSS (--pl-head), narrower on phones.
@@ -175,7 +172,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const isChosen = id => id === selected || extra.has(id);
   const chosen = () => state.clips.filter(c => isChosen(c.id));
   const pick = id => { selected = id; extra.clear(); };
-  const copy = () => structuredClone(state);
+  const copy = () => structuredClone({ ...state, sampleIds: importedSamples().map(asset => asset.id) });
   const trackOf = id => state.tracks.find(track => track.id === id);
   const color = track => CHANNEL_COLORS[track?.stem] || EXTRA_COLORS[Math.max(0, state.tracks.filter(item => !item.stem).indexOf(track)) % EXTRA_COLORS.length];
   const clock = seconds => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, '0')}`;
@@ -220,6 +217,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     if (!graveyard.size) return;
     const used = new Set();
     for (const snapshot of [...history, ...future]) {
+      for (const id of snapshot.sampleIds || []) used.add(id);
       for (const clip of snapshot.clips) used.add(clip.asset);
       for (const track of snapshot.tracks) if (track.source) used.add(track.source);
     }
@@ -516,16 +514,17 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
       { label: t('Duplicate', 'Duplicar'), icon: ICONS.duplicate, action: safe(() => {
         if (asset.pattern) { onPatternAction?.('duplicate', asset.id); return; }
         const next = new Map(assets), copyOf = { id: uid(), name: uniqueName(asset.name), buffer: asset.buffer, version: 0 };
-        next.set(copyOf.id, copyOf); checkBudget(next); assets = next; draw();
+        next.set(copyOf.id, copyOf); checkBudget(next); commit(() => { assets = next; });
       }) },
       { label: asset.pattern ? t('Delete', 'Eliminar') : t('Delete from project', 'Eliminar del proyecto'), icon: ICONS.trash, danger: true, disabled: !!asset.session,
         title: deleteTitle || (asset.pattern ? '' : t('Removes the sample and all its clips; tracks that used it as their instrument let it go. Undo brings the clips back.', 'Quita el sample y todos sus clips; las pistas que lo usaban como instrumento lo sueltan. Deshacer devuelve los clips.')), action: () => {
         if (asset.pattern) { onPatternAction?.('delete', asset.id); return; }
-        commit(() => {
+        const removed = commit(() => {
           state.clips = state.clips.filter(clip => clip.asset !== asset.id); if (selected && !picked()) selected = null;
           for (const track of state.tracks) if (track.source === asset.id) delete track.source;
+          graveyard.set(asset.id, asset); assets.delete(asset.id); cache.forget(asset.id);
         });
-        graveyard.set(asset.id, asset); assets.delete(asset.id); cache.forget(asset.id); draw();
+        if (!removed) { assets.set(asset.id, asset); graveyard.delete(asset.id); changed(); draw(); }
       } },
     ]);
   }
@@ -577,8 +576,12 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     const from = forward ? future : history, to = forward ? history : future;
     if (!from.length) return;
     to.push(copy()); state = from.pop();
+    if (state.sampleIds) {
+      const ids = new Set(state.sampleIds);
+      for (const asset of importedSamples()) if (!ids.has(asset.id)) { graveyard.set(asset.id, asset); assets.delete(asset.id); cache.forget(asset.id); }
+    }
     // Undo of "Delete from project" brings the sample back from the graveyard.
-    for (const id of [...state.clips.map(clip => clip.asset), ...state.tracks.map(track => track.source)]) {
+    for (const id of [...(state.sampleIds || []), ...state.clips.map(clip => clip.asset), ...state.tracks.map(track => track.source)]) {
       if (id && !assets.has(id) && graveyard.has(id)) { assets.set(id, graveyard.get(id)); graveyard.delete(id); }
     }
     state.clips = state.clips.filter(clip => assets.has(clip.asset)); assignSources(); pruneGraveyard(); changed(); draw();
@@ -1029,6 +1032,16 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     toggle: safe(toggle), space: safe(space), pause: () => stop(), seek, now, playing, setSession, edit, draw,
     track: stem => state.tracks.find(track => track.id === stem || track.stem === stem),
     tracks: () => state.tracks,
+    instrumentSources() {
+      const used = new Set();
+      const channels = state.tracks.map(track => {
+        const source = trackSource(track.id); if (source) used.add(source.id);
+        return { key: track.stem || track.id, name: source && !track.stem ? source.name : track.name,
+          buffer: source?.buffer || null, imported: !!source && !track.stem };
+      });
+      for (const asset of importedSamples()) if (!used.has(asset.id)) channels.push({ key: `sample-${asset.id}`, name: asset.name, buffer: asset.buffer, imported: true });
+      return channels;
+    },
     duration: () => arrangementEnd(state),
     trackSource,
     // Per-channel EQ, like a mixer insert. Edits apply at once and reach onChange for saving.

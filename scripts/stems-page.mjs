@@ -331,8 +331,8 @@ const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('trans
   } });
 const mixOutput = createEqualizedOutput({ audioContext: () => context ||= new AudioContext({ sampleRate: SAMPLE_RATE }) });
 // Tracks are instruments: their own audio is what the channel rack cuts into pads.
-const instrumentTracks = () => playlist.tracks().map(track => ({ key: track.stem || track.id,
-  name: track.stem ? text(track.stem) : track.name, buffer: playlist.trackSource(track.id)?.buffer || null }));
+const instrumentTracks = () => playlist.instrumentSources().map(track => ({ ...track,
+  name: STEMS.includes(track.key) || track.key === 'original' ? text(track.key) : track.name }));
 const instruments = createInstruments({ playlist, tracks: instrumentTracks, rate: () => rate, report: playbackError,
   changed: () => libraryUI?.changed(),
   // A pattern preview plays through its track's insert, then Keep Tone and the master.
