@@ -167,6 +167,14 @@ module.exports = async function verifyInstruments(page) {
   await page.waitForTimeout(300);
   assert.equal(await rack.locator('.rack-pad.is-assigned').count(), 0, 'A cleared track stays empty');
 
+  // An imported one-shot (an 808) is stored with the separation.
+  const rate = 44100, kick = Buffer.alloc(44 + rate * 2);
+  kick.write('RIFF'); kick.writeUInt32LE(kick.length - 8, 4); kick.write('WAVEfmt ', 8); kick.writeUInt32LE(16, 16); kick.writeUInt16LE(1, 20); kick.writeUInt16LE(1, 22);
+  kick.writeUInt32LE(rate, 24); kick.writeUInt32LE(rate * 2, 28); kick.writeUInt16LE(2, 32); kick.writeUInt16LE(16, 34); kick.write('data', 36); kick.writeUInt32LE(rate * 2, 40);
+  for (let i = 0; i < rate; i++) kick.writeInt16LE(Math.round(Math.sin(2 * Math.PI * 55 * i / rate) * 20000 * Math.exp(-i / rate * 3)), 44 + i * 2);
+  await page.locator('#transport input[type=file]').setInputFiles({ name: '808.wav', mimeType: 'audio/wav', buffer: kick });
+  await playlist.locator('.pl-shelf button', { hasText: '808.wav' }).waitFor();
+
   // Presets keep instruments, patterns and their clips.
   await page.locator('#save-locally').click(); await page.locator('#save-name').fill('Patterns');
   await page.locator('#save-confirm').click();
@@ -180,11 +188,19 @@ module.exports = async function verifyInstruments(page) {
   assert.equal(saved.instruments.bass.slices.filter(Boolean).length, 8);
   assert.equal(saved.instruments.drums.slices.filter(Boolean).length, 0); assert.equal(saved.instruments.drums.sliced, true, 'Cleared pads are saved as cleared');
   assert.equal(saved.playlist.clips.filter(clip => clip.asset.startsWith('pattern:')).length, 1);
+  assert.deepEqual(saved.playlist.samples.map(sample => sample.name), ['808.wav']);
+  // Its audio is written next to the stems, before the page can go away.
+  await page.waitForFunction(async id => {
+    const { StemPresets } = await import('./scripts/stem-presets.mjs');
+    return Object.keys((await (await StemPresets.current()).load(id)).samples).length === 1;
+  }, id);
   await page.reload();
   await page.locator('#stem-presets:not(:disabled)').waitFor(); await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
   // Off-screen clips are virtualized: bring the user track into view.
   await page.locator('.pl-user-head').waitFor(); await page.locator('.pl-user-head').scrollIntoViewIfNeeded();
   await playlist.locator('.pl-clip.is-pattern').waitFor();
+  await playlist.locator('.pl-shelf button', { hasText: '808.wav' }).waitFor();
+  assert.ok(await playlist.locator('.pl-clip', { hasText: '808.wav' }).count() >= 1, 'The imported sample comes back with its clip');
   // Zoom fits the session on load: compare with the 3 s stem clip instead of pixels.
   const stemClip = await playlist.locator('.pl-clip:not(.is-pattern)').first().boundingBox();
   const restored = await playlist.locator('.pl-clip.is-pattern').boundingBox();

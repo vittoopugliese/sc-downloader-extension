@@ -1,6 +1,6 @@
 # Plan técnico: Browser de samples, Channel Rack y borrado independiente
 
-Fecha: 2026-10-16. Estado: sección 4 (Browser) implementada; secciones 1, 2, 3 y 5 pendientes.
+Fecha: 2026-10-16. Estado: implementado completo (2026-10-17); ver «Estado de implementación» al final.
 
 ## Resultado esperado
 
@@ -217,6 +217,27 @@ Extender las suites `test:stems`, `test:e2e:instruments`, `test:e2e:playlist`,
 `test:e2e:stem-presets` y agregar cobertura del Browser. Actualizar de forma
 intencional la expectativa actual de 14 botones;
 verificar también el selector existente de Player Tools tras extraerlo.
+
+## Estado de implementación (2026-10-17)
+
+1. Fuente estable: `track.source` en pistas de usuario; quitar/mover clips no la
+   cambia; «Usar como instrumento de la pista» la reemplaza; «Eliminar del
+   proyecto» la suelta y deshacer recupera el sample (graveyard ligado al
+   historial). Clip: «Quitar de la playlist».
+2. Clear All: botón propio en el Rack; segundo clic restaura; `instrument.sliced`
+   evita que vuelva el Auto-slice; se guarda en el preset.
+3. `stem-row-menu.mjs`: menú tipo Player Tools para patrones (Rack y Piano Roll)
+   y separaciones guardadas; `StemPresets.remove()` en IndexedDB y carpeta, con
+   confirmación en dos pasos. El tacho externo de patrón se quitó.
+4. Browser (F8/B), ahora botón naranja en la barra de transporte, maximizable;
+   preview con clic (inicio) y clic derecho (desde ese punto), waveform espectral.
+5. Samples importados guardados con la separación (`sample-<id>.wav` o
+   `<id>#samples` en IndexedDB), audio antes que metadata; formato aditivo, los
+   presets anteriores siguen abriendo.
+
+Además, fuera del plan original: ventanas flotantes estilo FL para Channel Rack,
+Piano Roll, EQ y Grabadora (F6/F7/F9/F10, acoplar, maximizar), EQ por canal con
+Master, y motor de audio que reemplaza solo el clip editado (sin cortes al editar).
 
 ## Decisiones de UX
 

@@ -152,8 +152,11 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     const asset = assets.get(clip.asset);
     return asset?.loop ? loopSegments(clip, asset.buffer.duration) : [clip];
   }) });
-  // Clips of pattern and session audio are saved; imported files are not.
-  const savable = id => !!(assets.get(id)?.session || assets.get(id)?.pattern);
+  // Imported samples used by clips or as a track's instrument; presets store their audio.
+  const importedSamples = () => {
+    const used = new Set([...state.clips.map(clip => clip.asset), ...state.tracks.map(track => track.source)]);
+    return [...assets.values()].filter(asset => !asset.session && !asset.pattern && used.has(asset.id));
+  };
   const rowViews = new Map(), clipViews = new Map(), analyzing = new WeakSet();
   let paintFrame = 0, dragAudio = 0, shelfKey = '', editMode = 'move', reported = null, slicing = false, slice = null;
   // Channel header width comes from CSS (--pl-head), narrower on phones.
@@ -961,12 +964,14 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   }
   // Replace the host's channels (original and stems); user tracks with clips stay.
   // `saved` restores channel mix and clips from a preset; invalid data falls back.
-  function setSession({ sources, saved = null }) {
+  // `samples` are the imported samples a preset stored: [{ id, name, buffer }].
+  function setSession({ sources, saved = null, samples = [] }) {
     showHint();
     stop(true);
     for (const old of assets.values()) if (old.session) cache.forget(old.id);
     const next = new Map([...assets].filter(([, asset]) => !asset.session));
     for (const source of sources) next.set(source.id, { id: source.id, name: source.name, buffer: source.buffer, version: 0, session: true });
+    for (const sample of samples) if (!next.has(sample.id)) next.set(sample.id, { id: sample.id, name: String(sample.name || 'Sample').slice(0, 160), buffer: sample.buffer, version: 0 });
     const userClips = state.clips.filter(clip => next.get(clip.asset) && !next.get(clip.asset).session && !trackOf(clip.track)?.stem);
     const userTracks = state.tracks.filter(track => !track.stem && userClips.some(clip => clip.track === track.id));
     userTracks.push(state.tracks.find(track => !track.stem && !userTracks.includes(track)) ||
@@ -977,7 +982,8 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
         return { id: `track-${source.stem}`, name: source.name, stem: source.stem, gain: Number.isFinite(old?.gain) ? clamp(old.gain, 0, 2) : 1,
           mute: old ? old.mute === true : source.mute === true, solo: false };
       });
-      const clips = restore && Array.isArray(saved?.clips) ? saved.clips.map(clip => ({ ...clip })) :
+      // A clip whose audio did not come back (a sample that failed to load) is left out.
+      const clips = restore && Array.isArray(saved?.clips) ? saved.clips.filter(clip => next.has(clip?.asset)).map(clip => ({ ...clip })) :
         sources.map(source => newClip(next.get(source.id), `track-${source.stem}`, 0));
       const restoredUsers = restore && Array.isArray(saved?.userTracks) ? saved.userTracks.filter(track => !track.stem) : [];
       const users = [...restoredUsers, ...userTracks.filter(track => !restoredUsers.some(saved => saved.id === track.id) && (!restoredUsers.length || userClips.some(clip => clip.track === track.id)))];
@@ -1091,10 +1097,13 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
       });
     },
     // Channel mix is saved by the host; the arrangement saves tempo and clips.
+    // Imported samples are listed by ID and name; the host stores their audio (`samples()`).
     snapshot: () => ({ bpm: state.bpm,
       trackEq: Object.fromEntries(state.tracks.filter(track => track.stem && track.eq).map(track => [track.id, structuredClone(track.eq)])),
-      userTracks: state.tracks.filter(track => !track.stem && state.clips.filter(clip => clip.track === track.id).every(clip => savable(clip.asset))).map(track => ({ ...track })),
-      clips: state.clips.filter(clip => savable(clip.asset) && (trackOf(clip.track)?.stem || state.clips.filter(other => other.track === clip.track).every(other => savable(other.asset)))).map(clip => ({ ...clip })) }),
+      samples: importedSamples().map(asset => ({ id: asset.id, name: asset.name })),
+      userTracks: state.tracks.filter(track => !track.stem).map(track => structuredClone(track)),
+      clips: state.clips.map(clip => ({ ...clip })) }),
+    samples: () => importedSamples().map(asset => ({ id: asset.id, name: asset.name, buffer: asset.buffer })),
     dispose() {
       exporting?.abort(); engine?.dispose(); cache.dispose(); viewObserver.disconnect(); sampleBrowser?.dispose();
       document.removeEventListener('keydown', onWindowKey); clearTimeout(messageTimer); clearTimeout(hintTimer); cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();

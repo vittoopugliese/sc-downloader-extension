@@ -195,6 +195,21 @@ const { chromium } = require('playwright');
       const target = path.join(root, 'test-results/stem-presets'); fs.mkdirSync(target, { recursive: true });
       await page.screenshot({ path: path.join(target, `${width}.png`), fullPage: true });
     }
+    // Imported samples live beside the stems in both destinations and can be dropped.
+    assert.deepEqual(await page.evaluate(async id => {
+      const { StemPresets } = await import('./scripts/stem-presets.mjs');
+      const sample = new Blob([new Uint8Array(100)], { type: 'audio/wav' }), results = [];
+      const database = await StemPresets.current(), { record, blobs } = await database.load(id);
+      const folder = new StemPresets(await navigator.storage.getDirectory()), copy = await folder.save(record.info, record.settings, blobs);
+      for (const [library, key] of [[database, id], [folder, copy.id]]) {
+        await library.saveSamples(key, { 'kick-808': sample });
+        results.push(Object.keys((await library.load(key)).samples));
+        await library.removeSamples(key, ['kick-808']);
+        results.push(Object.keys((await library.load(key)).samples));
+      }
+      await folder.remove(copy.id);
+      return results;
+    }, id), [['kick-808'], [], ['kick-808'], []]);
     // Delete from the menu: two steps, never opens the row; the open session stays and
     // autosave stops. The folder destination removes only that preset's folder.
     await page.setViewportSize({ width: 1200, height: 1000 });

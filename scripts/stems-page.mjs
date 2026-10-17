@@ -514,8 +514,10 @@ const settings = () => ({ ...instruments.snapshot(),
   rate, keepTone, eq: mixOutput.snapshot().eq, playlist: playlist.snapshot() });
 libraryUI = mountStemLibrary({ locale, report: status,
   onOperation(value) { libraryOperating = value; $('separate').disabled = value || busy || !initialized; $('cancel').disabled = value; $('import-audio').disabled = value || busy || !importReady; },
-  snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : null }),
-  restore: async ({ record, blobs }) => {
+  // Imported samples go with the separation; their WAV is encoded only when stored.
+  snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : null,
+    samples: playlist.samples().map(sample => ({ id: sample.id, name: sample.name, blob: () => sampleWav(sample.buffer) })) }),
+  restore: async ({ record, blobs, samples = {} }) => {
     // Decode/validate before replacing the current session. Missing/corrupt files
     // leave the current separation intact.
     const decoder = new OfflineAudioContext(2, 1, SAMPLE_RATE);
@@ -527,13 +529,22 @@ libraryUI = mountStemLibrary({ locale, report: status,
       for (let channel = 0; channel < 2; channel++) if (!buffer.getChannelData(channel).every(Number.isFinite)) throw new Error('Invalid PCM');
       decoded.push(buffer);
     }
+    // Imported samples: one that cannot be decoded is skipped, with its clips.
+    const names = new Map((record.settings?.playlist?.samples || []).map(item => [item?.id, item?.name]));
+    const restoredSamples = [];
+    for (const [id, blob] of Object.entries(samples)) {
+      try {
+        const buffer = await decoder.decodeAudioData(await blob.arrayBuffer());
+        if (buffer.duration <= MAX_SAMPLE_SECONDS && buffer.numberOfChannels <= 2) restoredSamples.push({ id, name: names.get(id) || 'Sample', buffer });
+      } catch (cause) { console.warn('[Stem presets] Skipped sample', id, cause); }
+    }
     disposeResults();
     for (const view of waveforms) view.dispose();
     original = decoded[0];
     renderInfo(record.info);
     revealAudition();
     mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
-    showResults({ outputs: decoded.slice(1).map(buffer => [buffer.getChannelData(0), buffer.getChannelData(1)]), seconds: 0 }, record.settings);
+    showResults({ outputs: decoded.slice(1).map(buffer => [buffer.getChannelData(0), buffer.getChannelData(1)]), seconds: 0 }, record.settings, restoredSamples);
     wavs = blobs;
     initialized = true;
   },
@@ -699,7 +710,7 @@ function channelForTrack(track, source) {
   item.buffer = source?.buffer;
   return item;
 }
-function startSession(saved = null) {
+function startSession(saved = null, samples = []) {
   const sources = [original, ...buffers].map((buffer, index) => {
     const stem = index ? STEMS[index - 1] : 'original';
     // With stems, the original starts muted so the mix is not doubled.
@@ -709,10 +720,13 @@ function startSession(saved = null) {
   // The stem mix lives in `states` (as before the playlist); the arrangement adds clips.
   const tracks = saved?.states && [...STEMS.map((stem, i) => ({ stem, gain: saved.states[i]?.gain, mute: saved.states[i]?.muted === true })),
     ...(saved.original ? [{ stem: 'original', gain: saved.original.gain, mute: saved.original.muted === true }] : [])];
-  playlist.setSession({ sources, saved: saved && { ...saved.playlist, tracks } });
+  playlist.setSession({ sources, saved: saved && { ...saved.playlist, tracks }, samples });
   $('original-waveform').hidden = true; zoomTools.hidden = true;
   renderChannels();
 }
+// Imported samples are stored once per buffer; the playlist limits them to five minutes.
+const MAX_SAMPLE_SECONDS = 5 * 60 + .01, sampleWavs = new WeakMap();
+const sampleWav = buffer => { if (!sampleWavs.has(buffer)) sampleWavs.set(buffer, wavOf(buffer)); return sampleWavs.get(buffer); };
 const wavOf = buffer => new Blob([encodeWav([buffer.getChannelData(0), buffer.getChannelData(Math.min(1, buffer.numberOfChannels - 1))], buffer.sampleRate)], { type: 'audio/wav' });
 // Before separation the playlist holds the source audio alone.
 function showOriginal() {
@@ -728,7 +742,7 @@ function disposeResults() {
   urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
   for (const view of waveforms) if (!$('original-waveform').contains(view.element)) view.dispose();
 }
-function showResults(result, saved = null) {
+function showResults(result, saved = null, samples = []) {
   disposeResults();
   mixOutput.setEqualizer(globalThis.SCParametricEQ.normalize(saved?.eq)); equalizerUI.reset();
   outputs = result.outputs;
@@ -741,7 +755,7 @@ function showResults(result, saved = null) {
   outputs = [];
   // Patterns first: the saved playlist holds their clips.
   instruments.restore(saved);
-  startSession(saved); instruments.focus('drums');
+  startSession(saved, samples); instruments.focus('drums');
   syncLoop();
   status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`);
 }

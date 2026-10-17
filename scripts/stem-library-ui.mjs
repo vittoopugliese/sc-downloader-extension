@@ -75,6 +75,8 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
   $('save-confirm').textContent = copy.confirm;
   $('save-name-label').textContent = copy.name;
   $('preset-reconnect').textContent = copy.connect;
+  // `stored`: imported sample IDs whose audio the active preset already holds.
+  let stored = new Set();
   let library, active = null, enabled = false, operating = false, inference = false, pending = Promise.resolve(), nextWrite = null, writing = false, writeError = null;
   let ready = initialize();
   function error(cause) {
@@ -110,13 +112,23 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
   // Queue settings immediately: pagehide does not have to start a new transaction.
   function changed() {
     if (!enabled || !active) return;
-    nextWrite = { target: library, id: active.id, settings: snapshot().settings };
+    const data = snapshot();
+    nextWrite = { target: library, id: active.id, settings: data.settings, samples: data.samples || [] };
     if (writing) return;
     writing = true; writeError = null;
     pending = (async () => {
       while (nextWrite) {
         const item = nextWrite; nextWrite = null;
+        // Sample audio first, then the settings that name it, then drop unused samples.
+        const wanted = new Set(item.samples.map(sample => sample.id));
+        const missing = item.samples.filter(sample => !stored.has(sample.id));
+        if (missing.length) {
+          await item.target.saveSamples(item.id, Object.fromEntries(missing.map(sample => [sample.id, sample.blob()])));
+          for (const sample of missing) stored.add(sample.id);
+        }
         await item.target.update(item.id, item.settings);
+        const unused = [...stored].filter(key => !wanted.has(key));
+        if (unused.length) { await item.target.removeSamples(item.id, unused); for (const key of unused) stored.delete(key); }
       }
     })().catch(cause => { writeError = cause; nextWrite = null; error(cause); }).finally(() => { writing = false; });
   }
@@ -130,6 +142,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
     operating = true; controls(); report(copy.saving);
     try {
       const info = { ...data.info, title: $('save-name').value.trim() || data.info.title };
+      stored = new Set();
       active = await library.save(info, data.settings, data.blobs);
       // Include adjustments made while the WAVs were being written.
       changed(); await pending;
@@ -182,6 +195,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
       await library.authorize(true);
       await pending;
       const data = await library.load(id);
+      stored = new Set(Object.keys(data.samples || {}));
       await restore(data);
       active = data.record; enabled = true;
       $('save-name').value = active.title;

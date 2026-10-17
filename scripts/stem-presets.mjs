@@ -3,6 +3,11 @@ import { MAX_SECONDS, SAMPLE_RATE } from './stem-audio.mjs';
 // small settings writes never re-encode or copy the WAVs.
 const AUDIO = ['original', 'drums', 'bass', 'other', 'vocals'];
 const validId = id => /^stem-[a-f0-9-]{36}$/.test(id);
+// Imported samples of a separation's playlist: stored next to its five WAVs, as
+// `sample-<id>.wav` in a preset folder or under `<preset id>#samples` in IndexedDB.
+const validSample = id => typeof id === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(id);
+const MAX_SAMPLES = 64, MAX_SAMPLE_BYTES = 128 * 1024 * 1024;
+const samplesKey = id => `${id}#samples`;
 let database;
 function db() {
   return database ||= new Promise((resolve, reject) => {
@@ -100,21 +105,30 @@ export class StemPresets {
   }
   async load(id) {
     if (!validId(id)) throw new Error('Invalid preset ID');
-    let record, blobs;
+    let record, blobs, samples = {};
     if (!this.directory) {
-      [record, blobs] = await Promise.all([
+      let stored;
+      [record, blobs, stored] = await Promise.all([
         transaction(['presets'], 'readonly', tx => tx.objectStore('presets').get(id)),
         transaction(['audio'], 'readonly', tx => tx.objectStore('audio').get(id)),
+        transaction(['audio'], 'readonly', tx => tx.objectStore('audio').get(samplesKey(id))),
       ]);
+      samples = stored && typeof stored === 'object' ? stored : {};
     } else {
       const directory = await (await this.root()).getDirectoryHandle(id);
       record = await readRecord(directory);
       blobs = await Promise.all(AUDIO.map(async name => (await directory.getFileHandle(`${name}.wav`)).getFile()));
+      for await (const [name, handle] of directory.entries()) {
+        const match = /^sample-(.+)\.wav$/.exec(name);
+        if (match && handle.kind === 'file' && validSample(match[1])) samples[match[1]] = await handle.getFile();
+      }
     }
     validate(record);
     const maxWavBytes = 44 + MAX_SECONDS * SAMPLE_RATE * 2 * 4;
     if (record.id !== id || blobs?.length !== 5 || blobs.some(blob => !(blob instanceof Blob) || blob.size > maxWavBytes || blob.size < 44)) throw new Error('Invalid preset audio');
-    return { record, blobs };
+    // Unusable sample files are skipped; their clips are left out on restore.
+    samples = Object.fromEntries(Object.entries(samples).filter(([key, blob]) => validSample(key) && blob instanceof Blob && blob.size >= 44 && blob.size <= MAX_SAMPLE_BYTES).slice(0, MAX_SAMPLES));
+    return { record, blobs, samples };
   }
   // Deletes the saved copy of a separation: its IndexedDB records, or its preset folder
   // inside PlayerTools-Stems. Nothing else in the chosen folder is touched.
@@ -122,7 +136,7 @@ export class StemPresets {
     if (!validId(id)) throw new Error('Invalid preset ID');
     if (!this.directory) {
       await transaction(['presets', 'audio'], 'readwrite', tx => {
-        tx.objectStore('presets').delete(id); tx.objectStore('audio').delete(id);
+        tx.objectStore('presets').delete(id); tx.objectStore('audio').delete(id); tx.objectStore('audio').delete(samplesKey(id));
       });
       return;
     }
@@ -133,6 +147,53 @@ export class StemPresets {
       catch (error) { if (error.name !== 'NotFoundError') throw error; }
       try { await root.removeEntry(id, { recursive: true }); }
       catch (error) { if (error.name !== 'NotFoundError') throw error; }
+    });
+  }
+  // Adds imported samples ({ sampleId: Blob }) to a saved separation. Write these before
+  // settings that refer to them, so metadata never points at missing audio.
+  async saveSamples(id, samples) {
+    if (!validId(id)) throw new Error('Invalid preset ID');
+    const entries = Object.entries(samples);
+    if (entries.some(([key, blob]) => !validSample(key) || !(blob instanceof Blob) || blob.size > MAX_SAMPLE_BYTES)) throw new Error('Invalid sample');
+    if (!entries.length) return;
+    if (!this.directory) {
+      await transaction(['audio'], 'readwrite', tx => {
+        const store = tx.objectStore('audio'), request = store.get(samplesKey(id));
+        request.onsuccess = () => {
+          const merged = { ...(request.result || {}), ...samples };
+          if (Object.keys(merged).length > MAX_SAMPLES) { tx.abort(); return; }
+          store.put(merged, samplesKey(id));
+        };
+      });
+      return;
+    }
+    await navigator.locks.request(`scdl-stem-preset-${id}`, async () => {
+      const directory = await (await this.root()).getDirectoryHandle(id);
+      for (const [key, blob] of entries) await write(directory, `sample-${key}.wav`, blob);
+    });
+  }
+  // Drops samples the playlist no longer uses. Run after the settings stop naming them.
+  async removeSamples(id, ids) {
+    if (!validId(id)) throw new Error('Invalid preset ID');
+    const keys = ids.filter(validSample);
+    if (!keys.length) return;
+    if (!this.directory) {
+      await transaction(['audio'], 'readwrite', tx => {
+        const store = tx.objectStore('audio'), request = store.get(samplesKey(id));
+        request.onsuccess = () => {
+          if (!request.result) return;
+          const rest = { ...request.result }; for (const key of keys) delete rest[key];
+          store.put(rest, samplesKey(id));
+        };
+      });
+      return;
+    }
+    await navigator.locks.request(`scdl-stem-preset-${id}`, async () => {
+      const directory = await (await this.root()).getDirectoryHandle(id);
+      for (const key of keys) {
+        try { await directory.removeEntry(`sample-${key}.wav`); }
+        catch (error) { if (error.name !== 'NotFoundError') throw error; }
+      }
     });
   }
   async update(id, settings) {
