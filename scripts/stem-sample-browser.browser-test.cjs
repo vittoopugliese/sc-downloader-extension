@@ -33,7 +33,7 @@ const { chromium } = require('playwright');
       const create = AudioContext.prototype.createBufferSource;
       AudioContext.prototype.createBufferSource = function () {
         const source = create.call(this), start = source.start.bind(source), context = this;
-        source.start = (...args) => { window.starts.push({ context, duration: source.buffer?.duration }); start(...args); };
+        source.start = (...args) => { window.starts.push({ context, duration: source.buffer?.duration, offset: args[1] || 0 }); start(...args); };
         return source;
       };
       if (sessionStorage.getItem('revoke')) {
@@ -108,6 +108,18 @@ const { chromium } = require('playwright');
       return false;
     }), 'The waveform is drawn');
     assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'false', 'Preview does not start the transport');
+    // Frequency colors like the other waveforms, once the analysis lands.
+    await page.waitForFunction(() => {
+      const canvas = document.querySelector('.sb-wave canvas'), [r, g, b] = canvas.getContext('2d').getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
+      return r + g + b > 0 && !(r === 133 && g === 141 && b === 150);
+    });
+    // Right-click plays from that point; a click plays from the start.
+    const waveBox = await dialog.locator('.sb-wave').boundingBox();
+    await page.mouse.click(waveBox.x + waveBox.width / 2, waveBox.y + waveBox.height / 2, { button: 'right' });
+    await page.waitForFunction(() => window.starts.at(-1).offset > 0);
+    assert.ok(Math.abs((await lastStart()).offset - .5) < .03, 'Right-click starts at the middle');
+    await page.mouse.click(waveBox.x + waveBox.width / 2, waveBox.y + waveBox.height / 2);
+    await page.waitForFunction(() => window.starts.at(-1).offset === 0);
     // Fast selection: the previous file never starts after a newer pick.
     await page.evaluate(() => { window.starts.length = 0; });
     await page.evaluate(() => {

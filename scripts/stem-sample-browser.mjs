@@ -1,5 +1,6 @@
 import { createSamplePreview } from './stem-sample-preview.mjs';
 import { chooseRoot, createFolderCache, readPermission, savedRoot } from './stem-sample-library.mjs';
+import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
 
 // Floating sample browser, like FL Studio's: pick a root folder, walk it, click a file to
 // preview it and drag it onto a Playlist track. It is not modal; the Playlist keeps working.
@@ -58,7 +59,7 @@ export function mountSampleBrowser({ t, importSamples, onToggle }) {
   emptyAction.type = 'button'; empty.append(emptyText, emptyAction);
   const viewer = node('div', 'sb-viewer');
   const wave = node('div', 'sb-wave'), canvas = node('canvas'), line = node('div', 'sb-line');
-  wave.title = t('Click to play from the start', 'Clic para reproducir desde el inicio');
+  wave.title = t('Click: play from the start · right-click: play from that point', 'Clic: reproduce desde el inicio · clic derecho: reproduce desde ese punto');
   wave.append(canvas, line); line.hidden = true;
   const controls = node('div', 'sb-controls');
   const playButton = iconButton(ICONS.play, t('Play preview (Space)', 'Escuchar (Espacio)'), () => togglePreview());
@@ -302,7 +303,20 @@ export function mountSampleBrowser({ t, importSamples, onToggle }) {
     if (current?.sample) { const mine = ++ticket; previewer.play(current.sample, () => mine === ticket).catch(error => setStatus(errorText(error))); }
     else if (current && !current.loading) previewEntry(current.entry);
   }
-  wave.onclick = () => { if (current?.sample) { stopPreview(); togglePreview(); } };
+  // Click plays the whole sample once; right-click plays from the clicked point.
+  function playFrom(offset) {
+    if (!current?.sample) return;
+    stopPreview();
+    const mine = ++ticket;
+    previewer.play(current.sample, () => mine === ticket, offset).catch(error => setStatus(errorText(error)));
+  }
+  wave.onclick = () => playFrom(0);
+  wave.oncontextmenu = event => {
+    event.preventDefault();
+    if (!current?.sample) return;
+    const box = wave.getBoundingClientRect();
+    playFrom(Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)) * current.sample.buffer.duration);
+  };
   // What the Playlist imports: the preview buffer when it is still the same file, else the file.
   const itemFor = (entry, path) => ({ name: entry.name, async read() {
     stopPreview();
@@ -340,10 +354,19 @@ export function mountSampleBrowser({ t, importSamples, onToggle }) {
       }
       return;
     }
-    ctx.fillStyle = '#ff8a4c';
+    // Frequency colors, as in every other waveform of the app: bass red, mids green, treble blue.
+    const buffer = current.sample.buffer, spectrum = spectrumNow(buffer);
+    if (!spectrum) spectrumOf(buffer).then(() => { if (current?.sample?.buffer === buffer) drawWave(); }, () => {});
+    const bins = spectrum?.peaks.length || 0;
     for (let x = 0; x < width; x++) {
       const from = Math.floor(x / width * peaks.length), to = Math.max(from + 1, Math.floor((x + 1) / width * peaks.length));
       let peak = 0; for (let i = from; i < to; i++) peak = Math.max(peak, peaks[i]);
+      if (spectrum) {
+        const first = Math.floor(x / width * bins), last = Math.min(bins, Math.max(first + 1, Math.floor((x + 1) / width * bins)));
+        let low = 0, mid = 0, high = 0;
+        for (let i = first; i < last; i++) { low += spectrum.bands[i * 3]; mid += spectrum.bands[i * 3 + 1]; high += spectrum.bands[i * 3 + 2]; }
+        ctx.fillStyle = spectrumColor(low, mid, high);
+      } else ctx.fillStyle = '#858d96';
       const bar = Math.max(scale, Math.min(1, peak) * height * .9);
       ctx.fillRect(x, (height - bar) / 2, 1, bar);
     }

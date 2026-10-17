@@ -51,7 +51,8 @@ export function createSamplePreview({ budget = PREVIEW_BUDGET, onState } = {}) {
       return last = sample;
     },
     // `wanted` is checked once the context resumes, so a stale selection never starts.
-    async play(sample, wanted = () => true) {
+    // `offset` is where playback starts, in seconds.
+    async play(sample, wanted = () => true, offset = 0) {
       stop();
       if (!context) {
         context = new AudioContext({ latencyHint: 'interactive' });
@@ -62,9 +63,10 @@ export function createSamplePreview({ budget = PREVIEW_BUDGET, onState } = {}) {
       stop();
       const source = context.createBufferSource();
       source.buffer = sample.buffer; source.connect(gain);
-      const current = { source, sample, startedAt: context.currentTime };
+      const from = Math.min(Math.max(0, offset), Math.max(0, sample.buffer.duration - .001));
+      const current = { source, sample, startedAt: context.currentTime - from };
       source.onended = () => { if (voice === current) { voice = null; source.disconnect(); onState?.(null); } };
-      voice = current; source.start(); onState?.(sample);
+      voice = current; source.start(0, from); onState?.(sample);
     },
     stop,
     playing: () => voice?.sample || null,

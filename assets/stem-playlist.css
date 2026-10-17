@@ -3,7 +3,6 @@
 #audition{padding-bottom:6px}
 #mixer{padding:0 18px 18px}
 #mixer #mix-tools{margin-top:4px}
-#mixer #quality-note{margin:12px 2px 0}
 @media(max-width:600px){#mixer{padding:0 14px 14px}}
 
 .pl-ui{--pl-head:236px;--pl-edge:#3b3b3b;--pl-panel:#292929;--pl-head-bg:#202020;--pl-night:#191919;--pl-muted:#b8b3ad}
