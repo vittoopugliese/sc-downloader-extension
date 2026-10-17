@@ -15,6 +15,7 @@
     "test:e2e:sample-browser": "node scripts/stem-sample-browser.browser-test.cjs",
     "test:e2e:module-windows": "node scripts/stem-module-window.browser-test.cjs",
     "test:e2e:channel-eq": "node scripts/stem-channel-eq.browser-test.cjs",
+    "test:e2e:stem-fx": "node scripts/stem-effects.browser-test.cjs",
     "test:contact-content": "node scripts/verify-contact-content.js && node scripts/verify-contact-content-runtime.js",
     "test:contact-content:browser": "node scripts/verify-contact-content-browser.js",
     "test": "node scripts/run-verifications.js",

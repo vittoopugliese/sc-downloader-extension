@@ -27,10 +27,11 @@ el Chrome del usuario ni publicado.
 ### Botones de ventanas y atajos
 
 En la barra de transporte, junto al tacho, el gamepad y la descarga, hay cinco
-botones naranjas. Las herramientas de la Playlist volvieron a 7 + 7.
+botones naranjas, más FXs. Las herramientas de la Playlist volvieron a 7 + 7.
 
 | Ventana | Tecla |
 | --- | --- |
+| FXs del Master | F4 |
 | Channel Rack | F6 |
 | Piano Roll | F7 |
 | Browser de samples | F8 (B también, con el foco en la Playlist) |
@@ -118,6 +119,25 @@ recibe el Auto-slice inicial.
 - Los pads y notas no pasan por el volumen de la pista ni por Keep Tone, igual
   que antes.
 
+### FXs del Master
+
+- Botón naranja **FXs** entre Piano Roll y EQ, con la misma ventana movible,
+  redimensionable, acoplable y maximizable. F4 abre, trae al frente o cierra.
+- Los seis efectos de Player Tools: Reverb, Echo, Flanger, Phaser, Saturation y
+  Bitcrusher. Todos sus controles están a la vista, incluido Room, sin mantener
+  apretada una perilla para abrir opciones. En ventanas chicas se puede desplazar.
+- Presets Subtle, Studio, Wide y Dub; encendido por efecto que recuerda su nivel;
+  bypass y reset exclusivos de FXs. Arrastrar las perillas, Shift para precisión,
+  flechas para ajustar y doble clic para restablecer.
+- Echo Freeze funciona mientras se mantiene el botón o Enter/Espacio. Pausa la
+  Playlist o la preview del patrón y la reanuda al soltar. Cerrar la ventana o
+  perder el foco libera Freeze.
+- Los clips, patrones, pads y notas pasan por FXs y luego por el EQ Master.
+  La Grabadora recibe esa salida. La preview del Browser sigue independiente.
+- Los ajustes de FXs se guardan con la separación; las anteriores abren con los
+  efectos apagados. El WAV de la Playlist aplica los FXs antes del EQ Master e
+  incluye las colas de reverb/echo. Bypass de FXs conserva el EQ.
+
 ### Guardado
 
 Con **Guardar localmente** activo se guardan también:
@@ -140,6 +160,7 @@ Los presets anteriores siguen abriendo.
 | `scripts/stem-sample-library.mjs` | Carpeta raíz: `showDirectoryPicker({ id: 'stem-samples', mode: 'read' })`, handle en IndexedDB, permisos y caché de carpetas. |
 | `scripts/stem-sample-preview.mjs` | Preview en su propio `AudioContext`, caché LRU de 32 MiB que cuenta en el presupuesto de la Playlist. |
 | `scripts/stem-module-window.mjs` | Ventanas: `mountModuleWindow()`, `bringToFront`, `isOnTop`. Estado en `localStorage` bajo `stem-module-<id>`. |
+| `scripts/stem-effects.mjs` | Ventana FXs y todos los parámetros del motor compartido de Player Tools. |
 | `scripts/stem-row-menu.mjs` | Dropdown con borrar por fila: `createRowMenu()`. |
 | `scripts/stem-rack-overview.mjs` | Vista Channel Rack con una fila por sample. |
 
@@ -191,6 +212,7 @@ aplica los mismos inserts en la exportación.
 | `npm run test:stems` | Unidades: patrones, motor que reemplaza solo el clip editado, cortes. |
 | `npm run test:e2e:sample-browser` | Browser: carpeta, permisos, preview, arrastre. Usa perfil persistente. |
 | `npm run test:e2e:module-windows` | Ventanas: teclas, frente/cierre, acople, maximizar, persistencia. |
+| `npm run test:e2e:stem-fx` | Todos los controles FXs, presets, persistencia, Freeze, bypass, worklet, salida de audio y WAV, escritorio y 320 px. |
 | `npm run test:e2e:channel-eq` | EQ por canal y exportación filtrada. |
 | `npm run test:e2e:instruments` | Rack (Chops), Piano Roll, patrones, Clear All, presets. |
 | `npm run test:e2e:rack-modes` | Vista Channel Rack, One-shot con nota raíz, modos sin pérdida, recarga, 390/320 px. |

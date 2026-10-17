@@ -30,7 +30,7 @@ function smokePackage(zipPath, apiPermission) {
   const prohibited = files.filter(entry => forbidden.test(entry));
   if (prohibited.length) throw new Error(`Package contains development-only files: ${prohibited.join(', ')}`);
   for (const required of ['manifest.json', 'popup.html', 'offscreen.html', 'stems.html', 'assets/stems.css', 'scripts/local-audio-output.mjs',
-    'scripts/stem-worker.mjs', 'scripts/stem-model.mjs', 'scripts/stem-audio.mjs', 'scripts/stem-jobs.js',
+    'scripts/stem-worker.mjs', 'scripts/stem-model.mjs', 'scripts/stem-audio.mjs', 'scripts/stem-jobs.js', 'scripts/stem-effects.mjs',
     'scripts/stem-presets.mjs', 'scripts/stem-library-ui.mjs', 'scripts/stem-tone-processor.mjs',
     'scripts/stem-playlist.mjs', 'scripts/stem-playlist-core.mjs', 'scripts/stem-playlist-audio.mjs', 'scripts/stem-playlist-stretch.mjs', 'scripts/stem-playlist-worker.mjs', 'assets/stem-playlist.css',
     'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/stem-pattern-core.mjs', 'scripts/stem-instruments.mjs', 'scripts/stem-channel-rack.mjs', 'scripts/stem-piano.mjs', 'scripts/stem-spectrum.mjs', 'assets/icons/mute.svg',

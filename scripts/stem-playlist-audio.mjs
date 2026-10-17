@@ -325,8 +325,8 @@ export function prefetchStretches(state, assets, cache, onError) {
   }
 }
 
-// The export follows the realtime insert order: track EQ, fader, then the master EQ.
-export async function renderArrangement(state, assets, cache, { signal, progress, masterEq = null } = {}) {
+// The export follows the realtime insert order: track EQ, fader, master FX, master EQ.
+export async function renderArrangement(state, assets, cache, { signal, progress, masterEq = null, masterFx = null } = {}) {
   validateArrangement(state, assets); signal?.throwIfAborted();
   const end = arrangementEnd(state);
   if (!end) throw new Error('Add a sample to the playlist first.');
@@ -337,7 +337,9 @@ export async function renderArrangement(state, assets, cache, { signal, progress
     const graph = equalizer.createGraph(offline); graph.apply(settings, false, true); graph.output.connect(destination);
     return graph.input;
   };
-  const master = insert(masterEq, offline.destination);
+  const effects = globalThis.SCTempoEffects;
+  const withFx = masterFx?.bypassed !== true && effects?.EFFECT_NAMES.some(name => Number(masterFx?.[name]) > 0);
+  const master = withFx ? offline.destination : insert(masterEq, offline.destination);
   const gains = new Map(state.tracks.map(track => {
     const gain = offline.createGain(); gain.gain.value = track.gain; gain.connect(master);
     return [track.id, insert(track.eq, gain)];
@@ -350,8 +352,11 @@ export async function renderArrangement(state, assets, cache, { signal, progress
     if (needsStretch(clip)) { await cache.request(clip, asset); signal?.throwIfAborted(); stretched = cache.lookup(clip, asset); }
     startClip(offline, gains.get(clip.track), clip, asset, stretched, clip.at);
   }
-  const mix = await offline.startRendering();
+  let mix = await offline.startRendering();
   signal?.throwIfAborted();
+  // Reuse Player Tools' offline DSP, including effect tails. The playlist allows
+  // five minutes, longer than a pad; bound its stereo render to 128 MiB.
+  if (withFx) mix = await effects.renderSample(mix, { ...masterFx, eq: masterEq }, signal, { maxBytes: 128 * 1024 * 1024 });
   // One common gain preserves stereo balance and prevents clipping in exports.
   let peak = 1;
   for (let c = 0; c < 2; c++) for (const value of mix.getChannelData(c)) peak = Math.max(peak, Math.abs(value));

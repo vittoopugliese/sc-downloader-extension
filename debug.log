@@ -62,3 +62,10 @@
 [1015/124607.965:ERROR:gpu\command_buffer\service\shared_image\shared_image_manager.cc:395] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.
 [1015/124607.966:ERROR:gpu\command_buffer\service\shared_image\shared_image_manager.cc:395] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.
 [1015/124607.966:ERROR:gpu\command_buffer\service\shared_image\shared_image_manager.cc:395] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.
+[1017/003507.663:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)
+[1017/130443.243:ERROR:third_party\blink\renderer\platform\audio\reverb.cc:267] NOTREACHED hit. 
+[1017/130443.873:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)
+[1017/130508.767:WARNING:net\extras\sqlite\sqlite_persistent_store_backend_base.cc:181] Failed to post task from operator()@net\extras\sqlite\sqlite_persistent_shared_dictionary_store.cc:259 to client_task_runner_.
+[1017/130521.913:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)
+[1017/130521.943:ERROR:third_party\blink\renderer\platform\audio\reverb.cc:267] NOTREACHED hit. 
+[1017/130523.863:WARNING:services\audio\sync_reader.cc:154] ASR: No room in socket buffer.: Se está cerrando la canalización. (0xE8)

@@ -23,7 +23,7 @@ const { chromium } = require('playwright');
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html`);
     const tools = page.locator('#transport');
-    const windows = { rack: ['Channel rack', '#stem-rack', 'F6'], piano: ['Piano roll', '#stem-piano-roll', 'F7'], eq: ['Parametric EQ', '#scdl-parametric-eq', 'F9'], recorder: ['Recorder', '#scdl-record', 'F10'] };
+    const windows = { rack: ['Channel rack', '#stem-rack', 'F6'], piano: ['Piano roll', '#stem-piano-roll', 'F7'], fx: ['FXs', '#stem-fx', 'F4'], eq: ['Parametric EQ', '#scdl-parametric-eq', 'F9'], recorder: ['Recorder', '#scdl-record', 'F10'] };
     const section = id => page.locator(windows[id][1]);
     const button = id => tools.getByRole('button', { name: windows[id][0], exact: true });
     const z = id => section(id).evaluate(node => Number(node.style.zIndex));
@@ -38,7 +38,7 @@ const { chromium } = require('playwright');
     assert.equal(await section('rack').isVisible(), true);
     assert.equal(await button('rack').getAttribute('aria-pressed'), 'true');
     assert.equal(await section('rack').evaluate(node => getComputedStyle(node).position), 'fixed');
-    for (const id of ['piano', 'eq', 'recorder']) {
+    for (const id of ['piano', 'fx', 'eq', 'recorder']) {
       await page.keyboard.press(windows[id][2]);
       assert.equal(await section(id).isVisible(), true, `${windows[id][2]} opens ${id}`);
     }

@@ -141,7 +141,7 @@ export function createKnob({ label, min, max, step, coarse, value, reset, format
 // `toolbarEnd` sits before the download button;
 // `inspectorControls` share the library row. Pattern library entries are owned by
 // the host: their Duplicate/Delete go through `onPatternAction(action, assetId)`.
-export function mountPlaylist({ container, windows = [], toolbarHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect }) {
+export function mountPlaylist({ container, windows = [], toolbarHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect }) {
   const es = document.documentElement.lang === 'es', t = (en, spanish) => es ? spanish : en;
   let state = emptyArrangement(), assets = new Map(), selected = null, extra = new Set(), zoom = 48, snap = .25;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
@@ -344,7 +344,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   () => commit(() => state.tracks.push({ id: uid(), name: `${t('Track', 'Pista')} ${state.tracks.filter(item => !item.stem).length + 1}`, gain: 1, mute: false, solo: false })));
   const exportButton = iconButton(ICONS.download, t('Download WAV', 'Descargar WAV'), safe(exportMix));
   exportButton.classList.add('pl-export');
-  exportButton.title = t('Download WAV: renders the whole playlist (or the A–B loop) with mute, solo, volume and EQ into a stereo WAV file', 'Descargar WAV: renderiza toda la playlist (o el loop A–B) con mute, solo, volumen y EQ en un WAV estéreo');
+  exportButton.title = t('Download WAV: renders the whole playlist (or the A–B loop) with mute, solo, volume, FXs and EQ into a stereo WAV file', 'Descargar WAV: renderiza toda la playlist (o el loop A–B) con mute, solo, volumen, FXs y EQ en un WAV estéreo');
   // Slice tool, like FL Studio's: a click cuts the clip under the mouse; dragging up or down
   // cuts every lane the line crosses. Snap applies unless Alt is held.
   const sliceButton = toolButton({ icon: ICONS.slice, name: t('Slice tool', 'Herramienta de corte'), key: 'C', keys: ['c'], color: '#ff5d8f',
@@ -958,7 +958,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     if (exporting) return;
     exporting = new AbortController(); exportButton.disabled = true;
     try {
-      const rendered = await renderArrangement(structuredClone(playbackState()), new Map(assets), cache, { signal: exporting.signal, masterEq: structuredClone(masterEq?.() ?? null),
+      const rendered = await renderArrangement(structuredClone(playbackState()), new Map(assets), cache, { signal: exporting.signal, masterEq: structuredClone(masterEq?.() ?? null), masterFx: structuredClone(masterFx?.() ?? null),
         progress: p => report(`${t('Rendering', 'Renderizando')} ${Math.round(p * 100)}%`) });
       const blob = new Blob([encodeWav([rendered.getChannelData(0), rendered.getChannelData(1)], rendered.sampleRate)], { type: 'audio/wav' });
       const url = URL.createObjectURL(blob), link = node('a'); link.href = url; link.download = 'playlist.wav'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);

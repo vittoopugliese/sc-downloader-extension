@@ -6,8 +6,8 @@ module.exports = async function verifyInstruments(page) {
   await page.locator('#separate:not(:disabled)').click();
   await page.locator('.pl-stem-head[data-stem=vocals]').waitFor();
   const rack = page.locator('#stem-rack'), piano = page.locator('#stem-piano-roll'), playlist = page.locator('#playlist');
-  // The four modules are windows: closed until opened from the toolbar, a key or a track menu.
-  assert.equal(await page.locator('.module-window').count(), 4);
+  // Five modules, including FXs: closed until opened from the toolbar, a key or a track menu.
+  assert.equal(await page.locator('.module-window').count(), 5);
   assert.equal(await page.locator('.module-window:visible').count(), 0, 'Windows start closed');
   // Docked windows keep the old order under the playlist: rack and piano roll before EQ and recorder.
   const dock = async section => { await section.locator('.module-control').first().click(); assert.equal(await section.evaluate(node => node.parentElement.id), 'mix-tools'); };

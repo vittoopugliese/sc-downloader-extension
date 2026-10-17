@@ -8,6 +8,7 @@ import { MODEL } from './stem-model.mjs';
 import { mountStemLibrary } from './stem-library-ui.mjs';
 import { contextMenu, createKnob, mountPlaylist } from './stem-playlist.mjs';
 import { mountModuleWindow } from './stem-module-window.mjs';
+import { mountEffects, FX_ICON } from './stem-effects.mjs';
 import { spectrumOf } from './stem-spectrum.mjs';
 
 const translations = {
@@ -301,7 +302,7 @@ function reconcileChannels() {
 }
 // The header play button is the transport; the playlist toolbar joins the header with
 // the speed slider next to the tempo controls.
-// Tool windows (FL Studio's F6–F10): buttons in the Playlist tool rows, windows created below.
+// Tool windows: orange buttons together in the transport bar.
 const say = (en, es) => locale === 'es' ? es : en;
 let moduleWindows = {}, eqTargetSelect = null;
 const WINDOWS = [
@@ -309,6 +310,8 @@ const WINDOWS = [
     detail: say('the focused track cut into eight pads and its step patterns', 'la pista enfocada cortada en ocho pads y sus patrones de pasos') },
   { id: 'piano', icon: PLUGIN_ICONS.piano, name: say('Piano roll', 'Piano roll'), key: 'F7', keys: ['f7'], color: '#c792ea',
     detail: say('notes of the focused pattern', 'las notas del patrón enfocado') },
+  { id: 'fx', icon: FX_ICON, name: 'FXs', key: 'F4', keys: ['f4'], color: '#ff9955',
+    detail: say('all six Player Tools effects and their settings on the master', 'los seis efectos de Player Tools y todos sus ajustes en el master') },
   { id: 'eq', icon: 'M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6', name: say('Parametric EQ', 'EQ paramétrico'), key: 'F9', keys: ['f9'], color: '#4fc3f7',
     detail: say('equalizer of the selected channel, or of the master', 'ecualizador del canal seleccionado o del master') },
   { id: 'recorder', icon: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/>', name: say('Recorder', 'Grabadora'), key: 'F10', keys: ['f10'], color: '#ff4d6d',
@@ -321,6 +324,7 @@ const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('trans
   audio: playlistAudio, channel: channelForTrack,
   // The master EQ is the last insert of the WAV export too.
   masterEq: () => mixOutput.snapshot().eq,
+  masterFx: () => mixOutput.effectsSettings(),
   onLoopChange(range) { stemLoop.setRange(range ? { startMs: range.start * 1000, endMs: range.end * 1000, durationMs: original?.duration * 1000 || range.end * 1000 } : null); },
   onChange() { reconcileChannels(); renderChannels(); instruments?.sync(); syncChannelEq(); libraryUI?.changed(); },
   // Selecting a pattern clip opens that pattern, as double-clicking one does in FL Studio.
@@ -382,6 +386,15 @@ const eqEffects = {
 };
 const channelRack = mountChannelRack({ container: $('mix-tools'), instruments, ...pluginAudio, locale, report: playbackError });
 const pianoRoll = mountPianoRoll({ container: $('mix-tools'), instruments, ...pluginAudio, report: playbackError });
+const effectsUI = mountEffects({ container: $('mix-tools'), effects: mixOutput.effects, t: say,
+  changed: () => libraryUI?.changed(), report: playbackError,
+  pauseForFreeze() {
+    const song = playlist.playing(), pattern = instruments.playing();
+    if (song) playlist.pause();
+    if (pattern) instruments.stop();
+    return () => { if (song && !playlist.playing()) playlist.toggle(); else if (pattern && !instruments.playing()) instruments.play().catch(playbackError); };
+  },
+});
 const equalizerUI = globalThis.SCParametricEQUI.mount({
   container: $('mix-tools'), effects: eqEffects, isAllowed: () => true, authorize: async () => true,
   onChange: () => libraryUI?.changed(), pro: false,
@@ -429,11 +442,11 @@ function syncChannelEq() {
 }
 renderEqTargets();
 channelRack.setCollapsed(false); pianoRoll.setCollapsed(false);
-// The four modules are windows now: always expanded, opened from their buttons or keys.
+// Modules stay expanded, opened from their buttons or keys.
 {
-  const sections = { rack: $('stem-rack'), piano: $('stem-piano-roll'), eq: $('scdl-parametric-eq'), recorder: $('scdl-record') };
-  const sizes = { rack: { width: 940, height: 470, offset: 0 }, piano: { width: 940, height: 470, offset: 28 }, eq: { width: 680, height: 380, offset: 56 }, recorder: { width: 600, height: 300, offset: 84 } };
-  const visibility = { eq: value => equalizerUI.setVisible(value), recorder: value => recorderUI.setVisible(value) };
+  const sections = { rack: $('stem-rack'), piano: $('stem-piano-roll'), fx: effectsUI.section, eq: $('scdl-parametric-eq'), recorder: $('scdl-record') };
+  const sizes = { rack: { width: 940, height: 470, offset: 0 }, piano: { width: 940, height: 470, offset: 28 }, fx: { width: 880, height: 550, offset: 42 }, eq: { width: 680, height: 380, offset: 56 }, recorder: { width: 600, height: 300, offset: 84 } };
+  const visibility = { fx: value => effectsUI.setVisible(value), eq: value => equalizerUI.setVisible(value), recorder: value => recorderUI.setVisible(value) };
   const shown = { rack: () => channelRack.open(), piano: () => pianoRoll.open() };
   for (const item of WINDOWS) {
     const section = sections[item.id];
@@ -511,7 +524,7 @@ $('import-form').onsubmit = event => {
 const settings = () => ({ ...instruments.snapshot(),
   states: STEMS.map(stem => { const track = playlist.track(stem); return { muted: !!track?.mute, solo: false, gain: track?.gain ?? 1 }; }),
   original: { muted: !!playlist.track('original')?.mute, gain: playlist.track('original')?.gain ?? 1 },
-  rate, keepTone, eq: mixOutput.snapshot().eq, playlist: playlist.snapshot() });
+  rate, keepTone, eq: mixOutput.snapshot().eq, fx: mixOutput.effectsSettings(), playlist: playlist.snapshot() });
 libraryUI = mountStemLibrary({ locale, report: status,
   onOperation(value) { libraryOperating = value; $('separate').disabled = value || busy || !initialized; $('cancel').disabled = value; $('import-audio').disabled = value || busy || !importReady; },
   // Imported samples go with the separation; their WAV is encoded only when stored.
@@ -594,7 +607,7 @@ async function prepareTone() {
   })().catch(error => { toneReady = null; throw error; });
   await toneReady;
 }
-// The playlist plays into the shared context: Keep Tone, then EQ and recorder.
+// The playlist plays into the shared context: Keep Tone, FXs, EQ and recorder.
 async function playlistAudio() {
   const playback = mixOutput.getPlaybackContext();
   await playback.resume();
@@ -734,6 +747,7 @@ function showOriginal() {
   startSession(); syncLoop();
 }
 function disposeResults() {
+  effectsUI.cancelFreeze(); mixOutput.restoreEffects(null); effectsUI.reset();
   mixOutput.setEqualizer(null); equalizerUI.reset();
   playlist.pause(); instruments.restore({ instruments: {}, patterns: [] });
   for (const item of channels.values()) item.head.remove();
@@ -744,6 +758,7 @@ function disposeResults() {
 }
 function showResults(result, saved = null, samples = []) {
   disposeResults();
+  mixOutput.restoreEffects(saved?.fx); effectsUI.reset();
   mixOutput.setEqualizer(globalThis.SCParametricEQ.normalize(saved?.eq)); equalizerUI.reset();
   outputs = result.outputs;
   buffers = outputs.map(audioBuffer);
@@ -867,7 +882,7 @@ function animate() {
 animate();
 window.addEventListener('pagehide', () => {
   playlist.dispose();
-  equalizerUI.dispose(); recorderUI.dispose(); mixOutput.dispose();
+  effectsUI.dispose(); equalizerUI.dispose(); recorderUI.dispose(); mixOutput.dispose();
   cancelAnimationFrame(animationFrame);
   for (const view of waveforms) view.dispose();
   for (const item of Object.values(moduleWindows)) item.dispose();

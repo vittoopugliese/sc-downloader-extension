@@ -59,7 +59,7 @@ const { chromium } = require('playwright');
     // Two rows of seven tools, each with a hotkey; window buttons live in the transport bar.
     const tools = playlist.locator('.pl-tools > button');
     assert.equal(await tools.count(), 14);
-    assert.equal(await transport.locator('.pl-window-tool').count(), 5);
+    assert.equal(await transport.locator('.pl-window-tool').count(), 6);
     assert.equal(await transport.locator('.pl-window-tool').first().evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(255, 85, 0)');
     assert.equal(new Set(await tools.evaluateAll(nodes => nodes.map(n => Math.round(n.getBoundingClientRect().top)))).size, 2);
     assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 14);

@@ -428,6 +428,26 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .module-window.is-floating .stem-plugin-body>*{flex-shrink:0}
 .module-window.is-floating .stem-plugin-body>.piano-scroll{flex-shrink:1}
 /* EQ channel selector: Master or one playlist channel. */
+.stem-fx .fx-toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.stem-fx .fx-presets{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+.stem-fx .fx-toolbar button,.stem-fx .fx-freeze{min-height:28px;padding:4px 9px;font-size:11px}
+.stem-fx .fx-toolbar button[aria-pressed=true],.stem-fx .fx-freeze[aria-pressed=true]{color:#ffd2b3;border-color:#e79655;background:#61391e}
+.stem-fx .fx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:10px;align-content:start}
+.stem-fx .fx-card{min-width:0;padding:12px;border:1px solid #44372d;border-radius:7px;background:#161616}
+.stem-fx .fx-card.is-active{border-color:#99633d;background:#201a16}
+.stem-fx .fx-card-heading{display:flex;align-items:center;margin-bottom:12px}
+.stem-fx .fx-enable{display:flex;gap:8px;align-items:center;padding:0;border:0;background:none;color:#ccc;font-size:12px;font-weight:600}
+.stem-fx .fx-enable::before{content:'';width:8px;height:8px;border:1px solid #777;border-radius:50%;background:#303030}
+.stem-fx .fx-enable[aria-pressed=true]::before{background:#ff9955;border-color:#ffbb88;box-shadow:0 0 8px #ff995555}
+.stem-fx .fx-parameters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 8px;align-items:center}
+.stem-fx .pl-knob{min-width:0;display:grid;justify-items:center;gap:5px}
+.stem-fx .pl-knob-label,.stem-fx .fx-room{font-size:10px;color:#c2b9b0;text-align:center}
+.stem-fx .pl-knob-value{font-size:10px;color:#ffbc8e}
+.stem-fx .pad-knob{position:relative;width:32px;height:32px;min-height:32px;padding:0;border:1px solid #655344;border-radius:50%;background:radial-gradient(circle at 35% 30%,#484038,#222);cursor:ns-resize;touch-action:none}
+.stem-fx .pad-knob::after{height:9px;transform-origin:50% 12.5px}
+.stem-fx .fx-room{display:grid;gap:6px;min-width:0}
+.stem-fx .fx-room select{width:100%;min-width:0;padding:4px;background:#222;border:1px solid #655344;border-radius:4px;color:#eee;font-size:11px}
+.stem-fx .fx-freeze{grid-column:span 2;align-self:center;white-space:normal}
 .peq-target{display:flex;align-items:center;gap:6px;margin:0 0 6px;font:10px system-ui,sans-serif;color:#b8b3ad}
 .peq-target select{height:24px;max-width:220px;padding:0 6px;border:1px solid #514c44;border-radius:5px;background:#121313;color:#eee;font:11px system-ui,sans-serif}
 /* Pattern menu rows inside the plugin toolbars keep the row menu's own look. */

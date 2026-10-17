@@ -197,7 +197,7 @@
     return buffer;
   }
 
-  async function renderSample(buffer, settings, signal) {
+  async function renderSample(buffer, settings, signal, { maxBytes = 64 * 1024 * 1024 } = {}) {
     const reverbWet = settings?.bypassed ? 0 : clampPercent(settings?.reverb);
     const delayWet = settings?.bypassed ? 0 : clampPercent(settings?.delay);
     const flangerWet = settings?.bypassed ? 0 : clampPercent(settings?.flanger);
@@ -216,7 +216,7 @@
     const delayTail = delayWet ? delaySeconds * Math.ceil(Math.log(0.001) / Math.log(Math.max(0.05, feedbackValue))) : 0;
     const tailSeconds = Math.min(12, Math.max(reverbWet ? reverbSeconds + reverbPreDelaySeconds : 0, delayTail));
     const frameCount = buffer.length + Math.ceil(tailSeconds * sampleRate);
-    if (frameCount * Math.min(buffer.numberOfChannels, 2) * 4 > 64 * 1024 * 1024) {
+    if (frameCount * Math.min(buffer.numberOfChannels, 2) * 4 > maxBytes) {
       throw new Error("This loop is too large to save as a pad sample.");
     }
     const context = new OfflineAudioContext(Math.min(buffer.numberOfChannels, 2), frameCount, sampleRate);
@@ -443,6 +443,8 @@
       saturationInput, saturationShaper, saturationTone, wetNodes };
   }
 
+  // localAudio optionally supplies { context, input, output } for an owned insert.
+  // The caller owns the downstream EQ and recording tap in that mode.
   function create(options = {}) {
     const AudioContextConstructor = options.AudioContext ||
       globalThis.AudioContext || globalThis.webkitAudioContext;
@@ -470,7 +472,7 @@
     function installBitcrusherWorklet(targetGraph = graph) {
       const contextForGraph = targetGraph?.context;
       const WorkletNode = options.AudioWorkletNode || globalThis.AudioWorkletNode;
-      const moduleUrl = globalThis.document?.documentElement?.getAttribute?.("data-scdl-extension-bitcrusher-worklet-url");
+      const moduleUrl = options.bitcrusherModuleUrl || globalThis.document?.documentElement?.getAttribute?.("data-scdl-extension-bitcrusher-worklet-url");
       if (!contextForGraph?.audioWorklet?.addModule || typeof WorkletNode !== "function" || !moduleUrl || targetGraph.bitcrusherWorklet) return;
       let load = bitcrusherModuleLoads.get(contextForGraph);
       if (!load) {
@@ -498,6 +500,8 @@
     }
 
     function updateEqualizer(targetGraph = graph) {
+      // Local pages own their destination and the EQ/recorder after this insert.
+      if (options.localAudio) return;
       if (targetGraph && !outputs.has(targetGraph.context)) outputs.set(targetGraph.context, {});
       const key = `${eqRevision}:${bypassed}:${eqAllowed}`;
       for (const [outputContext, output] of outputs) {
@@ -521,6 +525,7 @@
     }
 
     function getPlaybackContext() {
+      if (options.localAudio) { if (!graph) initialize(); return context; }
       eqRequested = true;
       applyToActive();
       if (!context || context.state === "closed") {
@@ -651,12 +656,12 @@
       if (!targetGraph.ownsSource) return;
       const useLimiter = active && EFFECT_NAMES.some((name) => values[name] > 0);
       if (useLimiter && !targetGraph.processedOutput) {
-        targetGraph.source.disconnect(contextForGraph.destination);
+        targetGraph.source.disconnect(targetGraph.destination);
         targetGraph.source.connect(targetGraph.master);
         targetGraph.processedOutput = true;
       } else if (!useLimiter && targetGraph.processedOutput) {
         targetGraph.source.disconnect(targetGraph.master);
-        targetGraph.source.connect(contextForGraph.destination);
+        targetGraph.source.connect(targetGraph.destination);
         targetGraph.processedOutput = false;
       }
     }
@@ -713,9 +718,10 @@
         return true;
       }
       try {
-        const existingSource = mediaSources.get(target);
+        const existingSource = options.localAudio ? null : mediaSources.get(target);
         if (existingSource) context = existingSource.context;
-        const source = existingSource || context.createMediaElementSource(target);
+        const source = options.localAudio ? target : existingSource || context.createMediaElementSource(target);
+        const destination = options.localAudio ? options.localAudio().output : context.destination;
         const ownsSource = !existingSource;
         const returns = Object.fromEntries(EFFECT_NAMES.map((name) => [`${name}Return`, context.createGain()]));
         const master = context.createGain();
@@ -727,14 +733,14 @@
         limiter.release.value = 0.12;
         for (const name of EFFECT_NAMES) returns[`${name}Return`].gain.value = 0;
 
-        if (ownsSource) source.connect(context.destination);
+        if (ownsSource) source.connect(destination);
         for (const name of EFFECT_NAMES) returns[`${name}Return`].connect(master);
         master.connect(limiter);
-        limiter.connect(context.destination);
+        limiter.connect(destination);
 
         const targetGraph = {
           source, ...returns, master, limiter,
-          context, ownsSource,
+          context, ownsSource, destination,
           resetTimers: {},
           connected: Object.fromEntries(EFFECT_NAMES.map((name) => [name, false])),
           processedOutput: false,
@@ -743,9 +749,11 @@
         if (values.bitcrusher > 0) installBitcrusherWorklet(targetGraph);
         graphs.set(target, targetGraph);
         graphReferences.add(new WeakRef(targetGraph));
-        target.addEventListener("loadstart", resetTail);
-        target.addEventListener("emptied", resetTail);
-        target.addEventListener("loadedmetadata", restoreAfterTrackChange);
+        if (!options.localAudio) {
+          target.addEventListener("loadstart", resetTail);
+          target.addEventListener("emptied", resetTail);
+          target.addEventListener("loadedmetadata", restoreAfterTrackChange);
+        }
         audio = target;
         graph = targetGraph;
         updateCharacter(targetGraph);
@@ -761,6 +769,11 @@
     }
 
     function initialize() {
+      if (options.localAudio) {
+        const local = options.localAudio();
+        context = local.context;
+        return connectAudio(local.input);
+      }
       if (!available || typeof AudioContextConstructor !== "function") {
         available = false;
         reason = "Web Audio is unavailable in this browser.";
@@ -927,7 +940,24 @@
       return snapshot();
     }
 
-    return Object.freeze({ applyPreset, applyToActive, discover, isDelayFrozen, reset, set, setBypassed, setCharacter, setDelayFreeze, snapshot,
+    // Only the local insert owns these nodes. Never close its caller's context.
+    function dispose() {
+      if (!options.localAudio) return;
+      clearTimeout(resetTimer);
+      for (const reference of graphReferences) {
+        const item = reference.deref();
+        if (!item) continue;
+        Object.values(item.resetTimers).forEach(clearTimeout);
+        item.bitcrusherInput = null; // Ignore pending worklet installation.
+        for (const node of [item.source, item.master, item.limiter, ...EFFECT_NAMES.map(name => item[`${name}Return`]), ...item.wetNodes]) {
+          try { node.stop?.(); } catch {}
+          try { node.disconnect(); } catch {}
+        }
+      }
+      graphReferences.clear(); graph = null; context = null;
+    }
+
+    return Object.freeze({ applyPreset, applyToActive, discover, dispose, isDelayFrozen, reset, set, setBypassed, setCharacter, setDelayFreeze, snapshot,
       setEqualizer, setEqualizerAllowed, analyseEqualizer, getPlaybackContext, observeOutput });
   }
 
