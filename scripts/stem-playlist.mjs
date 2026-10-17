@@ -4,13 +4,14 @@ import { encodeWav } from './stem-audio.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
 import { mountSampleBrowser } from './stem-sample-browser.mjs';
 import { createButton } from './ui-button.mjs';
+import { createMetronome } from './stem-metronome.mjs';
 
 const MIN_ZOOM = 8, MAX_ZOOM = 600;
 // The workspace header's stem palette; user tracks continue in warm tints.
 export const CHANNEL_COLORS = Object.freeze({ original: '#c8c2ba', drums: '#ff8a4c', bass: '#ffb98f', other: '#8c8c8c', vocals: '#ff5500' });
 const EXTRA_COLORS = ['#ffd2b3', '#c56a3a', '#e9a27a', '#a39a90', '#ff7a2f', '#d9cfc4'];
 // Semantic names from the shared icon catalog.
-const ICONS = Object.freeze({"pencil": "draw", "select": "select", "undo": "undo", "redo": "redo", "export": "export", "tapTempo": "tap-tempo", "browser": "browser", "addTrack": "add-track", "magnet": "snap", "zoomOut": "zoom-out", "zoomIn": "zoom-in", "fit": "fit", "mute": "mute", "reverse": "reverse", "crossfade": "crossfade", "duplicate": "copy", "slice": "slice", "split": "cut", "trash": "trash", "check": "check", "keepLength": "keep-length", "resample": "resample", "moveTool": "move", "slipTool": "slip", "stretchTool": "stretch", "import": "upload"});
+const ICONS = Object.freeze({"pencil": "draw", "select": "select", "undo": "undo", "redo": "redo", "export": "export", "tapTempo": "tap-tempo", "metronome": "metronome", "browser": "browser", "addTrack": "add-track", "magnet": "snap", "zoomOut": "zoom-out", "zoomIn": "zoom-in", "fit": "fit", "mute": "mute", "reverse": "reverse", "crossfade": "crossfade", "duplicate": "copy", "slice": "slice", "split": "cut", "trash": "trash", "check": "check", "keepLength": "keep-length", "resample": "resample", "moveTool": "move", "slipTool": "slip", "stretchTool": "stretch", "import": "upload"});
 
 // Small context menu at the pointer. Items: { label, icon, shortcut, danger, checked,
 // disabled, title, action }, '-' for a separator, { heading }, or { choices: [{ label, icon,
@@ -194,7 +195,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   } });
   function renderPlay(active) { if (!play) return; play.replaceChildren(globalThis.SCIcons.create(active ? 'pause' : 'play')); play.setAttribute('aria-pressed', String(active)); }
   function stop(reset = false) {
-    const was = playing(), at = engine?.stop();
+    const was = playing(), at = engine?.stop(); metronome.stop();
     position = reset ? marker : at ?? position;
     renderPlay(false); if (was) onTransport?.(false);
   }
@@ -299,6 +300,19 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     commit(() => retimePatternClips(state, Math.round(bpm * 100) / 100, isPattern));
   } });
   fitTempo.classList.add('pl-fit-tempo');
+  // Metronome, like FL Studio's (Ctrl+M): a click on every beat while the playlist plays,
+  // higher on the first beat of each bar. It is not part of the mix or the WAV export.
+  const metronome = createMetronome();
+  const metronomeButton = toolButton({ icon: ICONS.metronome, name: t('Metronome', 'Metrónomo'), key: 'Ctrl+M', keys: ['ctrl+m'], color: '#ffd166', variant: 'neutral', size: 'icon',
+    detail: t('a click on every beat while the playlist plays, accented on each bar; it is not recorded or exported', 'un clic en cada tiempo mientras suena la playlist, acentuado en cada compás; no se graba ni se exporta') }, () => {
+    metronome.setEnabled(!metronome.enabled());
+    metronomeButton.setAttribute('aria-pressed', String(metronome.enabled()));
+    if (playing()) startMetronome();
+  });
+  metronomeButton.setAttribute('aria-pressed', 'false');
+  function startMetronome() {
+    if (engineIO) metronome.start({ context: engineIO.context, position: () => engine?.now() ?? null, bpm: () => state.bpm, rate: () => rate, loop: () => transport().loop });
+  }
   const snapLabel = node('label', 'pl-field'), snapSelect = node('select'); snapSelect.setAttribute('aria-label', 'Snap');
   snapLabel.innerHTML = globalThis.SCIcons.html("snap");
   snapLabel.title = snapSelect.title = t('Snap: grid that clips, edges and loops stick to. Hold Alt while dragging to ignore it.', 'Snap: grilla a la que se pegan clips, bordes y loops. Mantené Alt al arrastrar para ignorarla.');
@@ -365,7 +379,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     pencilButton.setAttribute('aria-pressed', String(!on && !selecting)); selectButton.setAttribute('aria-pressed', String(selecting));
     container.classList.toggle('is-drawing', !on && !selecting); container.classList.toggle('is-selecting', selecting);
   }
-  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.label, tapButton, fitTempo, ...tempoControls, snapLabel, node('span', 'pl-spacer'), ...toolbarEnd, windowGroup, exportButton, fileInput);
+  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.label, tapButton, metronomeButton, fitTempo, ...tempoControls, snapLabel, node('span', 'pl-spacer'), ...toolbarEnd, windowGroup, exportButton, fileInput);
   const shelf = node('div', 'pl-shelf'); shelf.setAttribute('aria-label', t('Sample library', 'Biblioteca de samples'));
   shelf.title = t('Library: click to select for drawing, double-click to add at the cursor, drag onto a track. Right-click for more.', 'Biblioteca: clic para elegir qué dibujar, doble clic para agregar en el cursor, arrastrá a una pista. Clic derecho para más.');
   shelf.addEventListener('wheel', event => {
@@ -1052,7 +1066,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     if (playing()) { stop(); return; }
     if (!arrangementEnd(state)) { report(t('Add a sample to the playlist first.', 'Primero agregá un sample a la playlist.')); return; }
     await connect();
-    if (engine.play(playbackState(), position, transport())) { renderPlay(true); onTransport?.(true); }
+    if (engine.play(playbackState(), position, transport())) { renderPlay(true); startMetronome(); onTransport?.(true); }
   }
   // A second Space within 350 ms rewinds to the marker and plays, like FL Studio. The marker is
   // the last ruler click; making or moving a loop puts it on the loop start.
@@ -1065,7 +1079,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   }
   function seek(seconds) {
     position = clamp(seconds, 0, LIMITS.seconds);
-    if (playing()) engine.play(playbackState(), position, transport());
+    if (playing()) { engine.play(playbackState(), position, transport()); startMetronome(); }
   }
   async function exportMix() {
     if (exporting) return;
@@ -1250,7 +1264,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
       clips: state.clips.map(clip => ({ ...clip })) }),
     samples: () => importedSamples().map(asset => ({ id: asset.id, name: asset.name, buffer: asset.buffer })),
     dispose() {
-      exporting?.abort(); engine?.dispose(); cache.dispose(); viewObserver.disconnect(); sampleBrowser?.dispose();
+      exporting?.abort(); metronome.stop(); engine?.dispose(); cache.dispose(); viewObserver.disconnect(); sampleBrowser?.dispose();
       document.removeEventListener('keydown', onWindowKey); clearTimeout(messageTimer); clearTimeout(hintTimer); cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();
     },
   };

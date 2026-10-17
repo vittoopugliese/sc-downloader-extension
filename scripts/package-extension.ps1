@@ -84,6 +84,7 @@ $packageItems = @(
     "scripts/stem-rack-overview.mjs",
     "scripts/stem-row-menu.mjs",
     "scripts/ui-button.mjs",
+    "scripts/stem-metronome.mjs",
     "scripts/stem-sample-browser.mjs",
     "scripts/stem-sample-library.mjs",
     "scripts/stem-sample-preview.mjs",

@@ -36,7 +36,7 @@ function smokePackage(zipPath, apiPermission) {
     'scripts/stem-presets.mjs', 'scripts/stem-library-ui.mjs', 'scripts/stem-tone-processor.mjs',
     'scripts/stem-playlist.mjs', 'scripts/stem-playlist-core.mjs', 'scripts/stem-playlist-audio.mjs', 'scripts/stem-playlist-stretch.mjs', 'scripts/stem-playlist-worker.mjs', 'assets/stem-playlist.css',
     'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/stem-pattern-core.mjs', 'scripts/stem-instruments.mjs', 'scripts/stem-channel-rack.mjs', 'scripts/stem-piano.mjs', 'scripts/stem-spectrum.mjs',
-    'scripts/stem-sample-browser.mjs', 'scripts/stem-sample-library.mjs', 'scripts/stem-sample-preview.mjs', 'scripts/stem-module-window.mjs', 'scripts/stem-row-menu.mjs', 'scripts/ui-button.mjs', 'assets/ui-button.css', 'scripts/stem-rack-overview.mjs',
+    'scripts/stem-sample-browser.mjs', 'scripts/stem-sample-library.mjs', 'scripts/stem-sample-preview.mjs', 'scripts/stem-module-window.mjs', 'scripts/stem-row-menu.mjs', 'scripts/ui-button.mjs', 'scripts/stem-metronome.mjs', 'assets/ui-button.css', 'scripts/stem-rack-overview.mjs',
     'scripts/vendor/onnxruntime/ort.wasm.min.mjs', 'scripts/vendor/onnxruntime/ort-wasm-simd-threaded.mjs',
     'scripts/vendor/onnxruntime/ort-wasm-simd-threaded.wasm', 'scripts/background.js', 'THIRD_PARTY_LICENSES.md']) {
     if (!entries.has(required)) throw new Error(`Package smoke check: missing ${required}.`);

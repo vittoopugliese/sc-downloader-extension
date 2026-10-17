@@ -107,5 +107,6 @@
   "plugin": "glyph:F41B",
   "eq-window": "glyph:F0B4",
   "export": "glyph:F008",
-  "tap-tempo": "glyph:F01D"
+  "tap-tempo": "glyph:F01D",
+  "metronome": "glyph:0042"
 }
