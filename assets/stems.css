@@ -36,6 +36,14 @@ main{max-width:1040px;margin:auto;padding:28px 40px 40px}
 .preset-toolbar{display:flex;gap:6px;min-width:0}
 .preset-toolbar select{flex:1;min-width:0;width:0;height:32px;padding:0 8px;border:1px solid #45423e;border-radius:6px;background:#242321;color:var(--ink);font:11px Arial,Helvetica,sans-serif;cursor:pointer}
 .preset-toolbar select:disabled{opacity:.4;cursor:not-allowed}
+/* Saved separations: the shared row menu, styled like the old select. */
+.preset-toolbar .preset-menu{flex:1;min-width:0}
+.workspace-header .preset-toolbar .row-menu-toggle{flex:1;width:100%;min-width:0;height:32px;padding:0 8px;border:1px solid #45423e;border-radius:6px;background:#242321;color:var(--ink);font:11px Arial,Helvetica,sans-serif}
+.workspace-header .preset-toolbar .row-menu-toggle:disabled{opacity:.4;cursor:not-allowed}
+.workspace-header .preset-toolbar .row-menu-list button{width:auto;height:auto;flex-shrink:1;padding:3px 6px;border:0;background:transparent}
+.workspace-header .preset-toolbar .row-menu-list button:hover:enabled{background:#383838}
+.workspace-header .preset-toolbar .row-menu-list .row-menu-delete{flex:0 0 28px}
+.workspace-header .preset-toolbar .row-menu-list .row-menu-delete.is-armed{flex:0 0 auto;background:#4a2020}
 .workspace-header .preset-toolbar button{width:32px;height:32px;padding:6px;flex-shrink:0;border-color:#45423e;background:#242321}
 .workspace-header .preset-toolbar button:hover{background:#35312b;border-color:#897564}
 .preset-toolbar img{width:16px;height:16px}
@@ -315,6 +323,8 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .stem-plugin .plugin-play .icon{fill:currentColor;stroke:none}
 .stem-plugin .plugin-play[aria-pressed=true]{background:#ffad80;color:#1b110b}
 .stem-plugin select{height:28px;padding:0 6px;border:1px solid #514c44;border-radius:5px;background:#121313;color:#eee;font:11px ui-monospace,monospace;max-width:170px}
+.stem-plugin .plugin-pattern .row-menu-toggle{height:28px;min-width:96px;max-width:170px;padding:0 6px;border:1px solid #514c44;border-radius:5px;background:#121313;color:#eee;font:11px ui-monospace,monospace}
+.stem-plugin .plugin-pattern .row-menu-toggle:disabled{opacity:.4}
 .plugin-track{min-width:96px}
 .plugin-field{display:flex;align-items:center;gap:5px;font-size:10px;color:#bcb3a8;white-space:nowrap}
 .plugin-field input[type=checkbox]{accent-color:#ed7134}
@@ -420,3 +430,9 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 /* EQ channel selector: Master or one playlist channel. */
 .peq-target{display:flex;align-items:center;gap:6px;margin:0 0 6px;font:10px system-ui,sans-serif;color:#b8b3ad}
 .peq-target select{height:24px;max-width:220px;padding:0 6px;border:1px solid #514c44;border-radius:5px;background:#121313;color:#eee;font:11px system-ui,sans-serif}
+/* Pattern menu rows inside the plugin toolbars keep the row menu's own look. */
+.stem-plugin .plugin-toolbar .row-menu-list button{height:auto;min-height:24px;min-width:0;padding:3px 6px;border:0;border-radius:4px;background:transparent;color:#fff;font:11px/1.4 system-ui,sans-serif}
+.stem-plugin .plugin-toolbar .row-menu-list button:hover:enabled{background:#383838}
+.stem-plugin .plugin-toolbar .row-menu-list .row-menu-delete{flex:0 0 28px;font-size:17px;color:#aaa}
+.stem-plugin .plugin-toolbar .row-menu-list .row-menu-footer{color:#ff934d}
+.stem-plugin .rack-clear-slices[aria-pressed=true]{border-color:#ffb887;color:#ffd2b3}

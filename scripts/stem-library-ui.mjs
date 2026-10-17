@@ -1,4 +1,5 @@
 import { StemPresets } from './stem-presets.mjs';
+import { createRowMenu } from './stem-row-menu.mjs';
 
 export function mountStemLibrary({ locale, snapshot, restore, report, onOperation }) {
   const es = locale === 'es';
@@ -48,8 +49,23 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
       destination: 'Место сохранения', name: 'Название', connect: 'Подключить папку', empty: 'Нет сохранённых разделений',
     },
   }[locale]);
+  Object.assign(copy, {
+    en: { remove: 'Delete saved separation', confirmRemove: 'Delete?', removed: 'Saved separation deleted. The open session stays here.' },
+    es: { remove: 'Eliminar separación guardada', confirmRemove: '¿Eliminar?', removed: 'Separación guardada eliminada. La sesión abierta sigue acá.' },
+    de: { remove: 'Gespeicherte Trennung löschen', confirmRemove: 'Löschen?', removed: 'Gespeicherte Trennung gelöscht. Die offene Sitzung bleibt erhalten.' },
+    'pt-BR': { remove: 'Excluir separação salva', confirmRemove: 'Excluir?', removed: 'Separação salva excluída. A sessão aberta continua aqui.' },
+    ru: { remove: 'Удалить сохранённое разделение', confirmRemove: 'Удалить?', removed: 'Сохранённое разделение удалено. Открытая сессия остаётся.' },
+  }[locale] || {});
   const $ = id => document.getElementById(id);
-  const selector = $('stem-presets'), toggle = $('save-locally'), dialog = $('save-dialog');
+  const toggle = $('save-locally'), dialog = $('save-dialog');
+  // Saved separations: Player Tools' preset menu. Each row opens on click and has its own
+  // two-step delete, which never opens the row.
+  let records = [];
+  const presetMenu = createRowMenu({ className: 'preset-menu', label: copy.saved, placeholder: copy.current, empty: copy.empty,
+    deleteLabel: name => `${copy.remove}: ${name}`, confirm: copy.confirmRemove,
+    onSelect: id => open(id), onDelete: id => remove(id) });
+  $('stem-presets').replaceWith(presetMenu.element);
+  presetMenu.toggle.id = 'stem-presets'; presetMenu.menu.id = 'stem-presets-menu'; presetMenu.toggle.setAttribute('aria-controls', 'stem-presets-menu');
   $('preset-label').textContent = copy.saved;
   $('preset-folder').title = $('preset-folder').ariaLabel = copy.folder;
   $('preset-reset').title = $('preset-reset').ariaLabel = copy.reset;
@@ -67,7 +83,8 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
   }
   function controls() {
     onOperation(operating);
-    for (const id of ['stem-presets', 'preset-folder', 'preset-reset', 'preset-reconnect', 'save-locally']) $(id).disabled = operating || inference || !library;
+    for (const id of ['preset-folder', 'preset-reset', 'preset-reconnect', 'save-locally']) $(id).disabled = operating || inference || !library;
+    presetMenu.setDisabled(operating || inference || !library); presetMenu.setBusy(operating);
     toggle.setAttribute('aria-pressed', String(enabled));
     toggle.title = enabled ? `${copy.save} · ${copy.off}` : copy.save;
     toggle.setAttribute('aria-label', copy.save);
@@ -78,14 +95,9 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
     $('preset-destination').title = copy.destination;
   }
   async function refresh() {
-    const records = await library.list();
-    selector.replaceChildren(new Option(records.length ? copy.current : copy.empty, ''));
-    selector.options[0].disabled = true;
-    for (const record of records) {
-      const option = new Option(`${record.title} · ${new Date(record.createdAt).toLocaleDateString(locale)}`, record.id);
-      selector.add(option);
-    }
-    selector.value = active?.id || '';
+    records = await library.list();
+    presetMenu.setItems(records.map(record => ({ id: record.id, name: `${record.title} · ${new Date(record.createdAt).toLocaleDateString(locale)}`, title: record.title })));
+    presetMenu.setValue(active?.id || null);
     $('preset-reconnect').hidden = true;
   }
   async function initialize() {
@@ -162,9 +174,9 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
   $('preset-reconnect').onclick = async () => {
     try { await library.authorize(true); await refresh(); } catch (cause) { error(cause); }
   };
-  selector.onchange = async () => {
-    const id = selector.value;
-    if (!id) { selector.value = active?.id || ''; return; }
+  async function open(id) {
+    if (!id) return;
+    presetMenu.setValue(id);
     operating = true; controls();
     try {
       await library.authorize(true);
@@ -174,13 +186,28 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
       active = data.record; enabled = true;
       $('save-name').value = active.title;
       report(copy.stored);
-    } catch (cause) { selector.value = active?.id || ''; error(cause); }
+    } catch (cause) { presetMenu.setValue(active?.id || null); error(cause); }
     finally { operating = false; controls(); }
-  };
+  }
+  // Deleting the open separation stops its autosave and keeps the session in memory.
+  // A failure keeps the row and the data, so it can be retried.
+  async function remove(id) {
+    const authorization = library.authorize(true);
+    operating = true; controls();
+    try {
+      await authorization;
+      if (active?.id === id) { enabled = false; nextWrite = null; }
+      await pending;
+      await library.remove(id);
+      if (active?.id === id) active = null;
+      await refresh(); report(copy.removed);
+    } catch (cause) { error(cause); }
+    finally { operating = false; controls(); }
+  }
   return {
     ready, changed,
     setBusy(value) { inference = value; controls(); },
-    newExtraction() { active = null; enabled = false; selector.value = ''; controls(); },
+    newExtraction() { active = null; enabled = false; presetMenu.setValue(null); controls(); },
     async completed() { await ready; await save(); },
   };
 }

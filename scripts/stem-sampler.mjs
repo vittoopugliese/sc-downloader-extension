@@ -295,6 +295,16 @@ export function mountPadSampler({ waveform, buffer, timeline, audioContext, outp
   render();
   return {
     render, state, trigger, autoSlice,
+    // Empties all eight pads; `restore` puts a previous set back (undo of Clear All).
+    clearAll() {
+      if (!slices.some(Boolean)) return false;
+      slices.forEach((_, i) => { slices[i] = null; revisions[i]++; stop(i); });
+      selected = 0; armed = null; render(); emit(); return true;
+    },
+    restore(saved) {
+      slices.forEach((_, i) => { slices[i] = normalizeDrumSlice(saved?.[i], buffer); revisions[i]++; stop(i); });
+      armed = null; render(); emit();
+    },
     snapshot: () => slices.map(slice => slice ? { ...slice } : null),
     select(i) { if (Number.isInteger(i) && i >= 0 && i < KEYS.length) { selected = i; render(); } },
     // Arming waits for a click or drag on the waveform. Esc or `cancel` releases it.

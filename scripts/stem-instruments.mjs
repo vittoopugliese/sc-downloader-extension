@@ -1,3 +1,4 @@
+import { createRowMenu } from './stem-row-menu.mjs';
 import { MAX_PATTERNS, migrateLegacy, normalizeInstrument, normalizePattern, normalizeProject, renderPattern, silentPattern } from './stem-pattern-core.mjs';
 
 // Shared state of the channel rack and the piano roll, as in FL Studio: one focused
@@ -178,8 +179,9 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
   };
 }
 
-// Track and pattern selectors shared by both plugins. `manage` adds new, duplicate
-// and delete; length belongs to the pattern, so both plugins show it.
+// Track and pattern selectors shared by both plugins. The pattern menu works like Player
+// Tools' presets: each row has its own delete, which never opens the row. `manage` adds
+// new and duplicate buttons; length belongs to the pattern, so both plugins show it.
 export function patternControls(instruments, { manage = false } = {}) {
   const pt = globalThis.SCPlayerToolsText.t;
   const element = (tag, className) => { const node = document.createElement(tag); node.className = className; return node; };
@@ -193,19 +195,19 @@ export function patternControls(instruments, { manage = false } = {}) {
   };
   const wrap = element('div', 'plugin-focus');
   const trackSelect = select('plugin-track', 'Playlist track', () => instruments.focus(trackSelect.value));
-  const patternSelect = select('plugin-pattern', 'Pattern', () => {
-    if (patternSelect.value === '+') { instruments.createPattern(); return; }
-    instruments.focus(instruments.focused().key, patternSelect.value);
-  });
+  const patternMenu = createRowMenu({ className: 'plugin-pattern', label: pt('Pattern'), placeholder: pt('New pattern'), empty: pt('No patterns yet'),
+    deleteLabel: name => pt('Delete pattern: $1', name),
+    onSelect: id => instruments.focus(instruments.focused().key, id),
+    onDelete: id => instruments.deletePattern(id),
+    footer: { label: `+ ${pt('New pattern')}`, action: () => instruments.createPattern() } });
   const bars = select('plugin-bars', 'Pattern length', () => instruments.editPattern(pattern => { pattern.bars = Number(bars.value); }));
   for (const value of [1, 2, 4]) bars.add(new Option(`${value} × 4/4`, String(value)));
-  wrap.append(trackSelect, patternSelect);
-  let add, copy, remove;
+  wrap.append(trackSelect, patternMenu.element);
+  let add, copy;
   if (manage) {
     add = button('plugin-new', 'New pattern', '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>', () => instruments.createPattern());
     copy = button('plugin-duplicate', 'Duplicate pattern', '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V4H4v12h4"/></svg>', () => instruments.duplicatePattern());
-    remove = button('plugin-delete', 'Delete pattern', '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15"/></svg>', () => instruments.deletePattern());
-    wrap.append(add, copy, remove);
+    wrap.append(add, copy);
   }
   wrap.append(bars);
   function render() {
@@ -215,13 +217,10 @@ export function patternControls(instruments, { manage = false } = {}) {
       trackSelect.replaceChildren(...list.map(item => new Option(item.name, item.key))); trackSelect.dataset.options = tracks;
     }
     trackSelect.value = key ?? ''; trackSelect.disabled = !list.length;
-    const patterns = instruments.patternsOf(key);
-    patternSelect.replaceChildren(...patterns.map(item => new Option(item.name, item.id)));
-    if (!pattern) patternSelect.prepend(new Option(pt('New pattern'), ''));
-    patternSelect.add(new Option(`+ ${pt('New pattern')}`, '+'));
-    patternSelect.value = pattern?.id ?? ''; patternSelect.disabled = !key;
+    patternMenu.setItems(instruments.patternsOf(key).map(item => ({ id: item.id, name: item.name })));
+    patternMenu.setValue(pattern?.id ?? null); patternMenu.setDisabled(!key);
     bars.value = String(pattern?.bars ?? 1); bars.disabled = !key;
-    if (manage) { add.disabled = !key; copy.disabled = remove.disabled = !pattern; }
+    if (manage) { add.disabled = !key; copy.disabled = !pattern; }
   }
   return { element: wrap, render };
 }

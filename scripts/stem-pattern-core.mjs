@@ -25,15 +25,15 @@ export function normalizePiano(value) {
 }
 
 // Without a buffer the slices stay as saved; they are bounded once the track's audio is known.
+// `sliced` remembers that the pads were set up once (auto-slice or by hand), so pads the
+// user cleared stay empty instead of being auto-sliced again.
 export function normalizeInstrument(value, buffer = null) {
-  return {
-    slices: Array.from({ length: 8 }, (_, i) => {
-      const slice = value?.slices?.[i];
-      if (buffer) return normalizeDrumSlice(slice, buffer);
-      return Number.isFinite(slice?.start) ? { ...slice } : null;
-    }),
-    piano: normalizePiano(value?.piano),
-  };
+  const slices = Array.from({ length: 8 }, (_, i) => {
+    const slice = value?.slices?.[i];
+    if (buffer) return normalizeDrumSlice(slice, buffer);
+    return Number.isFinite(slice?.start) ? { ...slice } : null;
+  });
+  return { slices, sliced: value?.sliced === true || slices.some(Boolean), piano: normalizePiano(value?.piano) };
 }
 
 export function normalizeNotes(notes) {

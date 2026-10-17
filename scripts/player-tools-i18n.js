@@ -16,6 +16,10 @@ Add to playlist¦Agregar a la playlist¦Zur Playlist hinzufügen¦Adicionar à p
 Playlist¦Playlist¦Playlist¦Playlist¦Плейлист
 Auto-slice the visible audio into the eight pads¦Cortar automáticamente el audio visible en los ocho pads¦Sichtbares Audio automatisch auf die acht Pads schneiden¦Fatiar automaticamente o áudio visível nos oito pads¦Автоматически нарезать видимое аудио на восемь пэдов
 Clear steps¦Borrar pasos¦Schritte löschen¦Limpar passos¦Очистить шаги
+Clear all slices¦Borrar todos los cortes¦Alle Schnitte löschen¦Apagar todos os cortes¦Удалить все срезы
+Restore cleared slices¦Restaurar los cortes borrados¦Gelöschte Schnitte wiederherstellen¦Restaurar os cortes apagados¦Вернуть удалённые срезы
+Delete pattern: $1¦Eliminar patrón: $1¦Pattern löschen: $1¦Excluir padrão: $1¦Удалить паттерн: $1
+No patterns yet¦Todavía no hay patrones¦Noch keine Patterns¦Ainda não há padrões¦Паттернов пока нет
 Separate or import audio to start.¦Separá o importá audio para empezar.¦Trenne oder importiere Audio, um zu beginnen.¦Separe ou importe áudio para começar.¦Разделите или импортируйте аудио, чтобы начать.
 Click to play · right-click to choose another sample¦Clic para escuchar · clic derecho para elegir otro sample¦Klicken zum Abspielen · Rechtsklick für ein anderes Sample¦Clique para ouvir · clique direito para escolher outra amostra¦Нажмите для прослушивания · правая кнопка — другой сэмпл
 Pad $1: click or drag on the waveform to choose its sample. Esc cancels.¦Pad $1: hacé clic o arrastrá en la onda para elegir su sample. Esc cancela.¦Pad $1: Auf die Wellenform klicken oder ziehen, um das Sample zu wählen. Esc bricht ab.¦Pad $1: clique ou arraste na onda para escolher a amostra. Esc cancela.¦Пэд $1: нажмите или протяните по волне, чтобы выбрать сэмпл. Esc — отмена.

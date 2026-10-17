@@ -42,7 +42,7 @@ module.exports = async function verifyInstruments(page) {
   // A first hit creates the pattern; dragging a hit changes its velocity.
   const cell = (row, column) => rack.locator(`.rack-step[data-row="${row}"][data-column="${column}"]`);
   await cell(0, 0).click();
-  assert.equal(await rack.locator('.plugin-pattern option:checked').textContent(), 'Pat 1');
+  assert.equal(await rack.locator('.plugin-pattern .row-menu-value').textContent(), 'Pat 1');
   assert.equal(await cell(0, 0).getAttribute('data-velocity'), '0.8');
   box = await cell(0, 0).boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down();
@@ -99,7 +99,7 @@ module.exports = async function verifyInstruments(page) {
   await dock(piano);
   assert.deepEqual(await page.locator('#mix-tools > section:visible').evaluateAll(nodes => nodes.map(node => node.id)), ['stem-rack', 'stem-piano-roll']);
   assert.equal(await piano.locator('.plugin-track').inputValue(), 'bass');
-  assert.equal(await piano.locator('.plugin-pattern option:checked').textContent(), 'Pat 1');
+  assert.equal(await piano.locator('.plugin-pattern .row-menu-value').textContent(), 'Pat 1');
   const grid = piano.locator('.piano-grid');
   async function at(pitch, step) {
     await grid.locator(`.piano-pitch-row[data-pitch="${pitch}"]`).scrollIntoViewIfNeeded();
@@ -142,29 +142,46 @@ module.exports = async function verifyInstruments(page) {
   await playlist.screenshot({ path: require('node:path').join(artifacts, 'playlist.png') });
   // Another track gets its own patterns; deleting one removes it from the library.
   await rack.locator('.plugin-track').selectOption('drums');
-  assert.equal(await rack.locator('.plugin-pattern').inputValue(), '');
+  assert.equal(await rack.locator('.plugin-pattern .row-menu-toggle').evaluate(node => node.value), '');
   await page.waitForFunction(() => document.querySelectorAll('#stem-rack .rack-pad.is-assigned').length > 0, null, { timeout: 5000 }).catch(() => {});
   if (!await rack.locator('.rack-pad.is-assigned').count()) { await pads.first().click(); await wave.click({ position: { x: 30, y: 40 } }); }
   const assigned = Number(await rack.locator('.rack-pad.is-assigned').first().evaluate(node => [...node.parentElement.querySelectorAll('.rack-pad')].indexOf(node)));
   await cell(assigned, 2).click();
   assert.deepEqual(await shelf.allTextContents(), ['Bajo · Pat 1', 'Batería · Pat 1']);
-  await rack.locator('.plugin-delete').click();
+  // Patterns are deleted from their row in the menu, without opening them.
+  await rack.locator('.plugin-pattern .row-menu-toggle').click();
+  await rack.locator('.plugin-pattern .row-menu-row').first().locator('.row-menu-delete').click();
   assert.deepEqual(await shelf.allTextContents(), ['Bajo · Pat 1']);
+
+  // Clear All empties every pad of the focused track; a second click restores them, and a
+  // cleared track is not auto-sliced again when it is focused later.
+  const clearAll = rack.locator('.rack-clear-slices');
+  assert.equal(await clearAll.getAttribute('title'), 'Borrar todos los cortes');
+  await clearAll.click();
+  assert.equal(await rack.locator('.rack-pad.is-assigned').count(), 0);
+  assert.equal(await clearAll.getAttribute('aria-pressed'), 'true');
+  await clearAll.click();
+  assert.ok(await rack.locator('.rack-pad.is-assigned').count() > 0, 'Restore brings the slices back');
+  await clearAll.click();
+  await rack.locator('.plugin-track').selectOption('bass'); await rack.locator('.plugin-track').selectOption('drums');
+  await page.waitForTimeout(300);
+  assert.equal(await rack.locator('.rack-pad.is-assigned').count(), 0, 'A cleared track stays empty');
 
   // Presets keep instruments, patterns and their clips.
   await page.locator('#save-locally').click(); await page.locator('#save-name').fill('Patterns');
   await page.locator('#save-confirm').click();
   await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
-  const id = await page.locator('#stem-presets').inputValue();
+  const id = await page.locator('#stem-presets').evaluate(node => node.value);
   const saved = await page.evaluate(async id => {
     const { StemPresets } = await import('./scripts/stem-presets.mjs');
     return (await (await StemPresets.current()).load(id)).record.settings;
   }, id);
   assert.equal(saved.patterns.length, 1); assert.equal(saved.patterns[0].notes.length, 2);
   assert.equal(saved.instruments.bass.slices.filter(Boolean).length, 8);
+  assert.equal(saved.instruments.drums.slices.filter(Boolean).length, 0); assert.equal(saved.instruments.drums.sliced, true, 'Cleared pads are saved as cleared');
   assert.equal(saved.playlist.clips.filter(clip => clip.asset.startsWith('pattern:')).length, 1);
   await page.reload();
-  await page.locator('#stem-presets:not(:disabled)').waitFor(); await page.locator('#stem-presets').selectOption(id);
+  await page.locator('#stem-presets:not(:disabled)').waitFor(); await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
   // Off-screen clips are virtualized: bring the user track into view.
   await page.locator('.pl-user-head').waitFor(); await page.locator('.pl-user-head').scrollIntoViewIfNeeded();
   await playlist.locator('.pl-clip.is-pattern').waitFor();

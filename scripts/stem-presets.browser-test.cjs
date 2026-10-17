@@ -53,7 +53,7 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'true');
     await page.locator('#separate').click();
     await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
-    const id = await page.locator('#stem-presets').inputValue();
+    const id = await page.locator('#stem-presets').evaluate(node => node.value);
     const stored = () => page.evaluate(async () => {
       const { StemPresets } = await import('./scripts/stem-presets.mjs');
       const library = await StemPresets.current();
@@ -82,9 +82,9 @@ const { chromium } = require('playwright');
       return record.settings.rate === .5 && record.settings.keepTone && record.settings.states[0].muted && record.settings.instruments?.drums?.slices?.[0]?.start > 0 && record.settings.eq?.bands.length === 1 && record.settings.eq.hardClip;
     });
     await page.goto(url.replace('?job=test', ''));
-    await page.waitForFunction(() => document.querySelector('#stem-presets').options.length === 2);
+    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 1);
     assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'false');
-    await page.locator('#stem-presets').selectOption(id);
+    await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
     await page.locator('.pl-stem-head[data-stem=drums] .pad-knob').waitFor();
     assert.equal(await page.evaluate(() => inferences), 0, 'Loading never starts model inference');
     assert.equal(await page.locator('#track').textContent(), 'My saved mix');
@@ -109,7 +109,7 @@ const { chromium } = require('playwright');
     await page.locator('#save-locally').click();
     await page.locator('#save-confirm').click();
     await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
-    const folderId = await page.locator('#stem-presets').inputValue();
+    const folderId = await page.locator('#stem-presets').evaluate(node => node.value);
     assert.notEqual(folderId, id);
     assert.deepEqual(await page.evaluate(async id => {
       const root = await navigator.storage.getDirectory();
@@ -117,14 +117,14 @@ const { chromium } = require('playwright');
       const names = []; for await (const name of directory.keys()) names.push(name); return names.sort();
     }, folderId), ['bass.wav', 'drums.wav', 'original.wav', 'other.wav', 'preset.json', 'vocals.wav']);
     await page.reload();
-    await page.waitForFunction(() => document.querySelector('#stem-presets').options.length === 2);
-    await page.locator('#stem-presets').selectOption(folderId);
+    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 1);
+    await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${folderId}"] .row-menu-load`).click();
     await page.locator('.stem').first().waitFor();
     assert.equal(await page.evaluate(() => inferences), 0);
     await page.locator('#preset-reset').click();
-    await page.waitForFunction(id => [...document.querySelector('#stem-presets').options].some(o => o.value === id), id);
+    await page.waitForFunction(id => !!document.querySelector(`#stem-presets-menu .row-menu-row[data-id="${id}"]`), id);
     assert.equal(await page.locator('#preset-reset').isVisible(), false);
-    await page.locator('#stem-presets').selectOption(id);
+    await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
     await page.waitForFunction(() => document.querySelector('#stem-rate').value === '0.5');
     // Interrupted folder saves must not appear in the list; prior data survives.
     assert.equal(await page.evaluate(async () => {
@@ -149,7 +149,7 @@ const { chromium } = require('playwright');
     }, folderId);
     await page.locator('#preset-folder').click();
     await page.locator('#stem-presets:not(:disabled)').waitFor();
-    await page.locator('#stem-presets').selectOption(folderId);
+    await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${folderId}"] .row-menu-load`).click();
     await page.locator('#status.error').waitFor();
     assert.equal(await page.locator('.pl-stem-head').count(), 5);
     assert.equal(await page.locator('#stem-rate').inputValue(), '0.5');
@@ -157,7 +157,7 @@ const { chromium } = require('playwright');
     // Keep Tone is off. Shared clock remains aligned through live changes/seek.
     await page.locator('#preset-reset').click();
     await page.locator('#stem-presets:not(:disabled)').waitFor();
-    await page.locator('#stem-presets').selectOption(id);
+    await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
     await page.locator('#save-locally[aria-pressed=true]').waitFor();
     await page.locator('.peq-reset').click();
     await page.locator('.pl-stem-head[data-stem=original] .stem-enable').click({ button: 'right' });
@@ -195,6 +195,28 @@ const { chromium } = require('playwright');
       const target = path.join(root, 'test-results/stem-presets'); fs.mkdirSync(target, { recursive: true });
       await page.screenshot({ path: path.join(target, `${width}.png`), fullPage: true });
     }
+    // Delete from the menu: two steps, never opens the row; the open session stays and
+    // autosave stops. The folder destination removes only that preset's folder.
+    await page.setViewportSize({ width: 1200, height: 1000 });
+    await page.locator('#stem-presets').click();
+    const removeRow = page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-delete`);
+    await removeRow.click();
+    assert.equal(await removeRow.textContent(), 'Delete?');
+    await removeRow.click();
+    await page.waitForFunction(id => !document.querySelector(`#stem-presets-menu .row-menu-row[data-id="${id}"]`), id);
+    assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'false', 'Autosave stops');
+    assert.equal(await page.locator('.pl-stem-head').count(), 5, 'The open session stays');
+    assert.equal(await page.evaluate(async id => {
+      const { StemPresets } = await import('./scripts/stem-presets.mjs');
+      return (await (await StemPresets.current()).list()).some(record => record.id === id);
+    }, id), false);
+    assert.deepEqual(await page.evaluate(async id => {
+      const { StemPresets } = await import('./scripts/stem-presets.mjs');
+      const root = await navigator.storage.getDirectory(), library = new StemPresets(root);
+      await library.remove(id);
+      const names = []; for await (const name of (await root.getDirectoryHandle('PlayerTools-Stems')).keys()) names.push(name);
+      return names.includes(id);
+    }, folderId), false);
     assert.deepEqual(errors, []);
     console.log('Stem presets: DB/folder save, restore, automatic settings, reset, interrupted/corrupt saves, no re-inference, real Keep Tone and responsive layout passed.');
   } finally { await context.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }

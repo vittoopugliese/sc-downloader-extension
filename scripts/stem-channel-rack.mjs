@@ -11,6 +11,9 @@ export const PLUGIN_ICONS = Object.freeze({
   place: '<path d="M3 6h11M3 12h7M3 18h7m7-9v12m-6-6h12"/>',
   slice: '<path d="M3 21 15 9M14 4v3M19 9h3M17.5 5.5l2-2M10 6.5 8 4.5M17.5 12.5l2 2"/>',
   clear: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15"/>',
+  // Eight pads with a line through them: Clear All, apart from the trash cans.
+  clearSlices: '<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6zM2 22 22 2"/>',
+  restore: '<path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/>',
 });
 
 // One collapsible plugin shell, shared with the piano roll: header, body, visibility.
@@ -54,10 +57,25 @@ export function mountChannelRack({ container, instruments, audioContext, output,
   const focus = patternControls(instruments, { manage: true });
   const place = button('rack-place', pt('Add to playlist'), `${svg(PLUGIN_ICONS.place)}<span>${pt('Playlist')}</span>`, () => instruments.place());
   const slice = button('rack-slice', pt('Auto-slice the visible audio into the eight pads'), svg(PLUGIN_ICONS.slice), () => { sampler?.autoSlice(true); });
+  // Clear All empties the eight pads (steps and notes stay); a second click restores them.
+  let cleared = null;
+  const clearSlices = button('rack-clear-slices', pt('Clear all slices'), svg(PLUGIN_ICONS.clearSlices), () => {
+    const { key } = instruments.focused();
+    if (cleared?.key === key && sampler && !sampler.state().slices.some(Boolean)) { const { slices } = cleared; cleared = null; sampler.restore(slices); renderClear(); return; }
+    const before = sampler?.snapshot();
+    if (sampler?.clearAll()) { cleared = { key, slices: before }; renderClear(); }
+  });
+  function renderClear() {
+    const { key } = instruments.focused(), empty = !sampler?.state().slices.some(Boolean), undo = cleared?.key === key && empty;
+    const label = undo ? pt('Restore cleared slices') : pt('Clear all slices');
+    clearSlices.title = label; clearSlices.setAttribute('aria-label', label); clearSlices.setAttribute('aria-pressed', String(undo));
+    clearSlices.innerHTML = svg(undo ? PLUGIN_ICONS.restore : PLUGIN_ICONS.clearSlices);
+    clearSlices.disabled = !sampler || (empty && !undo);
+  }
   const clear = button('rack-clear', pt('Clear steps'), svg(PLUGIN_ICONS.clear), () => instruments.editPattern(pattern => {
     for (const row of pattern.steps) row.fill(0, bar * STEPS_PER_BAR, (bar + 1) * STEPS_PER_BAR);
   }));
-  toolbar.append(play, focus.element, place, slice, clear);
+  toolbar.append(play, focus.element, place, slice, clearSlices, clear);
   const wave = element('div', 'waveform rack-wave');
   const canvas = element('canvas', 'rack-wave-canvas'); canvas.setAttribute('aria-hidden', 'true'); wave.append(canvas);
   const tabs = element('div', 'rack-bars');
@@ -216,18 +234,22 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     const { key, track } = instruments.focused(), buffer = track?.buffer || null;
     if (mounted?.key === key && mounted.buffer === buffer) return;
     sampler?.dispose(); sampler = null; mounted = null;
-    if (!buffer) return;
+    if (!buffer) { renderClear(); return; }
     mounted = { key, buffer }; view = { startMs: 0, endMs: buffer.duration * 1000 }; drawn = '';
     // Pads play through this track's EQ.
     sampler = mountPadSampler({ waveform: wave, buffer, timeline, audioContext, output: () => output(key), locale, report,
       saved: instruments.instrument(key).slices,
       keyboardActive: event => shell.active() && !event.target.closest?.('.pl-ui,.stem-piano-roll'),
-      changed: slices => instruments.editInstrument(instrument => { instrument.slices = slices; }, key),
-      onRender: renderPads });
-    if (!sampler.state().slices.some(Boolean)) requestAnimationFrame(() => setTimeout(() => {
-      if (sampler && mounted?.key === key) sampler.autoSlice();
+      changed: slices => {
+        instruments.editInstrument(instrument => { instrument.slices = slices; instrument.sliced = true; }, key);
+        if (slices.some(Boolean) && cleared?.key === key) cleared = null;
+      },
+      onRender: state => { renderPads(state); renderClear(); } });
+    // Only a track that was never set up is auto-sliced; a cleared one stays empty.
+    if (!instruments.instrument(key).sliced) requestAnimationFrame(() => setTimeout(() => {
+      if (sampler && mounted?.key === key && !instruments.instrument(key).sliced) sampler.autoSlice();
     }));
-    drawWave();
+    drawWave(); renderClear();
   }
   function renderPads(state = sampler?.state()) {
     pads.forEach((pad, row) => {

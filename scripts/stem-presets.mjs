@@ -116,6 +116,25 @@ export class StemPresets {
     if (record.id !== id || blobs?.length !== 5 || blobs.some(blob => !(blob instanceof Blob) || blob.size > maxWavBytes || blob.size < 44)) throw new Error('Invalid preset audio');
     return { record, blobs };
   }
+  // Deletes the saved copy of a separation: its IndexedDB records, or its preset folder
+  // inside PlayerTools-Stems. Nothing else in the chosen folder is touched.
+  async remove(id) {
+    if (!validId(id)) throw new Error('Invalid preset ID');
+    if (!this.directory) {
+      await transaction(['presets', 'audio'], 'readwrite', tx => {
+        tx.objectStore('presets').delete(id); tx.objectStore('audio').delete(id);
+      });
+      return;
+    }
+    await navigator.locks.request(`scdl-stem-preset-${id}`, async () => {
+      const root = await this.root();
+      // The commit marker goes first: an interrupted removal no longer lists the preset.
+      try { await (await root.getDirectoryHandle(id)).removeEntry('preset.json'); }
+      catch (error) { if (error.name !== 'NotFoundError') throw error; }
+      try { await root.removeEntry(id, { recursive: true }); }
+      catch (error) { if (error.name !== 'NotFoundError') throw error; }
+    });
+  }
   async update(id, settings) {
     if (!validId(id)) throw new Error('Invalid preset ID');
     if (!this.directory) {
