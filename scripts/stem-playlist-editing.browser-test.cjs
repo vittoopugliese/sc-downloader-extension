@@ -110,6 +110,10 @@ const { chromium } = require('playwright');
     assert.deepEqual((await state()).clips.map(c => c.at), [.5, 1, 2.5, 3, 4.5, 5, 6.5, 7]);
     await page.keyboard.press('Control+z'); assert.equal((await state()).clips.length, 6);
     await page.keyboard.press('Control+y'); assert.equal((await state()).clips.length, 8);
+    // Copying with nothing selected keeps the previous copy.
+    await page.keyboard.press('Escape'); await page.keyboard.press('Control+c'); await page.keyboard.press('Control+v');
+    assert.equal((await state()).clips.length, 10, 'An empty Ctrl+C does not clear the clipboard');
+    await page.keyboard.press('Control+z'); assert.equal((await state()).clips.length, 8);
     // Whole groups duplicate with their spacing even without an explicit time range.
     await page.keyboard.press('Control+a'); await page.keyboard.press('Control+d');
     assert.equal((await state()).clips.length, 16, 'Duplicate applies to every selected clip');

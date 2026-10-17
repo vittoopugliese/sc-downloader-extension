@@ -204,6 +204,14 @@ const { chromium } = require('playwright');
     assert.equal(await playlist.locator('.pl-clip').count(), 0, 'Right click on the waveform removes the clip');
     await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('Control+z');
     assert.equal(await playlist.locator('.pl-clip').count(), 1, 'Undo brings the clip back');
+    // A touch long-press on the waveform opens the menu instead of deleting.
+    await playlist.locator('.pl-clip').first().evaluate(item => {
+      const box = item.getBoundingClientRect();
+      item.dispatchEvent(new PointerEvent('contextmenu', { bubbles: true, cancelable: true, pointerType: 'touch', clientX: box.left + box.width / 2, clientY: box.bottom - 6 }));
+    });
+    assert.equal(await menu.count(), 1, 'Touch long-press opens the clip menu');
+    assert.equal(await playlist.locator('.pl-clip').count(), 1, 'Touch long-press never deletes the clip');
+    await page.keyboard.press('Escape'); assert.equal(await menu.count(), 0);
     // Space twice rewinds to the loop start and plays, like FL Studio.
     await playlist.locator('.pl-scroll').focus();
     await page.keyboard.press('Space'); await page.waitForTimeout(900);

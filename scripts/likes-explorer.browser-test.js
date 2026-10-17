@@ -280,7 +280,7 @@ const { chromium } = require('playwright');
         await SCLikesLibrary.start('987','Fixture',false);await jobs.tick();
         const status=await jobs.handle({type:'GET_LIKES_LIBRARY_STATUS',ownerId:'987'},sender);
         const query=await jobs.handle({type:'QUERY_LIKES',ownerId:'987',limit:10},sender);
-        const opened=await jobs.handle({type:'OPEN_LIKED_TRACK',ownerId:'987',trackId:'901'},sender);
+        let opened;try{await jobs.handle({type:'OPEN_LIKED_TRACK',ownerId:'987',trackId:'901'},sender);}catch(e){opened=e.code||e.message;}
         const playback=await jobs.handle({type:'PLAY_LIKED_TRACK',ownerId:'987',trackId:'901'},sender);
         let missingPlayback,stalePlayback;
         try{await jobs.handle({type:'PLAY_LIKED_TRACK',ownerId:'987',trackId:'999'},sender);}catch(e){missingPlayback=e.code;}
@@ -302,8 +302,8 @@ const { chromium } = require('playwright');
     assert.equal(jobsResult.invalidatedCount,0);assert.equal(jobsResult.paused,'paused');assert.equal(jobsResult.complete,true);assert.equal(jobsResult.count,1);
     assert.equal(jobsResult.otherSource,'654');assert.equal(jobsResult.externalFetched,true);
     assert.equal(jobsResult.wrongOwner,'owner-mismatch');assert.equal(jobsResult.wrongSender,'invalid-request');assert.equal(jobsResult.free,'pro-required');assert.equal(jobsResult.deleted,true);
-    assert.deepEqual(jobsResult.createdTabs,[{url:'https://soundcloud.com/fixture/track',active:false,openerTabId:123}]);
-    assert.equal(jobsResult.updatedTabs,0);assert.equal(jobsResult.opened.tabId,456);assert.equal(jobsResult.playback.item.itemId,'901');
+    assert.deepEqual(jobsResult.createdTabs,[],'The Explorer no longer opens tracks in other tabs');
+    assert.equal(jobsResult.updatedTabs,0);assert.equal(jobsResult.opened,'invalid-request');assert.equal(jobsResult.playback.item.itemId,'901');
     assert.equal(jobsResult.missingPlayback,'track-missing');assert.equal(jobsResult.stalePlayback,'stale-generation');assert.equal(jobsResult.freePlayback,'pro-required');
     console.log('Worker jobs: account change during fetch blocks commit; resume, sender/owner checks, Pro denial and Free deletion passed.');
     const popup=await context.newPage();await popup.setViewportSize({width:426,height:760});

@@ -856,14 +856,17 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     const item = node('div', 'pl-clip'); item.dataset.clip = id; item.tabIndex = 0; item.setAttribute('role', 'button');
     item.append(node('span', 'pl-clip-title'));
     for (const edge of ['left', 'right']) { const handle = node('span', `pl-edge pl-edge-${edge}`); handle.dataset.edge = edge; handle.title = t('Drag to trim', 'Arrastrar para recortar'); item.append(handle); }
-    item.onpointerdown = event => beginDrag(event, state.clips.find(c => c.id === id), item);
+    // Remembered for the contextmenu event, which older Chrome versions fire without pointerType.
+    item.onpointerdown = event => { item.dataset.pointer = event.pointerType; beginDrag(event, state.clips.find(c => c.id === id), item); };
     // Like FL Studio: right click on the name bar opens the menu, on the waveform removes the clip.
-    // The keyboard menu key (no pointer position) always opens the menu.
+    // The keyboard menu key (no pointer position) and touch long-press always open the menu,
+    // so a long press never deletes by accident.
     item.oncontextmenu = event => {
       const clip = state.clips.find(c => c.id === id); if (!clip) return;
       // Measured by height: the trim handles cover the name bar's ends too.
       const keyboard = !event.clientX && !event.clientY, onHeader = event.clientY < item.querySelector('.pl-clip-title').getBoundingClientRect().bottom;
-      if (keyboard || onHeader) { clipMenu(event, clip); return; }
+      const touch = ['touch', 'pen'].includes(event.pointerType || item.dataset.pointer);
+      if (keyboard || onHeader || touch) { clipMenu(event, clip); return; }
       event.preventDefault(); event.stopPropagation(); eraseClip(clip);
     };
     item.onkeydown = event => {
@@ -1150,7 +1153,8 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     const combo = (modifier ? 'ctrl+' : '') + (modifier && event.shiftKey ? 'shift+' : '') + event.key.toLowerCase(), tool = windowKeys.has(combo) ? null : hotkeys.get(combo);
     if (tool) { event.preventDefault(); if ((!event.repeat || tool.repeat) && !tool.control.disabled) tool.control.click(); }
     else if (event.key === 'Escape') { event.preventDefault(); setTool('draw'); pick(null); updateSelection(); }
-    else if (combo === 'ctrl+c') { event.preventDefault(); clipboard = captureSelection(); }
+    // An empty selection keeps the previous copy, like FL Studio.
+    else if (combo === 'ctrl+c') { event.preventDefault(); clipboard = captureSelection() || clipboard; }
     else if (combo === 'ctrl+v') { event.preventDefault(); if (clipboard) pasteSelection(clipboard, snapAt(position), activeTrack); }
     else if (combo === 'ctrl+a') { event.preventDefault(); timeSelection = null; selected = state.clips[0]?.id ?? null; extra = new Set(state.clips.slice(1).map(c => c.id)); updateSelection(); }
     else if (combo === 't') { event.preventDefault(); if (!event.repeat) tapTempo(); }

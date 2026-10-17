@@ -248,14 +248,10 @@
       if(r.generation&&r.generation!==generation)throw source.fail('stale-generation');
       if(r.type==='SAVE_LIKES_VIEW'){await db.put('collectionViews',{accountId,collectionId,anchorTrackId:String(r.anchorTrackId||'').slice(0,30),query:String(r.query||'').slice(0,200),period:String(r.period||'').slice(0,7),offset:Number(r.offset)||0});return{};}
       const locate=async id=>{const ordinal=await db.position(accountId,collectionId,generation,id);if(ordinal<0)throw source.fail('track-missing');return(await db.window(accountId,collectionId,generation,ordinal,1))[0];};
-      if(['OPEN_LIKED_TRACK','PLAY_LIKED_TRACK','LOCATE_LIKED_TRACK'].includes(r.type)) {
+      if(['PLAY_LIKED_TRACK','LOCATE_LIKED_TRACK'].includes(r.type)) {
         const item = await locate(r.trackId), permalink = source.permalink(item?.permalink);
         if (!permalink) throw source.fail('track-missing');
         await valid(ctx);
-        if (r.type === 'OPEN_LIKED_TRACK') {
-          const tab = await chrome.tabs.create({ url: permalink, active: false, openerTabId: sender.tab.id });
-          return { phase: 'opened', tabId: tab.id };
-        }
         if (r.type === 'PLAY_LIKED_TRACK') return { item: { itemId: item.itemId, title: item.title, artistName: item.artistName, permalink } };
         return { permalink };
       }

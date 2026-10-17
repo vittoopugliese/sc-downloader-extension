@@ -43,6 +43,10 @@ function smokePackage(zipPath, apiPermission) {
   if (!manifest.host_permissions?.includes(apiPermission)) throw new Error(`Package smoke check: missing API host permission ${apiPermission}.`);
   const referencedScripts = [manifest.background?.service_worker,
     ...(manifest.content_scripts || []).flatMap(item => item.js || []),
+    // The service worker's importScripts() and exact web-accessible files fail only at runtime.
+    ...[...zipText(zipPath, manifest.background?.service_worker || 'scripts/background.js').matchAll(/importScripts\(([^)]*)\)/g)]
+      .flatMap(match => [...match[1].matchAll(/["']([^"']+\.js)["']/g)].map(file => `scripts/${file[1]}`)),
+    ...(manifest.web_accessible_resources || []).flatMap(item => item.resources || []).filter(resource => !resource.includes('*')),
     ...['popup.html', 'offscreen.html', 'stems.html'].flatMap((html) => [...zipText(zipPath, html).matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map(match => match[1]))]
     .filter(Boolean);
   for (const script of referencedScripts) {

@@ -42,13 +42,13 @@
   dictionary.teleportStopHint = teleportStopHint;
   dictionary.archive = ({es:'TU ARCHIVO PERSONAL',pt_BR:'SEU ARQUIVO PESSOAL',de:'DEIN PERSÖNLICHES ARCHIV',ru:'ТВОЙ ЛИЧНЫЙ АРХИВ'})[language] || ({es:'TU ARCHIVO PERSONAL',de:'DEIN PERSÖNLICHES ARCHIV',ru:'ТВОЙ ЛИЧНЫЙ АРХИВ'})[language.split('_')[0]] || 'YOUR PERSONAL ARCHIVE';
   dictionary.open = ({es:'Abrir',pt_BR:'Abrir',de:'Öffnen',ru:'Открыть'})[language] || ({es:'Abrir',de:'Öffnen',ru:'Открыть'})[language.split('_')[0]] || 'Open';
-  const playbackKeys = ['play','listen','openHint','openedTab','loadingAudio','playbackError','needsPlay'];
+  const playbackKeys = ['play','listen','loadingAudio','playbackError','needsPlay'];
   const playback = {
-    en: ['Play','Listen in Explorer','Open in another tab; keep exploring here.','Opened in another tab.','Loading audio…','Could not play this track. Try again or open it in another tab.','Press Play in the SoundCloud player to start listening.'],
-    es: ['Reproducir','Escuchar en Explorer','Abrir en otra pestaña; seguí explorando acá.','Abierto en otra pestaña.','Cargando audio…','No se pudo reproducir este track. Reintentá o abrilo en otra pestaña.','Pulsá Play en el reproductor de SoundCloud para escuchar.'],
-    pt_BR: ['Reproduzir','Ouvir no Explorer','Abrir em outra aba; continue explorando aqui.','Aberto em outra aba.','Carregando áudio…','Não foi possível reproduzir esta faixa. Tente novamente ou abra em outra aba.','Pressione Play no player do SoundCloud para ouvir.'],
-    de: ['Abspielen','Im Explorer anhören','In einem anderen Tab öffnen; hier weiterstöbern.','In einem anderen Tab geöffnet.','Audio wird geladen…','Dieser Track konnte nicht abgespielt werden. Erneut versuchen oder in einem anderen Tab öffnen.','Drücke Play im SoundCloud-Player, um die Wiedergabe zu starten.'],
-    ru: ['Воспроизвести','Слушать в Explorer','Открыть в другой вкладке и продолжить просмотр здесь.','Открыто в другой вкладке.','Загрузка аудио…','Не удалось воспроизвести трек. Повтори попытку или открой в другой вкладке.','Нажми Play в плеере SoundCloud, чтобы начать прослушивание.']
+    en: ['Play','Listen in Explorer','Loading audio…','Could not play this track. Try again, or use it in Player Tools.','Press Play in the SoundCloud player to start listening.'],
+    es: ['Reproducir','Escuchar en Explorer','Cargando audio…','No se pudo reproducir este track. Reintentá o usalo en Player Tools.','Pulsá Play en el reproductor de SoundCloud para escuchar.'],
+    pt_BR: ['Reproduzir','Ouvir no Explorer','Carregando áudio…','Não foi possível reproduzir esta faixa. Tente novamente ou use no Player Tools.','Pressione Play no player do SoundCloud para ouvir.'],
+    de: ['Abspielen','Im Explorer anhören','Audio wird geladen…','Dieser Track konnte nicht abgespielt werden. Erneut versuchen oder in Player Tools verwenden.','Drücke Play im SoundCloud-Player, um die Wiedergabe zu starten.'],
+    ru: ['Воспроизвести','Слушать в Explorer','Загрузка аудио…','Не удалось воспроизвести трек. Повтори попытку или используй в Player Tools.','Нажми Play в плеере SoundCloud, чтобы начать прослушивание.']
   };
   const playbackLocale = playback[language] || playback.en;
   playbackKeys.forEach((key,i)=>{dictionary[key]=playbackLocale[i];});

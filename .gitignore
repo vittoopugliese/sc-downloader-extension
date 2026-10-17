@@ -12,3 +12,6 @@ test-results/
 .playwright-profile/
 repos
 *.csv
+
+# Chrome writes this in the working directory when launched with logging.
+debug.log
