@@ -58,7 +58,7 @@ const { chromium } = require('playwright');
       assert.equal(await page.locator('#stem-presets .row-menu-value').textContent(), 'Record');
       { await page.locator('.pl-stem-head[data-stem=drums] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
       const copy = await page.evaluate(() => ({
-        hint: SCPlayerToolsText.t('A S D F G H J K play the pads. Drag on the waveform to re-cut the selected pad; wheel zooms. Click a step to add a hit, drag it up or down for velocity.'),
+        hint: SCPlayerToolsText.t('Each row is a sample in this pattern. Choose One-shot for the full sound, or Chops to sequence its selected pad.'),
         reset: SCPlayerToolsText.t('Reset speed and tone'),
         record: SCPlayerToolsText.t('Record the final mix'),
       }));
