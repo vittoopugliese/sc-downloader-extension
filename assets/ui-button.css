@@ -1,0 +1,27 @@
+/* The one button of the Stem Extractor (scripts/ui-button.mjs). Every header control uses
+   it; the playlist tools use its 'tool' size. Variants: accent (the Lumberjack orange),
+   neutral (grey) and ghost (no frame). An open window or an active toggle is
+   aria-pressed=true. */
+button.ui-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex-shrink:0;box-sizing:border-box;height:32px;min-height:0;margin:0;padding:0 11px;border:1px solid transparent;border-radius:6px;font:700 11px/1 Arial,Helvetica,sans-serif;letter-spacing:.2px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s;-webkit-user-select:none;user-select:none}
+button.ui-btn--icon{width:34px;padding:0}
+button.ui-btn--tool{width:32px;height:30px;padding:0}
+.ui-btn .ui-btn-icon{width:18px;height:18px;flex-shrink:0;pointer-events:none}
+.ui-btn--text .ui-btn-icon{width:15px;height:15px}
+.ui-btn-label{overflow:hidden;text-overflow:ellipsis}
+button.ui-btn:disabled{opacity:.4;cursor:not-allowed}
+button.ui-btn:focus-visible{outline:2px solid var(--orange,#ff5500);outline-offset:2px}
+
+/* Accent: orange gradient, warm border and a soft glow. */
+button.ui-btn--accent{border-color:#ff884c;background:linear-gradient(135deg,#ff6b18,#c94000);color:#fff;box-shadow:0 3px 12px #ff550026}
+button.ui-btn--accent:hover:enabled{border-color:#ffad80;background:linear-gradient(135deg,#ff833d,#e64d00)}
+button.ui-btn--accent[aria-pressed=true]{border-color:#ffd2b3;background:linear-gradient(135deg,#c94000,#8f2c00);color:#fff;box-shadow:inset 0 2px 4px #0007}
+
+/* Neutral: dark grey, orange when pressed. */
+button.ui-btn--neutral{border-color:#45423e;background:#242321;color:#ece8e2;box-shadow:none}
+button.ui-btn--neutral:hover:enabled{border-color:#897564;background:#35312b}
+button.ui-btn--neutral[aria-pressed=true]{border-color:var(--orange,#ff5500);background:#42291d;color:#ffad80}
+
+/* Ghost: no frame until hovered. */
+button.ui-btn--ghost{border-color:transparent;background:transparent;color:#8d8781;box-shadow:none}
+button.ui-btn--ghost:hover:enabled{border-color:#484848;background:#ffffff08;color:#ddd}
+button.ui-btn--ghost[aria-pressed=true]{color:#ff9a62}

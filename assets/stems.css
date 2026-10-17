@@ -13,10 +13,7 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 .workspace-header::before{content:'';position:absolute;z-index:1;inset:0;padding-top:2px;border-radius:11px;background:linear-gradient(90deg,var(--vocals) 0 25%,var(--drums) 25% 50%,var(--bass) 50% 75%,var(--other) 75%);opacity:.85;pointer-events:none;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 .daw-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0;padding:7px 12px}
 .daw-row-main .transport-bar{flex:1 1 520px;min-width:0}
-.header-pin{display:grid;place-items:center;flex-shrink:0;width:30px;height:30px;padding:0;border-color:transparent;background:none;color:#8d8781}
-.header-pin:hover{border-color:#484848;color:#ddd}
-.header-pin[aria-pressed=true]{color:#ff9a62}
-.header-pin .icon{width:15px;height:15px}
+.header-pin .ui-btn-icon{width:16px;height:16px}
 .daw-row-sub{border-top:1px solid #ffffff0c;border-radius:0 0 12px 12px;background:#17171780;padding:5px 12px}
 /* Hint panel, as in FL: the loaded track, then status and progress messages. */
 .daw-hint{display:flex;align-items:center;gap:10px;flex:1 1 240px;min-width:0;height:34px;padding:0 4px}
@@ -66,16 +63,8 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 .workspace-header .preset-toolbar .row-menu-list button:hover:enabled{background:#383838}
 .workspace-header .preset-toolbar .row-menu-list .row-menu-delete{flex:0 0 28px}
 .workspace-header .preset-toolbar .row-menu-list .row-menu-delete.is-armed{flex:0 0 auto;background:#4a2020}
-.workspace-header .preset-toolbar button{width:32px;height:32px;padding:6px;flex-shrink:0;border-color:#45423e;background:#242321}
-.workspace-header .preset-toolbar button:hover{background:#35312b;border-color:#897564}
-.preset-toolbar img,.preset-toolbar sc-icon{width:16px;height:16px}
-#preset-folder img,#preset-folder sc-icon{filter:brightness(0) invert(1);opacity:.7}
-.workspace-header #save-locally .icon{width:16px;height:16px}
-.workspace-header #save-locally[aria-pressed=true]{border-color:var(--orange);background:#42291d;color:#ffad80}
-.workspace-header #preset-folder.has-custom-folder{border-color:var(--orange);background:#42291d}
-.workspace-header #import-audio{width:auto;height:32px;padding:0 8px;gap:5px;border:1px solid #e88751;border-radius:6px;background:#ed7134;color:#17120f;font-size:11px;line-height:18px;box-shadow:inset 0 1px 0 #ffffff20;white-space:nowrap}
-.workspace-header #import-audio:hover:enabled{background:#ff8a4e;border-color:#ffb182}
-#import-audio .icon{width:14px;height:14px}
+.preset-toolbar .ui-btn-icon{width:16px;height:16px}
+.workspace-header #preset-folder.has-custom-folder{border-color:var(--orange);background:#42291d;color:#ffad80}
 #preset-reconnect{justify-self:start;white-space:normal}
 #preset-destination{max-width:100%}
 /* Narrow windows: the rows wrap; the identity block shares its line with the pin. */
@@ -86,7 +75,7 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 /* On phones and short windows the wrapped header is too tall to pin. */
 @media(max-width:600px),(max-height:480px){
   .workspace-header[data-pinned=true]{position:relative}
-  .header-pin{display:none}
+  .workspace-header button.header-pin{display:none}
 }
 @media(max-width:600px){
   .workspace-edition{font-size:8px;padding-left:8px;margin-left:0}
@@ -125,8 +114,6 @@ progress{width:100%;height:6px;margin-top:22px;accent-color:var(--orange)}
 #status.is-loading{display:flex;align-items:center;gap:9px}
 #status.is-loading::before{content:'';width:14px;height:14px;flex-shrink:0;border:2px solid #ffffff40;border-top-color:#fff;border-radius:50%;animation:stem-spin .8s linear infinite}
 @keyframes stem-spin{to{transform:rotate(360deg)}}
-button.game-toggle{padding:11px 18px;border-color:#ff884c;background:linear-gradient(135deg,#ff6b18,#c94000);color:#fff;font-size:13px;font-weight:700;box-shadow:0 3px 12px #ff550026;white-space:normal;text-align:left}
-button.game-toggle:hover{background:linear-gradient(135deg,#ff833d,#e64d00);border-color:#ffad80}
 #game-panel{margin-top:16px}
 #game-panel iframe{display:block;width:100%;max-width:300px;height:auto;aspect-ratio:2/3;margin:auto;border:0;border-radius:8px;background:#111}
 @media(prefers-reduced-motion:reduce){#status.is-loading::before{animation:none}}
@@ -302,12 +289,10 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 
 /* One line: cover, title, Separate and utilities; transport, mix, speed and legend. */
 #status:empty{display:none}
-#play{display:grid;place-items:center;width:38px;height:34px;min-width:0;padding:0}
-#play .icon{width:16px;height:16px}
 #audition{padding-top:12px}
 .prepare .utility-actions{margin-left:auto}
-body:has(.prepare.has-results) #separate [data-copy],#toggle-game [data-copy]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-body:has(.prepare.has-results) #separate,#toggle-game{display:grid;place-items:center;width:38px;height:34px;padding:0}
+body:has(.prepare.has-results) #separate [data-copy]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+body:has(.prepare.has-results) #separate{display:grid;place-items:center;width:38px;height:34px;padding:0}
 
 .piano-scroll{max-width:100%;max-height:360px;overflow:auto;overscroll-behavior:contain;border:1px solid #444;border-radius:5px;background:#171717}
 .piano-sheet{--piano-steps:16;display:grid;grid-template-columns:46px minmax(0,1fr);grid-template-rows:24px 550px;min-width:calc(46px + var(--piano-steps)*26px)}
@@ -425,7 +410,7 @@ body:has(.prepare.has-results) #separate,#toggle-game{display:grid;place-items:c
 .source-mini #artwork-fallback .icon{width:15px;height:15px}
 .source-mini h1.track{min-width:0;max-width:100%;margin:0;overflow:hidden;font-size:12px;line-height:1.3;letter-spacing:0;white-space:nowrap;text-overflow:ellipsis}
 /* One transport line: separate and play open it, model and game close it. */
-.transport-bar #play,body:has(.prepare.has-results) #separate,.transport-bar #toggle-game,#clear-cache{width:34px;height:32px;min-height:0}
+body:has(.prepare.has-results) #separate,#clear-cache{width:34px;height:32px;min-height:0}
 .transport-bar #separate{min-height:32px;padding-block:0}
 
 /* Tool windows (stem-module-window.mjs): floating like FL Studio, or docked under the Playlist. */

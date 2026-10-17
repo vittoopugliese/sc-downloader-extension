@@ -11,22 +11,22 @@
 /* The playlist continues the header card: no divider, the transport bar lives in the header. */
 .playlist{padding:0 18px 18px}
 .pl-ui button,.pl-ui select,.pl-ui input{font:11px Arial,Helvetica,sans-serif}
-.pl-ui button{min-height:30px;padding:6px 10px;border:1px solid #45423e;border-radius:6px;background:#242321;color:#ece8e2;cursor:pointer}
-.pl-ui button:hover:enabled{border-color:#897564;background:#35312b}
-.pl-ui button:disabled{opacity:.4;cursor:default}
-.pl-ui button[aria-pressed=true]{border-color:var(--orange);background:#42291d;color:#ffad80}
+/* Plain playlist buttons (track mute/solo, library chips). Toolbar and tool buttons are the
+   shared ui-btn (assets/ui-button.css). */
+.pl-ui button:not(.ui-btn){min-height:30px;padding:6px 10px;border:1px solid #45423e;border-radius:6px;background:#242321;color:#ece8e2;cursor:pointer}
+.pl-ui button:not(.ui-btn):hover:enabled{border-color:#897564;background:#35312b}
+.pl-ui button:not(.ui-btn):disabled{opacity:.4;cursor:default}
+.pl-ui button:not(.ui-btn)[aria-pressed=true]{border-color:var(--orange);background:#42291d;color:#ffad80}
 .pl-ui :focus-visible{outline:2px solid var(--orange);outline-offset:2px}
 .pl-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:7px}
 .pl-toolbar{padding:9px 12px;border:1px solid var(--pl-edge);border-radius:10px;background:linear-gradient(180deg,#2b2a28,#242321)}
 .pl-field sc-icon{width:17px;height:17px;flex-shrink:0;color:var(--pl-muted)}
 .pl-spacer{flex:1}
-.pl-ui .pl-play,.pl-ui .pl-export{min-width:38px;background:var(--orange);border-color:var(--orange);color:#fff;box-shadow:0 2px 0 #a83700}
-.pl-ui .pl-play:hover:enabled,.pl-ui .pl-export:hover:enabled{background:#ff7b38;border-color:#ff7b38}
-.pl-ui .pl-icon-button{display:inline-flex;align-items:center;justify-content:center;width:32px;padding:6px}
-.pl-icon-button sc-icon{width:18px;height:18px;pointer-events:none}
+.pl-ui .pl-play{min-width:38px;background:var(--orange);border-color:var(--orange);color:#fff;box-shadow:0 2px 0 #a83700}
+.pl-ui .pl-play:hover:enabled{background:#ff7b38;border-color:#ff7b38}
 .pl-ui .pl-play[aria-pressed=true]{background:#e64d00;color:#fff}
-.pl-ui .pl-tap{position:relative;overflow:hidden;min-width:44px;font-weight:700;letter-spacing:1px;touch-action:manipulation;user-select:none}
-.pl-ui .pl-tap:active{border-color:var(--orange);background:#42291d;color:#ffad80}
+.pl-ui .pl-tap{overflow:hidden;touch-action:manipulation}
+.pl-ui button.pl-tap:active{border-color:var(--orange);background:#42291d;color:#ffad80}
 /* Waiting gauge: drains until the tap session resets, like FL Studio's tapper. */
 .pl-tap::after{content:'';position:absolute;inset:auto 0 0;height:3px;background:var(--orange);transform:scaleX(0);transform-origin:left}
 .pl-tap.is-waiting::after{animation:pl-tap-wait var(--tap-wait,3s) linear forwards}
@@ -106,12 +106,8 @@
 .pl-inspector{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:10px 12px;border:1px solid var(--pl-edge);border-radius:10px 10px 0 0;background:var(--pl-panel)}
 .pl-selected{flex:0 1 auto;max-width:140px;overflow:hidden;font-size:11px;color:#ffad80;white-space:nowrap;text-overflow:ellipsis}
 .pl-tools{display:grid;grid-template-columns:repeat(8,32px);gap:5px;margin-left:auto}
-.pl-windows{display:inline-flex;align-items:center;gap:3px}
-.pl-ui .pl-windows .pl-icon-button{width:28px;padding:5px}
-/* Window buttons: orange like the transport's main actions; an open window stays pressed. */
-.pl-ui button.pl-window-tool{border-color:var(--orange);background:var(--orange);color:#fff;box-shadow:0 2px 0 #a83700}
-.pl-ui button.pl-window-tool:hover:enabled{border-color:#ff7b38;background:#ff7b38}
-.pl-ui button.pl-window-tool[aria-pressed=true]{border-color:#ffd2b3;background:#b83c00;color:#fff;box-shadow:inset 0 2px 3px #0006}
+/* Window buttons are accent ui-btns; an open window stays pressed. */
+.pl-windows{display:inline-flex;align-items:center;gap:5px}
 /* Hotkey flash: an overlay in the button's color whose opacity is animated from JS. */
 .pl-key{position:relative;isolation:isolate}
 .pl-key::after{content:'';position:absolute;inset:-1px;z-index:-1;border-radius:inherit;background:var(--key-color);box-shadow:0 0 14px 1px var(--key-color);opacity:0;pointer-events:none}
@@ -143,7 +139,6 @@
 /* Pattern clips and library entries: FL Studio draws patterns apart from audio. */
 .pl-shelf button.is-pattern{border-left-color:#6fc3cf}
 .pl-clip.is-pattern .pl-clip-title{background:repeating-linear-gradient(135deg,var(--clip-color) 0 8px,color-mix(in srgb,var(--clip-color) 80%,#fff) 8px 16px)}
-.pl-ui .pl-fit-tempo{min-width:40px;font-weight:700}
 
 /* Context menu: small, dark, icon + label + shortcut; Delete in red. */
 .pl-menu{position:fixed;z-index:1000;min-width:176px;max-width:260px;padding:4px;border:1px solid #45423e;border-radius:8px;background:#242321f7;box-shadow:0 10px 28px #000b,0 0 0 1px #0006;color:#ece8e2;font:11.5px Arial,Helvetica,sans-serif;animation:pl-menu-in .09s ease-out}
@@ -170,12 +165,11 @@
 .pl-menu-choice-check{position:absolute;top:-5px;right:-5px;display:grid;place-items:center;width:12px;height:12px;border-radius:50%;background:var(--orange,#ff5500)}
 .pl-menu-choice-check sc-icon{width:9px;height:9px;}
 .pl-notes:has(> .pl-message:empty):has(> .pl-hint[hidden]){display:none}
+
 /* Host buttons placed in the transport keep their page styles. */
 .pl-ui button.primary{border-color:var(--orange);background:var(--orange);color:#fff;box-shadow:0 2px 0 #a83700}
 .pl-ui button.primary:hover:enabled{border-color:#e64d00;background:#e64d00}
 .pl-ui button.primary[aria-pressed=true]{border-color:var(--orange);background:#42291d;color:#ffad80;box-shadow:none}
-.pl-ui button.game-toggle{border-color:#ff884c;background:linear-gradient(135deg,#ff6b18,#c94000);color:#fff;box-shadow:0 3px 12px #ff550026}
-.pl-ui button.game-toggle:hover:enabled{border-color:#ffad80;background:linear-gradient(135deg,#ff833d,#e64d00)}
 
 /* Sample browser: a floating, movable window over the page; the Playlist stays usable. */
 .sb-window{position:fixed;z-index:900;display:flex;flex-direction:column;min-width:280px;min-height:300px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:hidden;resize:both;border:1px solid #45423e;border-radius:10px;background:#202020;box-shadow:0 18px 48px #000c,0 0 0 1px #0006;color:#ece8e2;font:11.5px Arial,Helvetica,sans-serif}

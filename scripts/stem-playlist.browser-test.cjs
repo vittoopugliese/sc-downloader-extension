@@ -66,10 +66,12 @@ const { chromium } = require('playwright');
     const tools = playlist.locator('.pl-tools > button');
     assert.equal(await tools.count(), 16);
     assert.equal(await transport.locator('.pl-window-tool').count(), 6);
-    assert.equal(await transport.locator('.pl-window-tool').first().evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(255, 85, 0)');
+    assert.match(await transport.locator('.pl-window-tool').first().evaluate(e => getComputedStyle(e).backgroundImage), /linear-gradient/, 'Window buttons share the accent button');
     assert.equal(new Set(await tools.evaluateAll(nodes => nodes.map(n => Math.round(n.getBoundingClientRect().top)))).size, 2);
     assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 16);
-    assert.equal(await transport.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(255, 85, 0)');
+    assert.match(await transport.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundImage), /linear-gradient/);
+    // Every header button shares one size.
+    assert.deepEqual([...new Set(await transport.locator('button.ui-btn--icon').evaluateAll(nodes => nodes.filter(n => n.offsetParent).map(n => n.offsetWidth + 'x' + n.offsetHeight)))], ['34x32']);
     const ruler = playlist.locator('.pl-ruler'), band = playlist.locator('.pl-loop-band');
     assert.match(await ruler.getAttribute('title'), /drag inside.*edges.*double-click/i);
     const dragRuler = async (from, to) => {

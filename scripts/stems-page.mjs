@@ -7,6 +7,7 @@ import { SAMPLE_RATE, MAX_SECONDS, STEMS, encodeWav } from './stem-audio.mjs';
 import { MODEL } from './stem-model.mjs';
 import { mountStemLibrary } from './stem-library-ui.mjs';
 import { contextMenu, createKnob, mountPlaylist } from './stem-playlist.mjs';
+import { setButtonContent } from './ui-button.mjs';
 import { mountModuleWindow } from './stem-module-window.mjs';
 import { mountEffects, FX_ICON } from './stem-effects.mjs';
 import { spectrumOf } from './stem-spectrum.mjs';
@@ -122,10 +123,14 @@ $('separate').title = `${text('separate')} · ${text('details')}`;
 $('toggle-game').title = text('gameTip'); $('toggle-game').setAttribute('aria-label', text('playGame'));
 $('clear-cache').title = text('clearCacheTip'); $('clear-cache').setAttribute('aria-label', text('clearCache'));
 $('transport').setAttribute('aria-label', text('transport'));
-document.querySelectorAll('[data-icon]').forEach(node => node.replaceChildren(icon(node.dataset.icon)));
+// Inside the shared buttons the icon takes the button's own size.
+document.querySelectorAll('[data-icon]').forEach(node => {
+  if (node.closest('.ui-btn')) node.replaceWith(globalThis.SCIcons.create(node.dataset.icon, 'ui-btn-icon'));
+  else node.replaceChildren(icon(node.dataset.icon));
+});
 function playLabel(active) {
   const label = text(active ? 'stop' : 'play');
-  $('play').replaceChildren(icon(active ? 'pause' : 'play'));
+  setButtonContent($('play'), { icon: active ? 'pause' : 'play' });
   $('play').title = text(active ? 'pauseTip' : 'playTip'); $('play').setAttribute('aria-label', label);
   $('play').setAttribute('aria-pressed', String(active));
 }
@@ -339,7 +344,6 @@ function setPinned(pinned) {
   pin.setAttribute('aria-pressed', String(pinned));
   pin.title = pinned ? say('Header pinned to the top · click to let it scroll', 'Header fijo arriba · clic para que se desplace') : say('Pin the header to the top', 'Fijar el header arriba');
   pin.setAttribute('aria-label', say('Pin header', 'Fijar header'));
-  pin.replaceChildren(icon('pin'));
   try { localStorage.setItem('stems.headerPinned', pinned ? '1' : '0'); } catch {}
 }
 let storedPin = null;
@@ -889,8 +893,9 @@ $('toggle-game').onclick = () => {
   }
   panel.hidden = !open;
   $('toggle-game').setAttribute('aria-expanded', String(open));
-  const gameLabel = document.createElement('span'); gameLabel.dataset.copy = open ? 'hideGame' : 'playGame'; gameLabel.textContent = text(gameLabel.dataset.copy);
-  $('toggle-game').replaceChildren(icon(open ? 'close' : 'game'), gameLabel); $('toggle-game').title = gameLabel.textContent;
+  setButtonContent($('toggle-game'), { icon: open ? 'close' : 'game' });
+  $('toggle-game').title = open ? text('hideGame') : text('gameTip');
+  $('toggle-game').setAttribute('aria-label', text(open ? 'hideGame' : 'playGame'));
 };
 $('clear-cache').onclick = async () => {
   try { await caches.delete(MODEL.cache); status(text('cleared')); } catch (error) { console.error('[Stems cache]', error); status(text('cacheClearFailed'), true); }

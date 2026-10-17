@@ -3,6 +3,7 @@ import { createPlaylistEngine, createStretchCache, prefetchStretches, renderArra
 import { encodeWav } from './stem-audio.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
 import { mountSampleBrowser } from './stem-sample-browser.mjs';
+import { createButton } from './ui-button.mjs';
 
 const MIN_ZOOM = 8, MAX_ZOOM = 600;
 // The workspace header's stem palette; user tracks continue in warm tints.
@@ -232,12 +233,9 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
     changed(); draw(); return true;
   }
   const toolbar = node('div', 'pl-toolbar pl-ui');
-  function iconButton(name, title, action) {
-    const control = button('', title, action); control.className = 'pl-icon-button';
-    // Menu entries use the same semantic icon names as every other control.
-    control.innerHTML = globalThis.SCIcons.html(name);
-    return control;
-  }
+  // Every toolbar control is the shared button (ui-button.mjs): orange window and export
+  // buttons, grey tempo tools, and the 32 × 30 cells of the tool grid.
+  const iconButton = (icon, title, action, { variant = 'neutral', size = 'icon' } = {}) => createButton({ icon, title, variant, size, onClick: action });
   // Tool buttons carry a hotkey and a color: a click or the hotkey flashes the button in its
   // color, like FL Studio. The flash animates a pseudo-element's opacity only (compositor-only).
   // `keys` are normalized combos ('m', 'ctrl+d', 'ctrl+shift+z', 'delete'); `repeat` allows key repeat.
@@ -245,8 +243,8 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   function flash(control) {
     try { control.animate([{ opacity: .85 }, { opacity: 0 }], { duration: 300, easing: 'ease-out', pseudoElement: '::after' }); } catch { /* no pseudo-element animations */ }
   }
-  function toolButton({ icon, name, detail = '', key, keys, color, repeat = false }, action) {
-    const control = iconButton(icon, name, () => { flash(control); action(); });
+  function toolButton({ icon, name, detail = '', key, keys, color, repeat = false, variant = 'neutral', size = 'tool' }, action) {
+    const control = iconButton(icon, name, () => { flash(control); action(); }, { variant, size });
     control.title = `${name} (${key})${detail ? ': ' + detail : ''}`;
     control.setAttribute('aria-keyshortcuts', key.replace('Ctrl', 'Control').replace('Del', 'Delete').replace('Supr', 'Delete'));
     control.classList.add('pl-key'); control.style.setProperty('--key-color', color);
@@ -271,8 +269,8 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   // Tap tempo like FL Studio's tapper: BPM is the average of every interval since the first tap;
   // a pause longer than two beats (3 s minimum) starts over. One tap session is one undo step.
   let taps = [], tapTimer = 0, tapUndo = null;
-  const tapButton = button('TAP', t('Tap tempo (T): tap along with the beat and the BPM follows the average; pause to start over', 'Tap tempo (T): tocá al ritmo y el BPM sigue el promedio; una pausa reinicia'), () => {});
-  tapButton.className = 'pl-tap';
+  const tapButton = createButton({ label: 'TAP', variant: 'neutral', title: t('Tap tempo (T): tap along with the beat and the BPM follows the average; pause to start over', 'Tap tempo (T): tocá al ritmo y el BPM sigue el promedio; una pausa reinicia') });
+  tapButton.classList.add('pl-tap');
   const tapInterval = () => taps.length > 1 ? (taps.at(-1) - taps[0]) / (taps.length - 1) : 0;
   const tapWait = () => Math.max(3000, tapInterval() * 2);
   function tapTempo() {
@@ -292,15 +290,15 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   tapButton.onpointerdown = event => { if (event.button === 0) { event.preventDefault(); tapTempo(); } };
   tapButton.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) tapTempo(); } };
   // The A–B loop is 1, 2, 4 or 8 bars; the tempo closest to 120 BPM wins.
-  const fitTempo = button('A–B', t('Tempo from loop: drag a loop on the ruler first; the BPM is set so it lasts 1, 2, 4 or 8 bars', 'Tempo desde el loop: primero arrastrá un loop en la regla; el BPM se ajusta para que dure 1, 2, 4 u 8 compases'), () => {
+  const fitTempo = createButton({ label: 'A–B', variant: 'neutral', title: t('Tempo from loop: drag a loop on the ruler first; the BPM is set so it lasts 1, 2, 4 or 8 bars', 'Tempo desde el loop: primero arrastrá un loop en la regla; el BPM se ajusta para que dure 1, 2, 4 u 8 compases'), onClick: () => {
     if (!loopRange) { report(t('Select a loop on the ruler first.', 'Primero seleccioná un loop en la regla.')); return; }
     const seconds = loopRange.end - loopRange.start;
     const bpm = [1, 2, 4, 8].map(bars => bars * 240 / seconds).filter(value => value >= 20 && value <= 300)
       .sort((a, b) => Math.abs(a - 120) - Math.abs(b - 120))[0];
     if (!bpm) { report(t('The loop is outside the 20–300 BPM range.', 'El loop queda fuera del rango 20–300 BPM.')); return; }
     commit(() => retimePatternClips(state, Math.round(bpm * 100) / 100, isPattern));
-  });
-  fitTempo.className = 'pl-fit-tempo';
+  } });
+  fitTempo.classList.add('pl-fit-tempo');
   const snapLabel = node('label', 'pl-field'), snapSelect = node('select'); snapSelect.setAttribute('aria-label', 'Snap');
   snapLabel.innerHTML = globalThis.SCIcons.html("snap");
   snapLabel.title = snapSelect.title = t('Snap: grid that clips, edges and loops stick to. Hold Alt while dragging to ignore it.', 'Snap: grilla a la que se pegan clips, bordes y loops. Mantené Alt al arrastrar para ignorarla.');
@@ -318,7 +316,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   let sampleBrowser = null;
   const windowKeys = new Map(), windowButtons = new Map();
   function windowButton({ id, icon, name, detail, key, keys, color, toggle }) {
-    const control = toolButton({ icon, name, detail, key, keys, color }, () => toggle(control));
+    const control = toolButton({ icon, name, detail, key, keys, color, variant: 'accent', size: 'icon' }, () => toggle(control));
     control.classList.add('pl-window-tool'); control.setAttribute('aria-pressed', 'false');
     for (const combo of keys) if (/^f\d+$/.test(combo)) windowKeys.set(combo, control);
     windowButtons.set(id, control);
@@ -345,7 +343,7 @@ export function mountPlaylist({ container, windows = [], toolbarHost = container
   const addTrack = toolButton({ icon: ICONS.addTrack, name: t('Add track', 'Agregar pista'), key: 'N', keys: ['n'], color: '#ffd166',
     detail: t('an empty lane for samples and patterns (up to 16 tracks)', 'un carril vacío para samples y patrones (hasta 16 pistas)') },
   () => commit(() => state.tracks.push({ id: uid(), name: `${t('Track', 'Pista')} ${state.tracks.filter(item => !item.stem).length + 1}`, gain: 1, mute: false, solo: false })));
-  const exportButton = iconButton(ICONS.download, t('Download WAV', 'Descargar WAV'), safe(exportMix));
+  const exportButton = iconButton(ICONS.download, t('Download WAV', 'Descargar WAV'), safe(exportMix), { variant: 'accent' });
   exportButton.classList.add('pl-export');
   exportButton.title = t('Download WAV: renders the whole playlist (or the A–B loop) with mute, solo, volume, FXs and EQ into a stereo WAV file', 'Descargar WAV: renderiza toda la playlist (o el loop A–B) con mute, solo, volumen, FXs y EQ en un WAV estéreo');
   // Slice tool, like FL Studio's: a click cuts the clip under the mouse; dragging up or down
