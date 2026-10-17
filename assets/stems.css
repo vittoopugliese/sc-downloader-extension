@@ -8,7 +8,9 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
    library. Pinned (sticky at the top) unless the pin button turns it off. */
 .workspace-header{position:relative;z-index:50;isolation:isolate;border:1px solid #42403d;border-radius:12px;background:radial-gradient(ellipse at 12% 0,#ff70200c,transparent 65%),#202020;box-shadow:0 8px 30px #0002}
 .workspace-header[data-pinned=true]{position:sticky;top:0;box-shadow:0 10px 24px #000b}
-.workspace-header::before{content:'';position:absolute;inset:0 0 auto;height:2px;border-radius:12px 12px 0 0;background:linear-gradient(90deg,var(--vocals) 0 25%,var(--drums) 25% 50%,var(--bass) 50% 75%,var(--other) 75%);opacity:.85}
+/* Stem-colored top edge, inside the border: the box minus its content area leaves a 2px
+   band that follows the inner curve of the corners. */
+.workspace-header::before{content:'';position:absolute;z-index:1;inset:0;padding-top:2px;border-radius:11px;background:linear-gradient(90deg,var(--vocals) 0 25%,var(--drums) 25% 50%,var(--bass) 50% 75%,var(--other) 75%);opacity:.85;pointer-events:none;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 .daw-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0;padding:7px 12px}
 .daw-row-main .transport-bar{flex:1 1 520px;min-width:0}
 .header-pin{display:grid;place-items:center;flex-shrink:0;width:30px;height:30px;padding:0;border-color:transparent;background:none;color:#8d8781}
