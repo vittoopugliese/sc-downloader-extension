@@ -1,10 +1,10 @@
-import { LIMITS, uid, clamp, emptyArrangement, newClip, clipDuration, clipRate, clipPitch, clipEnvelope, slipClip, crossfadeClips, arrangementEnd, splitClip, clipsInRange, validateArrangement, needsStretch, trackAudible, loopSegments, retimePatternClips } from './stem-playlist-core.mjs';
+import { LIMITS, uid, clamp, emptyArrangement, newClip, clipDuration, clipRate, clipPitch, clipEnvelope, slipClip, crossfadeClips, arrangementEnd, snapTime, splitClip, clipsInRange, validateArrangement, needsStretch, trackAudible, loopSegments, retimePatternClips } from './stem-playlist-core.mjs';
 import { createPlaylistEngine, createStretchCache, prefetchStretches, renderArrangement } from './stem-playlist-audio.mjs';
 import { encodeWav } from './stem-audio.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
 import { mountSampleBrowser } from './stem-sample-browser.mjs';
 import { wasOpen } from './stem-module-window.mjs';
-import { createButton } from './ui-button.mjs';
+import { createButton, setButtonContent } from './ui-button.mjs';
 import { createMetronome } from './stem-metronome.mjs';
 import { createKnob } from './ui-knob.mjs';
 import { toast, dismissToast } from './ui-toast.mjs';
@@ -80,14 +80,17 @@ export function contextMenu(event, items) {
   const outside = e => { if (!menu.contains(e.target)) close(); };
   const onKey = e => {
     const list = entries(), index = list.indexOf(document.activeElement);
-    if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); close(); back?.focus?.({ preventScroll: true }); }
+    if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); close(); }
     else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); list[(index + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length]?.focus(); }
     else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); (e.key === 'Home' ? list[0] : list.at(-1))?.focus(); }
     e.stopPropagation();
   };
   function close() {
     if (openMenu?.menu !== menu) return;
+    const inside = menu.contains(document.activeElement);
     openMenu = null; menu.remove();
+    // Keyboard focus goes back where it was, so hotkeys (Ctrl+Z after a delete) keep working.
+    if (inside && back?.isConnected) back.focus?.({ preventScroll: true });
     document.removeEventListener('pointerdown', outside, true); document.removeEventListener('wheel', close, true);
     window.removeEventListener('blur', close); window.removeEventListener('resize', close);
   }
@@ -113,9 +116,9 @@ export function contextMenu(event, items) {
 // separates it and hands the result back with `addStemTracks`.
 export function mountPlaylist({ container, windows = [], windowHome = null, toolbarHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect, onRackSample, onSeparate }) {
   const es = document.documentElement.lang === 'es', t = (en, spanish) => es ? spanish : en;
-  let state = emptyArrangement(), assets = new Map(), selected = null, extra = new Set(), zoom = 48;
+  let state = emptyArrangement(), assets = new Map(), selected = null, extra = new Set(), zoom = 48, snap = .5;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
-  let drag = null, frame, operating = false, liveBefore = null, loopRange = null, marker = 0, rate = 1, rateTimer = 0;
+  let drag = null, ctrlClick = null, frame, operating = false, liveBefore = null, loopRange = null, marker = 0, rate = 1, rateTimer = 0;
   const isPattern = clip => !!assets.get(clip.asset)?.loop;
   // What the engine and the export hear: one plain clip per pass of a looping clip.
   const playbackState = () => ({ ...state, clips: state.clips.flatMap(clip => {
@@ -296,6 +299,20 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   }
   const undo = toolButton({ icon: ICONS.undo, name: t('Undo', 'Deshacer'), detail: t('the last playlist edit', 'la última edición de la playlist'), key: 'Ctrl+Z', keys: ['ctrl+z'], color: '#5aa9ff', repeat: true }, () => travel(false));
   const redo = toolButton({ icon: ICONS.redo, name: t('Redo', 'Rehacer'), key: 'Ctrl+Y', keys: ['ctrl+y', 'ctrl+shift+z'], color: '#5aa9ff', repeat: true }, () => travel(true));
+  // Grid, like FL Studio's snap: clips, edges, cuts, selections, drops and the ruler (marker
+  // and loop) stick to it. Each click goes 1/8 → 1/16 → off; holding Alt places freely.
+  const GRIDS = [[.5, '1/8'], [.25, '1/16'], [0, t('Free', 'Libre')]];
+  const gridButton = toolButton({ icon: '', name: t('Grid', 'Grilla'), key: 'G', keys: ['g'], color: '#9ad4c0' }, () => {
+    snap = GRIDS[(GRIDS.findIndex(([value]) => value === snap) + 1) % GRIDS.length][0]; renderGrid(); draw();
+  });
+  gridButton.classList.add('pl-grid-snap');
+  function renderGrid() {
+    const label = GRIDS.find(([value]) => value === snap)[1];
+    setButtonContent(gridButton, { label }); gridButton.setAttribute('aria-pressed', String(!!snap));
+    gridButton.setAttribute('aria-label', `${t('Grid', 'Grilla')}: ${label}`);
+    gridButton.dataset.scdlTooltip = `${t('Grid', 'Grilla')}: ${label} (G): ${t('click to switch 1/8 → 1/16 → free. Clips, edges, cuts, selections and the ruler stick to it; hold Alt while dragging to place freely.', 'clic para alternar 1/8 → 1/16 → libre. Clips, bordes, cortes, selecciones y la regla se pegan a ella; mantené Alt al arrastrar para moverte libre.')}`;
+  }
+  renderGrid();
   const fileInput = node('input'); fileInput.type = 'file'; fileInput.accept = 'audio/*,.wav,.mp3,.flac,.m4a,.ogg'; fileInput.multiple = true; fileInput.hidden = true;
   fileInput.onchange = safe(async () => { const files = [...fileInput.files]; fileInput.value = ''; await importSamples(files); });
   const importButton = toolButton({ icon: ICONS.import, name: t('Import audio files', 'Importar archivos de audio'), key: 'I', keys: ['i'], color: '#ff7a2f',
@@ -341,7 +358,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   // Slice tool, like FL Studio's: a click cuts the clip under the mouse; dragging up or down
   // cuts every lane the line crosses.
   const sliceButton = toolButton({ icon: ICONS.slice, name: t('Slice tool', 'Herramienta de corte'), key: 'C', keys: ['c'], color: '#ff5d8f',
-    detail: t('click a clip to cut it at the mouse; drag up or down to cut several tracks at once · Esc exits', 'hacé clic en un clip para cortarlo donde está el mouse; arrastrá hacia arriba o abajo para cortar varias pistas a la vez · Esc sale') }, () => setSlicing(!slicing));
+    detail: t('click a clip to cut it at the mouse; drag up or down to cut several tracks at once · cuts follow the grid; Alt cuts freely · Esc exits', 'hacé clic en un clip para cortarlo donde está el mouse; arrastrá hacia arriba o abajo para cortar varias pistas a la vez · los cortes siguen la grilla; Alt corta libre · Esc sale') }, () => setSlicing(!slicing));
   sliceButton.setAttribute('aria-pressed', 'false');
   const pencilButton = toolButton({ icon: ICONS.pencil, name: t('Draw tool', 'Lápiz'), key: 'P', keys: ['p'], color: '#ffad80',
     detail: t('select a sample or clip, then click empty grid space to place it; drag to select a time range', 'seleccioná un sample o clip y hacé clic en la grilla vacía para colocarlo; arrastrá para seleccionar un rango') }, () => setTool('draw'));
@@ -376,7 +393,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const rulerRow = node('div', 'pl-grid-row pl-ruler-row'), corner = node('div', 'pl-track-head', t('CHANNELS', 'CANALES')), ruler = node('div', 'pl-ruler');
   const rulerMarks = node('div', 'pl-ruler-marks'), loopBand = node('div', 'pl-loop-band'), markerLine = node('div', 'pl-marker');
   let rulerKey = '', rulerWidth = 0;
-  ruler.dataset.scdlTooltip = t('Drag on the ruler to create a loop · drag inside the selection to move it · drag its edges to resize · double-click to clear (without a loop: play from the start) · click to seek.', 'Arrastrá en la regla para crear un loop · arrastrá dentro de la selección para moverla · arrastrá sus bordes para ajustar · doble clic para eliminar (sin loop: reproduce desde el inicio) · clic para mover el cursor.');
+  ruler.dataset.scdlTooltip = t('Drag on the ruler to create a loop · drag inside the selection to move it · drag its edges to resize · double-click to clear (without a loop: play from the start) · click to seek · follows the grid; hold Alt to place freely.', 'Arrastrá en la regla para crear un loop · arrastrá dentro de la selección para moverla · arrastrá sus bordes para ajustar · doble clic para eliminar (sin loop: reproduce desde el inicio) · clic para mover el cursor · sigue la grilla; mantené Alt para moverte libre.');
   ruler.setAttribute('aria-label', ruler.dataset.scdlTooltip);
   rulerRow.append(corner, ruler); grid.prepend(rulerRow);
   let loopDrag;
@@ -392,17 +409,17 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     const kind = loopDrag?.kind || loopHit(event);
     ruler.style.cursor = kind === 'create' ? 'crosshair' : kind === 'move' ? (loopDrag ? 'grabbing' : 'grab') : 'ew-resize';
     if (loopDrag?.id !== event.pointerId || (!loopDrag.moved && Math.abs(event.clientX - loopDrag.x) < 4)) return;
-    const at = timeAt(rulerTime(event)), from = timeAt(loopDrag.at);
+    const at = snapAt(rulerTime(event), event.altKey), from = snapAt(loopDrag.at, event.altKey);
     const before = loopDrag.before;
     loopDrag.moved = true;
     if (kind === 'move') {
-      const span = before.end - before.start, start = clamp(timeAt(before.start + rulerTime(event) - loopDrag.at), 0, LIMITS.seconds - span);
+      const span = before.end - before.start, start = clamp(snapAt(before.start + rulerTime(event) - loopDrag.at, event.altKey), 0, LIMITS.seconds - span);
       changeLoop({ start, end: start + span });
     } else if (kind === 'start') changeLoop({ start: clamp(at, 0, before.end - .01), end: before.end });
     else if (kind === 'end') changeLoop({ start: before.start, end: clamp(at, before.start + .01, LIMITS.seconds) });
     else if (Math.abs(at - from) >= .01) changeLoop({ start: Math.min(at, from), end: Math.max(at, from) });
   };
-  ruler.onpointerup = event => { if (loopDrag?.id !== event.pointerId) return; if (!loopDrag.moved) { seek(rulerTime(event)); marker = position; renderLoopBand(); } loopDrag = null; ruler.releasePointerCapture(event.pointerId); };
+  ruler.onpointerup = event => { if (loopDrag?.id !== event.pointerId) return; if (!loopDrag.moved) { seek(snapAt(rulerTime(event), event.altKey)); marker = position; renderLoopBand(); } loopDrag = null; ruler.releasePointerCapture(event.pointerId); };
   ruler.onpointercancel = () => { if (loopDrag) changeLoop(loopDrag.before); loopDrag = null; };
   // Double-click clears the loop; without one it clears the marker and plays from the top.
   ruler.ondblclick = () => {
@@ -416,7 +433,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     if (index >= 0 || !nearest || !list.length) return index;
     return y < list[0].getBoundingClientRect().top ? 0 : list.length - 1;
   };
-  const sliceTime = event => timeAt((event.clientX - lanes()[0].getBoundingClientRect().left) / zoom);
+  const sliceTime = event => snapAt((event.clientX - lanes()[0].getBoundingClientRect().left) / zoom, event.altKey);
   function showSlice(at, from, to) {
     const list = lanes(), origin = grid.getBoundingClientRect();
     const top = list[Math.min(from, to)].getBoundingClientRect().top, bottom = list[Math.max(from, to)].getBoundingClientRect().bottom;
@@ -577,7 +594,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const fitButton = toolButton({ icon: ICONS.fit, name: t('Show the whole arrangement', 'Ver todo el arreglo'), detail: t('fits every clip in view', 'ajusta el zoom para ver todos los clips'), key: 'F', keys: ['f'], color: '#e6e1da' }, fit);
   // One row of tools in groups: pointer tools, cut/copy/delete, clip effects, history, zoom, add.
   const tools = node('div', 'pl-tools');
-  const toolGroups = [[pencilButton, selectButton, sliceButton], [split, duplicate, remove], [muteClip, reverseClip, crossfade], [undo, redo], [zoomOut, zoomIn, fitButton], [importButton, addTrack]];
+  const toolGroups = [[pencilButton, selectButton, sliceButton], [split, duplicate, remove], [muteClip, reverseClip, crossfade], [undo, redo, gridButton], [zoomOut, zoomIn, fitButton], [importButton, addTrack]];
   for (const group of toolGroups.slice(1)) group[0].classList.add('pl-tool-group');
   tools.append(...toolGroups.flat());
   inspector.append(clipVolume.wrap, pitch.wrap, fine.wrap, speed.wrap, ...fades.map(f => f.wrap), tools);
@@ -604,7 +621,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
   // Help stays available in the header without automatically covering the timeline.
-  const hintText = t('P: pencil · select a sample or clip, then click empty grid space to draw · Q: select time, including silence · Ctrl+C/V: copy/paste at cursor · Ctrl+D: repeat selection · drag clips to move, edges to trim · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 tracks / 5 minutes.', 'P: lápiz · elegí un sample o clip y hacé clic en la grilla vacía para dibujar · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar en el cursor · Ctrl+D: repetir selección · arrastrá clips para mover, bordes para recortar · Espacio reproduce · S corta en el cursor · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 pistas / 5 minutos.');
+  const hintText = t('P: pencil · select a sample or clip, then click empty grid space to draw · Q: select time, including silence · Ctrl+C/V: copy/paste at cursor · Ctrl+D: repeat selection · drag clips to move, edges to trim · G: grid 1/8, 1/16 or free · Alt places freely · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 tracks / 5 minutes.', 'P: lápiz · elegí un sample o clip y hacé clic en la grilla vacía para dibujar · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar en el cursor · Ctrl+D: repetir selección · arrastrá clips para mover, bordes para recortar · G: grilla 1/8, 1/16 o libre · Alt mueve libre · Espacio reproduce · S corta en el cursor · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 pistas / 5 minutos.');
   function showHint() {
     toast({ id: 'playlist-hint', variant: 'info', title: t('Playlist shortcuts', 'Atajos de la playlist'), message: hintText, duration: 12000 });
   }
@@ -670,9 +687,8 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       return added;
     } finally { operating = false; dismissToast('playlist-task'); }
   }
-  // Placement is free, like FL Studio with snap off: clips, edges, loops and selections
-  // land exactly where the mouse is.
-  const timeAt = seconds => clamp(seconds, 0, LIMITS.seconds);
+  // Times stick to the grid unless it is off or Alt is held (`free`).
+  const snapAt = (seconds, free = false) => clamp(free || !snap ? seconds : snapTime(seconds, state.bpm, snap), 0, LIMITS.seconds);
   // One canvas follows the visible viewport; editors and hit targets persist.
   function paintSoon() {
     paintFrame ||= requestAnimationFrame(() => { paintFrame = 0; paint(); });
@@ -757,7 +773,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       drawWave(ctx, clip, left + 1, top, clipWidth - 2, 44, width);
     }
     ctx.globalAlpha = 1;
-    for (const [id, item] of clipViews) if (!visible.has(id)) { item.remove(); clipViews.delete(id); }
+    for (const [id, item] of clipViews) if (!visible.has(id)) { keepFocus(item); item.remove(); clipViews.delete(id); }
   }
   function userHead(track, index) {
     const head = node('div', 'pl-track-head');
@@ -782,6 +798,8 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     const extent = Math.min(LIMITS.seconds, Math.max(16, arrangementEnd(state) + 8, timeSelection?.end || 0));
     const width = Math.max(scroll.clientWidth - TRACK_HEAD, extent * zoom);
     grid.style.width = (width + TRACK_HEAD) + 'px'; grid.style.setProperty('--beat', (60 / state.bpm * zoom) + 'px');
+    const step = snap * 60 / state.bpm * zoom;
+    grid.style.setProperty('--grid-step', (step >= 6 ? step : 60 / state.bpm * zoom) + 'px');
     ruler.style.width = width + 'px'; rulerWidth = width;
     if (loopBand.parentElement !== ruler) ruler.append(rulerMarks, loopBand, markerLine);
     renderRuler(); renderLoopBand();
@@ -797,7 +815,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
         lane.onpointerdown = event => { if (event.target === lane) beginMarquee(event); };
         lane.ondragover = event => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; };
         lane.ondrop = safe(async event => {
-          event.preventDefault(); const at = timeAt((event.clientX - lane.getBoundingClientRect().left) / zoom);
+          event.preventDefault(); const at = snapAt((event.clientX - lane.getBoundingClientRect().left) / zoom, event.altKey);
           const browsed = sampleBrowser?.resolveDrop(event.dataTransfer);
           if (browsed) { await importSamples(browsed, track.id, at); return; }
           if (event.dataTransfer.files.length) { await importSamples([...event.dataTransfer.files], track.id, at); return; }
@@ -821,7 +839,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     const shelfAssets = [...assets.values()];
     const nextShelf = shelfAssets.map(a => a.id + ':' + a.name + ':' + (a.group || '')).join('|');
     if (nextShelf !== shelfKey) {
-      shelfKey = nextShelf; shelf.replaceChildren();
+      shelfKey = nextShelf; keepFocus(shelf); shelf.replaceChildren();
       const colors = groupColors(shelfAssets);
       for (const asset of shelfAssets) {
         const b = button(asset.name, t('Click to draw this sample · double-click: add at cursor · drag onto a track', 'Clic para dibujar este sample · doble clic: agregar en el cursor · arrastrá a una pista'), () => {
@@ -850,12 +868,18 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     item.append(node('span', 'pl-clip-title'));
     for (const edge of ['left', 'right']) { const handle = node('span', `pl-edge pl-edge-${edge}`); handle.dataset.edge = edge; handle.dataset.scdlTooltip = t('Drag to trim', 'Arrastrar para recortar'); item.append(handle); }
     // Remembered for the contextmenu event, which older Chrome versions fire without pointerType.
-    item.onpointerdown = event => { item.dataset.pointer = event.pointerType; beginDrag(event, state.clips.find(c => c.id === id), item); };
+    item.onpointerdown = event => {
+      item.dataset.pointer = event.pointerType;
+      // macOS turns Ctrl+click into a right click too: that click toggles the selection only.
+      ctrlClick = event.button === 0 && event.ctrlKey ? id : null;
+      beginDrag(event, state.clips.find(c => c.id === id), item);
+    };
     // Like FL Studio: right click on the name bar opens the menu, on the waveform removes the clip.
     // The keyboard menu key (no pointer position) and touch long-press always open the menu,
     // so a long press never deletes by accident.
     item.oncontextmenu = event => {
       const clip = state.clips.find(c => c.id === id); if (!clip) return;
+      if (ctrlClick === id && event.ctrlKey) { event.preventDefault(); ctrlClick = null; return; }
       // Measured by height: the trim handles cover the name bar's ends too.
       const keyboard = !event.clientX && !event.clientY, onHeader = event.clientY < item.querySelector('.pl-clip-title').getBoundingClientRect().bottom;
       const touch = ['touch', 'pen'].includes(event.pointerType || item.dataset.pointer);
@@ -867,7 +891,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       if (event.key === 'Enter') { pick(clip.id); updateSelection(); return; }
       if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
       event.preventDefault(); event.stopPropagation(); pick(clip.id);
-      commit(() => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') clip.at = clamp(clip.at + (event.key === 'ArrowLeft' ? -1 : 1) * 60 / state.bpm * .25, 0, LIMITS.seconds - clipDuration(clip));
+      commit(() => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') clip.at = clamp(clip.at + (event.key === 'ArrowLeft' ? -1 : 1) * 60 / state.bpm * (snap || .25), 0, LIMITS.seconds - clipDuration(clip));
         else clip.track = state.tracks[clamp(index + (event.key === 'ArrowUp' ? -1 : 1), 0, state.tracks.length - 1)].id; });
       grid.querySelector(`.pl-clip[data-clip="${clip.id}"]`)?.focus();
     };
@@ -971,7 +995,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       if (!moved && Math.hypot(x1 - x0, y1 - y0) < 4) return;
       moved = true;
       const left = Math.min(x0, x1), right = Math.max(x0, x1), top = Math.min(y0, y1), bottom = Math.max(y0, y1);
-      const from = timeAt((left - TRACK_HEAD) / zoom), to = timeAt((right - TRACK_HEAD) / zoom);
+      const from = snapAt((left - TRACK_HEAD) / zoom, move.altKey), to = snapAt((right - TRACK_HEAD) / zoom, move.altKey);
       const tracks = new Set(state.tracks.filter(track => { const r = rowViews.get(track.id).lane.getBoundingClientRect(); return r.top - origin.top <= bottom && r.bottom - origin.top >= top; }).map(track => track.id));
       timeSelection = !add && to > from ? { start: from, end: to, tracks: [...tracks] } : null;
       const ids = [...new Set([...base, ...state.clips.filter(c => tracks.has(c.track) && c.at < to && c.at + clipDuration(c) > from).map(c => c.id)])];
@@ -983,7 +1007,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       if (lane.hasPointerCapture(event.pointerId)) lane.releasePointerCapture(event.pointerId);
       if (cancel) { timeSelection = previous.range; selected = previous.selected; extra = previous.extra; updateSelection(); return; }
       if (!moved && !add) {
-        const at = timeAt((x0 - TRACK_HEAD) / zoom);
+        const at = snapAt((x0 - TRACK_HEAD) / zoom, event.altKey);
         if (!selecting && drawSource && assets.has(drawSource.asset)) placeDrawSource(lane.dataset.track, at);
         else { pick(null); seek(at); updateSelection(); }
       }
@@ -1007,22 +1031,22 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       if (editMode === 'slip' && !drag.edge) {
         Object.assign(clip, slipClip(original, delta * (original.reverse ? -1 : 1), length));
       } else if (editMode === 'stretch' && drag.edge === 'right') {
-        const end = timeAt(original.at + clipDuration(original) + delta);
+        const end = snapAt(original.at + clipDuration(original) + delta, move.altKey);
         const pitchRate = original.keepLength ? 1 : 2 ** (clipPitch(original) / 12);
         clip.speed = clamp((original.out - original.in) / Math.max(.01, end - original.at) / pitchRate, .25, 4);
         if (clip.at + clipDuration(clip) > LIMITS.seconds) clip.speed = (clip.out - clip.in) / (LIMITS.seconds - clip.at) / pitchRate;
       } else if (drag.edge === 'right') {
-        const end = timeAt(original.at + clipDuration(original) + delta);
+        const end = snapAt(original.at + clipDuration(original) + delta, move.altKey);
         if (original.reverse) clip.in = clamp(original.out - (end - original.at) * speedRate, Math.max(0, original.out - (LIMITS.seconds - clip.at) * speedRate), original.out - .01 * speedRate);
         else clip.out = clamp(original.in + (end - original.at) * speedRate, original.in + .01 * speedRate, Math.min(length, original.in + (LIMITS.seconds - clip.at) * speedRate));
       } else if (drag.edge === 'left') {
         const room = original.reverse ? length - original.out : original.in;
-        const next = clamp(timeAt(original.at + delta), Math.max(0, original.at - room / speedRate), original.at + clipDuration(original) - .01);
+        const next = clamp(snapAt(original.at + delta, move.altKey), Math.max(0, original.at - room / speedRate), original.at + clipDuration(original) - .01);
         clip.at = next;
         if (original.reverse) clip.out = original.out - (next - original.at) * speedRate;
         else clip.in = original.in + (next - original.at) * speedRate;
       } else {
-        clip.at = clamp(timeAt(original.at + delta), 0, LIMITS.seconds - clipDuration(clip));
+        clip.at = clamp(snapAt(original.at + delta, move.altKey), 0, LIMITS.seconds - clipDuration(clip));
         const lane = lanes.find(e => { const box = e.getBoundingClientRect(); return move.clientY >= box.top && move.clientY < box.bottom; });
         if (lane) { clip.track = lane.dataset.track; item.style.transform = `translateY(${lane.getBoundingClientRect().top - home}px)`; }
       }
@@ -1137,8 +1161,29 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     const asset = assets.get(track.stem ? `audio-${track.stem}` : track.source);
     return asset ? { id: asset.id, name: asset.name, buffer: asset.buffer } : null;
   }
-  for (const root of new Set([container, toolbar])) root.addEventListener('keydown', event => {
-    if (event.target.closest('input,select,textarea') || event.target.isContentEditable) return;
+  // Keys reach the playlist while it is the last place the user worked in, even when the
+  // focused element went away (a deleted clip, a closed menu): focus then sits on <body>.
+  let owned = false;
+  const owns = target => container.contains(target) || toolbar.contains(target);
+  const claim = event => {
+    const target = event.target;
+    // Menus, toasts and tooltips float above everything and do not change the owner.
+    if (!(target instanceof Element) || target.closest('.pl-menu,.row-menu-list,.toastify,#scdl-fast-tooltip')) return;
+    owned = owns(target);
+  };
+  document.addEventListener('pointerdown', claim, true); document.addEventListener('focusin', claim, true);
+  function keepFocus(element) { if (element.contains(document.activeElement)) scroll.focus({ preventScroll: true }); }
+  const onPageKey = event => {
+    if (!owned || event.defaultPrevented) return;
+    // Alt alone must not move focus to the browser menu while it bypasses the grid.
+    if (event.key === 'Alt') { event.preventDefault(); return; }
+    if (event.type !== 'keydown' || (event.target !== document.body && event.target !== document.documentElement)) return;
+    scroll.focus({ preventScroll: true }); onKey(event);
+  };
+  document.addEventListener('keydown', onPageKey); document.addEventListener('keyup', onPageKey);
+  for (const root of new Set([container, toolbar])) root.addEventListener('keydown', onKey);
+  function onKey(event) {
+    if (event.target.closest?.('input,select,textarea') || event.target.isContentEditable) return;
     const modifier = event.ctrlKey || event.metaKey;
     if (event.altKey) return;
     if (event.code === 'Space') { event.preventDefault(); event.stopPropagation(); if (!event.repeat) safe(space)(); return; }
@@ -1147,10 +1192,10 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     else if (event.key === 'Escape') { event.preventDefault(); setTool('draw'); pick(null); updateSelection(); }
     // An empty selection keeps the previous copy, like FL Studio.
     else if (combo === 'ctrl+c') { event.preventDefault(); clipboard = captureSelection() || clipboard; }
-    else if (combo === 'ctrl+v') { event.preventDefault(); if (clipboard) pasteSelection(clipboard, timeAt(position), activeTrack); }
+    else if (combo === 'ctrl+v') { event.preventDefault(); if (clipboard) pasteSelection(clipboard, snapAt(position), activeTrack); }
     else if (combo === 'ctrl+a') { event.preventDefault(); timeSelection = null; selected = state.clips[0]?.id ?? null; extra = new Set(state.clips.slice(1).map(c => c.id)); updateSelection(); }
     else if (combo === 't') { event.preventDefault(); if (!event.repeat) tapTempo(); }
-  });
+  }
   function animate() {
     const at = now(); time.textContent = clock(at);
     const head = grid.querySelector('.pl-playhead'); if (head) head.style.left = `${TRACK_HEAD + at * zoom}px`;
@@ -1308,7 +1353,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     },
     dispose() {
       disposed = true; exporting?.abort(); metronome.stop(); engine?.dispose(); cache.dispose(); viewObserver.disconnect(); sampleBrowser?.dispose();
-      document.removeEventListener('keydown', onWindowKey); cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();
+      document.removeEventListener('keydown', onWindowKey); document.removeEventListener('keydown', onPageKey); document.removeEventListener('keyup', onPageKey); document.removeEventListener('pointerdown', claim, true); document.removeEventListener('focusin', claim, true); cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();
     },
   };
 }

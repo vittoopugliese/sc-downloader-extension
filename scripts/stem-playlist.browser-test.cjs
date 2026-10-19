@@ -62,13 +62,13 @@ const { chromium } = require('playwright');
       assert.equal(await control.locator('svg').count(), 1);
       assert.match(await control.getAttribute('data-scdl-tooltip'), new RegExp('^' + name + (name === 'Export WAV' ? '' : ' \\([A-Z]\\d*\\)') + ': '));
     }
-    // One row of sixteen tools, each with a hotkey; window buttons live in the transport bar.
+    // One row of seventeen tools, each with a hotkey; window buttons live in the transport bar.
     const tools = playlist.locator('.pl-tools > button');
-    assert.equal(await tools.count(), 16);
+    assert.equal(await tools.count(), 17);
     assert.equal(await transport.locator('.pl-window-tool').count(), 6);
     assert.match(await transport.locator('.pl-window-tool').first().evaluate(e => getComputedStyle(e).backgroundImage), /linear-gradient/, 'Window buttons share the accent button');
     assert.equal(new Set(await tools.evaluateAll(nodes => nodes.map(n => Math.round(n.getBoundingClientRect().top)))).size, 1);
-    assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 16);
+    assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 17);
     assert.match(await transport.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundImage), /linear-gradient/);
     // Every header button shares one size.
     assert.deepEqual([...new Set(await transport.locator('button.ui-btn--icon').evaluateAll(nodes => nodes.filter(n => n.offsetParent).map(n => n.offsetWidth + 'x' + n.offsetHeight)))], ['34x32']);
@@ -89,6 +89,28 @@ const { chromium } = require('playwright');
     assert.deepEqual(await selection(), { left: 36, width: 60 });
     await dragRuler(96, 84);
     assert.deepEqual(await selection(), { left: 36, width: 48 });
+    // The grid (1/8 by default: 12 px at 120 BPM and 48 px/s) applies to the ruler; Alt is free.
+    const gridButton = playlist.locator('.pl-grid-snap');
+    assert.equal(await gridButton.textContent(), '1/8');
+    assert.equal(await gridButton.getAttribute('aria-pressed'), 'true');
+    // Each check starts from no loop (double-click clears it), so the drag creates one.
+    const freshLoop = async () => { await ruler.dblclick({ position: { x: 400, y: 14 } }); await dragRuler(151, 185); };
+    await freshLoop();
+    assert.deepEqual(await selection(), { left: 156, width: 24 }, 'Loop edges stick to 1/8');
+    await page.keyboard.down('Alt'); await freshLoop(); await page.keyboard.up('Alt');
+    assert.deepEqual(await selection(), { left: 151, width: 34 }, 'Alt drags the loop freely');
+    await gridButton.click();
+    assert.equal(await gridButton.textContent(), '1/16');
+    await freshLoop();
+    assert.deepEqual(await selection(), { left: 150, width: 36 }, 'Loop edges stick to 1/16');
+    await gridButton.click();
+    assert.equal(await gridButton.getAttribute('aria-pressed'), 'false');
+    await freshLoop();
+    assert.deepEqual(await selection(), { left: 151, width: 34 }, 'Without a grid the loop is free');
+    await gridButton.click();
+    assert.equal(await gridButton.textContent(), '1/8', 'The grid cycles back to 1/8');
+    await ruler.dblclick({ position: { x: 400, y: 14 } });
+    await dragRuler(36, 84);
     // The marker follows the loop start, then the last ruler click; it stays when the loop is cleared.
     const marker = () => playlist.locator('.pl-marker').evaluate(e => parseFloat(e.style.left));
     assert.equal(await marker(), 36);
@@ -166,8 +188,8 @@ const { chromium } = require('playwright');
       for (let i = first + 22051; i < first + 66150; i++) if (data[i - 1] < 0 && data[i] >= 0) crossings++;
       return { duration: buffer.duration, first: first / buffer.sampleRate, frequency: crossings / 1 };
     }, [...fs.readFileSync(file)]);
-    assert.ok(Math.abs(result.duration - 2.125) < .01, `export length ${result.duration}`);
-    assert.ok(Math.abs(result.first - .125) < .01, `clip moved by one 1/16 step: ${result.first}`);
+    assert.ok(Math.abs(result.duration - 2.25) < .01, `export length ${result.duration}`);
+    assert.ok(Math.abs(result.first - .25) < .01, `clip moved by one grid step (1/8): ${result.first}`);
     assert.ok(Math.abs(result.frequency - 880) < 20, `exported pitch ${result.frequency}`);
     // The timeline scrollbar spans the lanes only; channel headers cover clips and the playhead.
     const [scrollBox, barBox] = await Promise.all([playlist.locator('.pl-scroll').boundingBox(), playlist.locator('.pl-hbar').boundingBox()]);
@@ -211,7 +233,7 @@ const { chromium } = require('playwright');
     await page.mouse.click(clipBox.x + clipBox.width / 2, clipBox.y + clipBox.height - 6, { button: 'right' });
     assert.equal(await menu.count(), 0, 'Right click on the waveform opens no menu');
     assert.equal(await playlist.locator('.pl-clip').count(), 0, 'Right click on the waveform removes the clip');
-    await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
     assert.equal(await playlist.locator('.pl-clip').count(), 1, 'Undo brings the clip back');
     // A touch long-press on the waveform opens the menu instead of deleting.
     await playlist.locator('.pl-clip').first().evaluate(item => {
@@ -276,7 +298,8 @@ const { chromium } = require('playwright');
     await menu.getByRole('menuitem', { name: 'Delete from project' }).click();
     assert.equal(await playlist.locator('.pl-shelf button', { hasText: 'tone.wav' }).count(), 0);
     assert.equal(await rackTracks.count(), 0, 'No track has an instrument any more');
-    await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('Control+z');
+    // No click on the timeline first: the playlist keeps its hotkeys after the menu closes.
+    await page.keyboard.press('Control+z');
     await playlist.locator('.pl-shelf button', { hasText: 'tone.wav' }).first().waitFor();
     assert.ok(await rackTracks.count() >= 1, 'Undo restores the sample and the instrument');
     assert.deepEqual(errors, []);

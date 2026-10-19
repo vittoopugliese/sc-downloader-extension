@@ -35,7 +35,7 @@ el Chrome del usuario ni publicado.
 - **Seleccionar rango (Q)** permite arrastrar desde cualquier punto, incluso
   sobre un clip. También se puede iniciar el arrastre desde espacio vacío con
   el lápiz. La selección queda visible y conserva el silencio de ambos lados,
-  además de las pistas abarcadas. Alt omite el snap.
+  además de las pistas abarcadas. Alt omite el snap. La grilla es 1/8 por defecto; el botón junto a Deshacer/Rehacer (G) alterna 1/8 → 1/16 → libre.
 - **Ctrl+C / Ctrl+V** copia y pega en el cursor. Con Q, clic en una pista vacía
   fija el tiempo y la pista de destino; también se puede mover el cursor desde
   la regla. **Ctrl+D** repite todo el rango inmediatamente después y selecciona

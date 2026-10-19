@@ -96,6 +96,25 @@ const { chromium } = require('playwright');
     assert.equal((await state()).clips.length, 2, 'Drawing is one undo step');
     await page.keyboard.press('Control+y'); assert.equal((await state()).clips.length, 3);
     await page.keyboard.press('Control+z');
+    // Dragging a clip sticks its start to the 1/8 grid (.25 s at 120 BPM); Alt moves it freely.
+    const dragClip = async (from, to, alt) => {
+      const a = await lanePoint(from), b = await lanePoint(to);
+      if (alt) await page.keyboard.down('Alt');
+      await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move(b.x, b.y, { steps: 6 }); await page.mouse.up();
+      if (alt) await page.keyboard.up('Alt');
+      await settle();
+    };
+    // Zoomed in so the 0.1 s clip is wider than its two trim handles.
+    for (let i = 0; i < 3; i++) { await ui.getByLabel('Zoom in', { exact: true }).click(); await settle(); }
+    await scroll.evaluate(el => { el.scrollLeft = 0; }); await settle();
+    await dragClip(1.05, 1.42, false);
+    assert.deepEqual((await state()).clips.map(c => c.at), [.5, 1.25], 'The clip lands on the grid');
+    await dragClip(1.3, 1.37, true);
+    assert.ok(Math.abs((await state()).clips[1].at - 1.32) < .01, 'Alt places the clip freely: ' + (await state()).clips[1].at);
+    await page.keyboard.press('Control+z'); await page.keyboard.press('Control+z');
+    assert.deepEqual((await state()).clips.map(c => c.at), [.5, 1]);
+    for (let i = 0; i < 3; i++) { await ui.getByLabel('Zoom out', { exact: true }).click(); await settle(); }
+    await scroll.evaluate(el => { el.scrollLeft = 0; }); await settle();
     // Range 0..2 has silence on both sides of the snares; repeat it twice.
     await ui.getByLabel('Time selection tool', { exact: true }).click();
     await range(0, 2);

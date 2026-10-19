@@ -70,7 +70,7 @@
 .pl-track-controls{display:flex;align-items:center;gap:4px}
 .pl-ui .pl-track-controls button:not(.ui-knob-dial){min-height:22px;padding:1px 6px;font-size:9px}
 .pl-grid-row.is-silent .pl-lane{opacity:.45}
-.pl-lane{position:relative;flex-shrink:0;min-height:76px;border-bottom:1px solid #2c2b29;background:repeating-linear-gradient(90deg,#ffffff07 0 1px,transparent 1px var(--beat)),repeating-linear-gradient(90deg,#ffffff12 0 1px,transparent 1px calc(var(--beat)*4)),var(--pl-night)}
+.pl-lane{position:relative;flex-shrink:0;min-height:76px;border-bottom:1px solid #2c2b29;background:repeating-linear-gradient(90deg,#ffffff04 0 1px,transparent 1px var(--grid-step,var(--beat))),repeating-linear-gradient(90deg,#ffffff07 0 1px,transparent 1px var(--beat)),repeating-linear-gradient(90deg,#ffffff12 0 1px,transparent 1px calc(var(--beat)*4)),var(--pl-night)}
 .pl-ruler{position:relative;flex-shrink:0;border-bottom:1px solid var(--pl-edge);background:var(--pl-panel);color:#97938e;font:10px ui-monospace,monospace;cursor:crosshair;touch-action:none;user-select:none}
 .pl-ruler span{position:absolute;top:6px;padding-left:6px;border-left:1px solid #5a554f}
 .pl-loop-band{position:absolute;top:0;bottom:0;border-inline:2px solid var(--orange);background:#ff550026;pointer-events:none}
@@ -113,6 +113,9 @@
 .pl-tools{display:flex;gap:4px;min-width:0;max-width:100%;margin-left:auto;padding:3px 2px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:#4a4642 transparent}
 .pl-tools>*{flex-shrink:0}
 .pl-tools .pl-tool-group{margin-left:6px}
+/* Grid toggle: its value (1/8, 1/16, Free) is the label. */
+.pl-tools .pl-grid-snap{width:38px;padding:0}
+.pl-tools .pl-grid-snap .ui-btn-label{font-size:10px;letter-spacing:0}
 /* Clip inspector knobs run 20% under the shared md knob so the tools fit beside them.
    A fixed width keeps changing values from moving the row. */
 .pl-inspector .ui-knob{--knob-size:26px;--knob-tick-top:2.5px;--knob-tick-height:7px;--knob-tick-origin:9.5px;gap:3px;width:54px;min-width:0}
