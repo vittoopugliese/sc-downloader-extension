@@ -175,7 +175,7 @@ test('the shipping allow-list contains the analyzer and every local runtime depe
   const packaging = fs.readFileSync(new URL('scripts/package-extension.ps1', root), 'utf8');
   const list = packaging.match(/\$packageItems = @\(([\s\S]*?)\n\s*\)/)[1];
   const items = [...list.matchAll(/"([^"]+)"/g)].map(match => match[1]);
-  const required = ['stems.html', 'assets/stems.css', 'scripts/stems-page.mjs', 'scripts/stem-audio.mjs',
+  const required = ['stems.html', 'assets/stems.css', 'scripts/stems-page.mjs', 'scripts/stem-output-monitor.mjs', 'scripts/stem-audio.mjs',
     'scripts/stem-presets.mjs', 'scripts/stem-library-ui.mjs', 'scripts/stem-tone-processor.mjs',
     'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/local-audio-output.mjs', 'scripts/icons.js', 'scripts/icons-client.js',
     'scripts/stem-pattern-core.mjs', 'scripts/stem-note-recording.mjs', 'scripts/stem-instruments.mjs', 'scripts/stem-channel-rack.mjs', 'scripts/stem-piano.mjs',

@@ -40,8 +40,10 @@ export function createEqualizedOutput({ audioContext }) {
     snapshot() { return { eq: equalizer.normalize(settings), initialized: !!graph, available: true, bypassed: false }; },
     setEqualizer(value) { settings = equalizer.validate(value); graph?.apply(settings); },
     analyseEqualizer() { return graph || null; },
-    observeOutput(listener) {
-      prepare(); listener(context, graph.output); listeners.add(listener);
+    observeOutput(listener, { prepare: initialize = true } = {}) {
+      if (initialize) prepare();
+      if (graph) listener(context, graph.output);
+      listeners.add(listener);
       return () => listeners.delete(listener);
     },
     dispose() { listeners.clear(); effects.dispose(); graph?.dispose(); graph = null; },

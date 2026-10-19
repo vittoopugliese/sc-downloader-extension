@@ -74,6 +74,7 @@ $packageItems = @(
     "scripts/stem-model.mjs",
     "scripts/stem-worker.mjs",
     "scripts/stems-page.mjs",
+    "scripts/stem-output-monitor.mjs",
     "scripts/stem-presets.mjs",
     "scripts/stem-library-ui.mjs",
     "scripts/stem-loop.mjs",

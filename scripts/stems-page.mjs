@@ -14,6 +14,7 @@ import { toast, dismissToast, configureToasts } from './ui-toast.mjs';
 import { mountModuleWindow } from './stem-module-window.mjs';
 import { mountEffects } from './stem-effects.mjs';
 import { spectrumOf } from './stem-spectrum.mjs';
+import { mountOutputMonitor } from './stem-output-monitor.mjs';
 
 const translations = {
   en: {
@@ -333,27 +334,8 @@ const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('trans
   onTransport(active) {
     if (active) instruments?.stop();
     toneNode?.port.postMessage({ rate, keepTone, reset: true }); playLabel(active); updatePlayheads();
-    metersActive = active; if (active) runMeters();
+    outputMonitor.setActive(active);
   } });
-// Header meters: each stem's peak lights its wave, falling back smoothly after the peak.
-const meters = [...document.querySelectorAll('.preview-track')].map(row => ({ stem: row.dataset.channel, wave: row.querySelector('.preview-wave'), level: 0 }));
-let meterFrame = 0, metersActive = false;
-function runMeters() {
-  if (meterFrame) return;
-  const tick = () => {
-    let lit = false;
-    for (const meter of meters) {
-      const peak = playlist.trackLevel(meter.stem);
-      const target = peak > 0 ? Math.min(1, Math.max(0, (20 * Math.log10(peak) + 48) / 48)) : 0;
-      meter.level = target >= meter.level ? target : meter.level * .86;
-      if (meter.level < .01) meter.level = 0;
-      meter.wave.style.setProperty('--level', meter.level.toFixed(3));
-      lit ||= meter.level > 0;
-    }
-    meterFrame = lit || metersActive ? requestAnimationFrame(tick) : 0;
-  };
-  meterFrame = requestAnimationFrame(tick);
-}
 // Pin: the header stays at the top while scrolling, or scrolls away with the page.
 const header = document.querySelector('.workspace-header'), pin = $('header-pin');
 document.querySelector('.workspace-header .brand').dataset.scdlTooltip = text('workspace');
@@ -372,18 +354,21 @@ pin.onclick = () => setPinned(header.dataset.pinned !== 'true');
 // Toasts drop in under the header while it is on screen.
 configureToasts({ top: () => Math.max(0, header.getBoundingClientRect().bottom - 7), closeLabel: say('Close', 'Cerrar') });
 const mixOutput =createEqualizedOutput({ audioContext: () => context ||= new AudioContext({ sampleRate: SAMPLE_RATE }) });
+const outputMonitor = mountOutputMonitor({ element: $('output-monitor'), output: mixOutput, trackLevel: key => playlist.trackLevel(key), locale });
 // Tracks are instruments: their own audio is what the channel rack cuts into pads.
 const instrumentTracks = () => playlist.instrumentSources().map(track => ({ ...track,
   name: STEMS.includes(track.key) || track.key === 'original' ? text(track.key) : track.name }));
 const instruments = createInstruments({ playlist, tracks: instrumentTracks, rate: () => rate, report: playbackError,
   changed: ({ auto = false } = {}) => { if (!auto) libraryUI?.changed(); },
   // A pattern preview plays through its track's insert, then Keep Tone and the master.
-  async audio(key) { const io = key ? await playlist.trackAudio(key) : await playlistAudio(); toneNode?.port.postMessage({ rate, keepTone, reset: true }); return io; } });
+  async audio(key) { const io = key ? await playlist.trackAudio(key) : await playlistAudio(); outputMonitor.wake(); toneNode?.port.postMessage({ rate, keepTone, reset: true }); return io; } });
+instruments.on(kind => { if (kind === 'transport') outputMonitor.setActive(playlist.playing() || instruments.playing()); });
 // Pads and piano notes are auditions: they skip the playlist fader and Keep Tone, but go
 // through their track's EQ and then the master, like an FL Studio mixer insert.
 const auditionBuses = new Map();
 function auditionInput(key) {
   const context = mixOutput.getPlaybackContext();
+  outputMonitor.wake();
   if (!key) return mixOutput.input();
   let bus = auditionBuses.get(key);
   if (!bus || bus.context !== context) {
@@ -1029,6 +1014,7 @@ function animate() {
 }
 animate();
 window.addEventListener('pagehide', () => {
+  outputMonitor.dispose();
   playlist.dispose();
   effectsUI.dispose(); equalizerUI.dispose(); recorderUI.dispose(); mixOutput.dispose();
   cancelAnimationFrame(animationFrame);
