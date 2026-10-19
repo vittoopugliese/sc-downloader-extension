@@ -35,13 +35,13 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 /* The wave is dim; --level (set while playing) lights it from the left. */
 .preview-wave{position:relative;opacity:1;background:repeating-linear-gradient(90deg,color-mix(in srgb,currentColor 32%,transparent) 0 2px,transparent 2px 4px)}
 .preview-wave::after{content:'';position:absolute;inset:0 auto 0 0;width:calc(var(--level,0) * 100%);background:repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 4px);background-size:inherit}
-.header-library{display:flex;align-items:center;gap:10px;flex:2 1 420px;min-width:0}
+.header-library{display:flex;align-items:center;gap:10px;flex:0 1 auto;min-width:0}
 .header-library .preset-toolbar{flex:1;min-width:0}
 .preset-toolbar{display:flex;gap:6px;min-width:0}
 .preset-toolbar select{flex:1;min-width:0;width:0;height:32px;padding:0 8px;border:1px solid #45423e;border-radius:6px;background:#242321;color:var(--ink);font:11px Arial,Helvetica,sans-serif;cursor:pointer}
 .preset-toolbar select:disabled{opacity:.4;cursor:not-allowed}
-/* Saved separations: the shared row menu, styled like the old select. */
-.preset-toolbar .preset-menu{flex:1;min-width:0}
+/* Saved projects: the shared row menu, styled like the old select; half its old width. */
+.preset-toolbar .preset-menu{flex:0 1 240px;width:240px;min-width:110px}
 .workspace-header .preset-toolbar .row-menu-toggle{flex:1;width:100%;min-width:0;height:32px;padding:0 8px;border:1px solid #45423e;border-radius:6px;background:#242321;color:var(--ink);font:11px Arial,Helvetica,sans-serif}
 .workspace-header .preset-toolbar .row-menu-toggle:disabled{opacity:.4;cursor:not-allowed}
 /* Saved separation rows: names start at the left; the delete cross shows on hover. */
@@ -51,6 +51,8 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 .workspace-header .preset-toolbar .row-menu-list .row-menu-delete sc-icon{width:11px;height:11px}
 .workspace-header .preset-toolbar .row-menu-list .row-menu-delete.is-armed{flex:0 0 auto;padding:3px 8px;background:#4a2020}
 .preset-toolbar .ui-btn-icon{width:16px;height:16px}
+/* Save lights up while the open project has unsaved changes. */
+.workspace-header #save-project.has-changes{border-color:var(--orange);color:#ffad80}
 .workspace-header #preset-folder.has-custom-folder{border-color:var(--orange);background:#42291d;color:#ffad80}
 #preset-reconnect{justify-self:start;white-space:normal}
 /* Narrow windows: the rows wrap; the identity block shares its line with the pin. */
@@ -163,12 +165,10 @@ h1{letter-spacing:-1.4px;margin-bottom:22px}
 }
 
 .waveform:focus-visible{outline:2px solid var(--orange);outline-offset:4px}
-#save-dialog,#import-dialog{max-width:min(440px,calc(100vw - 32px));padding:20px;background:#242424;color:var(--ink);border:1px solid #555;border-radius:10px;box-shadow:0 12px 40px #0008}
-#save-dialog::backdrop,#import-dialog::backdrop{background:#0009}
-#save-dialog h3,#import-dialog h3{margin:0 0 12px;font-size:16px}
-#save-dialog p,#import-dialog p{font-size:12px;line-height:1.6}
-#save-name-label{font-size:11px;display:block}
-#save-name{width:100%;padding:8px;border:1px solid #555;border-radius:5px;background:#191919;color:var(--ink)}
+#import-dialog{max-width:min(440px,calc(100vw - 32px));padding:20px;background:#242424;color:var(--ink);border:1px solid #555;border-radius:10px;box-shadow:0 12px 40px #0008}
+#import-dialog::backdrop{background:#0009}
+#import-dialog h3{margin:0 0 12px;font-size:16px}
+#import-dialog p{font-size:12px;line-height:1.6}
 .dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
 /* Same speed control as the Player Tools panel, compact. */
 .stem-tempo{display:flex;align-items:center;gap:7px;margin:0}
@@ -474,7 +474,14 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .extract-spacer{flex:1}
 .extract-actions .extract-clear{padding:0 6px;font-weight:400;color:#a29d97}
 .extract-actions .extract-clear:hover:enabled{color:#ff9494}
-.extract-close .ui-btn-icon{width:13px;height:13px}
+.extract-close .ui-btn-icon,.project-close .ui-btn-icon{width:13px;height:13px}
+/* Project windows (stem-project-dialog.mjs) reuse the extraction window. */
+.project-dialog{width:min(360px,calc(100vw - 32px))}
+.project-name{display:grid;gap:4px;font-size:11px;color:var(--muted)}
+.project-name input{height:30px;padding:0 8px;border:1px solid #45423e;border-radius:6px;background:#191919;color:var(--ink);font:12px Arial,Helvetica,sans-serif}
+.project-name input:focus-visible{outline:2px solid var(--orange);outline-offset:1px}
+.extract-actions .project-discard{padding:0 6px;font-weight:400;color:#a29d97}
+.extract-actions .project-discard:hover:enabled{color:#ff9494}
 @media(max-width:420px){.extract-stems{grid-template-columns:repeat(2,minmax(0,1fr))}.extract-actions{flex-wrap:wrap}.extract-actions .extract-clear{order:3;width:100%}}
 
 /* The timeline sits directly on the workspace, without an outer card. */

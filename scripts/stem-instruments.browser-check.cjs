@@ -178,7 +178,7 @@ module.exports = async function verifyInstruments(page) {
   await playlist.locator('.pl-shelf button', { hasText: '808.wav' }).waitFor();
 
   // Presets keep instruments, patterns and their clips.
-  await page.locator('#save-locally').click(); await page.locator('#save-name').fill('Patterns');
+  await page.locator('#save-project').click(); await page.locator('#save-name').fill('Patterns');
   await page.locator('#save-confirm').click();
   await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
   const id = await page.locator('#stem-presets').evaluate(node => node.value);

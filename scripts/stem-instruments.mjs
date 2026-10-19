@@ -53,7 +53,8 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
     focus = { track: key, pattern: pattern?.id ?? null };
     emit('focus');
   }
-  function persist() { Promise.resolve(changed()).catch(report); }
+  // `auto` changes (a track's first automatic slicing) are saved with the project but do not mark it modified.
+  function persist(auto = false) { Promise.resolve(changed({ auto })).catch(report); }
   function createPattern(from = null, key = focus.track) {
     if (!key || patterns.length >= MAX_PATTERNS) return null;
     emit('beforefocus');
@@ -78,11 +79,11 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
     schedule(); persist(); emit('pattern');
     return pattern;
   }
-  function editInstrument(mutate, key = focus.track) {
+  function editInstrument(mutate, key = focus.track, { auto = false } = {}) {
     const value = instrument(key); if (!value) return;
     const next = structuredClone(value); mutate(next);
     emit('beforeinstrument');
-    Object.assign(value, next); schedule(); persist(); emit('instrument');
+    Object.assign(value, next); schedule(); persist(auto); emit('instrument');
   }
   function deletePattern(id = focus.pattern) {
     const index = patterns.findIndex(item => item.id === id); if (index < 0) return;

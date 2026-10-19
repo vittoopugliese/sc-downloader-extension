@@ -71,9 +71,10 @@ async function reopenExtract(page) {
     assert.match(await page.locator('#track').getAttribute('data-meta'), /My recording.wav.*1 ch.*2:05/);
     assert.match(await page.locator('#track').getAttribute('data-range'), /122,00.*125,00.*3,00/);
     await closeExtract(page);
-    await page.locator('#save-locally').click(); await page.locator('#save-confirm').click();
+    await page.locator('#save-project').click(); await page.locator('#save-confirm').click();
     await reopenExtract(page);
     await page.locator('#separate:not(:disabled)').waitFor(); await page.locator('#separate').click();
+    await page.locator('.pl-stem-head[data-stem=drums]').waitFor();
     await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
     const id = await page.locator('#stem-presets').evaluate(node => node.value);
     const summary = await page.evaluate(() => inputSummary);
@@ -81,6 +82,8 @@ async function reopenExtract(page) {
     assert.ok(summary.peak > .26 && summary.peak < .3, 'Selected the loud ending, not the first 120 seconds');
     await page.locator('#stem-rate').evaluate((node, value) => { node.value = value; node.dispatchEvent(new Event('input', { bubbles: true })); }, '0.5');
     await page.locator('#stem-keep-tone').check();
+    // Saving is by hand: Ctrl+S writes the stems and the new settings into the project.
+    await page.keyboard.press('Control+s');
     await page.waitForFunction(async id => {
       const { StemPresets } = await import('./scripts/stem-presets.mjs');
       return (await (await StemPresets.current()).load(id)).record.settings.keepTone;
@@ -94,7 +97,7 @@ async function reopenExtract(page) {
     assert.equal(await page.locator('#stem-presets').evaluate(node => node.value), id);
     assert.equal(await page.locator('.pl-stem-head').count(), 5, 'The separation stays loaded');
     await page.reload();
-    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 1);
+    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 2);
     await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click(); await page.locator('.stem').first().waitFor();
     assert.equal(await page.evaluate(() => inferences), 0);
     assert.equal(await page.locator('#stem-rate').inputValue(), '0.5');
@@ -109,7 +112,7 @@ async function reopenExtract(page) {
     await upload(); await page.locator('#import-dialog').waitFor();
     await page.screenshot({ path: path.join(artifacts, 'import-mobile.png') });
     await page.locator('#import-confirm').click(); await page.locator('#import-audio:not(:disabled)').waitFor();
-    assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'false');
+    assert.equal(await page.locator('#stem-presets').evaluate(node => node.value), '', 'New audio starts a new, unsaved project');
     assert.equal(await page.locator('#stem-rate').inputValue(), '1');
     assert.equal(await page.locator('.pl-stem-head:not([data-stem=original])').count(), 0, 'A new import clears the separated stems');
     assert.deepEqual(errors, []);

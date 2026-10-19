@@ -129,7 +129,7 @@ module.exports = async function (page) {
   const artifacts = path.join(__dirname, '../test-results/stem-note-workflow'); fs.mkdirSync(artifacts, { recursive: true });
   await piano.screenshot({ path: path.join(artifacts, 'piano.png') });
   await rack.screenshot({ path: path.join(artifacts, 'rack.png') });
-  await page.locator('#save-locally').click(); await page.locator('#save-name').fill('Recorded notes'); await page.locator('#save-confirm').click();
+  await page.locator('#save-project').click(); await page.locator('#save-name').fill('Recorded notes'); await page.locator('#save-confirm').click();
   await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
   const id = await page.locator('#stem-presets').evaluate(n => n.value);
   const saved = await page.evaluate(async id => {

@@ -77,7 +77,8 @@ that EQ points and bypass survive a page reload. These fixtures do not replace
 a manual check with a real SoundCloud session.
 
 `test:e2e:stem-presets` exercises real IndexedDB and filesystem handles (OPFS
-stands in for the OS folder picker), atomic WAV saves, metadata-only autosave,
+stands in for the OS folder picker), atomic WAV saves, manual saving (original alone, then stems), the unsaved marker,
+the Leave-site warning, the empty project,
 reload without inference, folder/reset, incomplete and corrupt presets, and
 responsive layout. It measures a real Signalsmith AudioWorklet with a 440 Hz
 tone at 0.1–3x, with and without Keep Tone. It uses a persistent Chromium profile:

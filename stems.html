@@ -30,7 +30,7 @@
       <div class="daw-row daw-row-sub workspace-toolbar">
         <div class="source-mini"><div class="source-cover"><img id="artwork" alt="" referrerpolicy="no-referrer" hidden><span id="artwork-fallback" data-icon="music"></span></div></div>
         <div id="track" class="header-library">
-          <div class="preset-toolbar"><select id="stem-presets" disabled></select><button id="save-locally" class="ui-btn ui-btn--neutral ui-btn--icon" type="button" aria-pressed="false" disabled><span data-icon="save"></span></button><button id="preset-folder" class="ui-btn ui-btn--neutral ui-btn--icon" type="button" disabled><sc-icon name="folder" class="ui-btn-icon" aria-hidden="true"></sc-icon></button><button id="preset-reset" class="ui-btn ui-btn--neutral ui-btn--icon" type="button" hidden><sc-icon name="close" class="ui-btn-icon" aria-hidden="true"></sc-icon></button><button id="import-audio" class="ui-btn ui-btn--accent ui-btn--text" type="button" disabled><span data-icon="upload"></span><span id="import-audio-label" class="ui-btn-label">Load</span></button></div>
+          <div class="preset-toolbar"><select id="stem-presets" disabled></select><button id="save-project" class="ui-btn ui-btn--neutral ui-btn--icon" type="button" aria-keyshortcuts="Control+S" disabled><span data-icon="save"></span></button><button id="preset-folder" class="ui-btn ui-btn--neutral ui-btn--icon" type="button" disabled><sc-icon name="folder" class="ui-btn-icon" aria-hidden="true"></sc-icon></button><button id="preset-reset" class="ui-btn ui-btn--neutral ui-btn--icon" type="button" hidden><sc-icon name="close" class="ui-btn-icon" aria-hidden="true"></sc-icon></button><button id="import-audio" class="ui-btn ui-btn--accent ui-btn--icon" type="button" disabled><span data-icon="upload"></span></button></div>
           <button id="preset-reconnect" type="button" hidden></button>
         </div>
         <div class="stem-preview" aria-hidden="true">
@@ -54,7 +54,6 @@
       <div id="mix-tools"></div>
     </section>
   </main>
-  <dialog id="save-dialog" aria-labelledby="save-title" aria-describedby="save-description"><h3 id="save-title"></h3><p id="save-description"></p><label id="save-name-label" for="save-name"></label><input id="save-name" maxlength="160"><p id="save-destination" class="muted"></p><div class="dialog-actions"><button id="save-cancel" type="button" autofocus></button><button id="save-confirm" class="primary" type="button"></button></div></dialog>
   <dialog id="import-dialog" aria-labelledby="import-title"><form id="import-form"><h3 id="import-title"></h3><p id="import-file-info" class="muted"></p><label id="import-name-label" for="import-name"></label><input id="import-name" maxlength="160" required><div class="import-range"><label><span id="import-start-label"></span><input id="import-start" type="number" min="0" step="any" required></label><label><span id="import-end-label"></span><input id="import-end" type="number" min="0" step="any" required></label></div><p id="import-range-hint" class="muted"></p><p id="import-error" role="alert"></p><div class="dialog-actions"><button id="import-cancel" type="button"></button><button id="import-confirm" type="submit" class="primary"></button></div></form></dialog>
   <script src="scripts/player-tools-i18n.js"></script>
   <script src="scripts/looper-core.js"></script>

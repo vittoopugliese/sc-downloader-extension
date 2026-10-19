@@ -184,7 +184,7 @@ async function reopenExtract(page) {
     }
     assert.ok(stats[0].rms > .005 && stats[1].rms > .005, 'Real model must produce non-silent drum and bass stems.');
     assert.notEqual(stats[0].rms.toFixed(5), stats[1].rms.toFixed(5));
-    await page.locator('#save-locally').click();
+    await page.locator('#save-project').click();
     await page.locator('#save-confirm').click();
     await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
     const presetId = await page.locator('#stem-presets').evaluate(node => node.value);
@@ -211,6 +211,9 @@ async function reopenExtract(page) {
     assert.equal(await page.locator('#separate').isEnabled(), true);
     // A separate extension page can restore the actual inference output with no
     // active SoundCloud session, under MV3 CSP, without creating a model worker.
+    // Saving is by hand: the new speed and Keep Tone reach the project on Save.
+    await page.locator('#save-project').click();
+    await page.waitForFunction(() => !document.querySelector('#save-project').classList.contains('has-changes'));
     const savedPage = await context.newPage();
     await savedPage.addInitScript(() => { window.Worker = class { constructor() { throw new Error('Unexpected re-inference'); } }; });
     await savedPage.goto(`chrome-extension://${new URL(background.url()).host}/stems.html`);
@@ -235,7 +238,7 @@ async function reopenExtract(page) {
     await localPage.locator('#extract-dialog').waitFor({ state: 'hidden', timeout: 900000 }).catch(() => {});
     await localPage.waitForFunction(() => document.querySelectorAll('.pl-stem-head:not([data-stem=original])').length === 4 || document.querySelector('.ui-toast-content[data-variant=error]'), null, { timeout: 900000 });
     assert.equal(await localPage.locator('.pl-stem-head:not([data-stem=original])').count(), 4, await localPage.locator('.ui-toast-title').allTextContents());
-    await localPage.locator('#save-locally').click();
+    await localPage.locator('#save-project').click();
     await localPage.locator('#save-confirm').click();
     await localPage.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
     const localId = await localPage.locator('#stem-presets').evaluate(node => node.value);

@@ -263,8 +263,8 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     sampler = mountPadSampler({ waveform: wave, buffer, timeline, audioContext, output: () => output(key), locale, report,
       saved: instruments.instrument(key).slices,
       keyboardActive: event => !document.querySelector('.piano-keyboard[aria-pressed=true]') && shell.active() && rackView === 'chops' && instruments.focused().instrument?.mode === 'slices' && !event.target.closest?.('.pl-ui,.stem-piano-roll,.rack-overview'),
-      changed: slices => {
-        instruments.editInstrument(instrument => { instrument.slices = slices; instrument.sliced = true; }, key);
+      changed: (slices, { auto = false } = {}) => {
+        instruments.editInstrument(instrument => { instrument.slices = slices; instrument.sliced = true; }, key, { auto });
         if (slices.some(Boolean) && cleared?.key === key) cleared = null;
       },
       onRender: state => { renderPads(state); renderClear(); } });

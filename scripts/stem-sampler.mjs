@@ -165,7 +165,8 @@ export function mountPadSampler({ waveform, buffer, timeline, audioContext, outp
     });
     onRender(state());
   }
-  function emit() { if (!disposed) changed(slices.map(slice => slice && { ...slice })); }
+  // `auto`: the first automatic slicing of a track, not a user edit.
+  function emit(auto = false) { if (!disposed) changed(slices.map(slice => slice && { ...slice }), { auto }); }
   // Detected hits of the visible audio; with `force` false only empty pads are filled.
   function autoSlice(force = false) {
     if (!force && slices.some(Boolean)) return false;
@@ -173,7 +174,7 @@ export function mountPadSampler({ waveform, buffer, timeline, audioContext, outp
     const found = detectDrumSlices(buffer, { startMs, endMs, count: KEYS.length });
     if (!found.length) return false;
     slices.forEach((_, i) => { slices[i] = found[i] ?? null; revisions[i]++; stop(i); });
-    selected = 0; armed = null; render(); emit(); return true;
+    selected = 0; armed = null; render(); emit(!force); return true;
   }
   function stop(i) {
     const voice = voices.get(i); if (!voice) return;

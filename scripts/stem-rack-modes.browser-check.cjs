@@ -86,7 +86,7 @@ module.exports = async function (page) {
   assert.equal(await rack.locator('.rack-channel').count(), 7);
   await rack.locator('.rack-place').click();
   await playlist.locator('.pl-clip.is-pattern').waitFor();
-  await page.locator('#save-locally').click(); await page.locator('#save-name').fill('Rack modes'); await page.locator('#save-confirm').click();
+  await page.locator('#save-project').click(); await page.locator('#save-name').fill('Rack modes'); await page.locator('#save-confirm').click();
   await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
   const id = await page.locator('#stem-presets').evaluate(node => node.value);
   await page.waitForFunction(async id => {

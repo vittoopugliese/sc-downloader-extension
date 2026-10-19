@@ -375,7 +375,7 @@ const mixOutput =createEqualizedOutput({ audioContext: () => context ||= new Aud
 const instrumentTracks = () => playlist.instrumentSources().map(track => ({ ...track,
   name: STEMS.includes(track.key) || track.key === 'original' ? text(track.key) : track.name }));
 const instruments = createInstruments({ playlist, tracks: instrumentTracks, rate: () => rate, report: playbackError,
-  changed: () => libraryUI?.changed(),
+  changed: ({ auto = false } = {}) => { if (!auto) libraryUI?.changed(); },
   // A pattern preview plays through its track's insert, then Keep Tone and the master.
   async audio(key) { const io = key ? await playlist.trackAudio(key) : await playlistAudio(); toneNode?.port.postMessage({ rate, keepTone, reset: true }); return io; } });
 // Pads and piano notes are auditions: they skip the playlist fader and Keep Tone, but go
@@ -498,17 +498,16 @@ function revealAudition() {
   document.querySelector('.prepare').classList.add('has-results');
 }
 const localCopy = ({
-  es: ['Cargar audio del equipo', 'Elegí un archivo y un fragmento de hasta 2 minutos.', 'Cargar fragmento', 'Nombre', 'Inicio (s)', 'Fin (s)', 'Cancelar', 'Leyendo audio…', 'No se pudo leer el audio. Probá otro archivo o un formato compatible con Chrome.', 'Elegí un rango válido de hasta 2 minutos dentro del archivo.', 'Elegí un audio del equipo o una separación guardada.'],
-  en: ['Load audio from computer', 'Choose a file and a segment up to 2 minutes.', 'Load segment', 'Name', 'Start (s)', 'End (s)', 'Cancel', 'Reading audio…', 'Could not read audio. Try another file or a format supported by Chrome.', 'Choose a valid range up to 2 minutes within the file.', 'Choose local audio or a saved separation.'],
-  de: ['Audio vom Computer laden', 'Datei und einen Ausschnitt von bis zu 2 Minuten auswählen.', 'Ausschnitt laden', 'Name', 'Start (s)', 'Ende (s)', 'Abbrechen', 'Audio wird gelesen…', 'Audio konnte nicht gelesen werden. Versuche eine andere Datei oder ein von Chrome unterstütztes Format.', 'Wähle einen gültigen Bereich von bis zu 2 Minuten innerhalb der Datei.', 'Wähle lokales Audio oder eine gespeicherte Trennung.'],
-  'pt-BR': ['Carregar áudio do computador', 'Escolha um arquivo e um trecho de até 2 minutos.', 'Carregar trecho', 'Nome', 'Início (s)', 'Fim (s)', 'Cancelar', 'Lendo áudio…', 'Não foi possível ler o áudio. Tente outro arquivo ou formato compatível com o Chrome.', 'Escolha um intervalo válido de até 2 minutos dentro do arquivo.', 'Escolha um áudio local ou uma separação salva.'],
-  ru: ['Загрузить аудио с компьютера', 'Выберите файл и фрагмент до 2 минут.', 'Загрузить фрагмент', 'Название', 'Начало (с)', 'Конец (с)', 'Отмена', 'Чтение аудио…', 'Не удалось прочитать аудио. Попробуйте другой файл или формат, поддерживаемый Chrome.', 'Выберите допустимый фрагмент до 2 минут в пределах файла.', 'Выберите локальное аудио или сохранённое разделение.'],
+  es: ['Cargar audio del equipo', 'Elegí un archivo y un fragmento de hasta 2 minutos.', 'Cargar fragmento', 'Nombre', 'Inicio (s)', 'Fin (s)', 'Cancelar', 'Leyendo audio…', 'No se pudo leer el audio. Probá otro archivo o un formato compatible con Chrome.', 'Elegí un rango válido de hasta 2 minutos dentro del archivo.', 'Elegí un audio del equipo o un proyecto guardado.'],
+  en: ['Load audio from computer', 'Choose a file and a segment up to 2 minutes.', 'Load segment', 'Name', 'Start (s)', 'End (s)', 'Cancel', 'Reading audio…', 'Could not read audio. Try another file or a format supported by Chrome.', 'Choose a valid range up to 2 minutes within the file.', 'Choose local audio or a saved project.'],
+  de: ['Audio vom Computer laden', 'Datei und einen Ausschnitt von bis zu 2 Minuten auswählen.', 'Ausschnitt laden', 'Name', 'Start (s)', 'Ende (s)', 'Abbrechen', 'Audio wird gelesen…', 'Audio konnte nicht gelesen werden. Versuche eine andere Datei oder ein von Chrome unterstütztes Format.', 'Wähle einen gültigen Bereich von bis zu 2 Minuten innerhalb der Datei.', 'Wähle lokales Audio oder ein gespeichertes Projekt.'],
+  'pt-BR': ['Carregar áudio do computador', 'Escolha um arquivo e um trecho de até 2 minutos.', 'Carregar trecho', 'Nome', 'Início (s)', 'Fim (s)', 'Cancelar', 'Lendo áudio…', 'Não foi possível ler o áudio. Tente outro arquivo ou formato compatível com o Chrome.', 'Escolha um intervalo válido de até 2 minutos dentro do arquivo.', 'Escolha um áudio local ou um projeto salvo.'],
+  ru: ['Загрузить аудио с компьютера', 'Выберите файл и фрагмент до 2 минут.', 'Загрузить фрагмент', 'Название', 'Начало (с)', 'Конец (с)', 'Отмена', 'Чтение аудио…', 'Не удалось прочитать аудио. Попробуйте другой файл или формат, поддерживаемый Chrome.', 'Выберите допустимый фрагмент до 2 минут в пределах файла.', 'Выберите локальное аудио или сохранённый проект.'],
 })[locale] || [];
 for (const [id, index] of Object.entries({ 'import-title': 2, 'import-confirm': 2,
   'import-name-label': 3, 'import-start-label': 4, 'import-end-label': 5, 'import-cancel': 6, 'import-range-hint': 1 })) $(id).textContent = localCopy[index];
 let importDraft = null;
-$('import-audio-label').textContent = ({ es: 'Cargar', en: 'Load', de: 'Laden', 'pt-BR': 'Carregar', ru: 'Загрузить' })[locale] || 'Load';
-$('import-audio').dataset.scdlTooltip = localCopy[0];
+$('import-audio').dataset.scdlTooltip = localCopy[0]; $('import-audio').setAttribute('aria-label', localCopy[0]);
 $('import-audio').onclick = () => $('audio-file').click();
 $('audio-file').onchange = async event => {
   const file = event.target.files[0]; event.target.value = '';
@@ -532,7 +531,7 @@ $('audio-file').onchange = async event => {
 };
 $('import-cancel').onclick = () => $('import-dialog').close();
 $('import-dialog').addEventListener('close', () => { importDraft = null; setBusy(false); });
-$('import-form').onsubmit = event => {
+$('import-form').onsubmit = async event => {
   event.preventDefault();
   if (!importDraft) return;
   const { file, decoded, duration } = importDraft;
@@ -544,10 +543,12 @@ $('import-form').onsubmit = event => {
   }
   const channels = [0, Math.min(1, decoded.numberOfChannels - 1)].map(channel => decoded.getChannelData(channel).slice(first, last));
   if (channels.some(channel => !channel.every(Number.isFinite))) { $('import-error').textContent = localCopy[8]; return; }
-  loadLocalAudio(audioBuffer(channels), { title: $('import-name').value.trim() || file.name, artist: '', artworkUrl: '', durationMs: decoded.duration * 1000,
+  const value = { title: $('import-name').value.trim() || file.name, artist: '', artworkUrl: '', durationMs: decoded.duration * 1000,
     trimRange: { startMs: first / SAMPLE_RATE * 1000, endMs: last / SAMPLE_RATE * 1000 },
-    localFile: { name: file.name, type: file.type, size: file.size, lastModified: file.lastModified, channels: decoded.numberOfChannels } });
+    localFile: { name: file.name, type: file.type, size: file.size, lastModified: file.lastModified, channels: decoded.numberOfChannels } };
   $('import-dialog').close();
+  // New audio replaces the open project: unsaved changes are saved or discarded first.
+  if (await libraryUI.confirmDiscard()) loadLocalAudio(audioBuffer(channels), value);
 };
 // Imported files and Likes Explorer recordings become the Original, ready to separate.
 function loadLocalAudio(next, value) {
@@ -558,7 +559,7 @@ function loadLocalAudio(next, value) {
   initialized = true; libraryUI.newExtraction();
   revealAudition();
   mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
-  showOriginal();
+  showOriginal(); libraryUI.markClean();
   openExtract(originalTarget());
 }
 const recordingId = jobId ? null : new URL(location.href).searchParams.get('recording');
@@ -584,10 +585,11 @@ const settings = () => ({ ...instruments.snapshot(),
   states: STEMS.map(stem => { const track = playlist.track(stem); return { muted: !!track?.mute, solo: false, gain: track?.gain ?? 1 }; }),
   original: { muted: !!playlist.track('original')?.mute, gain: playlist.track('original')?.gain ?? 1, removed: removeOriginal },
   rate, keepTone, stems: [...stemChoice], eq: mixOutput.snapshot().eq, fx: mixOutput.effectsSettings(), playlist: playlist.snapshot() });
-libraryUI = mountStemLibrary({ locale, report: status,
+libraryUI = mountStemLibrary({ locale, report: status, canSave: () => !!info && !!original,
   onOperation(value) { libraryOperating = value; extractDialog.setReady(!value && !busy && canSeparate()); $('import-audio').disabled = value || busy || !importReady; },
   // Imported samples go with the separation; their WAV is encoded only when stored.
-  snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : null,
+  // Before separation a project holds the original alone.
+  snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : original ? [sampleWav(original)] : null,
     samples: playlist.samples().map(sample => ({ id: sample.id, name: sample.name, blob: () => sampleWav(sample.buffer) })) }),
   restore: async ({ record, blobs, samples = {} }) => {
     // Decode/validate before replacing the current session. Missing/corrupt files
@@ -616,8 +618,15 @@ libraryUI = mountStemLibrary({ locale, report: status,
     renderInfo(record.info);
     revealAudition();
     mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
-    showResults({ outputs: decoded.slice(1).map(buffer => [buffer.getChannelData(0), buffer.getChannelData(1)]), seconds: 0 }, record.settings, restoredSamples);
-    wavs = blobs;
+    if (decoded.length > 1) {
+      showResults({ outputs: decoded.slice(1).map(buffer => [buffer.getChannelData(0), buffer.getChannelData(1)]), seconds: 0 }, record.settings, restoredSamples);
+      wavs = blobs;
+    } else {
+      // Saved before separation: the original and its settings; Extract stems still works.
+      sampleWavs.set(original, blobs[0]); wavs = [];
+      applySettings(record.settings);
+      instruments.restore(record.settings); startSession(record.settings, restoredSamples); instruments.focus('original'); syncLoop();
+    }
     initialized = true;
   },
 });
@@ -820,15 +829,19 @@ function disposeResults() {
   urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
   for (const view of waveforms) if (!$('original-waveform').contains(view.element)) view.dispose();
 }
-function showResults(result, saved = null, samples = []) {
-  disposeResults();
+// Master FXs, EQ, speed and Keep Tone of a saved project (defaults without one).
+function applySettings(saved) {
   mixOutput.restoreEffects(saved?.fx); effectsUI.reset();
   mixOutput.setEqualizer(globalThis.SCParametricEQ.normalize(saved?.eq)); equalizerUI.reset();
-  outputs = result.outputs;
-  buffers = outputs.map(audioBuffer);
   rate = Number.isFinite(saved?.rate) ? Math.max(.1, Math.min(3, saved.rate)) : 1;
   keepTone = !!saved?.keepTone;
   renderTempo(); playlist.setRate(rate);
+}
+function showResults(result, saved = null, samples = []) {
+  disposeResults();
+  applySettings(saved);
+  outputs = result.outputs;
+  buffers = outputs.map(audioBuffer);
   wavs = [wavOf(original)];
   for (const output of outputs) wavs.push(new Blob([encodeWav(output)], { type: 'audio/wav' }));
   outputs = [];
@@ -901,7 +914,6 @@ async function clipChannels(target) {
 async function separate(options) {
   const target = extractTarget;
   if (busy || libraryOperating || !target || !canSeparate() || !options.stems.length) return;
-  if (target.original && buffers.length) libraryUI.newExtraction();
   const version = ++revision;
   separating = true; setBusy(true); progress(null, text('load'));
   try {
@@ -916,7 +928,6 @@ async function separate(options) {
         removeOriginal = options.when === 'delete';
         showResults(result); extractDialog.close();
         status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`, 'success');
-        await libraryUI.completed();
         return;
       }
       const stems = STEMS.map((stem, index) => ({ stem, output: result.outputs[index] })).filter(item => options.stems.includes(item.stem))
@@ -952,7 +963,7 @@ async function cancel() {
 async function loadJobLoop() {
   setBusy(true); progress(null, text('preparing'));
   let reason = '';
-  try { await renderJobLoop(); }
+  try { await renderJobLoop(); libraryUI.markClean(); }
   catch (error) {
     console.error('[Stems loop]', error);
     reason = error.localized ? error.message : text('prepareFailed');

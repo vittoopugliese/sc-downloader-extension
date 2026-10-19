@@ -7,21 +7,31 @@ persistencia en `stems-roadmap.md`. No convierte Stems en una web independiente.
 
 ## Uso
 
-- Cada extracción nueva empieza con **Guardar localmente** apagado. Al activarlo
-  se abre un diálogo con nombre y destino; cancelar o Escape no activa el guardado.
-- Se puede activar antes de separar (guardará al terminar) o después. Se guarda
-  el original y los cuatro stems como WAV originales, estéreo float32 de 44,1 kHz.
-- El selector bajo Experimental abre una separación sin cargar el modelo ni
-  volver a ejecutar inferencia. También funciona abriendo `stems.html` sin `job`.
-- Volumen, mute/solo, modo original/mezcla, repetición, velocidad y Keep Tone se
-  guardan automáticamente en los presets activos. Apagar el toggle detiene las
-  actualizaciones; no elimina el preset. Abrir un preset activa su autoguardado.
+> Actualización 19/10/2026: el guardado es manual, como en FL Studio. Ya no hay
+> autoguardado ni interruptor "Guardar localmente".
+
+- **Guardar** (disquete, `Ctrl/Cmd+S`) escribe el proyecto abierto. La primera
+  vez pide un nombre; después actualiza el mismo proyecto. `Ctrl/Cmd+Shift+S`
+  (o Shift + clic) guarda una copia con otro nombre.
+- Editar no escribe nada: solo marca el proyecto como modificado (`*` junto al
+  nombre, en el título de la pestaña y el disquete en naranja). El reparto de
+  pads automático al montar una pista no cuenta como cambio.
+- Se puede guardar antes de separar: el proyecto guarda solo el original
+  (`"stems": false` en el registro). Al separar y guardar, los cuatro stems se
+  agregan al mismo proyecto. Los WAV solo se reescriben si cambiaron.
+- El selector abre un proyecto sin cargar el modelo ni volver a ejecutar
+  inferencia. Su primera fila, **Empty project**, recarga la página vacía (sin
+  `job` ni `recording` en la dirección).
+- Abrir otro proyecto, el proyecto vacío o un audio nuevo con cambios sin guardar
+  pregunta **Guardar / No guardar / Cancelar**. Si guardar falla, la sesión queda.
+- Cerrar o recargar la pestaña con cambios muestra el aviso de Chrome "¿Salir del
+  sitio?". Chrome no permite cambiar su texto ni agregar "Guardar".
 - El destino inicial es IndexedDB de la extensión, en el perfil del navegador.
   El botón de carpeta permite elegir otra biblioteca y recuerda su handle. La
   cruz, como en el popup, restablece el destino del navegador. Cambiar de destino
   no mueve ni elimina presets: se puede volver a elegir la carpeta para abrirlos.
-- Las carpetas contienen `PlayerTools-Stems/stem-<uuid>/`, cinco WAV y
-  `preset.json`. El nombre visible está en el JSON; los identificadores evitan
+- Las carpetas contienen `PlayerTools-Stems/stem-<uuid>/`, el WAV original (más
+  los cuatro stems si se separó), los samples importados y `preset.json`. El nombre visible está en el JSON; los identificadores evitan
   colisiones entre nombres iguales. No se descarga una copia adicional a Descargas.
 - Si Chrome revoca el permiso de la carpeta se ofrece reconectarla. No se usa un
   destino alternativo silenciosamente ante un fallo. Los errores de espacio,
@@ -45,8 +55,7 @@ el zoom habitual; ↔ vuelve a mostrar todo el audio. Los fades son una envolven
 de entrada/salida para disparos de una sola vez, sin sustain dependiente de
 mantener la tecla. Repetir una tecla apaga suavemente su voz anterior.
 
-Con **Guardar localmente** activo, los recortes y fades se guardan junto con
-el preset, tanto en navegador como en carpeta. Los presets anteriores, que
+Al guardar, los recortes y fades se guardan junto con el preset, tanto en navegador como en carpeta. Los presets anteriores, que
 solo guardaban posiciones de inicio, se abren con el recorte de 154 ms. Los
 WAV originales no cambian.
 

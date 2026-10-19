@@ -21,6 +21,10 @@ const STYLES = `
 .row-menu-list .row-menu-delete.is-armed{flex:0 0 auto;padding:3px 8px;background:#4a2020;color:#ff8f8f;font-size:11px;font-weight:700}
 .row-menu-list .row-menu-footer{width:100%;margin-top:4px;padding-top:6px;border-top:1px solid #414141;border-radius:0 0 4px 4px;color:#ff934d}
 .row-menu-list :disabled{opacity:.5;cursor:wait}
+/* A row with \`className: 'row-menu-new'\` leads the list as an action, set apart by a line. */
+.row-menu-row.row-menu-new{margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid #414141}
+.row-menu-row.row-menu-new .row-menu-load{color:#ffad80}
+.row-menu-toggle .row-menu-modified{flex:0 0 auto;margin:0 auto 0 -2px;color:#ff934d;font-weight:700}
 /* With a mouse, a row's delete cross shows while the row is hovered or focused. */
 @media(hover:hover){.row-menu-row:not(:hover):not(:focus-within) .row-menu-delete:not(.is-armed){visibility:hidden}}
 `;
@@ -37,7 +41,9 @@ export function createRowMenu({ className = '', label, empty = '', placeholder =
   toggle.setAttribute('aria-haspopup', 'menu'); toggle.setAttribute('aria-expanded', 'false'); toggle.setAttribute('aria-controls', id);
   toggle.dataset.scdlTooltip = label; toggle.setAttribute('aria-label', label);
   const value = document.createElement('span'); value.className = 'row-menu-value';
-  toggle.append(value);
+  // Unsaved changes, like the asterisk in FL Studio's title bar.
+  const modified = document.createElement('span'); modified.className = 'row-menu-modified'; modified.textContent = '*'; modified.hidden = true;
+  toggle.append(value, modified);
   toggle.insertAdjacentHTML('beforeend', '<sc-icon name="down" aria-hidden="true"></sc-icon>');
   const menu = document.createElement('div'); menu.className = 'row-menu-list'; menu.id = id;
   menu.popover = 'auto'; menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', label);
@@ -56,7 +62,7 @@ export function createRowMenu({ className = '', label, empty = '', placeholder =
     value.textContent = chosen?.name ?? placeholder;
     toggle.disabled = disabled;
     const rows = items.map(item => {
-      const row = document.createElement('div'); row.className = 'row-menu-row'; row.dataset.id = item.id;
+      const row = document.createElement('div'); row.className = `row-menu-row ${item.className || ''}`.trim(); row.dataset.id = item.id;
       const load = document.createElement('button'); load.type = 'button'; load.className = 'row-menu-load';
       load.setAttribute('role', 'menuitemradio'); load.setAttribute('aria-checked', String(item.id === current));
       load.textContent = item.name; load.dataset.scdlTooltip = item.title || item.name;
@@ -122,10 +128,11 @@ export function createRowMenu({ className = '', label, empty = '', placeholder =
   render();
   return {
     element: wrap, toggle, menu,
-    // [{ id, name, title?, deletable? }]
+    // [{ id, name, title?, deletable?, className? }]
     setItems(list) { items = list.map(item => ({ ...item })); render(); },
     setValue(id) { current = id ?? null; toggle.value = current ?? ''; render(); },
     setPlaceholder(text) { placeholder = text; render(); },
+    setModified(value, label = '') { modified.hidden = !value; modified.dataset.scdlTooltip = label; modified.setAttribute('aria-label', label); },
     value: () => current,
     setDisabled(value) { disabled = !!value; if (disabled) close(); render(); },
     setBusy(value) { busy = !!value; render(); },

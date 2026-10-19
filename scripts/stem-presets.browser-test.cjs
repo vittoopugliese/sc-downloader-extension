@@ -52,27 +52,50 @@ async function reopenExtract(page) {
     page.on('pageerror', error => errors.push(error.message));
     const url = `http://127.0.0.1:${server.address().port}/stems.html?job=test`;
     await page.goto(url);
-    await page.locator('#save-locally:not(:disabled)').waitFor();
+    await page.locator('#save-project:not(:disabled)').waitFor();
     await closeExtract(page);
-    assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'false');
-    await page.locator('#save-locally').click();
+    // Opens a saved project from the menu and waits until it has loaded (the menu is
+    // disabled while it loads).
+    const openProject = async key => {
+      const done = page.evaluate(() => new Promise(resolve => {
+        const toggle = document.querySelector('#stem-presets'); let seen = false;
+        const observer = new MutationObserver(() => { if (toggle.disabled) seen = true; else if (seen) { observer.disconnect(); resolve(); } });
+        observer.observe(toggle, { attributes: true, attributeFilter: ['disabled'] });
+      }));
+      await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${key}"] .row-menu-load`).click();
+      await done;
+    };
+    const modified = () => page.locator('#save-project').evaluate(node => node.classList.contains('has-changes'));
+    const stored = (key = null) => page.evaluate(async key => {
+      const { StemPresets } = await import('./scripts/stem-presets.mjs');
+      return (await StemPresets.current()).load(key || document.querySelector('#stem-presets').value);
+    }, key);
+    const storedIds = () => page.evaluate(async () => {
+      const { StemPresets } = await import('./scripts/stem-presets.mjs');
+      return (await (await StemPresets.current()).list()).map(record => record.id);
+    });
+    assert.equal(await modified(), false, 'A freshly loaded loop has nothing to save yet');
+    // Saving is by hand. The first save asks for a name; Cancel stores nothing.
+    await page.locator('#save-project').click();
     await page.locator('#save-cancel').click();
-    assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'false');
-    await page.locator('#save-locally').click();
+    assert.deepEqual(await storedIds(), []);
+    await page.locator('#save-project').click();
     await page.locator('#save-name').fill('My saved mix');
     await page.locator('#save-confirm').click();
-    await page.locator('#save-locally[aria-pressed=true]').waitFor();
-    assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'true');
-    await reopenExtract(page);
-    await page.locator('#separate').click();
     await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
     const id = await page.locator('#stem-presets').evaluate(node => node.value);
-    const stored = () => page.evaluate(async () => {
-      const { StemPresets } = await import('./scripts/stem-presets.mjs');
-      const library = await StemPresets.current();
-      return library.load(document.querySelector('#stem-presets').value);
-    });
     assert.equal((await stored()).record.title, 'My saved mix');
+    assert.equal((await stored()).blobs.length, 1, 'Saved before separation: the original alone');
+    // Separating marks the project as modified (* by its name); Ctrl+S adds the stems to it.
+    await reopenExtract(page);
+    await page.locator('#separate').click();
+    await page.waitForFunction(() => document.querySelector('#save-project').classList.contains('has-changes'));
+    assert.equal(await page.locator('#stem-presets .row-menu-modified').isVisible(), true);
+    assert.equal((await stored()).blobs.length, 1, 'Nothing is saved automatically');
+    await page.keyboard.press('Control+s');
+    await page.waitForFunction(() => !document.querySelector('#save-project').classList.contains('has-changes'));
+    assert.equal((await stored(id)).blobs.length, 5, 'Save writes the stems into the same project');
+    assert.deepEqual(await storedIds(), [id]);
     // Rack-only audio is saved with the project, despite having no arrangement clip.
     const clipsBeforeRackImport = (await stored()).record.settings.playlist.clips.length;
     await page.evaluate(async () => {
@@ -85,6 +108,8 @@ async function reopenExtract(page) {
     const rackSample = page.locator('.rack-channel', { hasText: 'rack-only.wav' });
     await rackSample.waitFor();
     const rackSampleKey = await rackSample.getAttribute('data-channel'), rackSampleId = rackSampleKey.slice('sample-'.length);
+    assert.deepEqual(Object.keys((await stored()).samples), [], 'Imported samples wait for Save');
+    await page.locator('#save-project').click();
     await page.waitForFunction(async sampleId => {
       const { StemPresets } = await import('./scripts/stem-presets.mjs');
       const saved = await (await StemPresets.current()).load(document.querySelector('#stem-presets').value);
@@ -108,16 +133,22 @@ async function reopenExtract(page) {
     await page.locator('#stem-keep-tone').check();
     await page.locator('.peq-add').click();
     await page.locator('.peq-clip').click();
+    assert.equal((await stored()).record.settings.rate, 1, 'Edits stay unsaved until Save');
+    await page.locator('#save-project').click();
     await page.waitForFunction(async () => {
       const { StemPresets } = await import('./scripts/stem-presets.mjs');
       const record = (await (await StemPresets.current()).list())[0];
       return record.settings.rate === .5 && record.settings.keepTone && record.settings.states[0].muted && record.settings.instruments?.drums?.slices?.[0]?.start > 0 && record.settings.eq?.bands.length === 1 && record.settings.eq.hardClip;
     });
+    // Leaving with unsaved edits shows Chrome's "Leave site?" warning; leaving drops them.
+    await page.locator('#stem-keep-tone').uncheck();
+    const warned = new Promise(resolve => page.once('dialog', dialog => { resolve(dialog.type()); dialog.accept(); }));
     await page.goto(url.replace('?job=test', ''));
-    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 1);
-    assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'false');
-    await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
-    await page.locator('.pl-stem-head[data-stem=drums] .ui-knob-dial').waitFor();
+    assert.equal(await warned, 'beforeunload');
+    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 2);
+    assert.equal(await page.locator('#stem-presets-menu .row-menu-row').first().textContent(), 'Empty project');
+    await openProject(id);
+    assert.equal(await modified(), false, 'An opened project has no changes');
     assert.equal(await page.evaluate(() => inferences), 0, 'Loading never starts model inference');
     assert.equal(await page.locator('#stem-presets .row-menu-value').textContent(), 'My saved mix');
     assert.equal(await rackSample.getAttribute('data-channel'), rackSampleKey, 'Rack-only sample survives reopening');
@@ -133,15 +164,24 @@ async function reopenExtract(page) {
     assert.equal(await page.locator('#repeat').count(), 0);
     assert.equal(await page.locator('.peq-point').count(), 1);
     assert.equal(await page.locator('.peq-clip').getAttribute('aria-pressed'), 'true');
-    // Turning off never deletes a saved separation.
-    await page.locator('#save-locally').click();
+    // Empty project: unsaved changes ask first. Cancel stays; Don't save starts over and
+    // keeps the stored copy.
+    const emptyProject = async () => { await page.locator('#stem-presets').click(); await page.locator('#stem-presets-menu .row-menu-row[data-id="new-project"] .row-menu-load').click(); };
     await page.locator('#stem-rate').dblclick();
-    assert.equal((await stored()).record.settings.rate, .5);
+    await emptyProject(); await page.locator('#unsaved-cancel').click();
+    assert.equal(await page.locator('#stem-rate').inputValue(), '1', 'Cancel keeps the session');
+    await emptyProject();
+    await Promise.all([page.waitForNavigation(), page.locator('#unsaved-discard').click()]);
+    assert.equal(new URL(page.url()).search, '');
+    assert.equal(await page.locator('.pl-stem-head').count(), 0, 'The page starts empty');
+    assert.equal((await stored(id)).record.settings.rate, .5, "Don't save leaves the stored project as it was");
+    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 2);
+    await openProject(id);
     // Select a different root and save the loaded audio there, retaining the DB copy.
     await page.locator('#preset-folder').click();
     await page.locator('#preset-reset').waitFor();
-    await page.locator('#save-locally:not(:disabled)').waitFor();
-    await page.locator('#save-locally').click();
+    await page.locator('#save-project:not(:disabled)').waitFor();
+    await page.locator('#save-project').click();
     await page.locator('#save-confirm').click();
     await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
     const folderId = await page.locator('#stem-presets').evaluate(node => node.value);
@@ -152,15 +192,15 @@ async function reopenExtract(page) {
       const names = []; for await (const name of directory.keys()) names.push(name); return names.sort();
     }, folderId), ['bass.wav', 'drums.wav', 'original.wav', 'other.wav', 'preset.json', `sample-${rackSampleId}.wav`, 'vocals.wav']);
     await page.reload();
-    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 1);
-    await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${folderId}"] .row-menu-load`).click();
+    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 2);
+    await openProject(folderId);
     await page.locator('.stem').first().waitFor();
     assert.equal(await rackSample.getAttribute('data-channel'), rackSampleKey, 'Rack-only sample survives folder restoration');
     assert.equal(await page.evaluate(() => inferences), 0);
     await page.locator('#preset-reset').click();
     await page.waitForFunction(id => !!document.querySelector(`#stem-presets-menu .row-menu-row[data-id="${id}"]`), id);
     assert.equal(await page.locator('#preset-reset').isVisible(), false);
-    await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
+    await openProject(id);
     await page.waitForFunction(() => document.querySelector('#stem-rate').value === '0.5');
     // Interrupted folder saves must not appear in the list; prior data survives.
     assert.equal(await page.evaluate(async () => {
@@ -185,7 +225,7 @@ async function reopenExtract(page) {
     }, folderId);
     await page.locator('#preset-folder').click();
     await page.locator('#stem-presets:not(:disabled)').waitFor();
-    await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${folderId}"] .row-menu-load`).click();
+    await openProject(folderId);
     await page.locator('.ui-toast-content[data-variant=error]').first().waitFor();
     assert.equal(await page.locator('.pl-stem-head').count(), 5);
     assert.equal(await page.locator('#stem-rate').inputValue(), '0.5');
@@ -193,8 +233,7 @@ async function reopenExtract(page) {
     // Keep Tone is off. Shared clock remains aligned through live changes/seek.
     await page.locator('#preset-reset').click();
     await page.locator('#stem-presets:not(:disabled)').waitFor();
-    await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
-    await page.locator('#save-locally[aria-pressed=true]').waitFor();
+    await openProject(id);
     await page.locator('.peq-reset').click();
     await page.locator('.pl-stem-head[data-stem=original] .stem-enable').click({ button: 'right' });
     await page.evaluate(() => {
@@ -246,8 +285,8 @@ async function reopenExtract(page) {
       await folder.remove(copy.id);
       return results;
     }, id), [[rackSampleId, 'kick-808'], [rackSampleId], ['kick-808'], []]);
-    // Delete from the menu: two steps, never opens the row; the open session stays and
-    // autosave stops. The folder destination removes only that preset's folder.
+    // Delete from the menu: two steps, never opens the row; the open session stays, now
+    // unsaved. The folder destination removes only that preset's folder.
     await page.setViewportSize({ width: 1200, height: 1000 });
     await page.locator('#stem-presets').click();
     const removeRow = page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-delete`);
@@ -255,7 +294,7 @@ async function reopenExtract(page) {
     assert.equal(await removeRow.textContent(), 'Delete?');
     await removeRow.click();
     await page.waitForFunction(id => !document.querySelector(`#stem-presets-menu .row-menu-row[data-id="${id}"]`), id);
-    assert.equal(await page.locator('#save-locally').getAttribute('aria-pressed'), 'false', 'Autosave stops');
+    assert.equal(await modified(), true, 'The open session is unsaved again');
     assert.equal(await page.locator('.pl-stem-head').count(), 5, 'The open session stays');
     assert.equal(await page.evaluate(async id => {
       const { StemPresets } = await import('./scripts/stem-presets.mjs');
@@ -269,6 +308,6 @@ async function reopenExtract(page) {
       return names.includes(id);
     }, folderId), false);
     assert.deepEqual(errors, []);
-    console.log('Stem presets: DB/folder save, restore, automatic settings, reset, interrupted/corrupt saves, no re-inference, real Keep Tone and responsive layout passed.');
+    console.log('Stem projects: manual save (original alone, then stems), unsaved marker, Leave-site warning, empty project, DB/folder save, restore, reset, interrupted/corrupt saves, no re-inference, real Keep Tone and responsive layout passed.');
   } finally { await context.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

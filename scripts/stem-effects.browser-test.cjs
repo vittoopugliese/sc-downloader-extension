@@ -78,7 +78,7 @@ async function reopenExtract(page) {
     await setting('reverbRoom').selectOption('plate');
     await page.waitForFunction(() => fxWorklets.includes('scdl-bitcrusher'));
     // Presets and all character values survive the saved separation path.
-    await page.locator('#save-locally').click(); await page.locator('#save-confirm').click();
+    await page.locator('#save-project').click(); await page.locator('#save-confirm').click();
     await page.waitForFunction(() => document.querySelector('#stem-presets').value.startsWith('stem-'));
     const id = await page.locator('#stem-presets').evaluate(node => node.value);
     const savedValues = await fx.locator('[data-fx-setting]').evaluateAll(nodes => Object.fromEntries(nodes.map(n => [n.dataset.fxSetting, n.value || n.getAttribute('aria-valuenow')])));

@@ -90,6 +90,7 @@ $packageItems = @(
     "scripts/ui-knob.mjs",
     "scripts/ui-toast.mjs",
     "scripts/stem-extract-dialog.mjs",
+    "scripts/stem-project-dialog.mjs",
     "scripts/stem-metronome.mjs",
     "scripts/stem-sample-browser.mjs",
     "scripts/stem-sample-library.mjs",
