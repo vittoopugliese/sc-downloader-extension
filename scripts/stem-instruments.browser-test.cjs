@@ -34,6 +34,8 @@ const { chromium } = require('playwright');
         const source = createSource.call(this);
         const start = source.start.bind(source);
         source.start = (...args) => { source.testStart = args; start(...args); };
+        const stop = source.stop.bind(source);
+        source.stop = (...args) => { source.testStops ||= []; source.testStops.push(args); stop(...args); };
         globalThis.stemTestSources.push(source); return source;
       };
       globalThis.chrome = { runtime: { sendMessage: async ({ type }) => type === 'STEM_LOOP_INFO'
@@ -49,7 +51,14 @@ const { chromium } = require('playwright');
       };
     }, { dataUrl });
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html?job=fixture`);
-    await require(process.argv.includes('--modes') ? './stem-rack-modes.browser-check.cjs' : './stem-instruments.browser-check.cjs')(page);
+    try {
+      await require(process.argv.includes('--workflow') ? './stem-note-workflow.browser-check.cjs' : process.argv.includes('--modes') ? './stem-rack-modes.browser-check.cjs' : './stem-instruments.browser-check.cjs')(page);
+    } catch (error) {
+      fs.mkdirSync(path.join(root, 'test-results/stem-instruments'), { recursive: true });
+      await page.screenshot({ path: path.join(root, 'test-results/stem-instruments/failure.png'), fullPage: true });
+      console.error('Browser diagnostics:', errors, await page.locator('.pl-menu').allTextContents());
+      throw error;
+    }
     assert.deepEqual(errors, []);
   } finally { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

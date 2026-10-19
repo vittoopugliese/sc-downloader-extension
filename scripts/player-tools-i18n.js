@@ -4,6 +4,17 @@
   'use strict';
   const locales = ['en', 'es', 'de', 'pt-BR', 'ru'];
   const rows = `
+Typing keyboard to piano¦Teclado en modo piano¦Computertastatur als Klavier¦Teclado em modo piano¦Клавиатура как пианино
+Record notes¦Grabar notas¦Noten aufnehmen¦Gravar notas¦Записать ноты
+Stop recording¦Detener grabación¦Aufnahme stoppen¦Parar gravação¦Остановить запись
+Recording mode¦Modo de grabación¦Aufnahmemodus¦Modo de gravação¦Режим записи
+Loop overdub¦Grabar en loop¦Loop-Aufnahme¦Gravar em loop¦Запись в цикле
+Extend recording¦Extender grabación¦Aufnahme verlängern¦Estender gravação¦Продлевать запись
+Backing loop¦Acompañamiento¦Begleitung¦Acompanhamento¦Аккомпанемент
+Trim pattern to notes¦Recortar patrón a las notas¦Pattern auf Noten kürzen¦Recortar padrão às notas¦Обрезать паттерн по нотам
+Fill every $1 steps¦Llenar cada $1 pasos¦Alle $1 Schritte füllen¦Preencher a cada $1 passos¦Заполнить каждые $1 шагов
+Recording limit reached: $1 notes or $2 bars.¦Límite de grabación: $1 notas o $2 compases.¦Aufnahmelimit: $1 Noten oder $2 Takte.¦Limite de gravação: $1 notas ou $2 compassos.¦Лимит записи: $1 нот или $2 тактов.
+Piano keyboard: Z–M and Q–U play white notes; the rows above play sharps. Recording follows Snap.¦Teclado piano: Z–M y Q–U tocan las blancas; las filas superiores, los sostenidos. La grabación sigue Snap.¦Klaviatur: Z–M und Q–U spielen weiße Tasten, die Reihen darüber die schwarzen. Die Aufnahme folgt dem Raster.¦Teclado piano: Z–M e Q–U tocam as brancas; as filas acima, os sustenidos. A gravação segue Snap.¦Клавиатура: Z–M и Q–U — белые клавиши, ряды выше — диезы. Запись следует привязке.
 All samples¦Todos los samples¦Alle Samples¦Todas as amostras¦Все сэмплы
 Chops¦Chops¦Chops¦Chops¦Нарезка
 Edit chops¦Editar chops¦Chops bearbeiten¦Editar chops¦Редактировать нарезку

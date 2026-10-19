@@ -482,3 +482,17 @@ main>#playlist{margin-top:12px;padding:0}
 .daw-row-main>.brand{padding-right:8px}
 .daw-row-sub .source-mini{flex:0 0 auto}
 @media(max-width:600px){.header-library{flex:1 1 calc(100% - 50px)}.daw-row-sub .stem-preview{flex-basis:100%}}
+
+/* Continuous pattern timelines: every bar shares one horizontal scroll. */
+.rack-grid{grid-template-columns:34px repeat(var(--rack-steps,16),24px);max-height:60vh;overscroll-behavior:contain}
+.rack-channel{grid-template-columns:300px repeat(var(--rack-steps,16),24px);width:max-content;min-width:100%}
+.rack-overview{overscroll-behavior:contain}
+.stem-plugin .rack-step.is-bar{border-left-color:#dfaa79;margin-left:2px}
+.stem-plugin .plugin-bars{width:62px;height:28px;padding:0 6px;border:1px solid #514c44;border-radius:5px;background:#121313;color:#eee;font:11px ui-monospace,monospace}
+.piano-sheet{grid-template-rows:24px var(--piano-height,1078px)}
+.piano-grid{height:var(--piano-height,1078px)}
+.piano-keys .piano-key.is-active{background:#ed7134;color:#fff}
+.stem-plugin .piano-keyboard[aria-pressed=true]{background:#714425;border-color:#efab76;color:#fff}
+.stem-plugin .piano-record{color:#ff6f7c}
+.stem-plugin .piano-record[aria-pressed=true]{background:#a02f3b;color:#fff;border-color:#ff8e99}
+@media(max-width:600px){.rack-channel{grid-template-columns:236px repeat(var(--rack-steps,16),24px)}}

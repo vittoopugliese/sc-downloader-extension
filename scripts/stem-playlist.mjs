@@ -1159,6 +1159,12 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   draw(); animate();
   return {
     toggle: safe(toggle), space: safe(space), pause: () => stop(), seek, now, playing, setSession, edit, draw,
+    async startRecordingLoop(active = () => true) {
+      stop(); seek(transport().loop?.start || 0); await connect();
+      if (!active()) return;
+      if (engine.play(playbackState(), position, transport())) { renderPlay(true); startMetronome(); onTransport?.(true); }
+    },
+    recordingClock: () => engine?.recordingClock(),
     async importRackDrop(dataTransfer) {
       // Capture files/items before awaiting: browser drag data is only readable during drop.
       const browsed = sampleBrowser?.resolveDrop(dataTransfer);

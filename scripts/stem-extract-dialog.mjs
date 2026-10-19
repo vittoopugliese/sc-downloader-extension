@@ -73,9 +73,8 @@ export function mountExtractDialog({ t, stemName, onExtract, onCancel, onClearMo
     extract.disabled = running || !ready || none;
     extract.dataset.scdlTooltip = none ? t('Choose at least one stem', 'Elegí al menos un stem') : '';
     for (const input of [...stemInputs.values(), action, group.input]) input.disabled = running;
-    // The original's stems always have their own four tracks under it, and it stays.
-    group.wrap.hidden = original; removeOption.hidden = removeOption.disabled = original;
-    if (original && action.value === 'delete') action.value = 'mute';
+    // Session sources (including SoundCloud loops) support the same after-action.
+    group.wrap.hidden = original;
     clear.disabled = running;
   }
   for (const input of [...stemInputs.values(), action, group.input]) input.addEventListener('change', () => { remember(); render(); });

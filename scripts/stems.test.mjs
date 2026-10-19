@@ -6,15 +6,36 @@ import './stem-jobs.js';
 import { normalizeDrumSlice, editDrumSlice, detectDrumSlices } from './stem-sampler.mjs';
 import { MAX_NOTES, migrateLegacy, noteName, normalizeInstrument, normalizePattern, normalizeProject, patternSeconds, pitchRatio } from './stem-pattern-core.mjs';
 import { loopSegments, retimePatternClips, validateArrangement } from './stem-playlist-core.mjs';
+import { createNoteTake, recordedNotes } from './stem-note-recording.mjs';
+
+test('recording quantizes gates, splits loop seams, preserves chords and extends beyond four bars', () => {
+  assert.deepEqual(recordedNotes({ pitch: 60, start: 15.8, end: 17.1, snap: .5, steps: 16, loop: true }),
+    [{ pitch: 60, velocity: .8, start: 0, length: 1 }]);
+  assert.deepEqual(recordedNotes({ pitch: 61, start: 15, end: 18, snap: 1, steps: 16, loop: true }),
+    [{ pitch: 61, velocity: .8, start: 15, length: 1 }, { pitch: 61, velocity: .8, start: 0, length: 2 }]);
+  const pattern = normalizePattern({ id: 'take', track: 'bass', bars: 1 });
+  const take = createNoteTake(pattern, 'extend', .5);
+  take.down('q', 72, 64.1); take.down('q', 72, 64.2); take.down('e', 76, 64.1);
+  take.up('q', 66.2); take.up('e', 66.2);
+  assert.equal(take.bars, 5); assert.equal(take.notes.length, 2);
+  assert.deepEqual(take.notes.map(n => [n.start, n.length]), [[64, 2], [64, 2]]);
+  assert.deepEqual(pattern.notes, []);
+  assert.equal(normalizePattern({ ...pattern, bars: take.bars, notes: take.notes }).notes.length, 2);
+  const loop = createNoteTake(pattern, 'loop', 1);
+  loop.down('z', 60, 5000); loop.up('z', 5002);
+  assert.deepEqual(loop.notes, [{ pitch: 60, velocity: .8, start: 8, length: 2 }], 'Loop recording keeps gates after many passes');
+  const full = createNoteTake({ ...pattern, notes: Array.from({ length: MAX_NOTES }, () => ({ pitch: 60, start: 0, length: 1, velocity: .8 })) }, 'loop', 1);
+  full.down('q', 72, 1); assert.equal(full.full, true); assert.equal(full.notes.length, MAX_NOTES);
+});
 
 test('patterns normalize malformed notes and steps, keep hidden bars and do not mutate input', () => {
   const value = { id: 'p1', track: 'bass', name: '  Groove  ', bars: 3, steps: [[1.5, -1, .5]],
     notes: [{ pitch: 60, start: 40, length: 8, velocity: .5 }, { pitch: NaN, start: 0, length: 1 },
       { pitch: 100, start: 63.5, length: 500, velocity: -2 }, { pitch: 60, start: 64, length: 1 }] };
   const pattern = normalizePattern(value);
-  assert.equal(pattern.name, 'Groove'); assert.equal(pattern.bars, 1, 'Only 1, 2 or 4 bars');
+  assert.equal(pattern.name, 'Groove'); assert.equal(pattern.bars, 3, 'Any whole bar count supports extended takes');
   assert.deepEqual(pattern.steps[0].slice(0, 3), [1, 0, .5]); assert.equal(pattern.steps.length, 8); assert.equal(pattern.steps[7].length, 64);
-  assert.deepEqual(pattern.notes, [{ pitch: 60, start: 40, length: 8, velocity: .5 }, { pitch: 96, start: 63.5, length: 64, velocity: .01 }]);
+  assert.deepEqual(pattern.notes, [{ pitch: 60, start: 40, length: 8, velocity: .5 }, { pitch: 96, start: 63.5, length: 500, velocity: .01 }, { pitch: 60, start: 64, length: 1, velocity: .8 }]);
   assert.equal(value.notes.length, 4); assert.equal(value.steps[0][0], 1.5);
   assert.equal(normalizePattern({ ...value, notes: Array(10000).fill({ pitch: 60, start: 0, length: 1 }) }).notes.length, MAX_NOTES);
   for (const bad of [null, {}, { id: 'p', track: '../x' }, { id: '', track: 'bass' }]) assert.equal(normalizePattern(bad), null);
@@ -157,7 +178,7 @@ test('the shipping allow-list contains the analyzer and every local runtime depe
   const required = ['stems.html', 'assets/stems.css', 'scripts/stems-page.mjs', 'scripts/stem-audio.mjs',
     'scripts/stem-presets.mjs', 'scripts/stem-library-ui.mjs', 'scripts/stem-tone-processor.mjs',
     'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/local-audio-output.mjs', 'scripts/icons.js', 'scripts/icons-client.js',
-    'scripts/stem-pattern-core.mjs', 'scripts/stem-instruments.mjs', 'scripts/stem-channel-rack.mjs', 'scripts/stem-piano.mjs',
+    'scripts/stem-pattern-core.mjs', 'scripts/stem-note-recording.mjs', 'scripts/stem-instruments.mjs', 'scripts/stem-channel-rack.mjs', 'scripts/stem-piano.mjs',
     'scripts/stem-effects.mjs', 'scripts/stem-module-window.mjs', 'scripts/stem-rack-overview.mjs', 'scripts/stem-row-menu.mjs',
     'scripts/stem-sample-browser.mjs', 'scripts/stem-sample-library.mjs', 'scripts/stem-sample-preview.mjs',
     'scripts/audio-effects-core.js', 'scripts/bitcrusher-processor.js',

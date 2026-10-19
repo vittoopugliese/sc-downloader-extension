@@ -90,27 +90,20 @@ export function mountChannelRack({ container, instruments, audioContext, output,
   }
   const clear = button('rack-clear', pt('Clear steps'), iconMarkup(PLUGIN_ICONS.clear), () => instruments.editPattern(pattern => {
     const rows = rackView === 'channels' && instruments.focused().instrument?.mode === 'oneShot' ? [pattern.hits] : pattern.steps;
-    for (const row of rows) row.fill(0, bar * STEPS_PER_BAR, (bar + 1) * STEPS_PER_BAR);
+    for (const row of rows) row.fill(0, 0, count());
   }));
   toolbar.append(viewTabs, play, focus.element, mode, place, slice, clearSlices, clear);
   const wave = element('div', 'waveform rack-wave');
   const canvas = element('canvas', 'rack-wave-canvas'); canvas.setAttribute('aria-hidden', 'true'); wave.append(canvas);
-  const tabs = element('div', 'rack-bars');
-  const barButtons = [0, 1, 2, 3].map(index => {
-    const tab = button('rack-bar', pt('Bar $1', index + 1), String(index + 1), () => { bar = index; render(); });
-    tabs.append(tab); return tab;
-  });
   const grid = element('div', 'rack-grid'); grid.setAttribute('role', 'group'); grid.setAttribute('aria-label', pt('Pattern steps'));
-  grid.append(element('span', 'rack-corner'));
-  const beats = Array.from({ length: STEPS_PER_BAR }, (_, i) => element('span', 'rack-beat', i % 4 ? '' : String(i / 4 + 1)));
-  grid.append(...beats);
+  const beats = [];
   const pads = [], cells = [];
   const hint = element('p', 'plugin-hint'); hint.setAttribute('role', 'status');
   const empty = element('p', 'plugin-empty', pt('Separate or import audio to start.'));
-  shell.body.append(toolbar, wave, tabs, grid, hint, empty);
+  shell.body.append(toolbar, wave, grid, hint, empty);
 
-  let bar = 0, sampler = null, mounted = null, view = null, template = .8, gesture = null, frame = 0, drawn = '';
-  const overview = mountRackOverview({ container: shell.body, instruments, audioContext, output, report, bar: () => bar,
+  let sampler = null, mounted = null, view = null, template = .8, gesture = null, frame = 0, drawn = '';
+  const overview = mountRackOverview({ container: shell.body, instruments, audioContext, output, report,
     openChops(key) { rackView = 'chops'; instruments.focus(key); instruments.editInstrument(value => { value.mode = 'slices'; }, key); } });
   shell.body.insertBefore(overview.element, hint);
   const count = () => (instruments.focused().pattern?.bars ?? 1) * STEPS_PER_BAR;
@@ -180,16 +173,26 @@ export function mountChannelRack({ container, instruments, audioContext, output,
       sampler.trigger(row);
     });
     pad.addEventListener('contextmenu', event => { event.preventDefault(); sampler?.arm(row); });
-    pads.push(pad); grid.append(pad);
-    const line = [];
-    for (let column = 0; column < STEPS_PER_BAR; column++) {
-      const cell = element('button', `rack-step${column % 4 === 0 ? ' is-beat' : ''}`); cell.type = 'button';
-      cell.dataset.row = String(row); cell.dataset.column = String(column);
-      line.push(cell); grid.append(cell);
-    }
-    cells.push(line);
+    pads.push(pad);
+    cells.push([]);
   }
-  const stepOf = cell => bar * STEPS_PER_BAR + Number(cell.dataset.column);
+  function buildSteps() {
+    if (beats.length === count()) return;
+    beats.length = 0; grid.replaceChildren(element('span', 'rack-corner'));
+    grid.style.setProperty('--rack-steps', String(count()));
+    for (let i = 0; i < count(); i++) beats.push(element('span', 'rack-beat', i % 4 ? '' : `${Math.floor(i / 16) + 1}.${i % 16 / 4 + 1}`));
+    grid.append(...beats);
+    for (let row = 0; row < PAD_KEYS.length; row++) {
+      grid.append(pads[row]);
+      const line = cells[row]; line.length = 0;
+      for (let column = 0; column < count(); column++) {
+        const cell = element('button', `rack-step${column % 4 === 0 ? ' is-beat' : ''}${column % 16 === 0 ? ' is-bar' : ''}`); cell.type = 'button';
+        cell.dataset.row = String(row); cell.dataset.column = String(column);
+        line.push(cell); grid.append(cell);
+      }
+    }
+  }
+  const stepOf = cell => Number(cell.dataset.column);
   const value = (row, step) => instruments.focused().pattern?.steps[row][step] ?? 0;
   // Click toggles a hit with the velocity of the last hit touched; dragging a hit up or
   // down changes its velocity, shown by the fill. Right-click removes, as in FL.
@@ -238,7 +241,7 @@ export function mountChannelRack({ container, instruments, audioContext, output,
       return;
     }
     const nextRow = clamp(row + (event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0), 0, 7);
-    const nextColumn = clamp(column + (event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0), 0, STEPS_PER_BAR - 1);
+    const nextColumn = clamp(column + (event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0), 0, count() - 1);
     cells[nextRow][nextColumn].focus();
   });
   // Space previews the pattern while the rack has focus; the playlist keeps Space elsewhere.
@@ -259,7 +262,7 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     // Pads play through this track's EQ.
     sampler = mountPadSampler({ waveform: wave, buffer, timeline, audioContext, output: () => output(key), locale, report,
       saved: instruments.instrument(key).slices,
-      keyboardActive: event => shell.active() && rackView === 'chops' && instruments.focused().instrument?.mode === 'slices' && !event.target.closest?.('.pl-ui,.stem-piano-roll,.rack-overview'),
+      keyboardActive: event => !document.querySelector('.piano-keyboard[aria-pressed=true]') && shell.active() && rackView === 'chops' && instruments.focused().instrument?.mode === 'slices' && !event.target.closest?.('.pl-ui,.stem-piano-roll,.rack-overview'),
       changed: slices => {
         instruments.editInstrument(instrument => { instrument.slices = slices; instrument.sliced = true; }, key);
         if (slices.some(Boolean) && cleared?.key === key) cleared = null;
@@ -286,16 +289,14 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     renderSteps(state);
   }
   function renderSteps(state = sampler?.state()) {
-    const { pattern } = instruments.focused(), bars = pattern?.bars ?? 1;
-    bar = Math.min(bar, bars - 1);
-    tabs.hidden = bars < 2;
-    barButtons.forEach((tab, i) => { tab.hidden = i >= bars; tab.setAttribute('aria-pressed', String(i === bar)); });
+    const { pattern } = instruments.focused();
+    buildSteps();
     cells.forEach((line, row) => line.forEach((cell, column) => {
-      const step = bar * STEPS_PER_BAR + column, velocity = pattern?.steps[row][step] ?? 0;
+      const step = column, velocity = pattern?.steps[row][step] ?? 0;
       cell.disabled = !state?.slices[row]; cell.dataset.step = String(step); cell.dataset.velocity = String(velocity);
       cell.classList.toggle('is-on', velocity > 0); cell.setAttribute('aria-pressed', String(velocity > 0));
       cell.style.setProperty('--velocity', String(velocity));
-      cell.dataset.scdlTooltip = `${PAD_KEYS[row]} · ${pt('Bar $1', bar + 1)} · ${pt('Step $1', column + 1)}${velocity ? ` · ${Math.round(velocity * 100)}%` : ''}`;
+      cell.dataset.scdlTooltip = `${PAD_KEYS[row]} · ${pt('Bar $1', Math.floor(column / 16) + 1)} · ${pt('Step $1', column % 16 + 1)}${velocity ? ` · ${Math.round(velocity * 100)}%` : ''}`;
       cell.setAttribute('aria-label', cell.dataset.scdlTooltip);
     }));
   }
@@ -307,7 +308,7 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     const step = () => {
       const phase = instruments.phase(), current = phase < 0 ? -1 : Math.floor(phase * count());
       beats.forEach((beat, column) => {
-        const active = current === bar * STEPS_PER_BAR + column;
+        const active = current === column;
         beat.classList.toggle('is-current', active);
         for (const line of cells) line[column].classList.toggle('is-current', active);
       });
@@ -331,9 +332,8 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     overview.render();
     place.disabled = !pattern; clear.disabled = !pattern; slice.disabled = !track?.buffer;
     play.disabled = !pattern && !instruments.playing();
-    if (!key) tabs.hidden = true;
   }
-  instruments.on(kind => { if (kind === 'transport') renderTransport(); else render(); });
+  instruments.on(kind => { if (kind.startsWith('before')) return; if (kind === 'transport') renderTransport(); else render(); });
   render(); renderTransport();
   return {
     ...shell,

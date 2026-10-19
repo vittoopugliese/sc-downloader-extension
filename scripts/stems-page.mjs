@@ -582,7 +582,7 @@ async function loadRecording() {
 }
 const settings = () => ({ ...instruments.snapshot(),
   states: STEMS.map(stem => { const track = playlist.track(stem); return { muted: !!track?.mute, solo: false, gain: track?.gain ?? 1 }; }),
-  original: { muted: !!playlist.track('original')?.mute, gain: playlist.track('original')?.gain ?? 1 },
+  original: { muted: !!playlist.track('original')?.mute, gain: playlist.track('original')?.gain ?? 1, removed: removeOriginal },
   rate, keepTone, stems: [...stemChoice], eq: mixOutput.snapshot().eq, fx: mixOutput.effectsSettings(), playlist: playlist.snapshot() });
 libraryUI = mountStemLibrary({ locale, report: status,
   onOperation(value) { libraryOperating = value; extractDialog.setReady(!value && !busy && canSeparate()); $('import-audio').disabled = value || busy || !importReady; },
@@ -784,15 +784,16 @@ function channelForTrack(track, source) {
 }
 // Stems chosen in the extraction window. The separation keeps all four WAVs; the others
 // just get no track. `muteOriginal` is the window's "when done" choice.
-let stemChoice = [...STEMS], muteOriginal = true;
+let stemChoice = [...STEMS], muteOriginal = true, removeOriginal = false;
 function startSession(saved = null, samples = []) {
+  if (saved) removeOriginal = saved.original?.removed === true;
   if (saved) stemChoice = Array.isArray(saved.stems) && saved.stems.some(stem => STEMS.includes(stem)) ? STEMS.filter(stem => saved.stems.includes(stem)) : [...STEMS];
   const sources = [original, ...buffers].map((buffer, index) => {
     const stem = index ? STEMS[index - 1] : 'original';
     // With stems, the original starts muted so the mix is not doubled.
     const mute = index ? false : saved?.original ? saved.original.muted === true : buffers.length > 0 && muteOriginal;
     return { id: `audio-${stem}`, stem, name: index ? text(stem) : text('original'), buffer, mute };
-  }).filter(source => source.stem === 'original' || stemChoice.includes(source.stem));
+  }).filter(source => source.stem === 'original' ? !removeOriginal : stemChoice.includes(source.stem));
   // The stem mix lives in `states` (as before the playlist); the arrangement adds clips.
   const tracks = saved?.states && [...STEMS.map((stem, i) => ({ stem, gain: saved.states[i]?.gain, mute: saved.states[i]?.muted === true })),
     ...(saved.original ? [{ stem: 'original', gain: saved.original.gain, mute: saved.original.muted === true }] : [])];
@@ -806,7 +807,7 @@ const sampleWav = buffer => { if (!sampleWavs.has(buffer)) sampleWavs.set(buffer
 const wavOf = buffer => new Blob([encodeWav([buffer.getChannelData(0), buffer.getChannelData(Math.min(1, buffer.numberOfChannels - 1))], buffer.sampleRate)], { type: 'audio/wav' });
 // Before separation the playlist holds the source audio alone.
 function showOriginal() {
-  wavs = [];
+  wavs = []; removeOriginal = false;
   startSession(); syncLoop();
 }
 function disposeResults() {
@@ -912,6 +913,7 @@ async function separate(options) {
       if (version !== revision) return;
       if (target.original) {
         stemChoice = STEMS.filter(stem => options.stems.includes(stem)); muteOriginal = options.when === 'mute';
+        removeOriginal = options.when === 'delete';
         showResults(result); extractDialog.close();
         status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`, 'success');
         await libraryUI.completed();

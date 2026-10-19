@@ -1,8 +1,9 @@
-import { PAD_KEYS, STEPS_PER_BAR, clamp, instrumentSample, noteName, schedulePianoNote } from './stem-pattern-core.mjs';
+import { contextMenu } from './stem-playlist.mjs';
+import { PAD_KEYS, STEPS_PER_BAR, clamp, instrumentSample, noteName } from './stem-pattern-core.mjs';
 
 // All loaded sources share the selected pattern. The chops editor and piano roll
 // edit a lane of that same pattern; changing selection never changes patterns.
-export function mountRackOverview({ container, instruments, audioContext, output, report, bar, openChops }) {
+export function mountRackOverview({ container, instruments, audioContext, output, report, openChops }) {
   const pt = globalThis.SCPlayerToolsText.t, rows = new Map(), voices = new Map();
   const grid = document.createElement('div'); grid.className = 'rack-overview';
   grid.setAttribute('role', 'group'); grid.setAttribute('aria-label', pt('All samples'));
@@ -10,25 +11,26 @@ export function mountRackOverview({ container, instruments, audioContext, output
   let template = .8, gesture = null, disposed = false;
   const node = (tag, className, text) => { const n = document.createElement(tag); n.className = className; if (text) n.textContent = text; return n; };
   const button = (className, label, action) => { const n = node('button', className, label); n.type = 'button'; n.addEventListener('click', action); return n; };
-  function stop(key) { const voice = voices.get(key); voice?.stop(); voices.delete(key); }
+  function stop(key) { for (const voice of voices.get(key) || []) voice.stop(); voices.delete(key); }
   function preview(key) {
     const track = instruments.tracks().find(item => item.key === key), instrument = instruments.instrument(key);
     const sample = instrumentSample(instrument, track?.buffer);
     if (!sample || !track?.buffer) return;
-    stop(key);
-    const token = { stop() {} }; voices.set(key, token);
+    if (instrument.cutSelf) stop(key);
+    const group = voices.get(key) || new Set(), token = { stop() {} }; group.add(token); voices.set(key, group);
     try {
       const context = audioContext();
       context.resume().then(() => {
-        if (disposed || voices.get(key) !== token) return;
-        const voice = schedulePianoNote(context, output(key), track.buffer, sample, instrument.piano,
-          { pitch: instrument.piano.root, velocity: .8 }, context.currentTime, sample.end - sample.start, instrument.mode === 'oneShot');
-        if (!voice) return;
-        voices.set(key, voice);
-        voice.source.onended = () => { voice.cleanup(); if (voices.get(key) === voice) voices.delete(key); };
-      }, report);
+        if (disposed || voices.get(key) !== group || !group.has(token)) return;
+        const voice = instruments.voices(key).trigger(context, output(key), track.buffer, sample, instrument,
+          { pitch: instrument.piano.root, velocity: .8 }, sample.end - sample.start);
+        if (!voice) { group.delete(token); return; }
+        token.stop = voice.stop;
+        voice.source.addEventListener('ended', () => { group.delete(token); if (!group.size && voices.get(key) === group) voices.delete(key); }, { once: true });
+      }).catch(report);
     } catch (error) { voices.delete(key); report(error); }
   }
+  const count = () => (instruments.focused().pattern?.bars || 1) * STEPS_PER_BAR;
   function values(key) {
     const pattern = instruments.channel(key), instrument = instruments.instrument(key);
     return instrument.mode === 'oneShot' ? pattern?.hits : pattern?.steps[instrument.piano.pad];
@@ -58,17 +60,37 @@ export function mountRackOverview({ container, instruments, audioContext, output
     chops.append(globalThis.SCIcons.create('slice'));
     chops.dataset.scdlTooltip = pt('Edit chops'); chops.setAttribute('aria-label', pt('Edit chops'));
     heading.append(play, name, mode, root, chops); row.append(heading);
-    const steps = Array.from({ length: STEPS_PER_BAR }, (_, column) => {
-      const cell = button(`rack-step${column % 4 === 0 ? ' is-beat' : ''}`, '', () => {});
-      cell.dataset.channel = track.key; cell.dataset.column = String(column); row.append(cell); return cell;
+    heading.addEventListener('contextmenu', event => contextMenu(event, [
+      { heading: track.name },
+      ...[2, 4, 8].map(interval => ({ label: pt('Fill every $1 steps', interval), action: () => {
+        instruments.editPattern(pattern => {
+          const instrument = instruments.instrument(track.key);
+          const lane = instrument.mode === 'oneShot' ? pattern.hits : pattern.steps[instrument.piano.pad];
+          for (let i = 0; i < pattern.bars * STEPS_PER_BAR; i++) lane[i] = i % interval ? 0 : template;
+        }, track.key);
+      } })),
+      '-',
+      { label: pt('Cut itself'), checked: instruments.instrument(track.key).cutSelf, action: () => {
+        stop(track.key); instruments.voices(track.key).stop();
+        instruments.editInstrument(value => { value.cutSelf = !value.cutSelf; }, track.key);
+      } },
+    ]));
+    grid.append(row); return { row, name, play, mode, root, steps: [] };
+  }
+  function buildSteps(row, key) {
+    if (row.steps.length === count()) return;
+    for (const step of row.steps) step.remove();
+    row.row.style.setProperty('--rack-steps', String(count()));
+    row.steps = Array.from({ length: count() }, (_, column) => {
+      const cell = button(`rack-step${column % 4 === 0 ? ' is-beat' : ''}${column % 16 === 0 ? ' is-bar' : ''}`, '', () => {});
+      cell.dataset.channel = key; cell.dataset.column = String(column); row.row.append(cell); return cell;
     });
-    grid.append(row); return { row, name, play, mode, root, steps };
   }
   grid.addEventListener('pointerdown', event => {
     const cell = event.target.closest('.rack-step');
     if (!cell || cell.disabled || event.button !== 0) return;
     event.preventDefault(); cell.focus({ preventScroll: true });
-    const key = cell.dataset.channel, step = bar() * STEPS_PER_BAR + Number(cell.dataset.column), velocity = values(key)?.[step] || 0;
+    const key = cell.dataset.channel, step = Number(cell.dataset.column), velocity = values(key)?.[step] || 0;
     if (velocity) template = velocity;
     gesture = { id: event.pointerId, cell, key, step, velocity, y: event.clientY, dragged: false };
     cell.setPointerCapture(event.pointerId);
@@ -88,11 +110,11 @@ export function mountRackOverview({ container, instruments, audioContext, output
   });
   grid.addEventListener('contextmenu', event => {
     const cell = event.target.closest('.rack-step'); if (!cell) return;
-    event.preventDefault(); edit(cell.dataset.channel, bar() * STEPS_PER_BAR + Number(cell.dataset.column), 0);
+    event.preventDefault(); edit(cell.dataset.channel, Number(cell.dataset.column), 0);
   });
   grid.addEventListener('keydown', event => {
     const cell = event.target.closest('.rack-step'); if (!cell || cell.disabled) return;
-    const key = cell.dataset.channel, column = Number(cell.dataset.column), step = bar() * STEPS_PER_BAR + column;
+    const key = cell.dataset.channel, column = Number(cell.dataset.column), step = column;
     if (['Enter', 'Delete', 'Backspace'].includes(event.key)) {
       event.preventDefault(); edit(key, step, event.key === 'Enter' && !values(key)?.[step] ? template : 0); return;
     }
@@ -103,7 +125,7 @@ export function mountRackOverview({ container, instruments, audioContext, output
       return;
     }
     const keys = [...rows.keys()], next = clamp(keys.indexOf(key) + (event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0), 0, keys.length - 1);
-    rows.get(keys[next])?.steps[clamp(column + (event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0), 0, 15)].focus();
+    rows.get(keys[next])?.steps[clamp(column + (event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0), 0, count() - 1)].focus();
   });
   return {
     element: grid,
@@ -113,17 +135,18 @@ export function mountRackOverview({ container, instruments, audioContext, output
       for (const track of tracks) {
         if (!rows.has(track.key)) rows.set(track.key, create(track));
         const row = rows.get(track.key), instrument = instruments.instrument(track.key), selected = instruments.focused().key === track.key;
-        const revision = JSON.stringify([instrument.mode, instrument.piano, instrument.slices]);
-        if (row.revision !== revision || row.buffer !== track.buffer) stop(track.key);
+        const revision = JSON.stringify([instrument.mode, instrument.piano, instrument.slices, instrument.cutSelf]);
+        if (row.revision !== revision || row.buffer !== track.buffer) { stop(track.key); instruments.voices(track.key).stop(); }
         row.revision = revision; row.buffer = track.buffer;
+        buildSteps(row, track.key);
         row.name.textContent = track.name; row.name.dataset.scdlTooltip = track.name;
         row.name.setAttribute('aria-pressed', String(selected)); row.row.classList.toggle('is-selected', selected);
         row.play.setAttribute('aria-label', `${pt('Preview note')} · ${track.name}`);
         row.mode.value = instrument.mode; row.root.value = String(instrument.piano.root);
         const sample = instrumentSample(instrument, track.buffer); row.play.disabled = !sample;
         row.steps.forEach((cell, column) => {
-          const velocity = values(track.key)?.[bar() * STEPS_PER_BAR + column] || 0;
-          cell.disabled = !sample; cell.dataset.velocity = String(velocity); cell.dataset.step = String(bar() * STEPS_PER_BAR + column);
+          const velocity = values(track.key)?.[column] || 0;
+          cell.disabled = !sample; cell.dataset.velocity = String(velocity); cell.dataset.step = String(column);
           cell.classList.toggle('is-on', velocity > 0); cell.setAttribute('aria-pressed', String(velocity > 0));
           cell.style.setProperty('--velocity', String(velocity));
           cell.dataset.scdlTooltip = `${track.name}${instrument.mode === 'slices' ? ` · ${PAD_KEYS[instrument.piano.pad]}` : ''} · ${pt('Step $1', column + 1)} · ${Math.round(velocity * 100)}%`;
@@ -131,7 +154,7 @@ export function mountRackOverview({ container, instruments, audioContext, output
         });
       }
     },
-    transport(step) { for (const row of rows.values()) row.steps.forEach((cell, column) => cell.classList.toggle('is-current', step === bar() * 16 + column)); },
+    transport(step) { for (const row of rows.values()) row.steps.forEach((cell, column) => cell.classList.toggle('is-current', step === column)); },
     stop() { for (const key of voices.keys()) stop(key); },
     dispose() { disposed = true; for (const key of voices.keys()) stop(key); grid.remove(); },
   };

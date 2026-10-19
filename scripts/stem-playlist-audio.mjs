@@ -310,6 +310,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
       signature = next;
     },
     stop, now,
+    recordingClock: () => session && ({ context, zero: session.ctxStart }),
     playing: () => !!session,
     // Mixer state (faders, mute/solo, track EQ) applies while stopped too.
     mix: mixTracks,

@@ -79,6 +79,7 @@ $packageItems = @(
     "scripts/stem-loop.mjs",
     "scripts/stem-sampler.mjs",
     "scripts/stem-pattern-core.mjs",
+    "scripts/stem-note-recording.mjs",
     "scripts/stem-instruments.mjs",
     "scripts/stem-channel-rack.mjs",
     "scripts/stem-effects.mjs",

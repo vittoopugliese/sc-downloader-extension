@@ -35,7 +35,7 @@ function smokePackage(zipPath, apiPermission) {
     'scripts/stem-worker.mjs', 'scripts/stem-model.mjs', 'scripts/stem-audio.mjs', 'scripts/stem-jobs.js', 'scripts/stem-effects.mjs',
     'scripts/stem-presets.mjs', 'scripts/stem-library-ui.mjs', 'scripts/stem-tone-processor.mjs',
     'scripts/stem-playlist.mjs', 'scripts/stem-playlist-core.mjs', 'scripts/stem-playlist-audio.mjs', 'scripts/stem-playlist-stretch.mjs', 'scripts/stem-playlist-worker.mjs', 'assets/stem-playlist.css',
-    'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/stem-pattern-core.mjs', 'scripts/stem-instruments.mjs', 'scripts/stem-channel-rack.mjs', 'scripts/stem-piano.mjs', 'scripts/stem-spectrum.mjs',
+    'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/stem-pattern-core.mjs', 'scripts/stem-note-recording.mjs', 'scripts/stem-instruments.mjs', 'scripts/stem-channel-rack.mjs', 'scripts/stem-piano.mjs', 'scripts/stem-spectrum.mjs',
     'scripts/stem-sample-browser.mjs', 'scripts/stem-sample-library.mjs', 'scripts/stem-sample-preview.mjs', 'scripts/stem-module-window.mjs', 'scripts/stem-row-menu.mjs', 'scripts/ui-button.mjs', 'scripts/stem-extract-dialog.mjs', 'scripts/stem-metronome.mjs', 'assets/ui-button.css', 'scripts/ui-knob.mjs', 'assets/ui-knob.css', 'scripts/ui-toast.mjs', 'assets/ui-toast.css', 'scripts/vendor/toastify/toastify.min.mjs', 'scripts/vendor/toastify/toastify.css', 'scripts/stem-rack-overview.mjs',
     'scripts/vendor/onnxruntime/ort.wasm.min.mjs', 'scripts/vendor/onnxruntime/ort-wasm-simd-threaded.mjs',
     'scripts/vendor/onnxruntime/ort-wasm-simd-threaded.wasm', 'scripts/background.js', 'THIRD_PARTY_LICENSES.md']) {

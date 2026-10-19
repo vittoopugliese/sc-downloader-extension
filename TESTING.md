@@ -191,3 +191,23 @@ Diagnóstico opcional con red y decodificación real de Chrome:
 (por defecto 20). No usa cookies ni guarda audio, tokens o URLs. El 2026-10-05,
 la pista 2137202109 reprodujo el 404 antes del arreglo y preparó correctamente
 loops de 20 y 120 segundos después de distinguir los MIME.
+
+## Teclado y grabación del piano roll
+
+`npm run test:e2e:note-workflow` verifica con audio determinista el flujo de un
+loop importado desde SoundCloud: eliminar el Original al separar, scroll de todos
+los compases, rellenar cada 2/4/8 pasos, Cut itself en audio en vivo y renderizado,
+acordes con el mapa físico de Player Tools, keyup/blur, grabación sobre playlist o
+patrón, reescucha de overdubs, toma extendida, recorte/deshacer y presets.
+Las capturas quedan en `test-results/stem-note-workflow/`.
+
+En el piano roll, el botón de teclado habilita las teclas; el botón rojo graba y
+Espacio detiene la toma. El selector permite grabar sobre el loop o extender el
+patrón automáticamente. Snap cuantiza inicio y duración. La toma extendida admite
+hasta 256 compases y el patrón hasta 512 notas; alcanzar el límite detiene y conserva
+la toma. El control numérico cambia los compases; las tijeras ajustan el largo a
+las notas. Las notas se pueden mover, redimensionar o borrar después de grabar.
+
+La opción «Eliminar origen» también se aplica al Original de SoundCloud: lo quita
+del workspace y conserva esa elección al reabrir el preset. El WAV original sigue
+en el respaldo del preset para mantener su formato y permitir nuevas separaciones.

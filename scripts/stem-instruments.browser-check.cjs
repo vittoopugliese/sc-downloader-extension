@@ -105,7 +105,7 @@ module.exports = async function verifyInstruments(page) {
   async function at(pitch, step) {
     await grid.locator(`.piano-pitch-row[data-pitch="${pitch}"]`).scrollIntoViewIfNeeded();
     const rect = await grid.boundingBox();
-    return { x: rect.x + rect.width * (step + .3) / 16, y: rect.y + (72 - pitch) * 22 + 11 };
+    return { x: rect.x + rect.width * (step + .3) / 16, y: rect.y + (96 - pitch) * 22 + 11 };
   }
   let point = await at(60, 0);
   await page.mouse.click(point.x, point.y);
@@ -201,7 +201,9 @@ module.exports = async function verifyInstruments(page) {
   await page.locator('#extract-dialog[open]').waitFor(); await page.keyboard.press('Escape'); await page.locator('#extract-dialog').waitFor({ state: 'hidden' });
   await page.locator('#stem-presets:not(:disabled)').waitFor(); await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
   // Off-screen clips are virtualized: bring the user track into view.
-  await page.locator('.pl-user-head').waitFor(); await page.locator('.pl-user-head').scrollIntoViewIfNeeded();
+  // Restore publishes placeholder audio before the rendered pattern; either publish
+  // can replace virtualized headers while Playwright waits for layout stability.
+  await page.locator('.pl-user-head').evaluate(node => node.scrollIntoView({ block: 'center' }));
   await playlist.locator('.pl-clip.is-pattern').waitFor();
   await playlist.locator('.pl-shelf button', { hasText: '808.wav' }).waitFor();
   assert.ok(await playlist.locator('.pl-clip', { hasText: '808.wav' }).count() >= 1, 'The imported sample comes back with its clip');

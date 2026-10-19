@@ -28,7 +28,7 @@ module.exports = async function (page) {
   await page.waitForFunction(n => stemTestSources.length > n, before);
   assert.equal(await page.evaluate(() => stemTestSources.at(-1).testStart[2]), 3, 'Audition starts all three seconds, not a slice');
   await row808.locator('.rack-step').nth(0).click();
-  await rack.locator('.plugin-bars').selectOption('2');
+  await rack.locator('.plugin-bars').fill('2'); await rack.locator('.plugin-bars').press('Enter'); await rack.locator('.plugin-bars').blur();
   const pattern = await rack.locator('.plugin-pattern .row-menu-toggle').evaluate(node => node.value);
   await snare.locator('.rack-step').nth(4).click();
   await snare.locator('.rack-channel-name').click();

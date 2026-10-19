@@ -1,11 +1,12 @@
-import { normalizeDrumSlice, scheduleDrumEnvelope } from './stem-sampler.mjs';
+import { normalizeDrumSlice } from './stem-sampler.mjs';
 
 // FL-style patterns: a track is an instrument (eight pads cut from its audio, one of
 // them also played by the piano roll); a pattern belongs to one instrument and holds
 // its steps and notes. Patterns render to playlist clips at the project tempo.
 export const PAD_KEYS = 'ASDFGHJK';
 export const STEPS_PER_BAR = 16;
-export const MAX_STEPS = 64;
+export const MAX_BARS = 256;
+export const MAX_STEPS = MAX_BARS * STEPS_PER_BAR;
 export const MAX_NOTES = 512;
 export const MAX_PATTERNS = 32;
 export const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
@@ -33,12 +34,12 @@ export function normalizeInstrument(value, buffer = null) {
     if (buffer) return normalizeDrumSlice(slice, buffer);
     return Number.isFinite(slice?.start) ? { ...slice } : null;
   });
-  return { slices, sliced: value?.sliced === true || slices.some(Boolean), mode: value?.mode === 'oneShot' ? 'oneShot' : 'slices', piano: normalizePiano(value?.piano) };
+  return { slices, sliced: value?.sliced === true || slices.some(Boolean), mode: value?.mode === 'oneShot' ? 'oneShot' : 'slices', cutSelf: value?.cutSelf === true, piano: normalizePiano(value?.piano) };
 }
 
 // One-shot and chops keep separate step lanes. Switching the instrument never erases
 // its cuts, notes or the sequence of the other mode.
-export const normalizeHits = value => Array.from({ length: MAX_STEPS }, (_, i) => Number.isFinite(value?.[i]) ? clamp(value[i], 0, 1) : 0);
+export const normalizeHits = value => Array.from({ length: clamp(value?.length || 64, 64, MAX_STEPS) }, (_, i) => Number.isFinite(value?.[i]) ? clamp(value[i], 0, 1) : 0);
 export function instrumentSample(instrument, buffer) {
   return instrument?.mode === 'oneShot' && buffer
     ? normalizeDrumSlice({ start: 0, end: buffer.duration, fadeIn: .001, fadeOut: .003 }, buffer)
@@ -61,12 +62,9 @@ export function normalizePattern(value) {
   return {
     id: value.id, track: value.track,
     name: typeof value.name === 'string' && value.name.trim() ? value.name.trim().slice(0, 60) : 'Pat',
-    bars: [1, 2, 4].includes(value.bars) ? value.bars : 1,
+    bars: Number.isInteger(value.bars) ? clamp(value.bars, 1, MAX_BARS) : 1,
     // Shortening a pattern keeps the hidden bars; changing length is reversible.
-    steps: Array.from({ length: 8 }, (_, row) => Array.from({ length: MAX_STEPS }, (_, step) => {
-      const velocity = value.steps?.[row]?.[step];
-      return Number.isFinite(velocity) ? clamp(velocity, 0, 1) : 0;
-    })),
+    steps: Array.from({ length: 8 }, (_, row) => normalizeHits(value.steps?.[row])),
     notes: normalizeNotes(value.notes),
     hits: normalizeHits(value.hits),
     channels: Object.fromEntries(Object.entries(value.channels || {}).filter(([key]) => validId(key) && key !== value.track).slice(0, 64)
@@ -130,19 +128,45 @@ export function schedulePianoNote(context, destination, buffer, slice, piano, no
   source.loop = sustain; source.loopStart = 0; source.loopEnd = source.buffer.duration;
   gain.gain.setValueAtTime(0, when);
   gain.gain.linearRampToValueAtTime(note.velocity, when + attack);
-  gain.gain.setValueAtTime(note.velocity, when + Math.max(attack, length - release));
-  gain.gain.linearRampToValueAtTime(0, when + length);
+  if (Number.isFinite(length)) {
+    gain.gain.setValueAtTime(note.velocity, when + Math.max(attack, length - release));
+    gain.gain.linearRampToValueAtTime(0, when + length);
+  }
   source.connect(gain).connect(destination);
   const cleanup = () => { source.disconnect(); gain.disconnect(); };
   source.onended = cleanup;
   if (sustain) source.start(when, 0);
   else source.start(when, slice.start, sampleLength);
-  source.stop(when + length);
-  return { source, gain, cleanup, stop() {
-    const now = context.currentTime;
+  if (Number.isFinite(length)) source.stop(when + length);
+  return { source, gain, cleanup, stop(at = context.currentTime) {
+    if (at < when) { source.stop(at); return; }
+    const now = Math.max(when, at);
     gain.gain.cancelAndHoldAtTime(now); gain.gain.linearRampToValueAtTime(0, now + .005);
     source.stop(now + .005);
   } };
+}
+
+// Held keys use the same sample/pitch path as pattern rendering. One-shots ring out
+// on keyup; sustained chops release at keyup. A new trigger can choke either voice.
+export function createPianoVoices() {
+  const voices = new Set();
+  return {
+    trigger(context, output, buffer, sample, instrument, note, seconds = Infinity, when = context.currentTime) {
+      let next = Infinity;
+      if (instrument.cutSelf) for (const voice of voices) {
+        if (voice.when <= when) voice.stop(when); else next = Math.min(next, voice.when);
+      }
+      if (voices.size >= 32) voices.values().next().value.stop();
+      const voice = schedulePianoNote(context, output, buffer, sample, instrument.piano, note, when, seconds, instrument.mode === 'oneShot');
+      if (!voice) return null;
+      voice.when = when;
+      if (Number.isFinite(next)) voice.stop(next);
+      voices.add(voice);
+      voice.source.onended = () => { voice.cleanup(); voices.delete(voice); };
+      return { source: voice.source, stop: voice.stop, release() { if (instrument.mode !== 'oneShot') voice.stop(); } };
+    },
+    stop() { for (const voice of voices) voice.stop(); voices.clear(); },
+  };
 }
 
 // Short fades at the loop seam avoid clicks on arbitrary cuts. Cache only the
@@ -165,39 +189,36 @@ export function silentPattern(pattern, bpm, sampleRate = 44100) {
   return new AudioBuffer({ numberOfChannels: 2, sampleRate, length: Math.max(1, Math.round(patternSeconds(pattern, bpm) * sampleRate)) });
 }
 
-// One cycle of the pattern at `bpm`. A pad hit is cut at the same pad's next hit,
-// keeping polyphony and memory bounded; anything sounding past the cycle is cut.
+// One cycle at `bpm`. Cut itself chokes the channel at its next trigger; otherwise
+// tails overlap. Anything sounding past the cycle is cut by the render boundary.
 export async function renderPattern(pattern, instrument, buffer, bpm) {
   const sampleRate = buffer?.sampleRate || 44100;
   const frames = Math.max(1, Math.round(patternSeconds(pattern, bpm) * sampleRate));
   if (!buffer) return silentPattern(pattern, bpm, sampleRate);
   const length = frames / sampleRate, count = pattern.bars * STEPS_PER_BAR, step = length / count;
   const renderer = new OfflineAudioContext(2, frames, sampleRate);
+  const events = [];
+  const sample = instrumentSample(instrument, buffer);
   for (let row = 0; instrument.mode !== 'oneShot' && row < 8; row++) {
     const slice = normalizeDrumSlice(instrument.slices[row], buffer);
     if (!slice) continue;
-    const hits = pattern.steps[row].slice(0, count).flatMap((velocity, index) => velocity > 0 ? [{ index, velocity }] : []);
-    hits.forEach((hit, i) => {
-      const next = hits[i + 1]?.index ?? count;
-      const cropped = normalizeDrumSlice({ ...slice, end: slice.start + Math.min(slice.end - slice.start, (next - hit.index) * step) }, buffer);
-      const source = renderer.createBufferSource(), envelope = renderer.createGain(), gain = renderer.createGain();
-      const when = hit.index * step;
-      source.buffer = buffer; gain.gain.value = hit.velocity;
-      scheduleDrumEnvelope(envelope.gain, cropped, when);
-      source.connect(envelope).connect(gain).connect(renderer.destination);
-      source.start(when, cropped.start, cropped.end - cropped.start);
+    pattern.steps[row].slice(0, count).forEach((velocity, index) => {
+      if (velocity) events.push({ pitch: instrument.piano.root, velocity, start: index, length: count - index, sample: slice, oneShot: true });
     });
   }
-  const sample = instrumentSample(instrument, buffer);
   if (instrument.mode === 'oneShot') for (let i = 0; i < count; i++) {
     const velocity = pattern.hits?.[i] || 0;
-    if (velocity) schedulePianoNote(renderer, renderer.destination, buffer, sample, instrument.piano,
-      { pitch: instrument.piano.root, velocity }, i * step, length, true);
+    if (velocity) events.push({ pitch: instrument.piano.root, velocity, start: i, length: count - i, sample, oneShot: true });
   }
   for (const note of pattern.notes) {
-    if (note.start >= count) continue;
-    schedulePianoNote(renderer, renderer.destination, buffer, sample, instrument.piano, note,
-      note.start * step, Math.min(note.length, count - note.start) * step, instrument.mode === 'oneShot');
+    if (note.start < count) events.push({ ...note, sample, oneShot: instrument.mode === 'oneShot' });
   }
+  events.sort((a, b) => a.start - b.start);
+  events.forEach((note, index) => {
+    const voice = schedulePianoNote(renderer, renderer.destination, buffer, note.sample, instrument.piano, note,
+      note.start * step, Math.min(note.length, count - note.start) * step, note.oneShot);
+    const next = events[index + 1];
+    if (voice && instrument.cutSelf && next) voice.stop(next.start * step);
+  });
   return renderer.startRendering();
 }
