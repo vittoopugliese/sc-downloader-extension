@@ -4,8 +4,8 @@
 body{margin:0;-webkit-font-smoothing:antialiased}
 [hidden]{display:none!important}
 main{max-width:1294px;margin:auto;padding:28px 40px 40px}
-/* FL Studio-style header: identity and transport, then hint/status, stem meters and the
-   library. Pinned (sticky at the top) unless the pin button turns it off. */
+/* Shared header: transport, project and stem meters, then clip controls and editing tools.
+   Pinned (sticky at the top) unless the pin button turns it off. */
 .workspace-header{position:relative;z-index:50;isolation:isolate;border:1px solid #42403d;border-radius:12px;background:radial-gradient(ellipse at 12% 0,#ff70200c,transparent 65%),#202020;box-shadow:0 8px 30px #0002}
 .workspace-header[data-pinned=true]{position:sticky;top:0;box-shadow:0 10px 24px #000b}
 /* Stem-colored top edge, inside the border: the box minus its content area leaves a 2px
@@ -14,7 +14,7 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 .daw-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0;padding:7px 12px}
 .daw-row-main .transport-bar{flex:1 1 520px;min-width:0}
 .header-pin .ui-btn-icon{width:16px;height:16px}
-.daw-row-sub{border-top:1px solid #ffffff0c;border-radius:0 0 12px 12px;background:#17171780;padding:5px 12px}
+.daw-row-sub{border-top:1px solid #ffffff0c;background:#17171780;padding:5px 12px}
 /* Hint panel, as in FL: the loaded track, then status and progress messages. */
 .brand{display:flex;align-items:center;flex-wrap:wrap;gap:9px;font-size:10px;font-weight:800;letter-spacing:1.5px}
 .brand img,.brand sc-icon{object-fit:contain}

@@ -38,7 +38,7 @@ const { chromium } = require('playwright');
       };
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html`);
-    const playlist = page.locator('#playlist'), transport = page.locator('#transport');
+    const playlist = page.locator('#playlist'), transport = page.locator('#transport'), inspector = page.locator('.workspace-header > .pl-inspector');
     // One workspace, including before source import.
     assert.equal(await page.locator('#tab-playlist').count(), 0);
     assert.equal(await playlist.isVisible(), true);
@@ -56,14 +56,14 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('.pl-play').count(), 0);
     assert.equal(await transport.locator('#stem-rate').count(), 1, 'Speed sits next to the tempo controls');
     for (const name of ['Import audio files', 'Sample browser', 'Add track', 'Export WAV']) {
-      const host = name === 'Export WAV' || name === 'Sample browser' ? transport : playlist.locator('.pl-tools');
+      const host = name === 'Export WAV' || name === 'Sample browser' ? transport : inspector.locator('.pl-tools');
       const control = host.getByRole('button', { name, exact: true });
       assert.equal(await control.textContent(), '');
       assert.equal(await control.locator('svg').count(), 1);
       assert.match(await control.getAttribute('data-scdl-tooltip'), new RegExp('^' + name + (name === 'Export WAV' ? '' : ' \\([A-Z]\\d*\\)') + ': '));
     }
     // One row of seventeen tools, each with a hotkey; window buttons live in the transport bar.
-    const tools = playlist.locator('.pl-tools > button');
+    const tools = inspector.locator('.pl-tools > button');
     assert.equal(await tools.count(), 17);
     assert.equal(await transport.locator('.pl-window-tool').count(), 6);
     assert.match(await transport.locator('.pl-window-tool').first().evaluate(e => getComputedStyle(e).backgroundImage), /linear-gradient/, 'Window buttons share the accent button');
@@ -90,7 +90,7 @@ const { chromium } = require('playwright');
     await dragRuler(96, 84);
     assert.deepEqual(await selection(), { left: 36, width: 48 });
     // The grid (1/8 by default: 12 px at 120 BPM and 48 px/s) applies to the ruler; Alt is free.
-    const gridButton = playlist.locator('.pl-grid-snap');
+    const gridButton = inspector.locator('.pl-grid-snap');
     assert.equal(await gridButton.textContent(), '1/8');
     assert.equal(await gridButton.getAttribute('aria-pressed'), 'true');
     // Each check starts from no loop (double-click clears it), so the drag creates one.
@@ -143,11 +143,11 @@ const { chromium } = require('playwright');
     await playlist.locator('.pl-clip').first().click();
     const width = (await playlist.locator('.pl-clip').first().boundingBox()).width;
     // Shift + ArrowUp on the pitch knob is one octave.
-    await playlist.getByRole('slider', { name: 'Pitch', exact: true }).press('Shift+ArrowUp');
-    assert.equal(await playlist.getByRole('slider', { name: 'Pitch', exact: true }).getAttribute('aria-valuenow'), '12');
+    await inspector.getByRole('slider', { name: 'Pitch', exact: true }).press('Shift+ArrowUp');
+    assert.equal(await inspector.getByRole('slider', { name: 'Pitch', exact: true }).getAttribute('aria-valuenow'), '12');
     // The clip has its own volume, first in the inspector; the track knob stays the channel master.
-    const clipVolume = playlist.getByRole('slider', { name: 'Volume', exact: true });
-    assert.equal(await playlist.locator('.pl-inspector .ui-knob-dial').first().getAttribute('aria-label'), 'Volume');
+    const clipVolume = inspector.getByRole('slider', { name: 'Volume', exact: true });
+    assert.equal(await inspector.locator('.ui-knob-dial').first().getAttribute('aria-label'), 'Volume');
     await clipVolume.press('Shift+ArrowDown');
     assert.equal(await clipVolume.getAttribute('aria-valuenow'), '90');
     await clipVolume.dblclick();
@@ -168,7 +168,7 @@ const { chromium } = require('playwright');
     await page.mouse.move(box.x + 400, box.y + 120);
     await page.keyboard.down('Shift'); await page.mouse.wheel(0, 200); await page.keyboard.up('Shift');
     await page.waitForFunction(() => document.querySelector('.pl-scroll').scrollLeft > 0);
-    await playlist.getByRole('button', { name: 'Show the whole arrangement' }).click();
+    await inspector.getByRole('button', { name: 'Show the whole arrangement' }).click();
     // Track volume is a knob too.
     assert.equal(await playlist.getByRole('slider', { name: /^Volume / }).count(), 4);
     // Moving the clip while playing reschedules instead of stopping.
@@ -254,7 +254,7 @@ const { chromium } = require('playwright');
     // Several selected clips split together at the playhead.
     const clips = playlist.locator('.pl-clip'), clipCount = () => clips.count();
     await clips.first().click(); await page.keyboard.press('Control+d');
-    await playlist.getByLabel('Show the whole arrangement').click();
+    await inspector.getByLabel('Show the whole arrangement').click();
     await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('Control+a');
     assert.equal(await clipCount(), 2);
     const pressed = () => playlist.locator('.pl-clip[aria-pressed=true]').count();
@@ -273,7 +273,7 @@ const { chromium } = require('playwright');
     assert.equal(await clipCount(), 3);
     assert.equal(await pressed(), 3, 'Both halves stay selected');
     // The slice tool cuts at the mouse, without moving the playhead.
-    const sliceTool = playlist.getByRole('button', { name: 'Slice tool', exact: true });
+    const sliceTool = inspector.getByRole('button', { name: 'Slice tool', exact: true });
     await page.keyboard.press('c');
     assert.equal(await sliceTool.getAttribute('aria-pressed'), 'true');
     assert.equal(await sliceTool.evaluate(n => n.getAnimations({ subtree: true }).filter(a => a.effect?.pseudoElement === '::after').length), 1, 'The hotkey flashes its button');

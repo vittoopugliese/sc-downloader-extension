@@ -92,7 +92,7 @@ module.exports = async function verifyInstruments(page) {
   await tempo.fill('60'); await tempo.press('Enter');
   const slow = await clip.boundingBox();
   assert.ok(Math.abs(slow.width - repeated.width * 2) < 6, `Half tempo doubles the clip: ${repeated.width} → ${slow.width}`);
-  await page.locator('#playlist .pl-tools button[aria-keyshortcuts="Control+Z"]').click();
+  await page.locator('.workspace-header .pl-tools button[aria-keyshortcuts="Control+Z"]').click();
   assert.equal(await tempo.inputValue(), '120');
 
   // Piano roll: same track and pattern; the next note copies the last clicked one.

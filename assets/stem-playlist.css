@@ -9,7 +9,7 @@
 @media(max-width:600px){#mixer{margin-top:18px;padding:12px}}
 
 .pl-ui{--pl-head:165px;--pl-edge:#3b3b3b;--pl-panel:#292929;--pl-head-bg:#202020;--pl-night:#191919;--pl-muted:#b8b3ad}
-/* The playlist continues the header card: no divider, the transport bar lives in the header. */
+/* The workspace playlist starts at the sample shelf; its controls live in the header. */
 .playlist{padding:0 18px 18px}
 .pl-ui button,.pl-ui select,.pl-ui input{font:11px Arial,Helvetica,sans-serif}
 /* Plain playlist buttons (track mute/solo, library chips). Toolbar and tool buttons are the
@@ -121,6 +121,13 @@
 .pl-inspector .ui-knob{--knob-size:26px;--knob-tick-top:2.5px;--knob-tick-height:7px;--knob-tick-origin:9.5px;gap:3px;width:54px;min-width:0}
 .pl-inspector .ui-knob-label{font-size:7px;white-space:nowrap}
 .pl-inspector .ui-knob-value{font-size:8px}
+/* Third header row: subtle dividers continue the project row, with no separate card. */
+.workspace-header>.pl-inspector{padding:9px 12px;border:0;border-top:1px solid #ffffff0c;border-radius:0 0 12px 12px;background:transparent}
+.workspace-header>.pl-inspector>.ui-knob{position:relative;flex-shrink:0}
+.workspace-header>.pl-inspector>.ui-knob+.ui-knob::before{content:'';position:absolute;left:-8px;top:12px;bottom:8px;width:1px;background:#ffffff0a;pointer-events:none}
+.workspace-header>.pl-inspector>.pl-tools{flex:1 1 600px;border-left:1px solid #ffffff0f;padding-left:12px}
+.workspace-header~.playlist>.pl-library{border-top:1px solid var(--pl-edge);border-radius:10px 10px 0 0}
+@media(max-width:1100px){.workspace-header>.pl-inspector>.pl-tools{border-left:0;border-top:1px solid #ffffff0a;padding:8px 2px 3px}}
 /* Window buttons are accent ui-btns; an open window stays pressed. */
 .pl-windows{display:inline-flex;align-items:center;gap:5px}
 /* Hotkey flash: an overlay in the button's color whose opacity is animated from JS. */

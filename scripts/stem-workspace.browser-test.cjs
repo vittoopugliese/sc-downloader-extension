@@ -57,8 +57,26 @@ const { chromium } = require('playwright');
     await page.locator('.tooltips-toggle').click();
     assert.equal(await page.evaluate(() => localStorage.getItem('scdl.tooltips.enabled')), 'true');
     assert.equal(await page.getByRole('spinbutton', { name: 'BPM', exact: true }).evaluate(e => e.getBoundingClientRect().height), 32);
-    const dials = await page.locator('#playlist .ui-knob-dial').evaluateAll(nodes => nodes.map(e => ({ width: e.offsetWidth, height: e.offsetHeight, radius: getComputedStyle(e).borderRadius })));
+    const inspector = page.locator('.workspace-header > .pl-inspector');
+    const dials = await inspector.locator('.ui-knob-dial').evaluateAll(nodes => nodes.map(e => ({ width: e.offsetWidth, height: e.offsetHeight, radius: getComputedStyle(e).borderRadius })));
     assert.ok(dials.length > 0 && dials.every(d => d.width === d.height && d.radius === '50%'));
+    assert.equal(await page.locator('#playlist').evaluate(e => e.firstElementChild.className), 'pl-library', 'Playlist starts at the sample selector');
+    // Moved controls keep keyboard ownership, and one key press runs exactly once.
+    const snap = inspector.locator('.pl-grid-snap');
+    await snap.focus(); await page.keyboard.press('g');
+    assert.equal(await snap.textContent(), '1/16');
+    await page.keyboard.press('g'); await page.keyboard.press('g');
+    assert.equal(await snap.textContent(), '1/8');
+    // All three rows follow the same pin state when the page scrolls.
+    await page.evaluate(() => { document.body.style.paddingBottom = '1200px'; window.scrollTo(0, 300); });
+    await page.waitForFunction(() => window.scrollY === 300);
+    assert.equal(await page.locator('.workspace-header').evaluate(e => Math.round(e.getBoundingClientRect().top)), 0);
+    assert.ok((await inspector.boundingBox()).y >= 0);
+    await page.locator('#header-pin').click();
+    await page.evaluate(() => window.scrollTo(0, 500));
+    assert.ok(await inspector.evaluate(e => e.getBoundingClientRect().bottom < 0), 'Unpinned clip controls scroll away with the header');
+    await page.evaluate(() => { window.scrollTo(0, 0); document.body.style.paddingBottom = ''; });
+    await page.locator('#header-pin').click();
     const top = await page.locator('#playlist').evaluate(e => e.getBoundingClientRect().top);
     await page.evaluate(async () => {
       window.notifications = await import('./scripts/ui-toast.mjs');
@@ -147,7 +165,9 @@ const { chromium } = require('playwright');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     const bounds = await page.locator('.ui-toast.on').first().boundingBox();
     assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 390);
-    assert.ok(bounds.y >= await page.locator('.workspace-header').evaluate(e => e.getBoundingClientRect().bottom));
+    // On phones the three-row header can exceed half the viewport; toasts cap their
+    // offset there so notifications remain on screen.
+    assert.ok(bounds.y >= await page.locator('.workspace-header').evaluate(e => Math.min(innerHeight / 2, e.getBoundingClientRect().bottom)));
     fs.mkdirSync(path.join(root, 'test-results/workspace'), { recursive: true });
     await page.screenshot({ path: path.join(root, 'test-results/workspace/mobile.png'), fullPage: true });
     await page.setViewportSize({ width: 1440, height: 1000 });

@@ -110,11 +110,12 @@ export function contextMenu(event, items) {
 // A host with its own play button passes `playButton: false`; `toolbarHost` mounts the
 // transport bar elsewhere: `toolbarStart` opens it, `tempoControls` follow the tempo controls and
 // `toolbarEnd` sits before the download button;
-// `inspectorControls` share the library row. Pattern library entries are owned by
+// `inspectorHost` mounts the clip knobs and editing tools elsewhere; `inspectorControls`
+// share the library row. Pattern library entries are owned by
 // the host: their Duplicate/Delete go through `onPatternAction(action, assetId)`.
 // `onSeparate(clip)` adds "Extract stems…" to the menu of every audio clip; the host
 // separates it and hands the result back with `addStemTracks`.
-export function mountPlaylist({ container, windows = [], windowHome = null, toolbarHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect, onRackSample, onSeparate }) {
+export function mountPlaylist({ container, windows = [], windowHome = null, toolbarHost = container, inspectorHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect, onRackSample, onSeparate }) {
   const es = document.documentElement.lang === 'es', t = (en, spanish) => es ? spanish : en;
   let state = emptyArrangement(), assets = new Map(), selected = null, extra = new Set(), zoom = 48, snap = .5;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
@@ -479,7 +480,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   });
   viewObserver.observe(scroll);
   viewObserver.observe(grid);
-  const inspector = node('div', 'pl-inspector');
+  const inspector = node('div', 'pl-inspector pl-ui');
   const setClip = (key, value) => commit(() => { for (const clip of chosen()) clip[key] = value; });
   const signed = v => `${v > 0 ? '+' : ''}${Number(v.toFixed(2))}`;
   const resetHint = t('drag, or double-click to reset', 'arrastrá, o doble clic para resetear');
@@ -632,7 +633,8 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   hbar.addEventListener('scroll', () => { if (scroll.scrollLeft !== hbar.scrollLeft) scroll.scrollLeft = hbar.scrollLeft; });
   scroll.addEventListener('scroll', () => { if (hbar.scrollLeft !== scroll.scrollLeft) hbar.scrollLeft = scroll.scrollLeft; });
   (toolbarHost === container ? container : toolbarHost).append(toolbar);
-  container.append(inspector, library, scroll, hbarRow);
+  inspectorHost.append(inspector);
+  container.append(library, scroll, hbarRow);
 
   function travel(forward) {
     const from = forward ? future : history, to = forward ? history : future;
@@ -1164,7 +1166,8 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   // Keys reach the playlist while it is the last place the user worked in, even when the
   // focused element went away (a deleted clip, a closed menu): focus then sits on <body>.
   let owned = false;
-  const owns = target => container.contains(target) || toolbar.contains(target);
+  const keyRoots = [container, toolbar, inspector].filter((root, i, roots) => !roots.some((other, j) => i !== j && other.contains(root)));
+  const owns = target => keyRoots.some(root => root.contains(target));
   const claim = event => {
     const target = event.target;
     // Menus, toasts and tooltips float above everything and do not change the owner.
@@ -1181,7 +1184,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     scroll.focus({ preventScroll: true }); onKey(event);
   };
   document.addEventListener('keydown', onPageKey); document.addEventListener('keyup', onPageKey);
-  for (const root of new Set([container, toolbar])) root.addEventListener('keydown', onKey);
+  for (const root of keyRoots) root.addEventListener('keydown', onKey);
   function onKey(event) {
     if (event.target.closest?.('input,select,textarea') || event.target.isContentEditable) return;
     const modifier = event.ctrlKey || event.metaKey;
