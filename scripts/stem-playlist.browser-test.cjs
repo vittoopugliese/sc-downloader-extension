@@ -62,13 +62,13 @@ const { chromium } = require('playwright');
       assert.equal(await control.locator('svg').count(), 1);
       assert.match(await control.getAttribute('data-scdl-tooltip'), new RegExp('^' + name + (name === 'Export WAV' ? '' : ' \\([A-Z]\\d*\\)') + ': '));
     }
-    // One row of seventeen tools, each with a hotkey; window buttons live in the transport bar.
+    // One row of nineteen tools, each with a hotkey; window buttons live in the transport bar.
     const tools = inspector.locator('.pl-tools > button');
-    assert.equal(await tools.count(), 17);
+    assert.equal(await tools.count(), 19);
     assert.equal(await transport.locator('.pl-window-tool').count(), 6);
     assert.match(await transport.locator('.pl-window-tool').first().evaluate(e => getComputedStyle(e).backgroundImage), /linear-gradient/, 'Window buttons share the accent button');
     assert.equal(new Set(await tools.evaluateAll(nodes => nodes.map(n => Math.round(n.getBoundingClientRect().top)))).size, 1);
-    assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 17);
+    assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 19);
     assert.match(await transport.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundImage), /linear-gradient/);
     // Every header button shares one size.
     assert.deepEqual([...new Set(await transport.locator('button.ui-btn--icon').evaluateAll(nodes => nodes.filter(n => n.offsetParent).map(n => n.offsetWidth + 'x' + n.offsetHeight)))], ['34x32']);
@@ -199,7 +199,7 @@ const { chromium } = require('playwright');
     assert.ok(await page.evaluate(() => +getComputedStyle(document.querySelector('.pl-track-head')).zIndex > +getComputedStyle(document.querySelector('.pl-playhead')).zIndex));
     // Help and status lines expire.
     await playlist.locator('.pl-hint').waitFor({ state: 'hidden', timeout: 12000 });
-    // Right-click menus: library entries duplicate/delete; clips add pitch mode and edit tool.
+    // Right-click menus contain actions on the target, with global modes in the header.
     const menu = page.locator('.pl-menu');
     await playlist.locator('.pl-shelf button', { hasText: 'tone.wav' }).first().click({ button: 'right' });
     assert.deepEqual(await menu.locator('.pl-menu-label').allTextContents(), ['Extract stems…', 'Duplicate', 'Delete from project']);
@@ -215,18 +215,10 @@ const { chromium } = require('playwright');
     // Like FL Studio: right click on the name bar opens the menu, on the waveform removes the clip.
     const clipHeader = playlist.locator('.pl-clip .pl-clip-title').first();
     await clipHeader.click({ button: 'right' });
-    assert.ok((await menu.locator('.pl-menu-heading').allTextContents()).includes('Pitch mode · Stretch'));
-    assert.equal(await menu.locator('.pl-menu-choices').count(), 2, 'Pitch mode and edit tool are icon rows');
-    assert.equal(await menu.locator('.pl-menu-choice-check').count(), 2, 'Each row marks its active choice');
-    const menuLefts = await menu.evaluate(m => ['.pl-menu-item .pl-menu-icon', '.pl-menu-heading', '.pl-menu-choice'].map(s => {
-      const el = m.querySelector(s); const pad = s === '.pl-menu-heading' ? parseFloat(getComputedStyle(el).paddingLeft) : 0;
-      return Math.round(el.getBoundingClientRect().left + pad);
-    }));
-    assert.deepEqual(new Set(menuLefts).size, 1, `Headings and choice rows start on the item icon column: ${menuLefts}`);
-    await menu.getByRole('menuitemradio', { name: 'Resample · pitch + speed' }).click();
-    await clipHeader.click({ button: 'right' });
-    assert.equal(await menu.getByRole('menuitemradio', { name: 'Resample · pitch + speed' }).getAttribute('aria-checked'), 'true');
-    assert.ok((await menu.locator('.pl-menu-heading').allTextContents()).includes('Pitch mode · Resample'));
+    assert.equal(await menu.getByRole('menuitemradio').count(), 0, 'Global modes are absent from the clip menu');
+    assert.deepEqual(await menu.locator('.pl-menu-label').allTextContents(), ['Duplicate', 'Split at cursor', 'Mute clip', 'Reverse', 'Extract stems…', 'Remove from playlist']);
+    assert.equal(await inspector.locator('.pl-edit-mode').textContent(), 'Move / trim');
+    assert.equal(await inspector.locator('.pl-pitch-mode').textContent(), 'Stretch');
     await page.waitForTimeout(300); await page.screenshot({ path: path.join(artifacts, 'playlist-clip-menu.png') });
     await page.keyboard.press('Escape'); assert.equal(await menu.count(), 0);
     const clipBox = await playlist.locator('.pl-clip').first().boundingBox();
@@ -254,7 +246,8 @@ const { chromium } = require('playwright');
     // Several selected clips split together at the playhead.
     const clips = playlist.locator('.pl-clip'), clipCount = () => clips.count();
     await clips.first().click(); await page.keyboard.press('Control+d');
-    await inspector.getByLabel('Show the whole arrangement').click();
+    // Off-screen clips are not drawn: wait for the fitted view to show the copy.
+    await inspector.getByLabel('Show the whole arrangement').click(); await clips.nth(1).waitFor();
     await playlist.locator('.pl-scroll').focus(); await page.keyboard.press('Control+a');
     assert.equal(await clipCount(), 2);
     const pressed = () => playlist.locator('.pl-clip[aria-pressed=true]').count();

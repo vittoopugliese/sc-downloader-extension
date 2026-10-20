@@ -130,7 +130,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   // Every loaded sample is available to the rack, even without a playlist clip.
   const importedSamples = () => [...assets.values()].filter(asset => !asset.session && !asset.pattern);
   const rowViews = new Map(), clipViews = new Map(), analyzing = new WeakSet();
-  let paintFrame = 0, dragAudio = 0, shelfKey = '', editMode = 'move', reported = null, slicing = false, slice = null;
+  let paintFrame = 0, dragAudio = 0, shelfKey = '', editMode = 'move', pitchMode = 'stretch', reported = null, slicing = false, slice = null;
   // Channel header width comes from CSS (--pl-head), narrower on phones.
   let TRACK_HEAD = 165;
   let drawSource = null, timeSelection = null, clipboard = null, activeTrack = null, selecting = false;
@@ -317,6 +317,36 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     gridButton.dataset.scdlTooltip = `${t('Grid', 'Grilla')}: ${label} (G): ${t('click to switch 1/8 → 1/16 → free. Clips, edges, cuts, selections and the ruler stick to it; hold Alt while dragging to place freely.', 'clic para alternar 1/8 → 1/16 → libre. Clips, bordes, cortes, selecciones y la regla se pegan a ella; mantené Alt al arrastrar para moverte libre.')}`;
   }
   renderGrid();
+  // Global editing modes, like the grid: choosing a mode never edits a clip. The
+  // next gesture applies it to its target, with the clip's result saved for playback.
+  function modeToggle({ name, key, color, className, choices, current, select }) {
+    const choose = value => { select(value); render(); };
+    const control = toolButton({ icon: '', name, key, keys: [key.toLowerCase()], color }, () => {
+      choose(choices[(choices.findIndex(choice => choice.value === current()) + 1) % choices.length].value);
+    });
+    control.classList.add('pl-mode-toggle', className);
+    control.setAttribute('aria-keyshortcuts', [key, ...choices.map(choice => choice.key)].join(' '));
+    for (const choice of choices) hotkeys.set(choice.key, { control, action: () => choose(choice.value) });
+    function render() {
+      const choice = choices.find(choice => choice.value === current());
+      setButtonContent(control, { icon: choice.icon, label: choice.label });
+      control.dataset.mode = choice.value;
+      control.setAttribute('aria-label', `${name}: ${choice.label}`);
+      control.dataset.scdlTooltip = `${name}: ${choice.label} (${choice.key}) · ${choice.detail} · ${key}: ${t('click or press to cycle', 'clic o tecla para alternar')} · ${choices.map(item => `${item.key}: ${item.label}`).join(' / ')}`;
+    }
+    render(); return control;
+  }
+  const editModeButton = modeToggle({ name: t('Edit tool', 'Herramienta'), key: 'E', color: '#ffd166', className: 'pl-edit-mode',
+    current: () => editMode, select: value => { editMode = value; setTool('draw'); }, choices: [
+      { value: 'move', icon: ICONS.moveTool, label: t('Move / trim', 'Mover / recortar'), key: '1', detail: t('drag clips to move them, edges to trim them on any track', 'arrastrá clips para moverlos y bordes para recortarlos en cualquier pista') },
+      { value: 'slip', icon: ICONS.slipTool, label: t('Slip content', 'Deslizar audio'), key: '2', detail: t('drag the audio inside a clip without moving its timeline edges', 'arrastrá el audio dentro de un clip sin mover sus bordes en la playlist') },
+      { value: 'stretch', icon: ICONS.stretchTool, label: t('Stretch edge', 'Estirar borde'), key: '3', detail: t('drag a clip’s right edge to change its speed using the selected pitch mode', 'arrastrá el borde derecho de un clip para cambiar su velocidad usando el modo de pitch elegido') },
+    ] });
+  const pitchModeButton = modeToggle({ name: t('Pitch mode', 'Modo de pitch'), key: 'H', color: '#b48cff', className: 'pl-pitch-mode',
+    current: () => pitchMode, select: value => { pitchMode = value; }, choices: [
+      { value: 'stretch', icon: ICONS.keepLength, label: 'Stretch', key: '4', detail: t('next pitch, speed or stretch edit: keep pitch and duration independent', 'próxima edición de pitch, velocidad o estiramiento: mantener pitch y duración independientes') },
+      { value: 'resample', icon: ICONS.resample, label: 'Resample', key: '5', detail: t('next pitch, speed or stretch edit: pitch and speed change together, like a turntable', 'próxima edición de pitch, velocidad o estiramiento: pitch y velocidad cambian juntos, como un tocadiscos') },
+    ] });
   const fileInput = node('input'); fileInput.type = 'file'; fileInput.accept = 'audio/*,.wav,.mp3,.flac,.m4a,.ogg'; fileInput.multiple = true; fileInput.hidden = true;
   fileInput.onchange = safe(async () => { const files = [...fileInput.files]; fileInput.value = ''; await importSamples(files); });
   const importButton = toolButton({ icon: ICONS.import, name: t('Import audio files', 'Importar archivos de audio'), key: 'I', keys: ['i'], color: '#ff7a2f',
@@ -484,7 +514,12 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   viewObserver.observe(scroll);
   viewObserver.observe(grid);
   const inspector = node('div', 'pl-inspector pl-ui');
-  const setClip = (key, value) => commit(() => { for (const clip of chosen()) clip[key] = value; });
+  const setClip = (key, value) => commit(() => {
+    for (const clip of chosen()) {
+      if (['pitch', 'cents', 'speed'].includes(key)) clip.keepLength = pitchMode === 'stretch';
+      clip[key] = value;
+    }
+  });
   const signed = v => `${v > 0 ? '+' : ''}${Number(v.toFixed(2))}`;
   const resetHint = t('drag, or double-click to reset', 'arrastrá, o doble clic para resetear');
   // Clip volume sits before the track volume: the track knob is the channel's master.
@@ -513,15 +548,8 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     });
   }
   library.append(shelf, ...inspectorControls, busy);
-  // Right-click menus: clips get their actions plus pitch mode and edit tool; library
+  // Right-click menus contain clip actions; global modes live in the toolbar. Library
   // entries can be duplicated or deleted. Session audio (the stems) stays in the library.
-  const MODES = [['stretch', ICONS.keepLength, t('Stretch · keep length', 'Stretch · conservar duración'), t('Changing the pitch keeps the clip length', 'Cambiar el pitch conserva la duración del clip')],
-    ['resample', ICONS.resample, t('Resample · pitch + speed', 'Resample · pitch + velocidad'), t('Pitch and speed change together, like a turntable', 'Pitch y velocidad cambian juntos, como un tocadiscos')]];
-  const TOOLS = [['move', ICONS.moveTool, t('Move / trim', 'Mover / recortar'), t('Drag clips and their edges', 'Arrastrá clips y sus bordes')],
-    ['slip', ICONS.slipTool, t('Slip content', 'Deslizar contenido'), t('Drag to move the audio inside the clip', 'Arrastrá para mover el audio dentro del clip')],
-    ['stretch', ICONS.stretchTool, t('Stretch edge', 'Estirar borde'), t('Drag an edge to change the clip speed', 'Arrastrá un borde para cambiar la velocidad del clip')]];
-  // The heading names the active choice, since the row itself shows only icons.
-  const choiceHeading = (heading, list, value) => `${heading} · ${list.find(([key]) => key === value)[2].split(' · ')[0]}`;
   // FL-style right click on the clip body: removes it, or the whole selection when it is part of it.
   function eraseClip(clip) {
     if (isChosen(clip.id)) { remove.click(); return; }
@@ -530,7 +558,6 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   function clipMenu(event, clip) {
     if (!isChosen(clip.id)) pick(clip.id); else if (clip.id !== selected) { extra.delete(clip.id); extra.add(selected); selected = clip.id; }
     updateSelection();
-    const mode = clip.keepLength !== false ? 'stretch' : 'resample';
     contextMenu(event, [
       { label: t('Duplicate', 'Duplicar'), icon: ICONS.duplicate, shortcut: 'Ctrl+D', action: () => duplicate.click() },
       { label: t('Split at cursor', 'Cortar en cursor'), icon: ICONS.split, shortcut: 'S', action: () => split.click() },
@@ -539,11 +566,6 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       ...(onSeparate && !isPattern(clip) ? [{ label: t('Extract stems…', 'Separar stems…'), icon: ICONS.separate,
         title: t('Split this sample into drums, bass, other and vocals tracks, like FL Studio', 'Separa este sample en pistas de batería, bajo, otros y voz, como en FL Studio'),
         action: () => onSeparate(separable(clip)) }] : []),
-      '-', { heading: choiceHeading(t('Pitch mode', 'Modo de pitch'), MODES, mode) },
-      { choices: MODES.map(([value, icon, label, title]) => ({ icon, label, title, checked: mode === value,
-        action: () => commit(() => { const current = state.clips.find(c => c.id === clip.id); if (current) current.keepLength = value === 'stretch'; }) })) },
-      '-', { heading: choiceHeading(t('Edit tool', 'Herramienta'), TOOLS, editMode) },
-      { choices: TOOLS.map(([value, icon, label, title]) => ({ icon, label, title, checked: editMode === value, action: () => { editMode = value; } })) },
       ...(!isPattern(clip) && trackOf(clip.track) && !trackOf(clip.track).stem && trackOf(clip.track).source !== clip.asset ? [
         { label: t('Use as track instrument', 'Usar como instrumento de la pista'), icon: ICONS.slice,
           title: t('The channel rack and piano roll of this track cut this sample from now on', 'El channel rack y el piano roll de esta pista cortan este sample desde ahora'),
@@ -598,7 +620,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const fitButton = toolButton({ icon: ICONS.fit, name: t('Show the whole arrangement', 'Ver todo el arreglo'), detail: t('fits every clip in view', 'ajusta el zoom para ver todos los clips'), key: 'F', keys: ['f'], color: '#e6e1da' }, fit);
   // One row of tools in groups: pointer tools, cut/copy/delete, clip effects, history, zoom, add.
   const tools = node('div', 'pl-tools');
-  const toolGroups = [[pencilButton, selectButton, sliceButton], [split, duplicate, remove], [muteClip, reverseClip, crossfade], [undo, redo, gridButton], [zoomOut, zoomIn, fitButton], [importButton, addTrack]];
+  const toolGroups = [[pencilButton, selectButton, sliceButton], [split, duplicate, remove], [muteClip, reverseClip, crossfade], [undo, redo], [gridButton, editModeButton, pitchModeButton], [zoomOut, zoomIn, fitButton], [importButton, addTrack]];
   for (const group of toolGroups.slice(1)) group[0].classList.add('pl-tool-group');
   tools.append(...toolGroups.flat());
   inspector.append(clipVolume.wrap, pitch.wrap, fine.wrap, speed.wrap, ...fades.map(f => f.wrap), tools);
@@ -625,7 +647,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
   // Help stays available in the header without automatically covering the timeline.
-  const hintText = t('P: pencil · select a sample or clip, then click empty grid space to draw · Q: select time, including silence · Ctrl+C/V: copy/paste at cursor · Ctrl+D: repeat selection · drag clips to move, edges to trim · G: grid 1/8, 1/16 or free · Alt places freely · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 tracks / 5 minutes.', 'P: lápiz · elegí un sample o clip y hacé clic en la grilla vacía para dibujar · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar en el cursor · Ctrl+D: repetir selección · arrastrá clips para mover, bordes para recortar · G: grilla 1/8, 1/16 o libre · Alt mueve libre · Espacio reproduce · S corta en el cursor · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 pistas / 5 minutos.');
+  const hintText = t('P: pencil · select a sample or clip, then click empty grid space to draw · Q: select time, including silence · Ctrl+C/V: copy/paste at cursor · Ctrl+D: repeat selection · drag clips to move, edges to trim · 1/2/3: move/trim, slip content, stretch right edge (E cycles) · 4/5: Stretch/Resample for the next edit (H cycles) · G: grid 1/8, 1/16 or free · Alt places freely · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 tracks / 5 minutes.', 'P: lápiz · elegí un sample o clip y hacé clic en la grilla vacía para dibujar · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar en el cursor · Ctrl+D: repetir selección · arrastrá clips para mover, bordes para recortar · 1/2/3: mover/recortar, deslizar audio, estirar borde derecho (E alterna) · 4/5: Stretch/Resample para la próxima edición (H alterna) · G: grilla 1/8, 1/16 o libre · Alt mueve libre · Espacio reproduce · S corta en el cursor · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 pistas / 5 minutos.');
   function showHint() {
     toast({ id: 'playlist-hint', variant: 'info', title: t('Playlist shortcuts', 'Atajos de la playlist'), message: hintText, duration: 12000 });
   }
@@ -1026,18 +1048,20 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     if (event.ctrlKey || event.metaKey || event.shiftKey) { toggleClip(clip.id); item.focus({ preventScroll: true }); return; }
     pick(clip.id); updateSelection(); item.focus({ preventScroll: true });
     const lanes = [...grid.querySelectorAll('.pl-lane')], home = item.parentElement.getBoundingClientRect().top;
-    drag = { id: event.pointerId, x: event.clientX, scroll: scroll.scrollLeft, before: copy(), clip: { ...clip }, edge: event.target.dataset.edge, changed: false };
+    drag = { id: event.pointerId, x: event.clientX, scroll: scroll.scrollLeft, before: copy(), clip: { ...clip }, edge: event.target.dataset.edge, editMode, keepLength: pitchMode === 'stretch', changed: false };
     item.setPointerCapture(event.pointerId);
     item.onpointermove = move => {
       if (drag?.id !== move.pointerId) return;
       const original = drag.clip, delta = (move.clientX - drag.x + scroll.scrollLeft - drag.scroll) / zoom, speedRate = clipRate(original);
       // Pattern clips have no source end: stretching them repeats the pattern.
       const length = isPattern(clip) ? Infinity : assets.get(clip.asset).buffer.duration;
-      if (editMode === 'slip' && !drag.edge) {
+      if (drag.editMode === 'slip' && !drag.edge) {
         Object.assign(clip, slipClip(original, delta * (original.reverse ? -1 : 1), length));
-      } else if (editMode === 'stretch' && drag.edge === 'right') {
+      } else if (drag.editMode === 'stretch' && drag.edge === 'right') {
+        if (!drag.changed && Math.abs(delta * zoom) < 2) return;
         const end = snapAt(original.at + clipDuration(original) + delta, move.altKey);
-        const pitchRate = original.keepLength ? 1 : 2 ** (clipPitch(original) / 12);
+        clip.keepLength = drag.keepLength;
+        const pitchRate = clip.keepLength ? 1 : 2 ** (clipPitch(original) / 12);
         clip.speed = clamp((original.out - original.in) / Math.max(.01, end - original.at) / pitchRate, .25, 4);
         if (clip.at + clipDuration(clip) > LIMITS.seconds) clip.speed = (clip.out - clip.in) / (LIMITS.seconds - clip.at) / pitchRate;
       } else if (drag.edge === 'right') {
@@ -1058,7 +1082,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       drag.changed = true; item.style.left = `${clip.at * zoom}px`; item.style.width = `${Math.max(8, clipDuration(clip) * zoom)}px`;
       // One engine update per frame; a stretch-edge drag would queue a render per move,
       // so its new speed is heard on release.
-      if (!(editMode === 'stretch' && drag.edge === 'right')) dragAudio ||= requestAnimationFrame(() => { dragAudio = 0; engine?.update(playbackState(), transport()); });
+      if (!(drag.editMode === 'stretch' && drag.edge === 'right')) dragAudio ||= requestAnimationFrame(() => { dragAudio = 0; engine?.update(playbackState(), transport()); });
       paintSoon();
     };
     const finish = cancel => {
@@ -1194,7 +1218,12 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     if (event.altKey) return;
     if (event.code === 'Space') { event.preventDefault(); event.stopPropagation(); if (!event.repeat) safe(space)(); return; }
     const combo = (modifier ? 'ctrl+' : '') + (modifier && event.shiftKey ? 'shift+' : '') + event.key.toLowerCase(), tool = windowKeys.has(combo) ? null : hotkeys.get(combo);
-    if (tool) { event.preventDefault(); if ((!event.repeat || tool.repeat) && !tool.control.disabled) tool.control.click(); }
+    if (tool) {
+      event.preventDefault();
+      if ((!event.repeat || tool.repeat) && !tool.control.disabled) {
+        if (tool.action) { flash(tool.control); tool.action(); } else tool.control.click();
+      }
+    }
     else if (event.key === 'Escape') { event.preventDefault(); setTool('draw'); pick(null); updateSelection(); }
     // An empty selection keeps the previous copy, like FL Studio.
     else if (combo === 'ctrl+c') { event.preventDefault(); clipboard = captureSelection() || clipboard; }

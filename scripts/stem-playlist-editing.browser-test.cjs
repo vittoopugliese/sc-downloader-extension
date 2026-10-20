@@ -178,6 +178,99 @@ const { chromium } = require('playwright');
     await page.evaluate(() => editor.seek(300)); await scroll.focus(); await page.keyboard.press('Control+v');
     assert.deepEqual((await state()).clips, beforeLimit);
     assert.match(await page.locator('.ui-toast-title').filter({ hasText: '5 minutes' }).first().textContent(), /5 minutes/);
+    // Global modes work without a selection and apply only when an edit is made.
+    await page.evaluate(() => {
+      const buffer = new AudioBuffer({ length: 176400, sampleRate: 44100 });
+      editor.edit(state => { state.clips = []; });
+      editor.setSession({ sources: ['drums', 'bass'].map(stem => ({ id: `audio-${stem}`, stem, name: stem, buffer })) });
+      editor.edit(state => { for (const clip of state.clips) { clip.at = .5; clip.in = .5; clip.out = 2.5; } });
+    });
+    await ui.getByLabel('Show the whole arrangement', { exact: true }).click(); await settle();
+    for (let i = 0; i < 2; i++) { await ui.getByLabel('Zoom out', { exact: true }).click(); await settle(); }
+    await scroll.focus(); await page.keyboard.press('Escape');
+    const editMode = ui.locator('.pl-edit-mode'), pitchMode = ui.locator('.pl-pitch-mode');
+    assert.equal(await editMode.isEnabled(), true);
+    assert.equal(await pitchMode.isEnabled(), true);
+    const unedited = (await state()).clips;
+    for (const mode of ['slip', 'stretch', 'move']) {
+      await editMode.click(); assert.equal(await editMode.getAttribute('data-mode'), mode);
+    }
+    await pitchMode.click(); assert.equal(await pitchMode.textContent(), 'Resample');
+    await page.keyboard.press('h'); assert.equal(await pitchMode.textContent(), 'Stretch');
+    await page.keyboard.press('e'); assert.equal(await editMode.getAttribute('data-mode'), 'slip');
+    for (const [key, mode] of [['3', 'stretch'], ['2', 'slip'], ['1', 'move']]) {
+      await page.keyboard.press(key); assert.equal(await editMode.getAttribute('data-mode'), mode);
+    }
+    for (const [key, mode] of [['5', 'resample'], ['4', 'stretch']]) {
+      await page.keyboard.press(key); assert.equal(await pitchMode.getAttribute('data-mode'), mode);
+    }
+    assert.deepEqual((await state()).clips, unedited, 'Mode selection never changes clips');
+    await page.keyboard.press('Control+z');
+    assert.ok((await state()).clips.every(clip => clip.in === 0), 'Mode changes do not add undo entries');
+    await page.keyboard.press('Control+y');
+    // The hotkeys must not steal numeric input, modified browser shortcuts or key repeats.
+    await ui.evaluate(el => { const input = document.createElement('input'); input.id = 'mode-input-check'; el.append(input); input.focus(); });
+    await page.keyboard.press('2');
+    assert.equal(await editMode.getAttribute('data-mode'), 'move');
+    await ui.locator('#mode-input-check').evaluate(el => el.remove()); await scroll.focus();
+    await page.keyboard.press('Alt+2');
+    assert.equal(await editMode.getAttribute('data-mode'), 'move');
+    await scroll.dispatchEvent('keydown', { key: 'e', repeat: true });
+    assert.equal(await editMode.getAttribute('data-mode'), 'move');
+    await page.keyboard.press('c'); await page.keyboard.press('2');
+    assert.equal(await ui.getByLabel('Slice tool', { exact: true }).getAttribute('aria-pressed'), 'false');
+    await page.keyboard.press('q'); await page.keyboard.press('3');
+    assert.equal(await ui.getByLabel('Time selection tool', { exact: true }).getAttribute('aria-pressed'), 'false');
+    const gesture = async (row, edge, seconds, cancel = false) => {
+      const clip = ui.locator('.pl-clip').nth(row), target = edge ? clip.locator(`[data-edge="${edge}"]`) : clip;
+      const box = await target.boundingBox(), a = await lanePoint(0), b = await lanePoint(seconds);
+      const x = box.x + box.width / 2, y = box.y + box.height / 2;
+      await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + b.x - a.x, y, { steps: 6 });
+      if (cancel) await clip.dispatchEvent('pointercancel', { pointerId: 1 });
+      await page.mouse.up(); await settle();
+    };
+    await page.keyboard.press('2'); await gesture(0, null, .25);
+    let edited = (await state()).clips;
+    assert.ok(Math.abs(edited[0].in - .75) < .01 && Math.abs(edited[0].out - 2.75) < .01, 'Slip shifts the source window');
+    assert.equal(edited[0].at, .5, 'Slip retains the timeline position');
+    assert.deepEqual(edited[1], unedited[1], 'Slip leaves the other track intact');
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('1'); await gesture(0, 'right', -.25);
+    edited = (await state()).clips;
+    assert.equal(edited[0].out, 2.25, 'Move / trim trims the source edge');
+    assert.equal(edited[0].speed, 1);
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('3'); await page.keyboard.press('5');
+    await gesture(0, 'right', .5, true);
+    assert.deepEqual((await state()).clips, unedited, 'Canceling stretch restores the source, mode and speed');
+    await gesture(0, 'right', .5);
+    edited = (await state()).clips;
+    assert.equal(edited[0].keepLength, false, 'The gesture applies the global Resample mode');
+    assert.ok(Math.abs(edited[0].speed - .8) < .001);
+    assert.equal(edited[0].out, 2.5, 'Stretch retains the source range');
+    assert.deepEqual(edited[1], unedited[1], 'Stretch leaves the other track intact');
+    await page.keyboard.press('4');
+    assert.deepEqual((await state()).clips, edited, 'Changing pitch mode does not retroactively alter audio');
+    await gesture(1, 'right', .5);
+    let both = (await state()).clips;
+    assert.equal(both[1].keepLength, true, 'The same tool applies the new global mode on another track');
+    assert.ok(Math.abs(both[1].speed - .8) < .001);
+    assert.deepEqual(both[0], edited[0]);
+    await page.keyboard.press('Control+z'); await page.keyboard.press('Control+z');
+    assert.deepEqual((await state()).clips, unedited, 'One undo restores each gesture including its pitch mode');
+    // Pitch, fine pitch and speed knobs also use the chosen global mode.
+    await page.keyboard.press('1'); await page.keyboard.press('5');
+    await ui.locator('.pl-clip').first().click();
+    await ui.getByRole('slider', { name: 'Pitch', exact: true }).press('ArrowUp');
+    both = (await state()).clips;
+    assert.equal(both[0].keepLength, false); assert.equal(both[0].pitch, 1);
+    assert.deepEqual(both[1], unedited[1]);
+    await page.keyboard.press('4');
+    await ui.getByRole('slider', { name: 'Fine pitch', exact: true }).press('ArrowUp');
+    assert.equal((await state()).clips[0].keepLength, true);
+    await page.keyboard.press('5'); await page.keyboard.press('Control+a');
+    await ui.getByRole('slider', { name: 'Speed', exact: true }).press('ArrowUp');
+    assert.ok((await state()).clips.every(clip => !clip.keepLength && clip.speed === 1.01), 'Multi-selection edits apply the chosen mode to every target');
     // Repaint after resizing even if the CSS header breakpoint did not change.
     for (let i = 0; i < 14; i++) { await ui.getByLabel('Zoom out', { exact: true }).click(); await settle(); }
     for (const width of [1000, 1400, 390, 320, 1600]) {

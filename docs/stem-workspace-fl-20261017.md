@@ -36,6 +36,17 @@ el Chrome del usuario ni publicado.
   sobre un clip. También se puede iniciar el arrastre desde espacio vacío con
   el lápiz. La selección queda visible y conserva el silencio de ambos lados,
   además de las pistas abarcadas. Alt omite el snap. La grilla es 1/8 por defecto; el botón junto a Deshacer/Rehacer (G) alterna 1/8 → 1/16 → libre.
+- Junto a la grilla, el selector de **herramienta (E)** alterna **Mover / recortar
+  (1)**, **Deslizar audio (2)** y **Estirar borde (3)**. El modo se usa en cualquier
+  pista: arrastrar el cuerpo mueve el clip o su contenido; en Estirar, el borde
+  derecho cambia la velocidad. Elegir una herramienta sale de selección y corte.
+- El selector de **modo de pitch (H)** alterna **Stretch (4)** y **Resample (5)**.
+  Es global: cambiarlo no modifica clips ni crea un paso de deshacer. Se aplica
+  al próximo ajuste de pitch, pitch fino, velocidad o estiramiento de borde.
+  Stretch separa pitch y duración; Resample los vincula como un tocadiscos.
+  Cada clip conserva el resultado de su edición para reproducirlo y exportarlo.
+  Ambos selectores funcionan sin clips seleccionados y muestran su modo activo;
+  estas opciones ya no aparecen en el menú contextual de un clip.
 - **Ctrl+C / Ctrl+V** copia y pega en el cursor. Con Q, clic en una pista vacía
   fija el tiempo y la pista de destino; también se puede mover el cursor desde
   la regla. **Ctrl+D** repite todo el rango inmediatamente después y selecciona
