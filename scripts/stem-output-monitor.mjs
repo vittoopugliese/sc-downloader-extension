@@ -7,15 +7,14 @@ export function mountOutputMonitor({ element, output, locale = 'en' }) {
   }[locale] || 'Output frequency spectrum';
   element.setAttribute('aria-label', label);
   const canvas = element.querySelector('canvas'), ctx = canvas.getContext('2d', { alpha: false });
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  // A long window resolves adjacent bass frequencies; a short window follows
-  // transients in the mids/treble. Blend over two octaves to avoid a visible seam.
-  const analyses = [16384, 4096].map(fftSize => ({
+  // Keep analysis windows short: at 44.1 kHz these span 93/23 ms, with their
+  // centres only 46/12 ms behind the current sample. Blend across two octaves.
+  const analyses = [4096, 1024].map(fftSize => ({
     fftSize, node: null, bins: new Float32Array(fftSize / 2), starts: null, compensation: null,
   }));
   let bands = new Float32Array(0), blend = new Float32Array(0);
   let context, source, connected = false, frame = 0, active = false, disposed = false, visible = true;
-  let width = 1, height = 18, dpr = 1, last = 0, quietSince = 0, wakeUntil = 0;
+  let width = 1, height = 1, dpr = 1, last = 0, quietSince = 0, wakeUntil = 0;
   const drawable = () => !disposed && !document.hidden && visible;
 
   function mapSpectrum() {
@@ -94,11 +93,11 @@ export function mountOutputMonitor({ element, output, locale = 'en' }) {
     frame = 0;
     if (!drawable() || context?.state !== 'running') { stop(); return; }
     frame = requestAnimationFrame(tick);
-    if (reduced.matches && now - last < 1000 / 15) return;
     const elapsed = Math.min(100, last ? now - last : 1000 / 60); last = now;
     connect();
     for (const { node, bins } of analyses) node.getFloatFrequencyData(bins);
-    const [bass, fast] = analyses, decay = Math.exp(-elapsed / 70);
+    // Instant attacks, with a longer release so short sounds remain readable.
+    const [bass, fast] = analyses, decay = Math.exp(-elapsed / 85);
     let loudest = -120;
     for (let i = 0; i < bands.length; i++) {
       const mix = blend[i];

@@ -37,8 +37,18 @@ const { chromium } = require('playwright');
     assert.equal(await monitor.evaluate(element => getComputedStyle(element).cursor), 'auto');
     assert.equal(await monitor.locator(':scope > *').count(), 1);
     const box = await monitor.boundingBox(), slot = await page.locator('.output-monitor-slot').boundingBox();
-    assert.ok(Math.abs(box.width - slot.width / 2) < 1, 'The spectrum occupies half of its available header width');
-    assert.equal(box.height, 18, 'The spectrum is half the previous 36px height');
+    const row = await page.locator('.workspace-toolbar').boundingBox();
+    assert.ok(Math.abs(box.width - slot.width * .3125) < 1, 'The spectrum is 25% wider than the previous version');
+    assert.ok(Math.abs(box.y - row.y - 6) < 1 && Math.abs(row.y + row.height - box.y - box.height - 5) < 1, 'The spectrum has 5px of vertical space inside the row border');
+    const rowHeights = await monitor.evaluate(element => {
+      const row = element.closest('.workspace-toolbar'), spaced = row.getBoundingClientRect().height;
+      element.style.marginBlock = '-5px';
+      const flush = row.getBoundingClientRect().height;
+      element.style.removeProperty('margin-block');
+      return { spaced, flush };
+    });
+    assert.equal(rowHeights.spaced, rowHeights.flush, 'The vertical gap does not increase the row height');
+    assert.ok(Math.abs(box.x + box.width - row.x - row.width) < 1, 'The spectrum is flush with the right edge');
     const markup = await monitor.evaluate(element => element.outerHTML);
     const storage = await page.evaluate(() => JSON.stringify(localStorage));
     await monitor.click(); await monitor.dblclick();
@@ -51,23 +61,24 @@ const { chromium } = require('playwright');
     const { encodeWav } = await import('./stem-audio.mjs');
     const rate = 44100, duration = 12;
     const pcm = Float32Array.from({ length: rate * duration }, (_, i) =>
-      .12 * (Math.sin(i * 2 * Math.PI * 110 / rate) + Math.sin(i * 2 * Math.PI * 140 / rate) + Math.sin(i * 2 * Math.PI * 1700 / rate)));
+      .12 * (Math.sin(i * 2 * Math.PI * 110 / rate) + Math.sin(i * 2 * Math.PI * 160 / rate) + Math.sin(i * 2 * Math.PI * 1700 / rate)));
     await page.locator('#transport input[type=file]').setInputFiles({ name: 'Spectrum tones.wav', mimeType: 'audio/wav', buffer: Buffer.from(encodeWav([pcm, pcm])) });
     await page.locator('.pl-clip').waitFor();
     await page.locator('#play').click();
     await page.waitForTimeout(800);
     const pixels = await monitor.locator('canvas').evaluate(canvas => {
       const ctx = canvas.getContext('2d'), width = canvas.width, height = canvas.height;
-      const scale = width / canvas.clientWidth, data = ctx.getImageData(0, 0, width, height).data;
+      const rect = canvas.getBoundingClientRect(), scale = width / rect.width, scaleY = height / rect.height;
+      const data = ctx.getImageData(0, 0, width, height).data;
       const at = frequency => {
-        const x = Math.round((2 + Math.log(frequency / 25) / Math.log(20000 / 25) * (canvas.clientWidth - 4)) * scale);
+        const x = Math.round((2 + Math.log(frequency / 25) / Math.log(20000 / 25) * (rect.width - 4)) * scale);
         let top = height;
-        for (let y = Math.ceil(scale); y < height - 2 * scale; y++) {
+        for (let y = Math.ceil(scaleY); y < height - 2 * scaleY; y++) {
           if (data[(y * width + x) * 4] > 150) { top = y; break; }
         }
-        return (height - top) / scale;
+        return (height - top) / scaleY;
       };
-      return { bass: at(110), secondBass: at(140), valley: at(125), treble: at(1700), scale };
+      return { bass: at(110), secondBass: at(160), valley: at(133), treble: at(1700), scale };
     });
     assert.ok(pixels.bass > pixels.valley + 3 && pixels.secondBass > pixels.valley + 3, `Adjacent bass tones remain distinct: ${JSON.stringify(pixels)}`);
     assert.ok(pixels.treble > 6, `The same spectrum includes the upper frequencies: ${JSON.stringify(pixels)}`);
@@ -75,23 +86,25 @@ const { chromium } = require('playwright');
     fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
     await monitor.screenshot({ path: path.join(root, 'test-results/output-monitor-spectrum.png') });
     await page.locator('.workspace-header').screenshot({ path: path.join(root, 'test-results/output-monitor-header.png') });
-    await page.evaluate(() => {
-      window.monitorPaints = 0; window.displayFrames = 0; window.measureFrames = true;
-      const count = () => { if (window.measureFrames) { window.displayFrames++; requestAnimationFrame(count); } };
-      requestAnimationFrame(count);
-    });
-    await page.waitForTimeout(1000);
-    const cadence = await page.evaluate(() => {
-      window.measureFrames = false;
-      return { paints: window.monitorPaints, frames: window.displayFrames };
-    });
-    assert.ok(cadence.frames > 30 && cadence.paints >= cadence.frames * .85 && cadence.paints <= cadence.frames + 2,
-      `Paints follow display frames: ${JSON.stringify(cadence)}`);
+    async function measureCadence() {
+      await page.evaluate(() => {
+        window.monitorPaints = 0; window.displayFrames = 0;
+        const count = () => { window.displayFrames++; window.frameCounter = requestAnimationFrame(count); };
+        window.frameCounter = requestAnimationFrame(count);
+      });
+      await page.waitForTimeout(1000);
+      const cadence = await page.evaluate(() => {
+        cancelAnimationFrame(window.frameCounter);
+        return { paints: window.monitorPaints, frames: window.displayFrames };
+      });
+      assert.ok(cadence.frames > 30 && cadence.paints >= cadence.frames * .85 && cadence.paints <= cadence.frames + 2,
+        `Paints follow display frames: ${JSON.stringify(cadence)}`);
+      return cadence;
+    }
+    const cadence = await measureCadence();
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.evaluate(() => { window.monitorPaints = 0; });
-    await page.waitForTimeout(1000);
-    const reducedPaints = await page.evaluate(() => window.monitorPaints);
-    assert.ok(reducedPaints > 0 && reducedPaints <= 16, `Reduced motion is respected: ${reducedPaints}`);
+    // This passive signal display must retain its timing even when the OS reduces animations.
+    await measureCadence();
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.locator('#header-pin').click();
     await page.evaluate(() => { document.body.style.paddingBottom = '2000px'; window.scrollTo(0, 1500); });
@@ -108,35 +121,53 @@ const { chromium } = require('playwright');
     await page.waitForTimeout(350);
     assert.equal(await page.evaluate(() => window.monitorPaints), idlePaints, 'No animation loop after audio becomes idle');
 
-    // Isolate an audition to measure how quickly high-frequency transients appear,
-    // and confirm that the analyser taps are released when the view is disposed.
+    // Measure actual changes in the drawn signal, including bass attack/release.
+    // A repaint count alone cannot detect a delayed analysis window.
     const audition = await page.evaluate(async () => {
       const { mountOutputMonitor } = await import('./scripts/stem-output-monitor.mjs');
       const { createEqualizedOutput } = await import('./scripts/local-audio-output.mjs');
       const element = document.querySelector('#output-monitor').cloneNode(true);
-      element.id = 'audition-monitor'; element.style.cssText = 'width:600px;height:18px'; document.body.prepend(element);
+      element.id = 'audition-monitor'; element.style.cssText = 'width:200px;height:42px;margin:0'; document.body.prepend(element);
       let created = 0;
       const output = createEqualizedOutput({ audioContext: () => { created++; return new AudioContext({ sampleRate: 44100 }); } });
       const view = mountOutputMonitor({ element, output });
       const lazy = created === 0, context = output.getPlaybackContext(); await context.resume();
       const oscillator = context.createOscillator(), gain = context.createGain();
-      oscillator.frequency.value = 2000; gain.gain.value = 0;
+      gain.gain.value = 0;
       oscillator.connect(gain).connect(output.input()); oscillator.start(); view.setActive(true);
       await new Promise(resolve => setTimeout(resolve, 100));
       const canvas = element.querySelector('canvas'), ctx = canvas.getContext('2d');
-      const dpr = canvas.width / canvas.clientWidth;
-      const x = Math.floor((2 + Math.log(2000 / 25) / Math.log(20000 / 25) * (canvas.clientWidth - 4)) * dpr);
-      const onset = context.currentTime + .1;
-      gain.gain.setValueAtTime(.3, onset);
-      const responseMs = await new Promise(resolve => {
-        function check() {
-          const elapsed = (context.currentTime - onset) * 1000;
-          if (elapsed > 0 && ctx.getImageData(x, 8 * dpr, 1, 1).data[0] > 150) resolve(elapsed);
-          else if (elapsed > 500) resolve(Infinity);
-          else requestAnimationFrame(check);
-        }
-        requestAnimationFrame(check);
-      });
+      const dpr = canvas.width / canvas.clientWidth, responses = [];
+      for (const frequency of [110, 2000]) {
+        oscillator.frequency.value = frequency;
+        const x = Math.floor((2 + Math.log(frequency / 25) / Math.log(20000 / 25) * (canvas.clientWidth - 4)) * dpr);
+        const level = () => {
+          const data = ctx.getImageData(x, 0, 1, canvas.height).data;
+          for (let y = Math.ceil(dpr); y < canvas.height - 2 * dpr; y++) {
+            if (data[y * 4] > 150) return (canvas.height - y) / dpr - 2;
+          }
+          return 0;
+        };
+        gain.gain.setValueAtTime(.3, context.currentTime);
+        await new Promise(resolve => setTimeout(resolve, 450));
+        const full = level();
+        gain.gain.setValueAtTime(0, context.currentTime);
+        await new Promise(resolve => setTimeout(resolve, 450));
+        const onset = context.currentTime + .1, offset = onset + .35;
+        gain.gain.setValueAtTime(.3, onset); gain.gain.setValueAtTime(0, offset);
+        const response = await new Promise(resolve => {
+          let attackMs = null;
+          function check() {
+            const time = context.currentTime, height = level();
+            if (attackMs === null && time >= onset && height >= full * .85) attackMs = (time - onset) * 1000;
+            if (time >= offset && height <= full * .2) resolve({ frequency, full, attackMs, releaseMs: (time - offset) * 1000 });
+            else if (time > offset + 1) resolve({ frequency, full, attackMs, releaseMs: Infinity });
+            else requestAnimationFrame(check);
+          }
+          requestAnimationFrame(check);
+        });
+        responses.push(response);
+      }
       let detached = 0;
       output.observeOutput((_, source) => {
         const disconnect = source.disconnect.bind(source);
@@ -145,16 +176,24 @@ const { chromium } = require('playwright');
       view.dispose();
       const monitorDetached = detached;
       oscillator.stop(); output.dispose(); await context.close(); element.remove();
-      return { lazy, responseMs, detached: monitorDetached };
+      return { lazy, responses, detached: monitorDetached };
     });
     assert.equal(audition.lazy, true, 'Mounting the monitor does not initialize audio');
-    assert.ok(audition.responseMs < 120, `Treble attacks appear promptly: ${audition.responseMs}ms`);
+    for (const response of audition.responses) {
+      assert.ok(response.full > 15, `The ${response.frequency} Hz reference is visible`);
+      assert.ok(response.attackMs !== null && response.attackMs < (response.frequency < 200 ? 110 : 80), `Fast attack: ${JSON.stringify(response)}`);
+      assert.ok(response.releaseMs >= 110 && response.releaseMs < 280, `Short sounds linger briefly before fading: ${JSON.stringify(response)}`);
+    }
     assert.equal(audition.detached, 2, 'Disposal disconnects both analysis windows');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(100);
     const mobileBox = await monitor.boundingBox(), mobileSlot = await page.locator('.output-monitor-slot').boundingBox();
-    assert.equal(mobileBox.height, 18);
-    assert.ok(Math.abs(mobileBox.width - mobileSlot.width / 2) < 1);
+    const mobileRow = await page.locator('.workspace-toolbar').boundingBox();
+    assert.ok(mobileBox.height >= 32);
+    assert.ok(Math.abs(mobileBox.width - mobileSlot.width * .3125) < 1);
+    assert.ok(Math.abs(mobileBox.x + mobileBox.width - mobileRow.x - mobileRow.width) < 1);
+    assert.ok(Math.abs(mobileBox.y - mobileSlot.y) < 1);
+    assert.ok(Math.abs(mobileRow.y + mobileRow.height - mobileBox.y - mobileBox.height - 5) < 1);
     assert.ok(mobileBox.x >= 0 && mobileBox.x + mobileBox.width <= 390, 'Compact spectrum fits on mobile');
     await monitor.click(); assert.deepEqual(await monitor.boundingBox(), mobileBox);
     await page.locator('.workspace-header').screenshot({ path: path.join(root, 'test-results/output-monitor-mobile.png') });
