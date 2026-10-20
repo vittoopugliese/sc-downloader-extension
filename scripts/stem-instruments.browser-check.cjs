@@ -88,12 +88,12 @@ module.exports = async function verifyInstruments(page) {
   assert.ok(playing >= 1, 'The pattern clip plays in the song');
 
   // Tempo lives in the playlist: pattern clips keep their bars.
-  const tempo = page.locator('#transport .pl-toolbar input[type=number]');
-  await tempo.fill('60'); await tempo.press('Enter');
+  const tempo = page.locator('#transport .pl-toolbar [role=spinbutton][aria-label=BPM]');
+  await tempo.focus(); for (let i = 0; i < 6; i++) await tempo.press('PageDown');
   const slow = await clip.boundingBox();
   assert.ok(Math.abs(slow.width - repeated.width * 2) < 6, `Half tempo doubles the clip: ${repeated.width} → ${slow.width}`);
   await page.locator('.workspace-header .pl-tools button[aria-keyshortcuts="Control+Z"]').click();
-  assert.equal(await tempo.inputValue(), '120');
+  assert.equal(await tempo.getAttribute('aria-valuenow'), '120', 'One key run is one undo step');
 
   // Piano roll: same track and pattern; the next note copies the last clicked one.
   { await page.locator('.pl-stem-head[data-stem=bass] .stem-more').click(); await page.locator('.pl-menu-item').nth(1).click(); }

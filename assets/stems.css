@@ -348,9 +348,9 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 /* Before separation the audition row holds the original waveform; afterwards it is empty. */
 #audition:not(:has(> :not([hidden]))){display:none}
 @media(max-width:600px){.transport-bar .pl-toolbar{gap:6px}.pl-toolbar .stem-tempo{flex:1 1 100%}}
-/* Time readout: only the number. BPM fits in a narrower field. */
+/* Time readout: only the number. BPM is a small drag number (three digits). */
 .transport-bar .pl-time{min-width:0;padding:0 2px;border:0;background:none;font-size:16px}
-.transport-bar .pl-field input[type=number]{width:64px;height:32px;padding:0 6px;font-size:13px}
+.transport-bar .pl-field .ui-drag-number-value{height:32px}
 /* Loaded track: small cover and title beside "Load audio from computer". */
 .source-mini{display:flex;align-items:center;gap:8px;min-width:0}
 .source-mini .source-cover{width:30px;height:30px;border-radius:5px}

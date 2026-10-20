@@ -57,6 +57,17 @@ const { chromium } = require('playwright');
     await page.locator('.tooltips-toggle').click();
     assert.equal(await page.evaluate(() => localStorage.getItem('scdl.tooltips.enabled')), 'true');
     assert.equal(await page.getByRole('spinbutton', { name: 'BPM', exact: true }).evaluate(e => e.getBoundingClientRect().height), 32);
+    { // BPM is a drag number like FL Studio's: 4 px up is +1, whole numbers only; one drag is one undo step.
+      const bpm = page.getByRole('spinbutton', { name: 'BPM', exact: true }), box = await bpm.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down();
+      assert.ok(await page.evaluate(() => document.documentElement.classList.contains('ui-drag-number-dragging')), 'A drag keeps the up/down cursor');
+      for (let y = 1; y <= 40; y += 3) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - y);
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - 40); await page.mouse.up();
+      assert.equal(await bpm.getAttribute('aria-valuenow'), '130');
+      await page.waitForTimeout(300); assert.equal(await bpm.textContent(), '130', 'The number counts to the new value');
+      await page.locator('.workspace-header .pl-tools button[aria-keyshortcuts="Control+Z"]').click();
+      assert.equal(await bpm.getAttribute('aria-valuenow'), '120', 'One drag is one undo step');
+    }
     const inspector = page.locator('.workspace-header > .pl-inspector');
     const dials = await inspector.locator('.ui-knob-dial').evaluateAll(nodes => nodes.map(e => ({ width: e.offsetWidth, height: e.offsetHeight, radius: getComputedStyle(e).borderRadius })));
     assert.ok(dials.length > 0 && dials.every(d => d.width === d.height && d.radius === '50%'));

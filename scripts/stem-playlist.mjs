@@ -7,6 +7,7 @@ import { wasOpen } from './stem-module-window.mjs';
 import { createButton, setButtonContent } from './ui-button.mjs';
 import { createMetronome } from './stem-metronome.mjs';
 import { createKnob } from './ui-knob.mjs';
+import { createDragNumber } from './ui-drag-number.mjs';
 import { toast, dismissToast } from './ui-toast.mjs';
 
 const MIN_ZOOM = 8, MAX_ZOOM = 600;
@@ -240,38 +241,40 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const play = playButton ? button('', t('Play / pause (Space)', 'Reproducir / pausar (Espacio)'), safe(toggle)) : null;
   if (play) { play.append(globalThis.SCIcons.create('play')); play.className = 'pl-play'; play.setAttribute('aria-pressed', 'false'); }
   const time = node('output', 'pl-time', '0:00.00'); time.dataset.scdlTooltip = t('Playhead position (minutes:seconds)', 'Posición del cursor (minutos:segundos)');
-  function field(text, type, value, min, max, step) {
-    const label = node('label', 'pl-field', text), input = node('input'); input.type = type; input.value = String(value);
-    input.setAttribute('aria-label', text); if (min !== undefined) input.min = min; if (max !== undefined) input.max = max; if (step !== undefined) input.step = step;
-    label.append(input); return { label, input };
+  // BPM is a whole number you drag up or down, like FL Studio's tempo display. The clips follow
+  // live while it moves; one drag, wheel spin or key run is one undo step.
+  let tempoUndo = null;
+  function setTempo(bpm) {
+    bpm = clamp(Math.round(bpm), 20, 300);
+    if (bpm === state.bpm) return;
+    if (tempoUndo && history.at(-1) === tempoUndo) { retimePatternClips(state, bpm, isPattern); changed(); draw(); }
+    else if (commit(() => retimePatternClips(state, bpm, isPattern))) tempoUndo = history.at(-1);
   }
-  const tempo = field('BPM', 'number', 120, 20, 300, .01); tempo.label.dataset.scdlTooltip = tempo.input.dataset.scdlTooltip = t('Project tempo (20–300 BPM): grid, channel rack and piano roll. It does not change the audio speed; the speed slider next to it does.', 'Tempo del proyecto (20–300 BPM): grilla, channel rack y piano roll. No cambia la velocidad del audio; para eso está el slider de velocidad al lado.');
+  const tempo = createDragNumber({ label: 'BPM', min: 20, max: 300, value: 120, className: 'pl-field',
+    hint: t('drag up or down (Shift for fine), or use the wheel or the arrows. Project tempo: grid, channel rack and piano roll. It does not change the audio speed; the speed slider next to it does.', 'arrastrá arriba o abajo (Shift para fino), o usá la rueda o las flechas. Tempo del proyecto: grilla, channel rack y piano roll. No cambia la velocidad del audio; para eso está el slider de velocidad al lado.'),
+    onInput: setTempo, onEnd: () => { tempoUndo = null; } });
   function changeLoop(range) {
     loopRange = range; if (range) marker = range.start;
     engine?.update(playbackState(), transport()); renderLoopBand();
     onLoopChange?.(range);
   }
-  tempo.input.onchange = () => { const bpm = Number(tempo.input.value); if (bpm >= 20 && bpm <= 300) commit(() => retimePatternClips(state, bpm, isPattern)); else draw(); };
   // Tap tempo like FL Studio's tapper: BPM is the average of every interval since the first tap;
   // a pause longer than two beats (3 s minimum) starts over. One tap session is one undo step.
-  let taps = [], tapTimer = 0, tapUndo = null;
+  let taps = [], tapTimer = 0;
   const tapButton = iconButton(ICONS.tapTempo, t('Tap tempo (T): tap along with the beat and the BPM follows the average; pause to start over', 'Tap tempo (T): tocá al ritmo y el BPM sigue el promedio; una pausa reinicia'), () => {});
   tapButton.classList.add('pl-tap');
   const tapInterval = () => taps.length > 1 ? (taps.at(-1) - taps[0]) / (taps.length - 1) : 0;
   const tapWait = () => Math.max(3000, tapInterval() * 2);
   function tapTempo() {
     const at = performance.now();
-    if (!taps.length || at - taps.at(-1) > tapWait()) { taps = []; tapUndo = null; }
+    if (!taps.length || at - taps.at(-1) > tapWait()) { taps = []; tempoUndo = null; }
     taps.push(at); if (taps.length > 16) taps.shift();
     const wait = tapWait();
     tapButton.style.setProperty('--tap-wait', wait + 'ms');
     tapButton.classList.remove('is-waiting'); void tapButton.offsetWidth; tapButton.classList.add('is-waiting');
-    clearTimeout(tapTimer); tapTimer = setTimeout(() => { taps = []; tapUndo = null; tapButton.classList.remove('is-waiting'); }, wait);
+    clearTimeout(tapTimer); tapTimer = setTimeout(() => { taps = []; tempoUndo = null; tapButton.classList.remove('is-waiting'); }, wait);
     if (taps.length < 2) return;
-    const bpm = clamp(Math.round(60000 / tapInterval()), 20, 300);
-    if (bpm === state.bpm) return;
-    if (tapUndo && history.at(-1) === tapUndo) { retimePatternClips(state, bpm, isPattern); changed(); draw(); }
-    else if (commit(() => retimePatternClips(state, bpm, isPattern))) tapUndo = history.at(-1);
+    setTempo(60000 / tapInterval());
   }
   tapButton.onpointerdown = event => { if (event.button === 0) { event.preventDefault(); tapTempo(); } };
   tapButton.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) tapTempo(); } };
@@ -282,7 +285,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     const bpm = [1, 2, 4, 8].map(bars => bars * 240 / seconds).filter(value => value >= 20 && value <= 300)
       .sort((a, b) => Math.abs(a - 120) - Math.abs(b - 120))[0];
     if (!bpm) { report(t('The loop is outside the 20–300 BPM range.', 'El loop queda fuera del rango 20–300 BPM.')); return; }
-    commit(() => retimePatternClips(state, Math.round(bpm * 100) / 100, isPattern));
+    tempoUndo = null; setTempo(bpm); tempoUndo = null;
   } });
   fitTempo.classList.add('pl-fit-tempo');
   // Metronome, like FL Studio's (Ctrl+M): a click on every beat while the playlist plays,
@@ -376,7 +379,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     container.classList.toggle('is-drawing', !on && !selecting); container.classList.toggle('is-selecting', selecting);
   }
   const help = iconButton('help', t('Playlist shortcuts', 'Atajos de la playlist'), () => showHint(), { variant: 'ghost' });
-  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.label, tapButton, metronomeButton, fitTempo, ...tempoControls, node('span', 'pl-spacer'), help, ...toolbarEnd, windowGroup, exportButton, fileInput);
+  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.wrap, tapButton, metronomeButton, fitTempo, ...tempoControls, node('span', 'pl-spacer'), help, ...toolbarEnd, windowGroup, exportButton, fileInput);
   const shelf = node('div', 'pl-shelf'); shelf.setAttribute('aria-label', t('Sample library', 'Biblioteca de samples'));
   shelf.dataset.scdlTooltip = t('Library: click to select for drawing, double-click to add at the cursor, drag onto a track. Right-click for more.', 'Biblioteca: clic para elegir qué dibujar, doble clic para agregar en el cursor, arrastrá a una pista. Clic derecho para más.');
   shelf.addEventListener('wheel', event => {
@@ -796,7 +799,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   }
   function draw({ paint: paintNow = true } = {}) {
     TRACK_HEAD = parseFloat(getComputedStyle(container).getPropertyValue('--pl-head')) || 165;
-    tempo.input.value = String(Math.round(state.bpm * 100) / 100); undo.disabled = !history.length; redo.disabled = !future.length;
+    tempo.show(state.bpm); undo.disabled = !history.length; redo.disabled = !future.length;
     const extent = Math.min(LIMITS.seconds, Math.max(16, arrangementEnd(state) + 8, timeSelection?.end || 0));
     const width = Math.max(scroll.clientWidth - TRACK_HEAD, extent * zoom);
     grid.style.width = (width + TRACK_HEAD) + 'px'; grid.style.setProperty('--beat', (60 / state.bpm * zoom) + 'px');

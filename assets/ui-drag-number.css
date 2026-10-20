@@ -1,0 +1,9 @@
+/* The shared drag number (scripts/ui-drag-number.mjs): a whole number you drag up or down,
+   like FL Studio's tempo display. It is as wide as its largest value (--digits). */
+.ui-drag-number{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.ui-drag-number-value{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:calc(var(--digits,3) * 1ch + 14px);height:28px;padding:0 6px;border:1px solid #45423e;border-radius:5px;background:#191919;color:#ece8e2;font:13px ui-monospace,monospace;font-variant-numeric:tabular-nums;cursor:ns-resize;touch-action:none;user-select:none;-webkit-user-select:none;transition:border-color .15s}
+.ui-drag-number-value:hover,.ui-drag-number-value.is-dragging{border-color:#ff8a4c}
+.ui-drag-number-value.is-dragging{color:#ffbc8e}
+.ui-drag-number-value:focus-visible{outline:2px solid #ff8a4c;outline-offset:2px}
+/* While dragging, the up/down cursor stays on, wherever the pointer goes. */
+html.ui-drag-number-dragging,html.ui-drag-number-dragging *{cursor:ns-resize!important}
