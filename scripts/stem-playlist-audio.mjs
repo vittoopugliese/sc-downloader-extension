@@ -170,8 +170,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
       const gain = context.createGain(), eq = globalThis.SCParametricEQ?.createGraph(context, { analyse: true }) || null;
       gain.connect(master);
       if (eq) { eq.apply(null, false, true); eq.output.connect(gain); }
-      // Allocate the legacy stem meter only if that visualization is read.
-      bus = { gain, eq, meter: null, samples: null, input: eq ? eq.input : gain, settings: 'null' };
+      bus = { gain, eq, input: eq ? eq.input : gain, settings: 'null' };
       tracks.set(id, bus);
     }
     return bus;
@@ -315,19 +314,6 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     // Where a track's instruments play into, and the EQ graph whose spectrum the editor shows.
     trackInput: id => trackBus(id).input,
     trackGraph: id => tracks.get(id)?.eq || null,
-    // Peak level (0..1+) of a track after its fader.
-    trackLevel(id) {
-      const bus = tracks.get(id);
-      if (!bus || !context.createAnalyser) return 0;
-      if (!bus.meter) {
-        bus.meter = context.createAnalyser(); bus.meter.fftSize = 512;
-        bus.samples = new Float32Array(512); bus.gain.connect(bus.meter);
-      }
-      bus.meter.getFloatTimeDomainData(bus.samples);
-      let peak = 0;
-      for (const value of bus.samples) peak = Math.max(peak, Math.abs(value));
-      return peak;
-    },
     dispose() { stop(); master.disconnect(); for (const bus of tracks.values()) { bus.eq?.dispose(); bus.gain.disconnect(); } tracks.clear(); },
   };
 }

@@ -1256,11 +1256,6 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       const track = state.tracks.find(item => item.id === key || item.stem === key);
       return track ? engine?.trackGraph(track.id) || null : null;
     },
-    // Peak level of a track (by id or stem) while the playlist plays; 0 when stopped.
-    trackLevel(key) {
-      const track = state.tracks.find(item => item.id === key || item.stem === key);
-      return track && engine?.playing() ? engine.trackLevel(track.id) : 0;
-    },
     // The toolbar button of a window ('browser' or a host window id).
     windowButton: id => windowButtons.get(id),
     audible: track => trackAudible(state, track),

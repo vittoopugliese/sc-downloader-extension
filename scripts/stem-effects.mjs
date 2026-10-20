@@ -49,6 +49,7 @@ export function mountEffects({ container, effects, changed, pauseForFreeze, repo
     control.dataset.fxPreset = name; presets.set(name, control); presetGroup.append(control);
   }
   const bypass = button('fx-bypass', t('Bypass FXs', 'Omitir FXs'), () => change(() => { release(); effects.setBypassed(!effects.snapshot().bypassed); }));
+  bypass.prepend(globalThis.SCIcons.create('bypass'));
   const reset = button('fx-reset', t('Reset FXs', 'Restablecer FXs'), () => change(() => { release(); effects.reset(); wetMemory.clear(); }));
   toolbar.append(presetGroup, bypass, reset);
   const grid = element('div', 'fx-grid');
@@ -61,6 +62,7 @@ export function mountEffects({ container, effects, changed, pauseForFreeze, repo
       if (name === 'delay') release();
       effects.set(name, effects.snapshot()[name] > 0 ? 0 : wetMemory.get(name) || 35);
     }));
+    toggle.prepend(globalThis.SCIcons.create('bypass'));
     toggle.dataset.effectBypass = name; toggles.set(name, toggle); heading.append(toggle);
     card.append(heading);
     const controls = element('div', 'fx-parameters');

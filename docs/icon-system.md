@@ -43,7 +43,9 @@ No hay fuentes, peticiones de iconos ni observadores del documento. Cada vector 
 
 `test-results/icons-catalog.png` muestra los nombres incluidos. Las pruebas verifican el filtrado, deduplicación, estados dinámicos, escala, color, visibilidad, shadow roots y registro real MAIN/ISOLATED.
 
-Las carátulas, gráficos de audio, capturas promocionales e identidad de la extensión son recursos separados de los iconos de controles.
+Las carátulas, gráficos de audio, capturas promocionales e identidad de la extensión son recursos separados de los iconos de controles. El header del popup usa la imagen original `assets/icons/player-toolkit.png`.
+
+Los alias `heart` y `bypass` comparten `custom:heart-bypass`: el corazón original recuperado del historial anterior a `2cc3c1a`, conservado también en `assets/icons/bypass.svg` (SVG Repo). El grupo interno conserva `fill="none"` y `stroke="currentColor"` para mantener el trazo y heredar el color de cada control. Se usa en el crédito, bypass general, EQ y FX de ambas superficies.
 
 ## Procedencia de desarrollo
 

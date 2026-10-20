@@ -42,23 +42,32 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
         if (mode !== true) {
           assert.equal(await page.locator("#helpPanel").isVisible(), true);
           assert.equal(await page.locator("#helpBackBtn").isVisible(), false);
-          assert.equal(await page.locator("#speedTab").getAttribute("aria-selected"), "true");
-          assert.equal(await page.evaluate(() => document.activeElement.id), "speedTab");
+          assert.equal(await page.locator('#helpPanel [role="tab"], #helpPanel [role="tabpanel"]').count(), 0);
+          assert.equal(await page.evaluate(() => document.activeElement.getAttribute('href')), 'https://soundcloud.com/');
+          assert.equal(await page.locator('.help-links a').count(), 2);
+          assert.equal(await page.locator('.help-review-link').isVisible(), true);
+          assert.equal(await page.locator('.help-credit').isVisible(), true);
+          assert.equal(await page.locator('.help-brand img').evaluate(image => image.complete && image.naturalWidth > 0), true);
+          const layout = await page.locator('#helpPanel').evaluate(panel => ({
+            height: panel.getBoundingClientRect().height,
+            overflow: panel.scrollHeight > panel.clientHeight || panel.scrollWidth > panel.clientWidth,
+            links: [...panel.querySelectorAll('.help-links a')].map(link => link.offsetTop),
+          }));
+          assert.ok(layout.height < 320, 'Home should fit its content without the old tutorial height');
+          assert.equal(layout.overflow, false);
+          assert.equal(layout.links[0], layout.links[1], 'Contact and review share one row');
           if (mode === false && !onSoundCloud) {
             await page.locator("body").screenshot({ path: path.join(root, "test-results", "popup-help-home.png") });
           }
           assert.equal(await page.locator("#errorOverlay").isVisible(), false);
           await page.keyboard.press("Escape");
           assert.equal(await page.locator("#helpPanel").isVisible(), true);
-          await page.locator("#likesHelpTab").click();
-          assert.equal(await page.locator("#likesHelp a").getAttribute("href"), "https://soundcloud.com/you/likes#scdl-explore");
-          await page.locator("#downloadsTab").click();
-          assert.equal(await page.locator(".permitted-downloads-guide").isVisible(), true);
-          assert.equal(await page.locator('[data-i18n="help_collection"]').isVisible(), false);
           assert.deepEqual(await page.evaluate(() => popupMessages), ["GET_DOWNLOAD_POLICY"], "Help home must not start downloader jobs or track polling");
-          await page.locator("#speedTab").focus();
-          await page.keyboard.press("ArrowRight");
-          assert.equal(await page.locator("#looperTab").getAttribute("aria-selected"), "true");
+          await page.locator('.help-action').first().focus();
+          await page.keyboard.press("Shift+Tab");
+          assert.equal(await page.evaluate(() => document.activeElement.getAttribute('href')), 'https://sctd.vpugliese.online');
+          await page.keyboard.press("Tab");
+          assert.equal(await page.evaluate(() => document.activeElement.getAttribute('href')), 'https://soundcloud.com/');
         } else if (!onSoundCloud) {
           await page.waitForFunction(() => document.getElementById("errorOverlay").classList.contains("is-visible"));
           assert.equal(await page.locator("#helpPanel").isVisible(), false);
@@ -76,7 +85,8 @@ const { chromium } = require(process.env.SCDL_PLAYWRIGHT_PATH || "playwright");
       chrome.runtime.sendMessage = async () => ({ policy: { allDownloadsActivated: false } });
     });
     await page.goto("chrome-extension://" + extensionId + "/popup.html");
-    await page.waitForFunction(() => document.getElementById("looperTab").getAttribute("aria-selected") === "true");
+    await page.waitForFunction(() => document.getElementById("helpPanel").classList.contains("is-visible"));
+    await page.waitForFunction(async () => !(await chrome.storage.local.get("scdl.popup.startView"))["scdl.popup.startView"]);
     await page.keyboard.press("Escape");
     assert.equal(await page.locator("#helpPanel").isVisible(), true);
     console.log("Popup policy, help home, keyboard, deep-link and unsupported-page verification passed.");

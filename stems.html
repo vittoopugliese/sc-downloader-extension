@@ -17,7 +17,7 @@
 </head>
 <body>
   <main>
-    <!-- Shared header: transport, project and stem meters; playlist controls mount as its third row. -->
+    <!-- Shared header: transport, project and output spectrum; playlist controls mount as its third row. -->
     <header class="workspace-header" aria-label="Player Tools" data-pinned="true">
       <div class="daw-row daw-row-main">
         <div class="brand"><img src="assets/icons/player-toolkit.png" width="22" height="22" alt="" draggable="false"><span>PLAYER TOOLS</span></div>
@@ -33,14 +33,10 @@
           <div class="preset-toolbar"><select id="stem-presets" disabled></select><button id="save-project" class="ui-btn ui-btn--neutral ui-btn--icon" type="button" aria-keyshortcuts="Control+S" disabled><span data-icon="save"></span></button><button id="preset-folder" class="ui-btn ui-btn--neutral ui-btn--icon" type="button" disabled><sc-icon name="folder" class="ui-btn-icon" aria-hidden="true"></sc-icon></button><button id="preset-reset" class="ui-btn ui-btn--neutral ui-btn--icon" type="button" hidden><sc-icon name="close" class="ui-btn-icon" aria-hidden="true"></sc-icon></button><button id="import-audio" class="ui-btn ui-btn--accent ui-btn--icon" type="button" disabled><span data-icon="upload"></span></button></div>
           <button id="preset-reconnect" type="button" hidden></button>
         </div>
-        <div id="output-monitor" class="output-monitor" role="button" tabindex="0" data-mode="combined">
-        <canvas class="output-monitor-canvas" aria-hidden="true"></canvas>
-        <div class="stem-preview" aria-hidden="true" hidden>
-          <div class="preview-track" data-channel="vocals"><span data-icon="vocals"></span><span data-copy="vocals">Vocals</span><span class="preview-wave"></span><span class="preview-number">01</span></div>
-          <div class="preview-track" data-channel="drums"><span data-icon="drums"></span><span data-copy="drums">Drums</span><span class="preview-wave"></span><span class="preview-number">02</span></div>
-          <div class="preview-track" data-channel="bass"><span data-icon="bass"></span><span data-copy="bass">Bass</span><span class="preview-wave"></span><span class="preview-number">03</span></div>
-          <div class="preview-track" data-channel="other"><span data-icon="other"></span><span data-copy="other">Other</span><span class="preview-wave"></span><span class="preview-number">04</span></div>
-        </div>
+        <div class="output-monitor-slot">
+          <div id="output-monitor" class="output-monitor" role="img">
+            <canvas class="output-monitor-canvas" aria-hidden="true"></canvas>
+          </div>
         </div>
 
         <input id="audio-file" type="file" accept="audio/*,.wav,.mp3,.flac,.m4a,.ogg,.aac,.aif,.aiff" hidden>

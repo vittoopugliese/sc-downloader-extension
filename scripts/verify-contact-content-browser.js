@@ -20,16 +20,13 @@ const content = {
   try {
     const page = await browser.newPage({ viewport: { width: 426, height: 580 } });
     await page.route(content.image.url, (route) => route.fulfill({ body: image, contentType: "image/png" }));
-    const html = fs.readFileSync(path.join(root, "popup.html"), "utf8")
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
-    await page.setContent(html);
+    // The popup no longer mounts remote Contact content; exercise the loader independently.
+    await page.setContent(`<style>body{margin:10px;font:13px system-ui}img{display:block;max-width:100%;height:auto}</style>
+      <section id="contactContent" hidden>
+        <h3 id="contactContentTitle"></h3><p id="contactContentDescription" hidden></p>
+        <a id="contactContentLink" hidden></a><img id="contactContentImage" alt="" hidden>
+      </section>`);
     await page.evaluate((remote) => {
-      document.body.classList.remove("policy-pending");
-      document.getElementById("loadingOverlay").classList.add("is-hidden");
-      document.body.classList.add("help-mode");
-      document.getElementById("helpPanel").classList.add("is-visible");
-      document.getElementById("downloadsHelp").hidden = true;
-      document.getElementById("supportHelp").hidden = false;
       chrome = { storage: { local: { get: async () => ({}), set: async () => {} } } };
       fetch = async (url) => ({
         ok: true, url, headers: { get: () => null }, body: null,
@@ -41,26 +38,20 @@ const content = {
     await page.locator("#contactContentImage:not([hidden])").waitFor();
     const layout = await page.evaluate(() => {
       const ids = ["contactContentTitle", "contactContentDescription", "contactContentLink",
-        "contactContentImage", "supportHelp"];
+        "contactContentImage"];
       const elements = ids.map((id) => document.getElementById(id));
       const image = elements[3];
-      const card = document.querySelector("#supportHelp > .help-section");
-      const credit = document.querySelector("#supportHelp > .help-credit");
       return {
-        tops: [...elements.slice(0, 4), card, credit].map((el) => el.getBoundingClientRect().top),
+        tops: elements.map((el) => el.getBoundingClientRect().top),
         imageWidth: image.getBoundingClientRect().width,
         contentWidth: document.getElementById("contactContent").getBoundingClientRect().width,
         scrollWidth: document.documentElement.scrollWidth,
-        viewportWidth: innerWidth,
-        contactLinks: card.querySelectorAll("a").length,
-        creditVisible: !credit.hidden
+        viewportWidth: innerWidth
       };
     });
     assert.deepEqual([...layout.tops].sort((a, b) => a - b), layout.tops, "Contact order changed");
     assert.ok(layout.imageWidth <= layout.contentWidth, "Image overflows Contact");
     assert.equal(layout.scrollWidth, layout.viewportWidth, "Popup overflows horizontally");
-    assert.equal(layout.contactLinks, 3);
-    assert.equal(layout.creditVisible, true);
     console.log("Contact browser layout checks passed");
   } finally {
     await browser.close();

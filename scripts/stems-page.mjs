@@ -354,7 +354,7 @@ pin.onclick = () => setPinned(header.dataset.pinned !== 'true');
 // Toasts drop in under the header while it is on screen.
 configureToasts({ top: () => Math.max(0, header.getBoundingClientRect().bottom - 7), closeLabel: say('Close', 'Cerrar') });
 const mixOutput =createEqualizedOutput({ audioContext: () => context ||= new AudioContext({ sampleRate: SAMPLE_RATE }) });
-const outputMonitor = mountOutputMonitor({ element: $('output-monitor'), output: mixOutput, trackLevel: key => playlist.trackLevel(key), locale });
+const outputMonitor = mountOutputMonitor({ element: $('output-monitor'), output: mixOutput, locale });
 // Tracks are instruments: their own audio is what the channel rack cuts into pads.
 const instrumentTracks = () => playlist.instrumentSources().map(track => ({ ...track,
   name: STEMS.includes(track.key) || track.key === 'original' ? text(track.key) : track.name }));

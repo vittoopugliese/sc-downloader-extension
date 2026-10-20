@@ -9,7 +9,7 @@ const playerToolsDataUrl = `data:image/png;base64,${fs.readFileSync(
   path.resolve(__dirname, "..", "assets", "icons", "player-toolkit.png")
 ).toString("base64")}`;
 const likesExplorerDataUrl = `data:image/png;base64,${fs.readFileSync(
-  path.resolve(__dirname, "..", "assets", "images", "likes-explorer.png")
+  path.resolve(__dirname, "..", "assets", "icons", "likes-explorer.png")
 ).toString("base64")}`;
 const iconDataUrls = Object.fromEntries(
   ["help.svg", "download.svg", "folder-icon.svg", "back-arrow.svg", "bypass.svg"].map((fileName) => [
@@ -39,6 +39,7 @@ const iconDataUrls = Object.fromEntries(
       document.querySelector("#artist").textContent = "t t o r i o";
       document.querySelector("#artistArtwork").src = logoUrl;
       document.querySelector(".likes-explorer-thumb").src = likesExplorerUrl;
+      document.querySelector(".help-brand img").src = playerToolsUrl;
       document.querySelector("#playerToolsTrialStatus").textContent = "7 days left in your free trial";
       document.querySelectorAll("img[src]").forEach((image) => {
         const fileName = image.getAttribute("src").split("/").at(-1);
@@ -278,46 +279,26 @@ const iconDataUrls = Object.fromEntries(
     );
     assert.notEqual(backgroundCoverage[5], "rgba(0, 0, 0, 0)", "The popup background overlay must remain visible");
     await page.setViewportSize({ width: 426, height: 580 });
-    const source = fs.readFileSync(path.resolve(__dirname, "popup.js"), "utf8");
-    const selectTab = source.slice(source.indexOf("function selectHelpTab("), source.indexOf("async function openRequestedPopupView"));
-    await page.evaluate((selectTab) => {
-      window.helpPanel = document.getElementById("helpPanel");
-      // This layout-only fixture strips runtime scripts and extension APIs.
-      // Keep the real tab handler intact while replacing Contact's networked
-      // loader with the smallest dependency the handler expects.
-      window.SCContactContent = { load() {} };
+    await page.evaluate(() => {
       document.body.classList.add("help-mode");
-      helpPanel.classList.add("is-visible");
-      window.eval(selectTab);
-    }, selectTab);
-    for (const id of ["downloadsTab", "speedTab", "looperTab", "likesHelpTab", "supportTab"]) {
-      await page.evaluate((id) => selectHelpTab(document.getElementById(id)), id);
-      await page.waitForTimeout(180);
-      assert.equal(await page.locator('#helpPanel [role="tabpanel"]:visible').count(), 1);
-      assert.equal(await page.locator(`#${id}`).getAttribute("aria-selected"), "true");
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 426);
-      const helpTheme = await page.locator(`#${id}`).evaluate((tab) => {
-        const tabStyle = getComputedStyle(tab);
-        const cardStyle = getComputedStyle(document.querySelector('#helpPanel [role="tabpanel"]:not([hidden]) .help-section'));
-        return {
-          tabHeight: tab.offsetHeight,
-          tabRadius: tabStyle.borderRadius,
-          tabBorder: tabStyle.borderColor,
-          cardRadius: cardStyle.borderRadius,
-          cardBorder: cardStyle.borderColor,
-        };
-      });
-      assert.deepEqual(helpTheme, {
-        tabHeight: 27,
-        tabRadius: "7px",
-        tabBorder: "rgb(255, 85, 0)",
-        cardRadius: "10px",
-        cardBorder: "rgb(52, 52, 52)",
-      }, `Help tab ${id} must share the player-panel controls and surfaces`);
-      if (deviceScaleFactor === 1) {
-        fs.mkdirSync(path.resolve(__dirname, "..", "test-results"), { recursive: true });
-        await page.screenshot({ path: path.resolve(__dirname, "..", "test-results", `help-${id}.png`) });
-      }
+      document.getElementById("helpPanel").classList.add("is-visible");
+    });
+    assert.equal(await page.locator('#helpPanel [role="tab"], #helpPanel [role="tabpanel"]').count(), 0);
+    assert.equal(await page.locator('.help-links a:visible').count(), 2);
+    const helpLayout = await page.locator('#helpPanel').evaluate(panel => ({
+      height: panel.getBoundingClientRect().height,
+      overflow: panel.scrollWidth > panel.clientWidth || panel.scrollHeight > panel.clientHeight,
+      links: [...panel.querySelectorAll('.help-links a')].map(link => link.offsetTop),
+      creditBottom: panel.querySelector('.help-credit').getBoundingClientRect().bottom,
+    }));
+    assert.ok(helpLayout.height < 320);
+    assert.equal(helpLayout.overflow, false);
+    assert.equal(helpLayout.links[0], helpLayout.links[1]);
+    assert.ok(helpLayout.creditBottom <= helpLayout.height);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 426);
+    if (deviceScaleFactor === 1) {
+      fs.mkdirSync(path.resolve(__dirname, "..", "test-results"), { recursive: true });
+      await page.locator('body').screenshot({ path: path.resolve(__dirname, "..", "test-results", "popup-home-with-back.png") });
     }
     await page.close();
     console.log(`Popup browser verification passed at scale ${deviceScaleFactor}.`);

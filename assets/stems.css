@@ -19,25 +19,10 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 .brand{display:flex;align-items:center;flex-wrap:wrap;gap:9px;font-size:10px;font-weight:800;letter-spacing:1.5px}
 .brand img,.brand sc-icon{object-fit:contain}
 /* The tagline is the title's tooltip. */
-/* Stem meters: the four stems with their live level while the playlist plays. */
-.output-monitor{position:relative;flex:1 1 380px;min-width:0;height:36px;cursor:pointer;contain:layout paint;outline-offset:2px;border-radius:3px}
-.output-monitor:focus-visible{outline:1px solid #ddd}
+/* Passive output spectrum, half the available width and 18px tall. */
+.output-monitor-slot{flex:1 1 380px;min-width:0;height:18px}
+.output-monitor{position:relative;width:50%;height:100%;contain:layout paint;border-radius:2px}
 .output-monitor-canvas{display:block;width:100%;height:100%}
-.stem-preview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;min-width:0;height:100%}
-.preview-track{--channel:var(--vocals);display:grid;grid-template-columns:13px auto minmax(18px,1fr);align-items:center;gap:6px;padding:4px 7px;border:1px solid color-mix(in srgb,var(--channel) 16%,transparent);border-left:2px solid var(--channel);border-radius:3px;background:color-mix(in srgb,var(--channel) 5%,#1b1b1b);color:var(--channel);font:9px ui-monospace,monospace}
-.preview-track[data-channel=drums]{--channel:var(--drums)}
-.preview-track[data-channel=bass]{--channel:var(--bass)}
-.preview-track[data-channel=other]{--channel:var(--other)}
-.preview-track .icon{width:13px;height:13px}
-.preview-track>span:nth-child(2){overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.preview-number{display:none}
-.preview-wave{height:14px;background:repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 4px);opacity:.6;clip-path:polygon(0 40%,4% 30%,8% 45%,12% 15%,16% 32%,20% 5%,24% 28%,28% 16%,32% 36%,36% 20%,40% 42%,44% 10%,48% 25%,52% 0,56% 30%,60% 18%,64% 35%,68% 8%,72% 28%,76% 15%,80% 35%,84% 22%,88% 42%,92% 30%,96% 40%,100% 44%,100% 56%,96% 60%,92% 70%,88% 58%,84% 78%,80% 65%,76% 85%,72% 72%,68% 92%,64% 65%,60% 82%,56% 70%,52% 100%,48% 75%,44% 90%,40% 58%,36% 80%,32% 64%,28% 84%,24% 72%,20% 95%,16% 68%,12% 85%,8% 55%,4% 70%,0 60%)}
-.preview-track[data-channel=drums] .preview-wave{background-size:13px 100%;clip-path:polygon(0 5%,8% 45%,15% 45%,16% 0,24% 42%,31% 42%,32% 10%,40% 45%,47% 45%,48% 0,56% 44%,63% 44%,64% 5%,72% 45%,79% 45%,80% 0,88% 43%,95% 43%,96% 12%,100% 35%,100% 65%,96% 88%,95% 57%,88% 57%,80% 100%,79% 55%,72% 55%,64% 95%,63% 56%,56% 56%,48% 100%,47% 55%,40% 55%,32% 90%,31% 58%,24% 58%,16% 100%,15% 55%,8% 55%,0 95%)}
-.preview-track[data-channel=bass] .preview-wave{transform:scaleY(.65)}
-.preview-track[data-channel=other] .preview-wave{transform:scaleY(.8) scaleX(-1)}
-/* The wave is dim; --level (set while playing) lights it from the left. */
-.preview-wave{position:relative;opacity:1;background:repeating-linear-gradient(90deg,color-mix(in srgb,currentColor 32%,transparent) 0 2px,transparent 2px 4px)}
-.preview-wave::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 4px);background-size:inherit;clip-path:inset(0 calc((1 - var(--level,0)) * 100%) 0 0)}
 .header-library{display:flex;align-items:center;gap:10px;flex:0 1 auto;min-width:0}
 .header-library .preset-toolbar{flex:1;min-width:0}
 .preset-toolbar{display:flex;gap:6px;min-width:0}
@@ -66,12 +51,6 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 @media(max-width:600px),(max-height:480px){
   .workspace-header[data-pinned=true]{position:relative}
   .workspace-header button.header-pin{display:none}
-}
-@media(max-width:600px){
-  .stem-preview{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .stem-preview .preview-track{padding:1px 5px}
-  .stem-preview .preview-track .icon{width:11px;height:11px}
-  .stem-preview .preview-wave{height:10px}
 }
 .eyebrow{font:10px/1.5 ui-monospace,SFMono-Regular,monospace;letter-spacing:1.6px;display:flex;align-items:center;gap:9px}
 main>.eyebrow{margin-top:34px}
@@ -416,8 +395,10 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .stem-fx .fx-card.is-active{border-color:#99633d;background:#201a16}
 .stem-fx .fx-card-heading{display:flex;align-items:center;margin-bottom:12px}
 .stem-fx .fx-enable{display:flex;gap:8px;align-items:center;padding:0;border:0;background:none;color:#ccc;font-size:12px;font-weight:600}
-.stem-fx .fx-enable::before{content:'';width:8px;height:8px;border:1px solid #777;border-radius:50%;background:#303030}
-.stem-fx .fx-enable[aria-pressed=true]::before{background:#ff9955;border-color:#ffbb88;box-shadow:0 0 8px #ff995555}
+.stem-fx .fx-bypass{display:inline-flex;align-items:center;gap:6px}
+.stem-fx .fx-bypass sc-icon,.stem-fx .fx-enable sc-icon{width:17px;height:17px}
+.stem-fx .fx-enable sc-icon{color:#888}
+.stem-fx .fx-enable[aria-pressed=true] sc-icon{color:#ff9955}
 .stem-fx .fx-parameters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 8px;align-items:center}
 .stem-fx .ui-knob{min-width:0;gap:5px}
 .stem-fx .ui-knob-label,.stem-fx .fx-room{font-size:10px;color:#c2b9b0;text-align:center}
@@ -494,7 +475,7 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 main>#playlist{margin-top:12px;padding:0}
 .daw-row-main>.brand{padding-right:8px}
 .daw-row-sub .source-mini{flex:0 0 auto}
-@media(max-width:600px){.header-library{flex:1 1 calc(100% - 50px)}.daw-row-sub .stem-preview{flex-basis:100%}}
+@media(max-width:600px){.header-library{flex:1 1 calc(100% - 50px)}}
 
 /* Continuous pattern timelines: every bar shares one horizontal scroll. */
 .rack-grid{grid-template-columns:34px repeat(var(--rack-steps,16),24px);max-height:60vh;overscroll-behavior:contain}

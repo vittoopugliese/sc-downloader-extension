@@ -1,4 +1,4 @@
-// Real audio/DOM coverage for header mode switching, stereo taps and idle rendering.
+// Real audio/DOM coverage for the passive header spectrum and its render lifecycle.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -20,12 +20,10 @@ const { chromium } = require('playwright');
     const page = await browser.newPage({ locale: 'es-AR', viewport: { width: 1440, height: 1000 } });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(() => {
-      window.monitorPaints = 0; window.monitorPaintTimes = [];
+      window.monitorPaints = 0;
       const fill = CanvasRenderingContext2D.prototype.fillRect;
       CanvasRenderingContext2D.prototype.fillRect = function (...args) {
-        if (this.canvas.classList.contains('output-monitor-canvas') && args[0] === 0 && args[1] === 0 && args[2] > 200) {
-          window.monitorPaints++; window.monitorPaintTimes.push(performance.now());
-        }
+        if (this.canvas.parentElement?.id === 'output-monitor' && args[0] === 0 && args[1] === 0) window.monitorPaints++;
         return fill.apply(this, args);
       };
     });
@@ -33,56 +31,68 @@ const { chromium } = require('playwright');
     await page.goto(url);
     await page.locator('#import-audio:not(:disabled)').waitFor();
     const monitor = page.locator('#output-monitor');
-    assert.equal(await monitor.getAttribute('data-mode'), 'combined');
-    assert.match(await monitor.getAttribute('aria-label'), /Clic para cambiar/);
-    const box = await monitor.boundingBox();
-    for (const mode of ['stems', 'spectrum', 'waveform', 'combined']) {
-      await monitor.click();
-      assert.equal(await monitor.getAttribute('data-mode'), mode);
-      assert.deepEqual(await monitor.boundingBox(), box, 'Every mode occupies the same header area');
-    }
-    await monitor.focus(); await page.keyboard.press('Space');
-    assert.equal(await monitor.getAttribute('data-mode'), 'stems');
+    assert.equal(await monitor.getAttribute('role'), 'img');
+    assert.equal(await monitor.getAttribute('aria-label'), 'Espectro de frecuencias de salida');
+    assert.equal(await monitor.evaluate(element => element.tabIndex), -1);
+    assert.equal(await monitor.evaluate(element => getComputedStyle(element).cursor), 'auto');
+    assert.equal(await monitor.locator(':scope > *').count(), 1);
+    const box = await monitor.boundingBox(), slot = await page.locator('.output-monitor-slot').boundingBox();
+    assert.ok(Math.abs(box.width - slot.width / 2) < 1, 'The spectrum occupies half of its available header width');
+    assert.equal(box.height, 18, 'The spectrum is half the previous 36px height');
+    const markup = await monitor.evaluate(element => element.outerHTML);
+    const storage = await page.evaluate(() => JSON.stringify(localStorage));
+    await monitor.click(); await monitor.dblclick();
+    assert.equal(await monitor.evaluate(element => element.outerHTML), markup, 'Clicks do not change the passive spectrum');
+    assert.equal(await page.evaluate(() => JSON.stringify(localStorage)), storage, 'Clicks write no preferences');
     assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'false');
-    await page.keyboard.press('Enter');
     await page.reload(); await page.locator('#import-audio:not(:disabled)').waitFor();
-    assert.equal(await monitor.getAttribute('data-mode'), 'spectrum', 'View persists');
-    await monitor.click(); await monitor.click();
+    assert.equal(await monitor.getAttribute('aria-label'), 'Espectro de frecuencias de salida');
 
     const { encodeWav } = await import('./stem-audio.mjs');
-    const rate = 44100, duration = 3;
+    const rate = 44100, duration = 12;
     const pcm = Float32Array.from({ length: rate * duration }, (_, i) =>
-      (.23 * Math.sin(i * 2 * Math.PI * 110 / rate) + .12 * Math.sin(i * 2 * Math.PI * 1700 / rate)) * (.65 + .35 * Math.sin(i / 2200)));
-    const quiet = pcm.map(value => value * .12);
-    await page.locator('#transport input[type=file]').setInputFiles({ name: 'Monitor stereo.wav', mimeType: 'audio/wav', buffer: Buffer.from(encodeWav([pcm, quiet])) });
+      .12 * (Math.sin(i * 2 * Math.PI * 110 / rate) + Math.sin(i * 2 * Math.PI * 140 / rate) + Math.sin(i * 2 * Math.PI * 1700 / rate)));
+    await page.locator('#transport input[type=file]').setInputFiles({ name: 'Spectrum tones.wav', mimeType: 'audio/wav', buffer: Buffer.from(encodeWav([pcm, pcm])) });
     await page.locator('.pl-clip').waitFor();
     await page.locator('#play').click();
     await page.waitForTimeout(800);
     const pixels = await monitor.locator('canvas').evaluate(canvas => {
-      const ctx = canvas.getContext('2d'), dpr = canvas.width / canvas.clientWidth;
-      const width = canvas.clientWidth, height = canvas.clientHeight, half = Math.floor((width - 5) / 2);
-      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-      const bright = (x, y) => data[(Math.floor(y * dpr) * canvas.width + Math.floor(x * dpr)) * 4] > 150;
-      let spectrum = 0, wave = 0;
-      for (let x = 4; x < half - 4; x++) for (let y = 4; y < height - 4; y++) if (bright(x, y)) spectrum++;
-      for (let x = half + 9; x < width - 110; x++) for (let y = 4; y < height - 4; y++) if (bright(x, y)) wave++;
-      let l = 0, r = 0;
-      for (let x = width - 95; x < width - 4; x++) { if (bright(x, 8)) l++; if (bright(x, 25)) r++; }
-      return { spectrum, wave, l, r };
+      const ctx = canvas.getContext('2d'), width = canvas.width, height = canvas.height;
+      const scale = width / canvas.clientWidth, data = ctx.getImageData(0, 0, width, height).data;
+      const at = frequency => {
+        const x = Math.round((2 + Math.log(frequency / 25) / Math.log(20000 / 25) * (canvas.clientWidth - 4)) * scale);
+        let top = height;
+        for (let y = Math.ceil(scale); y < height - 2 * scale; y++) {
+          if (data[(y * width + x) * 4] > 150) { top = y; break; }
+        }
+        return (height - top) / scale;
+      };
+      return { bass: at(110), secondBass: at(140), valley: at(125), treble: at(1700), scale };
     });
-    assert.ok(pixels.spectrum > 20 && pixels.wave > 20, JSON.stringify(pixels));
-    assert.ok(pixels.l > pixels.r + 10, `Stereo channels have independent levels: ${JSON.stringify(pixels)}`);
+    assert.ok(pixels.bass > pixels.valley + 3 && pixels.secondBass > pixels.valley + 3, `Adjacent bass tones remain distinct: ${JSON.stringify(pixels)}`);
+    assert.ok(pixels.treble > 6, `The same spectrum includes the upper frequencies: ${JSON.stringify(pixels)}`);
+    assert.ok(pixels.scale >= 2, 'Canvas is supersampled even on a 1x display');
     fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
-    await monitor.screenshot({ path: path.join(root, 'test-results/output-monitor-combined.png') });
-    await page.evaluate(() => { window.monitorPaints = 0; window.monitorPaintTimes = []; });
+    await monitor.screenshot({ path: path.join(root, 'test-results/output-monitor-spectrum.png') });
+    await page.locator('.workspace-header').screenshot({ path: path.join(root, 'test-results/output-monitor-header.png') });
+    await page.evaluate(() => {
+      window.monitorPaints = 0; window.displayFrames = 0; window.measureFrames = true;
+      const count = () => { if (window.measureFrames) { window.displayFrames++; requestAnimationFrame(count); } };
+      requestAnimationFrame(count);
+    });
     await page.waitForTimeout(1000);
-    const paints = await page.evaluate(() => window.monitorPaints);
-    assert.ok(paints > 5 && paints <= 62, `At most two background fills per 30 FPS frame: ${paints}`);
-    for (const mode of ['stems', 'spectrum', 'waveform']) {
-      await monitor.click(); await page.waitForTimeout(180);
-      assert.equal(await monitor.getAttribute('data-mode'), mode);
-      await monitor.screenshot({ path: path.join(root, `test-results/output-monitor-${mode}.png`) });
-    }
+    const cadence = await page.evaluate(() => {
+      window.measureFrames = false;
+      return { paints: window.monitorPaints, frames: window.displayFrames };
+    });
+    assert.ok(cadence.frames > 30 && cadence.paints >= cadence.frames * .85 && cadence.paints <= cadence.frames + 2,
+      `Paints follow display frames: ${JSON.stringify(cadence)}`);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.evaluate(() => { window.monitorPaints = 0; });
+    await page.waitForTimeout(1000);
+    const reducedPaints = await page.evaluate(() => window.monitorPaints);
+    assert.ok(reducedPaints > 0 && reducedPaints <= 16, `Reduced motion is respected: ${reducedPaints}`);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.locator('#header-pin').click();
     await page.evaluate(() => { document.body.style.paddingBottom = '2000px'; window.scrollTo(0, 1500); });
     await page.waitForTimeout(200);
@@ -97,47 +107,63 @@ const { chromium } = require('playwright');
     const idlePaints = await page.evaluate(() => window.monitorPaints);
     await page.waitForTimeout(350);
     assert.equal(await page.evaluate(() => window.monitorPaints), idlePaints, 'No animation loop after audio becomes idle');
-    // A separate mono source must reach both stereo meters, just as it reaches both speakers.
-    await page.evaluate(async () => {
+
+    // Isolate an audition to measure how quickly high-frequency transients appear,
+    // and confirm that the analyser taps are released when the view is disposed.
+    const audition = await page.evaluate(async () => {
       const { mountOutputMonitor } = await import('./scripts/stem-output-monitor.mjs');
       const { createEqualizedOutput } = await import('./scripts/local-audio-output.mjs');
       const element = document.querySelector('#output-monitor').cloneNode(true);
-      element.id = 'mono-monitor'; element.style.cssText = 'width:600px;height:40px'; document.body.prepend(element);
+      element.id = 'audition-monitor'; element.style.cssText = 'width:600px;height:18px'; document.body.prepend(element);
       let created = 0;
-      const output = createEqualizedOutput({ audioContext: () => { created++; return new AudioContext(); } });
-      const view = mountOutputMonitor({ element, output, trackLevel: () => 0 });
-      window.monoWasLazy = created === 0;
-      const context = output.getPlaybackContext(); await context.resume();
-      const oscillator = context.createOscillator(), gain = context.createGain(); gain.gain.value = .2;
+      const output = createEqualizedOutput({ audioContext: () => { created++; return new AudioContext({ sampleRate: 44100 }); } });
+      const view = mountOutputMonitor({ element, output });
+      const lazy = created === 0, context = output.getPlaybackContext(); await context.resume();
+      const oscillator = context.createOscillator(), gain = context.createGain();
+      oscillator.frequency.value = 2000; gain.gain.value = 0;
       oscillator.connect(gain).connect(output.input()); oscillator.start(); view.setActive(true);
-      window.monoCleanup = () => { view.dispose(); oscillator.stop(); output.dispose(); context.close(); element.remove(); };
-    });
-    assert.equal(await page.evaluate(() => window.monoWasLazy), true, 'Mounting the monitor does not initialize audio');
-    await page.waitForTimeout(200);
-    const monoLevels = await page.locator('#mono-monitor canvas').evaluate(canvas => {
-      const context = canvas.getContext('2d'); let l = 0, r = 0;
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const canvas = element.querySelector('canvas'), ctx = canvas.getContext('2d');
       const dpr = canvas.width / canvas.clientWidth;
-      for (let x = 505; x < 596; x++) {
-        if (context.getImageData(x * dpr, 8 * dpr, 1, 1).data[0] > 150) l++;
-        if (context.getImageData(x * dpr, 25 * dpr, 1, 1).data[0] > 150) r++;
-      }
-      return { l, r };
+      const x = Math.floor((2 + Math.log(2000 / 25) / Math.log(20000 / 25) * (canvas.clientWidth - 4)) * dpr);
+      const onset = context.currentTime + .1;
+      gain.gain.setValueAtTime(.3, onset);
+      const responseMs = await new Promise(resolve => {
+        function check() {
+          const elapsed = (context.currentTime - onset) * 1000;
+          if (elapsed > 0 && ctx.getImageData(x, 8 * dpr, 1, 1).data[0] > 150) resolve(elapsed);
+          else if (elapsed > 500) resolve(Infinity);
+          else requestAnimationFrame(check);
+        }
+        requestAnimationFrame(check);
+      });
+      let detached = 0;
+      output.observeOutput((_, source) => {
+        const disconnect = source.disconnect.bind(source);
+        source.disconnect = node => { detached++; return disconnect(node); };
+      });
+      view.dispose();
+      const monitorDetached = detached;
+      oscillator.stop(); output.dispose(); await context.close(); element.remove();
+      return { lazy, responseMs, detached: monitorDetached };
     });
-    assert.ok(monoLevels.l > 20 && Math.abs(monoLevels.l - monoLevels.r) <= 1, JSON.stringify(monoLevels));
-    await page.evaluate(() => window.monoCleanup());
+    assert.equal(audition.lazy, true, 'Mounting the monitor does not initialize audio');
+    assert.ok(audition.responseMs < 120, `Treble attacks appear promptly: ${audition.responseMs}ms`);
+    assert.equal(audition.detached, 2, 'Disposal disconnects both analysis windows');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(100);
-    const mobileBox = await monitor.boundingBox();
-    for (let i = 0; i < 4; i++) {
-      await monitor.click(); assert.deepEqual(await monitor.boundingBox(), mobileBox);
-      if (await monitor.getAttribute('data-mode') === 'stems') {
-        assert.ok(await monitor.evaluate(element => {
-          const box = element.getBoundingClientRect();
-          return [...element.querySelectorAll('.preview-track')].every(row => row.getBoundingClientRect().bottom <= box.bottom);
-        }), 'Both rows of stems fit the compact header');
-      }
-    }
+    const mobileBox = await monitor.boundingBox(), mobileSlot = await page.locator('.output-monitor-slot').boundingBox();
+    assert.equal(mobileBox.height, 18);
+    assert.ok(Math.abs(mobileBox.width - mobileSlot.width / 2) < 1);
+    assert.ok(mobileBox.x >= 0 && mobileBox.x + mobileBox.width <= 390, 'Compact spectrum fits on mobile');
+    await monitor.click(); assert.deepEqual(await monitor.boundingBox(), mobileBox);
+    await page.locator('.workspace-header').screenshot({ path: path.join(root, 'test-results/output-monitor-mobile.png') });
+    const retina = await browser.newPage({ deviceScaleFactor: 3, viewport: { width: 1440, height: 1000 } });
+    await retina.goto(url); await retina.locator('#import-audio:not(:disabled)').waitFor();
+    const retinaScale = await retina.locator('#output-monitor canvas').evaluate(canvas => canvas.width / canvas.getBoundingClientRect().width);
+    assert.ok(retinaScale >= 3, 'The backing store preserves full density on 3x displays');
+    await retina.close();
     assert.deepEqual(errors, []);
-    console.log(`Output monitor browser checks passed. Stereo pixels: ${JSON.stringify(pixels)}; background fills/sec: ${paints}.`);
+    console.log(`Output spectrum checks passed. Tones: ${JSON.stringify(pixels)}; cadence: ${JSON.stringify(cadence)}; audition: ${JSON.stringify(audition)}.`);
   } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

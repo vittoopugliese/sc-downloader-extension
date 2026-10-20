@@ -61,7 +61,6 @@ const selectionRows = document.getElementById("selectionRows");
 const helpBtn = document.getElementById("helpBtn");
 const helpPanel = document.getElementById("helpPanel");
 const helpBackBtn = document.getElementById("helpBackBtn");
-const looperPanel = document.getElementById("looperPanel");
 const productOffers = document.querySelector(".product-offers");
 const playerToolsOffer = document.getElementById("playerToolsOffer");
 const playerToolsProBtn = document.getElementById("playerToolsProBtn");
@@ -136,7 +135,7 @@ function openHelp() {
   helpSelectionScrollTop = selectionViewport.scrollTop;
   helpPanel.classList.add("is-visible");
   document.body.classList.add("help-mode");
-  (helpOnly ? helpPanel.querySelector('[aria-selected="true"]') : helpBackBtn)?.focus();
+  (helpOnly ? helpPanel.querySelector('.help-action') : helpBackBtn)?.focus();
 }
 
 function closeHelp() {
@@ -170,22 +169,6 @@ function trapHelpFocus(event) {
   }
 }
 
-function openLooperExplainer() {
-  openHelp();
-  selectHelpTab(document.getElementById("looperTab"));
-}
-
-function selectHelpTab(selected) {
-  helpPanel.querySelectorAll('[role="tab"]').forEach((tab) => {
-    const active = tab === selected;
-    tab.setAttribute("aria-selected", String(active));
-    tab.tabIndex = active ? 0 : -1;
-    document.getElementById(tab.dataset.helpTab).hidden = !active;
-  });
-  helpPanel.querySelector(".help-content").scrollTop = 0;
-  if (selected?.id === "supportTab") SCContactContent.load();
-}
-
 async function openRequestedPopupView() {
   try {
     const stored = await chrome.storage.local.get(POPUP_START_VIEW_KEY);
@@ -193,7 +176,7 @@ async function openRequestedPopupView() {
     const requested = stored[POPUP_START_VIEW_KEY];
     await chrome.storage.local.remove(POPUP_START_VIEW_KEY);
     if (requested === "pro") openCommercePanel();
-    else openLooperExplainer();
+    else openHelp();
   } catch (error) {
     console.warn("[SC Downloader] Could not restore the requested popup view.", error);
   }
@@ -242,33 +225,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (helpOnly) {
     helpPanel.setAttribute("role", "region");
     helpPanel.removeAttribute("aria-modal");
-    selectHelpTab(document.getElementById("speedTab"));
     openHelp();
     loadingOverlay.classList.add("is-hidden");
   }
   document.body.classList.remove("policy-pending");
-  if (helpOnly) helpPanel.querySelector('[aria-selected="true"]')?.focus();
+  if (helpOnly) helpPanel.querySelector('.help-action')?.focus();
 
   helpBtn.addEventListener("click", openHelp);
   helpBackBtn.addEventListener("click", closeHelp);
   document.getElementById("helpVersion").textContent = `v${chrome.runtime.getManifest().version}`;
   document.getElementById("openStemsBtn").addEventListener("click", () => {
     chrome.tabs.create({ url: chrome.runtime.getURL("stems.html") }).then(() => window.close(), () => {});
-  });
-  const helpTabs = [...helpPanel.querySelectorAll('[role="tab"]')];
-  helpTabs.forEach((tab, index) => {
-    tab.addEventListener("click", () => selectHelpTab(tab));
-    tab.addEventListener("keydown", (event) => {
-      let next;
-      if (event.key === "ArrowRight") next = (index + 1) % helpTabs.length;
-      if (event.key === "ArrowLeft") next = (index + helpTabs.length - 1) % helpTabs.length;
-      if (event.key === "Home") next = 0;
-      if (event.key === "End") next = helpTabs.length - 1;
-      if (next === undefined) return;
-      event.preventDefault();
-      selectHelpTab(helpTabs[next]);
-      helpTabs[next].focus();
-    });
   });
   await openRequestedPopupView();
   document.addEventListener("keydown", (event) => {

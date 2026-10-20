@@ -23,24 +23,16 @@ assert(
 );
 assert(
   /\.download-toolbar\s*\{[^}]*flex-wrap:\s*nowrap/s.test(popup) &&
-    /id="downloadToolbar"[\s\S]*id="downloadFormat"[\s\S]*id="downloadLimit"[\s\S]*id="chooseDownloadFolder"[\s\S]*id="resetDownloadFolder"[\s\S]*id="downloadBtn"/.test(popup) &&
-    /id="looperTab"[^>]*data-help-tab="looperPanel"/.test(popup),
-  "Download controls must share one toolbar and the Help view must expose the Looper guide."
+    /id="downloadToolbar"[\s\S]*id="downloadFormat"[\s\S]*id="downloadLimit"[\s\S]*id="chooseDownloadFolder"[\s\S]*id="resetDownloadFolder"[\s\S]*id="downloadBtn"/.test(popup),
+  "Download controls must share one toolbar."
 );
 assert(
-  /id="looperPanel"[^>]*role="tabpanel"/.test(popup) &&
-    /class="looper-tutorial\b/.test(popup) &&
-    !/looperPurchaseBtn|looperCheckoutNote|USD 2\.99|LOOPER PRO/.test(popup),
-  "The popup must provide a free, localized Looper tutorial without payment UI."
+  !/role="tab(?:list|panel)?"|data-help-tab=/.test(popup) && !/selectHelpTab/.test(popupScript),
+  "The popup home must have no help tabs or tab panels."
 );
 assert(
-  /#looperPanel\.is-visible\s*\{\s*display:\s*block/.test(popup) &&
-    /id="helpBackBtn"[^>]*>[\s\S]*name="back"[^>]*class="back-icon"/.test(popup),
-  "Help and its Looper tab must reuse the compact existing back-arrow icon."
-);
-assert(
-  /data-i18n="looper_step_zoom_title"[\s\S]*data-i18n="looper_step_zoom"/.test(popup),
-  "The free Looper tutorial must explain waveform zoom for precise A–B selection."
+  /id="helpBackBtn"[^>]*>[\s\S]*name="back"[^>]*class="back-icon"/.test(popup),
+  "Help must reuse the compact existing back-arrow icon."
 );
 assert(
   /function openHelp\(\)[\s\S]*helpPanel\.classList\.add\("is-visible"\)/.test(
@@ -52,12 +44,6 @@ assert(
     /event\.key === "Escape"/.test(popupScript) &&
     /function trapHelpFocus\(event\)/.test(popupScript),
   "Help must preserve selection scroll, trap keyboard focus, and close with Escape."
-);
-assert(
-  /function openLooperExplainer\(\)[\s\S]*openHelp\(\)/.test(popupScript) &&
-    /function openLooperExplainer\(\)[\s\S]*selectHelpTab\(document\.getElementById\("looperTab"\)\)/.test(popupScript) &&
-    !/ACTIVATE_LOOPER|DOWNLOAD_LOOP|looperPurchaseBtn|looperCheckoutNote/.test(popupScript),
-  "The Looper tutorial must open inside Help and must not activate Looper or a checkout."
 );
 
 function assert(condition, message) {

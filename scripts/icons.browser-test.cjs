@@ -65,6 +65,15 @@ const { names } = require('./build-icons.cjs').build(root, { check: true });
       if (node.shadowRoot.querySelector('img') || !node.shadowRoot.querySelector('path')) throw Error('Fallback failed');
       node.remove();
     });
+    const hearts = await page.evaluate(() => ['heart', 'bypass'].map(name => {
+      const icon = document.querySelector(`sc-icon[name="${name}"]`);
+      icon.style.color = 'rgb(255, 85, 0)';
+      const path = icon.shadowRoot.querySelector('path');
+      return { drawing: icon.shadowRoot.innerHTML, fill: getComputedStyle(path).fill, stroke: getComputedStyle(path).stroke };
+    }));
+    assert.deepEqual(hearts[0], hearts[1], 'Credit and bypass must use the same restored heart');
+    assert.equal(hearts[0].fill, 'none', 'The original heart keeps its outline');
+    assert.equal(hearts[0].stroke, 'rgb(255, 85, 0)', 'The heart inherits the control state color');
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
   // Real extension registration: MAIN and ISOLATED worlds must both render, even after reinjection.
