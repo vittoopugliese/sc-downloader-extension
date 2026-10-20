@@ -61,6 +61,7 @@
   "move": "glyph:F0B5",
   "slip": "glyph:F02D",
   "stretch": "glyph:F02C",
+  "clip-stretch": "glyph:F514",
   "reverse": "glyph:F4B2",
   "crossfade": "glyph:F495",
   "loop": "glyph:F549",

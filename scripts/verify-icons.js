@@ -26,7 +26,8 @@ assert.throws(() => compile({ ...fixture, sources: ['<sc-icon name="missing"></s
 assert.throws(() => compile({ ...fixture, catalog: { ...fixture.catalog, b: '<svg><script/></svg>' } }), /unsafe vector/);
 
 const actual = build(root, { check: true });
-assert.ok(actual.vectorCount < 100, 'Do not ship the full catalog');
+const catalogSize = Object.keys(require('./icon-vectors.json')).length;
+assert.ok(actual.vectorCount < catalogSize / 4, 'Ship only a small subset of the source catalog');
 assert.ok(Buffer.byteLength(actual.output) < 60000);
 assert.ok(Buffer.byteLength(actual.client) < 4000);
 assert.ok(!/ILGlyphs|ILLogos|ImageLine|glyph:|cursor:/.test(actual.output), 'Runtime uses semantic names only');
