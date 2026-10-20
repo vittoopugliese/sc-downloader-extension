@@ -87,11 +87,12 @@ module.exports = async function verifyInstruments(page) {
   });
   assert.ok(playing >= 1, 'The pattern clip plays in the song');
 
-  // Tempo lives in the playlist: pattern clips keep their bars.
+  // Tempo lives in the playlist: pattern clips keep their bars, and the grid keeps its size
+  // on screen, so the clip keeps its width.
   const tempo = page.locator('#transport .pl-toolbar [role=spinbutton][aria-label=BPM]');
   await tempo.focus(); for (let i = 0; i < 6; i++) await tempo.press('PageDown');
   const slow = await clip.boundingBox();
-  assert.ok(Math.abs(slow.width - repeated.width * 2) < 6, `Half tempo doubles the clip: ${repeated.width} → ${slow.width}`);
+  assert.ok(Math.abs(slow.width - repeated.width) < 2 && Math.abs(slow.x - repeated.x) < 2, `Half tempo keeps the clip on its bars: ${repeated.width} → ${slow.width}`);
   await page.locator('.workspace-header .pl-tools button[aria-keyshortcuts="Control+Z"]').click();
   assert.equal(await tempo.getAttribute('aria-valuenow'), '120', 'One key run is one undo step');
 

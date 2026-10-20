@@ -88,10 +88,13 @@ test('pattern clips repeat past one pass, in timeline order, and keep their posi
   retimeClips(state, 60, clip => clip.asset === 'pattern:p');
   assert.equal(state.bpm, 60);
   assert.deepEqual([state.clips[0].at, state.clips[0].out, state.clips[0].fadeIn], [2, 10, 1], 'Half tempo: same bar, twice the seconds');
-  assert.deepEqual([state.clips[1].at, state.clips[1].out], [1, 1], 'Audio clips keep their seconds');
+  assert.deepEqual([state.clips[1].at, state.clips[1].out, state.clips[1].speed], [2, 1, 1], 'Audio clips keep their bar and their speed');
   // Clips stretched to the grid keep their bars: half tempo plays them at half speed.
   assert.deepEqual([state.clips[2].at, state.clips[2].out, state.clips[2].speed, state.clips[2].fadeIn], [4, 1, .5, 1], 'Locked clip: same bar, half speed');
   assert.deepEqual([state.clips[3].at, state.clips[3].speed, state.clips[3].pitch, state.clips[3].keepLength], [4, .5, 3, false], 'Resample keeps its mode and pitch knob');
+  // Tempo from an A–B loop keeps unlocked audio in seconds.
+  retimeClips(state, 120, clip => clip.asset === 'pattern:p', { moveAudio: false });
+  assert.deepEqual([state.clips[1].at, state.clips[2].at, state.clips[2].speed], [2, 2, 1]);
   assert.throws(() => validateArrangement({ ...state, clips: [{ ...state.clips[2], tempoLock: 'yes' }] }, new Map([['a', { buffer: { duration: 1 } }]])));
 });
 

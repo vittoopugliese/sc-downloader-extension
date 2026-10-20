@@ -118,24 +118,31 @@ export function createStretchCache({ budget = 192 * 1024 * 1024, onChange = () =
       return entry ? { buffer: entry.buffer, offset: (clip.in - entry.from) / clip.speed } : null;
     },
     has: (clip, asset) => !!(entries.get(keyOf(clip, asset)) || []).some(item => covers(item, clip)),
-    busy: () => pending.length,
-    request(clip, asset) {
+    busy: () => pending.filter(job => !job.dropped).length,
+    // `keep` protects the job from `retain` (the WAV export needs every render).
+    request(clip, asset, { keep = false } = {}) {
       if (find(clip, asset)) return Promise.resolve();
-      const key = keyOf(clip, asset), queued = pending.find(job => job.key === key && covers(job, clip));
-      if (queued) return queued.promise;
+      const key = keyOf(clip, asset), queued = pending.find(job => !job.dropped && job.key === key && covers(job, clip));
+      if (queued) { queued.keep ||= keep; return queued.promise; }
       let from = clip.in - STRETCH_PAD, to = clip.out + STRETCH_PAD;
       // Merge with overlapping renders so one entry keeps covering an edited clip.
-      for (const range of [...(entries.get(key) || []), ...pending.filter(job => job.key === key)]) {
+      for (const range of [...(entries.get(key) || []), ...pending.filter(job => !job.dropped && job.key === key)]) {
         if (range.from <= to && range.to >= from) { from = Math.min(from, range.from); to = Math.max(to, range.to); }
       }
-      const job = { key, from, to };
+      const job = { key, from, to, keep };
       const snapshot = { ...clip }, source = { ...asset };
-      job.promise = queue.then(() => render(key, snapshot, source, from, to)).finally(() => {
+      job.promise = queue.then(() => job.dropped ? undefined : render(key, snapshot, source, from, to)).finally(() => {
         pending.splice(pending.indexOf(job), 1); onChange();
       });
       queue = job.promise.catch(() => {});
       pending.push(job); onChange();
       return job.promise;
+    },
+    // Drops queued renders no clip in `clips` needs any more, such as the in-between
+    // tempos of a BPM drag. The running render finishes; dropped requests resolve empty.
+    retain(clips, assets) {
+      const wanted = new Set(clips.filter(needsStretch).map(clip => keyOf(clip, assets.get(clip.asset))));
+      for (const job of pending) if (!job.keep && !wanted.has(job.key)) job.dropped = true;
     },
     // Renders of replaced audio can never be used again.
     forget(assetId) {
@@ -146,15 +153,63 @@ export function createStretchCache({ budget = 192 * 1024 * 1024, onChange = () =
   };
 }
 
+// Live stretch, like FL Studio: until a clip's stretch render lands, it plays from the source
+// at its speed through a Signalsmith processor that restores its pitch. The processors are
+// pooled and already loaded, so a tempo or stretch edit is heard at once. Their latency is
+// fixed, so a clip starts that much earlier to come out on time.
+const TONE_POOL = 16;
+function createTonePool(context, onReady) {
+  const nodes = [];
+  let latency = null, failed = false;
+  const loaded = context.audioWorklet?.addModule(new URL('./stem-tone-processor.mjs', import.meta.url)).then(() => true, () => false) ?? Promise.resolve(false);
+  function spawn() {
+    if (failed || nodes.length >= TONE_POOL) return;
+    const node = new AudioWorkletNode(context, 'scdl-stem-tone', { outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
+    const item = { node, ready: false, busy: false };
+    node.port.onmessage = ({ data }) => {
+      if (data.type === 'ready') { item.ready = true; latency ??= data.latency; onReady(); }
+      else { failed = true; drop(item); }
+    };
+    node.onprocessorerror = () => { failed = true; drop(item); };
+    nodes.push(item);
+  }
+  function drop(item) {
+    const index = nodes.indexOf(item);
+    if (index >= 0) nodes.splice(index, 1);
+    item.node.port.postMessage({ type: 'dispose' }); item.node.disconnect();
+  }
+  // Four warm processors cover the stems; more load in the background when they are busy.
+  loaded.then(ok => { if (!ok) failed = true; else for (let i = 0; i < 4; i++) spawn(); });
+  return {
+    latency: () => latency,
+    // A ready, idle processor set to `transpose`, or null (the clip then waits for its render).
+    take(transpose, destination) {
+      const item = nodes.find(entry => entry.ready && !entry.busy);
+      if (!nodes.some(entry => !entry.busy && entry !== item)) loaded.then(ok => ok && spawn());
+      if (!item || latency === null) return null;
+      item.busy = true;
+      item.node.port.postMessage({ transpose, reset: true });
+      item.node.connect(destination);
+      // Free it once the processor's tail has played out.
+      item.release = () => setTimeout(() => { item.node.disconnect(); item.busy = false; }, (latency + .05) * 1000);
+      return item;
+    },
+    dispose() { for (const item of [...nodes]) drop(item); failed = true; },
+  };
+}
+
 // Realtime playback: clips are scheduled on the AudioContext clock a short window
 // ahead, so edits are heard on the next block instead of after a full mix render.
-// Stretched clips not rendered yet join in place as soon as their render lands.
+// Stretched clips not rendered yet play live (see the tone pool) and switch to their
+// render in place as soon as it lands.
 // `transport` is { loop: {start, end} | null, rate }; rate scales the timeline.
 // Edits replace only the clips that changed: untouched clips keep sounding.
 export function createPlaylistEngine({ context, output, cache, assets, onEnded, onError }) {
   const master = context.createGain(), tracks = new Map(), live = new Set();
   master.connect(output);
   let session = null, signature = '', timer = 0;
+  const tones = createTonePool(context, () => {});
+  const liveStretch = () => tones.latency() !== null;
   const versionOf = clip => assets().get(clip.asset)?.version || 0;
   // A clip's identity for scheduling: its fields plus the version of its audio.
   const clipSignature = clip => JSON.stringify([clip, versionOf(clip)]);
@@ -193,6 +248,29 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
       node.source.stop(at + RESTART_FADE); live.delete(node);
     }
   }
+  function track(node, clipId, fallback = false) {
+    node.clipId = clipId; node.fallback = fallback; live.add(node);
+    node.source.addEventListener('ended', () => live.delete(node));
+  }
+  // The source plays at the clip's speed; the processor moves the pitch back by the same
+  // ratio and applies the clip's own pitch.
+  function startLive(owner, clip, asset, when, offset, limit) {
+    const latency = tones.latency(), tone = tones.take(2 ** (clipPitch(clip) / 12) / clip.speed, trackGain(clip.track));
+    if (!tone) return false;
+    const node = startClip(context, tone.node, clip, asset, null, when - latency, offset, { rate: owner.rate, limit });
+    if (!node) { tone.release(); return true; }
+    node.source.addEventListener('ended', tone.release);
+    track(node, clip.id, true);
+    return true;
+  }
+  // Swaps a live-stretched clip for its render from the current position on.
+  function swapIn(owner, clip) {
+    if (session !== owner || !cache.has(clip, assets().get(clip.asset)) || ![...live].some(node => node.clipId === clip.id && node.fallback)) return;
+    const wanted = clipSignature(clip);
+    if (!owner.state.clips.some(item => item.id === clip.id && clipSignature(item) === wanted)) return;
+    retire(clip.id);
+    scheduleRange(owner, [clip], Math.max(0, (context.currentTime + .005 - owner.ctxStart) * owner.rate), owner.horizon);
+  }
   function schedule(owner, clip, when, offset, limit) {
     const asset = assets().get(clip.asset);
     if (!asset) return;
@@ -202,9 +280,10 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
       const stretched = stretch ? cache.lookup(clip, asset) : null;
       if (stretch && !stretched) return;
       const node = startClip(context, trackGain(clip.track), clip, asset, stretched, when, offset, { rate: owner.rate, limit });
-      if (node) { node.clipId = clip.id; live.add(node); node.source.addEventListener('ended', () => live.delete(node)); }
+      if (node) track(node, clip.id);
     };
     if (!stretch || cache.has(clip, asset)) start();
+    else if (startLive(owner, clip, asset, when, offset, limit)) cache.request(clip, asset).then(() => swapIn(owner, clip), onError);
     else cache.request(clip, asset).then(start, onError);
   }
   // Every pass of `clips` between timeline elapsed `a` and `b`; the first window also
@@ -289,8 +368,9 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
         retire(clip.id);
         scheduleRange(owner, [clip], Math.max(0, (context.currentTime + .005 - owner.ctxStart) * owner.rate), owner.horizon);
       };
-      // A stretched clip keeps its previous version audible until the new render lands.
-      if (asset && before.has(clip.id) && needsStretch(clip) && !cache.has(clip, asset)) cache.request(clip, asset).then(replace, onError);
+      // Without live stretch, a stretched clip keeps its previous version audible until
+      // the new render lands.
+      if (!liveStretch() && asset && before.has(clip.id) && needsStretch(clip) && !cache.has(clip, asset)) cache.request(clip, asset).then(replace, onError);
       else replace();
     }
     return true;
@@ -314,12 +394,13 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     // Where a track's instruments play into, and the EQ graph whose spectrum the editor shows.
     trackInput: id => trackBus(id).input,
     trackGraph: id => tracks.get(id)?.eq || null,
-    dispose() { stop(); master.disconnect(); for (const bus of tracks.values()) { bus.eq?.dispose(); bus.gain.disconnect(); } tracks.clear(); },
+    dispose() { stop(); tones.dispose(); master.disconnect(); for (const bus of tracks.values()) { bus.eq?.dispose(); bus.gain.disconnect(); } tracks.clear(); },
   };
 }
 
 // Prefetch stretched renders for audible clips, earliest first, so play starts warm.
 export function prefetchStretches(state, assets, cache, onError) {
+  cache.retain(state.clips, assets);
   for (const clip of audibleClips(state).filter(needsStretch).sort((a, b) => a.at - b.at)) {
     const asset = assets.get(clip.asset);
     if (asset && !cache.has(clip, asset)) cache.request(clip, asset).catch(onError);
@@ -350,7 +431,7 @@ export async function renderArrangement(state, assets, cache, { signal, progress
     const clip = clips[i], asset = assets.get(clip.asset);
     progress?.(i / (clips.length + 1));
     let stretched = null;
-    if (needsStretch(clip)) { await cache.request(clip, asset); signal?.throwIfAborted(); stretched = cache.lookup(clip, asset); }
+    if (needsStretch(clip)) { await cache.request(clip, asset, { keep: true }); signal?.throwIfAborted(); stretched = cache.lookup(clip, asset); }
     startClip(offline, gains.get(clip.track), clip, asset, stretched, clip.at);
   }
   let mix = await offline.startRendering();

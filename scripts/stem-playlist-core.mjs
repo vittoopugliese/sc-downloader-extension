@@ -1,5 +1,5 @@
-// Arrangement times are seconds. BPM changes the editing grid; only patterns and clips
-// stretched to the grid (`tempoLock`) follow it.
+// Arrangement times are seconds. A BPM change moves every clip to keep its bar, as in
+// FL Studio; patterns and clips stretched to the grid (`tempoLock`) also keep their length.
 export const LIMITS = Object.freeze({ tracks: 16, clips: 256, seconds: 300, pcmBytes: 256 * 1024 * 1024 });
 export const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 export const uid = () => crypto.randomUUID();
@@ -59,16 +59,18 @@ export function loopSegments(clip, length) {
   pieces[0].fadeIn = clip.fadeIn || 0; pieces.at(-1).fadeOut = clip.fadeOut || 0;
   return pieces;
 }
-// Patterns and tempo-locked clips follow the project tempo: they keep their start and
-// length in beats, as in FL Studio. A pattern re-renders at the new tempo; a locked clip
-// changes speed in its own pitch mode (stretch keeps the pitch, resample moves it).
-// Other audio keeps its place in seconds.
-export function retimeClips(state, bpm, isPattern) {
+// The project tempo moves every clip so it starts on the same bar, as in FL Studio.
+// Patterns and tempo-locked clips also keep their length in beats: a pattern re-renders
+// at the new tempo; a locked clip changes speed in its own pitch mode (stretch keeps the
+// pitch, resample moves it). Other audio keeps its speed, so it spans more or fewer bars.
+// `moveAudio: false` keeps unlocked audio in seconds (tempo from an A–B loop).
+export function retimeClips(state, bpm, isPattern, { moveAudio = true } = {}) {
   const factor = state.bpm / bpm;
   for (const clip of state.clips) {
-    const pattern = isPattern(clip);
-    if (!pattern && !clip.tempoLock) continue;
+    const pattern = isPattern(clip), locked = pattern || clip.tempoLock;
+    if (!locked && !moveAudio) continue;
     clip.at *= factor;
+    if (!locked) continue;
     if (pattern) { clip.in *= factor; clip.out *= factor; }
     else clip.speed = clamp(clip.speed / factor, .25, 4);
     clip.fadeIn = (clip.fadeIn || 0) * factor; clip.fadeOut = (clip.fadeOut || 0) * factor;

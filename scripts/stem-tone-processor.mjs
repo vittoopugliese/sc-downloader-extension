@@ -9,8 +9,10 @@ class StemToneProcessor extends AudioWorkletProcessor {
     this.active = false;
     this.port.onmessage = ({ data }) => {
       if (data.type === 'dispose') { this.disposed = true; this.wasm = null; return; }
-      const active = !!data.keepTone && data.rate !== 1;
-      this.factor = 1 / Math.max(.1, Math.min(3, Number(data.rate) || 1));
+      // `transpose` sets the pitch factor directly: the playlist's live stretch of one clip.
+      const transpose = Number(data.transpose), direct = Number.isFinite(transpose) && transpose > 0;
+      const active = direct ? transpose !== 1 : !!data.keepTone && data.rate !== 1;
+      this.factor = direct ? Math.max(1 / 16, Math.min(16, transpose)) : 1 / Math.max(.1, Math.min(3, Number(data.rate) || 1));
       if (active !== this.active || data.reset) this.wasm?._reset();
       this.active = active;
       this.wasm?._setTransposeFactor(this.factor, 8000 / sampleRate);

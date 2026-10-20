@@ -252,14 +252,20 @@ const { chromium } = require('playwright');
     assert.equal(edited[0].tempoLock, true, 'A stretched clip sticks to the grid');
     assert.equal(await ui.locator('.pl-clip').first().locator('.pl-clip-title > *').count(), 1, 'The clip title shows the stretch icon');
     // Half tempo: the locked clip keeps its bars (twice the seconds, half the speed); the
-    // other clip keeps its seconds. Six PageDown steps are one undo step.
+    // other clip keeps its bar and its speed. The grid keeps its size on screen.
+    // Six PageDown steps are one undo step.
+    const barWidth = () => ui.locator('.pl-grid').evaluate(el => parseFloat(el.style.getPropertyValue('--beat')));
+    const beat = await barWidth(), lockedBox = await ui.locator('.pl-clip').first().boundingBox();
     const bpm = ui.getByRole('spinbutton', { name: 'BPM', exact: true });
     await bpm.focus(); for (let i = 0; i < 6; i++) await page.keyboard.press('PageDown');
     const halved = await page.evaluate(() => editor.snapshot());
     assert.equal(halved.bpm, 60);
     assert.ok(Math.abs(halved.clips[0].at - edited[0].at * 2) < 1e-9 && Math.abs(halved.clips[0].speed - edited[0].speed / 2) < 1e-9, 'Locked clip keeps its start and length in bars');
     assert.equal(halved.clips[0].keepLength, false, 'Resample stays resample');
-    assert.deepEqual(halved.clips[1], edited[1], 'Unlocked audio keeps its seconds');
+    assert.deepEqual(halved.clips[1], { ...edited[1], at: edited[1].at * 2 }, 'Unlocked audio keeps its bar and its speed');
+    assert.ok(Math.abs(await barWidth() - beat) < 1e-6, 'A beat keeps its width on screen');
+    const halvedBox = await ui.locator('.pl-clip').first().boundingBox();
+    assert.ok(Math.abs(halvedBox.x - lockedBox.x) < 1 && Math.abs(halvedBox.width - lockedBox.width) < 1, 'The locked clip does not move on screen');
     await page.waitForTimeout(800); await scroll.focus(); await page.keyboard.press('Control+z');
     assert.deepEqual((await state()).clips, edited, 'One undo restores the tempo change');
     await page.keyboard.press('4');

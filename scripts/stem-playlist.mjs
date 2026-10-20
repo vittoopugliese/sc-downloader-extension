@@ -118,7 +118,7 @@ export function contextMenu(event, items) {
 // separates it and hands the result back with `addStemTracks`.
 export function mountPlaylist({ container, windows = [], windowHome = null, toolbarHost = container, inspectorHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect, onRackSample, onSeparate }) {
   const es = document.documentElement.lang === 'es', t = (en, spanish) => es ? spanish : en;
-  let state = emptyArrangement(), assets = new Map(), selected = null, extra = new Set(), zoom = 48, snap = .5;
+  let state = emptyArrangement(), assets = new Map(), selected = null, extra = new Set(), zoom = 48, viewBpm = 120, snap = .5;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
   let drag = null, ctrlClick = null, frame, operating = false, liveBefore = null, loopRange = null, marker = 0, rate = 1, rateTimer = 0;
   const isPattern = clip => !!assets.get(clip.asset)?.loop;
@@ -242,22 +242,34 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   if (play) { play.append(globalThis.SCIcons.create('play')); play.className = 'pl-play'; play.setAttribute('aria-pressed', 'false'); }
   const time = node('output', 'pl-time', '0:00.00'); time.dataset.scdlTooltip = t('Playhead position (minutes:seconds)', 'Posición del cursor (minutos:segundos)');
   // BPM is a whole number you drag up or down, like FL Studio's tempo display. The clips follow
-  // live while it moves; one drag, wheel spin or key run is one undo step. Locked clips in
-  // stretch mode need a new render per tempo, so playback catches up once the value rests.
-  let tempoUndo = null, tempoSettle = 0;
-  function setTempo(bpm) {
+  // live while it moves; one drag, wheel spin or key run is one undo step. Like FL Studio,
+  // clips, loop, marker and playhead keep their bar, and the grid keeps its size on screen.
+  // `keepTime` (tempo from an A–B loop) leaves unlocked audio and the loop in seconds.
+  let tempoUndo = null;
+  function setTempo(bpm, { keepTime = false } = {}) {
     bpm = clamp(Math.round(bpm), 20, 300);
     if (bpm === state.bpm) return;
-    const before = copy();
-    try { retimeClips(state, bpm, isPattern); validateArrangement(state, assets); }
-    catch { state = before; report(t('At that tempo the stretched clips run past 5 minutes.', 'Con ese tempo los clips estirados pasan de 5 minutos.')); draw(); return; }
+    const before = copy(), factor = state.bpm / bpm;
+    try { retimeClips(state, bpm, isPattern, { moveAudio: !keepTime }); validateArrangement(state, assets); }
+    catch { state = before; report(t('At that tempo the playlist runs past 5 minutes.', 'Con ese tempo la playlist pasa de 5 minutos.')); draw(); return; }
     if (!tempoUndo || history.at(-1) !== tempoUndo) {
       history.push(before); if (history.length > 50) history.shift(); future = []; pruneGraveyard(); tempoUndo = history.at(-1);
     }
-    draw(); clearTimeout(tempoSettle); tempoSettle = setTimeout(changed, 120);
+    if (!keepTime) followTempo(factor);
+    changed(); draw();
+  }
+  // Timeline marks that live outside the arrangement follow their bar too. While playing,
+  // playback continues from the same bar.
+  function followTempo(factor) {
+    const at = seconds => clamp(seconds * factor, 0, LIMITS.seconds);
+    marker = at(marker);
+    if (timeSelection) timeSelection = { ...timeSelection, start: at(timeSelection.start), end: at(timeSelection.end) };
+    if (loopRange) { loopRange = { start: at(loopRange.start), end: at(loopRange.end) }; onLoopChange?.(loopRange); }
+    if (playing()) { position = at(engine.now() ?? position); engine.play(playbackState(), position, transport(), true); startMetronome(); }
+    else position = at(position);
   }
   const tempo = createDragNumber({ label: 'BPM', min: 20, max: 300, value: 120, className: 'pl-field',
-    hint: t('drag up or down (Shift for fine), or use the wheel or the arrows. Project tempo: grid, channel rack and piano roll. Clips stretched to the grid follow it in their pitch mode; other audio keeps its speed. The speed slider next to it changes everything.', 'arrastrá arriba o abajo (Shift para fino), o usá la rueda o las flechas. Tempo del proyecto: grilla, channel rack y piano roll. Los clips estirados a la grilla lo siguen en su modo de pitch; el resto del audio mantiene su velocidad. El slider de velocidad al lado cambia todo.'),
+    hint: t('drag up or down (Shift for fine), or use the wheel or the arrows. Project tempo: grid, channel rack and piano roll. Every clip keeps its bar and the grid keeps its size. Clips stretched to the grid also keep their length, in their pitch mode; other audio keeps its speed. The speed slider next to it changes everything.', 'arrastrá arriba o abajo (Shift para fino), o usá la rueda o las flechas. Tempo del proyecto: grilla, channel rack y piano roll. Cada clip queda en su compás y la grilla mantiene su tamaño. Los clips estirados a la grilla también mantienen su largo, en su modo de pitch; el resto del audio mantiene su velocidad. El slider de velocidad al lado cambia todo.'),
     onInput: setTempo, onEnd: () => { tempoUndo = null; } });
   function changeLoop(range) {
     loopRange = range; if (range) marker = range.start;
@@ -291,7 +303,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     const bpm = [1, 2, 4, 8].map(bars => bars * 240 / seconds).filter(value => value >= 20 && value <= 300)
       .sort((a, b) => Math.abs(a - 120) - Math.abs(b - 120))[0];
     if (!bpm) { report(t('The loop is outside the 20–300 BPM range.', 'El loop queda fuera del rango 20–300 BPM.')); return; }
-    tempoUndo = null; setTempo(bpm); tempoUndo = null;
+    tempoUndo = null; setTempo(bpm, { keepTime: true }); tempoUndo = null;
   } });
   fitTempo.classList.add('pl-fit-tempo');
   // Metronome, like FL Studio's (Ctrl+M): a click on every beat while the playlist plays,
@@ -636,7 +648,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     if (!(factor > 0) || !Number.isFinite(factor)) return;
     x = Math.max(0, x);
     zoomAnchor ||= { at: (scroll.scrollLeft + x) / zoom };
-    zoomAnchor.x = x; zoomTarget = clamp((zoomTarget ?? zoom) * factor, MIN_ZOOM, MAX_ZOOM);
+    zoomAnchor.x = x; zoomTarget = clamp((zoomTarget ?? zoom) * factor, MIN_ZOOM * state.bpm / 120, MAX_ZOOM * state.bpm / 120);
     zoomFrame ||= requestAnimationFrame(() => {
       const anchor = zoomAnchor; zoom = zoomTarget; zoomFrame = 0; zoomTarget = zoomAnchor = null;
       draw({ paint: false }); scroll.scrollLeft = anchor.at * zoom - anchor.x; paint(); onViewChange?.();
@@ -671,7 +683,9 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   function travel(forward) {
     const from = forward ? future : history, to = forward ? history : future;
     if (!from.length) return;
+    const bpm = state.bpm;
     to.push(copy()); state = from.pop(); timeSelection = null;
+    if (state.bpm !== bpm) followTempo(bpm / state.bpm);
     if (state.sampleIds) {
       const ids = new Set(state.sampleIds);
       for (const asset of importedSamples()) if (!ids.has(asset.id)) { graveyard.set(asset.id, asset); assets.delete(asset.id); cache.forget(asset.id); }
@@ -828,6 +842,8 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   }
   function draw({ paint: paintNow = true } = {}) {
     TRACK_HEAD = parseFloat(getComputedStyle(container).getPropertyValue('--pl-head')) || 165;
+    // The view zoom is per beat: a new tempo keeps every bar the same width on screen.
+    if (state.bpm !== viewBpm) { zoom *= state.bpm / viewBpm; viewBpm = state.bpm; }
     tempo.show(state.bpm); undo.disabled = !history.length; redo.disabled = !future.length;
     const extent = Math.min(LIMITS.seconds, Math.max(16, arrangementEnd(state) + 8, timeSelection?.end || 0));
     const width = Math.max(scroll.clientWidth - TRACK_HEAD, extent * zoom);
