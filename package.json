@@ -8,6 +8,7 @@
     "test:stems": "node --test scripts/stems.test.mjs scripts/stem-playlist.test.mjs",
     "test:e2e:stems-ui": "node scripts/stems-ui.browser-test.cjs",
     "test:e2e:workspace": "node scripts/stem-workspace.browser-test.cjs",
+    "test:e2e:drag-number": "node scripts/ui-drag-number.browser-test.cjs",
     "test:e2e:output-monitor": "node scripts/stem-output-monitor.browser-test.cjs",
     "test:e2e:instruments": "node scripts/stem-instruments.browser-test.cjs",
     "test:e2e:note-workflow": "node scripts/stem-instruments.browser-test.cjs --workflow",

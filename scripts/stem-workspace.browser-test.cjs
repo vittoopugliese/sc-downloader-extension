@@ -61,10 +61,14 @@ const { chromium } = require('playwright');
       const bpm = page.getByRole('spinbutton', { name: 'BPM', exact: true }), box = await bpm.boundingBox();
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down();
       assert.ok(await page.evaluate(() => document.documentElement.classList.contains('ui-drag-number-dragging')), 'A drag keeps the up/down cursor');
-      for (let y = 1; y <= 40; y += 3) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - y);
+      for (let y = 4; y <= 40; y += 4) {
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - y);
+        const live = await bpm.evaluate(e => ({ shown: e.textContent, value: e.getAttribute('aria-valuenow'), dragging: e.classList.contains('is-dragging') }));
+        assert.deepEqual(live, { shown: String(120 + y / 4), value: String(120 + y / 4), dragging: true }, 'BPM digits must follow each pointer move before release');
+      }
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - 40); await page.mouse.up();
       assert.equal(await bpm.getAttribute('aria-valuenow'), '130');
-      await page.waitForTimeout(300); assert.equal(await bpm.textContent(), '130', 'The number counts to the new value');
+      assert.equal(await bpm.textContent(), '130', 'Release keeps the value already shown during the drag');
       await page.locator('.workspace-header .pl-tools button[aria-keyshortcuts="Control+Z"]').click();
       assert.equal(await bpm.getAttribute('aria-valuenow'), '120', 'One drag is one undo step');
     }

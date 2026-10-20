@@ -1,8 +1,8 @@
 // A whole number you drag, like FL Studio's tempo display: press it, then drag up to raise it
 // and down to lower it (Shift for fine). The wheel and the arrows step by 1, PageUp/PageDown
 // by 10, Home/End jump to the limits. Styles live in assets/ui-drag-number.css.
-// The shown number counts to each new value (220 ms, smootherstep), like the Player Tools
-// speed readout. onInput runs on every change; onEnd once a drag, wheel spin or key run ends.
+// Direct input displays immediately. External updates count to their value (220 ms,
+// smootherstep). onInput runs on every change; onEnd once a drag, wheel spin or key run ends.
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const smootherstep = p => p * p * p * (p * (p * 6 - 15) + 10);
 const reducedMotion = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -19,9 +19,9 @@ export function createDragNumber({ label, min, max, value, hint = '', className 
 
   function paint(next) { shown = next; display.textContent = String(Math.round(next)); }
   // Shows `next` without calling onInput: for changes made elsewhere (undo, tap tempo, a load).
-  function show(next, { animate = true } = {}) {
+  function show(next, { animate = !drag } = {}) {
     next = clamp(Math.round(next), min, max);
-    if (next === current && (frame || Math.round(shown) === next)) return;
+    if (next === current && ((animate && frame) || (!frame && Math.round(shown) === next))) return;
     current = next; display.setAttribute('aria-valuenow', String(next));
     if (hint) wrap.dataset.scdlTooltip = display.dataset.scdlTooltip = `${label}: ${next} · ${hint}`;
     cancelAnimationFrame(frame); frame = 0;
@@ -36,7 +36,9 @@ export function createDragNumber({ label, min, max, value, hint = '', className 
   }
   function change(next) {
     next = clamp(Math.round(next), min, max);
-    if (next !== current) { show(next); onInput?.(next); }
+    // Restarting an eased count on every pointer move keeps it near its origin.
+    // Paint direct input before notifying the host, which may redraw the playlist.
+    if (next !== current) { show(next, { animate: false }); onInput?.(next); }
   }
   // Wheel and key runs end after a short pause, so a run is one undo step.
   function touch() { clearTimeout(idle); idle = setTimeout(() => { idle = 0; onEnd?.(); }, IDLE_MS); }
@@ -46,6 +48,7 @@ export function createDragNumber({ label, min, max, value, hint = '', className 
     event.preventDefault(); event.stopPropagation();
     display.setPointerCapture(event.pointerId); display.focus({ preventScroll: true });
     drag = { id: event.pointerId, y: event.clientY, rest: 0 };
+    show(current, { animate: false });
     document.documentElement.classList.add('ui-drag-number-dragging'); display.classList.add('is-dragging');
   };
   display.onpointermove = event => {
