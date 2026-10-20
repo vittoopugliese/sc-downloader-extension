@@ -113,14 +113,6 @@
 .pl-tools{display:flex;gap:4px;min-width:0;max-width:100%;margin-left:auto;padding:3px 2px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:#4a4642 transparent}
 .pl-tools>*{flex-shrink:0}
 .pl-tools .pl-tool-group{margin-left:6px}
-/* Grid toggle: its value (1/8, 1/16, Free) is the label. */
-.pl-tools .pl-grid-snap{width:38px;padding:0}
-.pl-tools .pl-grid-snap .ui-btn-label{font-size:10px;letter-spacing:0}
-/* Global mode toggles show the current tool, like the grid; fixed widths avoid jumps. */
-.pl-tools .pl-mode-toggle{width:116px;gap:5px;padding:0 6px}
-.pl-tools .pl-pitch-mode{width:90px}
-.pl-tools .pl-mode-toggle .ui-btn-label{font-size:10px;letter-spacing:0;white-space:nowrap}
-.pl-tools .pl-mode-toggle .ui-btn-icon{width:15px;height:15px;flex-shrink:0}
 /* Clip inspector knobs run 20% under the shared md knob so the tools fit beside them.
    A fixed width keeps changing values from moving the row. */
 .pl-inspector .ui-knob{--knob-size:26px;--knob-tick-top:2.5px;--knob-tick-height:7px;--knob-tick-origin:9.5px;gap:3px;width:54px;min-width:0}

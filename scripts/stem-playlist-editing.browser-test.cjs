@@ -195,8 +195,8 @@ const { chromium } = require('playwright');
     for (const mode of ['slip', 'stretch', 'move']) {
       await editMode.click(); assert.equal(await editMode.getAttribute('data-mode'), mode);
     }
-    await pitchMode.click(); assert.equal(await pitchMode.textContent(), 'Resample');
-    await page.keyboard.press('h'); assert.equal(await pitchMode.textContent(), 'Stretch');
+    await pitchMode.click(); assert.equal(await pitchMode.getAttribute('aria-label'), 'Pitch mode: Resample');
+    await page.keyboard.press('h'); assert.equal(await pitchMode.getAttribute('aria-label'), 'Pitch mode: Stretch');
     await page.keyboard.press('e'); assert.equal(await editMode.getAttribute('data-mode'), 'slip');
     for (const [key, mode] of [['3', 'stretch'], ['2', 'slip'], ['1', 'move']]) {
       await page.keyboard.press(key); assert.equal(await editMode.getAttribute('data-mode'), mode);
@@ -249,6 +249,19 @@ const { chromium } = require('playwright');
     assert.ok(Math.abs(edited[0].speed - .8) < .001);
     assert.equal(edited[0].out, 2.5, 'Stretch retains the source range');
     assert.deepEqual(edited[1], unedited[1], 'Stretch leaves the other track intact');
+    assert.equal(edited[0].tempoLock, true, 'A stretched clip sticks to the grid');
+    assert.equal(await ui.locator('.pl-clip').first().locator('.pl-clip-title > *').count(), 1, 'The clip title shows the stretch icon');
+    // Half tempo: the locked clip keeps its bars (twice the seconds, half the speed); the
+    // other clip keeps its seconds. Six PageDown steps are one undo step.
+    const bpm = ui.getByRole('spinbutton', { name: 'BPM', exact: true });
+    await bpm.focus(); for (let i = 0; i < 6; i++) await page.keyboard.press('PageDown');
+    const halved = await page.evaluate(() => editor.snapshot());
+    assert.equal(halved.bpm, 60);
+    assert.ok(Math.abs(halved.clips[0].at - edited[0].at * 2) < 1e-9 && Math.abs(halved.clips[0].speed - edited[0].speed / 2) < 1e-9, 'Locked clip keeps its start and length in bars');
+    assert.equal(halved.clips[0].keepLength, false, 'Resample stays resample');
+    assert.deepEqual(halved.clips[1], edited[1], 'Unlocked audio keeps its seconds');
+    await page.waitForTimeout(800); await scroll.focus(); await page.keyboard.press('Control+z');
+    assert.deepEqual((await state()).clips, edited, 'One undo restores the tempo change');
     await page.keyboard.press('4');
     assert.deepEqual((await state()).clips, edited, 'Changing pitch mode does not retroactively alter audio');
     await gesture(1, 'right', .5);

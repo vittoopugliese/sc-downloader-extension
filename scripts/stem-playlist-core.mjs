@@ -1,4 +1,5 @@
-// Arrangement times are seconds. BPM changes the editing grid, never the source audio.
+// Arrangement times are seconds. BPM changes the editing grid; only patterns and clips
+// stretched to the grid (`tempoLock`) follow it.
 export const LIMITS = Object.freeze({ tracks: 16, clips: 256, seconds: 300, pcmBytes: 256 * 1024 * 1024 });
 export const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 export const uid = () => crypto.randomUUID();
@@ -34,7 +35,7 @@ export function validateArrangement(state, assets) {
         clip.at < 0 || clip.in < 0 || clip.out <= clip.in || (!asset.loop && clip.out > asset.buffer.duration + 1e-6) ||
         Math.abs(clip.pitch) > 24 || clip.speed < .25 || clip.speed > 4 || clip.gain < 0 || clip.gain > 2 ||
         typeof clip.keepLength !== 'boolean' || clip.at + clipDuration(clip) > LIMITS.seconds + 1e-6) throw new Error('Invalid clip or playlist exceeds 5 minutes.');
-    for (const key of ['mute', 'reverse']) if (clip[key] !== undefined && typeof clip[key] !== 'boolean') throw new Error('Invalid clip flag.');
+    for (const key of ['mute', 'reverse', 'tempoLock']) if (clip[key] !== undefined && typeof clip[key] !== 'boolean') throw new Error('Invalid clip flag.');
     if (!Number.isFinite(clip.cents ?? 0) || Math.abs(clip.cents ?? 0) > 100) throw new Error('Invalid fine pitch.');
     for (const key of ['fadeIn', 'fadeOut']) if (!Number.isFinite(clip[key] ?? 0) || (clip[key] ?? 0) < 0 || (clip[key] ?? 0) > LIMITS.seconds) throw new Error('Invalid fade.');
     clips.add(clip.id);
@@ -58,11 +59,18 @@ export function loopSegments(clip, length) {
   pieces[0].fadeIn = clip.fadeIn || 0; pieces.at(-1).fadeOut = clip.fadeOut || 0;
   return pieces;
 }
-// Patterns follow the project tempo: their clips keep their position in beats.
-export function retimePatternClips(state, bpm, isPattern) {
+// Patterns and tempo-locked clips follow the project tempo: they keep their start and
+// length in beats, as in FL Studio. A pattern re-renders at the new tempo; a locked clip
+// changes speed in its own pitch mode (stretch keeps the pitch, resample moves it).
+// Other audio keeps its place in seconds.
+export function retimeClips(state, bpm, isPattern) {
   const factor = state.bpm / bpm;
-  for (const clip of state.clips) if (isPattern(clip)) {
-    clip.at *= factor; clip.in *= factor; clip.out *= factor;
+  for (const clip of state.clips) {
+    const pattern = isPattern(clip);
+    if (!pattern && !clip.tempoLock) continue;
+    clip.at *= factor;
+    if (pattern) { clip.in *= factor; clip.out *= factor; }
+    else clip.speed = clamp(clip.speed / factor, .25, 4);
     clip.fadeIn = (clip.fadeIn || 0) * factor; clip.fadeOut = (clip.fadeOut || 0) * factor;
   }
   state.bpm = bpm;

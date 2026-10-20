@@ -75,9 +75,9 @@ const { chromium } = require('playwright');
     // Moved controls keep keyboard ownership, and one key press runs exactly once.
     const snap = inspector.locator('.pl-grid-snap');
     await snap.focus(); await page.keyboard.press('g');
-    assert.equal(await snap.textContent(), '1/16');
+    assert.equal(await snap.getAttribute('aria-label'), 'Grid: 1/16');
     await page.keyboard.press('g'); await page.keyboard.press('g');
-    assert.equal(await snap.textContent(), '1/8');
+    assert.equal(await snap.getAttribute('aria-label'), 'Grid: 1/8');
     // All three rows follow the same pin state when the page scrolls.
     await page.evaluate(() => { document.body.style.paddingBottom = '1200px'; window.scrollTo(0, 300); });
     await page.waitForFunction(() => window.scrollY === 300);

@@ -5,7 +5,7 @@ import { separateAudio, encodeWav, validateAudio } from './stem-audio.mjs';
 import './stem-jobs.js';
 import { normalizeDrumSlice, editDrumSlice, detectDrumSlices } from './stem-sampler.mjs';
 import { MAX_NOTES, migrateLegacy, noteName, normalizeInstrument, normalizePattern, normalizeProject, patternSeconds, pitchRatio } from './stem-pattern-core.mjs';
-import { loopSegments, retimePatternClips, validateArrangement } from './stem-playlist-core.mjs';
+import { loopSegments, retimeClips, validateArrangement } from './stem-playlist-core.mjs';
 import { createNoteTake, recordedNotes } from './stem-note-recording.mjs';
 
 test('recording quantizes gates, splits loop seams, preserves chords and extends beyond four bars', () => {
@@ -81,13 +81,18 @@ test('pattern clips repeat past one pass, in timeline order, and keep their posi
   // Pitch changes the rate, so passes are shorter on the timeline.
   assert.deepEqual(loopSegments({ ...base, pitch: 12, keepLength: false, out: 4 }, 2).map(c => c.at), [1, 2]);
   const asset = { id: 'pattern:p', loop: true, buffer: { duration: 2 } };
-  const state = { version: 1, bpm: 120, tracks: [{ id: 't', name: 'T', gain: 1, mute: false, solo: false }], clips: [base, { ...base, id: 'audio', asset: 'a', out: 1 }] };
+  const state = { version: 1, bpm: 120, tracks: [{ id: 't', name: 'T', gain: 1, mute: false, solo: false }], clips: [base, { ...base, id: 'audio', asset: 'a', out: 1 },
+    { ...base, id: 'locked', asset: 'a', at: 2, out: 1, tempoLock: true }, { ...base, id: 'resampled', asset: 'a', at: 2, out: 1, pitch: 3, keepLength: false, tempoLock: true }] };
   validateArrangement(state, new Map([['pattern:p', asset], ['a', { buffer: { duration: 1 } }]]));
   assert.throws(() => validateArrangement(state, new Map([['pattern:p', { ...asset, loop: false }], ['a', { buffer: { duration: 1 } }]])));
-  retimePatternClips(state, 60, clip => clip.asset === 'pattern:p');
+  retimeClips(state, 60, clip => clip.asset === 'pattern:p');
   assert.equal(state.bpm, 60);
   assert.deepEqual([state.clips[0].at, state.clips[0].out, state.clips[0].fadeIn], [2, 10, 1], 'Half tempo: same bar, twice the seconds');
   assert.deepEqual([state.clips[1].at, state.clips[1].out], [1, 1], 'Audio clips keep their seconds');
+  // Clips stretched to the grid keep their bars: half tempo plays them at half speed.
+  assert.deepEqual([state.clips[2].at, state.clips[2].out, state.clips[2].speed, state.clips[2].fadeIn], [4, 1, .5, 1], 'Locked clip: same bar, half speed');
+  assert.deepEqual([state.clips[3].at, state.clips[3].speed, state.clips[3].pitch, state.clips[3].keepLength], [4, .5, 3, false], 'Resample keeps its mode and pitch knob');
+  assert.throws(() => validateArrangement({ ...state, clips: [{ ...state.clips[2], tempoLock: 'yes' }] }, new Map([['a', { buffer: { duration: 1 } }]])));
 });
 
 test('drum slices default to 154 ms and migrate start-only presets without playing the remaining stem', () => {

@@ -1,4 +1,4 @@
-import { LIMITS, uid, clamp, emptyArrangement, newClip, clipDuration, clipRate, clipPitch, clipEnvelope, slipClip, crossfadeClips, arrangementEnd, snapTime, splitClip, clipsInRange, validateArrangement, needsStretch, trackAudible, loopSegments, retimePatternClips } from './stem-playlist-core.mjs';
+import { LIMITS, uid, clamp, emptyArrangement, newClip, clipDuration, clipRate, clipPitch, clipEnvelope, slipClip, crossfadeClips, arrangementEnd, snapTime, splitClip, clipsInRange, validateArrangement, needsStretch, trackAudible, loopSegments, retimeClips } from './stem-playlist-core.mjs';
 import { createPlaylistEngine, createStretchCache, prefetchStretches, renderArrangement } from './stem-playlist-audio.mjs';
 import { encodeWav } from './stem-audio.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
@@ -29,7 +29,7 @@ function groupColors(assets) {
   return colors;
 }
 // Semantic names from the shared icon catalog.
-const ICONS = Object.freeze({"pencil": "draw", "select": "select", "undo": "undo", "redo": "redo", "export": "export", "tapTempo": "tap-tempo", "metronome": "metronome", "separate": "layers", "browser": "browser", "addTrack": "add-track", "zoomOut": "zoom-out", "zoomIn": "zoom-in", "fit": "fit", "mute": "mute", "reverse": "reverse", "crossfade": "crossfade", "duplicate": "copy", "slice": "slice", "split": "cut", "trash": "trash", "check": "check", "keepLength": "keep-length", "resample": "resample", "moveTool": "move", "slipTool": "slip", "stretchTool": "stretch", "import": "upload"});
+const ICONS = Object.freeze({"pencil": "draw", "select": "select", "undo": "undo", "redo": "redo", "export": "export", "tapTempo": "tap-tempo", "metronome": "metronome", "separate": "layers", "browser": "browser", "addTrack": "add-track", "zoomOut": "zoom-out", "zoomIn": "zoom-in", "fit": "fit", "mute": "mute", "reverse": "reverse", "crossfade": "crossfade", "duplicate": "copy", "slice": "slice", "split": "cut", "trash": "trash", "check": "check", "keepLength": "keep-length", "resample": "resample", "moveTool": "move", "slipTool": "slip", "stretchTool": "stretch", "import": "upload", "tempoLoop": "tempo-loop"});
 
 // Small context menu at the pointer. Items: { label, icon, shortcut, danger, checked,
 // disabled, title, action }, '-' for a separator, { heading }, or { choices: [{ label, icon,
@@ -242,16 +242,22 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   if (play) { play.append(globalThis.SCIcons.create('play')); play.className = 'pl-play'; play.setAttribute('aria-pressed', 'false'); }
   const time = node('output', 'pl-time', '0:00.00'); time.dataset.scdlTooltip = t('Playhead position (minutes:seconds)', 'Posición del cursor (minutos:segundos)');
   // BPM is a whole number you drag up or down, like FL Studio's tempo display. The clips follow
-  // live while it moves; one drag, wheel spin or key run is one undo step.
-  let tempoUndo = null;
+  // live while it moves; one drag, wheel spin or key run is one undo step. Locked clips in
+  // stretch mode need a new render per tempo, so playback catches up once the value rests.
+  let tempoUndo = null, tempoSettle = 0;
   function setTempo(bpm) {
     bpm = clamp(Math.round(bpm), 20, 300);
     if (bpm === state.bpm) return;
-    if (tempoUndo && history.at(-1) === tempoUndo) { retimePatternClips(state, bpm, isPattern); changed(); draw(); }
-    else if (commit(() => retimePatternClips(state, bpm, isPattern))) tempoUndo = history.at(-1);
+    const before = copy();
+    try { retimeClips(state, bpm, isPattern); validateArrangement(state, assets); }
+    catch { state = before; report(t('At that tempo the stretched clips run past 5 minutes.', 'Con ese tempo los clips estirados pasan de 5 minutos.')); draw(); return; }
+    if (!tempoUndo || history.at(-1) !== tempoUndo) {
+      history.push(before); if (history.length > 50) history.shift(); future = []; pruneGraveyard(); tempoUndo = history.at(-1);
+    }
+    draw(); clearTimeout(tempoSettle); tempoSettle = setTimeout(changed, 120);
   }
   const tempo = createDragNumber({ label: 'BPM', min: 20, max: 300, value: 120, className: 'pl-field',
-    hint: t('drag up or down (Shift for fine), or use the wheel or the arrows. Project tempo: grid, channel rack and piano roll. It does not change the audio speed; the speed slider next to it does.', 'arrastrá arriba o abajo (Shift para fino), o usá la rueda o las flechas. Tempo del proyecto: grilla, channel rack y piano roll. No cambia la velocidad del audio; para eso está el slider de velocidad al lado.'),
+    hint: t('drag up or down (Shift for fine), or use the wheel or the arrows. Project tempo: grid, channel rack and piano roll. Clips stretched to the grid follow it in their pitch mode; other audio keeps its speed. The speed slider next to it changes everything.', 'arrastrá arriba o abajo (Shift para fino), o usá la rueda o las flechas. Tempo del proyecto: grilla, channel rack y piano roll. Los clips estirados a la grilla lo siguen en su modo de pitch; el resto del audio mantiene su velocidad. El slider de velocidad al lado cambia todo.'),
     onInput: setTempo, onEnd: () => { tempoUndo = null; } });
   function changeLoop(range) {
     loopRange = range; if (range) marker = range.start;
@@ -279,7 +285,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   tapButton.onpointerdown = event => { if (event.button === 0) { event.preventDefault(); tapTempo(); } };
   tapButton.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) tapTempo(); } };
   // The A–B loop is 1, 2, 4 or 8 bars; the tempo closest to 120 BPM wins.
-  const fitTempo = createButton({ label: 'A–B', variant: 'neutral', title: t('Tempo from loop: drag a loop on the ruler first; the BPM is set so it lasts 1, 2, 4 or 8 bars', 'Tempo desde el loop: primero arrastrá un loop en la regla; el BPM se ajusta para que dure 1, 2, 4 u 8 compases'), onClick: () => {
+  const fitTempo = createButton({ icon: ICONS.tempoLoop, variant: 'neutral', title: t('Tempo from loop: drag a loop on the ruler first; the BPM is set so it lasts 1, 2, 4 or 8 bars', 'Tempo desde el loop: primero arrastrá un loop en la regla; el BPM se ajusta para que dure 1, 2, 4 u 8 compases'), onClick: () => {
     if (!loopRange) { report(t('Select a loop on the ruler first.', 'Primero seleccioná un loop en la regla.')); return; }
     const seconds = loopRange.end - loopRange.start;
     const bpm = [1, 2, 4, 8].map(bars => bars * 240 / seconds).filter(value => value >= 20 && value <= 300)
@@ -305,14 +311,15 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const redo = toolButton({ icon: ICONS.redo, name: t('Redo', 'Rehacer'), key: 'Ctrl+Y', keys: ['ctrl+y', 'ctrl+shift+z'], color: '#5aa9ff', repeat: true }, () => travel(true));
   // Grid, like FL Studio's snap: clips, edges, cuts, selections, drops and the ruler (marker
   // and loop) stick to it. Each click goes 1/8 → 1/16 → off; holding Alt places freely.
-  const GRIDS = [[.5, '1/8'], [.25, '1/16'], [0, t('Free', 'Libre')]];
+  // The icon shows the value: big squares for 1/8, a fine grid for 1/16, a free line for off.
+  const GRIDS = [[.5, '1/8', 'grid-coarse'], [.25, '1/16', 'grid-fine'], [0, t('Free', 'Libre'), 'grid-free']];
   const gridButton = toolButton({ icon: '', name: t('Grid', 'Grilla'), key: 'G', keys: ['g'], color: '#9ad4c0' }, () => {
     snap = GRIDS[(GRIDS.findIndex(([value]) => value === snap) + 1) % GRIDS.length][0]; renderGrid(); draw();
   });
   gridButton.classList.add('pl-grid-snap');
   function renderGrid() {
-    const label = GRIDS.find(([value]) => value === snap)[1];
-    setButtonContent(gridButton, { label }); gridButton.setAttribute('aria-pressed', String(!!snap));
+    const [, label, icon] = GRIDS.find(([value]) => value === snap);
+    setButtonContent(gridButton, { icon }); gridButton.setAttribute('aria-pressed', String(!!snap));
     gridButton.setAttribute('aria-label', `${t('Grid', 'Grilla')}: ${label}`);
     gridButton.dataset.scdlTooltip = `${t('Grid', 'Grilla')}: ${label} (G): ${t('click to switch 1/8 → 1/16 → free. Clips, edges, cuts, selections and the ruler stick to it; hold Alt while dragging to place freely.', 'clic para alternar 1/8 → 1/16 → libre. Clips, bordes, cortes, selecciones y la regla se pegan a ella; mantené Alt al arrastrar para moverte libre.')}`;
   }
@@ -329,7 +336,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     for (const choice of choices) hotkeys.set(choice.key, { control, action: () => choose(choice.value) });
     function render() {
       const choice = choices.find(choice => choice.value === current());
-      setButtonContent(control, { icon: choice.icon, label: choice.label });
+      setButtonContent(control, { icon: choice.icon });
       control.dataset.mode = choice.value;
       control.setAttribute('aria-label', `${name}: ${choice.label}`);
       control.dataset.scdlTooltip = `${name}: ${choice.label} (${choice.key}) · ${choice.detail} · ${key}: ${t('click or press to cycle', 'clic o tecla para alternar')} · ${choices.map(item => `${item.key}: ${item.label}`).join(' / ')}`;
@@ -340,7 +347,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     current: () => editMode, select: value => { editMode = value; setTool('draw'); }, choices: [
       { value: 'move', icon: ICONS.moveTool, label: t('Move / trim', 'Mover / recortar'), key: '1', detail: t('drag clips to move them, edges to trim them on any track', 'arrastrá clips para moverlos y bordes para recortarlos en cualquier pista') },
       { value: 'slip', icon: ICONS.slipTool, label: t('Slip content', 'Deslizar audio'), key: '2', detail: t('drag the audio inside a clip without moving its timeline edges', 'arrastrá el audio dentro de un clip sin mover sus bordes en la playlist') },
-      { value: 'stretch', icon: ICONS.stretchTool, label: t('Stretch edge', 'Estirar borde'), key: '3', detail: t('drag a clip’s right edge to change its speed using the selected pitch mode', 'arrastrá el borde derecho de un clip para cambiar su velocidad usando el modo de pitch elegido') },
+      { value: 'stretch', icon: ICONS.stretchTool, label: t('Stretch edge', 'Estirar borde'), key: '3', detail: t('drag a clip’s right edge to change its speed using the selected pitch mode. The clip then sticks to the grid: when the BPM changes, it keeps its length in bars', 'arrastrá el borde derecho de un clip para cambiar su velocidad usando el modo de pitch elegido. Después el clip queda pegado a la grilla: si cambia el BPM, mantiene su largo en compases') },
     ] });
   const pitchModeButton = modeToggle({ name: t('Pitch mode', 'Modo de pitch'), key: 'H', color: '#b48cff', className: 'pl-pitch-mode',
     current: () => pitchMode, select: value => { pitchMode = value; }, choices: [
@@ -887,7 +894,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     item.setAttribute('aria-pressed', String(isChosen(clip.id)));
     item.style.left = (clip.at * zoom) + 'px'; item.style.width = Math.max(8, clipDuration(clip) * zoom) + 'px'; item.style.setProperty('--clip-color', color(trackOf(clip.track)));
     item.classList.toggle('is-stretching', stretching(clip)); item.classList.toggle('is-muted', !!clip.mute); item.classList.toggle('is-pattern', isPattern(clip));
-    item.querySelector('.pl-clip-title').replaceChildren(...(clip.reverse ? [globalThis.SCIcons.create('reverse')] : []), document.createTextNode(name + (clipPitch(clip) ? '  ' + signed(clipPitch(clip)) + ' st' : '') + (clip.speed !== 1 ? '  ' + clip.speed.toFixed(2) + '×' : '')));
+    item.querySelector('.pl-clip-title').replaceChildren(...(clip.tempoLock ? [globalThis.SCIcons.create('stretch')] : []), ...(clip.reverse ? [globalThis.SCIcons.create('reverse')] : []), document.createTextNode(name + (clipPitch(clip) ? '  ' + signed(clipPitch(clip)) + ' st' : '') + (clip.speed !== 1 ? '  ' + clip.speed.toFixed(2) + '×' : '')));
   }
   function clipElement(initial) {
     const id = initial.id;
@@ -1064,6 +1071,8 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
         const pitchRate = clip.keepLength ? 1 : 2 ** (clipPitch(original) / 12);
         clip.speed = clamp((original.out - original.in) / Math.max(.01, end - original.at) / pitchRate, .25, 4);
         if (clip.at + clipDuration(clip) > LIMITS.seconds) clip.speed = (clip.out - clip.in) / (LIMITS.seconds - clip.at) / pitchRate;
+        // Stretched to the grid, the clip now keeps its length in beats when the BPM changes.
+        clip.tempoLock = true;
       } else if (drag.edge === 'right') {
         const end = snapAt(original.at + clipDuration(original) + delta, move.altKey);
         if (original.reverse) clip.in = clamp(original.out - (end - original.at) * speedRate, Math.max(0, original.out - (LIMITS.seconds - clip.at) * speedRate), original.out - .01 * speedRate);
