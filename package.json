@@ -5,7 +5,8 @@
   "description": "SoundCloud downloader browser extension",
   "scripts": {
     "vendor:stems": "node scripts/vendor-stem-runtime.cjs",
-    "test:stems": "node --test scripts/stems.test.mjs scripts/stem-playlist.test.mjs",
+    "test:stems": "node --test scripts/stems.test.mjs scripts/stem-playlist.test.mjs scripts/stem-automation.test.mjs",
+    "test:e2e:stem-editor-upgrade": "node scripts/stem-channel-fx.browser-test.cjs && node scripts/stem-automation.browser-test.cjs && node scripts/stem-presets-sparse.browser-test.cjs && node scripts/stem-editor-upgrade.browser-test.cjs",
     "test:e2e:stems-ui": "node scripts/stems-ui.browser-test.cjs",
     "test:e2e:workspace": "node scripts/stem-workspace.browser-test.cjs",
     "test:e2e:drag-number": "node scripts/ui-drag-number.browser-test.cjs",

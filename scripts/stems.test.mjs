@@ -188,6 +188,7 @@ test('the shipping allow-list contains the analyzer and every local runtime depe
     'scripts/stem-loop.mjs', 'scripts/stem-sampler.mjs', 'scripts/local-audio-output.mjs', 'scripts/icons.js', 'scripts/icons-client.js',
     'scripts/stem-pattern-core.mjs', 'scripts/stem-note-recording.mjs', 'scripts/stem-instruments.mjs', 'scripts/stem-channel-rack.mjs', 'scripts/stem-piano.mjs',
     'scripts/stem-effects.mjs', 'scripts/stem-module-window.mjs', 'scripts/stem-rack-overview.mjs', 'scripts/stem-row-menu.mjs',
+    'scripts/stem-channel-fx.mjs', 'scripts/stem-automation.mjs', 'scripts/stem-automation-ui.mjs', 'scripts/stem-action-dialog.mjs', 'scripts/stem-clip-processing.mjs', 'assets/stem-automation.css',
     'scripts/stem-sample-browser.mjs', 'scripts/stem-sample-library.mjs', 'scripts/stem-sample-preview.mjs',
     'scripts/audio-effects-core.js', 'scripts/bitcrusher-processor.js',
     'scripts/parametric-eq.js', 'scripts/parametric-eq-ui.js', 'scripts/player-tools-collapsible.js',
