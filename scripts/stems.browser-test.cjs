@@ -167,7 +167,7 @@ async function reopenExtract(page) {
     const stats = [];
     for (let index = 0; index < 4; index++) {
       const download = page.waitForEvent('download');
-      await page.locator('.pl-stem-head:not([data-stem=original]) .stem-more').nth(index).click(); await page.locator('.pl-menu-item').nth(3).click();
+      await page.locator('.pl-stem-head:not([data-stem=original]) .stem-more').nth(index).click(); await page.getByRole('menuitem', { name: /^(Download WAV|Descargar WAV)$/ }).click();
       const file = await download;
       const destination = path.join(artifacts, file.suggestedFilename());
       await file.saveAs(destination);
@@ -209,6 +209,8 @@ async function reopenExtract(page) {
     await page.waitForFunction(() => !document.getElementById('separate').disabled);
     assert.equal(await page.locator('.pl-stem-head:not([data-stem=original])').count(), 4, 'Cancelling a retry preserves the previous stems.');
     assert.equal(await page.locator('#separate').isEnabled(), true);
+    // The window keeps the cancel message until it is closed; Cancel closes it once idle.
+    await page.locator('#cancel').click(); await page.locator('#extract-dialog').waitFor({ state: 'hidden' });
     // A separate extension page can restore the actual inference output with no
     // active SoundCloud session, under MV3 CSP, without creating a model worker.
     // Saving is by hand: the new speed and Keep Tone reach the project on Save.

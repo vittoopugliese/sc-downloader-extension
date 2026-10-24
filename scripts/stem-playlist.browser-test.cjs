@@ -212,13 +212,14 @@ const { chromium } = require('playwright');
     const copy = playlist.locator('.pl-shelf button', { hasText: 'tone.wav (2)' });
     await copy.waitFor();
     await copy.click({ button: 'right' }); await menu.getByRole('menuitem', { name: 'Delete from project' }).click();
+    await page.locator('#channel-action-dialog [data-action=delete]').click();
     await copy.waitFor({ state: 'detached' });
     // Like FL Studio: right click on the name bar opens the menu, on the waveform removes the clip.
     const clipHeader = playlist.locator('.pl-clip .pl-clip-title').first();
     await clipHeader.click({ button: 'right' });
     assert.equal(await menu.getByRole('menuitemradio').count(), 0, 'Stretch modes are absent from the clip menu');
-    assert.deepEqual(await menu.locator('.pl-menu-label').allTextContents(), ['Duplicate', 'Split at cursor', 'Mute clip', 'Reverse', 'Extract stems…', 'Remove from playlist']);
-    assert.equal(await inspector.locator('.pl-edit-mode').getAttribute('aria-label'), 'Edit tool: Move / trim');
+    assert.deepEqual(await menu.locator('.pl-menu-label').allTextContents(), ['Duplicate', 'Split at cursor', 'Mute clip', 'Reverse', 'Normalize audio', 'Extract stems…', 'Remove from playlist']);
+    assert.equal(await inspector.getByLabel('Draw tool', { exact: true }).getAttribute('aria-pressed'), 'true');
     assert.equal(await inspector.locator('.pl-tools .ui-btn-label').count(), 0, 'Tool buttons show only icons');
     assert.equal(await inspector.getByRole('button', { name: 'Stretch', exact: true }).getAttribute('aria-pressed'), 'true');
     await page.waitForTimeout(300); await page.screenshot({ path: path.join(artifacts, 'playlist-clip-menu.png') });
@@ -291,6 +292,7 @@ const { chromium } = require('playwright');
     await page.keyboard.press('F6');
     await playlist.locator('.pl-shelf button', { hasText: 'tone.wav' }).first().click({ button: 'right' });
     await menu.getByRole('menuitem', { name: 'Delete from project' }).click();
+    await page.locator('#channel-action-dialog [data-action=delete]').click();
     assert.equal(await playlist.locator('.pl-shelf button', { hasText: 'tone.wav' }).count(), 0);
     assert.equal(await rackTracks.count(), 0, 'No track has an instrument any more');
     // No click on the timeline first: the playlist keeps its hotkeys after the menu closes.

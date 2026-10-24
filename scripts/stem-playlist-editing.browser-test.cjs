@@ -183,26 +183,28 @@ const { chromium } = require('playwright');
       const buffer = new AudioBuffer({ length: 176400, sampleRate: 44100 });
       editor.edit(state => { state.clips = []; });
       editor.setSession({ sources: ['drums', 'bass'].map(stem => ({ id: `audio-${stem}`, stem, name: stem, buffer })) });
-      editor.edit(state => { for (const clip of state.clips) { clip.at = .5; clip.in = .5; clip.out = 2.5; } });
+      editor.edit(state => { for (const clip of state.clips) { clip.at = .5; clip.in = .5; clip.out = 2.5; clip.tempoLock = false; } });
     });
     await ui.getByLabel('Show the whole arrangement', { exact: true }).click(); await settle();
     for (let i = 0; i < 2; i++) { await ui.getByLabel('Zoom out', { exact: true }).click(); await settle(); }
     await scroll.focus(); await page.keyboard.press('Escape');
-    const editMode = ui.locator('.pl-edit-mode'), stretch = ui.getByRole('button', { name: 'Stretch', exact: true });
-    assert.equal(await editMode.isEnabled(), true);
-    assert.equal(await ui.locator('.pl-tools .pl-mode-toggle').count(), 1, 'Only the edit tool remains in the toolbar');
+    const slip = ui.locator('.pl-slip-tool'), edgeTool = ui.locator('.pl-stretch-tool'), pencil = ui.getByLabel('Draw tool', { exact: true });
+    const modeButtons = { slip, stretch: edgeTool, move: pencil };
+    const stretch = ui.getByRole('button', { name: 'Stretch', exact: true });
+    assert.equal(await slip.isEnabled(), true);
+    assert.equal(await ui.locator('.pl-edit-mode').count(), 0, 'Gesture tools have independent buttons');
     assert.equal(await stretch.count(), 1, 'A single toggle replaces the gear and two mode buttons');
     assert.equal(await stretch.isVisible(), true);
-    assert.equal(await ui.locator('.pl-clip-settings, .pl-pitch-modes').count(), 0);
+    assert.equal(await ui.locator('.pl-clip-settings').count(), 1, 'Extra controls expand beside the knobs');
     assert.equal(await stretch.isDisabled(), true, 'A clip must be selected before changing its mode');
     assert.equal(await stretch.locator('.ui-btn-label').count(), 0, 'The toggle uses an icon only');
     const unedited = (await state()).clips;
     for (const mode of ['slip', 'stretch', 'move']) {
-      await editMode.click(); assert.equal(await editMode.getAttribute('data-mode'), mode);
+      await modeButtons[mode].click(); assert.equal(await modeButtons[mode].getAttribute('aria-pressed'), 'true');
     }
-    await page.keyboard.press('e'); assert.equal(await editMode.getAttribute('data-mode'), 'slip');
+    await page.keyboard.press('e'); assert.equal(await edgeTool.getAttribute('aria-pressed'), 'true');
     for (const [key, mode] of [['3', 'stretch'], ['2', 'slip'], ['1', 'move']]) {
-      await page.keyboard.press(key); assert.equal(await editMode.getAttribute('data-mode'), mode);
+      await page.keyboard.press(key); assert.equal(await modeButtons[mode].getAttribute('aria-pressed'), 'true');
     }
     for (const key of ['5', '4', 'h']) await page.keyboard.press(key);
     assert.deepEqual((await state()).clips, unedited, 'Mode hotkeys do nothing without selected clips');
@@ -212,12 +214,12 @@ const { chromium } = require('playwright');
     // The hotkeys must not steal numeric input, modified browser shortcuts or key repeats.
     await ui.evaluate(el => { const input = document.createElement('input'); input.id = 'mode-input-check'; el.append(input); input.focus(); });
     await page.keyboard.press('2');
-    assert.equal(await editMode.getAttribute('data-mode'), 'move');
+    assert.equal(await pencil.getAttribute('aria-pressed'), 'true');
     await ui.locator('#mode-input-check').evaluate(el => el.remove()); await scroll.focus();
     await page.keyboard.press('Alt+2');
-    assert.equal(await editMode.getAttribute('data-mode'), 'move');
+    assert.equal(await pencil.getAttribute('aria-pressed'), 'true');
     await scroll.dispatchEvent('keydown', { key: 'e', repeat: true });
-    assert.equal(await editMode.getAttribute('data-mode'), 'move');
+    assert.equal(await pencil.getAttribute('aria-pressed'), 'true');
     await page.keyboard.press('c'); await page.keyboard.press('2');
     assert.equal(await ui.getByLabel('Slice tool', { exact: true }).getAttribute('aria-pressed'), 'false');
     await page.keyboard.press('q'); await page.keyboard.press('3');
@@ -306,6 +308,7 @@ const { chromium } = require('playwright');
     both = (await state()).clips;
     assert.equal(both[0].keepLength, false); assert.equal(both[0].pitch, 1);
     assert.deepEqual(both[1], unedited[1]);
+    await ui.locator('.pl-clip-settings').click();
     await ui.getByRole('slider', { name: 'Fine pitch', exact: true }).press('ArrowUp');
     assert.equal((await state()).clips[0].keepLength, false, 'Fine tuning preserves Resample');
     await page.keyboard.press('Control+a');

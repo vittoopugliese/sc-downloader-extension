@@ -106,6 +106,9 @@ const { chromium } = require('playwright');
     await knob.dblclick(); assert.equal(await knob.getAttribute('aria-valuenow'), '100');
     const ruler = playlist.locator('.pl-ruler');
     const selectLoop = async (start, end) => {
+      // Status toasts float over the ruler; dismiss them before raw coordinate gestures.
+      for (const close of await page.locator('.ui-toast-close').all()) if (await close.isVisible()) await close.click();
+      await page.locator('.ui-toast-content').first().waitFor({ state: 'hidden' });
       const bounds = await ruler.boundingBox();
       const scale = (await playlist.locator('.pl-clip').first().boundingBox()).width / 3;
       await page.mouse.move(bounds.x + start * scale, bounds.y + 14); await page.mouse.down();
@@ -139,12 +142,12 @@ const { chromium } = require('playwright');
     await knob.dblclick();
     // Rack, piano roll and WAV live in the header menu: ⋮ or right-click on the header.
     await drumHead.locator('.stem-more').click();
-    assert.equal(await page.locator('.pl-menu-item').count(), 5);
+    assert.equal(await page.locator('.pl-menu-item').count(), 8);
     assert.deepEqual(await page.locator('sc-icon').evaluateAll(nodes => nodes.map(node => node.getAttribute('name')).filter(name => !SCIcons.has(name))), [], 'Every control and channel menu resolves to a catalog icon');
     await page.locator('.pl-menu-item').nth(0).click();
     assert.equal(await page.locator('#stem-rack .plugin-track').inputValue(), 'drums', 'The header menu focuses its track in the rack');
     await drumHead.locator('h2').click({ button: 'right' });
-    const downloadEvent = page.waitForEvent('download'); await page.locator('.pl-menu-item').nth(3).click();
+    const downloadEvent = page.waitForEvent('download'); await page.getByRole('menuitem', { name: /^(Download WAV|Descargar WAV)$/ }).click();
     assert.match((await downloadEvent).suggestedFilename(), /drums\.wav$/);
     // One frame: opening the rack scrolls smoothly, so separate reads could straddle a scroll.
     const [eqBounds, recorderBounds, playlistBounds] = await page.evaluate(() => ['.peq', '.record-section', '#playlist']
@@ -197,7 +200,9 @@ const { chromium } = require('playwright');
     assert.ok(await page.locator('.pl-stem-head .stem-name').evaluateAll(names => names.every(name => name.scrollWidth <= name.clientWidth)), 'Stem names fit beside the knobs in narrower headers');
     await page.screenshot({ path: path.join(artifacts, 'desktop.png'), fullPage: true });
     // Reproduce the reported zoom-out hole with real stem headers and shared waveforms.
-    for (let i = 0; i < 14; i++) { await playlist.getByLabel('Alejar', { exact: true }).click(); await page.evaluate(() => new Promise(requestAnimationFrame)); }
+    for (let i = 0; i < 14; i++) { await page.locator('.workspace-header').getByLabel('Alejar', { exact: true }).click(); await page.evaluate(() => new Promise(requestAnimationFrame)); }
+    // Zoom lives in the pinned header, so clicking it no longer scrolls the Playlist into view.
+    await playlist.scrollIntoViewIfNeeded(); await page.evaluate(() => new Promise(requestAnimationFrame));
     await checkAlignment();
     assert.ok(await playlist.evaluate(el => {
       const scroll = el.querySelector('.pl-scroll'), right = scroll.getBoundingClientRect().right;
