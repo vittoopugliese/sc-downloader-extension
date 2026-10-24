@@ -1,10 +1,17 @@
 import { MAX_SECONDS, SAMPLE_RATE } from './stem-audio.mjs';
 // A library is either IndexedDB or a user-selected directory. A project holds the original
 // WAV, plus the four stem WAVs once separated (`stems: false` marks one without them).
+// Deleted audio keeps its original slot as null; `audio` names the retained files.
 // Saving settings never rewrites audio that did not change.
 const AUDIO = ['original', 'drums', 'bass', 'other', 'vocals'];
 const audioCount = record => record.stems === false ? 1 : AUDIO.length;
-const validAudio = blobs => Array.isArray(blobs) && (blobs.length === 1 || blobs.length === AUDIO.length) && blobs.every(blob => blob instanceof Blob && blob.size);
+const retainedAudio = record => record.audio ?? AUDIO.slice(0, audioCount(record));
+const validAudio = blobs => Array.isArray(blobs) && (blobs.length === 1 || blobs.length === AUDIO.length) &&
+  Array.from(blobs).every(blob => blob === null || blob instanceof Blob && blob.size);
+function audioMetadata(blobs) {
+  return { ...(blobs.length === 1 ? { stems: false } : {}),
+    ...(blobs.some(blob => blob === null) ? { audio: AUDIO.filter((name, index) => index < blobs.length && blobs[index] !== null) } : {}) };
+}
 const validId = id => /^stem-[a-f0-9-]{36}$/.test(id);
 // Imported samples of a separation's playlist: stored next to its five WAVs, as
 // `sample-<id>.wav` in a preset folder or under `<preset id>#samples` in IndexedDB.
@@ -43,6 +50,10 @@ function validate(record) {
       !Number.isFinite(record.info.trimRange?.startMs) || !Number.isFinite(record.info.trimRange?.endMs) ||
       record.info.trimRange.startMs < 0 || record.info.trimRange.endMs <= record.info.trimRange.startMs ||
       record.info.trimRange.endMs - record.info.trimRange.startMs > MAX_SECONDS * 1000 + 1) throw new Error('Invalid stem preset');
+  if (record.stems !== undefined && typeof record.stems !== 'boolean' || record.audio !== undefined &&
+      (!Array.isArray(record.audio) || record.audio.length > audioCount(record) ||
+       new Set(record.audio).size !== record.audio.length ||
+       Array.from(record.audio).some(name => !AUDIO.slice(0, audioCount(record)).includes(name)))) throw new Error('Invalid preset audio metadata');
   return record;
 }
 async function write(directory, name, contents) {
@@ -94,12 +105,13 @@ export class StemPresets {
     }
     return records.sort((a, b) => b.createdAt - a.createdAt);
   }
-  // `blobs`: [original] or [original, drums, bass, other, vocals]; `samples`: { sampleId: Blob }.
+  // `blobs`: [original] or [original, drums, bass, other, vocals], with null for deleted
+  // sources. Even an empty project retains its one/five-slot shape. `samples`: { sampleId: Blob }.
   async save(info, settings, blobs, samples = {}) {
     if (!validAudio(blobs)) throw new Error('Missing WAV audio');
     checkSamples(samples);
     const record = validate({ version: 1, id: `stem-${crypto.randomUUID()}`, title: info.title || 'Loop', info, settings, createdAt: Date.now(),
-      ...(blobs.length === 1 ? { stems: false } : {}) });
+      ...audioMetadata(blobs) });
     if (!this.directory) {
       await transaction(['presets', 'audio'], 'readwrite', tx => {
         tx.objectStore('presets').put(record, record.id);
@@ -110,7 +122,7 @@ export class StemPresets {
       const root = await this.root(true);
       const directory = await root.getDirectoryHandle(record.id, { create: true });
       // Commit marker last: an interrupted save cannot appear as a loadable preset.
-      for (let i = 0; i < blobs.length; i++) await write(directory, `${AUDIO[i]}.wav`, blobs[i]);
+      for (let i = 0; i < blobs.length; i++) if (blobs[i] !== null) await write(directory, `${AUDIO[i]}.wav`, blobs[i]);
       for (const [key, blob] of Object.entries(samples)) await write(directory, `sample-${key}.wav`, blob);
       await write(directory, 'preset.json', JSON.stringify(record));
     }
@@ -120,17 +132,22 @@ export class StemPresets {
     if (!validId(id)) throw new Error('Invalid preset ID');
     let record, blobs, samples = {};
     if (!this.directory) {
+      // Read metadata and audio from the same snapshot while a save may be in flight.
+      const loaded = await transaction(['presets', 'audio'], 'readonly', tx => {
+        const result = [];
+        for (const [index, request] of [tx.objectStore('presets').get(id), tx.objectStore('audio').get(id), tx.objectStore('audio').get(samplesKey(id))].entries())
+          request.onsuccess = () => { result[index] = request.result; };
+        return { result };
+      });
       let stored;
-      [record, blobs, stored] = await Promise.all([
-        transaction(['presets'], 'readonly', tx => tx.objectStore('presets').get(id)),
-        transaction(['audio'], 'readonly', tx => tx.objectStore('audio').get(id)),
-        transaction(['audio'], 'readonly', tx => tx.objectStore('audio').get(samplesKey(id))),
-      ]);
+      [record, blobs, stored] = loaded;
       samples = stored && typeof stored === 'object' ? stored : {};
     } else {
       const directory = await (await this.root()).getDirectoryHandle(id);
       record = await readRecord(directory);
-      blobs = await Promise.all(AUDIO.slice(0, audioCount(record)).map(async name => (await directory.getFileHandle(`${name}.wav`)).getFile()));
+      const retained = new Set(retainedAudio(record));
+      blobs = await Promise.all(AUDIO.slice(0, audioCount(record)).map(async name => retained.has(name)
+        ? (await directory.getFileHandle(`${name}.wav`)).getFile() : null));
       for await (const [name, handle] of directory.entries()) {
         const match = /^sample-(.+)\.wav$/.exec(name);
         if (match && handle.kind === 'file' && validSample(match[1])) samples[match[1]] = await handle.getFile();
@@ -138,7 +155,9 @@ export class StemPresets {
     }
     validate(record);
     const maxWavBytes = 44 + MAX_SECONDS * SAMPLE_RATE * 2 * 4;
-    if (record.id !== id || blobs?.length !== audioCount(record) || blobs.some(blob => !(blob instanceof Blob) || blob.size > maxWavBytes || blob.size < 44)) throw new Error('Invalid preset audio');
+    const retained = new Set(retainedAudio(record));
+    if (record.id !== id || !Array.isArray(blobs) || blobs.length !== audioCount(record) || Array.from(blobs).some((blob, index) =>
+      retained.has(AUDIO[index]) ? !(blob instanceof Blob) || blob.size > maxWavBytes || blob.size < 44 : blob !== null)) throw new Error('Invalid preset audio');
     // Unusable sample files are skipped; their clips are left out on restore.
     samples = Object.fromEntries(Object.entries(samples).filter(([key, blob]) => validSample(key) && blob instanceof Blob && blob.size >= 44 && blob.size <= MAX_SAMPLE_BYTES).slice(0, MAX_SAMPLES));
     return { record, blobs, samples };
@@ -214,16 +233,18 @@ export class StemPresets {
     if (blobs && !validAudio(blobs)) throw new Error('Missing WAV audio');
     const next = record => {
       const value = { ...record, settings };
-      if (blobs) { delete value.stems; if (blobs.length === 1) value.stems = false; }
-      return value;
+      if (blobs) { delete value.stems; delete value.audio; Object.assign(value, audioMetadata(blobs)); }
+      return validate(value);
     };
     if (!this.directory) {
       await transaction(['presets', 'audio'], 'readwrite', tx => {
         const store = tx.objectStore('presets'), request = store.get(id);
         request.onsuccess = () => {
           if (!request.result) return;
-          store.put(next(request.result), id);
-          if (blobs) tx.objectStore('audio').put(blobs, id);
+          try {
+            store.put(next(request.result), id);
+            if (blobs) tx.objectStore('audio').put(blobs, id);
+          } catch { tx.abort(); }
         };
       });
     } else {
@@ -231,8 +252,16 @@ export class StemPresets {
         const directory = await (await this.root()).getDirectoryHandle(id);
         const record = await readRecord(directory);
         // Audio first: preset.json never names WAVs that are not written yet.
-        if (blobs) for (let i = 0; i < blobs.length; i++) await write(directory, `${AUDIO[i]}.wav`, blobs[i]);
-        await write(directory, 'preset.json', JSON.stringify(next(record)));
+        const updated = next(record);
+        if (blobs) for (let i = 0; i < blobs.length; i++) if (blobs[i] !== null) await write(directory, `${AUDIO[i]}.wav`, blobs[i]);
+        await write(directory, 'preset.json', JSON.stringify(updated));
+        // Commit the deletion before cleaning up. A failed cleanup leaves a loadable
+        // project that ignores the orphan WAV, and the failure is reported to the caller.
+        // Only our fixed audio names are candidates, never paths from metadata.
+        if (blobs) for (const name of AUDIO.filter(name => !retainedAudio(updated).includes(name))) {
+          try { await directory.removeEntry(`${name}.wav`); }
+          catch (error) { if (error.name !== 'NotFoundError') throw error; }
+        }
       });
     }
   }

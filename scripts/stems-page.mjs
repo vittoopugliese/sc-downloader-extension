@@ -13,6 +13,7 @@ import { mountExtractDialog } from './stem-extract-dialog.mjs';
 import { toast, dismissToast, configureToasts } from './ui-toast.mjs';
 import { mountModuleWindow } from './stem-module-window.mjs';
 import { mountEffects } from './stem-effects.mjs';
+import { createChannelFx, normalizeTrackFx } from './stem-channel-fx.mjs';
 import { spectrumOf } from './stem-spectrum.mjs';
 import { mountOutputMonitor } from './stem-output-monitor.mjs';
 
@@ -288,14 +289,14 @@ function reconcileChannels() {
 // the speed slider next to the tempo controls.
 // Tool windows: orange buttons together in the transport bar.
 const say = (en, es) => locale === 'es' ? es : en;
-let moduleWindows = {}, eqTargetSelect = null;
+let moduleWindows = {}, eqTargetSelect = null, fxTargetSelect = null;
 const WINDOWS = [
   { id: 'rack', icon: PLUGIN_ICONS.rack, name: say('Channel rack', 'Channel rack'), key: 'F6', keys: ['f6'], color: '#7bd88f',
     detail: say('the focused track cut into eight pads and its step patterns', 'la pista enfocada cortada en ocho pads y sus patrones de pasos') },
   { id: 'piano', icon: PLUGIN_ICONS.piano, name: say('Piano roll', 'Piano roll'), key: 'F7', keys: ['f7'], color: '#c792ea',
     detail: say('notes of the focused pattern', 'las notas del patrón enfocado') },
   { id: 'fx', icon: 'plugin', name: 'FXs', key: 'F4', keys: ['f4'], color: '#ff9955',
-    detail: say('all six Player Tools effects and their settings on the master', 'los seis efectos de Player Tools y todos sus ajustes en el master') },
+    detail: say('all six effects on each channel and the master', 'los seis efectos en cada canal y en el master') },
   { id: 'eq', icon: 'eq-window', name: say('Parametric EQ', 'EQ paramétrico'), key: 'F9', keys: ['f9'], color: '#4fc3f7',
     detail: say('equalizer of the selected channel, or of the master', 'ecualizador del canal seleccionado o del master') },
   { id: 'recorder', icon: 'recorder', name: say('Recorder', 'Grabadora'), key: 'F10', keys: ['f10'], color: '#ff4d6d',
@@ -321,13 +322,17 @@ const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('trans
   toolbarStart: [$('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [tooltipsToggle, $('header-pin'), $('toggle-game')],
   // Right-click > Extract stems… on any audio clip opens the extraction window.
   onSeparate: target => openExtract(target),
-  onPatternAction(action, id) { const pattern = id.slice('pattern:'.length); if (action === 'duplicate') instruments?.duplicatePattern(pattern); else instruments?.deletePattern(pattern); },
+  onPatternAction(action, id) {
+    if (action === 'fx') { selectFxChannel(id); moduleWindows.fx?.reveal(); return; }
+    const pattern = id.slice('pattern:'.length); if (action === 'duplicate') instruments?.duplicatePattern(pattern); else instruments?.deletePattern(pattern);
+  },
   audio: playlistAudio, channel: channelForTrack,
   // The master EQ is the last insert of the WAV export too.
   masterEq: () => mixOutput.snapshot().eq,
   masterFx: () => mixOutput.effectsSettings(),
+  masterEffects: () => mixOutput.effects,
   onLoopChange(range) { stemLoop.setRange(range ? { startMs: range.start * 1000, endMs: range.end * 1000, durationMs: original?.duration * 1000 || range.end * 1000 } : null); },
-  onChange() { reconcileChannels(); renderChannels(); instruments?.sync(); syncChannelEq(); libraryUI?.changed(); },
+  onChange() { reconcileChannels(); renderChannels(); instruments?.sync(); syncChannelEq(); syncChannelFx(); libraryUI?.changed(); },
   // Selecting a pattern clip opens that pattern, as double-clicking one does in FL Studio.
   onSelect(asset) { if (asset?.pattern) instruments?.focusPattern(asset.id.slice('pattern:'.length)); },
   onRackSample(key) { instruments.focus(key); channelRack.showChannels(); moduleWindows.rack?.reveal(); },
@@ -364,7 +369,7 @@ const instruments = createInstruments({ playlist, tracks: instrumentTracks, rate
   async audio(key) { const io = key ? await playlist.trackAudio(key) : await playlistAudio(); outputMonitor.wake(); toneNode?.port.postMessage({ rate, keepTone, reset: true }); return io; } });
 instruments.on(kind => { if (kind === 'transport') outputMonitor.setActive(playlist.playing() || instruments.playing()); });
 // Pads and piano notes are auditions: they skip the playlist fader and Keep Tone, but go
-// through their track's EQ and then the master, like an FL Studio mixer insert.
+// through their track's FX and EQ and then the master, like an FL Studio mixer insert.
 const auditionBuses = new Map();
 function auditionInput(key) {
   const context = mixOutput.getPlaybackContext();
@@ -372,13 +377,15 @@ function auditionInput(key) {
   if (!key) return mixOutput.input();
   let bus = auditionBuses.get(key);
   if (!bus || bus.context !== context) {
-    bus?.graph.dispose();
+    bus?.fx.dispose(); bus?.graph.dispose();
     const graph = globalThis.SCParametricEQ.createGraph(context, { analyse: true });
     graph.output.connect(mixOutput.input());
-    bus = { context, graph, settings: '' }; auditionBuses.set(key, bus);
+    const fx = createChannelFx({ context, output: graph.input, settings: playlist.trackFx(key) });
+    bus = { context, graph, fx, settings: '' }; auditionBuses.set(key, bus);
   }
   applyAuditionEq(key, bus);
-  return bus.graph.input;
+  bus.fx.apply(playlist.trackFx(key));
+  return bus.fx.input;
 }
 function applyAuditionEq(key, bus = auditionBuses.get(key)) {
   if (!bus) return;
@@ -410,8 +417,33 @@ const eqEffects = {
 const channelRack = mountChannelRack({ container: $('mix-tools'), instruments, ...pluginAudio, locale, report: playbackError,
   importSamples: dataTransfer => playlist.importRackDrop(dataTransfer) });
 const pianoRoll = mountPianoRoll({ container: $('mix-tools'), instruments, ...pluginAudio, report: playbackError });
-const effectsUI = mountEffects({ container: $('mix-tools'), effects: mixOutput.effects, t: say,
+let fxTarget = 'master';
+const fxChannel = () => fxTarget !== 'master' && playlist.track(fxTarget) ? fxTarget : null;
+const channelFxState = () => normalizeTrackFx(playlist.trackFx(fxChannel()));
+function editChannelFx(change) {
+  const value = channelFxState(); change(value); playlist.setTrackFx(fxChannel(), normalizeTrackFx(value));
+}
+const fxEffects = {
+  snapshot: () => fxChannel() ? { ...channelFxState(), available: true, initialized: true } : mixOutput.effects.snapshot(),
+  set(name, value) { if (!fxChannel()) return mixOutput.effects.set(name, value); editChannelFx(state => { state[name] = value; state.preset = 'custom'; }); },
+  setCharacter(name, value) { if (!fxChannel()) return mixOutput.effects.setCharacter(name, value); editChannelFx(state => { state[name] = value; state.preset = 'custom'; }); },
+  setBypassed(value) { if (!fxChannel()) return mixOutput.effects.setBypassed(value); editChannelFx(state => { state.bypassed = value; }); },
+  applyPreset(name) { if (!fxChannel()) return mixOutput.effects.applyPreset(name); editChannelFx(state => Object.assign(state, globalThis.SCTempoEffects.PRESETS[name], { preset: name })); },
+  reset() { if (!fxChannel()) return mixOutput.effects.reset(); playlist.setTrackFx(fxChannel(), normalizeTrackFx(null)); },
+  isDelayFrozen() { const key = fxChannel(); return key ? !!(playlist.trackEffects(key)?.isDelayFrozen() || auditionBuses.get(key)?.fx.isDelayFrozen()) : mixOutput.effects.isDelayFrozen(); },
+  setDelayFreeze(value) {
+    const key = fxChannel(); if (!key) return mixOutput.effects.setDelayFreeze(value);
+    const song = playlist.trackEffects(key)?.setDelayFreeze(value), audition = auditionBuses.get(key)?.fx.setDelayFreeze(value);
+    return !!(song || audition);
+  },
+};
+const effectsUI = mountEffects({ container: $('mix-tools'), effects: fxEffects, t: say,
   changed: () => libraryUI?.changed(), report: playbackError,
+  onAutomationRequest(event, param, value) {
+    const track = fxChannel() ? playlist.track(fxTarget).id : 'master';
+    contextMenu(event, [{ label: say('Create automation clip', 'Crear clip de automatización'), icon: 'waveform',
+      action: () => playlist.createAutomation({ track, param: `fx.${param}` }, { value, name: `${fxTargetSelect.selectedOptions[0].textContent} · ${param}` }) }]);
+  },
   pauseForFreeze() {
     const song = playlist.playing(), pattern = instruments.playing();
     if (song) playlist.pause();
@@ -427,6 +459,32 @@ const recorderUI = globalThis.SCRecordUI.mount({
   container: $('mix-tools'), effects: mixOutput,
   moduleUrl: new URL('./record-processor.js', import.meta.url).href,
 });
+
+fxTargetSelect = document.createElement('select');
+{
+  const row = document.createElement('label'); row.className = 'peq-target fx-target';
+  const caption = document.createElement('span'); caption.textContent = say('Channel', 'Canal');
+  fxTargetSelect.setAttribute('aria-label', say('FX channel', 'Canal de FX'));
+  fxTargetSelect.onchange = () => selectFxChannel(fxTargetSelect.value);
+  row.append(caption, fxTargetSelect); effectsUI.section.querySelector('.stem-plugin-body').prepend(row);
+}
+function renderFxTargets() {
+  const options = [['master', 'Master'], ...playlist.tracks().filter(track => track.kind !== 'automation').map(track => [track.stem || track.id, channelName(track)])];
+  const key = JSON.stringify(options);
+  if (fxTargetSelect.dataset.key !== key) { fxTargetSelect.dataset.key = key; fxTargetSelect.replaceChildren(...options.map(([value, label]) => new Option(label, value))); }
+  if (!fxChannel()) fxTarget = 'master';
+  fxTargetSelect.value = fxTarget;
+  effectsUI.section.querySelector('.tool-section-title').textContent = `FXs · ${fxTargetSelect.selectedOptions[0].textContent}`;
+}
+function selectFxChannel(key) {
+  effectsUI.cancelFreeze(); fxTarget = key || 'master'; renderFxTargets(); effectsUI.reset();
+}
+function syncChannelFx() {
+  if (!fxTargetSelect) return;
+  renderFxTargets(); effectsUI.sync();
+  for (const [key, bus] of auditionBuses) if (playlist.track(key)) bus.fx.apply(playlist.trackFx(key));
+}
+renderFxTargets();
 equalizerUI.setCollapsed(false);
 recorderUI.setCollapsed(false);
 // Channel selector of the EQ window: Master, then every playlist channel.
@@ -442,7 +500,7 @@ eqTargetSelect = document.createElement('select');
 }
 function channelName(track) { return track.stem ? text(track.stem) : track.name; }
 function renderEqTargets() {
-  const options = [['master', 'Master'], ...playlist.tracks().map(track => [track.stem || track.id, channelName(track)])];
+  const options = [['master', 'Master'], ...playlist.tracks().filter(track => track.kind !== 'automation').map(track => [track.stem || track.id, channelName(track)])];
   const key = options.map(option => option.join(':')).join('|');
   if (eqTargetSelect.dataset.key !== key) { eqTargetSelect.dataset.key = key; eqTargetSelect.replaceChildren(...options.map(([value, label]) => new Option(label, value))); }
   if (!eqChannel()) eqTarget = 'master';
@@ -458,7 +516,7 @@ function syncChannelEq() {
   if (before !== eqTarget) equalizerUI.reset(); else equalizerUI.sync();
   for (const [key, bus] of auditionBuses) {
     if (playlist.track(key)) applyAuditionEq(key, bus);
-    else { bus.graph.dispose(); auditionBuses.delete(key); }
+    else { bus.fx.dispose(); bus.graph.dispose(); auditionBuses.delete(key); }
   }
 }
 renderEqTargets();
@@ -575,20 +633,30 @@ libraryUI = mountStemLibrary({ locale, report: status, canSave: () => !!info && 
   onOperation(value) { libraryOperating = value; extractDialog.setReady(!value && !busy && canSeparate()); $('import-audio').disabled = value || busy || !importReady; },
   // Imported samples go with the separation; their WAV is encoded only when stored.
   // Before separation a project holds the original alone.
-  snapshot: () => ({ info, settings: settings(), blobs: wavs.length === 5 ? wavs : original ? [sampleWav(original)] : null,
-    samples: playlist.samples().map(sample => ({ id: sample.id, name: sample.name, blob: () => sampleWav(sample.buffer) })) }),
+  snapshot: () => {
+    const saved = settings(), deleted = new Set(saved.playlist.deletedSources || []);
+    const blobs = wavs.length === 5 ? wavs : original ? [deleted.has('audio-original') ? null : sampleWav(original)] : null;
+    return { info, settings: saved, blobs: blobs?.map((blob, index) => deleted.has(`audio-${index ? STEMS[index - 1] : 'original'}`) ? null : blob),
+      samples: playlist.samples().map(sample => ({ id: sample.id, name: sample.name, blob: () => sampleWav(sample.buffer) })) };
+  },
   restore: async ({ record, blobs, samples = {} }) => {
     // Decode/validate before replacing the current session. Missing/corrupt files
     // leave the current separation intact.
     const decoder = new OfflineAudioContext(2, 1, SAMPLE_RATE);
     const decoded = [];
+    let frameCount = 0;
     for (const blob of blobs) {
+      if (!blob) { decoded.push(null); continue; }
       const buffer = await decoder.decodeAudioData(await blob.arrayBuffer());
       if (buffer.numberOfChannels !== 2 || !buffer.length || buffer.duration > MAX_SECONDS + 1 / SAMPLE_RATE ||
-          (decoded.length && buffer.length !== decoded[0].length)) throw new Error('Invalid preset WAV');
+          (frameCount && buffer.length !== frameCount)) throw new Error('Invalid preset WAV');
       for (let channel = 0; channel < 2; channel++) if (!buffer.getChannelData(channel).every(Number.isFinite)) throw new Error('Invalid PCM');
-      decoded.push(buffer);
+      decoded.push(buffer); frameCount = buffer.length;
     }
+    // Deleted slots keep only a silent timing placeholder. Their tombstones prevent
+    // a track, sample or download from being recreated, and no PCM is persisted.
+    const seconds = Math.max(.01, Math.min(MAX_SECONDS, ((record.info?.trimRange?.endMs || 0) - (record.info?.trimRange?.startMs || 0)) / 1000));
+    for (let i = 0; i < decoded.length; i++) if (!decoded[i]) decoded[i] = decoder.createBuffer(2, frameCount || Math.ceil(seconds * SAMPLE_RATE), SAMPLE_RATE);
     // Imported samples: one that cannot be decoded is skipped, with its clips.
     const names = new Map((record.settings?.playlist?.samples || []).map(item => [item?.id, item]));
     const restoredSamples = [];
@@ -609,7 +677,7 @@ libraryUI = mountStemLibrary({ locale, report: status, canSave: () => !!info && 
       wavs = blobs;
     } else {
       // Saved before separation: the original and its settings; Extract stems still works.
-      sampleWavs.set(original, blobs[0]); wavs = [];
+      if (blobs[0]) sampleWavs.set(original, blobs[0]); wavs = [];
       applySettings(record.settings);
       instruments.restore(record.settings); startSession(record.settings, restoredSamples); instruments.focus('original'); syncLoop();
     }
@@ -745,6 +813,11 @@ function buildChannel(stem, wav, trackName = null) {
     onInput: value => editChannel(stem, track => { track.gain = value / 100; }, { live: true }),
     onCommit: value => editChannel(stem, track => { track.gain = value / 100; }) });
   volume.wrap.classList.add('stem-volume');
+  volume.dial.addEventListener('contextmenu', event => {
+    event.preventDefault(); event.stopPropagation();
+    contextMenu(event, [{ label: say('Create automation clip', 'Crear clip de automatización'), icon: 'waveform',
+      action: () => playlist.createAutomation({ track: playlist.track(stem).id, param: 'gain' }, { value: playlist.track(stem).gain, name: `${name} · ${text('volume')}` }) }]);
+  });
   const link = document.createElement('a'); link.className = 'download';
   const url = wav ? URL.createObjectURL(wav) : ''; if (url) urls.push(url);
   link.href = url; link.download = `${title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 80)}_${stem}.wav`;
@@ -754,9 +827,12 @@ function buildChannel(stem, wav, trackName = null) {
     { label: pt('Channel rack'), icon: PLUGIN_ICONS.rack, disabled: !wav, title: editorHint, action: () => { instruments.focus(stem); moduleWindows.rack.reveal(); channelRack.open(); } },
     { label: pt('Piano roll'), icon: PLUGIN_ICONS.piano, disabled: !wav, title: editorHint, action: () => { instruments.focus(stem); moduleWindows.piano.reveal(); pianoRoll.open(); } },
     { label: say('Channel EQ', 'EQ del canal'), icon: 'eq-window', action: () => { selectEqChannel(stem); moduleWindows.eq.reveal(); } },
+    { label: say('Channel FX', 'FX del canal'), icon: 'plugin', action: () => { selectFxChannel(stem); moduleWindows.fx.reveal(); } },
     { label: pt('Download WAV'), icon: 'download', disabled: !wav, action: () => link.click() },
     '-',
     { label: pt('Hear only this track'), icon: 'music', action: hearOnly },
+    { label: say('Consolidate channel…', 'Consolidar canal…'), icon: 'export', action: () => playlist.consolidateTrack(stem) },
+    { label: say('Delete channel…', 'Eliminar canal…'), icon: 'trash', danger: true, action: () => playlist.deleteTrack(stem) },
   ]);
   const more = document.createElement('button'); more.type = 'button'; more.className = 'stem-more';
   more.innerHTML = '<sc-icon name="more" class="icon" aria-hidden="true"></sc-icon>';
@@ -788,7 +864,7 @@ function startSession(saved = null, samples = []) {
     // With stems, the original starts muted so the mix is not doubled.
     const mute = index ? false : saved?.original ? saved.original.muted === true : buffers.length > 0 && muteOriginal;
     return { id: `audio-${stem}`, stem, name: index ? text(stem) : text('original'), buffer, mute };
-  }).filter(source => source.stem === 'original' ? !removeOriginal : stemChoice.includes(source.stem));
+  }).filter(source => !saved?.playlist?.deletedSources?.includes(source.id) && (source.stem === 'original' ? !removeOriginal : stemChoice.includes(source.stem)));
   // The stem mix lives in `states` (as before the playlist); the arrangement adds clips.
   const tracks = saved?.states && [...STEMS.map((stem, i) => ({ stem, gain: saved.states[i]?.gain, mute: saved.states[i]?.muted === true })),
     ...(saved.original ? [{ stem: 'original', gain: saved.original.gain, mute: saved.original.muted === true }] : [])];
@@ -1017,6 +1093,8 @@ window.addEventListener('pagehide', () => {
   outputMonitor.dispose();
   playlist.dispose();
   effectsUI.dispose(); equalizerUI.dispose(); recorderUI.dispose(); mixOutput.dispose();
+  for (const bus of auditionBuses.values()) { bus.fx.dispose(); bus.graph.dispose(); }
+  auditionBuses.clear();
   cancelAnimationFrame(animationFrame);
   for (const view of waveforms) view.dispose();
   for (const item of Object.values(moduleWindows)) item.dispose();
