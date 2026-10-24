@@ -267,3 +267,24 @@ test('two minute separation keeps bounded model inputs and complete output endpo
     for (const index of [0, 343980, frames - 1]) assert.ok(Math.abs(stem[c][index] - channels[c][index]) < 1e-6);
   }
 });
+
+test('rack steps open in the piano roll as notes at the root note, with FL tick precision', async () => {
+  const { absorbSteps, stepLane, stepNotes, snapGrain, TICK } = await import('./stem-pattern-core.mjs');
+  const buffer = { duration: 2, sampleRate: 44100 };
+  const pattern = normalizePattern({ id: 'p', track: 'drums', hits: [.8, 0, 0, 0, .5], steps: [[1, 0, 0, 0, 0, 0, 0, 0, .4]] });
+  const shot = normalizeInstrument({ mode: 'oneShot', piano: { root: 55 } }, buffer);
+  assert.deepEqual(stepNotes(pattern, shot, buffer, 120), [
+    { pitch: 55, start: 0, velocity: .8, length: 1 }, { pitch: 55, start: 4, velocity: .5, length: 1 }]);
+  // A chop note lasts as long as its slice (.5 s = 4 steps at 120 BPM), or until the next step when it cuts itself.
+  const chops = normalizeInstrument({ slices: [{ start: 0, end: .5 }] }, buffer);
+  assert.deepEqual(stepNotes(pattern, chops, buffer, 120).map(note => [note.start, note.length, note.velocity]), [[0, 4, 1], [8, 4, .4]]);
+  assert.deepEqual(stepNotes(pattern, { ...chops, cutSelf: true }, buffer, 480).map(note => note.length), [8, 16]);
+  const converted = stepNotes(pattern, shot, buffer, 120);
+  absorbSteps(stepLane(pattern, shot), converted);
+  assert.equal(pattern.hits.some(Boolean), false); assert.equal(pattern.steps[0][0], 1, 'Other lanes stay');
+  // Notes keep 1/24 of a step; snap 0 moves by one tick.
+  assert.equal(snapGrain(0), TICK); assert.equal(snapGrain(.25), .25);
+  assert.equal(normalizePattern({ id: 'q', track: 'x', notes: [{ pitch: 60, start: 1 / 24 * 7, length: .01 }] }).notes[0].start, 7 / 24);
+  assert.equal(normalizePattern({ id: 'q', track: 'x', notes: [{ pitch: 60, start: 0, length: .01 }] }).notes[0].length, 1 / 24);
+  assert.equal(normalizeProject({ instruments: { a: { piano: { snap: 0 } } } }).instruments.a.piano.snap, 0);
+});

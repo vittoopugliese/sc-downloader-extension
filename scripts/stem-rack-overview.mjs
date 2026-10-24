@@ -1,9 +1,11 @@
 import { contextMenu } from './stem-playlist.mjs';
-import { PAD_KEYS, STEPS_PER_BAR, clamp, instrumentSample, noteName } from './stem-pattern-core.mjs';
+import { PAD_KEYS, STEPS_PER_BAR, clamp, instrumentSample, noteName, stepNotes } from './stem-pattern-core.mjs';
 
 // All loaded sources share the selected pattern. The chops editor and piano roll
 // edit a lane of that same pattern; changing selection never changes patterns.
-export function mountRackOverview({ container, instruments, audioContext, output, report, openChops }) {
+// As in FL Studio, a channel with piano roll notes shows them in place of its steps;
+// clicking them opens the piano roll.
+export function mountRackOverview({ container, instruments, audioContext, output, report, openChops, openPiano = () => {} }) {
   const pt = globalThis.SCPlayerToolsText.t, rows = new Map(), voices = new Map();
   const grid = document.createElement('div'); grid.className = 'rack-overview';
   grid.setAttribute('role', 'group'); grid.setAttribute('aria-label', pt('All samples'));
@@ -59,14 +61,20 @@ export function mountRackOverview({ container, instruments, audioContext, output
     const chops = button('rack-channel-chops', '', () => openChops(track.key));
     chops.append(globalThis.SCIcons.create('slice'));
     chops.dataset.scdlTooltip = pt('Edit chops'); chops.setAttribute('aria-label', pt('Edit chops'));
-    heading.append(play, name, mode, root, chops); row.append(heading);
+    const notes = node('button', 'rack-channel-notes'); notes.type = 'button'; notes.hidden = true;
+    notes.addEventListener('click', () => openPiano(track.key));
+    heading.append(play, name, mode, root, chops); row.append(heading, notes);
     heading.addEventListener('contextmenu', event => contextMenu(event, [
       { heading: track.name },
+      { label: pt('Piano roll'), icon: 'piano', action: () => openPiano(track.key) },
+      '-',
+      // The fill replaces the channel's notes too: steps and notes are one list.
       ...[2, 4, 8].map(interval => ({ label: pt('Fill every $1 steps', interval), action: () => {
         instruments.editPattern(pattern => {
           const instrument = instruments.instrument(track.key);
           const lane = instrument.mode === 'oneShot' ? pattern.hits : pattern.steps[instrument.piano.pad];
           for (let i = 0; i < pattern.bars * STEPS_PER_BAR; i++) lane[i] = i % interval ? 0 : template;
+          pattern.notes = [];
         }, track.key);
       } })),
       '-',
@@ -75,7 +83,7 @@ export function mountRackOverview({ container, instruments, audioContext, output
         instruments.editInstrument(value => { value.cutSelf = !value.cutSelf; }, track.key);
       } },
     ]));
-    grid.append(row); return { row, name, play, mode, root, steps: [] };
+    grid.append(row); return { row, name, play, mode, root, notes, steps: [] };
   }
   function buildSteps(row, key) {
     if (row.steps.length === count()) return;
@@ -125,8 +133,31 @@ export function mountRackOverview({ container, instruments, audioContext, output
       return;
     }
     const keys = [...rows.keys()], next = clamp(keys.indexOf(key) + (event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0), 0, keys.length - 1);
-    rows.get(keys[next])?.steps[clamp(column + (event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0), 0, count() - 1)].focus();
+    const target = rows.get(keys[next]);
+    if (target && !target.notes.hidden) target.notes.focus();
+    else target?.steps[clamp(column + (event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0), 0, count() - 1)].focus();
   });
+  // A small piano roll of the channel: its notes, and any steps it still has.
+  function renderNotes(row, track, instrument) {
+    const lane = instruments.channel(track.key), own = lane?.notes || [];
+    row.notes.hidden = !own.length;
+    for (const cell of row.steps) cell.hidden = !!own.length;
+    if (!own.length) { row.drawn = ''; return; }
+    const list = [...own, ...stepNotes(lane, instrument, track.buffer, instruments.tempo())], total = count();
+    const revision = JSON.stringify([list, total]);
+    const label = `${track.name} · ${pt('Piano roll')} · ${list.length}`;
+    row.notes.dataset.scdlTooltip = label; row.notes.setAttribute('aria-label', label);
+    if (row.drawn === revision) return;
+    row.drawn = revision;
+    const pitches = list.map(note => note.pitch), low = Math.min(...pitches), span = Math.max(...pitches) - low + 1;
+    row.notes.replaceChildren(...list.filter(note => note.start < total).map(note => {
+      const bar = node('span', 'rack-channel-note');
+      bar.style.left = `${note.start / total * 100}%`; bar.style.width = `${Math.min(note.length, total - note.start) / total * 100}%`;
+      bar.style.top = `${(low + span - 1 - note.pitch) / span * 100}%`; bar.style.height = `${100 / span}%`;
+      bar.style.opacity = String(.45 + note.velocity * .55);
+      return bar;
+    }));
+  }
   return {
     element: grid,
     render() {
@@ -144,6 +175,7 @@ export function mountRackOverview({ container, instruments, audioContext, output
         row.play.setAttribute('aria-label', `${pt('Preview note')} · ${track.name}`);
         row.mode.value = instrument.mode; row.root.value = String(instrument.piano.root);
         const sample = instrumentSample(instrument, track.buffer); row.play.disabled = !sample;
+        renderNotes(row, track, instrument);
         row.steps.forEach((cell, column) => {
           const velocity = values(track.key)?.[column] || 0;
           cell.disabled = !sample; cell.dataset.velocity = String(velocity); cell.dataset.step = String(column);
@@ -154,7 +186,12 @@ export function mountRackOverview({ container, instruments, audioContext, output
         });
       }
     },
-    transport(step) { for (const row of rows.values()) row.steps.forEach((cell, column) => cell.classList.toggle('is-current', step === column)); },
+    transport(step) {
+      for (const row of rows.values()) {
+        row.steps.forEach((cell, column) => cell.classList.toggle('is-current', step === column));
+        row.notes.style.setProperty('--rack-cursor', step < 0 ? '-1' : String(step / count()));
+      }
+    },
     stop() { for (const key of voices.keys()) stop(key); },
     dispose() { disposed = true; for (const key of voices.keys()) stop(key); grid.remove(); },
   };

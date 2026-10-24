@@ -66,6 +66,7 @@ Piano roll¦Piano roll¦Piano-Roll¦Piano roll¦Пианоролл
 Root note¦Nota raíz¦Grundton¦Nota base¦Основная нота
 BPM¦BPM¦BPM¦BPM¦BPM
 Snap notes¦Ajuste de notas¦Notenraster¦Grade de notas¦Привязка нот
+No snap¦Sin ajuste¦Kein Raster¦Sem grade¦Без привязки
 Keyboard range¦Rango del teclado¦Tastaturbereich¦Extensão do teclado¦Диапазон клавиатуры
 Loop sample during notes¦Repetir sample durante la nota¦Sample während der Note wiederholen¦Repetir amostra durante a nota¦Повторять сэмпл на протяжении ноты
 Undo notes¦Deshacer notas¦Noten rückgängig¦Desfazer notas¦Отменить ноты

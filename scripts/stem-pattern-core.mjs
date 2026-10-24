@@ -9,6 +9,11 @@ export const MAX_BARS = 256;
 export const MAX_STEPS = MAX_BARS * STEPS_PER_BAR;
 export const MAX_NOTES = 512;
 export const MAX_PATTERNS = 32;
+// Note positions are kept in 1/24 of a step: FL Studio's 96 PPQ. Snap 0 ("no snap")
+// moves notes by one tick.
+export const TICK = 1 / 24;
+export const snapGrain = snap => snap > 0 ? snap : TICK;
+const toTick = value => Math.round(value * 24) / 24;
 export const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 export const noteName = midi => `${['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'][midi % 12]}${Math.floor(midi / 12) - 1}`;
 export const pitchRatio = (midi, root) => 2 ** ((midi - root) / 12);
@@ -21,7 +26,7 @@ export function normalizePiano(value) {
     root: Number.isFinite(value?.root) ? clamp(Math.round(value.root), 24, 96) : 60,
     sustain: value?.sustain === true,
     octave: Number.isInteger(value?.octave) ? clamp(value.octave, 1, 5) : 3,
-    snap: [.5, 1, 2, 4].includes(value?.snap) ? value.snap : 1,
+    snap: [0, .25, .5, 1, 2, 4].includes(value?.snap) ? value.snap : 1,
   };
 }
 
@@ -51,10 +56,30 @@ export function normalizeNotes(notes) {
     Number.isFinite(note?.length) && note.start >= 0 && note.start < MAX_STEPS && note.length > 0)
     .slice(0, MAX_NOTES).map(note => ({
       pitch: clamp(Math.round(note.pitch), 24, 96),
-      start: Math.round(note.start * 2) / 2,
-      length: clamp(Math.round(note.length * 2) / 2, .5, MAX_STEPS),
+      start: toTick(note.start),
+      length: clamp(toTick(note.length), TICK, MAX_STEPS),
       velocity: Number.isFinite(note.velocity) ? clamp(note.velocity, .01, 1) : .8,
     })).filter(note => note.start < MAX_STEPS);
+}
+
+// FL Studio keeps one list of notes per channel: a step is a note at the root note.
+// The step lane the piano roll plays (a one-shot's hits, or the row of the piano's pad)
+// shows there as notes; the first edit in the piano roll moves them into the notes.
+// A step plays its whole sample, so a chop note lasts as long as its slice (until the
+// next step when the channel cuts itself); a one-shot ignores the note length.
+export const stepLane = (lane, instrument) => instrument.mode === 'oneShot' ? lane.hits : lane.steps[instrument.piano.pad];
+export function stepNotes(lane, instrument, buffer, bpm) {
+  const row = lane && instrument ? stepLane(lane, instrument) : null;
+  if (!row) return [];
+  const sample = instrumentSample(instrument, buffer), seconds = sample ? sample.end - sample.start : 0;
+  const ring = instrument.mode === 'oneShot' || !(seconds > 0) ? 1 : Math.max(1, Math.ceil(seconds * bpm / 15 * 24) / 24);
+  const starts = row.flatMap((velocity, start) => velocity > 0 ? [start] : []).slice(0, Math.max(0, MAX_NOTES - (lane.notes?.length || 0)));
+  return starts.map((start, i) => ({ pitch: instrument.piano.root, start, velocity: row[start],
+    length: clamp(instrument.cutSelf && starts[i + 1] !== undefined ? Math.min(ring, starts[i + 1] - start) : ring, TICK, MAX_STEPS - start) }));
+}
+// The steps already shown as notes leave the lane.
+export function absorbSteps(row, notes) {
+  for (const note of notes) row[note.start] = 0;
 }
 
 export function normalizePattern(value) {

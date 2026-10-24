@@ -35,8 +35,31 @@ module.exports = async function (page) {
   assert.equal(await rack.locator('.rack-grid .rack-step').count(), 8 * 64);
   await rack.locator('.rack-view-channels').click();
   await length(1);
-  await page.keyboard.press('F7');
+  // FL Studio: the channel menu opens the piano roll, where the filled steps are notes at
+  // the root note. Each one can be pitched and moved off the grid; the rack then shows
+  // the channel's notes instead of its steps.
+  await drums.locator('.rack-channel-name').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Piano roll', exact: true }).click();
   await piano.locator('.module-control').first().click();
+  const filled = piano.locator('.piano-note');
+  assert.deepEqual(await filled.evaluateAll(nodes => nodes.map(n => [n.dataset.start, n.dataset.pitch])), [['0', '60'], ['8', '60']]);
+  assert.equal(await drums.locator('.rack-channel-notes').isHidden(), true, 'Looking does not change the steps');
+  await filled.nth(1).focus(); await page.keyboard.press('ArrowUp');
+  assert.equal(await filled.nth(1).getAttribute('data-pitch'), '61');
+  assert.equal(await drums.locator('.rack-channel-notes').isVisible(), true);
+  assert.equal(await drums.locator('.rack-step:visible').count(), 0);
+  assert.equal(await drums.locator('.rack-channel-note').count(), 2);
+  await piano.locator('.piano-snap').selectOption('0');
+  await filled.first().scrollIntoViewIfNeeded();
+  const note = await filled.first().boundingBox(), sheet = await piano.locator('.piano-grid').boundingBox();
+  await page.mouse.move(note.x + 4, note.y + 8); await page.mouse.down();
+  await page.mouse.move(note.x + 4 + sheet.width / 16 * .3, note.y + 8, { steps: 3 }); await page.mouse.up();
+  const free = Number(await filled.first().getAttribute('data-start'));
+  assert.ok(free > 0 && free < .5, `No snap moves a note by ticks: ${free}`);
+  await piano.locator('.piano-snap').selectOption('1');
+  await piano.locator('.piano-clear').click();
+  assert.equal(await filled.count(), 0);
+  assert.equal(await drums.locator('.rack-step:visible').count(), 16, 'Without notes the rack shows steps again');
   await piano.locator('.piano-sustain').check();
   await piano.locator('.piano-keyboard').click();
   const sourceCount = () => page.evaluate(() => stemTestSources.length);

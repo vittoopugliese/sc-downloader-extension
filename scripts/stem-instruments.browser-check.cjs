@@ -108,9 +108,14 @@ module.exports = async function verifyInstruments(page) {
     const rect = await grid.boundingBox();
     return { x: rect.x + rect.width * (step + .3) / 16, y: rect.y + (96 - pitch) * 22 + 11 };
   }
+  // FL Studio: the rack's steps of the piano's pad (A) are notes at the root note.
+  const notes = piano.locator('.piano-note');
+  assert.equal(await notes.count(), 1, 'The step of pad A shows as a note');
+  assert.deepEqual(await notes.first().evaluate(node => [node.dataset.pitch, node.dataset.start, node.dataset.velocity]), ['60', '0', '0.3']);
+  await notes.first().click({ button: 'right' });
+  assert.equal(await notes.count(), 0, 'Deleting it in the piano roll removes the step');
   let point = await at(60, 0);
   await page.mouse.click(point.x, point.y);
-  const notes = piano.locator('.piano-note');
   assert.equal(await notes.count(), 1);
   assert.equal(await notes.first().getAttribute('data-length'), '1');
   let end = await notes.first().locator('.piano-note-end').boundingBox(), width = (await grid.boundingBox()).width;
@@ -215,7 +220,7 @@ module.exports = async function verifyInstruments(page) {
   { await page.locator('.pl-stem-head[data-stem=bass] .stem-more').click(); await page.locator('.pl-menu-item').nth(1).click(); }
   assert.equal(await piano.locator('.piano-note').count(), 2);
   { await page.locator('.pl-stem-head[data-stem=bass] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
-  assert.equal(await rack.locator('.rack-grid .rack-step.is-on').count(), 2);
+  assert.equal(await rack.locator('.rack-grid .rack-step.is-on').count(), 1, 'The step of pad A became a piano note');
 
   // Opening a project replaces the session, as in FL Studio: a sample imported after the
   // last save does not travel into the project that opens next.

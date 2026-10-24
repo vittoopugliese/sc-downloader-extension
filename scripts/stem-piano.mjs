@@ -1,4 +1,4 @@
-import { MAX_BARS, MAX_NOTES, PAD_KEYS, STEPS_PER_BAR, clamp, instrumentSample, noteName } from './stem-pattern-core.mjs';
+import { MAX_BARS, MAX_NOTES, PAD_KEYS, STEPS_PER_BAR, absorbSteps, clamp, instrumentSample, noteName, snapGrain, stepLane, stepNotes } from './stem-pattern-core.mjs';
 import { PLUGIN_ICONS, pluginShell } from './stem-channel-rack.mjs';
 import { patternControls } from './stem-instruments.mjs';
 import { createNoteTake } from './stem-note-recording.mjs';
@@ -36,7 +36,7 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
   const recordingMode = select('piano-record-mode', pt('Recording mode'), [['loop', pt('Loop overdub')], ['extend', pt('Extend recording')]], () => {});
   const backing = select('piano-backing', pt('Backing loop'), [['song', pt('Playlist')], ['pattern', pt('Pattern')]], () => {});
   toolbar.append(play, record, keyboardMode, recordingMode, backing, focus.element, field(pt('Piano sample'), sample), field(pt('Root note'), root));
-  const snap = select('piano-snap', pt('Snap notes'), [[4, '1/4'], [2, '1/8'], [1, '1/16'], [.5, '1/32']], () => piano(value => { value.snap = Number(snap.value); }));
+  const snap = select('piano-snap', pt('Snap notes'), [[4, '1/4'], [2, '1/8'], [1, '1/16'], [.5, '1/32'], [.25, '1/64'], [0, pt('No snap')]], () => piano(value => { value.snap = Number(snap.value); }));
   const octave = select('piano-octave', pt('Keyboard range'), [1, 2, 3, 4, 5].map(value => [value, `C${value}–C${Math.min(7, value + 4)}`]), () => piano(value => { value.octave = Number(octave.value); }));
   const sustain = element('input', 'piano-sustain'); sustain.type = 'checkbox';
   sustain.onchange = () => { stopVoices(); piano(value => { value.sustain = sustain.checked; }); };
@@ -68,7 +68,10 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
   let keyboardEnabled = false, take = null, preparing = null, captureFrame = 0, disposed = false, liveKey = null, voiceGeneration = 0;
   const current = () => instruments.focused();
   const settings = () => current().instrument?.piano;
-  const notes = () => take?.notes ?? current().pattern?.notes ?? [];
+  // The channel's steps show as notes (see stepNotes); an edit stores them as notes.
+  const pending = () => { const { pattern, instrument, track } = current(); return stepNotes(pattern, instrument, track?.buffer, instruments.tempo()); };
+  const notes = () => take?.notes ?? (current().pattern ? [...current().pattern.notes, ...pending()] : []);
+  const grain = () => snapGrain(settings().snap);
   const count = () => (take?.bars ?? current().pattern?.bars ?? 1) * STEPS_PER_BAR;
   const low = () => (settings().octave + 1) * 12, high = () => Math.min(96, low() + 48);
   const slice = () => instrumentSample(current().instrument, current().track?.buffer);
@@ -77,11 +80,13 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
     if (!current().key || take) return;
     undo.push(Array.isArray(before) ? { notes: structuredClone(before), bars } : structuredClone(before));
     if (undo.length > 50) undo.shift(); redo.length = 0;
-    instruments.editPattern(pattern => { pattern.notes = next; pattern.bars = bars; });
+    const steps = pending(), instrument = current().instrument;
+    instruments.editPattern(pattern => { pattern.notes = next; pattern.bars = bars; absorbSteps(stepLane(pattern, instrument), steps); });
   }
   function history(from, to) {
     if (!from.length || take) return;
     to.push(snapshot()); const next = from.pop(); selected = -1;
+    // Snapshots already hold the steps that were showing as notes.
     instruments.editPattern(pattern => { pattern.notes = next.notes; pattern.bars = next.bars; });
   }
   function deleteNote() {
@@ -157,7 +162,7 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
       if (preparing !== token || disposed || !shell.active() || current().key !== token.key || current().pattern?.id !== token.pattern) { clock?.stop(); return; }
       preparing = null;
       if (!clock) { render(); return; }
-      take = Object.assign(createNoteTake(current().pattern, recordingMode.value, settings().snap), { clock, key: token.key, pattern: token.pattern, bpm: instruments.tempo(), speed: instruments.speed(), replay: new Map() });
+      take = Object.assign(createNoteTake({ ...current().pattern, notes: notes() }, recordingMode.value, grain()), { clock, key: token.key, pattern: token.pattern, bpm: instruments.tempo(), speed: instruments.speed(), replay: new Map() });
       render(); renderTransport();
       const tick = () => {
         if (!take) return;
@@ -207,7 +212,7 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
     renderedGrid = key;
     sheet.style.setProperty('--piano-steps', String(count()));
     sheet.style.setProperty('--piano-height', `${(high() - low() + 1) * ROW}px`);
-    grid.style.setProperty('--piano-snap', String(settings().snap));
+    grid.style.setProperty('--piano-snap', String(settings().snap || 1));
     ruler.replaceChildren(...Array.from({ length: count() / 4 }, (_, i) => element('span', '', `${Math.floor(i / 4) + 1}.${i % 4 + 1}`)));
     // Extending a take must keep the on-screen keys and their pointer captures.
     if (renderedOctave === settings().octave) return;
@@ -233,7 +238,8 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
       node.dataset.index = String(index); node.dataset.pitch = String(note.pitch); node.dataset.start = String(note.start);
       node.dataset.length = String(note.length); node.dataset.velocity = String(note.velocity);
       if (drag?.kind === 'velocity' && drag.index === index) { node.classList.add('is-velocity'); node.dataset.tip = percent; }
-      node.setAttribute('aria-label', `${noteName(note.pitch)} · ${pt('Step $1', note.start + 1)} · ${note.length} · ${percent}`);
+      const steps = value => String(Math.round(value * 100) / 100);
+      node.setAttribute('aria-label', `${noteName(note.pitch)} · ${pt('Step $1', steps(note.start + 1))} · ${steps(note.length)} · ${percent}`);
       node.setAttribute('aria-pressed', String(selected === index)); node.dataset.scdlTooltip = node.getAttribute('aria-label');
       node.style.left = `${note.start / count() * 100}%`; node.style.width = `${Math.min(note.length, count() - note.start) / count() * 100}%`;
       node.style.top = `${(high() - note.pitch) * ROW + 1}px`; node.style.setProperty('--note-velocity', String(note.velocity));
@@ -288,7 +294,7 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
     step();
   }
   function point(event, rect) {
-    const step = settings().snap;
+    const step = grain();
     return { start: clamp(Math.floor((event.clientX - rect.left) / rect.width * count() / step) * step, 0, count() - step),
       pitch: clamp(high() - Math.floor((event.clientY - rect.top) / ROW), low(), high()) };
   }
@@ -317,7 +323,7 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
   });
   grid.addEventListener('pointermove', event => {
     if (drag?.id !== event.pointerId) return;
-    const step = settings().snap, note = drag.notes[drag.index];
+    const step = grain(), note = drag.notes[drag.index];
     const dx = Math.round((event.clientX - drag.x) / drag.rect.width * count() / step) * step, dy = Math.round((drag.y - event.clientY) / ROW);
     if (drag.kind === 'velocity') {
       note.velocity = Math.round(clamp(drag.note.velocity + (drag.y - event.clientY) / 120, .01, 1) * 100) / 100;
@@ -363,7 +369,7 @@ export function mountPianoRoll({ container, instruments, audioContext, output, r
     const note = notes()[selected];
     if (!note || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
     event.preventDefault(); event.stopPropagation();
-    const next = structuredClone(notes()), moved = next[selected], step = settings().snap;
+    const next = structuredClone(notes()), moved = next[selected], step = grain();
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       const delta = (event.key === 'ArrowLeft' ? -1 : 1) * step;
       if (event.shiftKey) moved.length = clamp(moved.length + delta, step, count() - moved.start);

@@ -415,7 +415,8 @@ const eqEffects = {
   },
 };
 const channelRack = mountChannelRack({ container: $('mix-tools'), instruments, ...pluginAudio, locale, report: playbackError,
-  importSamples: dataTransfer => playlist.importRackDrop(dataTransfer) });
+  importSamples: dataTransfer => playlist.importRackDrop(dataTransfer),
+  openPianoRoll: () => { moduleWindows.piano?.reveal(); pianoRoll.open(); } });
 const pianoRoll = mountPianoRoll({ container: $('mix-tools'), instruments, ...pluginAudio, report: playbackError });
 let fxTarget = 'master';
 const fxChannel = () => fxTarget !== 'master' && playlist.track(fxTarget) ? fxTarget : null;

@@ -36,7 +36,7 @@ export function pluginShell({ container, id, title, icon, className }) {
 
 // FL Studio's channel rack for the focused track: its audio cut into eight pads
 // (A–K) on a waveform of that track, and the steps of the focused pattern.
-export function mountChannelRack({ container, instruments, audioContext, output, locale, report, importSamples }) {
+export function mountChannelRack({ container, instruments, audioContext, output, locale, report, importSamples, openPianoRoll = () => {} }) {
   const pt = globalThis.SCPlayerToolsText.t;
   const shell = pluginShell({ container, id: 'stem-rack', title: pt('Channel rack'), icon: PLUGIN_ICONS.rack, className: 'stem-rack' });
   const acceptsDrop = event => importSamples && [BROWSER_DRAG_TYPE, 'Files', 'application/x-stem-sample'].some(type => event.dataTransfer?.types.includes(type));
@@ -88,9 +88,11 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     clearSlices.innerHTML = iconMarkup(undo ? PLUGIN_ICONS.restore : PLUGIN_ICONS.clearSlices);
     clearSlices.disabled = !sampler || (empty && !undo);
   }
+  // In the channel list the steps and the piano roll notes are one list, as in FL Studio.
   const clear = button('rack-clear', pt('Clear steps'), iconMarkup(PLUGIN_ICONS.clear), () => instruments.editPattern(pattern => {
     const rows = rackView === 'channels' && instruments.focused().instrument?.mode === 'oneShot' ? [pattern.hits] : pattern.steps;
     for (const row of rows) row.fill(0, 0, count());
+    if (rackView === 'channels') pattern.notes = pattern.notes.filter(note => note.start >= count());
   }));
   toolbar.append(viewTabs, play, focus.element, mode, place, slice, clearSlices, clear);
   const wave = element('div', 'waveform rack-wave');
@@ -104,7 +106,8 @@ export function mountChannelRack({ container, instruments, audioContext, output,
 
   let sampler = null, mounted = null, view = null, template = .8, gesture = null, frame = 0, drawn = '';
   const overview = mountRackOverview({ container: shell.body, instruments, audioContext, output, report,
-    openChops(key) { rackView = 'chops'; instruments.focus(key); instruments.editInstrument(value => { value.mode = 'slices'; }, key); } });
+    openChops(key) { rackView = 'chops'; instruments.focus(key); instruments.editInstrument(value => { value.mode = 'slices'; }, key); },
+    openPiano(key) { instruments.focus(key); openPianoRoll(key); } });
   shell.body.insertBefore(overview.element, hint);
   const count = () => (instruments.focused().pattern?.bars ?? 1) * STEPS_PER_BAR;
   // The waveform of the focused track, with its own zoom (wheel) and pan (Shift + wheel).

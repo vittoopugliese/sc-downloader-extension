@@ -427,6 +427,14 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .stem-plugin .rack-channel-mode{width:83px;min-width:0;font-size:10px;padding:0 3px}
 .stem-plugin .rack-channel-root{width:56px;min-width:0;font-size:10px;padding:0 3px}
 .stem-plugin .rack-channel-play,.stem-plugin .rack-channel-chops{width:26px;min-width:26px;padding:0}
+/* A channel with piano roll notes shows them instead of its steps; a click opens the piano roll. */
+.stem-plugin .rack-step[hidden],.stem-plugin .rack-channel-notes[hidden]{display:none}
+.stem-plugin .rack-channel-notes{grid-column:2/-1;position:relative;height:26px;min-width:0;padding:0;overflow:hidden;border:1px solid #5b4a3a;border-radius:3px;cursor:pointer;
+  background:linear-gradient(to right,#ffffff14 1px,transparent 1px) 0 0/calc(400% / var(--rack-steps,16)) 100%,#1f1b17}
+.stem-plugin .rack-channel-notes:hover{border-color:#dc8a53}
+.stem-plugin .rack-channel-notes:focus-visible{outline:2px solid #fff;outline-offset:1px}
+.rack-channel-note{position:absolute;min-width:2px;min-height:2px;border-radius:1px;background:#f28b41;pointer-events:none}
+.rack-channel-notes::after{content:'';position:absolute;top:0;bottom:0;left:calc(var(--rack-cursor,-1) * 100%);width:1px;background:#ffe9d6;pointer-events:none}
 @media(max-width:600px){.rack-channel{grid-template-columns:236px repeat(16,22px);min-width:0;width:max-content}.stem-plugin .rack-channel-mode{width:68px}.stem-plugin .rack-channel-root{width:48px}.stem-plugin .rack-channel-name{min-width:44px}}
 .stem-rack.is-sample-drop{outline:2px solid var(--orange,#ff5500);outline-offset:-2px}
 
