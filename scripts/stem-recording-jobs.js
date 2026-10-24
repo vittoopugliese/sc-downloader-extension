@@ -1,6 +1,6 @@
 (function (root) {
   "use strict";
-  // Likes Explorer recordings -> Stem Extractor. The WAV arrives over a port in
+  // Likes Explorer and YouTube loop recordings -> Stem Extractor. The WAV arrives over a port in
   // base64 chunks, waits in Cache Storage and the stems tab loads it without separating.
   const PREFIX = "stem-recording:";
   const PORT = "stem-recording-upload";
@@ -10,6 +10,8 @@
   const audioKey = id => `https://scdl-recordings.invalid/recording/${id}`;
   const UUID = /^[a-f0-9-]{36}$/;
   const PERMALINK = /^https:\/\/soundcloud\.com\/[^/]+\/[^/?#]+$/;
+  const YOUTUBE_WATCH = /^https:\/\/www\.youtube\.com\/watch\?v=[A-Za-z0-9_-]{6,20}$/;
+  const SENDER = /^https:\/\/(soundcloud\.com|www\.youtube\.com)\//;
 
   function decode(base64) {
     const binary = atob(base64), bytes = new Uint8Array(binary.length);
@@ -67,8 +69,8 @@
         done = true; parts = [];
         reply({ success: false, error: error?.message || String(error) });
       };
-      if (sender.id !== chrome.runtime.id || !sender.tab || !/^https:\/\/soundcloud\.com\//.test(sender.url || "")) {
-        fail(new Error("Record a track on SoundCloud first.")); return;
+      if (sender.id !== chrome.runtime.id || !sender.tab || !SENDER.test(sender.url || "")) {
+        fail(new Error("Record a track on SoundCloud or YouTube first.")); return;
       }
       port.onDisconnect.addListener(() => { done = true; parts = []; });
       port.onMessage.addListener(message => {
@@ -76,7 +78,7 @@
         if (message?.type === "begin" && !meta) {
           const artworkUrl = text(message.artworkUrl, 2048), trackUrl = text(message.trackUrl, 2048);
           if (!Number.isSafeInteger(message.size) || message.size < 48 || message.size > MAX_BYTES ||
-              (artworkUrl && !/^https:\/\//.test(artworkUrl)) || (trackUrl && !PERMALINK.test(trackUrl))) {
+              (artworkUrl && !/^https:\/\//.test(artworkUrl)) || (trackUrl && !PERMALINK.test(trackUrl) && !YOUTUBE_WATCH.test(trackUrl))) {
             fail(new Error("Invalid recording upload.")); return;
           }
           meta = { size: message.size, title: text(message.title, 300) || "SoundCloud recording", artist: text(message.artist, 300), artworkUrl, trackUrl };
@@ -101,7 +103,7 @@
       if (sender.id !== chrome.runtime.id || sender.url?.split("?")[0] !== chrome.runtime.getURL("stems.html") ||
           !UUID.test(request.recordingId || "")) throw new Error("Invalid recording session.");
       const job = (await chrome.storage.session.get(key(request.recordingId)))[key(request.recordingId)];
-      if (!job || job.tabId !== sender.tab?.id) throw new Error("This recording has expired. Record it again in the Likes Explorer.");
+      if (!job || job.tabId !== sender.tab?.id) throw new Error("This recording has expired. Record it again.");
       return { success: true, title: job.title, artist: job.artist, artworkUrl: job.artworkUrl, trackUrl: job.trackUrl,
         durationMs: job.durationMs, audioUrl: audioKey(job.id) };
     }

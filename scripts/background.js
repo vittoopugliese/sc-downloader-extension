@@ -821,7 +821,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (["SAMPLER_PRESET_LIST", "SAMPLER_PRESET_SAVE", "SAMPLER_PRESET_LOAD", "SAMPLER_PRESET_DELETE", "SAMPLER_PRESET_RENDER",
       "RENDER_LOOP_PAD", "RENDER_LOOP_INSTRUMENT", "CANCEL_LOOP_INSTRUMENT",
       "GET_LOOP_PAD_LIST", "GET_LOOP_PAD_AUDIO", "TRIM_LOOP_PAD_AUDIO", "STORE_LOOP_PAD_AUDIO", "DELETE_LOOP_PAD_AUDIO"].includes(request.type)) {
-    if (sender.id !== chrome.runtime.id || !sender.tab || !/^https:\/\/soundcloud\.com\//.test(sender.url || "")) {
+    // YouTube keeps pads and presets, but has no audio file to render loops from.
+    const youtubePadStorage = /^https:\/\/www\.youtube\.com\//.test(sender.url || "") &&
+      !["RENDER_LOOP_PAD", "RENDER_LOOP_INSTRUMENT", "CANCEL_LOOP_INSTRUMENT"].includes(request.type);
+    if (sender.id !== chrome.runtime.id || !sender.tab ||
+        (!/^https:\/\/soundcloud\.com\//.test(sender.url || "") && !youtubePadStorage)) {
       sendResponse({ success: false, error: "This action is only available on SoundCloud." });
       return false;
     }
