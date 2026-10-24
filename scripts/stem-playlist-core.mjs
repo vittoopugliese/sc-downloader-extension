@@ -1,3 +1,5 @@
+import { validateAutomation, retimeAutomation } from './stem-automation.mjs';
+
 // Arrangement times are seconds. A BPM change moves every clip to keep its bar, as in
 // FL Studio; patterns and clips stretched to the grid (`tempoLock`) also keep their length.
 export const LIMITS = Object.freeze({ tracks: 16, clips: 256, seconds: 300, pcmBytes: 256 * 1024 * 1024 });
@@ -6,11 +8,11 @@ export const uid = () => crypto.randomUUID();
 export const clipPitch = clip => clip.pitch + (clip.cents || 0) / 100;
 export const clipRate = clip => clip.speed * (clip.keepLength ? 1 : 2 ** (clipPitch(clip) / 12));
 export const clipDuration = clip => (clip.out - clip.in) / clipRate(clip);
-export const arrangementEnd = state => Math.max(0, ...state.clips.map(c => c.at + clipDuration(c)));
+export const arrangementEnd = state => Math.max(0, ...state.clips.map(c => c.at + clipDuration(c)), ...(state.automation || []).map(c => c.at + c.duration));
 // Nearest multiple of `division` beats; 0 leaves the time free.
 export const snapTime = (seconds, bpm, division) => division ? Math.round(seconds / (60 / bpm * division)) * 60 / bpm * division : seconds;
 export function emptyArrangement() {
-  return { version: 1, bpm: 120, tracks: Array.from({ length: 4 }, (_, i) => ({ id: uid(), name: `Track ${i + 1}`, gain: 1, mute: false, solo: false })), clips: [] };
+  return { version: 1, bpm: 120, tracks: Array.from({ length: 4 }, (_, i) => ({ id: uid(), name: `Track ${i + 1}`, gain: 1, mute: false, solo: false })), clips: [], automation: [], deletedSources: [] };
 }
 export function newClip(asset, track, at = 0) {
   return { id: uid(), asset: asset.id, track, at, in: 0, out: asset.buffer.duration, pitch: 0, cents: 0, speed: 1, keepLength: true, gain: 1, mute: false, reverse: false, fadeIn: 0, fadeOut: 0 };
@@ -25,21 +27,25 @@ export function validateArrangement(state, assets) {
         (track.stem !== undefined && typeof track.stem !== 'string') ||
         !Number.isFinite(track.gain) || track.gain < 0 || track.gain > 2 || typeof track.mute !== 'boolean' || typeof track.solo !== 'boolean' ||
         (track.eq != null && (typeof track.eq !== 'object' || !Array.isArray(track.eq.bands))) ||
+        (track.fx != null && (typeof track.fx !== 'object' || Array.isArray(track.fx))) ||
         (track.source !== undefined && (typeof track.source !== 'string' || !assets.has(track.source)))) throw new Error('Invalid track.');
     tracks.add(track.id);
   }
   for (const clip of state.clips) {
     const asset = assets.get(clip.asset);
-    if (!asset || !tracks.has(clip.track) || typeof clip.id !== 'string' || clips.has(clip.id) ||
+    if (!asset || !tracks.has(clip.track) || state.tracks.find(track => track.id === clip.track)?.kind === 'automation' || typeof clip.id !== 'string' || clips.has(clip.id) ||
         !['at', 'in', 'out', 'pitch', 'speed', 'gain'].every(key => Number.isFinite(clip[key])) ||
         clip.at < 0 || clip.in < 0 || clip.out <= clip.in || (!asset.loop && clip.out > asset.buffer.duration + 1e-6) ||
         Math.abs(clip.pitch) > 24 || clip.speed < .25 || clip.speed > 4 || clip.gain < 0 || clip.gain > 2 ||
         typeof clip.keepLength !== 'boolean' || clip.at + clipDuration(clip) > LIMITS.seconds + 1e-6) throw new Error('Invalid clip or playlist exceeds 5 minutes.');
     for (const key of ['mute', 'reverse', 'tempoLock']) if (clip[key] !== undefined && typeof clip[key] !== 'boolean') throw new Error('Invalid clip flag.');
     if (!Number.isFinite(clip.cents ?? 0) || Math.abs(clip.cents ?? 0) > 100) throw new Error('Invalid fine pitch.');
+    if (!Number.isFinite(clip.normalizationGain ?? 1) || (clip.normalizationGain ?? 1) <= 0 || (clip.normalizationGain ?? 1) > 1e6) throw new Error('Invalid normalization.');
     for (const key of ['fadeIn', 'fadeOut']) if (!Number.isFinite(clip[key] ?? 0) || (clip[key] ?? 0) < 0 || (clip[key] ?? 0) > LIMITS.seconds) throw new Error('Invalid fade.');
     clips.add(clip.id);
   }
+  validateAutomation(state.automation || [], state.tracks, { seconds: LIMITS.seconds, maxClips: LIMITS.clips });
+  if (state.deletedSources && (!Array.isArray(state.deletedSources) || state.deletedSources.some(id => !['audio-original', 'audio-drums', 'audio-bass', 'audio-other', 'audio-vocals'].includes(id)))) throw new Error('Invalid deleted sources.');
   return state;
 }
 // Looping assets (patterns) repeat when a clip runs past their length, as FL Studio
@@ -66,6 +72,8 @@ export function loopSegments(clip, length) {
 // `moveAudio: false` keeps unlocked audio in seconds (tempo from an A–B loop).
 export function retimeClips(state, bpm, isPattern, { moveAudio = true } = {}) {
   const factor = state.bpm / bpm;
+  // A clamped ratio silently loses the beat length. Reject the whole tempo edit instead.
+  for (const clip of state.clips) if (clip.tempoLock && !isPattern(clip) && (clip.speed / factor < .25 - 1e-9 || clip.speed / factor > 4 + 1e-9)) throw new Error('Tempo exceeds the clip speed range (0.25–4×).');
   for (const clip of state.clips) {
     const pattern = isPattern(clip), locked = pattern || clip.tempoLock;
     if (!locked && !moveAudio) continue;
@@ -75,6 +83,7 @@ export function retimeClips(state, bpm, isPattern, { moveAudio = true } = {}) {
     else clip.speed = clamp(clip.speed / factor, .25, 4);
     clip.fadeIn = (clip.fadeIn || 0) * factor; clip.fadeOut = (clip.fadeOut || 0) * factor;
   }
+  state.automation = retimeAutomation(state.automation || [], factor);
   state.bpm = bpm;
 }
 export function splitClip(clip, seconds) {
@@ -166,7 +175,7 @@ export function clipsInWindow(clips, from, to, active = false) {
 // Every track, the original included, follows mute and solo.
 export function trackAudible(state, track) {
   if (!track || track.mute) return false;
-  const solo = state.tracks.some(item => item.solo);
+  const solo = state.tracks.some(item => item.kind !== 'automation' && item.solo);
   return !solo || !!track.solo;
 }
 
