@@ -1,4 +1,6 @@
 import { arrangementEnd, audibleClips, clipDuration, clipRate, clipPitch, clipEnvelope, clipsInWindow, needsStretch, stretchKey, trackAudible, transportWindows, validateArrangement } from './stem-playlist-core.mjs';
+import { activeTrackFx, createChannelFx } from './stem-channel-fx.mjs';
+import { automationEvents, scheduleAutomation } from './stem-automation.mjs';
 
 const LOOKAHEAD = 1.5, TICK_MS = 200, RESTART_FADE = .01, STRETCH_PAD = 1;
 const MAX_RENDER_BYTES = 128 * 1024 * 1024;
@@ -34,7 +36,7 @@ export function startClip(context, destination, clip, asset, stretched, when, of
   const points = [fade, duration - fade, (fi - offset) / rate, (length - fo - offset) / rate];
   if (fi + fo > length) points.push((length * fi / (fi + fo) - offset) / rate);
   for (const at of [...new Set(points)].filter(at => at >= fade && at <= duration - fade).sort((a, b) => a - b)) {
-    gain.gain.linearRampToValueAtTime(clip.gain * clipEnvelope(clip, offset + at * rate), when + at);
+    gain.gain.linearRampToValueAtTime(clip.gain * (clip.normalizationGain ?? 1) * clipEnvelope(clip, offset + at * rate), when + at);
   }
   gain.gain.linearRampToValueAtTime(0, when + duration);
   source.connect(gain).connect(destination);
@@ -204,7 +206,7 @@ function createTonePool(context, onReady) {
 // render in place as soon as it lands.
 // `transport` is { loop: {start, end} | null, rate }; rate scales the timeline.
 // Edits replace only the clips that changed: untouched clips keep sounding.
-export function createPlaylistEngine({ context, output, cache, assets, onEnded, onError }) {
+export function createPlaylistEngine({ context, output, cache, assets, onEnded, onError, masterEffects }) {
   const master = context.createGain(), tracks = new Map(), live = new Set();
   master.connect(output);
   let session = null, signature = '', timer = 0;
@@ -215,17 +217,17 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
   const clipSignature = clip => JSON.stringify([clip, versionOf(clip)]);
   function signatureOf(state, transport) {
     const versions = [...new Set(state.clips.map(clip => clip.asset))].map(id => assets().get(id)?.version || 0);
-    return JSON.stringify([state.clips, transport.loop, transport.rate, versions]);
+    return JSON.stringify([state.clips, state.automation, transport.loop, transport.rate, versions]);
   }
-  // Each track is a mixer insert: its EQ (track.eq), then its fader. Clips and the track's
-  // instruments enter at the EQ input.
+  // Each channel owns its FX, EQ and fader, shared by clips and instruments.
   function trackBus(id) {
     let bus = tracks.get(id);
     if (!bus) {
       const gain = context.createGain(), eq = globalThis.SCParametricEQ?.createGraph(context, { analyse: true }) || null;
       gain.connect(master);
       if (eq) { eq.apply(null, false, true); eq.output.connect(gain); }
-      bus = { gain, eq, input: eq ? eq.input : gain, settings: 'null' };
+      const fx = createChannelFx({ context, output: eq ? eq.input : gain });
+      bus = { gain, eq, fx, input: fx.input, settings: 'null' };
       tracks.set(id, bus);
     }
     return bus;
@@ -233,12 +235,53 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
   const trackGain = id => trackBus(id).input;
   function mixTracks(state) {
     for (const track of state.tracks) {
+      if (track.kind === 'automation') continue;
       const bus = trackBus(track.id), settings = JSON.stringify(track.eq || null);
       bus.gain.gain.setTargetAtTime(trackAudible(state, track) ? track.gain : 0, context.currentTime, .005);
       if (bus.eq && settings !== bus.settings) { bus.eq.apply(track.eq || null); bus.settings = settings; }
+      bus.fx.apply(track.fx);
     }
-    const ids = new Set(state.tracks.map(track => track.id));
-    for (const [id, bus] of tracks) if (!ids.has(id)) { bus.eq?.dispose(); bus.gain.disconnect(); tracks.delete(id); }
+    const ids = new Set(state.tracks.filter(track => track.kind !== 'automation').map(track => track.id));
+    for (const [id, bus] of tracks) if (!ids.has(id)) { bus.fx.dispose(); bus.eq?.dispose(); bus.gain.disconnect(); tracks.delete(id); }
+  }
+  function clearAutomation(state = session?.state) {
+    const at = context.currentTime;
+    for (const [id, bus] of tracks) {
+      bus.gain.gain.cancelScheduledValues(at); bus.fx.cancelAutomation(at);
+      const track = state?.tracks.find(track => track.id === id);
+      if (track) bus.gain.gain.setTargetAtTime(trackAudible(state, track) ? track.gain : 0, at, .005);
+    }
+    master.gain.cancelScheduledValues(at); master.gain.setValueAtTime(1, at);
+    masterEffects?.()?.cancelAutomation(at);
+  }
+  function scheduleMix(owner, a, b) {
+    const automation = owner.state.automation || [];
+    if (!automation.length) return;
+    const targets = new Map(automation.filter(clip => !clip.mute).map(clip => [`${clip.target.track}:${clip.target.param}`, clip.target]));
+    for (const window of transportWindows(a, b, owner.from, owner.length, owner.loop)) {
+      const when = owner.ctxStart + (window.zero + window.from) / owner.rate;
+      for (const target of targets.values()) {
+        const channel = owner.state.tracks.find(track => track.id === target.track);
+        if (target.track !== 'master' && !channel) continue;
+        const bus = channel && trackBus(channel.id);
+        const options = { from: window.from, to: window.to, when, rate: owner.rate };
+        if (target.param === 'gain') {
+          scheduleAutomation(bus ? bus.gain.gain : master.gain, automation, target,
+            { ...options, baseline: channel?.gain ?? 1, scale: channel && !trackAudible(owner.state, channel) ? 0 : 1 });
+        } else if (target.param.startsWith('fx.')) {
+          const name = target.param.slice(3), effects = bus ? bus.fx : masterEffects?.();
+          const baseline = channel?.fx?.[name] ?? effects?.snapshot()?.[name] ?? 0;
+          const events = automationEvents(automation, target, { ...options, baseline }).map(event => ({ ...event, at: when + (event.at - window.from) / owner.rate }));
+          effects?.schedule(name, events);
+        }
+      }
+    }
+  }
+  function refreshMix(state) {
+    clearAutomation(state); mixTracks(state);
+    if (!session) return;
+    session.state.tracks = structuredClone(state.tracks); session.state.automation = structuredClone(state.automation || []);
+    scheduleMix(session, Math.max(0, (context.currentTime - session.ctxStart) * session.rate), session.horizon);
   }
   function retire(clipId = null) {
     const at = context.currentTime;
@@ -302,6 +345,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     if (!owner.loop && owner.from + elapsed >= owner.length) { stop(); onEnded?.(); return; }
     const target = elapsed + LOOKAHEAD * owner.rate;
     if (target <= owner.horizon) return;
+    scheduleMix(owner, owner.horizon, target);
     for (const window of transportWindows(owner.horizon, target, owner.from, owner.length, owner.loop)) {
       for (const item of clipsInWindow(owner.state.clips, window.from, window.to, window.entry)) {
         schedule(owner, item.clip, owner.ctxStart + (window.zero + item.at) / owner.rate, item.offset, window.end - item.at);
@@ -311,6 +355,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
   }
   const loopOf = transport => transport.loop && transport.loop.end > transport.loop.start ? { ...transport.loop } : null;
   function begin(state, from, transport, editing = false) {
+    clearAutomation(state);
     retire();
     clearInterval(timer);
     const snapshot = structuredClone(state), length = arrangementEnd(snapshot);
@@ -333,6 +378,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
   }
   function stop() {
     const at = now();
+    clearAutomation();
     retire(); session = null; clearInterval(timer);
     return at;
   }
@@ -359,7 +405,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     const changed = snapshot.clips.filter(clip => before.get(clip.id) !== clipSignature(clip));
     const kept = new Set(snapshot.clips.map(clip => clip.id));
     owner.state = snapshot;
-    mixTracks(snapshot);
+    refreshMix(snapshot);
     for (const id of before.keys()) if (!kept.has(id)) retire(id);
     for (const clip of changed) {
       const asset = assets().get(clip.asset), wanted = clipSignature(clip);
@@ -382,7 +428,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     update(state, transport) {
       if (!session) { mixTracks(state); return; }
       const next = signatureOf(state, transport);
-      if (next === signature) { mixTracks(state); return; }
+      if (next === signature) { refreshMix(state); return; }
       if (!patch(state, transport)) { begin(state, now(), transport, true); return; }
       signature = next;
     },
@@ -390,11 +436,12 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     recordingClock: () => session && ({ context, zero: session.ctxStart }),
     playing: () => !!session,
     // Mixer state (faders, mute/solo, track EQ) applies while stopped too.
-    mix: mixTracks,
+    mix: refreshMix,
     // Where a track's instruments play into, and the EQ graph whose spectrum the editor shows.
     trackInput: id => trackBus(id).input,
     trackGraph: id => tracks.get(id)?.eq || null,
-    dispose() { stop(); tones.dispose(); master.disconnect(); for (const bus of tracks.values()) { bus.eq?.dispose(); bus.gain.disconnect(); } tracks.clear(); },
+    trackEffects: id => tracks.get(id)?.fx || null,
+    dispose() { stop(); tones.dispose(); master.disconnect(); for (const bus of tracks.values()) { bus.fx.dispose(); bus.eq?.dispose(); bus.gain.disconnect(); } tracks.clear(); },
   };
 }
 
@@ -407,42 +454,66 @@ export function prefetchStretches(state, assets, cache, onError) {
   }
 }
 
-// The export follows the realtime insert order: track EQ, fader, master FX, master EQ.
-export async function renderArrangement(state, assets, cache, { signal, progress, masterEq = null, masterFx = null } = {}) {
+// The export follows the realtime insert order: channel FX, EQ, fader, master FX,
+// master EQ. Channels with active FX are rendered separately so their feedback
+// and tails belong only to that channel, including when clips overlap.
+export async function renderArrangement(state, assets, cache, { signal, progress, masterEq = null, masterFx = null, normalize = true } = {}) {
   validateArrangement(state, assets); signal?.throwIfAborted();
   const end = arrangementEnd(state);
   if (!end) throw new Error('Add a sample to the playlist first.');
-  const sampleRate = 44100, offline = new OfflineAudioContext(2, Math.ceil(end * sampleRate), sampleRate);
-  const equalizer = globalThis.SCParametricEQ;
-  const insert = (settings, destination) => {
+  const sampleRate = 44100, equalizer = globalThis.SCParametricEQ, effects = globalThis.SCTempoEffects;
+  const automation = (state.automation || []).filter(clip => state.tracks.find(track => track.id === clip.track)?.mute !== true);
+  const rendered = new Map(), prepared = new Map(), clips = audibleClips(state);
+  const insert = (context, settings, destination) => {
     if (!equalizer?.isActive(settings)) return destination;
-    const graph = equalizer.createGraph(offline); graph.apply(settings, false, true); graph.output.connect(destination);
+    const graph = equalizer.createGraph(context); graph.apply(settings, false, true); graph.output.connect(destination);
     return graph.input;
   };
-  const effects = globalThis.SCTempoEffects;
-  const withFx = masterFx?.bypassed !== true && effects?.EFFECT_NAMES.some(name => Number(masterFx?.[name]) > 0);
-  const master = withFx ? offline.destination : insert(masterEq, offline.destination);
-  const gains = new Map(state.tracks.map(track => {
-    const gain = offline.createGain(); gain.gain.value = track.gain; gain.connect(master);
-    return [track.id, insert(track.eq, gain)];
-  }));
-  const clips = audibleClips(state);
+  const fxEvents = (id, settings, duration) => Object.fromEntries((effects?.EFFECT_NAMES || [])
+    .filter(name => automation.some(clip => !clip.mute && clip.target.track === id && clip.target.param === `fx.${name}`))
+    .map(name => [name, automationEvents(automation, { track: id, param: `fx.${name}` }, { from: 0, to: duration, baseline: settings?.[name] || 0 })]));
+  const hasFx = (settings, events) => settings?.bypassed !== true && (activeTrackFx(settings) || Object.values(events).some(list => list.some(event => event.value > 0)));
   for (let i = 0; i < clips.length; i++) {
     const clip = clips[i], asset = assets.get(clip.asset);
-    progress?.(i / (clips.length + 1));
-    let stretched = null;
-    if (needsStretch(clip)) { await cache.request(clip, asset, { keep: true }); signal?.throwIfAborted(); stretched = cache.lookup(clip, asset); }
-    startClip(offline, gains.get(clip.track), clip, asset, stretched, clip.at);
+    progress?.(i / (clips.length + state.tracks.length + 2));
+    if (needsStretch(clip)) { await cache.request(clip, asset, { keep: true }); signal?.throwIfAborted(); prepared.set(clip.id, cache.lookup(clip, asset)); }
+  }
+  let length = end;
+  for (const track of state.tracks) {
+    const ownClips = clips.filter(clip => clip.track === track.id), events = fxEvents(track.id, track.fx, end);
+    if (!ownClips.length || !hasFx(track.fx, events)) continue;
+    const raw = new OfflineAudioContext(2, Math.ceil(end * sampleRate), sampleRate);
+    for (const clip of ownClips) startClip(raw, raw.destination, clip, assets.get(clip.asset), prepared.get(clip.id), clip.at);
+    const buffer = await raw.startRendering(); signal?.throwIfAborted();
+    const processed = await effects.renderSample(buffer, { ...track.fx, eq: track.eq }, signal, { maxBytes: MAX_RENDER_BYTES, automation: events });
+    rendered.set(track.id, processed); length = Math.max(length, processed.duration);
+    progress?.((clips.length + rendered.size) / (clips.length + state.tracks.length + 2));
+  }
+  if (Math.ceil(length * sampleRate) * 8 > MAX_RENDER_BYTES) throw new Error('The rendered arrangement is too large.');
+  const offline = new OfflineAudioContext(2, Math.ceil(length * sampleRate), sampleRate);
+  const masterEvents = fxEvents('master', masterFx, length), withFx = hasFx(masterFx, masterEvents);
+  const master = offline.createGain(); master.connect(withFx ? offline.destination : insert(offline, masterEq, offline.destination));
+  scheduleAutomation(master.gain, automation, { track: 'master', param: 'gain' }, { from: 0, to: length, when: 0, baseline: 1 });
+  for (const track of state.tracks) {
+    if (!trackAudible(state, track)) continue;
+    const gain = offline.createGain(); gain.connect(master);
+    scheduleAutomation(gain.gain, automation, { track: track.id, param: 'gain' }, { from: 0, to: length, when: 0, baseline: track.gain });
+    if (rendered.has(track.id)) {
+      const source = offline.createBufferSource(); source.buffer = rendered.get(track.id); source.connect(gain); source.start();
+    } else {
+      const input = insert(offline, track.eq, gain);
+      for (const clip of clips.filter(clip => clip.track === track.id)) startClip(offline, input, clip, assets.get(clip.asset), prepared.get(clip.id), clip.at);
+    }
   }
   let mix = await offline.startRendering();
   signal?.throwIfAborted();
   // Reuse Player Tools' offline DSP, including effect tails. The playlist allows
   // five minutes, longer than a pad; bound its stereo render to 128 MiB.
-  if (withFx) mix = await effects.renderSample(mix, { ...masterFx, eq: masterEq }, signal, { maxBytes: 128 * 1024 * 1024 });
+  if (withFx) mix = await effects.renderSample(mix, { ...masterFx, eq: masterEq }, signal, { maxBytes: MAX_RENDER_BYTES, automation: masterEvents });
   // One common gain preserves stereo balance and prevents clipping in exports.
   let peak = 1;
   for (let c = 0; c < 2; c++) for (const value of mix.getChannelData(c)) peak = Math.max(peak, Math.abs(value));
-  if (peak > 1) for (let c = 0; c < 2; c++) { const data = mix.getChannelData(c); for (let i = 0; i < data.length; i++) data[i] /= peak; }
+  if (normalize && peak > 1) for (let c = 0; c < 2; c++) { const data = mix.getChannelData(c); for (let i = 0; i < data.length; i++) data[i] /= peak; }
   progress?.(1);
   return mix;
 }

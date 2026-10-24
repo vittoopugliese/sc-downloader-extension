@@ -23,7 +23,7 @@ const EFFECTS = [
   ['bitcrusher', 'Bitcrusher', [['bitDepth', 'Bits', 2, 16, 1, ''], ['sampleRateReduction', 'Downsample']]],
 ];
 
-export function mountEffects({ container, effects, changed, pauseForFreeze, report, t }) {
+export function mountEffects({ container, effects, changed, pauseForFreeze, report, t, onAutomationRequest }) {
   const pt = globalThis.SCPlayerToolsText.t;
   const shell = pluginShell({ container, id: 'stem-fx', title: 'FXs · Master', icon: FX_ICON, className: 'stem-fx' });
   shell.setCollapsed(false);
@@ -76,6 +76,11 @@ export function mountEffects({ container, effects, changed, pauseForFreeze, repo
         onInput: apply, onCommit: apply });
       knob.dial.setAttribute('aria-label', `${pt(title)} · ${pt(label)}`);
       knob.dial.dataset.fxSetting = key; knobs.set(key, knob); controls.append(knob.wrap);
+      if (key === name && onAutomationRequest) {
+        knob.dial.addEventListener('contextmenu', event => {
+          event.preventDefault(); event.stopPropagation(); onAutomationRequest(event, name, effects.snapshot()[name]);
+        });
+      }
     }
     if (name === 'reverb') {
       const label = element('label', 'fx-room', pt('Room'));

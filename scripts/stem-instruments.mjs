@@ -1,4 +1,5 @@
 import { createRowMenu } from './stem-row-menu.mjs';
+import { activeTrackFx } from './stem-channel-fx.mjs';
 import { MAX_BARS, MAX_PATTERNS, STEPS_PER_BAR, clamp, createPianoVoices, migrateLegacy, normalizeHits, normalizeInstrument, normalizePattern, normalizeProject, renderPattern, silentPattern } from './stem-pattern-core.mjs';
 
 // Shared state of the channel rack and the piano roll, as in FL Studio: one focused
@@ -97,7 +98,7 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
   // Rendering: placeholders of the right length keep clips valid until audio lands.
   const channelKeys = pattern => [pattern.track, ...Object.keys(pattern.channels)];
   const contentKey = pattern => JSON.stringify([pattern, channelKeys(pattern).map(key => [instrument(key), bufferId(track(key)?.buffer),
-    Object.keys(pattern.channels).length ? playlist.trackEq?.(key) : null]), playlist.bpm()]);
+    Object.keys(pattern.channels).length ? [playlist.trackEq?.(key), playlist.trackFx?.(key)] : null]), playlist.bpm()]);
   function placeholder(pattern) {
     const key = `${pattern.bars}/${playlist.bpm()}`, cached = placeholders.get(pattern.id);
     if (cached?.key === key) return cached.buffer;
@@ -117,7 +118,18 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
       try {
         for (const channel of channelKeys(pattern)) {
           const source = renderer.createBufferSource();
-          source.buffer = await renderPattern({ ...lane(pattern, channel), bars: pattern.bars }, instrument(channel), track(channel)?.buffer, playlist.bpm());
+          let channelBuffer = await renderPattern({ ...lane(pattern, channel), bars: pattern.bars }, instrument(channel), track(channel)?.buffer, playlist.bpm());
+          const fx = playlist.trackFx?.(channel);
+          if (activeTrackFx(fx)) {
+            const processed = await globalThis.SCTempoEffects.renderSample(channelBuffer, fx);
+            // A pattern repeats: fold effect tails into the following pass, retaining its beat length.
+            channelBuffer = renderer.createBuffer(2, base.length, base.sampleRate);
+            for (let c = 0; c < 2; c++) {
+              const input = processed.getChannelData(Math.min(c, processed.numberOfChannels - 1)), output = channelBuffer.getChannelData(c);
+              for (let i = 0; i < input.length; i++) output[i % output.length] += input[i];
+            }
+          }
+          source.buffer = channelBuffer;
           const eq = globalThis.SCParametricEQ?.createGraph(renderer);
           if (eq) { graphs.push(eq); eq.apply(playlist.trackEq?.(channel), false, true); source.connect(eq.input); eq.output.connect(renderer.destination); }
           else source.connect(renderer.destination);
@@ -214,7 +226,7 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
     rateChanged() { swap(); },
     // The playlist changed: tempo re-renders every pattern; new names or sources follow.
     sync() {
-      const key = JSON.stringify(tracks().map(item => [item.key, item.name, bufferId(item.buffer), playlist.trackEq?.(item.key)]));
+      const key = JSON.stringify(tracks().map(item => [item.key, item.name, bufferId(item.buffer), playlist.trackEq?.(item.key), playlist.trackFx?.(item.key)]));
       const tempo = playlist.bpm();
       if (key === trackKey && tempo === bpm) return;
       trackKey = key; bpm = tempo;

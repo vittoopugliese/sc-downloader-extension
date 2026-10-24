@@ -197,13 +197,14 @@
     return buffer;
   }
 
-  async function renderSample(buffer, settings, signal, { maxBytes = 64 * 1024 * 1024 } = {}) {
-    const reverbWet = settings?.bypassed ? 0 : clampPercent(settings?.reverb);
-    const delayWet = settings?.bypassed ? 0 : clampPercent(settings?.delay);
-    const flangerWet = settings?.bypassed ? 0 : clampPercent(settings?.flanger);
-    const phaserWet = settings?.bypassed ? 0 : clampPercent(settings?.phaser);
-    const bitcrusherWet = settings?.bypassed ? 0 : clampPercent(settings?.bitcrusher);
-    const saturationWet = settings?.bypassed ? 0 : clampPercent(settings?.saturation);
+  async function renderSample(buffer, settings, signal, { maxBytes = 64 * 1024 * 1024, automation = {} } = {}) {
+    const wetFor = name => settings?.bypassed ? 0 : Math.max(clampPercent(settings?.[name]), ...(automation[name] || []).map(event => clampPercent(event.value)));
+    const reverbWet = wetFor('reverb');
+    const delayWet = wetFor('delay');
+    const flangerWet = wetFor('flanger');
+    const phaserWet = wetFor('phaser');
+    const bitcrusherWet = wetFor('bitcrusher');
+    const saturationWet = wetFor('saturation');
     const eqSettings = globalThis.SCParametricEQ?.validate(settings?.eq);
     const eqActive = settings?.bypassed !== true && globalThis.SCParametricEQ?.isActive(eqSettings);
     if (!reverbWet && !delayWet && !flangerWet && !phaserWet && !bitcrusherWet && !saturationWet && !eqActive) return buffer;
@@ -220,6 +221,14 @@
       throw new Error("This loop is too large to save as a pad sample.");
     }
     const context = new OfflineAudioContext(Math.min(buffer.numberOfChannels, 2), frameCount, sampleRate);
+    const setWet = (gain, name) => {
+      gain.value = clampPercent(settings?.[name]) / 100 * MAX_SEND[name];
+      for (const event of automation[name] || []) {
+        const value = Math.max(0, Math.min(100, Number(event.value) || 0)) / 100 * MAX_SEND[name];
+        if (event.curve === 'linear') gain.linearRampToValueAtTime(value, Math.max(0, event.at));
+        else gain.setValueAtTime(value, Math.max(0, event.at));
+      }
+    };
     const source = context.createBufferSource();
     source.buffer = buffer;
     const master = context.createGain();
@@ -240,7 +249,7 @@
       tone.type = "lowpass";
       tone.frequency.value = 600 + clampPercent(settings?.reverbTone ?? DEFAULTS.reverbTone) / 100 * 15400;
       const wet = context.createGain();
-      wet.gain.value = reverbWet / 100 * MAX_SEND.reverb;
+      setWet(wet.gain, 'reverb');
       effectSource.connect(preDelay);
       preDelay.connect(reverb);
       reverb.connect(tone);
@@ -256,7 +265,7 @@
       const feedback = context.createGain();
       feedback.gain.value = feedbackValue;
       const wet = context.createGain();
-      wet.gain.value = delayWet / 100 * MAX_SEND.delay;
+      setWet(wet.gain, 'delay');
       effectSource.connect(delay);
       delay.connect(tone);
       tone.connect(feedback);
@@ -274,7 +283,7 @@
       const modulation = context.createGain();
       modulation.gain.value = clampPercent(settings?.flangerDepth ?? DEFAULTS.flangerDepth) / 100 * 0.008;
       const wet = context.createGain();
-      wet.gain.value = flangerWet / 100 * MAX_SEND.flanger;
+      setWet(wet.gain, 'flanger');
       effectSource.connect(delay);
       delay.connect(feedback);
       feedback.connect(delay);
@@ -308,7 +317,7 @@
       stages.at(-1).connect(feedback);
       feedback.connect(stages[0]);
       const wet = context.createGain();
-      wet.gain.value = phaserWet / 100 * MAX_SEND.phaser;
+      setWet(wet.gain, 'phaser');
       stages.at(-1).connect(wet);
       wet.connect(master);
       lfo.start();
@@ -321,7 +330,7 @@
       tone.type = "lowpass";
       tone.frequency.value = 900 + clampPercent(settings?.saturationTone ?? DEFAULTS.saturationTone) / 100 * 15100;
       const wet = context.createGain();
-      wet.gain.value = saturationWet / 100 * MAX_SEND.saturation;
+      setWet(wet.gain, 'saturation');
       effectSource.connect(shaper);
       shaper.connect(tone);
       tone.connect(wet);
@@ -332,7 +341,7 @@
       crusherSource = context.createBufferSource();
       crusherSource.buffer = crushBuffer(buffer, settings?.bitDepth ?? DEFAULTS.bitDepth, settings?.sampleRateReduction ?? DEFAULTS.sampleRateReduction);
       const wet = context.createGain();
-      wet.gain.value = bitcrusherWet / 100 * MAX_SEND.bitcrusher;
+      setWet(wet.gain, 'bitcrusher');
       crusherSource.connect(wet);
       wet.connect(master);
       crusherSource.start();
@@ -454,6 +463,7 @@
     let context = null;
     let ownsContext = false;
     let graph = null;
+    const automated = new Set();
     const graphs = new WeakMap();
     const graphReferences = new Set();
     const outputs = new Map();
@@ -651,10 +661,11 @@
       const contextForGraph = targetGraph.context;
       const active = !bypassed && available;
       for (const name of EFFECT_NAMES) {
+        if (automated.has(name) && active) continue;
         setParam(targetGraph[`${name}Return`].gain, active ? values[name] / 100 * MAX_SEND[name] : 0, contextForGraph);
       }
       if (!targetGraph.ownsSource) return;
-      const useLimiter = active && EFFECT_NAMES.some((name) => values[name] > 0);
+      const useLimiter = active && (automated.size > 0 || EFFECT_NAMES.some((name) => values[name] > 0));
       if (useLimiter && !targetGraph.processedOutput) {
         targetGraph.source.disconnect(targetGraph.destination);
         targetGraph.source.connect(targetGraph.master);
@@ -700,7 +711,7 @@
     }
 
     function ensureEffectConnected(name) {
-      if (!graph || !context || values[name] === 0 || graph.connected[name]) return;
+      if (!graph || !context || (values[name] === 0 && !automated.has(name)) || graph.connected[name]) return;
       if (graph.resetTimers[name] !== undefined) return;
       if (name === "bitcrusher") installBitcrusherWorklet(graph);
       graph.source.connect(graph[EFFECT_NODES[name]]);
@@ -892,7 +903,34 @@
 
     function isDelayFrozen() { return delayFrozen; }
 
+    // Playlist automation uses native AudioParam scheduling, with absolute context
+    // times. It leaves the saved/manual setting intact and can append lookahead windows.
+    function schedule(name, events) {
+      if (!EFFECT_NAMES.includes(name)) throw new RangeError(`Unknown audio effect: ${name}`);
+      if (!events.length || bypassed) return;
+      automated.add(name);
+      if (!graph && !initialize()) return;
+      // Re-enabling from zero must not wait for a pending manual tail flush.
+      if (graph.resetTimers[name] !== undefined) { clearTimeout(graph.resetTimers[name]); delete graph.resetTimers[name]; }
+      ensureEffectConnected(name);
+      updateReturns();
+      const param = graph[`${name}Return`].gain;
+      for (const event of events) {
+        const value = Math.max(0, Math.min(100, Number(event.value) || 0)) / 100 * MAX_SEND[name];
+        const at = Math.max(context.currentTime, Number(event.at) || 0);
+        if (event.curve === 'linear') param.linearRampToValueAtTime(value, at);
+        else param.setValueAtTime(value, at);
+      }
+    }
+
+    function cancelAutomation(at = context?.currentTime || 0) {
+      for (const name of automated) graph?.[`${name}Return`].gain.cancelScheduledValues(at);
+      automated.clear();
+      updateReturns();
+    }
+
     function reset() {
+      cancelAutomation();
       Object.assign(values, DEFAULTS);
       bypassed = false;
       delayFrozen = false;
@@ -957,7 +995,7 @@
       graphReferences.clear(); graph = null; context = null;
     }
 
-    return Object.freeze({ applyPreset, applyToActive, discover, dispose, isDelayFrozen, reset, set, setBypassed, setCharacter, setDelayFreeze, snapshot,
+    return Object.freeze({ applyPreset, applyToActive, discover, dispose, isDelayFrozen, reset, set, setBypassed, setCharacter, setDelayFreeze, snapshot, schedule, cancelAutomation,
       setEqualizer, setEqualizerAllowed, analyseEqualizer, getPlaybackContext, observeOutput });
   }
 

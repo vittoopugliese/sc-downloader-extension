@@ -102,7 +102,7 @@ test('Signalsmith stretch shifts pitch while keeping length, and changes length 
 test('engine edits replace only the edited clip; untouched clips keep sounding', async () => {
   const { createPlaylistEngine } = await import('./stem-playlist-audio.mjs');
   globalThis.AudioContext ||= class {};
-  const param = () => ({ value: 1, setValueAtTime() {}, linearRampToValueAtTime() {}, setTargetAtTime() {}, cancelAndHoldAtTime() {} });
+  const param = () => ({ value: 1, setValueAtTime() {}, linearRampToValueAtTime() {}, setTargetAtTime() {}, cancelAndHoldAtTime() {}, cancelScheduledValues() {} });
   const starts = [], stops = [];
   const context = Object.assign(Object.create(AudioContext.prototype), {
     currentTime: 1,
