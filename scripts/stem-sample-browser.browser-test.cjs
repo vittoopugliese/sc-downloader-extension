@@ -94,7 +94,7 @@ const { chromium } = require('playwright');
     await choose.click();
     await row('tone 2.wav').waitFor();
     assert.equal(await page.evaluate(() => window.pickerOptions.mode), 'read');
-    assert.deepEqual(await names(), ['Big', 'Drums', 'broken.wav', 'tone 2.wav', 'tone 10.wav']);
+    assert.deepEqual(await names(), ['Favorites', 'Big', 'Drums', 'broken.wav', 'tone 2.wav', 'tone 10.wav'], 'Favorites is always the first folder');
     assert.equal(await dialog.locator('.sb-root').textContent(), 'Samples');
     // A click previews on the browser's own context, with a waveform and duration.
     await row('tone 2.wav').click();
@@ -120,6 +120,19 @@ const { chromium } = require('playwright');
     assert.ok(Math.abs((await lastStart()).offset - .5) < .03, 'Right-click starts at the middle');
     await page.mouse.click(waveBox.x + waveBox.width / 2, waveBox.y + waveBox.height / 2);
     await page.waitForFunction(() => window.starts.at(-1).offset === 0);
+    // Clicking the sample already shown plays it again without reading or decoding it.
+    await page.evaluate(() => {
+      window.starts.length = 0; window.viewerTexts = []; window.reads = 0;
+      new MutationObserver(() => window.viewerTexts.push(document.querySelector('.sb-duration').textContent))
+        .observe(document.querySelector('.sb-duration'), { childList: true, characterData: true, subtree: true });
+      const getFile = FileSystemFileHandle.prototype.getFile;
+      FileSystemFileHandle.prototype.getFile = function () { window.reads++; return getFile.call(this); };
+    });
+    await row('tone 2.wav').click();
+    await page.waitForFunction(() => window.starts.length === 1);
+    assert.equal((await lastStart()).offset, 0);
+    assert.equal(await page.evaluate(() => window.reads), 0, 'The same sample is not read again');
+    assert.deepEqual(await page.evaluate(() => window.viewerTexts.filter(text => text !== '0:01.00')), [], 'The viewer never shows the loading state');
     // Fast selection: the previous file never starts after a newer pick.
     await page.evaluate(() => { window.starts.length = 0; });
     await page.evaluate(() => {
@@ -149,7 +162,7 @@ const { chromium } = require('playwright');
     await page.keyboard.press('Space');
     await page.waitForFunction(() => document.querySelector('.sb-controls .sb-icon').getAttribute('aria-pressed') === 'false');
     assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'false');
-    const sliceTool = playlist.getByRole('button', { name: 'Slice tool', exact: true });
+    const sliceTool = page.getByRole('button', { name: 'Slice tool', exact: true, includeHidden: true });
     await page.keyboard.press('c');
     assert.equal(await sliceTool.getAttribute('aria-pressed'), 'false');
     // Enter adds the selected file at the playhead without dragging.
@@ -187,6 +200,38 @@ const { chromium } = require('playwright');
     await page.keyboard.press('End');
     await row('f1499.wav').waitFor();
     assert.equal(await row('f1499.wav').getAttribute('aria-selected'), 'true');
+    // Favorites: F stars a file from any folder; the Favorites folder lists it with its folder.
+    await page.keyboard.press('Backspace');
+    await row('Drums').click();
+    await row('Kick 808.wav').click();
+    await page.waitForFunction(() => document.querySelector('.sb-duration').textContent === '0:02.00');
+    await page.keyboard.press('f');
+    await row('Kick 808.wav').locator('.sb-fav.is-on').waitFor();
+    const favToggle = dialog.locator('.sb-fav-toggle');
+    assert.equal(await favToggle.getAttribute('aria-pressed'), 'true');
+    await page.keyboard.press('Backspace');
+    await row('tone 2.wav').waitFor();
+    await row('tone 10.wav').locator('.sb-fav').click();
+    await row('tone 10.wav').locator('.sb-fav.is-on').waitFor();
+    await row('Favorites').click();
+    await page.waitForFunction(() => document.querySelector('.sb-crumb').textContent === '/Favorites');
+    assert.deepEqual(await names(), ['Kick 808.wav', 'tone 10.wav']);
+    assert.equal(await row('Kick 808.wav').locator('.sb-row-folder').textContent(), 'Drums');
+    assert.ok((await row('Kick 808.wav').getAttribute('class')).includes('is-current'), 'The previewed file is the same sample');
+    await page.evaluate(() => { window.starts.length = 0; window.reads = 0; });
+    await row('Kick 808.wav').click();
+    await page.waitForFunction(() => window.starts.length === 1);
+    assert.equal((await lastStart()).duration, 2);
+    assert.equal(await page.evaluate(() => window.reads), 0, 'A favorite of the shown sample replays without a read');
+    await row('tone 10.wav').click();
+    await page.waitForFunction(() => document.querySelector('.sb-duration').textContent === '0:01.50');
+    await favToggle.click();
+    await page.waitForFunction(() => document.querySelectorAll('.sb-row').length === 1);
+    assert.deepEqual(await names(), ['Kick 808.wav']);
+    await dialog.locator('.sb-list').focus();
+    await page.keyboard.press('Backspace');
+    await row('Favorites').waitFor();
+    assert.equal(await row('Favorites').getAttribute('aria-selected'), 'true');
     // The window moves by its header and stays non-modal.
     const before = await dialog.boundingBox(), title = await dialog.locator('.tool-section-title').boundingBox();
     await page.mouse.move(title.x + 4, title.y + 4); await page.mouse.down();
@@ -226,6 +271,12 @@ const { chromium } = require('playwright');
     assert.equal(await browserButton.getAttribute('aria-pressed'), 'true');
     await row('tone 2.wav').waitFor();
     assert.equal(await page.evaluate(() => window.pickerCalls), 0);
+    // Favorites survive the reload.
+    await row('Favorites').click();
+    await page.waitForFunction(() => document.querySelector('.sb-crumb').textContent === '/Favorites');
+    assert.deepEqual(await names(), ['Kick 808.wav']);
+    await page.keyboard.press('Backspace');
+    await row('tone 2.wav').waitFor();
     const placed = await dialog.boundingBox();
     assert.ok(Math.abs(placed.x - after.x) < 2, 'Position is remembered');
     // Lost permission asks to reconnect with a click.

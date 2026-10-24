@@ -1,5 +1,5 @@
 import { createSamplePreview } from './stem-sample-preview.mjs';
-import { chooseRoot, createFolderCache, readPermission, savedRoot } from './stem-sample-library.mjs';
+import { chooseRoot, collator, createFolderCache, fileAt, readPermission, saveFavorites, savedFavorites, savedRoot } from './stem-sample-library.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
 import { mountModuleWindow } from './stem-module-window.mjs';
 
@@ -8,9 +8,10 @@ import { mountModuleWindow } from './stem-module-window.mjs';
 // others (stem-module-window.mjs): floating and not modal, or docked under the Playlist.
 // Files are only read when previewed or imported. `importSamples` and `importToRack`
 // receive { name, read() } items; read() resolves to { buffer } or { file }.
+// The first row of the root is always Favorites: starred files from any folder of the root.
 export const BROWSER_DRAG_TYPE = 'application/x-stem-browser';
 const ROW = 26, VOLUME_KEY = 'stem-sample-browser-volume';
-const ICONS = Object.freeze({"browser": "browser", "folder": "folder", "audio": "audio", "choose": "folder-add", "up": "up", "refresh": "refresh", "play": "play", "stop": "stop", "add": "add", "rack": "rack", "volume": "volume"});
+const ICONS = Object.freeze({"browser": "browser", "folder": "folder", "audio": "audio", "choose": "folder-add", "up": "up", "refresh": "refresh", "play": "play", "stop": "stop", "add": "add", "rack": "rack", "volume": "volume", "star": "star"});
 const iconMarkup = name => globalThis.SCIcons.html(name, "icon");
 const clock = seconds => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, '0')}`;
 const read = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
@@ -22,6 +23,7 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
   const previewer = createSamplePreview({ onState: renderPlaying });
   const folders = createFolderCache();
   let root = null, access = 'unknown', stack = [], entries = [], active = -1, current = null;
+  let favorites = new Set();
   let listing = null, ticket = 0, loaded = false, dragging = null, back = null, rowFrame = 0, headFrame = 0, arrowTimer = 0, statusTimer = 0, frame = null;
 
   const node = (tag, className = '', text = '') => { const e = document.createElement(tag); if (className) e.className = className; if (text) e.textContent = text; return e; };
@@ -47,7 +49,7 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
   const crumb = node('span', 'sb-crumb'); pathRow.append(upButton, crumb);
   const list = node('div', 'sb-list'); list.tabIndex = 0;
   list.setAttribute('role', 'listbox'); list.setAttribute('aria-label', t('Folders and samples', 'Carpetas y samples'));
-  list.dataset.scdlTooltip = t('Click a file to preview it · drag it onto a track · Enter adds it at the playhead · Space plays or stops · Backspace goes up', 'Clic en un archivo para escucharlo · arrastralo a una pista · Enter lo agrega en el cursor · Espacio reproduce o detiene · Retroceso sube de carpeta');
+  list.dataset.scdlTooltip = t('Click a file to preview it · drag it onto a track · Enter adds it at the playhead · Space plays or stops · F adds to favorites · Backspace goes up', 'Clic en un archivo para escucharlo · arrastralo a una pista · Enter lo agrega en el cursor · Espacio reproduce o detiene · F lo agrega a favoritos · Retroceso sube de carpeta');
   const rows = node('div', 'sb-rows'); list.append(rows);
   const empty = node('div', 'sb-empty'), emptyText = node('p'), emptyAction = node('button', 'sb-action');
   emptyAction.type = 'button'; empty.append(emptyText, emptyAction);
@@ -68,10 +70,12 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
   volume.value = String(Number.isFinite(savedVolume) ? Math.min(100, Math.max(0, savedVolume)) : 80);
   previewer.setVolume(Number(volume.value) / 100);
   volume.oninput = () => { previewer.setVolume(Number(volume.value) / 100); write(VOLUME_KEY, Number(volume.value)); };
+  const favButton = iconButton(ICONS.star, '', () => current && toggleFavorite(current.entry));
+  favButton.classList.add('sb-fav-toggle');
   const addButton = iconButton(ICONS.add, t('Add to playlist at the playhead (Enter)', 'Agregar a la playlist en el cursor (Enter)'), () => current && importEntry(current.entry, current.path));
   const rackButton = iconButton(ICONS.rack, t('Add to channel rack only', 'Agregar solo al channel rack'), () => current && importEntry(current.entry, current.path, true));
   rackButton.hidden = !importToRack;
-  controls.append(playButton, sampleName, duration, volumeLabel, addButton, rackButton);
+  controls.append(playButton, sampleName, duration, volumeLabel, favButton, addButton, rackButton);
   viewer.append(wave, controls);
   const status = node('p', 'sb-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const body = node('div', 'sb-body pl-ui'); body.id = `${id}-body`;
@@ -84,6 +88,32 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
     if (text && !sticky) statusTimer = setTimeout(() => { if (status.textContent === text) status.textContent = ''; }, 8000);
   }
   const pathOf = (name = '') => [...stack.slice(1).map(item => item.name), name].filter(Boolean).join('/');
+  // Favorites rows carry their own root-relative path; other rows live in the open folder.
+  const entryPath = entry => entry.path ?? pathOf(entry.name);
+  const isCurrent = entry => entry.kind === 'file' && current?.path === entryPath(entry);
+  const favoritesLabel = t('Favorites', 'Favoritos');
+  const favoritesFolder = () => ({ kind: 'directory', name: favoritesLabel, favorites: true });
+  const inFavorites = () => !!stack.at(-1)?.favorites;
+  function favoriteEntries() {
+    return [...favorites].map(path => {
+      const cut = path.lastIndexOf('/'), name = path.slice(cut + 1);
+      return { kind: 'file', name, path, folder: cut > 0 ? path.slice(0, cut) : '',
+        handle: { kind: 'file', name, getFile: async () => (await fileAt(root, path)).getFile() } };
+    }).sort((a, b) => collator.compare(a.name, b.name) || collator.compare(a.path, b.path));
+  }
+  function toggleFavorite(entry) {
+    if (entry?.kind !== 'file') return;
+    const path = entryPath(entry), on = !favorites.has(path);
+    if (on) favorites.add(path); else favorites.delete(path);
+    saveFavorites(favorites);
+    setStatus(on ? t(`«${entry.name}» added to favorites.`, `«${entry.name}» agregado a favoritos.`)
+      : t(`«${entry.name}» removed from favorites.`, `«${entry.name}» quitado de favoritos.`));
+    if (inFavorites()) {
+      const keep = active; entries = favoriteEntries();
+      if (entries.length) setActive(Math.min(keep, entries.length - 1), { reveal: false }); else showFolder();
+    } else renderRows();
+    renderViewer();
+  }
   function errorText(error) {
     if (error?.message === 'too-large') return t('Files must be smaller than 64 MiB.', 'Los archivos deben pesar menos de 64 MiB.');
     if (error?.name === 'EncodingError') return t('This file cannot be decoded.', 'Este archivo no se puede decodificar.');
@@ -123,6 +153,7 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
     if (typeof window.showDirectoryPicker !== 'function') { access = 'unsupported'; renderAccess(); return; }
     root = await savedRoot();
     if (!root) { access = 'none'; renderAccess(); return; }
+    favorites = new Set(await savedFavorites());
     try { access = await readPermission(root) === 'granted' ? 'granted' : 'prompt'; } catch { access = 'prompt'; }
     stack = [{ name: root.name, handle: root }]; renderAccess();
     if (access === 'granted') await showFolder();
@@ -132,6 +163,8 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
     try { handle = await chooseRoot(); }
     catch (error) { if (error.name !== 'AbortError') setStatus(errorText(error)); return; }
     stopPreview(); previewer.clear(); folders.clear(); current = null; renderViewer();
+    // Favorites belong to one root: another folder starts with none.
+    if (!root || !(await root.isSameEntry(handle).catch(() => false))) { favorites = new Set(); saveFavorites(favorites); }
     root = handle; stack = [{ name: handle.name, handle }]; access = 'granted'; renderAccess();
     await showFolder(); list.focus({ preventScroll: true });
   }
@@ -142,24 +175,32 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
     access = 'granted'; renderAccess(); await showFolder(); list.focus({ preventScroll: true });
   }
 
-  // Lists the folder at the top of the stack; `select` names the entry to highlight.
+  // Lists the folder at the top of the stack; `select` matches the entry to highlight.
   async function showFolder(select = null) {
     listing?.abort();
     const controller = listing = new AbortController(), folder = stack.at(-1), key = pathOf() || '/';
     crumb.textContent = `/${pathOf()}`; crumb.dataset.scdlTooltip = `${root.name}/${pathOf()}`;
     upButton.disabled = stack.length < 2;
     entries = []; active = -1; list.scrollTop = 0; scheduleRows();
+    if (folder.favorites) {
+      listing = null; entries = favoriteEntries();
+      const index = select ? entries.findIndex(select) : -1;
+      setActive(index >= 0 ? index : entries.length ? 0 : -1);
+      setStatus(entries.length ? '' : t('No favorites yet. Star a sample (F) to keep it here.', 'Todavía no hay favoritos. Marcá un sample con la estrella (F) para tenerlo acá.'), !entries.length);
+      return;
+    }
+    const withFavorites = items => stack.length === 1 ? [favoritesFolder(), ...items] : items;
     const slow = setTimeout(() => setStatus(t('Reading folder…', 'Leyendo carpeta…'), true), 150);
     try {
       const result = await folders.list(key, folder.handle, { signal: controller.signal, onChunk(partial) {
         if (listing !== controller) return;
-        entries = partial; scheduleRows(); setStatus(`${t('Reading folder…', 'Leyendo carpeta…')} ${partial.length}`, true);
+        entries = withFavorites(partial); scheduleRows(); setStatus(`${t('Reading folder…', 'Leyendo carpeta…')} ${partial.length}`, true);
       } });
       if (listing !== controller) return;
-      entries = result;
-      const index = select ? entries.findIndex(entry => entry.name === select) : -1;
+      entries = withFavorites(result);
+      const index = select ? entries.findIndex(select) : -1;
       setActive(index >= 0 ? index : entries.length ? 0 : -1);
-      setStatus(entries.length ? '' : t('No folders or audio files here.', 'No hay carpetas ni archivos de audio acá.'), !entries.length);
+      setStatus(result.length ? '' : t('No folders or audio files here.', 'No hay carpetas ni archivos de audio acá.'), !result.length);
     } catch (error) {
       if (error.name === 'AbortError' || listing !== controller) return;
       setStatus('');
@@ -174,9 +215,16 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
       setStatus(errorText(error));
     } finally { clearTimeout(slow); if (listing === controller) listing = null; }
   }
-  function openFolder(entry) { stack.push({ name: entry.name, handle: entry.handle }); showFolder(); }
-  function parent() { if (stack.length < 2) return; const child = stack.pop(); showFolder(child.name); }
-  function refresh() { if (access !== 'granted' || !stack.length) return; folders.forget(pathOf() || '/'); showFolder(entries[active]?.name); }
+  const matching = item => item && (entry => !!entry.favorites === !!item.favorites && entry.name === item.name && entry.path === item.path);
+  function openFolder(entry) { stack.push({ name: entry.name, handle: entry.handle, favorites: entry.favorites }); showFolder(); }
+  function parent() { if (stack.length < 2) return; const child = stack.pop(); showFolder(matching(child)); }
+  function refresh() {
+    if (access !== 'granted' || !stack.length) return;
+    // A file saved again under the same name is decoded again on its next click.
+    if (current) current.stale = true;
+    if (!inFavorites()) folders.forget(pathOf() || '/');
+    showFolder(matching(entries[active]));
+  }
 
   // Only the visible rows exist; folders with thousands of files stay light.
   function scheduleRows() { rowFrame ||= requestAnimationFrame(renderRows); }
@@ -191,10 +239,18 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
       row.id = `${id}-row-${i}`; row.dataset.index = String(i); row.style.top = `${i * ROW}px`;
       row.setAttribute('role', 'option'); row.setAttribute('aria-selected', String(i === active));
       row.setAttribute('aria-setsize', String(entries.length)); row.setAttribute('aria-posinset', String(i + 1));
-      row.classList.toggle('is-current', entry.kind === 'file' && current?.entry === entry);
-      row.innerHTML = iconMarkup(entry.kind === 'directory' ? ICONS.folder : ICONS.audio);
-      const label = node('span', '', entry.name); row.dataset.scdlTooltip = entry.name; row.append(label);
-      if (entry.kind === 'file') row.draggable = true;
+      row.classList.toggle('is-current', isCurrent(entry));
+      row.classList.toggle('is-favorites', !!entry.favorites);
+      row.innerHTML = iconMarkup(entry.favorites ? ICONS.star : entry.kind === 'directory' ? ICONS.folder : ICONS.audio);
+      const label = node('span', '', entry.name); row.dataset.scdlTooltip = entry.path || entry.name; row.append(label);
+      if (entry.folder) row.append(node('small', 'sb-row-folder', entry.folder));
+      if (entry.kind === 'file') {
+        row.draggable = true;
+        const on = favorites.has(entryPath(entry)), star = node('i', `sb-fav${on ? ' is-on' : ''}`);
+        star.innerHTML = iconMarkup(ICONS.star);
+        star.dataset.scdlTooltip = on ? t('Remove from favorites (F)', 'Quitar de favoritos (F)') : t('Add to favorites (F)', 'Agregar a favoritos (F)');
+        row.append(star);
+      }
       shown.push(row);
     }
     rows.replaceChildren(...shown);
@@ -215,12 +271,14 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
   rows.addEventListener('click', event => {
     const index = rowOf(event); if (index < 0) return;
     const entry = entries[index]; setActive(index, { reveal: false }); list.focus({ preventScroll: true });
-    if (entry.kind === 'directory') openFolder(entry); else previewEntry(entry);
+    if (entry.kind === 'directory') openFolder(entry);
+    else if (event.target.closest('.sb-fav')) toggleFavorite(entry);
+    else playEntry(entry);
   });
   rows.addEventListener('dragstart', event => {
     const entry = entries[rowOf(event)];
     if (entry?.kind !== 'file') { event.preventDefault(); return; }
-    dragging = { entry, path: pathOf(entry.name) };
+    dragging = { entry, path: entryPath(entry) };
     event.dataTransfer.effectAllowed = 'copy';
     event.dataTransfer.setData(BROWSER_DRAG_TYPE, entry.name);
     event.dataTransfer.setData('text/plain', entry.name);
@@ -235,13 +293,14 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
       // Holding an arrow only previews where it stops.
       clearTimeout(arrowTimer);
       const next = entries[active];
-      if (next?.kind === 'file') arrowTimer = setTimeout(() => { if (entries[active] === next) previewEntry(next); }, 120);
+      if (next?.kind === 'file') arrowTimer = setTimeout(() => { if (entries[active] === next) playEntry(next); }, 120);
     } else if ((event.key === 'Enter' || event.key === 'ArrowRight') && entry?.kind === 'directory') { event.preventDefault(); openFolder(entry); }
-    else if (event.key === 'Enter' && entry?.kind === 'file') { event.preventDefault(); if (!event.repeat) importEntry(entry, pathOf(entry.name)); }
+    else if (event.key === 'Enter' && entry?.kind === 'file') { event.preventDefault(); if (!event.repeat) importEntry(entry, entryPath(entry)); }
+    else if (event.key.toLowerCase() === 'f' && !event.ctrlKey && !event.metaKey && !event.altKey && entry?.kind === 'file') { event.preventDefault(); if (!event.repeat) toggleFavorite(entry); }
     else if (event.key === 'Backspace' || event.key === 'ArrowLeft') { event.preventDefault(); parent(); }
     else if (event.key === ' ') {
       event.preventDefault(); if (event.repeat) return;
-      if (previewer.playing()) stopPreview(); else if (entry?.kind === 'file') previewEntry(entry);
+      if (previewer.playing()) stopPreview(); else if (entry?.kind === 'file') playEntry(entry);
     }
   });
   // The panel owns its keys: Space, pad letters and Playlist hotkeys do not leak out.
@@ -252,8 +311,14 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
     event.stopPropagation();
   });
 
+  // The sample already in the viewer plays again from the start: no read, no decode,
+  // no waveform redraw. Any other file is loaded first.
+  function playEntry(entry) {
+    if (!isCurrent(entry) || current.error || current.stale) { previewEntry(entry); return; }
+    if (current.sample) playFrom(0);
+  }
   async function previewEntry(entry, play = true) {
-    const mine = ++ticket, path = pathOf(entry.name);
+    const mine = ++ticket, path = entryPath(entry);
     previewer.stop();
     current = { entry, path, sample: null, loading: true, error: '' }; renderViewer(); renderRows();
     try {
@@ -311,7 +376,12 @@ export function mountSampleBrowser({ t, home, importSamples, importToRack, onTog
     sampleName.textContent = current ? current.entry.name : t('No sample selected', 'Ningún sample seleccionado');
     sampleName.dataset.scdlTooltip = current?.path || '';
     duration.textContent = sample ? clock(sample.buffer.duration) : current?.loading ? '…' : '';
-    playButton.disabled = !current || !!current.error; rackButton.disabled = addButton.disabled = !current || current.entry.kind !== 'file';
+    playButton.disabled = !current || !!current.error;
+    const starred = !!current && favorites.has(current.path);
+    const starLabel = starred ? t('Remove from favorites (F)', 'Quitar de favoritos (F)') : t('Add to favorites (F)', 'Agregar a favoritos (F)');
+    favButton.disabled = !current; favButton.setAttribute('aria-pressed', String(starred)); favButton.classList.toggle('is-on', starred);
+    favButton.dataset.scdlTooltip = starLabel; favButton.setAttribute('aria-label', starLabel);
+    rackButton.disabled = addButton.disabled = !current || current.entry.kind !== 'file';
     viewer.classList.toggle('is-error', !!current?.error);
     drawWave();
   }

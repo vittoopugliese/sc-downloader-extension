@@ -2,7 +2,7 @@
 // IndexedDB, apart from the read/write folder used for saved separations.
 const AUDIO = /\.(wav|mp3|flac|m4a|ogg|opus|aac)$/i;
 export const isAudioName = name => AUDIO.test(name);
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+export const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 let database;
 function db() {
@@ -32,6 +32,22 @@ export async function chooseRoot() {
   const handle = await window.showDirectoryPicker({ id: 'stem-samples', mode: 'read' });
   await preference('readwrite', store => store.put(handle, 'root')).catch(() => {});
   return handle;
+}
+// Favorites are file paths relative to the root ("Drums/Kick.wav"), so they follow the
+// root's permission and never hold handles of their own.
+export async function savedFavorites() {
+  try { const paths = await preference('readonly', store => store.get('favorites')); return Array.isArray(paths) ? paths.filter(p => typeof p === 'string') : []; }
+  catch { return []; }
+}
+export async function saveFavorites(paths) {
+  await preference('readwrite', store => store.put([...paths], 'favorites')).catch(() => {});
+}
+// Walks a root-relative path to its file handle. Missing parts throw NotFoundError.
+export async function fileAt(root, path) {
+  const parts = path.split('/'), name = parts.pop();
+  let folder = root;
+  for (const part of parts) folder = await folder.getDirectoryHandle(part);
+  return folder.getFileHandle(name);
 }
 // 'granted', 'prompt' or 'denied'. Requesting needs a user gesture.
 export async function readPermission(handle, request = false) {
