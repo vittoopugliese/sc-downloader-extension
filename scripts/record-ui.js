@@ -2,6 +2,13 @@
 (() => {
   "use strict";
   const pt = (source, ...values) => globalThis.SCPlayerToolsText?.t(source, ...values) ?? source.replace(/\$(\d+)/g, (match, index) => values[index - 1] ?? match);
+  // YouTube enforces Trusted Types. The policy stays private to this file and
+  // only receives the extension's own markup.
+  const trustedHtml = (() => {
+    let policy = null;
+    try { policy = globalThis.trustedTypes?.createPolicy?.("seib-recorder", { createHTML: (value) => value }); } catch {}
+    return (value) => policy ? policy.createHTML(value) : value;
+  })();
   // variant "pill": compact, always open, for the Likes Explorer. `recorder`
   // replaces the built-in one; `extraActions` are buttons added to the toolbar.
   function mount({ container, effects, onCollapsedChange, moduleUrl, recorder: injected, variant, extraActions = [], onChange, maxSeconds, emptyText }) {
@@ -21,7 +28,7 @@
         <canvas class="record-canvas" tabindex="0" role="slider" aria-label="Recorded sample position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" data-scdl-tooltip="Wheel to zoom at the cursor. Drag or Shift + wheel to scroll. Click to seek. Keyboard: + / - zoom, Shift + arrows scroll, 0 resets the view."></canvas>
         <div class="record-empty">${emptyText ? "" : "Record your mix<br>Track · pads · FX · EQ"}</div>
       </div>`;
-    section.innerHTML = `<style>
+    section.innerHTML = trustedHtml(`<style>
       ${pill ? "" : collapsible.styles}
       .record-section { overflow:hidden; border:1px solid #343434; border-radius:11px; background:#151515; color:#eee; }
       .record-body { padding:2px 9px 9px; }
@@ -58,7 +65,7 @@
     ${pill ? `<div class="record-bar">${transport}</div>
     <div class="record-body">${stage}</div>` : `${collapsible.header({ title: pt("Record"), bodyId: "scdl-record-body", expanded: false, toggleClass: "record-toggle", icon: '<sc-icon name="record" class="tool-section-icon record-icon" aria-hidden="true"></sc-icon>', actionsClass: "record-toolbar", actions: transport })}
     <div class="record-body" id="scdl-record-body" hidden>${stage}
-    </div>`}`;
+    </div>`}`);
     globalThis.SCPlayerToolsText?.localize(section);
     const find = name => section.querySelector(`.record-${name}`);
     if (emptyText) find("empty").textContent = emptyText;

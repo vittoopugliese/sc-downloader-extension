@@ -2,6 +2,13 @@
 (() => {
   "use strict";
   const pt = (source, ...values) => globalThis.SCPlayerToolsText?.t(source, ...values) ?? source.replace(/\$(\d+)/g, (match, index) => values[index - 1] ?? match);
+  // YouTube enforces Trusted Types. The policy stays private to this file and
+  // only receives the extension's own markup.
+  const trustedHtml = (() => {
+    let policy = null;
+    try { policy = globalThis.trustedTypes?.createPolicy?.("seib-eq", { createHTML: (value) => value }); } catch {}
+    return (value) => policy ? policy.createHTML(value) : value;
+  })();
   const HEART_ICON = `<sc-icon name="bypass" aria-hidden="true"></sc-icon>`;
   function mount({ container, effects, authorize, isAllowed, onChange, onCollapsedChange, pro = true }) {
     const api = globalThis.SCParametricEQ;
@@ -11,7 +18,7 @@
     section.id = "scdl-parametric-eq";
     section.setAttribute("aria-label", pt("Parametric EQ"));
     const bodyId = "scdl-parametric-eq-body";
-    section.innerHTML = `
+    section.innerHTML = trustedHtml(`
       <style>
         ${collapsible.styles}
         .peq { margin-top:7px; border:1px solid #343434; border-radius:11px; background:#151515; color:#eee; }
@@ -46,7 +53,7 @@
       ${collapsible.header({ title: pt("Parametric EQ"), bodyId, expanded: true, toggleClass: "peq-toggle", icon: '<sc-icon name="eq" class="tool-section-icon peq-icon" aria-hidden="true"></sc-icon>', actions: `<button type="button" class="peq-bypass peq-header-bypass" aria-pressed="false" aria-label="Bypass EQ" title="Bypass EQ only">${HEART_ICON}</button><button type="button" class="peq-add peq-header-control" aria-label="Add EQ point" title="Add a parametric EQ point"><sc-icon name="add" aria-hidden="true"></sc-icon></button><button type="button" class="peq-clip peq-header-control" aria-pressed="false" aria-label="Enable hard clip" title="Enable hard clipping after EQ"><sc-icon name="clip" aria-hidden="true"></sc-icon></button><button type="button" class="peq-reset peq-header-control" aria-label="Reset EQ" title="Reset all EQ points and clipping"><sc-icon name="close" class="peq-cross-icon" aria-hidden="true"></sc-icon></button><span class="peq-pro">PRO</span>` })}
       <div class="peq-body" id="${bodyId}">
         <div class="peq-stage"><canvas class="peq-canvas" aria-label="Equalizer response and live frequency spectrum. Double click near the left or right edge for a high-pass or low-pass cutoff. Drag to edit; scroll on a point to adjust Q; double click a point to delete it."></canvas><p class="peq-message" role="status" aria-live="polite" hidden></p></div>
-      </div>`;
+      </div>`);
     globalThis.SCPlayerToolsText?.localize(section);
     container.append(section);
     section.querySelector('.peq-pro').hidden = !pro;
