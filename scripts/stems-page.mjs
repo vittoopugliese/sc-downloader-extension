@@ -856,7 +856,8 @@ function channelForTrack(track, source) {
 // Stems chosen in the extraction window. The separation keeps all four WAVs; the others
 // just get no track. `muteOriginal` is the window's "when done" choice.
 let stemChoice = [...STEMS], muteOriginal = true, removeOriginal = false;
-function startSession(saved = null, samples = []) {
+// `keep` (same project only) carries the user's samples and clips over.
+function startSession(saved = null, samples = [], keep = false) {
   if (saved) removeOriginal = saved.original?.removed === true;
   if (saved) stemChoice = Array.isArray(saved.stems) && saved.stems.some(stem => STEMS.includes(stem)) ? STEMS.filter(stem => saved.stems.includes(stem)) : [...STEMS];
   const sources = [original, ...buffers].map((buffer, index) => {
@@ -868,7 +869,7 @@ function startSession(saved = null, samples = []) {
   // The stem mix lives in `states` (as before the playlist); the arrangement adds clips.
   const tracks = saved?.states && [...STEMS.map((stem, i) => ({ stem, gain: saved.states[i]?.gain, mute: saved.states[i]?.muted === true })),
     ...(saved.original ? [{ stem: 'original', gain: saved.original.gain, mute: saved.original.muted === true }] : [])];
-  playlist.setSession({ sources, saved: saved && { ...saved.playlist, tracks }, samples });
+  playlist.setSession({ sources, saved: saved && { ...saved.playlist, tracks }, samples, keep });
   $('original-waveform').hidden = true; zoomTools.hidden = true;
   renderChannels();
 }
@@ -877,9 +878,9 @@ const MAX_SAMPLE_SECONDS = 5 * 60 + .01, sampleWavs = new WeakMap();
 const sampleWav = buffer => { if (!sampleWavs.has(buffer)) sampleWavs.set(buffer, wavOf(buffer)); return sampleWavs.get(buffer); };
 const wavOf = buffer => new Blob([encodeWav([buffer.getChannelData(0), buffer.getChannelData(Math.min(1, buffer.numberOfChannels - 1))], buffer.sampleRate)], { type: 'audio/wav' });
 // Before separation the playlist holds the source audio alone.
-function showOriginal() {
+function showOriginal(keep = false) {
   wavs = []; removeOriginal = false;
-  startSession(); syncLoop();
+  startSession(null, [], keep); syncLoop();
 }
 function disposeResults() {
   effectsUI.cancelFreeze(); mixOutput.restoreEffects(null); effectsUI.reset();
@@ -899,7 +900,7 @@ function applySettings(saved) {
   keepTone = !!saved?.keepTone;
   renderTempo(); playlist.setRate(rate);
 }
-function showResults(result, saved = null, samples = []) {
+function showResults(result, saved = null, samples = [], keep = false) {
   disposeResults();
   applySettings(saved);
   outputs = result.outputs;
@@ -909,7 +910,7 @@ function showResults(result, saved = null, samples = []) {
   outputs = [];
   // Patterns first: the saved playlist holds their clips.
   instruments.restore(saved);
-  startSession(saved, samples); instruments.focus(stemChoice[0]);
+  startSession(saved, samples, keep); instruments.focus(stemChoice[0]);
   syncLoop();
 }
 
@@ -988,7 +989,8 @@ async function separate(options) {
       if (target.original) {
         stemChoice = STEMS.filter(stem => options.stems.includes(stem)); muteOriginal = options.when === 'mute';
         removeOriginal = options.when === 'delete';
-        showResults(result); extractDialog.close();
+        // Same project: the samples and clips the user added stay.
+        showResults(result, null, [], true); extractDialog.close();
         status(`${text('complete')} ${formatOneDecimal.format(result.seconds)} s.`, 'success');
         return;
       }
@@ -1044,7 +1046,7 @@ async function renderJobLoop() {
     original = audioBuffer([decoded.getChannelData(0), decoded.getChannelData(Math.min(1, decoded.numberOfChannels - 1))]);
     revealAudition();
     mountWaveform($('original-waveform'), original, `${text('original')} · ${text('position')}`);
-    showOriginal();
+    showOriginal(true);
   }
 }
 // There is something to separate: audio in the session, or a loop still to render.

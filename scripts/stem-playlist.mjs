@@ -1397,17 +1397,20 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   // Replace the host's channels (original and stems); user tracks with clips stay.
   // `saved` restores channel mix and clips from a preset; invalid data falls back.
   // `samples` are the imported samples a preset stored: [{ id, name, group?, buffer }].
-  function setSession({ sources, saved = null, samples = [] }) {
+  // `keep` carries the user's samples and clips over: only the same project changes its
+  // channels (separating its original). Opening or starting a project starts clean, as in
+  // FL Studio: what the project did not save is not in it.
+  function setSession({ sources, saved = null, samples = [], keep = false }) {
     stop(true);
-    for (const old of assets.values()) if (old.session) cache.forget(old.id);
-    const next = new Map([...assets].filter(([, asset]) => !asset.session));
+    for (const old of assets.values()) if (old.session || (!keep && !old.pattern)) cache.forget(old.id);
+    const next = new Map([...assets].filter(([, asset]) => !asset.session && (keep || asset.pattern)));
     sources = sources.filter(source => !saved?.deletedSources?.includes(source.id));
     for (const source of sources) next.set(source.id, { id: source.id, name: source.name, buffer: source.buffer, version: 0, session: true });
     for (const sample of samples) if (!next.has(sample.id)) next.set(sample.id, { id: sample.id, name: String(sample.name || 'Sample').slice(0, 160), buffer: sample.buffer, version: 0,
       ...(typeof sample.group === 'string' && sample.group ? { group: sample.group.slice(0, 64) } : {}) });
-    const userClips = state.clips.filter(clip => next.get(clip.asset) && !next.get(clip.asset).session && !trackOf(clip.track)?.stem);
-    const userTracks = state.tracks.filter(track => !track.stem && userClips.some(clip => clip.track === track.id));
-    userTracks.push(state.tracks.find(track => !track.stem && !userTracks.includes(track)) ||
+    const userClips = keep ? state.clips.filter(clip => next.get(clip.asset) && !next.get(clip.asset).session && !trackOf(clip.track)?.stem) : [];
+    const userTracks = keep ? state.tracks.filter(track => !track.stem && userClips.some(clip => clip.track === track.id)) : [];
+    userTracks.push((keep && state.tracks.find(track => !track.stem && !userTracks.includes(track))) ||
       { id: uid(), name: `${t('Track', 'Pista')} ${userTracks.length + 1}`, gain: 1, mute: false, solo: false });
     const build = restore => {
       const tracks = sources.filter(source => !saved?.removedTracks?.includes(`track-${source.stem}`)).map(source => {

@@ -216,6 +216,20 @@ module.exports = async function verifyInstruments(page) {
   assert.equal(await piano.locator('.piano-note').count(), 2);
   { await page.locator('.pl-stem-head[data-stem=bass] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
   assert.equal(await rack.locator('.rack-grid .rack-step.is-on').count(), 2);
+
+  // Opening a project replaces the session, as in FL Studio: a sample imported after the
+  // last save does not travel into the project that opens next.
+  await page.locator('#save-project').click({ modifiers: ['Shift'] }); await page.locator('#save-name').fill('Other');
+  await page.locator('#save-confirm').click();
+  await page.waitForFunction(id => document.querySelector('#stem-presets').value.startsWith('stem-') && document.querySelector('#stem-presets').value !== id, id);
+  await page.locator('#transport input[type=file]').setInputFiles({ name: 'unsaved.wav', mimeType: 'audio/wav', buffer: kick });
+  await playlist.locator('.pl-shelf button', { hasText: 'unsaved.wav' }).waitFor();
+  await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
+  await page.locator('#unsaved-discard').click();
+  await playlist.locator('.pl-shelf button', { hasText: 'unsaved.wav' }).waitFor({ state: 'detached' });
+  await playlist.locator('.pl-shelf button', { hasText: '808.wav' }).waitFor();
+  await page.waitForFunction(() => ![...document.querySelectorAll('.rack-channel-name')].some(node => node.textContent === 'unsaved.wav'));
+  assert.equal(await rack.locator('.rack-channel-name', { hasText: 'unsaved.wav' }).count(), 0, 'The unsaved sample left the channel rack too');
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Plugins fit ${width}px`);
