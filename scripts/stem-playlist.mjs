@@ -9,6 +9,10 @@ import { createMetronome } from './stem-metronome.mjs';
 import { createKnob } from './ui-knob.mjs';
 import { createDragNumber } from './ui-drag-number.mjs';
 import { toast, dismissToast } from './ui-toast.mjs';
+import { mountActionDialog } from './stem-action-dialog.mjs';
+import { normalizationGain } from './stem-clip-processing.mjs';
+import { AUTOMATION_PARAMETERS, newAutomationClip } from './stem-automation.mjs';
+import { mountAutomationClip } from './stem-automation-ui.mjs';
 
 const MIN_ZOOM = 8, MAX_ZOOM = 600;
 // The workspace header's stem palette; user tracks continue in warm tints.
@@ -116,20 +120,22 @@ export function contextMenu(event, items) {
 // the host: their Duplicate/Delete go through `onPatternAction(action, assetId)`.
 // `onSeparate(clip)` adds "Extract stems…" to the menu of every audio clip; the host
 // separates it and hands the result back with `addStemTracks`.
-export function mountPlaylist({ container, windows = [], windowHome = null, toolbarHost = container, inspectorHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect, onRackSample, onSeparate }) {
+export function mountPlaylist({ container, windows = [], windowHome = null, toolbarHost = container, inspectorHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, masterEffects, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect, onRackSample, onSeparate }) {
   const es = document.documentElement.lang === 'es', t = (en, spanish) => es ? spanish : en;
   let state = emptyArrangement(), assets = new Map(), selected = null, extra = new Set(), zoom = 48, viewBpm = 120, snap = .5;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
   let drag = null, ctrlClick = null, frame, operating = false, liveBefore = null, loopRange = null, marker = 0, rate = 1, rateTimer = 0;
   const isPattern = clip => !!assets.get(clip.asset)?.loop;
   // What the engine and the export hear: one plain clip per pass of a looping clip.
-  const playbackState = () => ({ ...state, clips: state.clips.flatMap(clip => {
+  const playbackState = () => ({ ...state, automation: (state.automation || []).filter(clip => !trackOf(clip.track)?.mute), clips: state.clips.flatMap(clip => {
     const asset = assets.get(clip.asset);
     return asset?.loop ? loopSegments(clip, asset.buffer.duration) : [clip];
   }) });
   // Every loaded sample is available to the rack, even without a playlist clip.
   const importedSamples = () => [...assets.values()].filter(asset => !asset.session && !asset.pattern);
   const rowViews = new Map(), clipViews = new Map(), analyzing = new WeakSet();
+  const automationViews = new Map(), actionDialog = mountActionDialog();
+  let selectedAutomation = null;
   let paintFrame = 0, dragAudio = 0, shelfKey = '', editMode = 'move', reported = null, slicing = false, slice = null;
   // Channel header width comes from CSS (--pl-head), narrower on phones.
   let TRACK_HEAD = 165;
@@ -149,11 +155,12 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const isChosen = id => id === selected || extra.has(id);
   const chosen = () => state.clips.filter(c => isChosen(c.id));
   const pick = id => {
+    selectedAutomation = null;
     selected = id; extra.clear(); timeSelection = null;
     const clip = picked();
     if (clip) { drawSource = { ...clip }; activeTrack = clip.track; }
   };
-  const copy = () => structuredClone({ ...state, sampleIds: importedSamples().map(asset => asset.id) });
+  const copy = () => structuredClone({ ...state, sampleIds: [...assets.values()].filter(asset => !asset.pattern).map(asset => asset.id) });
   const trackOf = id => state.tracks.find(track => track.id === id);
   const color = track => CHANNEL_COLORS[track?.stem] || track?.color || EXTRA_COLORS[Math.max(0, state.tracks.filter(item => !item.stem).indexOf(track)) % EXTRA_COLORS.length];
   const clock = seconds => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, '0')}`;
@@ -251,7 +258,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     if (bpm === state.bpm) return;
     const before = copy(), factor = state.bpm / bpm;
     try { retimeClips(state, bpm, isPattern, { moveAudio: !keepTime }); validateArrangement(state, assets); }
-    catch { state = before; report(t('At that tempo the playlist runs past 5 minutes.', 'Con ese tempo la playlist pasa de 5 minutos.')); draw(); return; }
+    catch { state = before; report(t('That tempo exceeds the 5-minute arrangement or 0.25–4× clip speed limit.', 'Ese tempo supera el límite de 5 minutos del arreglo o de velocidad de los clips (0,25–4×).')); draw(); return; }
     if (!tempoUndo || history.at(-1) !== tempoUndo) {
       history.push(before); if (history.length > 50) history.shift(); future = []; pruneGraveyard(); tempoUndo = history.at(-1);
     }
@@ -336,31 +343,13 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     gridButton.dataset.scdlTooltip = `${t('Grid', 'Grilla')}: ${label} (G): ${t('click to switch 1/8 → 1/16 → free. Clips, edges, cuts, selections and the ruler stick to it; hold Alt while dragging to place freely.', 'clic para alternar 1/8 → 1/16 → libre. Clips, bordes, cortes, selecciones y la regla se pegan a ella; mantené Alt al arrastrar para moverte libre.')}`;
   }
   renderGrid();
-  // Global editing modes, like the grid: choosing a mode never edits a clip. The
-  // next gesture applies it to its target, with the clip's result saved for playback.
-  function modeToggle({ name, key, color, className, choices, current, select }) {
-    const choose = value => { select(value); render(); };
-    const control = toolButton({ icon: '', name, key, keys: [key.toLowerCase()], color }, () => {
-      choose(choices[(choices.findIndex(choice => choice.value === current()) + 1) % choices.length].value);
-    });
-    control.classList.add('pl-mode-toggle', className);
-    control.setAttribute('aria-keyshortcuts', [key, ...choices.map(choice => choice.key)].join(' '));
-    for (const choice of choices) hotkeys.set(choice.key, { control, action: () => choose(choice.value) });
-    function render() {
-      const choice = choices.find(choice => choice.value === current());
-      setButtonContent(control, { icon: choice.icon });
-      control.dataset.mode = choice.value;
-      control.setAttribute('aria-label', `${name}: ${choice.label}`);
-      control.dataset.scdlTooltip = `${name}: ${choice.label} (${choice.key}) · ${choice.detail} · ${key}: ${t('click or press to cycle', 'clic o tecla para alternar')} · ${choices.map(item => `${item.key}: ${item.label}`).join(' / ')}`;
-    }
-    render(); return control;
-  }
-  const editModeButton = modeToggle({ name: t('Edit tool', 'Herramienta'), key: 'E', color: '#ffd166', className: 'pl-edit-mode',
-    current: () => editMode, select: value => { editMode = value; setTool('draw'); }, choices: [
-      { value: 'move', icon: ICONS.moveTool, label: t('Move / trim', 'Mover / recortar'), key: '1', detail: t('drag clips to move them, edges to trim them on any track', 'arrastrá clips para moverlos y bordes para recortarlos en cualquier pista') },
-      { value: 'slip', icon: ICONS.slipTool, label: t('Slip content', 'Deslizar audio'), key: '2', detail: t('drag the audio inside a clip without moving its timeline edges', 'arrastrá el audio dentro de un clip sin mover sus bordes en la playlist') },
-      { value: 'stretch', icon: ICONS.stretchTool, label: t('Stretch edge', 'Estirar borde'), key: '3', detail: t('drag a clip’s right edge to change its speed using that clip’s Stretch / Resample setting. The clip then sticks to the grid: when the BPM changes, it keeps its length in bars', 'arrastrá el borde derecho de un clip para cambiar su velocidad usando su propio ajuste Stretch / Resample. Después el clip queda pegado a la grilla: si cambia el BPM, mantiene su largo en compases') },
-    ] });
+  // A tool controls the gesture; the selected clip owns its audio algorithm.
+  const slipButton = toolButton({ icon: ICONS.slipTool, name: t('Slip content', 'Deslizar audio'), key: '2', keys: ['2'], color: '#ffd166',
+    detail: t('move audio inside its clip, keeping the timeline edges fixed; P returns to move / trim', 'mové el audio dentro del clip sin desplazar sus bordes; P vuelve a mover / recortar') }, () => setTool('slip'));
+  slipButton.classList.add('pl-slip-tool');
+  const stretchEdgeButton = toolButton({ icon: ICONS.stretchTool, name: t('Stretch edge', 'Estirar borde'), key: '3', keys: ['3', 'e'], color: '#ffd166',
+    detail: t('drag either edge to change speed with snap, using the clip’s Stretch / Resample setting; enables Follow tempo', 'arrastrá un borde para cambiar la velocidad con snap y el ajuste Stretch / Resample del clip; activa Seguir tempo') }, () => setTool('stretch'));
+  stretchEdgeButton.classList.add('pl-stretch-tool');
   const fileInput = node('input'); fileInput.type = 'file'; fileInput.accept = 'audio/*,.wav,.mp3,.flac,.m4a,.ogg'; fileInput.multiple = true; fileInput.hidden = true;
   fileInput.onchange = safe(async () => { const files = [...fileInput.files]; fileInput.value = ''; await importSamples(files); });
   const importButton = toolButton({ icon: ICONS.import, name: t('Import audio files', 'Importar archivos de audio'), key: 'I', keys: ['i'], color: '#ff7a2f',
@@ -406,21 +395,25 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   // Slice tool, like FL Studio's: a click cuts the clip under the mouse; dragging up or down
   // cuts every lane the line crosses.
   const sliceButton = toolButton({ icon: ICONS.slice, name: t('Slice tool', 'Herramienta de corte'), key: 'C', keys: ['c'], color: '#ff5d8f',
-    detail: t('click a clip to cut it at the mouse; drag up or down to cut several tracks at once · cuts follow the grid; Alt cuts freely · Esc exits', 'hacé clic en un clip para cortarlo donde está el mouse; arrastrá hacia arriba o abajo para cortar varias pistas a la vez · los cortes siguen la grilla; Alt corta libre · Esc sale') }, () => setSlicing(!slicing));
+    detail: t('click a clip to cut it at the mouse; drag up or down to cut several tracks at once · cuts follow the grid; Alt cuts freely · Esc exits', 'hacé clic en un clip para cortarlo donde está el mouse; arrastrá hacia arriba o abajo para cortar varias pistas a la vez · los cortes siguen la grilla; Alt corta libre · Esc sale') }, () => setTool(slicing ? 'draw' : 'slice'));
   sliceButton.setAttribute('aria-pressed', 'false');
-  const pencilButton = toolButton({ icon: ICONS.pencil, name: t('Draw tool', 'Lápiz'), key: 'P', keys: ['p'], color: '#ffad80',
+  const pencilButton = toolButton({ icon: ICONS.pencil, name: t('Draw tool', 'Lápiz'), key: 'P / 1', keys: ['p', '1'], color: '#ffad80',
     detail: t('select a sample or clip, then click empty grid space to place it; drag to select a time range', 'seleccioná un sample o clip y hacé clic en la grilla vacía para colocarlo; arrastrá para seleccionar un rango') }, () => setTool('draw'));
   const selectButton = toolButton({ icon: ICONS.select, name: t('Time selection tool', 'Seleccionar rango'), key: 'Q', keys: ['q'], color: '#ffd166',
     detail: t('drag across tracks to select time, including silence; Ctrl+C/V copies/pastes, Ctrl+D repeats the whole range', 'arrastrá sobre las pistas para seleccionar tiempo, incluido el silencio; Ctrl+C/V copia/pega, Ctrl+D repite el rango completo') }, () => setTool('select'));
   function setTool(tool) {
+    editMode = tool === 'slip' || tool === 'stretch' ? tool : 'move';
     selecting = tool === 'select'; setSlicing(tool === 'slice');
   }
   function setSlicing(on) {
     if (on) selecting = false;
     slicing = on; slice = null; sliceLine.hidden = true;
     sliceButton.setAttribute('aria-pressed', String(on)); container.classList.toggle('is-slicing', on);
-    pencilButton.setAttribute('aria-pressed', String(!on && !selecting)); selectButton.setAttribute('aria-pressed', String(selecting));
-    container.classList.toggle('is-drawing', !on && !selecting); container.classList.toggle('is-selecting', selecting);
+    pencilButton.setAttribute('aria-pressed', String(!on && !selecting && editMode === 'move')); selectButton.setAttribute('aria-pressed', String(selecting));
+    slipButton.setAttribute('aria-pressed', String(!on && !selecting && editMode === 'slip'));
+    stretchEdgeButton.setAttribute('aria-pressed', String(!on && !selecting && editMode === 'stretch'));
+    container.classList.toggle('is-drawing', !on && !selecting && editMode === 'move'); container.classList.toggle('is-selecting', selecting);
+    container.classList.toggle('is-slipping', !on && !selecting && editMode === 'slip'); container.classList.toggle('is-stretch-tool', !on && !selecting && editMode === 'stretch');
   }
   const help = iconButton('help', t('Playlist shortcuts', 'Atajos de la playlist'), () => showHint(), { variant: 'ghost' });
   toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.wrap, tapButton, metronomeButton, fitTempo, ...tempoControls, node('span', 'pl-spacer'), help, ...toolbarEnd, windowGroup, exportButton, fileInput);
@@ -558,14 +551,34 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const fine = createKnob({ label: t('Fine pitch', 'Pitch fino'), min: -100, max: 100, step: 1, coarse: 10, value: 0, reset: 0, hint: `${t('fine tuning in cents (100 = 1 semitone)', 'afinación fina en cents (100 = 1 semitono)')} · ${resetHint}`, format: v => `${signed(v)} ct`, onCommit: v => setClip('cents', v) });
   const speed = createKnob({ label: t('Speed', 'Velocidad'), min: .25, max: 4, step: .01, coarse: .25, value: 1, reset: 1, log: true, hint: `${t('speed of this clip only', 'velocidad solo de este clip')} · ${resetHint}`, format: v => `${v.toFixed(2)}×`, onCommit: v => setClip('speed', v) });
   const fades = ['fadeIn', 'fadeOut'].map((key, i) => createKnob({ label: i ? 'Fade out' : 'Fade in', min: 0, max: 10, step: .01, coarse: .1, value: 0, reset: 0, hint: `${i ? t('fades the end of the clip out', 'baja el volumen al final del clip') : t('fades the start of the clip in', 'sube el volumen al inicio del clip')} · ${resetHint}`, format: v => `${v.toFixed(2)} s`, onCommit: v => setClip(key, v) }));
+  const normalizeButton = iconButton('waveform', t('Normalize audio', 'Normalizar audio'), () => {
+    const enable = !chosen().every(clip => clip.normalizationGain !== undefined);
+    commit(() => { for (const clip of chosen()) { if (enable) clip.normalizationGain = normalizationGain(assets.get(clip.asset).buffer); else delete clip.normalizationGain; } });
+  });
+  normalizeButton.classList.add('pl-normalize');
+  normalizeButton.dataset.scdlTooltip = t('Normalize: source peak to −1 dBFS, preserving stereo balance. Reversible; volume and effects apply afterwards.', 'Normalizar: pico del sample a −1 dBFS conservando el balance estéreo. Reversible; volumen y efectos se aplican después.');
+  const followTempoButton = iconButton('tempo-loop', t('Follow tempo', 'Seguir tempo'), () => setClip('tempoLock', !chosen().every(clip => clip.tempoLock)));
+  followTempoButton.classList.add('pl-follow-tempo');
+  followTempoButton.dataset.scdlTooltip = t('Follow tempo: anchor this clip to the current BPM and keep its length in beats when BPM changes. Does not detect the sample tempo.', 'Seguir tempo: vincula el clip al BPM actual y conserva su duración en tiempos al cambiar el BPM. No detecta el tempo del sample.');
+  const clipDetails = node('div', 'pl-clip-details'); clipDetails.id = 'clip-details'; clipDetails.hidden = true;
+  const detailName = node('span', 'pl-clip-detail-name');
+  clipDetails.append(detailName, fine.wrap, ...fades.map(f => f.wrap), normalizeButton, followTempoButton);
+  const detailsButton = iconButton('more', t('More clip controls', 'Más controles del clip'), () => {
+    clipDetails.hidden = !clipDetails.hidden; detailsButton.setAttribute('aria-expanded', String(!clipDetails.hidden));
+  });
+  detailsButton.classList.add('pl-clip-settings'); detailsButton.setAttribute('aria-expanded', 'false'); detailsButton.setAttribute('aria-controls', clipDetails.id);
   const muteClip = toolButton({ icon: ICONS.mute, name: t('Mute clip', 'Silenciar clip'), key: 'M', keys: ['m'], color: '#9aa3ad', detail: t('silences only the selected clips; the track keeps playing', 'calla solo los clips seleccionados; la pista sigue sonando') }, () => setClip('mute', !picked()?.mute));
   const reverseClip = toolButton({ icon: ICONS.reverse, name: t('Reverse', 'Invertir'), key: 'R', keys: ['r'], color: '#b48cff', detail: t('plays the selected clips backwards', 'reproduce los clips seleccionados al revés') }, () => setClip('reverse', !picked()?.reverse));
   const crossfade = toolButton({ icon: ICONS.crossfade, name: t('Crossfade overlaps', 'Fundir superposiciones'), key: 'X', keys: ['x'], color: '#4fc3f7', detail: t('fades clips that overlap on the same track so the joins do not click', 'aplica fundidos a los clips que se pisan en la misma pista para que los cortes no hagan clic') }, () => commit(() => crossfadeClips(state.clips)));
   const duplicate = toolButton({ icon: ICONS.duplicate, name: t('Duplicate', 'Duplicar'), key: 'Ctrl+D', keys: ['ctrl+d'], color: '#66d17a', detail: t('repeats selected clips or the whole time range, including silence', 'repite los clips o el rango completo seleccionado, incluido el silencio') }, () => {
+    if (selectedAutomation) { duplicateAutomation(selectedAutomation); return; }
     const selection = captureSelection(); if (selection) pasteSelection(selection, selection.end);
   });
   const split = toolButton({ icon: ICONS.split, name: t('Split at cursor', 'Cortar en cursor'), key: 'S', keys: ['s'], color: '#ffb02e', detail: t('cuts every selected clip at the playhead. Ctrl/Shift+click clips, or drag on empty space, to select several.', 'corta todos los clips seleccionados en la posición del cursor. Ctrl/Shift+clic en los clips, o arrastrá en un espacio vacío, para seleccionar varios.') }, () => cutClips(chosen(), now()));
-  const remove = toolButton({ icon: ICONS.trash, name: t('Remove from playlist', 'Quitar de la playlist'), key: t('Del', 'Supr'), keys: ['delete', 'backspace'], color: '#ff4d4d', detail: t('removes the selected clips from the song; the sample stays in the library and the track keeps it as its instrument', 'quita los clips seleccionados de la canción; el sample queda en la biblioteca y la pista lo conserva como instrumento') }, () => commit(() => { state.clips = state.clips.filter(c => !isChosen(c.id)); pick(null); }));
+  const remove = toolButton({ icon: ICONS.trash, name: t('Remove from playlist', 'Quitar de la playlist'), key: t('Del', 'Supr'), keys: ['delete', 'backspace'], color: '#ff4d4d', detail: t('removes the selected clips from the song; the sample stays in the library and the track keeps it as its instrument', 'quita los clips seleccionados de la canción; el sample queda en la biblioteca y la pista lo conserva como instrumento') }, () => commit(() => {
+    if (selectedAutomation) state.automation = state.automation.filter(clip => clip.id !== selectedAutomation);
+    else state.clips = state.clips.filter(c => !isChosen(c.id)); pick(null);
+  }));
   // Cuts every clip in `clips` that crosses `seconds`; both halves of a selected clip stay selected.
   function cutClips(clips, seconds) {
     const targets = clips.filter(clip => splitClip(clip, seconds));
@@ -593,6 +606,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       { label: t('Split at cursor', 'Cortar en cursor'), icon: ICONS.split, shortcut: 'S', action: () => split.click() },
       { label: t('Mute clip', 'Silenciar clip'), icon: ICONS.mute, shortcut: 'M', checked: !!clip.mute, action: () => muteClip.click() },
       { label: t('Reverse', 'Invertir'), icon: ICONS.reverse, shortcut: 'R', checked: !!clip.reverse, action: () => reverseClip.click() },
+      { label: t('Normalize audio', 'Normalizar audio'), icon: 'waveform', checked: clip.normalizationGain !== undefined, action: () => normalizeButton.click() },
       ...(onSeparate && !isPattern(clip) ? [{ label: t('Extract stems…', 'Separar stems…'), icon: ICONS.separate,
         title: t('Split this sample into drums, bass, other and vocals tracks, like FL Studio', 'Separa este sample en pistas de batería, bajo, otros y voz, como en FL Studio'),
         action: () => onSeparate(separable(clip)) }] : []),
@@ -616,7 +630,6 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     for (let n = 2; ; n++) if (!names.has(`${base} (${n})`)) return `${base} (${n})`.slice(0, 160);
   }
   function shelfMenu(event, asset) {
-    const deleteTitle = asset.session ? t('Separation audio stays in the library', 'El audio de la separación queda siempre en la biblioteca') : '';
     contextMenu(event, [
       ...(onSeparate && !asset.pattern ? [{ label: t('Extract stems…', 'Separar stems…'), icon: ICONS.separate,
         action: () => {
@@ -630,17 +643,187 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
         const next = new Map(assets), copyOf = { id: uid(), name: uniqueName(asset.name), buffer: asset.buffer, version: 0, ...(asset.group ? { group: asset.group } : {}) };
         next.set(copyOf.id, copyOf); checkBudget(next); commit(() => { assets = next; });
       }) },
-      { label: asset.pattern ? t('Delete', 'Eliminar') : t('Delete from project', 'Eliminar del proyecto'), icon: ICONS.trash, danger: true, disabled: !!asset.session,
-        title: deleteTitle || (asset.pattern ? '' : t('Removes the sample and all its clips; tracks that used it as their instrument let it go. Undo brings the clips back.', 'Quita el sample y todos sus clips; las pistas que lo usaban como instrumento lo sueltan. Deshacer devuelve los clips.')), action: () => {
+      { label: asset.pattern ? t('Delete', 'Eliminar') : t('Delete from project', 'Eliminar del proyecto'), icon: ICONS.trash, danger: true,
+        title: t('Deletes this audio and its clips from the project, including original stems. Asks before deleting.', 'Elimina este audio y sus clips del proyecto, incluidos los stems originales. Pide confirmación.'), action: safe(async () => {
         if (asset.pattern) { onPatternAction?.('delete', asset.id); return; }
-        const removed = commit(() => {
-          state.clips = state.clips.filter(clip => clip.asset !== asset.id); if (selected && !picked()) selected = null;
-          for (const track of state.tracks) if (track.source === asset.id) delete track.source;
-          graveyard.set(asset.id, asset); assets.delete(asset.id); cache.forget(asset.id);
-        });
-        if (!removed) { assets.set(asset.id, asset); graveyard.delete(asset.id); changed(); draw(); }
-      } },
+        if (await confirmDelete(asset.name)) mutateAssets(() => { removeAsset(asset.id); ensureAudioLane(); pick(null); });
+      }) },
     ]);
+  }
+  function createAutomation(target, { name, value } = {}) {
+    const spec = AUTOMATION_PARAMETERS[target?.param], targetTrack = trackOf(target?.track);
+    if (!spec?.supported || target.track !== 'master' && (!targetTrack || targetTrack.kind === 'automation')) return false;
+    if (target.track === 'master' && target.param === 'gain') return false;
+    const start = timeSelection?.start ?? 0, end = timeSelection?.end ?? Math.max(arrangementEnd(state), 240 / state.bpm);
+    const existing = state.automation?.find(clip => clip.target.track === target.track && clip.target.param === target.param);
+    const lane = existing && trackOf(existing.track);
+    if (!lane && state.tracks.length >= LIMITS.tracks) { report(t('No room for an automation lane (16 channels maximum).', 'No hay lugar para un carril de automatización (máximo 16 canales).')); return false; }
+    const parameterName = target.param === 'gain' ? t('Volume', 'Volumen') : spec.label;
+    const label = name || `${targetTrack?.name || 'Master'} · ${parameterName}`;
+    const baseline = value ?? (target.param === 'gain' ? targetTrack.gain : (target.track === 'master' ? masterFx?.() : targetTrack.fx)?.[target.param.slice(3)]) ?? spec.default;
+    const done = commit(() => {
+      const track = lane || { id: uid(), kind: 'automation', name: label.slice(0, 160), gain: 1, mute: false, solo: false, color: '#6fc3cf' };
+      if (!lane) state.tracks.push(track);
+      const clip = newAutomationClip({ track: track.id, target, at: start, duration: Math.max(.01, end - start), value: baseline });
+      clip.name = label.slice(0, 160); state.automation ||= []; state.automation.push(clip);
+      pick(null); selectedAutomation = clip.id; activeTrack = track.id;
+    });
+    if (done) { setTool('draw'); rowViews.get(activeTrack)?.lane.scrollIntoView({ block: 'nearest' }); }
+    return done;
+  }
+  function selectAutomation(id) { pick(null); selectedAutomation = id; activeTrack = state.automation.find(clip => clip.id === id)?.track; updateSelection(); }
+  function duplicateAutomation(id, at) {
+    const source = state.automation.find(clip => clip.id === id); if (!source) return;
+    commit(() => {
+      const clip = { ...structuredClone(source), id: uid(), at: at ?? source.at + source.duration };
+      state.automation.push(clip); selectAutomation(clip.id);
+    });
+  }
+  function automationMenu(event, id) {
+    const clip = state.automation.find(clip => clip.id === id); if (!clip) return;
+    selectAutomation(id);
+    contextMenu(event, [
+      { label: t('Duplicate', 'Duplicar'), icon: ICONS.duplicate, shortcut: 'Ctrl+D', action: () => duplicateAutomation(id) },
+      { label: t('Mute clip', 'Silenciar clip'), icon: ICONS.mute, checked: !!clip.mute, action: () => commit(() => { clip.mute = !clip.mute; }) },
+      { label: t('Delete automation clip', 'Eliminar clip de automatización'), icon: ICONS.trash, danger: true, action: () => remove.click() },
+    ]);
+  }
+  function automationElement(clip) {
+    const element = node('div', 'pl-automation-clip'); element.dataset.automation = clip.id;
+    element.tabIndex = 0; element.setAttribute('role', 'group');
+    const title = node('span', 'pl-automation-title'); element.append(title);
+    let before = null;
+    const editor = mountAutomationClip({ element, clip, zoom, height: 44,
+      snap: seconds => snapAt(seconds), onSelect: () => selectAutomation(clip.id), onContextMenu: contextMenu,
+      onBegin: () => { before = copy(); },
+      onChange: next => { const index = state.automation.findIndex(item => item.id === clip.id); if (index >= 0) state.automation[index] = next; engine?.update(playbackState(), transport()); },
+      onCommit: next => { const original = before; before = null; commit(() => { const index = state.automation.findIndex(item => item.id === clip.id); if (index >= 0) state.automation[index] = next; }, original || copy()); },
+      onCancel: () => { if (before) { state = before; before = null; changed(); draw(); } },
+    });
+    for (const edge of ['left', 'right']) { const handle = node('span', `pl-edge pl-edge-${edge}`); handle.dataset.edge = edge; element.append(handle); }
+    element.oncontextmenu = event => { if (!event.defaultPrevented) automationMenu(event, clip.id); };
+    element.onpointerdown = event => {
+      if (event.button !== 0 || event.target.closest('.pl-automation-envelope')) return;
+      const current = state.automation.find(item => item.id === clip.id); if (!current) return;
+      event.preventDefault(); event.stopPropagation(); selectAutomation(clip.id); element.focus({ preventScroll: true });
+      const snapshot = copy(), initial = structuredClone(current), edge = event.target.dataset.edge;
+      const from = event.clientX, initialScroll = scroll.scrollLeft;
+      let moved = false;
+      element.setPointerCapture(event.pointerId);
+      element.onpointermove = move => {
+        const delta = (move.clientX - from + scroll.scrollLeft - initialScroll) / zoom;
+        if (!moved && Math.abs(delta * zoom) < 2) return;
+        moved = true;
+        if (edge) {
+          const right = initial.at + initial.duration;
+          current.at = edge === 'left' ? clamp(snapAt(initial.at + delta, move.altKey), 0, right - .01) : initial.at;
+          current.duration = edge === 'right' ? clamp(snapAt(right + delta, move.altKey) - initial.at, .01, LIMITS.seconds - initial.at) : right - current.at;
+          current.points = initial.points.map(point => ({ ...point, at: point.at * current.duration / initial.duration }));
+        } else current.at = clamp(snapAt(initial.at + delta, move.altKey), 0, LIMITS.seconds - current.duration);
+        updateAutomationView({ element, title, editor }, current); engine?.update(playbackState(), transport());
+      };
+      const finish = cancel => {
+        element.onpointermove = element.onpointerup = element.onpointercancel = element.onlostpointercapture = null;
+        if (element.hasPointerCapture(event.pointerId)) element.releasePointerCapture(event.pointerId);
+        if (cancel) { state = snapshot; changed(); draw(); }
+        else if (moved) commit(() => {}, snapshot);
+      };
+      element.onpointerup = () => finish(false); element.onpointercancel = element.onlostpointercapture = () => finish(true);
+    };
+    element.onkeydown = event => {
+      if (event.defaultPrevented || event.target !== element) return;
+      if (event.key === 'Enter') { selectAutomation(clip.id); return; }
+      if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      event.preventDefault(); event.stopPropagation(); selectAutomation(clip.id);
+      commit(() => { const current = state.automation.find(item => item.id === clip.id); current.at = clamp(current.at + (event.key === 'ArrowLeft' ? -1 : 1) * 60 / state.bpm * (snap || .25), 0, LIMITS.seconds - current.duration); });
+    };
+    return { element, title, editor };
+  }
+  function updateAutomationView(view, clip) {
+    view.title.textContent = clip.name || `${trackOf(clip.target.track)?.name || 'Master'} · ${AUTOMATION_PARAMETERS[clip.target.param].label}`;
+    view.element.setAttribute('aria-label', view.title.textContent);
+    view.element.setAttribute('aria-selected', String(clip.id === selectedAutomation));
+    view.element.classList.toggle('is-muted', !!clip.mute);
+    view.element.style.left = `${clip.at * zoom}px`; view.element.style.width = `${Math.max(12, clip.duration * zoom)}px`;
+    view.editor.update(clip, { zoom, height: 44 });
+  }
+  function mutateAssets(action) {
+    const previous = new Map(assets), removed = new Map(graveyard);
+    const done = commit(action);
+    if (!done) { assets = previous; graveyard.clear(); for (const [id, asset] of removed) graveyard.set(id, asset); changed(); draw(); }
+    return done;
+  }
+  const confirmDelete = name => actionDialog.ask({ heading: t('Delete from project?', '¿Eliminar del proyecto?'),
+    detail: t(`Destructive operation: “${name}” and its dependent clips will be removed. Saving also removes that audio from this saved project. External source files stay untouched. You can undo during this session.`, `Operación destructiva: se eliminará «${name}» y sus clips dependientes. Al guardar también se quitará ese audio de la copia guardada del proyecto. Los archivos fuente externos se conservan. Podés deshacer durante esta sesión.`),
+    cancel: t('Cancel', 'Cancelar'), choices: [{ value: 'delete', label: t('Delete', 'Eliminar'), danger: true }] });
+  function removeChannelState(id) {
+    const track = trackOf(id);
+    if (track?.stem) state.removedTracks = [...new Set([...(state.removedTracks || []), id])];
+    state.tracks = state.tracks.filter(track => track.id !== id);
+    state.clips = state.clips.filter(clip => clip.track !== id);
+    state.automation = (state.automation || []).filter(clip => clip.track !== id && clip.target.track !== id);
+  }
+  function ensureAudioLane() {
+    state.tracks = state.tracks.filter(track => track.kind !== 'automation' || state.automation?.some(clip => clip.track === track.id));
+    if (!state.tracks.some(track => track.kind !== 'automation')) state.tracks.push({ id: uid(), name: t('Track', 'Pista'), gain: 1, mute: false, solo: false });
+  }
+  function removeAsset(id) {
+    const asset = assets.get(id); if (!asset || asset.pattern) return;
+    state.clips = state.clips.filter(clip => clip.asset !== id);
+    for (const track of [...state.tracks]) {
+      if (track.stem && `audio-${track.stem}` === id) removeChannelState(track.id);
+      else if (track.source === id) delete track.source;
+    }
+    if (asset.session) state.deletedSources = [...new Set([...(state.deletedSources || []), id])];
+    graveyard.set(id, asset); assets.delete(id); cache.forget(id);
+    if (drawSource?.asset === id) drawSource = null;
+  }
+  async function deleteTrack(key) {
+    const track = state.tracks.find(item => item.id === key || item.stem === key); if (!track) return false;
+    if (!await confirmDelete(track.name) || !trackOf(track.id)) return false;
+    return mutateAssets(() => {
+      const ids = new Set(state.clips.filter(clip => clip.track === track.id).map(clip => clip.asset));
+      if (track.source) ids.add(track.source);
+      if (track.stem) ids.add(`audio-${track.stem}`);
+      removeChannelState(track.id);
+      for (const id of ids) if (id === `audio-${track.stem}` || !state.clips.some(clip => clip.asset === id) && !state.tracks.some(track => track.source === id)) removeAsset(id);
+      ensureAudioLane(); pick(null);
+    });
+  }
+  async function consolidateTrack(key) {
+    if (operating || exporting) return false;
+    const track = state.tracks.find(item => item.id === key || item.stem === key);
+    if (!track || !state.clips.some(clip => clip.track === track.id && !clip.mute)) { report(t('This channel has no audible clips to consolidate.', 'Este canal no tiene clips audibles para consolidar.')); return false; }
+    const choice = await actionDialog.ask({ heading: t('Consolidate channel', 'Consolidar canal'),
+      detail: t(`Render “${track.name}”, including its clips, gaps, normalization, FX, EQ, volume and automation. Master effects stay on the master. Keep originals adds a new channel and mutes the source. Replace is destructive: it removes the old channel and source audio not used elsewhere, after a successful render.`, `Renderizar «${track.name}», incluidos clips, silencios, normalización, FX, EQ, volumen y automatización. Los efectos master quedan en el master. Conservar originales agrega un canal nuevo y silencia el origen. Reemplazar es destructivo: elimina el canal anterior y los audios que no se usen en otros canales, después de renderizar correctamente.`),
+      cancel: t('Cancel', 'Cancelar'), choices: [{ value: 'replace', label: t('Replace originals', 'Reemplazar originales'), danger: true }, { value: 'keep', label: t('Keep originals · new channel', 'Conservar originales · canal nuevo') }] });
+    if (!choice || !trackOf(track.id)) return false;
+    if (choice === 'keep' && state.tracks.length >= LIMITS.tracks) { report(t('No room for another channel (16 maximum).', 'No hay lugar para otro canal (máximo 16).')); return false; }
+    operating = true; const before = copy(); exporting = new AbortController();
+    const snapshot = structuredClone(playbackState());
+    snapshot.clips = snapshot.clips.filter(clip => clip.track === track.id);
+    snapshot.automation = snapshot.automation.filter(clip => clip.target.track === track.id);
+    snapshot.tracks.forEach(item => { if (item.kind !== 'automation') item.mute = item.id !== track.id; item.solo = false; });
+    try {
+      const rendered = await renderArrangement(snapshot, new Map(assets), cache, { signal: exporting.signal, normalize: false,
+        progress: p => toast({ id: 'playlist-task', variant: 'loading', title: t('Consolidating channel…', 'Consolidando canal…'), progress: p }) });
+      if (JSON.stringify(before) !== JSON.stringify(copy())) throw new Error(t('The project changed during rendering. Consolidate again to include the edits.', 'El proyecto cambió durante el render. Volvé a consolidar para incluir las ediciones.'));
+      if (rendered.duration > LIMITS.seconds) throw new Error(t('The consolidated audio including FX tails exceeds 5 minutes.', 'El audio consolidado, incluidas las colas de FX, supera los 5 minutos.'));
+      const asset = { id: uid(), name: `${track.name} (${t('consolidated', 'consolidado')})`.slice(0, 160), buffer: rendered, version: 0 };
+      const next = new Map(assets); next.set(asset.id, asset); checkBudget(next);
+      return mutateAssets(() => {
+        const index = state.tracks.findIndex(item => item.id === track.id);
+        const ids = new Set([...state.clips.filter(clip => clip.track === track.id).map(clip => clip.asset), track.source, track.stem && `audio-${track.stem}`].filter(Boolean));
+        if (choice === 'replace') {
+          removeChannelState(track.id);
+          for (const id of ids) if (!state.clips.some(clip => clip.asset === id) && !state.tracks.some(item => item.source === id)) removeAsset(id);
+        } else { trackOf(track.id).mute = true; trackOf(track.id).solo = false; }
+        assets.set(asset.id, asset);
+        const consolidated = { id: uid(), name: asset.name, source: asset.id, gain: 1, mute: false, solo: !!track.solo, color: color(track) };
+        state.tracks.splice(choice === 'replace' ? index : index + 1, 0, consolidated);
+        const clip = newClip(asset, consolidated.id); state.clips.push(clip); pick(clip.id); ensureAudioLane();
+      });
+    } finally { operating = false; exporting = null; dismissToast('playlist-task'); }
   }
   // Same navigation as the stem waveforms: wheel zooms around the pointer, Shift pans.
   const fit = () => { scroll.scrollLeft = 0; zoomAround(0, (scroll.clientWidth - TRACK_HEAD - 12) / Math.max(1, arrangementEnd(state) || 16) / zoom); };
@@ -650,10 +833,10 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const fitButton = toolButton({ icon: ICONS.fit, name: t('Show the whole arrangement', 'Ver todo el arreglo'), detail: t('fits every clip in view', 'ajusta el zoom para ver todos los clips'), key: 'F', keys: ['f'], color: '#e6e1da' }, fit);
   // One row of tools in groups: pointer tools, cut/copy/delete, clip effects, history, zoom, add.
   const tools = node('div', 'pl-tools');
-  const toolGroups = [[pencilButton, selectButton, sliceButton], [split, duplicate, remove], [muteClip, reverseClip, crossfade], [undo, redo], [gridButton, editModeButton], [zoomOut, zoomIn, fitButton], [importButton, addTrack]];
+  const toolGroups = [[pencilButton, selectButton, slipButton, sliceButton], [split, duplicate, remove], [muteClip, reverseClip, crossfade], [undo, redo], [gridButton, zoomOut, zoomIn, fitButton], [importButton, addTrack]];
   for (const group of toolGroups.slice(1)) group[0].classList.add('pl-tool-group');
   tools.append(...toolGroups.flat());
-  inspector.append(clipVolume.wrap, pitch.wrap, fine.wrap, speed.wrap, ...fades.map(f => f.wrap), stretchModeButton, tools);
+  inspector.append(clipVolume.wrap, pitch.wrap, speed.wrap, stretchModeButton, stretchEdgeButton, detailsButton, tools, clipDetails);
   let zoomFrame = 0, zoomTarget = null, zoomAnchor = null;
   function zoomAround(x, factor) {
     if (!(factor > 0) || !Number.isFinite(factor)) return;
@@ -677,7 +860,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
   // Help stays available in the header without automatically covering the timeline.
-  const hintText = t('P: pencil · select a sample or clip, then click empty grid space to draw · Q: select time, including silence · Ctrl+C/V: copy/paste at cursor · Ctrl+D: repeat selection · drag clips to move, edges to trim · 1/2/3: move/trim, slip content, stretch right edge (E cycles) · Stretch beside the knobs: on = Stretch, off = Resample for selected clips (H toggles, 4 on, 5 off) · G: grid 1/8, 1/16 or free · Alt places freely · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 tracks / 5 minutes.', 'P: lápiz · elegí un sample o clip y hacé clic en la grilla vacía para dibujar · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar en el cursor · Ctrl+D: repetir selección · arrastrá clips para mover, bordes para recortar · 1/2/3: mover/recortar, deslizar audio, estirar borde derecho (E alterna) · Stretch junto a las perillas: activado = Stretch, desactivado = Resample para los clips seleccionados (H alterna, 4 activa, 5 desactiva) · G: grilla 1/8, 1/16 o libre · Alt mueve libre · Espacio reproduce · S corta en el cursor · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 pistas / 5 minutos.');
+  const hintText = t('P / 1: draw, move and trim · 2: slip audio · 3 / E: stretch either edge · Q: select time, including silence · Ctrl+C/V: copy/paste audio · Ctrl+D: duplicate selection · Stretch beside the knobs: on preserves pitch, off resamples (H toggles, 4 on, 5 off) · More clip controls: Normalize, Follow tempo, fine pitch and fades · Right-click channel volume or FX Mix: create automation · Double-click an envelope to add points; right-click points for Linear/Hold/Delete · G: grid beside zoom · Alt bypasses snap · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 lanes / 5 minutes.', 'P / 1: dibujar, mover y recortar · 2: deslizar audio · 3 / E: estirar un borde · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar audio · Ctrl+D: duplicar selección · Stretch junto a las perillas: activado conserva pitch, desactivado usa Resample (H alterna, 4 activa, 5 desactiva) · Más controles: Normalizar, Seguir tempo, pitch fino y fades · Clic derecho en volumen del canal o Mix de FX: crear automatización · Doble clic en la curva agrega puntos; clic derecho en un punto ofrece Lineal/Escalón/Eliminar · G: grilla junto al zoom · Alt omite snap · Espacio reproduce · S corta · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 carriles / 5 minutos.');
   function showHint() {
     toast({ id: 'playlist-hint', variant: 'info', title: t('Playlist shortcuts', 'Atajos de la playlist'), message: hintText, duration: 12000 });
   }
@@ -699,13 +882,13 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     if (state.bpm !== bpm) followTempo(bpm / state.bpm);
     if (state.sampleIds) {
       const ids = new Set(state.sampleIds);
-      for (const asset of importedSamples()) if (!ids.has(asset.id)) { graveyard.set(asset.id, asset); assets.delete(asset.id); cache.forget(asset.id); }
+      for (const asset of [...assets.values()].filter(asset => !asset.pattern)) if (!ids.has(asset.id)) { graveyard.set(asset.id, asset); assets.delete(asset.id); cache.forget(asset.id); }
     }
     // Undo of "Delete from project" brings the sample back from the graveyard.
     for (const id of [...(state.sampleIds || []), ...state.clips.map(clip => clip.asset), ...state.tracks.map(track => track.source)]) {
       if (id && !assets.has(id) && graveyard.has(id)) { assets.set(id, graveyard.get(id)); graveyard.delete(id); }
     }
-    state.clips = state.clips.filter(clip => assets.has(clip.asset)); assignSources(); pruneGraveyard(); changed(); draw();
+    state.clips = state.clips.filter(clip => assets.has(clip.asset)); selectedAutomation = null; assignSources(); pruneGraveyard(); changed(); draw();
   }
   function checkBudget(next) {
     // Preview audio held by the sample browser counts too.
@@ -713,13 +896,14 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     for (const asset of next.values()) bytes += asset.buffer.length * asset.buffer.numberOfChannels * 4;
     if (bytes > LIMITS.pcmBytes || next.size > 64) throw new Error(t('Sample library limit: 256 MiB / 64 samples.', 'Límite de biblioteca: 256 MiB / 64 samples.'));
   }
-  const firstUserTrack = () => state.tracks.find(track => !track.stem)?.id || state.tracks[0].id;
+  const firstUserTrack = () => state.tracks.find(track => !track.stem && track.kind !== 'automation')?.id || state.tracks.find(track => track.kind !== 'automation')?.id;
   // The one importer for the file picker, external drops and the sample browser. Items are
   // Files or { name, read() }, where read() resolves to { file } or an already decoded
   // { buffer }. A null track imports into the project/rack without placing clips.
   // Track and time are fixed when the import starts. Resolves true when added.
   async function importSamples(items, track = firstUserTrack(), at = position) {
     if (operating || !items.length) return false;
+    if (trackOf(track)?.kind === 'automation') { report(t('Drop audio on an audio channel.', 'Soltá el audio en un canal de audio.')); return false; }
     operating = true; report(t('Reading samples…', 'Leyendo samples…'), 'loading');
     try {
       const next = new Map(assets), additions = [];
@@ -799,7 +983,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   function paint() {
     hbarSize.style.width = Math.max(0, scroll.scrollWidth - TRACK_HEAD) + 'px';
     // The scrollbar row only shows when there are clips and something to scroll to.
-    const scrollable = state.clips.length > 0 && scroll.scrollWidth > scroll.clientWidth + 1;
+    const scrollable = state.clips.length + (state.automation?.length || 0) > 0 && scroll.scrollWidth > scroll.clientWidth + 1;
     if (hbarRow.hidden === scrollable) hbarRow.hidden = !scrollable;
     if (hbar.scrollLeft !== scroll.scrollLeft) hbar.scrollLeft = scroll.scrollLeft;
     const rect = grid.getBoundingClientRect(), y = Math.max(0, -rect.top);
@@ -833,6 +1017,15 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     }
     ctx.globalAlpha = 1;
     for (const [id, item] of clipViews) if (!visible.has(id)) { keepFocus(item); item.remove(); clipViews.delete(id); }
+    const retained = new Set();
+    for (const clip of state.automation || []) {
+      const lane = rowViews.get(clip.track)?.lane; if (!lane) continue;
+      let view = automationViews.get(clip.id);
+      if (!view) { view = automationElement(clip); automationViews.set(clip.id, view); }
+      if (view.element.parentElement !== lane) lane.append(view.element);
+      updateAutomationView(view, clip); retained.add(clip.id);
+    }
+    for (const [id, view] of automationViews) if (!retained.has(id)) { view.editor.dispose(); view.element.remove(); automationViews.delete(id); }
   }
   function userHead(track, index) {
     const head = node('div', 'pl-track-head');
@@ -849,6 +1042,18 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       size: 'sm', inline: true, hint: resetHint, format: v => `${v}%`, onInput: v => edit(() => { trackOf(trackId).gain = v / 100; }, { live: true }),
       onCommit: v => edit(() => { trackOf(trackId).gain = v / 100; }) });
     head.volume = volume; controls.append(volume.wrap); head.append(name, controls);
+    if (track.kind === 'automation') { head.classList.add('pl-automation-head'); volume.wrap.hidden = true; controls.querySelector('[data-mix=solo]').hidden = true; }
+    else volume.dial.oncontextmenu = event => contextMenu(event, [{ label: t('Create automation clip', 'Crear clip de automatización'), icon: 'waveform', action: () => createAutomation({ track: trackId, param: 'gain' }) }]);
+    const menu = event => contextMenu(event, [
+      ...(track.kind === 'automation' ? [] : [
+        { label: t('Channel FXs', 'FXs del canal'), icon: 'plugin', action: () => onPatternAction?.('fx', trackId) },
+        { label: t('Automate volume', 'Automatizar volumen'), icon: 'waveform', action: () => createAutomation({ track: trackId, param: 'gain' }) },
+        { label: t('Consolidate channel…', 'Consolidar canal…'), icon: 'export', action: safe(() => consolidateTrack(trackId)) },
+      ]),
+      { label: t('Delete channel…', 'Eliminar canal…'), icon: 'trash', danger: true, action: safe(() => deleteTrack(trackId)) },
+    ]);
+    const more = iconButton('more', t('Channel options', 'Opciones del canal'), menu); more.classList.add('stem-more'); controls.append(more);
+    head.oncontextmenu = event => { if (!event.target.closest('input') && !event.defaultPrevented) menu(event); };
     return head;
   }
   function draw({ paint: paintNow = true } = {}) {
@@ -866,7 +1071,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     renderRuler(); renderLoopBand();
     const rows = [rulerRow];
     state.tracks.forEach((track, index) => {
-      const host = channel?.(track, trackSource(track.id)) || null;
+      const host = track.kind === 'automation' ? null : channel?.(track, trackSource(track.id)) || null;
       let view = rowViews.get(track.id);
       if (!view || view.host !== host) {
         view?.row.remove();
@@ -881,7 +1086,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
           if (browsed) { await importSamples(browsed, track.id, at); return; }
           if (event.dataTransfer.files.length) { await importSamples([...event.dataTransfer.files], track.id, at); return; }
           const asset = assets.get(event.dataTransfer.getData('application/x-stem-sample'));
-          if (asset) commit(() => { const clip = newClip(asset, track.id, at); state.clips.push(clip); pick(clip.id); });
+          if (asset && track.kind !== 'automation') commit(() => { const clip = newClip(asset, track.id, at); state.clips.push(clip); pick(clip.id); });
         });
         view = { row, lane, head, host }; rowViews.set(track.id, view);
       }
@@ -948,12 +1153,12 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       event.preventDefault(); event.stopPropagation(); eraseClip(clip);
     };
     item.onkeydown = event => {
-      const clip = state.clips.find(c => c.id === id), index = state.tracks.findIndex(t => t.id === clip.track);
+      const clip = state.clips.find(c => c.id === id), audioTracks = state.tracks.filter(track => track.kind !== 'automation'), index = audioTracks.findIndex(t => t.id === clip.track);
       if (event.key === 'Enter') { pick(clip.id); updateSelection(); return; }
       if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
       event.preventDefault(); event.stopPropagation(); pick(clip.id);
       commit(() => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') clip.at = clamp(clip.at + (event.key === 'ArrowLeft' ? -1 : 1) * 60 / state.bpm * (snap || .25), 0, LIMITS.seconds - clipDuration(clip));
-        else clip.track = state.tracks[clamp(index + (event.key === 'ArrowUp' ? -1 : 1), 0, state.tracks.length - 1)].id; });
+          else clip.track = audioTracks[clamp(index + (event.key === 'ArrowUp' ? -1 : 1), 0, audioTracks.length - 1)].id; });
       grid.querySelector(`.pl-clip[data-clip="${clip.id}"]`)?.focus();
     };
     return item;
@@ -979,14 +1184,20 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     for (const id of extra) if (id === selected || !state.clips.some(c => c.id === id)) extra.delete(id);
     if (!picked() && extra.size) { selected = extra.values().next().value; extra.delete(selected); }
     const clip = picked();
+    const automation = state.automation?.find(item => item.id === selectedAutomation);
     renderPitchMode();
     for (const input of [clipVolume.dial, pitch.dial, fine.dial, speed.dial, ...fades.map(f => f.dial), muteClip, reverseClip, duplicate, split, remove]) input.disabled = !clip;
     fine.show(clip?.cents ?? 0); fades[0].show(clip?.fadeIn ?? 0); fades[1].show(clip?.fadeOut ?? 0);
     muteClip.setAttribute('aria-pressed', String(!!clip?.mute)); reverseClip.setAttribute('aria-pressed', String(!!clip?.reverse));
     clipVolume.show(Math.round((clip?.gain ?? 1) * 100)); pitch.show(clip?.pitch ?? 0); speed.show(clip?.speed ?? 1);
+    normalizeButton.disabled = followTempoButton.disabled = !clip;
+    normalizeButton.setAttribute('aria-pressed', String(!!clip && clip.normalizationGain !== undefined));
+    followTempoButton.setAttribute('aria-pressed', String(!!clip?.tempoLock));
+    detailName.textContent = clip ? `${assets.get(clip.asset)?.name || ''} · ${t('Selected clip', 'Clip seleccionado')}` : t('Select an audio clip', 'Seleccioná un clip de audio');
     for (const item of grid.querySelectorAll('.pl-clip')) item.setAttribute('aria-pressed', String(isChosen(item.dataset.clip)));
     for (const item of shelf.children) item.setAttribute('aria-pressed', String(item.dataset.asset === drawSource?.asset));
-    duplicate.disabled = !clip && !timeSelection;
+    duplicate.disabled = !clip && !timeSelection && !automation; remove.disabled = !clip && !automation;
+    for (const [id, view] of automationViews) view.element.setAttribute('aria-selected', String(id === selectedAutomation));
     renderTimeSelection();
     // Reported on change only: redraws must not move the host's focus.
     if (selected !== reported) { reported = selected; onSelect?.(clip && assets.get(clip.asset)); }
@@ -1009,7 +1220,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   }
   function placeDrawSource(track, at) {
     const source = picked() || drawSource;
-    if (!source || !assets.has(source.asset)) return;
+    if (!source || !assets.has(source.asset) || trackOf(track)?.kind === 'automation') return;
     commit(() => {
       const clip = { ...source, id: uid(), track, at };
       state.clips.push(clip); pick(clip.id);
@@ -1070,7 +1281,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       if (cancel) { timeSelection = previous.range; selected = previous.selected; extra = previous.extra; updateSelection(); return; }
       if (!moved && !add) {
         const at = snapAt((x0 - TRACK_HEAD) / zoom, event.altKey);
-        if (!selecting && drawSource && assets.has(drawSource.asset)) placeDrawSource(lane.dataset.track, at);
+        if (!selecting && editMode === 'move' && drawSource && assets.has(drawSource.asset)) placeDrawSource(lane.dataset.track, at);
         else { pick(null); seek(at); updateSelection(); }
       }
       if (timeSelection) activeTrack = timeSelection.tracks[0];
@@ -1092,12 +1303,15 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       const length = isPattern(clip) ? Infinity : assets.get(clip.asset).buffer.duration;
       if (drag.editMode === 'slip' && !drag.edge) {
         Object.assign(clip, slipClip(original, delta * (original.reverse ? -1 : 1), length));
-      } else if (drag.editMode === 'stretch' && drag.edge === 'right') {
+      } else if (drag.editMode === 'stretch' && drag.edge) {
         if (!drag.changed && Math.abs(delta * zoom) < 2) return;
-        const end = snapAt(original.at + clipDuration(original) + delta, move.altKey);
+        const right = original.at + clipDuration(original);
+        const end = drag.edge === 'right' ? snapAt(right + delta, move.altKey) : right;
+        const start = drag.edge === 'left' ? snapAt(original.at + delta, move.altKey) : original.at;
         const pitchRate = clip.keepLength ? 1 : 2 ** (clipPitch(original) / 12);
-        clip.speed = clamp((original.out - original.in) / Math.max(.01, end - original.at) / pitchRate, .25, 4);
-        if (clip.at + clipDuration(clip) > LIMITS.seconds) clip.speed = (clip.out - clip.in) / (LIMITS.seconds - clip.at) / pitchRate;
+        const ratio = (original.out - original.in) / Math.max(.01, end - start) / pitchRate;
+        if (end <= start || ratio < .25 || ratio > 4) return;
+        clip.speed = ratio; clip.at = start;
         // Stretched to the grid, the clip now keeps its length in beats when the BPM changes.
         clip.tempoLock = true;
       } else if (drag.edge === 'right') {
@@ -1113,12 +1327,12 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       } else {
         clip.at = clamp(snapAt(original.at + delta, move.altKey), 0, LIMITS.seconds - clipDuration(clip));
         const lane = lanes.find(e => { const box = e.getBoundingClientRect(); return move.clientY >= box.top && move.clientY < box.bottom; });
-        if (lane) { clip.track = lane.dataset.track; item.style.transform = `translateY(${lane.getBoundingClientRect().top - home}px)`; }
+        if (lane && trackOf(lane.dataset.track)?.kind !== 'automation') { clip.track = lane.dataset.track; item.style.transform = `translateY(${lane.getBoundingClientRect().top - home}px)`; }
       }
       drag.changed = true; item.style.left = `${clip.at * zoom}px`; item.style.width = `${Math.max(8, clipDuration(clip) * zoom)}px`;
       // One engine update per frame; a stretch-edge drag would queue a render per move,
       // so its new speed is heard on release.
-      if (!(drag.editMode === 'stretch' && drag.edge === 'right')) dragAudio ||= requestAnimationFrame(() => { dragAudio = 0; engine?.update(playbackState(), transport()); });
+      if (!(drag.editMode === 'stretch' && drag.edge)) dragAudio ||= requestAnimationFrame(() => { dragAudio = 0; engine?.update(playbackState(), transport()); });
       paintSoon();
     };
     const finish = cancel => {
@@ -1148,7 +1362,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     })();
     if (engine && engineIO?.context === io.context && engineIO.output === io.output) return;
     engine?.dispose(); engineIO = io;
-    engine = createPlaylistEngine({ context: io.context, output: io.output, cache, assets: () => assets, onEnded: () => stop(true), onError: report });
+    engine = createPlaylistEngine({ context: io.context, output: io.output, cache, assets: () => assets, masterEffects, onEnded: () => stop(true), onError: report });
   }
   async function toggle() {
     if (playing()) { stop(); return; }
@@ -1187,6 +1401,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     stop(true);
     for (const old of assets.values()) if (old.session) cache.forget(old.id);
     const next = new Map([...assets].filter(([, asset]) => !asset.session));
+    sources = sources.filter(source => !saved?.deletedSources?.includes(source.id));
     for (const source of sources) next.set(source.id, { id: source.id, name: source.name, buffer: source.buffer, version: 0, session: true });
     for (const sample of samples) if (!next.has(sample.id)) next.set(sample.id, { id: sample.id, name: String(sample.name || 'Sample').slice(0, 160), buffer: sample.buffer, version: 0,
       ...(typeof sample.group === 'string' && sample.group ? { group: sample.group.slice(0, 64) } : {}) });
@@ -1195,17 +1410,19 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     userTracks.push(state.tracks.find(track => !track.stem && !userTracks.includes(track)) ||
       { id: uid(), name: `${t('Track', 'Pista')} ${userTracks.length + 1}`, gain: 1, mute: false, solo: false });
     const build = restore => {
-      const tracks = sources.map(source => {
+      const tracks = sources.filter(source => !saved?.removedTracks?.includes(`track-${source.stem}`)).map(source => {
         const old = restore && saved?.tracks?.find(item => item?.stem === source.stem);
         return { id: `track-${source.stem}`, name: source.name, stem: source.stem, gain: Number.isFinite(old?.gain) ? clamp(old.gain, 0, 2) : 1,
           mute: old ? old.mute === true : source.mute === true, solo: false };
       });
       // A clip whose audio did not come back (a sample that failed to load) is left out.
       const clips = restore && Array.isArray(saved?.clips) ? saved.clips.filter(clip => next.has(clip?.asset)).map(clip => ({ ...clip })) :
-        sources.map(source => newClip(next.get(source.id), `track-${source.stem}`, 0));
+        sources.filter(source => tracks.some(track => track.stem === source.stem)).map(source => ({ ...newClip(next.get(source.id), `track-${source.stem}`, 0), tempoLock: true }));
       const restoredUsers = restore && Array.isArray(saved?.userTracks) ? saved.userTracks.filter(track => !track.stem) : [];
       const users = [...restoredUsers, ...userTracks.filter(track => !restoredUsers.some(saved => saved.id === track.id) && (!restoredUsers.length || userClips.some(clip => clip.track === track.id)))];
-      return { version: 1, bpm: restore && Number.isFinite(saved?.bpm) ? saved.bpm : state.bpm, tracks: [...tracks, ...users], clips: [...clips, ...userClips] };
+      return { version: 1, bpm: restore && Number.isFinite(saved?.bpm) ? saved.bpm : state.bpm, tracks: [...tracks, ...users], clips: [...clips, ...userClips],
+        automation: restore && Array.isArray(saved?.automation) ? structuredClone(saved.automation) : [],
+        deletedSources: [...(saved?.deletedSources || [])], removedTracks: [...(saved?.removedTracks || [])] };
     };
     let candidate = build(!!saved);
     // A saved track may name a sample that is not in this session.
@@ -1214,6 +1431,9 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     if (saved?.trackEq && typeof saved.trackEq === 'object') for (const track of candidate.tracks) {
       const eq = saved.trackEq[track.id];
       if (track.stem && eq && typeof eq === 'object' && Array.isArray(eq.bands)) track.eq = structuredClone(eq);
+    }
+    if (saved?.trackFx && typeof saved.trackFx === 'object') for (const track of candidate.tracks) {
+      if (track.stem && saved.trackFx[track.id] && typeof saved.trackFx[track.id] === 'object') track.fx = structuredClone(saved.trackFx[track.id]);
     }
     try { validateArrangement(candidate, next); } catch { candidate = build(false); validateArrangement(candidate, next); }
     state = candidate; assets = next; assignSources(); history = []; future = []; graveyard.clear(); pick(null); drawSource = clipboard = activeTrack = null; liveBefore = null; position = marker = loopRange?.start ?? 0;
@@ -1275,6 +1495,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   draw(); animate();
   return {
     toggle: safe(toggle), space: safe(space), pause: () => stop(), seek, now, playing, setSession, edit, draw,
+    createAutomation, deleteTrack: safe(deleteTrack), consolidateTrack: safe(consolidateTrack),
     async startRecordingLoop(active = () => true) {
       stop(); seek(transport().loop?.start || 0); await connect();
       if (!active()) return;
@@ -1296,7 +1517,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     tracks: () => state.tracks,
     instrumentSources() {
       const used = new Set();
-      const channels = state.tracks.map(track => {
+      const channels = state.tracks.filter(track => track.kind !== 'automation').map(track => {
         const source = trackSource(track.id); if (source) used.add(source.id);
         return { key: track.stem || track.id, name: source && !track.stem ? source.name : track.name,
           buffer: source?.buffer || null, imported: !!source && !track.stem };
@@ -1306,6 +1527,13 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     },
     duration: () => arrangementEnd(state),
     trackSource,
+    trackFx: key => structuredClone(state.tracks.find(track => track.id === key || track.stem === key)?.fx ?? null),
+    setTrackFx(key, settings) {
+      const track = state.tracks.find(item => item.id === key || item.stem === key);
+      if (!track || JSON.stringify(track.fx || null) === JSON.stringify(settings || null)) return false;
+      return commit(() => { track.fx = structuredClone(settings); });
+    },
+    trackEffects(key) { const track = state.tracks.find(item => item.id === key || item.stem === key); return track ? engine?.trackEffects(track.id) || null : null; },
     // Per-channel EQ, like a mixer insert. Edits apply at once and reach onChange for saving.
     trackEq: key => structuredClone(state.tracks.find(track => track.id === key || track.stem === key)?.eq ?? null),
     setTrackEq(key, eq) {
@@ -1375,6 +1603,8 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     // Imported samples are listed by ID and name; the host stores their audio (`samples()`).
     snapshot: () => ({ bpm: state.bpm,
       trackEq: Object.fromEntries(state.tracks.filter(track => track.stem && track.eq).map(track => [track.id, structuredClone(track.eq)])),
+      trackFx: Object.fromEntries(state.tracks.filter(track => track.stem && track.fx).map(track => [track.id, structuredClone(track.fx)])),
+      automation: structuredClone(state.automation || []), deletedSources: [...(state.deletedSources || [])], removedTracks: [...(state.removedTracks || [])],
       samples: importedSamples().map(asset => ({ id: asset.id, name: asset.name, ...(asset.group ? { group: asset.group } : {}) })),
       userTracks: state.tracks.filter(track => !track.stem).map(track => structuredClone(track)),
       clips: state.clips.map(clip => ({ ...clip })) }),
@@ -1419,6 +1649,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     },
     dispose() {
       disposed = true; exporting?.abort(); metronome.stop(); engine?.dispose(); cache.dispose(); viewObserver.disconnect(); sampleBrowser?.dispose();
+      actionDialog.dispose(); for (const view of automationViews.values()) view.editor.dispose(); automationViews.clear();
       document.removeEventListener('keydown', onWindowKey); document.removeEventListener('keydown', onPageKey); document.removeEventListener('keyup', onPageKey); document.removeEventListener('pointerdown', claim, true); document.removeEventListener('focusin', claim, true); cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();
     },
   };

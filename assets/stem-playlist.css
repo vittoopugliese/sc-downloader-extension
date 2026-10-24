@@ -110,6 +110,14 @@
 .pl-inspector{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:10px 12px;border:1px solid var(--pl-edge);border-radius:10px 10px 0 0;background:var(--pl-panel)}
 /* A partial highlight distinguishes clips with different Stretch settings. */
 .pl-pitch-mode[aria-pressed=mixed]{border-color:#b48cff;box-shadow:inset 0 -2px #b48cff}
+.pl-clip-details{display:flex;align-items:center;gap:14px;flex:1 0 100%;min-width:0;padding:10px 0 2px;border-top:1px solid #ffffff12;flex-wrap:wrap}
+.pl-clip-details[hidden]{display:none}
+.pl-clip-detail-name{flex:1 1 100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:#b8b3ad}
+.pl-clip-settings[aria-expanded=true]{color:#ffad80;border-color:var(--orange)}
+.playlist.is-slipping .pl-clip{cursor:ew-resize}
+.playlist.is-stretch-tool .pl-edge{background:#ffd16625}
+.channel-action-buttons{flex-wrap:wrap;gap:8px}
+.channel-action-buttons .is-danger{color:#ff8f8f;border-color:#a95353}
 /* One row that scrolls sideways when it is wider than the inspector, as on phones. The
    vertical padding keeps focus rings and hotkey flashes inside the scroll box. */
 .pl-tools{display:flex;gap:4px;min-width:0;max-width:100%;margin-left:auto;padding:3px 2px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:#4a4642 transparent}
