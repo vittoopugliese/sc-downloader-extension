@@ -46,6 +46,7 @@
     "test:release-local": "npm test && npm run test:player-tools && npm run test:e2e:bulk-store && npm run test:e2e:download && npm run test:e2e:popup && npm run test:e2e && npm run test:e2e:tempo && npm run test:e2e:effects && npm run test:e2e:eq && npm run test:e2e:record && npm run test:e2e:likes && npm run package:extension && npm run test:package",
     "test:live": "node scripts/verify-live-looper.js",
     "test:live:folder": "node scripts/verify-live-looper.js --folder",
+    "test:live:youtube": "node scripts/youtube-player-tools.live-test.cjs",
     "browser:live": "node scripts/open-live-browser.js",
     "test:feedback": "node --test services/uninstall-feedback/test/validation.test.mjs",
     "test:player-tools": "node scripts/verify-player-tools-policy.js && node scripts/verify-player-tools-access.js && node scripts/verify-player-tools-client.js && node scripts/verify-player-tools-commerce.js && npm --prefix services/player-tools-license test",
