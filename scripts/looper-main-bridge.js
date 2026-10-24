@@ -19,6 +19,9 @@
   function mediaDurationMs(media) { return Number.isFinite(media?.duration) ? Math.round(media.duration * 1000) : null; }
   function mediaSource(media) { return media?.currentSrc || media?.src || null; }
   function playerTrackIdentity() {
+    // Non-SoundCloud players (YouTube) name the track through their adapter.
+    const platform = globalThis.SCPlayerToolsPlatform;
+    if (platform) return platform.trackIdentity();
     const link = document.querySelector(".playbackSoundBadge__titleLink[href]") || document.querySelector("a.playbackSoundBadge__titleLink[href]");
     if (!link?.href) return null;
     try { const url = new URL(link.href, window.location.href); url.hash = ""; url.search = ""; return `permalink:${url.toString().replace(/\/$/, "")}`; } catch { return null; }

@@ -3,6 +3,9 @@ if (!globalThis.SCIcons) {
   const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const resolve = name => Object.hasOwn(names, name) ? names[name] : names.help;
   const templates = new Map();
+  // YouTube enforces Trusted Types; the vectors are the extension's own static data.
+  let htmlPolicy = null;
+  try { htmlPolicy = globalThis.trustedTypes?.createPolicy?.('seib-icons', { createHTML: value => value }); } catch {}
   // One scale for every control, including explicit CSS sizes and nested shadow roots.
   // Scale the drawing so button hit areas, alignment and host animations stay intact.
   const ICON_SCALE = 0.8;
@@ -26,7 +29,7 @@ if (!globalThis.SCIcons) {
       let template = templates.get(key);
       if (!template) {
         template = document.createElement('template');
-        template.innerHTML = vectors[key];
+        template.innerHTML = htmlPolicy ? htmlPolicy.createHTML(vectors[key]) : vectors[key];
         const svg = template.content.querySelector('svg');
         svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('focusable', 'false');
         templates.set(key, template);

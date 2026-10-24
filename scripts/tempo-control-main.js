@@ -1,11 +1,19 @@
 /*
- * SoundCloud player adapter for scripts/tempo-control-core.js.
+ * SoundCloud player adapter for scripts/tempo-control-core.js. Other players
+ * (YouTube) plug in through globalThis.SCPlayerToolsPlatform.
  * The audio-control implementation is adapted under the MIT license; see
  * THIRD_PARTY_LICENSES.md.
  */
 (() => {
   "use strict";
   const pt = (source, ...values) => globalThis.SCPlayerToolsText?.t(source, ...values) ?? source.replace(/\$(\d+)/g, (match, index) => values[index - 1] ?? match);
+  // YouTube enforces Trusted Types. The policy stays private to this file and
+  // only receives the extension's own markup.
+  const trustedHtml = (() => {
+    let policy = null;
+    try { policy = globalThis.trustedTypes?.createPolicy?.("seib-player-tools", { createHTML: (value) => value }); } catch {}
+    return (value) => policy ? policy.createHTML(value) : value;
+  })();
 
   const INSTALLED_FLAG = "__scdlTempoControlInstalled";
   const HOST_ID = "scdl-tempo-control";
@@ -94,6 +102,10 @@
 
   const { DEFAULTS, clampRate, create, formatRate } = globalThis.SCTempoControl;
   const effectsApi = globalThis.SCTempoEffects;
+  // Set by scripts/youtube-platform.js. SoundCloud has no adapter.
+  const platform = globalThis.SCPlayerToolsPlatform || null;
+  const IS_YOUTUBE = platform?.id === "youtube";
+  const MEDIA_SELECTOR = IS_YOUTUBE ? "video" : "audio";
   const EFFECT_NAMES = effectsApi?.EFFECT_NAMES || ["reverb", "delay", "flanger", "phaser", "bitcrusher", "saturation"];
   const RATE_ANIMATION_DURATION_MS = 220;
   const DOWNLOAD_STATUS_DURATION_MS = 30000;
@@ -132,6 +144,11 @@
   let sliceConfirmation = null;
   let suppressPanelEscape = false;
   let loopState = { active: false, enabled: false, startMs: null, endMs: null, durationMs: null };
+  let stemCapture = null;
+  let youtubeRatePushed = null;
+  let liveWaveform = null;
+  let liveWaveformTimer = null;
+  let liveWaveformRevision = -1;
   let accessSnapshot = { state: "loading", plan: "free", capabilities: {} };
   let playerToolsSessionId = null;
   let accessRequestId = 0;
@@ -1813,12 +1830,14 @@
   }
 
   const controller = create({
+    ...(platform ? { isAudio: platform.isMedia } : {}),
     initialRate: readStoredRate(),
     initialPreservePitch: readStoredPitch(),
     onChange: render,
     onError(error) {
-      playbackFailure =
-        pt("Could not change playback speed. Reload SoundCloud and retry.");
+      playbackFailure = IS_YOUTUBE
+        ? pt("Could not change playback speed. Reload YouTube and retry.")
+        : pt("Could not change playback speed. Reload SoundCloud and retry.");
       console.warn("[SC Downloader Tempo]", error);
       render();
     },
@@ -1828,6 +1847,7 @@
     getActiveAudio() {
       const discovered = controller.getActiveAudio?.();
       if (discovered) return discovered;
+      if (platform) return platform.media();
       const players = [...document.querySelectorAll("audio")].filter(
         (audio) => audio.isConnected
       );
@@ -1846,6 +1866,13 @@
       render();
     },
   });
+
+  // A speed picked in YouTube's own menu or with < > becomes the Player Tools speed.
+  if (IS_YOUTUBE) {
+    platform.onRateChange((rate) => {
+      if (Math.abs(rate - controller.snapshot().rate) > 0.001) applyPlayerRate(rate, { animate: true });
+    });
+  }
 
   if (globalThis.SCParametricEQ && effectsController) {
     try {
@@ -2208,8 +2235,39 @@
     return Math.max(0, Math.min(100, (value - windowRange.startMs) / (windowRange.endMs - windowRange.startMs) * 100));
   }
 
+  // Without the audio file, the waveform fills in as the video is heard.
+  function startLiveWaveform() {
+    if (!globalThis.SCLiveWaveform || !effectsController) return;
+    liveWaveform ||= globalThis.SCLiveWaveform.create({
+      effects: effectsController,
+      getMedia: () => platform.media(),
+      getIdentity: () => platform.trackIdentity(),
+      isSuspended: () => platform.isAdPlaying(),
+    });
+    // Keeps listening once started, so playback with the panel closed still counts.
+    liveWaveform.start();
+    if (liveWaveformTimer === null) liveWaveformTimer = setInterval(refreshLiveWaveform, 250);
+    ui.waveformCanvas.title = pt("The waveform fills in as the video plays. Red: bass | Green: mids | Blue: treble");
+    refreshLiveWaveform();
+  }
+
+  function refreshLiveWaveform() {
+    if (!liveWaveform || !ui || ui.panel.hidden || waveformCollapsed) return;
+    const identity = platform.trackIdentity();
+    const revision = liveWaveform.revision();
+    if (identity === waveformTrackUrl && revision === liveWaveformRevision) return;
+    if (identity !== waveformTrackUrl) waveformZoom = null;
+    waveformTrackUrl = identity;
+    liveWaveformRevision = revision;
+    waveformSamples = [];
+    waveformSpectrum = liveWaveform.snapshot();
+    waveformRevision += 1;
+    renderLoop();
+  }
+
   async function loadPlayerWaveform() {
     if (waveformCollapsed || !ui?.waveformCanvas || ui.panel.hidden) return;
+    if (IS_YOUTUBE) { startLiveWaveform(); return; }
     let descriptor = null;
     try { descriptor = JSON.parse(document.documentElement.getAttribute(PLAYER_WAVEFORM_ATTRIBUTE) || "null"); } catch {}
     if (!descriptor) {
@@ -2308,7 +2366,8 @@
     const hasLoopMarker = Number.isFinite(loopState.startMs) || Number.isFinite(loopState.endMs);
     ui.clearLoop.disabled = !loopState.available || !hasLoopMarker || loopDownloadPending;
     ui.downloadLoop.disabled = !loopState.active || loopDownloadPending;
-    if (ui.separateStems) ui.separateStems.disabled = !loopState.active || ui.separateStems.dataset.pending === "true";
+    // A YouTube loop recording stays clickable so Stems can cancel it.
+    if (ui.separateStems) ui.separateStems.disabled = !loopState.active || (ui.separateStems.dataset.pending === "true" && !stemCapture);
     ui.sliceButton.disabled = sliceJob ? sliceJob.committing : !capability("saveLoopPad") || !loopState.active || padRenderPending;
     ui.sliceButton.title = samplerCopy(!capability("saveLoopPad") ? "locked" : sliceJob ? "stop" : "slice");
     ui.sliceButton.setAttribute("aria-label", ui.sliceButton.title);
@@ -3025,7 +3084,121 @@
     });
   }
 
+  function setPlayerBypassed(bypassed) {
+    playbackFailure = "";
+    animateNextRateChange = true;
+    controller.setBypassed(bypassed);
+    requestLoop("set-global-bypass", { bypassed: bypassed || !capability("tempo") });
+    readLoopState();
+  }
+
+  function seekMedia(media, timeMs) {
+    return new Promise((resolve) => {
+      const done = () => { clearTimeout(timer); media.removeEventListener("seeked", done); resolve(); };
+      const timer = setTimeout(done, 5000);
+      media.addEventListener("seeked", done);
+      media.currentTime = timeMs / 1000;
+    });
+  }
+
+  // Drops the silence before playback reached the recorder, cuts the take to
+  // the loop length and undoes the player volume, which the capture includes.
+  // The WAV is the 16-bit stereo layout of SCRecord.encodeWav.
+  function trimCapturedWav(bytes, durationMs, gain = 1) {
+    const view = new DataView(bytes);
+    const rate = view.getUint32(24, true);
+    const frames = Math.floor((bytes.byteLength - 44) / 4);
+    const samples = new Int16Array(bytes, 44, frames * 2);
+    let first = 0;
+    const search = Math.min(frames, Math.round(rate * 0.3));
+    while (first < search && Math.abs(samples[first * 2]) < 64 && Math.abs(samples[first * 2 + 1]) < 64) first += 1;
+    if (first === search) first = 0;
+    const count = Math.max(0, Math.min(frames - first, Math.round(durationMs / 1000 * rate)));
+    const output = new ArrayBuffer(44 + count * 4);
+    new Uint8Array(output).set(new Uint8Array(bytes, 0, 44));
+    new Uint8Array(output, 44).set(new Uint8Array(bytes, 44 + first * 4, count * 4));
+    if (gain !== 1) {
+      const pcm = new Int16Array(output, 44, count * 2);
+      for (let index = 0; index < pcm.length; index += 1) pcm[index] = Math.max(-32768, Math.min(32767, Math.round(pcm[index] * gain)));
+    }
+    const header = new DataView(output);
+    header.setUint32(4, output.byteLength - 8, true);
+    header.setUint32(40, count * 4, true);
+    return output;
+  }
+
+  // YouTube offers no audio file to cut, so the loop is recorded in real time,
+  // at the original speed without effects, and opened in the Stem Extractor.
+  async function recordLoopStems() {
+    if (stemCapture) { stemCapture.cancelled = true; return; }
+    const media = platform.media();
+    if (!loopState.active || !media || !globalThis.SCRecord || !effectsController) return;
+    const startMs = loopState.startMs;
+    const endMs = loopState.endMs;
+    const lengthMs = endMs - startMs;
+    if (lengthMs > 120000) {
+      showDownloadStatus(pt("Stem separation supports loops up to 2 minutes. Shorten the selected loop first."));
+      return;
+    }
+    if (media.muted || media.volume === 0) {
+      showDownloadStatus(pt("Unmute the video to record the loop."));
+      return;
+    }
+    const identity = platform.trackIdentity();
+    const info = platform.trackInfo() || {};
+    const wasBypassed = controller.snapshot().bypassed;
+    const capture = stemCapture = { cancelled: false };
+    const recorder = globalThis.SCRecord.create({ effects: effectsController, maxSeconds: Math.ceil(lengthMs / 1000) + 2 });
+    ui.separateStems.dataset.pending = "true";
+    ui.separateStems.setAttribute("aria-pressed", "true");
+    renderLoop();
+    try {
+      if (!wasBypassed) setPlayerBypassed(true);
+      media.pause();
+      await seekMedia(media, startMs);
+      await recorder.start();
+      const volume = media.volume;
+      await media.play();
+      await new Promise((resolve, reject) => {
+        let previousMs = media.currentTime * 1000;
+        const timer = setInterval(() => {
+          const nowMs = media.currentTime * 1000;
+          let failure = null;
+          if (capture.cancelled) failure = pt("Loop recording cancelled.");
+          else if (platform.trackIdentity() !== identity) failure = pt("The video changed. Loop recording cancelled.");
+          else if (platform.isAdPlaying()) failure = pt("An ad interrupted the recording. Try again after the ad.");
+          else if (media.paused && !media.ended) failure = pt("Playback paused. Loop recording cancelled.");
+          if (failure) { clearInterval(timer); reject(new Error(failure)); return; }
+          showDownloadStatus(pt("Recording the loop for Stems: $1 / $2. Click Stems again to cancel.",
+            formatLoopTime(Math.max(0, Math.min(lengthMs, nowMs - startMs))), formatLoopTime(lengthMs)));
+          // A jump back means the player wrapped or seeked: the loop already ended.
+          if (nowMs >= endMs || media.ended || nowMs < previousMs - 250) { clearInterval(timer); resolve(); }
+          previousMs = nowMs;
+        }, 50);
+      });
+      media.pause();
+      await recorder.stop();
+      const wav = trimCapturedWav(await recorder.exportWav().arrayBuffer(), lengthMs, volume > 0.01 ? 1 / volume : 1);
+      showDownloadStatus(pt("Opening the Stem Extractor…"));
+      await requestPad("record-stems", { bytes: wav, title: info.title || "YouTube", artist: info.artist || "",
+        artworkUrl: info.artworkUrl || "", trackUrl: info.url || "" });
+      showDownloadStatus(pt("Loop opened in Stems. Separation uses the original speed without effects."), { dismissAfter: 6000 });
+    } catch (error) {
+      media.pause();
+      showDownloadStatus(error?.message || pt("Could not open stem separation."));
+    } finally {
+      await recorder.stop().catch(() => {});
+      recorder.dispose();
+      if (!wasBypassed && controller.snapshot().bypassed) setPlayerBypassed(false);
+      stemCapture = null;
+      ui.separateStems.dataset.pending = "false";
+      ui.separateStems.setAttribute("aria-pressed", "false");
+      renderLoop();
+    }
+  }
+
   async function separateLoopStems() {
+    if (IS_YOUTUBE) { await recordLoopStems(); return; }
     if (!loopState.active || ui.separateStems.dataset.pending === "true") return;
     if (loopState.endMs - loopState.startMs > 120000) {
       showDownloadStatus(pt("Stem separation supports loops up to 2 minutes. Shorten the selected loop first."));
@@ -3670,11 +3843,19 @@
         .panel-tool:focus-visible { border-color: rgba(255,85,0,.65); }
         .panel-tool:disabled { opacity: .48; cursor: wait; }
         .panel-tool.is-unavailable:disabled { cursor: not-allowed; }
+        :host([data-platform="youtube"]) :is(.download-track-button, .download-loop, .save-loop-pad, .loop-instrument, .slice-loop) { display: none !important; }
         .panel-tool[aria-pressed="true"] { color: #ff6a1a; border-color: #ff6a1a; }
         .panel-tool sc-icon{ display: block; width: 12px; height: 12px;      }
         .panel-tool .cross-icon { display:block; width:12px; height:12px; }
         .panel-tool .panel-tool-icon { display:block; width:13px; height:13px; }
         .trigger .trigger-icon { width:20px; height:20px; }
+        /* YouTube: a pill like the like/share buttons, with the theme's own colors. */
+        :host([data-platform="youtube"]) .trigger-shell { width: auto; height: 36px; flex: 0 0 auto; }
+        :host([data-platform="youtube"]) .trigger { display: inline-flex; align-items: center; gap: 6px; width: auto; height: 36px; margin: 0; padding: 0 14px 0 6px; border-radius: 18px; color: var(--yt-spec-text-primary, #0f0f0f); background: var(--yt-spec-additive-background, rgba(0, 0, 0, .05)); font: 500 14px/36px Roboto, Arial, sans-serif; white-space: nowrap; }
+        :host([data-platform="youtube"]) .trigger:hover { color: var(--yt-spec-text-primary, #0f0f0f); background: var(--yt-spec-button-chip-background-hover, rgba(0, 0, 0, .1)); }
+        :host([data-platform="youtube"]) .trigger::after { content: "Player Tools"; order: 1; }
+        :host([data-platform="youtube"]) .trigger .trigger-icon { position: static; width: 26px; height: 26px; transform: none; }
+        :host([data-platform="youtube"]) .trigger-rate { position: static; order: 2; font-size: 12px; transform: none; }
         .detach-button[aria-pressed="true"] .panel-tool-icon { filter:brightness(0) saturate(100%) invert(56%) sepia(93%) saturate(1985%) hue-rotate(336deg) brightness(104%) contrast(101%); }
         @media (max-width: 360px) {
           .panel-header { grid-template-columns: 28px minmax(0, 1fr) auto; column-gap: 3px; }
@@ -3744,7 +3925,7 @@
         <div class="brand">
           <img class="brand-logo" width="42" height="42" alt="" draggable="false" hidden />
           <div class="brand-copy">
-            <div class="brand-title-line"><button class="brand-name" type="button" aria-label="Open the Looper guide">${TOOLS_EDITION ? "Player Tools" : "SCTD Player Tools"}</button><span class="free-badge" aria-label="Player Tools Free plan"><sc-icon name="soundcloud" class="plan-badge-icon" aria-hidden="true"></sc-icon><span class="plan-badge-label">FREE</span></span></div>
+            <div class="brand-title-line"><button class="brand-name" type="button" aria-label="Open the Looper guide">${TOOLS_EDITION || IS_YOUTUBE ? "Player Tools" : "SCTD Player Tools"}</button><span class="free-badge" aria-label="Player Tools Free plan"><sc-icon name="${IS_YOUTUBE ? "youtube" : "soundcloud"}" class="plan-badge-icon" aria-hidden="true"></sc-icon><span class="plan-badge-label">FREE</span></span></div>
           </div>
         </div>
         <div class="panel-tools" role="group" aria-label="Panel options">
@@ -3864,7 +4045,20 @@
     const width = ui.panel.offsetWidth;
     const left = Math.max(8, Math.min(innerWidth - width - 8, anchor.right - width));
     ui.panel.style.left = `${left}px`;
-    ui.panel.style.bottom = `${Math.max(8, innerHeight - anchor.top + 8)}px`;
+    if (!IS_YOUTUBE) {
+      ui.panel.style.bottom = `${Math.max(8, innerHeight - anchor.top + 8)}px`;
+      return;
+    }
+    // The YouTube trigger sits mid-page: open on the side with more room and
+    // scroll inside the panel instead of leaving the viewport.
+    ui.panel.style.maxHeight = "";
+    const height = ui.panel.offsetHeight;
+    const roomAbove = anchor.top - 16;
+    const roomBelow = innerHeight - anchor.bottom - 16;
+    const below = height > roomAbove && roomBelow > roomAbove;
+    ui.panel.style.maxHeight = `${Math.max(160, below ? roomBelow : roomAbove)}px`;
+    ui.panel.style.top = below ? `${anchor.bottom + 8}px` : "";
+    ui.panel.style.bottom = below ? "" : `${Math.max(8, innerHeight - anchor.top + 8)}px`;
   }
 
   function setVolumeLayerOpen(open) {
@@ -3956,13 +4150,14 @@
     return event.composedPath().some(
       (node) =>
         typeof node?.matches === "function" &&
-        node.matches(PLAYER_TIMELINE_SELECTOR)
+        node.matches(IS_YOUTUBE ? "#movie_player" : PLAYER_TIMELINE_SELECTOR)
     );
   }
 
   function createUi() {
     const host = document.createElement("span");
     host.id = HOST_ID;
+    if (platform) host.dataset.platform = platform.id;
     host.lang = globalThis.SCPlayerToolsText?.locale() || "en";
     host.style.cssText = [
       "display:flex",
@@ -3973,7 +4168,7 @@
     ].join(";");
 
     const root = host.attachShadow({ mode: "open" });
-    root.innerHTML = template();
+    root.innerHTML = trustedHtml(template());
     globalThis.SCPlayerToolsText?.localize(root);
     ui = {
       host,
@@ -4366,14 +4561,7 @@
     ui.pitchToggle.addEventListener("change", () => {
       applyPlayerPitch(ui.pitchToggle.checked);
     });
-    ui.bypass.addEventListener("click", () => {
-      playbackFailure = "";
-      animateNextRateChange = true;
-      const bypassed = !controller.snapshot().bypassed;
-      controller.setBypassed(bypassed);
-      requestLoop("set-global-bypass", { bypassed: bypassed || !capability("tempo") });
-      readLoopState();
-    });
+    ui.bypass.addEventListener("click", () => setPlayerBypassed(!controller.snapshot().bypassed));
     for (const [marker, name] of [[ui.waveformStart, "start"], [ui.waveformEnd, "end"]]) {
       marker.addEventListener("pointerdown", (event) => beginWaveformDrag(event, name));
       marker.addEventListener("pointermove", moveWaveformDrag);
@@ -4407,8 +4595,10 @@
     ui.separateStems = document.createElement("button");
     ui.separateStems.type = "button";
     ui.separateStems.className = "separate-stems";
-    ui.separateStems.innerHTML = '<sc-icon name="layers" aria-hidden="true"></sc-icon><span>Stems</span>';
-    ui.separateStems.title = pt("Separate the selected loop into vocals, drums, bass and other (up to 2 minutes)");
+    ui.separateStems.innerHTML = trustedHtml('<sc-icon name="layers" aria-hidden="true"></sc-icon><span>Stems</span>');
+    ui.separateStems.title = IS_YOUTUBE
+      ? pt("Record the selected loop in real time and separate it into vocals, drums, bass and other (up to 2 minutes)")
+      : pt("Separate the selected loop into vocals, drums, bass and other (up to 2 minutes)");
     ui.separateStems.setAttribute("aria-label", ui.separateStems.title);
     ui.downloadLoop.before(ui.separateStems);
     ui.separateStems.addEventListener("click", separateLoopStems);
@@ -4503,6 +4693,8 @@
       requestLoop("set-global-bypass", { bypassed: controller.snapshot().bypassed });
     }
     const state = controller.snapshot();
+    // Keep YouTube's speed menu showing the Player Tools speed.
+    if (IS_YOUTUBE && state.rate !== youtubeRatePushed && platform.setPlayerRate(state.rate)) youtubeRatePushed = state.rate;
     const text = formatRate(state.effectiveRate);
     const triggerText = formatTriggerRate(state.effectiveRate);
     const animateRate = animateNextRateChange;
@@ -4738,6 +4930,14 @@
   }
 
   function mount() {
+    if (platform) {
+      const host = ui?.host || (platform.videoId() ? createUi() : null);
+      if (!host || !platform.mount(host)) {
+        ui?.host.remove();
+        closePanel();
+      }
+      return;
+    }
     const player = document.querySelector(PLAYER_SELECTOR);
     if (!player) {
       ui?.host.remove();
@@ -4763,7 +4963,7 @@
   }
 
   controller.install();
-  document.querySelectorAll("audio").forEach((audio) => {
+  document.querySelectorAll(MEDIA_SELECTOR).forEach((audio) => {
     controller.discover(audio);
     effectsController?.discover(audio);
   });
@@ -4783,11 +4983,11 @@
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (!(node instanceof Element)) continue;
-        if (node instanceof HTMLAudioElement) {
+        if (node instanceof HTMLAudioElement || platform?.isMedia(node)) {
           controller.discover(node);
           effectsController?.discover(node);
         } else {
-          node.querySelectorAll("audio").forEach((audio) => {
+          node.querySelectorAll(MEDIA_SELECTOR).forEach((audio) => {
             controller.discover(audio);
             effectsController?.discover(audio);
           });
@@ -4852,6 +5052,8 @@
     },
     true
   );
+  // The YouTube trigger scrolls with the page; the fixed panel follows it.
+  if (IS_YOUTUBE) window.addEventListener("scroll", () => positionPanel(), { passive: true });
   window.addEventListener("resize", () => {
     positionPanel();
     positionSamplerPresets();

@@ -69,6 +69,7 @@ async function verifyLoading() {
     let waveformTrackUrl = null, waveformSourceUrl = null, waveformZoom = null;
     let waveformRevision = 0, waveformLoadId = 0, waveformAnalysisCache = null;
     const PLAYER_WAVEFORM_ATTRIBUTE = 'waveform';
+    const IS_YOUTUBE = false;
     const ui = { waveformCanvas: {}, panel: { hidden: false } };
     ${loading}
   `, scope);

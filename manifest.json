@@ -16,6 +16,7 @@
   ],
   "host_permissions": [
     "https://soundcloud.com/*",
+    "https://www.youtube.com/*",
     "https://api.soundcloud.com/*",
     "https://api-v2.soundcloud.com/*",
     "https://*.sndcdn.com/*",
@@ -144,6 +145,43 @@
         "scripts/looper-core.js",
         "scripts/looper.js"
       ]
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "js": [
+        "scripts/icons.js",
+        "scripts/youtube-platform.js",
+        "scripts/looper-core.js",
+        "scripts/loop-session.js",
+        "scripts/looper-main-bridge.js",
+        "scripts/player-tools-i18n.js",
+        "scripts/tempo-control-core.js",
+        "scripts/sampler-core.js",
+        "scripts/parametric-eq.js",
+        "scripts/audio-effects-core.js",
+        "scripts/player-tools-collapsible.js",
+        "scripts/parametric-eq-ui.js",
+        "scripts/record-core.js",
+        "scripts/record-ui.js",
+        "scripts/live-waveform.js",
+        "scripts/tempo-control-main.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "scripts/icons-client.js",
+        "scripts/fast-tooltips.js",
+        "scripts/i18n.js",
+        "scripts/player-tools-client.js",
+        "scripts/youtube-content.js"
+      ]
     }
   ],
   "web_accessible_resources": [
@@ -167,6 +205,18 @@
       ],
       "matches": [
         "https://w.soundcloud.com/*"
+      ]
+    },
+    {
+      "resources": [
+        "assets/LooperPlayerToolkit.png",
+        "assets/icons/player-toolkit.png",
+        "assets/drums/*.wav",
+        "scripts/bitcrusher-processor.js",
+        "scripts/record-processor.js"
+      ],
+      "matches": [
+        "https://www.youtube.com/*"
       ]
     }
   ]
