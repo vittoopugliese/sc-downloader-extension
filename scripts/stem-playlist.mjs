@@ -348,6 +348,9 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const slipButton = toolButton({ icon: ICONS.slipTool, name: t('Slip content', 'Deslizar audio'), key: '2', keys: ['2'], color: '#ffd166',
     detail: t('move audio inside its clip, keeping the timeline edges fixed; P returns to move / trim', 'mové el audio dentro del clip sin desplazar sus bordes; P vuelve a mover / recortar') }, () => setTool('slip'));
   slipButton.classList.add('pl-slip-tool');
+  const fadeButton = toolButton({ icon: 'fade-in', name: t('Fade tool', 'Editar fades'), key: '6', keys: ['6'], color: '#66d1c1',
+    detail: t('drag the start or end inward to fade the selected clips; drag the fade handles to adjust, double-click to reset; Esc cancels a drag', 'arrastrá el inicio o el final hacia adentro para aplicar fades a los clips seleccionados; ajustá con las marcas, doble clic para resetear; Esc cancela el arrastre') }, () => setTool('fade'));
+  fadeButton.classList.add('pl-fade-tool');
   const stretchEdgeButton = toolButton({ icon: ICONS.stretchTool, name: t('Stretch edge', 'Estirar borde'), key: '3', keys: ['3', 'e'], color: '#ffd166',
     detail: t('drag either edge to stretch all selected clips with snap, using each clip’s Stretch / Resample setting; enables Follow tempo', 'arrastrá un borde para estirar todos los clips seleccionados con snap y el ajuste Stretch / Resample de cada clip; activa Seguir tempo') }, () => setTool('stretch'));
   stretchEdgeButton.classList.add('pl-stretch-tool');
@@ -403,7 +406,8 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const selectButton = toolButton({ icon: ICONS.select, name: t('Time selection tool', 'Seleccionar rango'), key: 'Q', keys: ['q'], color: '#ffd166',
     detail: t('drag across tracks to select time, including silence; Ctrl+C/V copies/pastes, Ctrl+D repeats the whole range', 'arrastrá sobre las pistas para seleccionar tiempo, incluido el silencio; Ctrl+C/V copia/pega, Ctrl+D repite el rango completo') }, () => setTool('select'));
   function setTool(tool) {
-    editMode = tool === 'slip' || tool === 'stretch' ? tool : 'move';
+    drag?.cancel();
+    editMode = ['slip', 'stretch', 'fade'].includes(tool) ? tool : 'move';
     selecting = tool === 'select'; setSlicing(tool === 'slice');
   }
   function setSlicing(on) {
@@ -413,8 +417,11 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     pencilButton.setAttribute('aria-pressed', String(!on && !selecting && editMode === 'move')); selectButton.setAttribute('aria-pressed', String(selecting));
     slipButton.setAttribute('aria-pressed', String(!on && !selecting && editMode === 'slip'));
     stretchEdgeButton.setAttribute('aria-pressed', String(!on && !selecting && editMode === 'stretch'));
+    fadeButton.setAttribute('aria-pressed', String(!on && !selecting && editMode === 'fade'));
+    container.classList.toggle('is-fading', !on && !selecting && editMode === 'fade');
     container.classList.toggle('is-drawing', !on && !selecting && editMode === 'move'); container.classList.toggle('is-selecting', selecting);
     container.classList.toggle('is-slipping', !on && !selecting && editMode === 'slip'); container.classList.toggle('is-stretch-tool', !on && !selecting && editMode === 'stretch');
+    paintSoon();
   }
   const help = iconButton('help', t('Playlist shortcuts', 'Atajos de la playlist'), () => showHint(), { variant: 'ghost' });
   toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.wrap, tapButton, metronomeButton, fitTempo, ...tempoControls, node('span', 'pl-spacer'), help, ...toolbarEnd, windowGroup, exportButton, fileInput);
@@ -551,7 +558,6 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const pitch = createKnob({ label: 'Pitch', min: -24, max: 24, step: 1, coarse: 12, value: 0, reset: 0, hint: `${t('transposes the clip in semitones', 'transpone el clip en semitonos')} · ${resetHint}`, format: v => `${signed(v)} st`, onCommit: v => setClip('pitch', v) });
   const fine = createKnob({ label: t('Fine pitch', 'Pitch fino'), min: -100, max: 100, step: 1, coarse: 10, value: 0, reset: 0, hint: `${t('fine tuning in cents (100 = 1 semitone)', 'afinación fina en cents (100 = 1 semitono)')} · ${resetHint}`, format: v => `${signed(v)} ct`, onCommit: v => setClip('cents', v) });
   const speed = createKnob({ label: t('Speed', 'Velocidad'), min: .25, max: 4, step: .01, coarse: .25, value: 1, reset: 1, log: true, hint: `${t('speed of this clip only', 'velocidad solo de este clip')} · ${resetHint}`, format: v => `${v.toFixed(2)}×`, onCommit: v => setClip('speed', v) });
-  const fades = ['fadeIn', 'fadeOut'].map((key, i) => createKnob({ label: i ? 'Fade out' : 'Fade in', min: 0, max: 10, step: .01, coarse: .1, value: 0, reset: 0, hint: `${i ? t('fades the end of the clip out', 'baja el volumen al final del clip') : t('fades the start of the clip in', 'sube el volumen al inicio del clip')} · ${resetHint}`, format: v => `${v.toFixed(2)} s`, onCommit: v => setClip(key, v) }));
   const normalizeButton = iconButton('waveform', t('Normalize audio', 'Normalizar audio'), () => {
     const enable = !chosen().every(clip => clip.normalizationGain !== undefined);
     commit(() => { for (const clip of chosen()) { if (enable) clip.normalizationGain = normalizationGain(assets.get(clip.asset).buffer); else delete clip.normalizationGain; } });
@@ -561,13 +567,9 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const followTempoButton = iconButton('tempo-loop', t('Follow tempo', 'Seguir tempo'), () => setClip('tempoLock', !chosen().every(clip => clip.tempoLock)));
   followTempoButton.classList.add('pl-follow-tempo');
   followTempoButton.dataset.scdlTooltip = t('Follow tempo: anchor this clip to the current BPM and keep its length in beats when BPM changes. Does not detect the sample tempo.', 'Seguir tempo: vincula el clip al BPM actual y conserva su duración en tiempos al cambiar el BPM. No detecta el tempo del sample.');
-  const clipDetails = node('div', 'pl-clip-details'); clipDetails.id = 'clip-details'; clipDetails.hidden = true;
-  const detailName = node('span', 'pl-clip-detail-name');
-  clipDetails.append(detailName, fine.wrap, ...fades.map(f => f.wrap), normalizeButton, followTempoButton);
-  const detailsButton = iconButton('more', t('More clip controls', 'Más controles del clip'), () => {
-    clipDetails.hidden = !clipDetails.hidden; detailsButton.setAttribute('aria-expanded', String(!clipDetails.hidden));
-  }, { variant: 'ghost' });
-  detailsButton.classList.add('pl-clip-settings'); detailsButton.setAttribute('aria-expanded', 'false'); detailsButton.setAttribute('aria-controls', clipDetails.id);
+  const clipOptions = node('div', 'pl-clip-options');
+  clipOptions.setAttribute('role', 'group'); clipOptions.setAttribute('aria-label', t('Clip options', 'Opciones del clip'));
+  clipOptions.append(stretchModeButton, normalizeButton, followTempoButton);
   const muteClip = toolButton({ icon: ICONS.mute, name: t('Mute clip', 'Silenciar clip'), key: 'M', keys: ['m'], color: '#9aa3ad', detail: t('silences only the selected clips; the track keeps playing', 'calla solo los clips seleccionados; la pista sigue sonando') }, () => setClip('mute', !picked()?.mute));
   const reverseClip = toolButton({ icon: ICONS.reverse, name: t('Reverse', 'Invertir'), key: 'R', keys: ['r'], color: '#b48cff', detail: t('plays the selected clips backwards', 'reproduce los clips seleccionados al revés') }, () => setClip('reverse', !picked()?.reverse));
   const crossfade = toolButton({ icon: ICONS.crossfade, name: t('Crossfade overlaps', 'Fundir superposiciones'), key: 'X', keys: ['x'], color: '#4fc3f7', detail: t('fades clips that overlap on the same track so the joins do not click', 'aplica fundidos a los clips que se pisan en la misma pista para que los cortes no hagan clic') }, () => commit(() => crossfadeClips(state.clips)));
@@ -861,10 +863,10 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const fitButton = toolButton({ icon: ICONS.fit, name: t('Show the whole arrangement', 'Ver todo el arreglo'), detail: t('fits every clip in view', 'ajusta el zoom para ver todos los clips'), key: 'F', keys: ['f'], color: '#e6e1da' }, fit);
   // One row of tools in groups: pointer tools, cut/copy/delete, clip effects, history, zoom, add.
   const tools = node('div', 'pl-tools');
-  const toolGroups = [[pencilButton, selectButton, stretchEdgeButton, slipButton, sliceButton], [split, duplicate, remove], [muteClip, reverseClip, crossfade], [undo, redo], [gridButton, zoomOut, zoomIn, fitButton], [importButton, addTrack]];
+  const toolGroups = [[pencilButton, selectButton, stretchEdgeButton, slipButton, fadeButton, sliceButton], [split, duplicate, remove], [muteClip, reverseClip, crossfade], [undo, redo], [gridButton, zoomOut, zoomIn, fitButton], [importButton, addTrack]];
   for (const group of toolGroups.slice(1)) group[0].classList.add('pl-tool-group');
   tools.append(...toolGroups.flat());
-  inspector.append(clipVolume.wrap, pitch.wrap, speed.wrap, stretchModeButton, detailsButton, tools, clipDetails);
+  inspector.append(clipVolume.wrap, pitch.wrap, fine.wrap, speed.wrap, clipOptions, tools);
   let zoomFrame = 0, zoomTarget = null, zoomAnchor = null;
   function zoomAround(x, factor) {
     if (!(factor > 0) || !Number.isFinite(factor)) return;
@@ -888,7 +890,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
   // Help stays available in the header without automatically covering the timeline.
-  const hintText = t('P / 1: draw, move and trim · 2: slip audio · 3 / E: stretch either edge · Q: select time, including silence · Ctrl+C/V: copy/paste audio · Ctrl+D: duplicate selection · Stretch beside the knobs: on preserves pitch, off resamples (H toggles, 4 on, 5 off) · More clip controls: Normalize, Follow tempo, fine pitch and fades · Right-click channel volume or FX Mix: create automation · Double-click an envelope to add points; right-click points for Linear/Hold/Delete · G: grid beside zoom · Alt bypasses snap · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 lanes / 5 minutes.', 'P / 1: dibujar, mover y recortar · 2: deslizar audio · 3 / E: estirar un borde · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar audio · Ctrl+D: duplicar selección · Stretch junto a las perillas: activado conserva pitch, desactivado usa Resample (H alterna, 4 activa, 5 desactiva) · Más controles: Normalizar, Seguir tempo, pitch fino y fades · Clic derecho en volumen del canal o Mix de FX: crear automatización · Doble clic en la curva agrega puntos; clic derecho en un punto ofrece Lineal/Escalón/Eliminar · G: grilla junto al zoom · Alt omite snap · Espacio reproduce · S corta · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 carriles / 5 minutos.');
+  const hintText = t('P / 1: draw, move and trim · 2: slip audio · 3 / E: stretch either edge · 6: drag edges or fade handles to fade in/out; double-click a handle to reset; Esc cancels a drag · Q: select time, including silence · Ctrl+C/V: copy/paste audio · Ctrl+D: duplicate selection · Stretch beside the knobs: on preserves pitch, off resamples (H toggles, 4 on, 5 off) · Normalize, Follow tempo and fine pitch are beside Stretch · Right-click channel volume or FX Mix: create automation · Double-click an envelope to add points; right-click points for Linear/Hold/Delete · G: grid beside zoom · Alt bypasses snap · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 lanes / 5 minutes.', 'P / 1: dibujar, mover y recortar · 2: deslizar audio · 3 / E: estirar un borde · 6: arrastrá bordes o marcas para editar fades; doble clic en una marca para resetear; Esc cancela el arrastre · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar audio · Ctrl+D: duplicar selección · Stretch junto a las perillas: activado conserva pitch, desactivado usa Resample (H alterna, 4 activa, 5 desactiva) · Normalizar, Seguir tempo y pitch fino están junto a Stretch · Clic derecho en volumen del canal o Mix de FX: crear automatización · Doble clic en la curva agrega puntos; clic derecho en un punto ofrece Lineal/Escalón/Eliminar · G: grilla junto al zoom · Alt omite snap · Espacio reproduce · S corta · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 carriles / 5 minutos.');
   function showHint() {
     toast({ id: 'playlist-hint', variant: 'info', title: t('Playlist shortcuts', 'Atajos de la playlist'), message: hintText, duration: 12000 });
   }
@@ -971,7 +973,9 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     if (!spectrum && !analyzing.has(buffer)) {
       analyzing.add(buffer); spectrumOf(buffer).then(paintSoon, () => {});
     }
-    const data = buffer.getChannelData(0), bins = spectrum?.peaks.length, loop = assets.get(clip.asset)?.loop ? buffer.duration : 0;
+    const channels = Array.from({ length: buffer.numberOfChannels }, (_, channel) => buffer.getChannelData(channel));
+    const bins = spectrum?.peaks.length, loop = assets.get(clip.asset)?.loop ? buffer.duration : 0;
+    const gain = clip.gain * (clip.normalizationGain ?? 1), duration = clipDuration(clip);
     const binSeconds = spectrum ? spectrum.durationMs / 1000 / bins : 0;
     const startX = Math.max(TRACK_HEAD, Math.floor(left)), endX = Math.min(viewport, Math.ceil(left + width));
     let lastPass = null;
@@ -993,16 +997,16 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
         ctx.fillStyle = spectrumColor(low, mid, high);
       } else {
         const first = Math.floor(from * buffer.sampleRate), last = Math.min(buffer.length, Math.ceil(to * buffer.sampleRate)), stride = Math.max(1, Math.floor((last - first) / 64));
-        for (let i = first; i < last; i += stride) peak = Math.max(peak, Math.abs(data[i]));
+        for (const data of channels) for (let i = first; i < last; i += stride) peak = Math.max(peak, Math.abs(data[i]));
         ctx.fillStyle = '#858d96';
       }
-      const bar = Math.min(1, peak) * height * .88;
+      const bar = Math.min(1, peak * gain * clipEnvelope(clip, (a + b) / 2 * duration)) * height * .88;
       if (bar > .02) ctx.fillRect(x, top + (height - bar) / 2, 1, Math.max(1, bar));
     }
     if (clip.fadeIn || clip.fadeOut) {
       ctx.strokeStyle = '#fff9'; ctx.beginPath();
       for (let x = startX; x < endX; x++) {
-        const y = top + height * (1 - clipEnvelope(clip, (x - left) / zoom));
+        const y = top + height * (1 - clipEnvelope(clip, (x - left) / width * duration));
         if (x === startX) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
@@ -1157,15 +1161,53 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     item.style.left = (clip.at * zoom) + 'px'; item.style.width = Math.max(8, clipDuration(clip) * zoom) + 'px'; item.style.setProperty('--clip-color', color(trackOf(clip.track)));
     item.classList.toggle('is-stretching', stretching(clip)); item.classList.toggle('is-muted', !!clip.mute); item.classList.toggle('is-pattern', isPattern(clip));
     item.querySelector('.pl-clip-title').replaceChildren(...(clip.tempoLock ? [globalThis.SCIcons.create('stretch')] : []), ...(clip.reverse ? [globalThis.SCIcons.create('reverse')] : []), document.createTextNode(name + (clipPitch(clip) ? '  ' + signed(clipPitch(clip)) + ' st' : '') + (clip.speed !== 1 ? '  ' + clip.speed.toFixed(2) + '×' : '')));
+    const duration = clipDuration(clip);
+    for (const handle of item.querySelectorAll('.pl-fade-handle')) {
+      const value = Math.min(clip[handle.dataset.fade] || 0, duration);
+      const fraction = value / duration;
+      handle.style.left = `clamp(6px, ${(handle.dataset.fade === 'fadeIn' ? fraction : 1 - fraction) * 100}%, calc(100% - 6px))`;
+      handle.setAttribute('aria-valuemax', String(duration)); handle.setAttribute('aria-valuenow', String(value));
+      handle.setAttribute('aria-valuetext', `${value.toFixed(2)} s`);
+      handle.dataset.scdlTooltip = `${handle.getAttribute('aria-label')}: ${value.toFixed(2)} s · ${resetHint}`;
+    }
+    for (const edge of item.querySelectorAll('.pl-edge')) edge.dataset.scdlTooltip = editMode === 'fade'
+      ? (edge.dataset.edge === 'left' ? 'Fade in' : 'Fade out')
+      : editMode === 'stretch' ? t('Drag to stretch', 'Arrastrar para estirar') : t('Drag to trim', 'Arrastrar para recortar');
   }
   function clipElement(initial) {
     const id = initial.id;
     const item = node('div', 'pl-clip'); item.dataset.clip = id; item.tabIndex = 0; item.setAttribute('role', 'button');
     item.append(node('span', 'pl-clip-title'));
     for (const edge of ['left', 'right']) { const handle = node('span', `pl-edge pl-edge-${edge}`); handle.dataset.edge = edge; handle.dataset.scdlTooltip = t('Drag to trim', 'Arrastrar para recortar'); item.append(handle); }
+    for (const [key, label] of [['fadeIn', 'Fade in'], ['fadeOut', 'Fade out']]) {
+      const handle = node('span', 'pl-fade-handle'); handle.dataset.fade = key; handle.tabIndex = 0;
+      handle.setAttribute('role', 'slider'); handle.setAttribute('aria-label', label); handle.setAttribute('aria-valuemin', '0');
+      handle.setAttribute('aria-orientation', 'horizontal'); item.append(handle);
+      handle.onkeydown = event => {
+        const steps = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 };
+        if (!(event.key in steps) && !['Home', 'End'].includes(event.key)) return;
+        event.preventDefault(); event.stopPropagation();
+        if (!isChosen(id)) pick(id);
+        commit(() => { for (const clip of chosen()) {
+          const duration = clipDuration(clip), value = Math.min(clip[key] || 0, duration);
+          clip[key] = event.key === 'Home' ? 0 : event.key === 'End' ? duration : clamp(value + steps[event.key] * (event.shiftKey ? .1 : .01), 0, duration);
+        } });
+      };
+    }
+    // Pointer capture retargets dblclick to the clip, so the pressed part is remembered.
+    let pressed = null;
+    item.ondblclick = event => {
+      if (editMode !== 'fade') return;
+      const target = pressed || event.target;
+      const key = target.dataset.fade || (target.dataset.edge === 'left' ? 'fadeIn' : target.dataset.edge === 'right' ? 'fadeOut' : null);
+      if (!key) return;
+      event.preventDefault(); event.stopPropagation();
+      if (!isChosen(id)) pick(id);
+      if (chosen().some(clip => clip[key])) setClip(key, 0);
+    };
     // Remembered for the contextmenu event, which older Chrome versions fire without pointerType.
     item.onpointerdown = event => {
-      item.dataset.pointer = event.pointerType;
+      item.dataset.pointer = event.pointerType; pressed = event.target;
       // macOS turns Ctrl+click into a right click too: that click toggles the selection only.
       ctrlClick = event.button === 0 && event.ctrlKey ? id : null;
       beginDrag(event, state.clips.find(c => c.id === id), item);
@@ -1216,14 +1258,16 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     const clip = picked();
     const automation = state.automation?.find(item => item.id === selectedAutomation);
     renderPitchMode();
-    for (const input of [clipVolume.dial, pitch.dial, fine.dial, speed.dial, ...fades.map(f => f.dial), muteClip, reverseClip, duplicate, split, remove]) input.disabled = !clip;
-    fine.show(clip?.cents ?? 0); fades[0].show(clip?.fadeIn ?? 0); fades[1].show(clip?.fadeOut ?? 0);
+    for (const input of [clipVolume.dial, pitch.dial, fine.dial, speed.dial, muteClip, reverseClip, duplicate, split, remove]) input.disabled = !clip;
+    fine.show(clip?.cents ?? 0);
     muteClip.setAttribute('aria-pressed', String(!!clip?.mute)); reverseClip.setAttribute('aria-pressed', String(!!clip?.reverse));
     clipVolume.show(Math.round((clip?.gain ?? 1) * 100)); pitch.show(clip?.pitch ?? 0); speed.show(clip?.speed ?? 1);
-    normalizeButton.disabled = followTempoButton.disabled = !clip;
-    normalizeButton.setAttribute('aria-pressed', String(!!clip && clip.normalizationGain !== undefined));
-    followTempoButton.setAttribute('aria-pressed', String(!!clip?.tempoLock));
-    detailName.textContent = clip ? `${assets.get(clip.asset)?.name || ''} · ${t('Selected clip', 'Clip seleccionado')}` : t('Select an audio clip', 'Seleccioná un clip de audio');
+    const clips = chosen();
+    for (const [control, enabled] of [[normalizeButton, clip => clip.normalizationGain !== undefined], [followTempoButton, clip => clip.tempoLock]]) {
+      const active = clips.filter(enabled).length;
+      control.disabled = !clips.length;
+      control.setAttribute('aria-pressed', active && active < clips.length ? 'mixed' : String(active > 0));
+    }
     for (const item of grid.querySelectorAll('.pl-clip')) item.setAttribute('aria-pressed', String(isChosen(item.dataset.clip)));
     for (const item of shelf.children) item.setAttribute('aria-pressed', String(item.dataset.asset === drawSource?.asset));
     duplicate.disabled = !clip && !timeSelection && !automation; remove.disabled = !clip && !automation;
@@ -1327,17 +1371,23 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     else if (selected !== clip.id) { extra.delete(clip.id); extra.add(selected); selected = clip.id; }
     timeSelection = null; selectedAutomation = null; drawSource = { ...clip }; activeTrack = clip.track;
     updateSelection(); item.focus({ preventScroll: true });
+    const edge = event.target.dataset.edge;
+    const fade = editMode === 'fade' ? event.target.dataset.fade || (edge === 'left' ? 'fadeIn' : edge === 'right' ? 'fadeOut' : null) : null;
+    if (editMode === 'fade' && !fade) return;
     const lanes = [...grid.querySelectorAll('.pl-lane')], tracks = state.tracks.filter(track => track.kind !== 'automation');
     const clips = chosen();
     drag = { id: event.pointerId, x: event.clientX, scroll: scroll.scrollLeft, before: copy(), clip: { ...clip },
-      clips: clips.map(c => ({ ...c })), range: previousRange, edge: event.target.dataset.edge, editMode, changed: false };
+      clips: clips.map(c => ({ ...c })), range: previousRange, edge, fade, editMode, changed: false };
     item.setPointerCapture(event.pointerId);
     item.onpointermove = move => {
       if (drag?.id !== move.pointerId) return;
       const original = drag.clip, delta = (move.clientX - drag.x + scroll.scrollLeft - drag.scroll) / zoom;
       if (!drag.changed && Math.abs(delta * zoom) < 2 && (drag.edge || Math.abs(move.clientY - event.clientY) < 2)) return;
       let updates;
-      if (drag.editMode === 'slip' && !drag.edge) {
+      if (drag.fade) {
+        const shift = delta * (drag.fade === 'fadeIn' ? 1 : -1);
+        updates = drag.clips.map(c => ({ ...c, [drag.fade]: clamp(Math.min(c[drag.fade] || 0, clipDuration(c)) + shift, 0, clipDuration(c)) }));
+      } else if (drag.editMode === 'slip' && !drag.edge) {
         updates = drag.clips.map(c => slipClip(c, delta * (c.reverse ? -1 : 1), isPattern(c) ? Infinity : assets.get(c.asset).buffer.duration));
       } else if (drag.edge) {
         const anchor = original.at + (drag.edge === 'right' ? clipDuration(original) : 0);
@@ -1377,6 +1427,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       draw(); grid.querySelector(`.pl-clip[data-clip="${selected}"]`)?.focus({ preventScroll: true });
     };
     item.onpointerup = () => finish(false); item.onpointercancel = item.onlostpointercapture = () => finish(true);
+    drag.cancel = () => finish(true);
   }
   // Track edits from the host and the track headers. Live edits are heard at once
   // and become one undo step with the next final edit.
@@ -1504,6 +1555,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   for (const root of keyRoots) root.addEventListener('keydown', onKey);
   function onKey(event) {
     if (event.target.closest?.('input,select,textarea') || event.target.isContentEditable) return;
+    if (event.key === 'Escape' && drag) { event.preventDefault(); event.stopPropagation(); drag.cancel(); return; }
     const modifier = event.ctrlKey || event.metaKey;
     if (event.altKey) return;
     if (event.code === 'Space') { event.preventDefault(); event.stopPropagation(); if (!event.repeat) safe(space)(); return; }
