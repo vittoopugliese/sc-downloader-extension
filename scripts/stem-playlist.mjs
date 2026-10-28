@@ -323,7 +323,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     metronomeButton.setAttribute('aria-pressed', String(metronome.enabled()));
     if (playing()) startMetronome();
   });
-  metronomeButton.setAttribute('aria-pressed', 'false');
+  metronomeButton.classList.add('pl-metronome'); metronomeButton.setAttribute('aria-pressed', 'false');
   function startMetronome() {
     if (engineIO) metronome.start({ context: engineIO.context, position: () => engine?.now() ?? null, bpm: () => state.bpm, rate: () => rate, loop: () => transport().loop });
   }
@@ -366,7 +366,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const windowKeys = new Map(), windowButtons = new Map();
   function windowButton({ id, icon, name, detail, key, keys, color, toggle }) {
     const control = toolButton({ icon, name, detail, key, keys, color, variant: 'accent', size: 'icon' }, () => toggle(control));
-    control.classList.add('pl-window-tool'); control.setAttribute('aria-pressed', 'false');
+    control.classList.add('pl-window-tool'); control.dataset.window = id; control.setAttribute('aria-pressed', 'false');
     for (const combo of keys) if (/^f\d+$/.test(combo)) windowKeys.set(combo, control);
     windowButtons.set(id, control);
     return control;
@@ -424,6 +424,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     paintSoon();
   }
   const help = iconButton('help', t('Playlist shortcuts', 'Atajos de la playlist'), () => showHint(), { variant: 'ghost' });
+  help.classList.add('pl-help');
   toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.wrap, tapButton, metronomeButton, fitTempo, ...tempoControls, node('span', 'pl-spacer'), help, ...toolbarEnd, windowGroup, exportButton, fileInput);
   const shelf = node('div', 'pl-shelf'); shelf.setAttribute('aria-label', t('Sample library', 'Biblioteca de samples'));
   shelf.dataset.scdlTooltip = t('Library: click to select for drawing, double-click to add at the cursor, drag onto a track. Right-click for more.', 'Biblioteca: clic para elegir qué dibujar, doble clic para agregar en el cursor, arrastrá a una pista. Clic derecho para más.');

@@ -53,7 +53,7 @@ async function reopenExtract(page) {
     await page.locator('.pl-stem-head[data-stem=vocals]').waitFor();
     const fx = page.locator('#stem-fx');
     assert.equal(await fx.isVisible(), false);
-    await page.locator('#transport .pl-windows').getByRole('button', { name: 'FXs', exact: true }).click();
+    await page.locator('#transport').getByRole('button', { name: 'FXs', exact: true }).click();
     assert.equal(await fx.isVisible(), true);
     const parity = await page.evaluate(() => ({
       expected: Object.keys(SCTempoEffects.DEFAULTS).filter(key => !['preset', 'schemaVersion'].includes(key)).sort(),

@@ -98,7 +98,7 @@ async function reopenExtract(page) {
     assert.equal(await page.locator('.pl-stem-head').count(), 5, 'The separation stays loaded');
     await page.reload();
     await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 2);
-    await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click(); await page.locator('.stem').first().waitFor();
+    await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click(); await page.locator('.pl-stem-head').first().waitFor();
     assert.equal(await page.evaluate(() => inferences), 0);
     assert.equal(await page.locator('#stem-rate').inputValue(), '0.5');
     assert.equal(await page.locator('#stem-keep-tone').isChecked(), true);

@@ -11,25 +11,39 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 /* Stem-colored top edge, inside the border: the box minus its content area leaves a 2px
    band that follows the inner curve of the corners. */
 .workspace-header::before{content:'';position:absolute;z-index:1;inset:0;padding-top:2px;border-radius:11px;background:linear-gradient(90deg,var(--vocals) 0 25%,var(--drums) 25% 50%,var(--bass) 50% 75%,var(--other) 75%);opacity:.85;pointer-events:none;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
-.daw-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0;padding:7px 12px}
-.daw-row-main .transport-bar{flex:1 1 520px;min-width:0}
+/* One deck of two rows. Row one: brand, cover, project menu, transport, speed, help, pin and
+   four tool windows. Row two: the output spectrum under the speed slider and help, tooltips
+   under the pin and the four editors under the windows. The free space gathers at the start
+   of row two. The transport and the playlist toolbar take no box: their groups (built in
+   stems-page.mjs) are the grid items. */
+.daw-deck{display:grid;grid-template-columns:minmax(356px,1fr) repeat(5,auto);grid-template-areas:"start transport tempo help pin wtop" ". . monitor monitor info wbottom";align-items:center;gap:6px;padding:8px 12px}
+.daw-deck .transport-bar,.daw-deck .pl-toolbar{display:contents}
+.daw-deck .pl-spacer{display:none}
+.daw-start{grid-area:start;display:flex;align-items:center;gap:10px;min-width:0;margin-right:6px}
+.daw-transport{grid-area:transport;display:flex;align-items:center;gap:5px;margin-right:4px}
+.daw-deck .stem-tempo{grid-area:tempo}
+.daw-deck .pl-help{grid-area:help}
+.daw-deck .header-pin{grid-area:pin}
+.daw-deck .tooltips-toggle{grid-area:info}
+.daw-windows{display:flex;gap:5px;margin-left:4px}
+.daw-windows-top{grid-area:wtop}
+.daw-windows-bottom{grid-area:wbottom}
 .header-pin .ui-btn-icon{width:16px;height:16px}
-.daw-row-sub{border-top:1px solid #ffffff0c;background:#17171780;padding:5px 12px}
 /* Hint panel, as in FL: the loaded track, then status and progress messages. */
-.brand{display:flex;align-items:center;flex-wrap:wrap;gap:9px;font-size:10px;font-weight:800;letter-spacing:1.5px}
+.brand{display:flex;flex:0 0 auto;align-items:center;gap:8px;font-size:15px;font-weight:800;letter-spacing:.2px;cursor:default}
 .brand img,.brand sc-icon{object-fit:contain}
 /* The tagline is the title's tooltip. */
 /* Keep the row's vertical padding around the spectrum, flush with the right edge. */
-.output-monitor-slot{display:flex;justify-content:flex-end;align-self:stretch;flex:1 1 380px;min-width:0;min-height:32px}
-.output-monitor{position:relative;width:31.25%;margin:0 -12px 0 0;contain:layout paint}
+.output-monitor-slot{grid-area:monitor;display:flex;align-self:stretch;min-width:0;height:32px}
+.output-monitor{position:relative;flex:1;min-width:0;border-radius:4px;overflow:hidden;contain:layout paint}
 .output-monitor-canvas{position:absolute;inset:0;display:block;width:100%;height:100%}
-.header-library{display:flex;align-items:center;gap:10px;flex:0 1 auto;min-width:0}
+.header-library{display:flex;align-items:center;gap:10px;flex:1 1 auto;min-width:0;max-width:440px}
 .header-library .preset-toolbar{flex:1;min-width:0}
 .preset-toolbar{display:flex;gap:6px;min-width:0}
 .preset-toolbar select{flex:1;min-width:0;width:0;height:32px;padding:0 8px;border:1px solid #45423e;border-radius:6px;background:#242321;color:var(--ink);font:11px Arial,Helvetica,sans-serif;cursor:pointer}
 .preset-toolbar select:disabled{opacity:.4;cursor:not-allowed}
 /* Saved projects: the shared row menu, styled like the old select; half its old width. */
-.preset-toolbar .preset-menu{flex:0 1 240px;width:240px;min-width:110px}
+.preset-toolbar .preset-menu{flex:1 1 240px;width:240px;min-width:110px}
 .workspace-header .preset-toolbar .row-menu-toggle{flex:1;width:100%;min-width:0;height:32px;padding:0 8px;border:1px solid #45423e;border-radius:6px;background:#242321;color:var(--ink);font:11px Arial,Helvetica,sans-serif}
 .workspace-header .preset-toolbar .row-menu-toggle:disabled{opacity:.4;cursor:not-allowed}
 /* Saved separation rows: names start at the left; the delete cross shows on hover. */
@@ -43,9 +57,14 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 .workspace-header #save-project.has-changes{border-color:var(--orange);color:#ffad80}
 .workspace-header #preset-folder.has-custom-folder{border-color:var(--orange);background:#42291d;color:#ffad80}
 #preset-reconnect{justify-self:start;white-space:normal}
-/* Narrow windows: the rows wrap; the identity block shares its line with the pin. */
-@media(max-width:1100px){
-  .daw-row-main .transport-bar{order:3;flex-basis:100%}
+/* Row one needs about 1200px of header for an unsqueezed speed slider; narrower windows wrap
+   the deck in reading order. */
+@media(max-width:1279px){
+  .daw-deck{display:flex;flex-wrap:wrap;align-items:center}
+  .daw-start{flex:1 1 100%;margin:0}
+  .daw-transport,.daw-windows{margin:0}
+  .daw-transport{order:1}.daw-deck .stem-tempo{order:2}.daw-deck :is(.pl-help,.tooltips-toggle,.header-pin){order:3}.daw-windows{order:4}
+  .daw-deck .output-monitor-slot{flex:1 1 100%;order:10}
 }
 /* On phones and short windows the wrapped header is too tall to pin. */
 @media(max-width:600px),(max-height:480px){
@@ -482,9 +501,8 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 
 /* The timeline sits directly on the workspace, without an outer card. */
 main>#playlist{margin-top:12px;padding:0}
-.daw-row-main>.brand{padding-right:8px}
-.daw-row-sub .source-mini{flex:0 0 auto}
-@media(max-width:600px){.header-library{flex:1 1 calc(100% - 50px)}}
+.daw-start .source-mini{flex:0 0 auto}
+@media(max-width:600px){.daw-start,.daw-transport{flex-wrap:wrap;min-width:0}.header-library{flex:1 1 100%;max-width:none}}
 
 /* Continuous pattern timelines: every bar shares one horizontal scroll. */
 .rack-grid{grid-template-columns:34px repeat(var(--rack-steps,16),24px);max-height:60vh;overscroll-behavior:contain}

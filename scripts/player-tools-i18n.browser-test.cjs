@@ -54,7 +54,7 @@ const { chromium } = require('playwright');
       await page.locator('#import-name').fill('Record'); // A user title matching a catalog key must stay untouched.
       await page.locator('#import-confirm').click();
       await page.locator('#separate:not(:disabled)').click();
-      await page.locator('.stem').first().waitFor();
+      await page.locator('.pl-stem-head').first().waitFor();
       assert.equal(await page.locator('#stem-presets .row-menu-value').textContent(), 'Record');
       { await page.locator('.pl-stem-head[data-stem=drums] .stem-more').click(); await page.locator('.pl-menu-item').nth(0).click(); }
       const copy = await page.evaluate(() => ({

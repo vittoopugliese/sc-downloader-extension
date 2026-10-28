@@ -33,7 +33,8 @@ const { chromium } = require('playwright');
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html`);
     await page.locator('#import-audio:not(:disabled)').waitFor();
     assert.equal(await page.locator('.studio-card, .workspace-edition, #workspace-title, .pl-notes, #status').count(), 0);
-    assert.equal(await page.locator('#header-pin').evaluate(e => e.nextElementSibling.id), 'toggle-game');
+    // The game leads the top row of orange window buttons.
+    assert.equal(await page.locator('.daw-windows-top > :first-child').getAttribute('id'), 'toggle-game');
     // Help, tooltips and pin are ghost buttons, in that order; every tooltip is the shared one.
     const headerEnd = await page.locator('#header-pin').evaluate(pin => [pin.previousElementSibling.previousElementSibling, pin.previousElementSibling, pin]
       .map(e => [e.getAttribute('aria-label'), e.classList.contains('ui-btn--ghost')]));
@@ -118,7 +119,7 @@ const { chromium } = require('playwright');
     await page.locator('#transport input[type=file]').setInputFiles({ name: 'Library tone.wav', mimeType: 'audio/wav', buffer: Buffer.from(encodeWav([pcm, pcm])) });
     await page.locator('.pl-clip').waitFor();
     const stretch = inspector.getByRole('button', { name: 'Stretch', exact: true });
-    assert.equal(await stretch.evaluate(e => e.previousElementSibling.classList.contains('ui-knob')), true, 'The Stretch toggle sits beside the clip knobs');
+    assert.equal(await stretch.evaluate(e => e.parentElement.previousElementSibling.classList.contains('ui-knob')), true, 'The Stretch toggle leads the clip options beside the knobs');
     assert.equal(await stretch.getAttribute('aria-pressed'), 'true');
     const onColor = await stretch.evaluate(e => getComputedStyle(e).backgroundColor);
     await stretch.click();

@@ -344,7 +344,23 @@ const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('trans
   } });
 // Pin: the header stays at the top while scrolling, or scrolls away with the page.
 const header = document.querySelector('.workspace-header'), pin = $('header-pin');
-document.querySelector('.workspace-header .brand').dataset.scdlTooltip = text('workspace');
+document.querySelector('.workspace-header .brand').dataset.scdlTooltip = 'Stem Extractor In Browser';
+// Header deck (stems.css): the transport and the window buttons in groups that the grid
+// places in two rows. They stay inside the playlist toolbar, so its hotkeys keep working
+// after a click on any of them.
+{
+  const bar = $('transport').querySelector('.pl-toolbar'), find = selector => bar.querySelector(selector);
+  const group = (className, label, nodes) => {
+    const wrap = document.createElement('div'); wrap.className = className;
+    if (label) { wrap.setAttribute('role', 'group'); wrap.setAttribute('aria-label', label); }
+    wrap.append(...nodes.filter(Boolean)); bar.append(wrap); return wrap;
+  };
+  const windowButton = id => find(`.pl-window-tool[data-window="${id}"]`);
+  group('daw-transport', '', [$('play'), find('.pl-time'), find('.pl-field'), find('.pl-tap'), find('.pl-metronome'), find('.pl-fit-tempo')]);
+  group('daw-windows daw-windows-top', say('Windows', 'Ventanas'), [$('toggle-game'), windowButton('browser'), windowButton('recorder'), find('.pl-export')]);
+  group('daw-windows daw-windows-bottom', say('Editors', 'Editores'), ['rack', 'piano', 'fx', 'eq'].map(windowButton));
+  find('.pl-windows')?.remove();
+}
 function setPinned(pinned) {
   header.dataset.pinned = String(pinned);
   pin.setAttribute('aria-pressed', String(pinned));
@@ -601,7 +617,7 @@ $('import-form').onsubmit = async event => {
 };
 // Imported files and Likes Explorer recordings become the Original, ready to separate.
 function loadLocalAudio(next, value) {
-  disposeResults();
+  dismissToast('welcome'); disposeResults();
   for (const view of waveforms) view.dispose();
   original = next; wavs = []; rate = 1; keepTone = false; renderTempo(); playlist.setRate(rate);
   renderInfo(value);
@@ -671,7 +687,8 @@ libraryUI = mountStemLibrary({ locale, report: status, canSave: () => !!info && 
         if (buffer.duration <= MAX_SAMPLE_SECONDS && buffer.numberOfChannels <= 2) restoredSamples.push({ id, name: names.get(id)?.name || 'Sample', group: names.get(id)?.group, buffer });
       } catch (cause) { console.warn('[Stem presets] Skipped sample', id, cause); }
     }
-    disposeResults();
+    // The welcome hint (choose audio or a project) is answered.
+    dismissToast('welcome'); disposeResults();
     for (const view of waveforms) view.dispose();
     original = decoded[0];
     renderInfo(record.info);
@@ -849,13 +866,15 @@ function buildChannel(stem, wav, trackName = null) {
   channels.set(stem, item);
   return item;
 }
+// Every audio track uses this header, in empty projects too, so tracks look alike.
 function channelForTrack(track, source) {
-  if (!original) return null;
   const key = track.stem || track.id, previous = channels.get(key);
   if (previous && previous.buffer === source?.buffer) return previous;
   previous?.head.remove();
   const item = buildChannel(key, source ? wavOf(source.buffer) : null, track.stem ? null : track.name);
   item.buffer = source?.buffer;
+  // Drawn before the next onChange: start with the track's own state.
+  item.enable.setAttribute('aria-checked', String(!track.mute)); item.volume.show(Math.round(track.gain * 100));
   return item;
 }
 // Stems chosen in the extraction window. The separation keeps all four WAVs; the others
@@ -1137,6 +1156,6 @@ try {
   else if (recordingId) await loadRecording();
   setBusy(false);
   // An empty page says where audio comes from; a loop or recording opens the extraction window.
-  if (!jobId && !recordingId) status(localCopy[10], 'info');
+  if (!jobId && !recordingId) toast({ id: 'welcome', title: localCopy[10], variant: 'info' });
 } catch (error) { console.error('[Stems initialization]', error); status(error.localized ? error.message : text('infoFailed'), 'error'); }
 finally { importReady = true; setBusy(false); }

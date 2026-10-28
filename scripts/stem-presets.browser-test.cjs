@@ -194,7 +194,7 @@ async function reopenExtract(page) {
     await page.reload();
     await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 2);
     await openProject(folderId);
-    await page.locator('.stem').first().waitFor();
+    await page.locator('.pl-stem-head').first().waitFor();
     assert.equal(await rackSample.getAttribute('data-channel'), rackSampleKey, 'Rack-only sample survives folder restoration');
     assert.equal(await page.evaluate(() => inferences), 0);
     await page.locator('#preset-reset').click();
