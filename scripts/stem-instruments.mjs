@@ -202,6 +202,18 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
   return {
     on(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     tracks: () => tracks(), focused, focus: setFocus, patternsOf, instrument, voices,
+    // Check every saved pattern, including inactive modes and patterns not placed in
+    // the song. Merely showing an imported sample in the rack does not use it.
+    usedSampleIds() {
+      const used = new Set();
+      for (const pattern of patterns) for (const key of [pattern.track, ...Object.keys(pattern.channels)]) {
+        const data = lane(pattern, key);
+        if (!data || !(data.notes.length || data.hits.some(hit => hit > 0) || data.steps.some(row => row.some(hit => hit > 0)))) continue;
+        const id = playlist.trackSource(key)?.id || (key.startsWith('sample-') ? key.slice('sample-'.length) : null);
+        if (id) used.add(id);
+      }
+      return used;
+    },
     tempo: () => playlist.bpm(), speed: () => rate(),
     async recordingClock(backing, active = () => true) {
       if (backing === 'pattern') {

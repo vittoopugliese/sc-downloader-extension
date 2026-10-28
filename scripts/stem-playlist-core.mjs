@@ -113,6 +113,42 @@ export function slipClip(clip, delta, duration) {
   const shift = clamp(delta * clipRate(clip), -clip.in, duration - clip.out);
   return { ...clip, in: clip.in + shift, out: clip.out + shift };
 }
+// Apply one timeline-edge displacement to the whole selection. The first source,
+// speed or timeline limit stops the group, retaining the spacing of its edges.
+export function resizeClips(clips, delta, { edge, stretch = false, assets }) {
+  let lower = -Infinity, upper = Infinity;
+  for (const clip of clips) {
+    const duration = clipDuration(clip), rate = clipRate(clip), minDuration = Math.min(.01, duration);
+    let minDelta, maxDelta;
+    if (stretch) {
+      const shortest = Math.max(minDuration, duration * clip.speed / 4), longest = duration * clip.speed / .25;
+      minDelta = edge === 'left' ? duration - longest : shortest - duration;
+      maxDelta = edge === 'left' ? duration - shortest : longest - duration;
+    } else {
+      const asset = assets.get(clip.asset), length = asset.loop ? Infinity : asset.buffer.duration;
+      const room = edge === 'left' ? (clip.reverse ? length - clip.out : clip.in) : (clip.reverse ? clip.in : length - clip.out);
+      minDelta = edge === 'left' ? -room / rate : minDuration - duration;
+      maxDelta = edge === 'left' ? duration - minDuration : room / rate;
+    }
+    lower = Math.max(lower, minDelta, edge === 'left' ? -clip.at : -Infinity);
+    upper = Math.min(upper, maxDelta, edge === 'right' ? LIMITS.seconds - clip.at - duration : Infinity);
+  }
+  const shift = clamp(delta, lower, upper);
+  return clips.map(clip => {
+    const next = { ...clip };
+    if (edge === 'left') next.at += shift;
+    if (stretch) {
+      next.speed = clamp(clip.speed * clipDuration(clip) / (clipDuration(clip) + (edge === 'left' ? -shift : shift)), .25, 4);
+      next.tempoLock = true;
+    } else {
+      const offset = shift * clipRate(clip);
+      if (edge === 'left') { if (clip.reverse) next.out -= offset; else next.in += offset; }
+      else if (clip.reverse) next.in -= offset; else next.out += offset;
+      next.in = Math.max(0, next.in);
+    }
+    return next;
+  });
+}
 export function crossfadeClips(clips) {
   const ordered = [...clips].filter(clip => !clip.mute).sort((a, b) => a.at - b.at);
   for (let i = 0; i < ordered.length; i++) for (let j = i + 1; j < ordered.length; j++) {

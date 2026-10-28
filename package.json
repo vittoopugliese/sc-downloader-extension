@@ -18,6 +18,7 @@
     "test:e2e:stems": "node scripts/stems.browser-test.cjs",
     "test:e2e:playlist": "node scripts/stem-playlist.browser-test.cjs",
     "test:e2e:playlist-editing": "node scripts/stem-playlist-editing.browser-test.cjs",
+    "test:e2e:unused-samples": "node scripts/stem-unused-samples.browser-test.cjs",
     "test:e2e:playlist-live-stretch": "node scripts/stem-playlist-live-stretch.browser-test.cjs",
     "test:e2e:sample-browser": "node scripts/stem-sample-browser.browser-test.cjs",
     "test:e2e:module-windows": "node scripts/stem-module-window.browser-test.cjs",

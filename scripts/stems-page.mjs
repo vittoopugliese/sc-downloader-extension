@@ -322,6 +322,7 @@ const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('trans
   toolbarStart: [$('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [tooltipsToggle, $('header-pin'), $('toggle-game')],
   // Right-click > Extract stems… on any audio clip opens the extraction window.
   onSeparate: target => openExtract(target),
+  getUsedSampleIds: () => instruments.usedSampleIds(),
   onPatternAction(action, id) {
     if (action === 'fx') { selectFxChannel(id); moduleWindows.fx?.reveal(); return; }
     const pattern = id.slice('pattern:'.length); if (action === 'duplicate') instruments?.duplicatePattern(pattern); else instruments?.deletePattern(pattern);
@@ -367,7 +368,10 @@ const instruments = createInstruments({ playlist, tracks: instrumentTracks, rate
   changed: ({ auto = false } = {}) => { if (!auto) libraryUI?.changed(); },
   // A pattern preview plays through its track's insert, then Keep Tone and the master.
   async audio(key) { const io = key ? await playlist.trackAudio(key) : await playlistAudio(); outputMonitor.wake(); toneNode?.port.postMessage({ rate, keepTone, reset: true }); return io; } });
-instruments.on(kind => { if (kind === 'transport') outputMonitor.setActive(playlist.playing() || instruments.playing()); });
+instruments.on(kind => {
+  if (kind === 'transport') outputMonitor.setActive(playlist.playing() || instruments.playing());
+  else if (!kind.startsWith('before')) playlist.refreshSampleUsage();
+});
 // Pads and piano notes are auditions: they skip the playlist fader and Keep Tone, but go
 // through their track's FX and EQ and then the master, like an FL Studio mixer insert.
 const auditionBuses = new Map();

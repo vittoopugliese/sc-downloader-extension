@@ -1,10 +1,47 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audibleClips, clipEnvelope, clipsInWindow, clipsInRange, crossfadeClips, needsStretch, slipClip, splitClip, stretchKey, trackAudible, transportWindows } from './stem-playlist-core.mjs';
+import { audibleClips, clipDuration, clipEnvelope, clipsInWindow, clipsInRange, crossfadeClips, needsStretch, resizeClips, slipClip, splitClip, stretchKey, trackAudible, transportWindows } from './stem-playlist-core.mjs';
 import { stretchChannels } from './stem-playlist-stretch.mjs';
 import createSignalsmith from './vendor/signalsmith/wasm-factory.mjs';
 
 const clip = (at, seconds, extra = {}) => ({ id: `c${at}`, asset: 'a', track: 't', at, in: 0, out: seconds, pitch: 0, speed: 1, keepLength: true, gain: 1, ...extra });
+
+test('group trimming shares an edge displacement across reverse and resampled clips and stops at source limits', () => {
+  const assets = new Map([['a', { buffer: { duration: 10 } }]]);
+  const clips = [clip(2, 6, { in: 1 }), clip(3, 8, { in: 2, reverse: true, pitch: 12, keepLength: false })];
+  const before = structuredClone(clips);
+  const right = resizeClips(clips, -.5, { edge: 'right', assets });
+  assert.deepEqual(right.map(c => [c.at, c.in, c.out, c.speed]), [[2, 1, 5.5, 1], [3, 3, 8, 1]]);
+  const left = resizeClips(clips, .5, { edge: 'left', assets });
+  assert.deepEqual(left.map(c => [c.at, c.in, c.out]), [[2.5, 1.5, 6], [3.5, 2, 7]]);
+  const extended = resizeClips(clips, 5, { edge: 'right', assets });
+  assert.deepEqual(extended.map(c => [c.in, c.out]), [[1, 7], [0, 8]], 'The shortest source allowance stops both clips');
+  const shortened = resizeClips(clips, -10, { edge: 'right', assets });
+  assert.ok(Math.abs(clipDuration(shortened[1]) - .01) < 1e-9);
+  assert.ok(Math.abs(clipDuration(shortened[0]) - 2.01) < 1e-9);
+  assert.deepEqual(clips, before, 'The gesture baseline is immutable');
+});
+
+test('group stretch preserves source, pitch modes and opposite edges while respecting speed and timeline limits', () => {
+  const clips = [clip(2, 4), clip(5, 8, { in: 2, keepLength: false, pitch: 12, reverse: true })];
+  for (const edge of ['left', 'right']) {
+    const result = resizeClips(clips, edge === 'left' ? -.5 : .5, { edge, stretch: true });
+    result.forEach((c, i) => {
+      assert.ok(Math.abs(clipDuration(c) - clipDuration(clips[i]) - .5) < 1e-9);
+      assert.deepEqual([c.in, c.out, c.pitch, c.keepLength, c.reverse], [clips[i].in, clips[i].out, clips[i].pitch, clips[i].keepLength, clips[i].reverse]);
+      assert.ok(Math.abs((edge === 'left' ? c.at + clipDuration(c) : c.at) - (edge === 'left' ? clips[i].at + clipDuration(clips[i]) : clips[i].at)) < 1e-9);
+      assert.equal(c.tempoLock, true);
+    });
+  }
+  const limited = resizeClips(clips, -100, { edge: 'right', stretch: true });
+  assert.equal(limited[1].speed, 4);
+  assert.ok(limited[0].speed < 4);
+  assert.equal(resizeClips(clips, -100, { edge: 'left', stretch: true })[0].at, 0);
+  const end = resizeClips([clip(298, 1), clip(5, 2)], 100, { edge: 'right', stretch: true });
+  assert.deepEqual(end.map(c => clipDuration(c)), [2, 3]);
+  const pattern = resizeClips([clip(1, 2)], 5, { edge: 'right', assets: new Map([['a', { loop: true, buffer: { duration: 2 } }]]) });
+  assert.equal(pattern[0].out, 7, 'Pattern edges repeat beyond their source length');
+});
 
 test('time ranges retain silent offsets, crop source windows at playback rate and exclude other lanes', () => {
   const snare = clip(.5, .1), other = clip(.75, .1, { track: 'other' });
