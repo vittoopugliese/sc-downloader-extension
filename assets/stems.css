@@ -424,9 +424,10 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .rack-channel.is-selected .rack-channel-controls{background:#231a12}
 .stem-plugin .rack-channel-name{display:block;flex:1;min-width:0;height:30px;padding:0 6px;line-height:28px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-size:11px}
 .stem-plugin .rack-channel-name[aria-pressed=true]{color:#ffd2b3;border-color:#b77c50}
-.stem-plugin .rack-channel-mode{width:83px;min-width:0;font-size:10px;padding:0 3px}
-.stem-plugin .rack-channel-root{width:56px;min-width:0;font-size:10px;padding:0 3px}
-.stem-plugin .rack-channel-play,.stem-plugin .rack-channel-chops{width:26px;min-width:26px;padding:0}
+.rack-channel-modes{display:flex;flex:none;gap:2px}
+.stem-plugin .rack-channel-modes button[aria-pressed=true]{background:#61391e;color:#ffe0c6;border-color:#e79655}
+.stem-plugin .rack-channel-root{width:34px;min-width:34px;flex:none;font-size:10px;padding:0 8px 0 2px;appearance:none;cursor:pointer;background-image:linear-gradient(45deg,transparent 50%,#bcb3a8 50%),linear-gradient(135deg,#bcb3a8 50%,transparent 50%);background-position:right 5px center,right 2px center;background-size:3px 3px;background-repeat:no-repeat}
+.stem-plugin .rack-channel-play,.stem-plugin .rack-channel-modes button,.stem-plugin .rack-channel-piano{width:26px;min-width:26px;flex:none;padding:0}
 /* A channel with piano roll notes shows them instead of its steps; a click opens the piano roll. */
 .stem-plugin .rack-step[hidden],.stem-plugin .rack-channel-notes[hidden]{display:none}
 .stem-plugin .rack-channel-notes{grid-column:2/-1;position:relative;height:26px;min-width:0;padding:0;overflow:hidden;border:1px solid #5b4a3a;border-radius:3px;cursor:pointer;
@@ -435,7 +436,7 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .stem-plugin .rack-channel-notes:focus-visible{outline:2px solid #fff;outline-offset:1px}
 .rack-channel-note{position:absolute;min-width:2px;min-height:2px;border-radius:1px;background:#f28b41;pointer-events:none}
 .rack-channel-notes::after{content:'';position:absolute;top:0;bottom:0;left:calc(var(--rack-cursor,-1) * 100%);width:1px;background:#ffe9d6;pointer-events:none}
-@media(max-width:600px){.rack-channel{grid-template-columns:236px repeat(16,22px);min-width:0;width:max-content}.stem-plugin .rack-channel-mode{width:68px}.stem-plugin .rack-channel-root{width:48px}.stem-plugin .rack-channel-name{min-width:44px}}
+@media(max-width:600px){.rack-channel{grid-template-columns:236px repeat(16,22px);min-width:0;width:max-content}.stem-plugin .rack-channel-name{min-width:44px}}
 .stem-rack.is-sample-drop{outline:2px solid var(--orange,#ff5500);outline-offset:-2px}
 
 /* Extract stems window (stem-extract-dialog.mjs): compact, in the playlist's panel colors,
@@ -490,7 +491,8 @@ main>#playlist{margin-top:12px;padding:0}
 .rack-channel{grid-template-columns:300px repeat(var(--rack-steps,16),24px);width:max-content;min-width:100%}
 .rack-overview{overscroll-behavior:contain}
 .stem-plugin .rack-step.is-bar{border-left-color:#dfaa79;margin-left:2px}
-.stem-plugin .plugin-bars{width:62px;height:28px;padding:0 6px;border:1px solid #514c44;border-radius:5px;background:#121313;color:#eee;font:11px ui-monospace,monospace}
+.stem-plugin .plugin-bars{width:25px;min-width:25px;height:28px;padding:0 2px;border:1px solid #514c44;border-radius:5px;background:#121313;color:#eee;font:10px ui-monospace,monospace;text-align:center;appearance:textfield}
+.stem-plugin .plugin-bars::-webkit-inner-spin-button,.stem-plugin .plugin-bars::-webkit-outer-spin-button{appearance:none;margin:0}
 .piano-sheet{grid-template-rows:24px var(--piano-height,1078px)}
 .piano-grid{height:var(--piano-height,1078px)}
 .piano-keys .piano-key.is-active{background:#ed7134;color:#fff}

@@ -298,7 +298,7 @@ const { chromium } = require('playwright');
     assert.equal(await clips.count(), 0);
     assert.equal(await playlist.locator('.pl-lane').count(), laneCount);
     assert.equal(await rackRows.count(), 1);
-    assert.equal(await rack.locator('.rack-channel-mode').inputValue(), 'oneShot');
+    assert.equal(await rack.locator('.rack-channel-one-shot').getAttribute('aria-pressed'), 'true');
     assert.equal(await playButton.getAttribute('aria-pressed'), 'false');
     const firstChannel = await rackRows.first().getAttribute('data-channel');
     // Undo/redo includes the imported asset even though it has no playlist clip.

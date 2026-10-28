@@ -65,10 +65,14 @@ export function mountChannelRack({ container, instruments, audioContext, output,
   const channelsTab = button('rack-view-channels', pt('All samples'), pt('Channel rack'), () => setRackView('channels'));
   const chopsTab = button('rack-view-chops', pt('Edit chops'), pt('Chops'), () => setRackView('chops'));
   viewTabs.append(channelsTab, chopsTab);
-  const mode = element('select', 'rack-source-mode'); mode.setAttribute('aria-label', pt('Sample mode'));
-  mode.add(new Option('One-shot', 'oneShot')); mode.add(new Option(pt('Chops'), 'slices'));
-  mode.onchange = () => instruments.editInstrument(instrument => { instrument.mode = mode.value; });
-  function setRackView(value) { rackView = value; overview.stop(); render(); requestAnimationFrame(drawWave); }
+  function setRackView(value) {
+    rackView = value; overview.stop(); sampler?.stop(); sampler?.cancel();
+    // Every entry into the chops editor selects the audio that its pads edit.
+    if (value === 'chops' && instruments.focused().instrument?.mode === 'oneShot') {
+      instruments.editInstrument(instrument => { instrument.mode = 'slices'; });
+    } else render();
+    requestAnimationFrame(drawWave);
+  }
   const play = button('plugin-play', pt('Play pattern'), iconMarkup(PLUGIN_ICONS.play), () => instruments.playing() ? instruments.stop() : instruments.play());
   const focus = patternControls(instruments, { manage: true });
   const place = button('rack-place', pt('Add to playlist'), `${iconMarkup(PLUGIN_ICONS.place)}<span>${pt('Playlist')}</span>`, () => instruments.place());
@@ -94,7 +98,7 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     for (const row of rows) row.fill(0, 0, count());
     if (rackView === 'channels') pattern.notes = pattern.notes.filter(note => note.start >= count());
   }));
-  toolbar.append(viewTabs, play, focus.element, mode, place, slice, clearSlices, clear);
+  toolbar.append(viewTabs, play, focus.element, place, slice, clearSlices, clear);
   const wave = element('div', 'waveform rack-wave');
   const canvas = element('canvas', 'rack-wave-canvas'); canvas.setAttribute('aria-hidden', 'true'); wave.append(canvas);
   const grid = element('div', 'rack-grid'); grid.setAttribute('role', 'group'); grid.setAttribute('aria-label', pt('Pattern steps'));
@@ -106,7 +110,10 @@ export function mountChannelRack({ container, instruments, audioContext, output,
 
   let sampler = null, mounted = null, view = null, template = .8, gesture = null, frame = 0, drawn = '';
   const overview = mountRackOverview({ container: shell.body, instruments, audioContext, output, report,
-    openChops(key) { rackView = 'chops'; instruments.focus(key); instruments.editInstrument(value => { value.mode = 'slices'; }, key); },
+    openChops(key) {
+      if (instruments.focused().key !== key) instruments.focus(key);
+      setRackView('chops'); chopsTab.focus({ preventScroll: true });
+    },
     openPiano(key) { instruments.focus(key); openPianoRoll(key); } });
   shell.body.insertBefore(overview.element, hint);
   const count = () => (instruments.focused().pattern?.bars ?? 1) * STEPS_PER_BAR;
@@ -250,6 +257,8 @@ export function mountChannelRack({ container, instruments, audioContext, output,
   // Space previews the pattern while the rack has focus; the playlist keeps Space elsewhere.
   shell.section.addEventListener('keydown', event => {
     if (event.code !== 'Space' || event.target.closest('input,select,textarea')) return;
+    const control = event.target.closest('button');
+    if (control && !control.classList.contains('rack-step')) return;
     event.preventDefault(); event.stopPropagation();
     if (!event.repeat) play.click();
   });
@@ -329,9 +338,6 @@ export function mountChannelRack({ container, instruments, audioContext, output,
     slice.hidden = clearSlices.hidden = rackView !== 'chops';
     channelsTab.setAttribute('aria-pressed', String(rackView === 'channels'));
     chopsTab.setAttribute('aria-pressed', String(rackView === 'chops'));
-    mode.value = instruments.focused().instrument?.mode || 'slices'; mode.disabled = !track?.buffer;
-    // Chops remain editable while the channel is playing its full sample. They become
-    // audible when the user selects Chops mode; viewing never destroys either sequence.
     overview.render();
     place.disabled = !pattern; clear.disabled = !pattern; slice.disabled = !track?.buffer;
     play.disabled = !pattern && !instruments.playing();

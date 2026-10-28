@@ -50,10 +50,14 @@ export function mountRackOverview({ container, instruments, audioContext, output
     play.append(globalThis.SCIcons.create('play'));
     const name = button('rack-channel-name', track.name, () => instruments.focus(track.key));
     name.addEventListener('dblclick', () => openChops(track.key));
-    const mode = node('select', 'rack-channel-mode');
-    mode.add(new Option('One-shot', 'oneShot')); mode.add(new Option(pt('Chops'), 'slices'));
-    mode.setAttribute('aria-label', pt('Sample mode'));
-    mode.onchange = () => { stop(track.key); instruments.editInstrument(value => { value.mode = mode.value; }, track.key); };
+    const modes = node('div', 'rack-channel-modes');
+    modes.setAttribute('role', 'group'); modes.setAttribute('aria-label', pt('Sample mode'));
+    const oneShot = button('rack-channel-one-shot', '', () => {
+      if (instruments.focused().key !== track.key) instruments.focus(track.key);
+      if (instruments.instrument(track.key).mode !== 'oneShot') instruments.editInstrument(value => { value.mode = 'oneShot'; }, track.key);
+    });
+    oneShot.append(globalThis.SCIcons.create('waveform'));
+    oneShot.dataset.scdlTooltip = 'One-shot'; oneShot.setAttribute('aria-label', 'One-shot');
     const root = node('select', 'rack-channel-root');
     for (let i = 24; i <= 96; i++) root.add(new Option(noteName(i), String(i)));
     root.dataset.scdlTooltip = pt('Root note'); root.setAttribute('aria-label', pt('Root note'));
@@ -61,9 +65,13 @@ export function mountRackOverview({ container, instruments, audioContext, output
     const chops = button('rack-channel-chops', '', () => openChops(track.key));
     chops.append(globalThis.SCIcons.create('slice'));
     chops.dataset.scdlTooltip = pt('Edit chops'); chops.setAttribute('aria-label', pt('Edit chops'));
+    modes.append(oneShot, chops);
+    const piano = button('rack-channel-piano', '', () => openPiano(track.key));
+    piano.append(globalThis.SCIcons.create('piano'));
+    piano.dataset.scdlTooltip = pt('Piano roll'); piano.setAttribute('aria-label', pt('Piano roll'));
     const notes = node('button', 'rack-channel-notes'); notes.type = 'button'; notes.hidden = true;
     notes.addEventListener('click', () => openPiano(track.key));
-    heading.append(play, name, mode, root, chops); row.append(heading, notes);
+    heading.append(play, name, root, modes, piano); row.append(heading, notes);
     heading.addEventListener('contextmenu', event => contextMenu(event, [
       { heading: track.name },
       { label: pt('Piano roll'), icon: 'piano', action: () => openPiano(track.key) },
@@ -83,7 +91,7 @@ export function mountRackOverview({ container, instruments, audioContext, output
         instruments.editInstrument(value => { value.cutSelf = !value.cutSelf; }, track.key);
       } },
     ]));
-    grid.append(row); return { row, name, play, mode, root, notes, steps: [] };
+    grid.append(row); return { row, name, play, oneShot, chops, root, notes, steps: [] };
   }
   function buildSteps(row, key) {
     if (row.steps.length === count()) return;
@@ -173,7 +181,9 @@ export function mountRackOverview({ container, instruments, audioContext, output
         row.name.textContent = track.name; row.name.dataset.scdlTooltip = track.name;
         row.name.setAttribute('aria-pressed', String(selected)); row.row.classList.toggle('is-selected', selected);
         row.play.setAttribute('aria-label', `${pt('Preview note')} · ${track.name}`);
-        row.mode.value = instrument.mode; row.root.value = String(instrument.piano.root);
+        row.oneShot.setAttribute('aria-pressed', String(instrument.mode === 'oneShot'));
+        row.chops.setAttribute('aria-pressed', String(instrument.mode === 'slices'));
+        row.root.value = String(instrument.piano.root);
         const sample = instrumentSample(instrument, track.buffer); row.play.disabled = !sample;
         renderNotes(row, track, instrument);
         row.steps.forEach((cell, column) => {

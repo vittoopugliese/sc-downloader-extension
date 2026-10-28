@@ -297,6 +297,7 @@ export function mountPadSampler({ waveform, buffer, timeline, audioContext, outp
   render();
   return {
     render, state, trigger, autoSlice,
+    stop() { slices.forEach((_, i) => { revisions[i]++; stop(i); }); render(); },
     // Empties all eight pads; `restore` puts a previous set back (undo of Clear All).
     clearAll() {
       if (!slices.some(Boolean)) return false;

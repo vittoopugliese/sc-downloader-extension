@@ -152,7 +152,7 @@ async function reopenExtract(page) {
     assert.equal(await page.evaluate(() => inferences), 0, 'Loading never starts model inference');
     assert.equal(await page.locator('#stem-presets .row-menu-value').textContent(), 'My saved mix');
     assert.equal(await rackSample.getAttribute('data-channel'), rackSampleKey, 'Rack-only sample survives reopening');
-    assert.equal(await rackSample.locator('.rack-channel-mode').inputValue(), 'oneShot');
+    assert.equal(await rackSample.locator('.rack-channel-one-shot').getAttribute('aria-pressed'), 'true');
     assert.equal((await stored()).record.settings.playlist.clips.length, clipsBeforeRackImport);
     assert.equal(await page.locator('.pl-stem-head[data-stem=drums] .ui-knob-dial').getAttribute('aria-valuenow'), '10');
     assert.equal(await page.locator('.pl-stem-head[data-stem=drums] .stem-enable').getAttribute('aria-checked'), 'false');

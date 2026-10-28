@@ -150,7 +150,8 @@ module.exports = async function verifyInstruments(page) {
   // Changing channel keeps the pattern; creating another is an explicit action.
   await rack.locator('.plugin-track').selectOption('drums');
   assert.notEqual(await rack.locator('.plugin-pattern .row-menu-toggle').evaluate(node => node.value), '');
-  await rack.locator('.plugin-new').click();
+  await rack.locator('.plugin-pattern .row-menu-toggle').click();
+  await rack.locator('.plugin-pattern .row-menu-footer').click();
   await page.waitForFunction(() => document.querySelectorAll('#stem-rack .rack-pad.is-assigned').length > 0, null, { timeout: 5000 }).catch(() => {});
   if (!await rack.locator('.rack-pad.is-assigned').count()) { await pads.first().click(); await wave.click({ position: { x: 30, y: 40 } }); }
   const assigned = Number(await rack.locator('.rack-pad.is-assigned').first().evaluate(node => [...node.parentElement.querySelectorAll('.rack-pad')].indexOf(node)));

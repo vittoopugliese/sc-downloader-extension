@@ -265,7 +265,7 @@ export function createInstruments({ playlist, tracks, audio, rate, changed = () 
 
 // Track and pattern selectors shared by both plugins. The pattern menu works like Player
 // Tools' presets: each row has its own delete, which never opens the row. `manage` adds
-// new and duplicate buttons; length belongs to the pattern, so both plugins show it.
+// a duplicate button; new patterns come from the menu. Both plugins show the length.
 export function patternControls(instruments, { manage = false } = {}) {
   const pt = globalThis.SCPlayerToolsText.t;
   const element = (tag, className) => { const node = document.createElement(tag); node.className = className; return node; };
@@ -291,11 +291,10 @@ export function patternControls(instruments, { manage = false } = {}) {
     instruments.editPattern(pattern => { pattern.bars = value; });
   });
   wrap.append(trackSelect, patternMenu.element);
-  let add, copy;
+  let copy;
   if (manage) {
-    add = button('plugin-new', 'New pattern', '<sc-icon name="add" class="icon" aria-hidden="true"></sc-icon>', () => instruments.createPattern());
     copy = button('plugin-duplicate', 'Duplicate pattern', '<sc-icon name="copy" class="icon" aria-hidden="true"></sc-icon>', () => instruments.duplicatePattern());
-    wrap.append(add, copy);
+    wrap.append(copy);
   }
   wrap.append(bars);
   function render() {
@@ -308,7 +307,7 @@ export function patternControls(instruments, { manage = false } = {}) {
     patternMenu.setItems(instruments.patternsOf(key).map(item => ({ id: item.id, name: item.name })));
     patternMenu.setValue(pattern?.id ?? null); patternMenu.setDisabled(!key);
     bars.value = String(pattern?.bars ?? 1); bars.disabled = !key;
-    if (manage) { add.disabled = !key; copy.disabled = !pattern; }
+    if (manage) copy.disabled = !pattern;
   }
   return { element: wrap, render };
 }
