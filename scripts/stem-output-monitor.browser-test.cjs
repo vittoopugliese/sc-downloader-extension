@@ -36,11 +36,12 @@ const { chromium } = require('playwright');
     assert.equal(await monitor.evaluate(element => element.tabIndex), -1);
     assert.equal(await monitor.evaluate(element => getComputedStyle(element).cursor), 'auto');
     assert.equal(await monitor.locator(':scope > *').count(), 1);
-    // Second header row: the spectrum spans the speed slider and the help button above it.
+    // Second header row: the spectrum fills the space after the clip controls, up to the help button above it.
     const box = await monitor.boundingBox(), slot = await page.locator('.output-monitor-slot').boundingBox();
     const tempo = await page.locator('.workspace-header .stem-tempo').boundingBox(), help = await page.locator('.workspace-header .pl-help').boundingBox();
-    assert.deepEqual([box.x, box.width, box.height], [slot.x, slot.width, 32], 'The spectrum fills its slot');
-    assert.ok(Math.abs(box.x - tempo.x) < 1 && Math.abs(box.x + box.width - help.x - help.width) < 1, `The spectrum spans the speed slider and help: ${JSON.stringify({ box, tempo, help })}`);
+    const controls = await page.locator('.workspace-header .pl-inspector').boundingBox();
+    assert.deepEqual([box.x, box.width, box.height], [slot.x, slot.width, controls.height], 'The spectrum fills its slot, as tall as the clip controls');
+    assert.ok(Math.abs(box.x - controls.x - controls.width - 12) < 1 && Math.abs(box.x + box.width - help.x - help.width) < 1, `The spectrum spans from the clip controls to the help button: ${JSON.stringify({ box, controls, help })}`);
     assert.ok(box.y >= tempo.y + tempo.height, 'The spectrum sits under the first row');
     const markup = await monitor.evaluate(element => element.outerHTML);
     const storage = await page.evaluate(() => JSON.stringify(localStorage));

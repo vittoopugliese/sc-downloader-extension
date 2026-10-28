@@ -73,7 +73,7 @@ const { chromium } = require('playwright');
       await page.locator('.workspace-header .pl-tools button[aria-keyshortcuts="Control+Z"]').click();
       assert.equal(await bpm.getAttribute('aria-valuenow'), '120', 'One drag is one undo step');
     }
-    const inspector = page.locator('.workspace-header > .pl-inspector');
+    const inspector = page.locator('.workspace-header .pl-inspector');
     const dials = await inspector.locator('.ui-knob-dial').evaluateAll(nodes => nodes.map(e => ({ width: e.offsetWidth, height: e.offsetHeight, radius: getComputedStyle(e).borderRadius })));
     assert.ok(dials.length > 0 && dials.every(d => d.width === d.height && d.radius === '50%'));
     assert.equal(await page.locator('#playlist').evaluate(e => e.firstElementChild.className), 'pl-library', 'Playlist starts at the sample selector');

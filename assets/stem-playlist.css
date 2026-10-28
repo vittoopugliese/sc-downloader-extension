@@ -134,13 +134,22 @@
 .pl-inspector .ui-knob{--knob-size:26px;--knob-tick-top:2.5px;--knob-tick-height:7px;--knob-tick-origin:9.5px;gap:3px;width:54px;min-width:0}
 .pl-inspector .ui-knob-label{font-size:7px;white-space:nowrap}
 .pl-inspector .ui-knob-value{font-size:8px}
-/* Third header row: subtle dividers continue the project row, with no separate card. */
-.workspace-header>.pl-inspector{padding:9px 12px;border:0;border-top:1px solid #ffffff0c;border-radius:0 0 12px 12px;background:transparent}
-.workspace-header>.pl-inspector>.ui-knob{position:relative;flex-shrink:0}
-.workspace-header>.pl-inspector>.ui-knob+.ui-knob::before{content:'';position:absolute;left:-8px;top:12px;bottom:8px;width:1px;background:#ffffff0a;pointer-events:none}
-.workspace-header>.pl-inspector>.pl-tools{flex:1 1 600px;border-left:1px solid #ffffff0f;padding-left:12px}
+/* In the stems header the clip controls share the second row with the output spectrum, with
+   no card: the four knobs span two lines, and the 23 buttons (clip options, then the tools)
+   fill two lines of twelve beside them. Group starts get a thin divider instead of a gap, so
+   the lines stay aligned. */
+.workspace-header .pl-inspector{display:grid;grid-template-columns:repeat(4,56px) repeat(12,32px);grid-auto-rows:30px;align-items:center;gap:6px 4px;padding:0;border:0;border-radius:0;background:transparent}
+.workspace-header .pl-inspector .pl-clip-options,.workspace-header .pl-inspector .pl-tools{display:contents}
+.workspace-header .pl-inspector>.ui-knob{position:relative;grid-row:span 2;width:56px}
+.workspace-header .pl-inspector>.ui-knob+.ui-knob::before{content:'';position:absolute;left:-3px;top:12px;bottom:8px;width:1px;background:#ffffff0a;pointer-events:none}
+.workspace-header .pl-inspector>.ui-knob:nth-child(4){margin-right:8px}
+.workspace-header .pl-inspector :is(.pl-clip-options,.pl-tools)>*{width:32px;min-width:0;height:30px;padding:0}
+.workspace-header .pl-inspector .pl-tools .pl-tool-group{position:relative;margin-left:0}
+.workspace-header .pl-inspector .pl-tool-group::before,.workspace-header .pl-inspector .pl-tools>:first-child::before{content:'';position:absolute;left:-3px;top:5px;bottom:5px;width:1px;background:#ffffff1f;pointer-events:none}
+.workspace-header .pl-inspector .pl-tools>:first-child{position:relative}
 .workspace-header~.playlist>.pl-library{border-top:1px solid var(--pl-edge);border-radius:10px 10px 0 0}
-@media(max-width:1100px){.workspace-header>.pl-inspector>.pl-tools{border-left:0;border-top:1px solid #ffffff0a;padding:8px 2px 3px}}
+/* Narrow windows and phones: the knobs and buttons wrap. */
+@media(max-width:800px){.workspace-header .pl-inspector{display:flex;flex-wrap:wrap}.workspace-header .pl-inspector>.ui-knob{margin-right:0}}
 /* Window buttons are accent ui-btns; an open window stays pressed. */
 .pl-windows{display:inline-flex;align-items:center;gap:5px}
 /* Hotkey flash: an overlay in the button's color whose opacity is animated from JS. */

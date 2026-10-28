@@ -12,11 +12,13 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
    band that follows the inner curve of the corners. */
 .workspace-header::before{content:'';position:absolute;z-index:1;inset:0;padding-top:2px;border-radius:11px;background:linear-gradient(90deg,var(--vocals) 0 25%,var(--drums) 25% 50%,var(--bass) 50% 75%,var(--other) 75%);opacity:.85;pointer-events:none;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 /* One deck of two rows. Row one: brand, cover, project menu, transport, speed, help, pin and
-   four tool windows. Row two: the output spectrum under the speed slider and help, tooltips
-   under the pin and the four editors under the windows. The free space gathers at the start
-   of row two. The transport and the playlist toolbar take no box: their groups (built in
-   stems-page.mjs) are the grid items. */
-.daw-deck{display:grid;grid-template-columns:minmax(356px,1fr) repeat(5,auto);grid-template-areas:"start transport tempo help pin wtop" ". . monitor monitor info wbottom";align-items:center;gap:6px;padding:8px 12px}
+   four tool windows. Row two: the clip controls (knobs, clip options and editing tools), then
+   the output spectrum filling the rest up to the help button, tooltips under the pin and the
+   four editors under the windows: no empty space at any width. The transport and the playlist
+   toolbar take no box: their groups (built in stems-page.mjs) are the grid items. */
+.daw-deck{display:grid;grid-template-columns:minmax(356px,1fr) repeat(5,auto);grid-template-areas:"start transport tempo help pin wtop" "lower lower lower lower info wbottom";align-items:center;gap:8px 6px;padding:8px 12px}
+.daw-lower{grid-area:lower;display:flex;align-items:stretch;gap:12px;min-width:0}
+.daw-lower>.pl-inspector{order:-1;flex:0 1 auto;min-width:0}
 .daw-deck .transport-bar,.daw-deck .pl-toolbar{display:contents}
 .daw-deck .pl-spacer{display:none}
 .daw-start{grid-area:start;display:flex;align-items:center;gap:10px;min-width:0;margin-right:6px}
@@ -33,8 +35,8 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 .brand{display:flex;flex:0 0 auto;align-items:center;gap:8px;font-size:15px;font-weight:800;letter-spacing:.2px;cursor:default}
 .brand img,.brand sc-icon{object-fit:contain}
 /* The tagline is the title's tooltip. */
-/* Keep the row's vertical padding around the spectrum, flush with the right edge. */
-.output-monitor-slot{grid-area:monitor;display:flex;align-self:stretch;min-width:0;height:32px}
+/* The spectrum takes the height of the clip controls beside it. */
+.output-monitor-slot{display:flex;flex:1 1 200px;min-width:160px;min-height:32px}
 .output-monitor{position:relative;flex:1;min-width:0;border-radius:4px;overflow:hidden;contain:layout paint}
 .output-monitor-canvas{position:absolute;inset:0;display:block;width:100%;height:100%}
 .header-library{display:flex;align-items:center;gap:10px;flex:1 1 auto;min-width:0;max-width:440px}
@@ -64,7 +66,13 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
   .daw-start{flex:1 1 100%;margin:0}
   .daw-transport,.daw-windows{margin:0}
   .daw-transport{order:1}.daw-deck .stem-tempo{order:2}.daw-deck :is(.pl-help,.tooltips-toggle,.header-pin){order:3}.daw-windows{order:4}
-  .daw-deck .output-monitor-slot{flex:1 1 100%;order:10}
+  .daw-lower{flex:1 1 100%;order:10}
+}
+/* Narrower than the clip controls plus a usable spectrum: the spectrum gets its own line. */
+@media(max-width:980px){
+  .daw-lower{flex-wrap:wrap;gap:8px}
+  .daw-lower>.output-monitor-slot{flex:1 1 100%;height:32px}
+  .daw-lower>.pl-inspector{order:1;flex:1 1 100%}
 }
 /* On phones and short windows the wrapped header is too tall to pin. */
 @media(max-width:600px),(max-height:480px){

@@ -36,9 +36,12 @@
         <div class="stem-tempo" role="group" aria-label="Playback speed"><div class="slider-wrap"><div class="limits" aria-hidden="true"><span>0.1x</span><span>3x</span></div><span class="range-label" aria-hidden="true">Tone &amp; Velocity</span><input id="stem-rate" class="slider" type="range" min="0.1" max="3" step="0.0125" value="1" aria-label="Playback speed"></div><label class="keep-tone" data-scdl-tooltip="Keep tone: change playback speed without changing the pitch."><input id="stem-keep-tone" type="checkbox" aria-label="Keep tone"></label><output id="stem-rate-value" for="stem-rate">1.000x</output></div>
         <button id="header-pin" class="header-pin ui-btn ui-btn--ghost ui-btn--icon" type="button" aria-pressed="true"><span data-icon="pin"></span></button>
         <button id="toggle-game" class="ui-btn ui-btn--accent ui-btn--icon" type="button" aria-expanded="false" aria-controls="game-panel"><span data-icon="game"></span></button></div>
-        <div class="output-monitor-slot">
-          <div id="output-monitor" class="output-monitor" role="img">
-            <canvas class="output-monitor-canvas" aria-hidden="true"></canvas>
+        <!-- Second row: the playlist's clip controls mount here (stems-page.mjs), beside the spectrum. -->
+        <div class="daw-lower">
+          <div class="output-monitor-slot">
+            <div id="output-monitor" class="output-monitor" role="img">
+              <canvas class="output-monitor-canvas" aria-hidden="true"></canvas>
+            </div>
           </div>
         </div>
         <input id="audio-file" type="file" accept="audio/*,.wav,.mp3,.flac,.m4a,.ogg,.aac,.aif,.aiff" hidden>

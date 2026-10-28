@@ -38,7 +38,7 @@ const { chromium } = require('playwright');
       };
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html`);
-    const playlist = page.locator('#playlist'), transport = page.locator('#transport'), inspector = page.locator('.workspace-header > .pl-inspector');
+    const playlist = page.locator('#playlist'), transport = page.locator('#transport'), inspector = page.locator('.workspace-header .pl-inspector');
     // One workspace, including before source import.
     assert.equal(await page.locator('#tab-playlist').count(), 0);
     assert.equal(await playlist.isVisible(), true);
@@ -62,12 +62,14 @@ const { chromium } = require('playwright');
       assert.equal(await control.locator('svg').count(), 1);
       assert.match(await control.getAttribute('data-scdl-tooltip'), new RegExp('^' + name + (name === 'Export WAV' ? '' : ' \\([A-Z]\\d*\\)') + ': '));
     }
-    // One row of twenty tools, including Stretch edge and Fade; each has a hotkey.
+    // Twenty tools, including Stretch edge and Fade; each has a hotkey.
     const tools = inspector.locator('.pl-tools > button');
     assert.equal(await tools.count(), 20);
     assert.equal(await transport.locator('.pl-window-tool').count(), 6);
     assert.match(await transport.locator('.pl-window-tool').first().evaluate(e => getComputedStyle(e).backgroundImage), /linear-gradient/, 'Window buttons share the accent button');
-    assert.equal(new Set(await tools.evaluateAll(nodes => nodes.map(n => Math.round(n.getBoundingClientRect().top)))).size, 1);
+    // Beside the knobs, two lines of buttons: the clip options and nine tools, then the other eleven.
+    const tops = await inspector.locator('.pl-clip-options > button, .pl-tools > button').evaluateAll(nodes => nodes.map(n => Math.round(n.getBoundingClientRect().top)));
+    assert.deepEqual([...new Set(tops)].map(top => tops.filter(value => value === top).length), [12, 11]);
     assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 20);
     assert.match(await transport.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundImage), /linear-gradient/);
     // Every header button shares one size.

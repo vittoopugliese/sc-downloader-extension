@@ -317,7 +317,7 @@ const renderTooltipsToggle = () => tooltipsToggle.setAttribute('aria-pressed', S
 document.addEventListener('scdl:tooltips-changed', renderTooltipsToggle);
 window.addEventListener('storage', renderTooltipsToggle);
 const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('transport'), playButton: false, windows: WINDOWS, windowHome: $('mix-tools'),
-  inspectorHost: document.querySelector('.workspace-header'),
+  inspectorHost: document.querySelector('.daw-lower'),
   // One line: play, tempo and speed, then the game, the windows and the export.
   toolbarStart: [$('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [tooltipsToggle, $('header-pin'), $('toggle-game')],
   // Right-click > Extract stems… on any audio clip opens the extraction window.
