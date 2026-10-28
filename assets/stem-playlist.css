@@ -113,7 +113,7 @@
 .pl-clip-details{display:flex;align-items:center;gap:14px;flex:1 0 100%;min-width:0;padding:10px 0 2px;border-top:1px solid #ffffff12;flex-wrap:wrap}
 .pl-clip-details[hidden]{display:none}
 .pl-clip-detail-name{flex:1 1 100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:#b8b3ad}
-.pl-clip-settings[aria-expanded=true]{color:#ffad80;border-color:var(--orange)}
+.pl-clip-settings[aria-expanded=true]{color:#ffad80}
 .playlist.is-slipping .pl-clip{cursor:ew-resize}
 .playlist.is-stretch-tool .pl-edge{background:#ffd16625}
 .channel-action-buttons{flex-wrap:wrap;gap:8px}

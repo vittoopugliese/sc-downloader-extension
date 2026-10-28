@@ -565,7 +565,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   clipDetails.append(detailName, fine.wrap, ...fades.map(f => f.wrap), normalizeButton, followTempoButton);
   const detailsButton = iconButton('more', t('More clip controls', 'Más controles del clip'), () => {
     clipDetails.hidden = !clipDetails.hidden; detailsButton.setAttribute('aria-expanded', String(!clipDetails.hidden));
-  });
+  }, { variant: 'ghost' });
   detailsButton.classList.add('pl-clip-settings'); detailsButton.setAttribute('aria-expanded', 'false'); detailsButton.setAttribute('aria-controls', clipDetails.id);
   const muteClip = toolButton({ icon: ICONS.mute, name: t('Mute clip', 'Silenciar clip'), key: 'M', keys: ['m'], color: '#9aa3ad', detail: t('silences only the selected clips; the track keeps playing', 'calla solo los clips seleccionados; la pista sigue sonando') }, () => setClip('mute', !picked()?.mute));
   const reverseClip = toolButton({ icon: ICONS.reverse, name: t('Reverse', 'Invertir'), key: 'R', keys: ['r'], color: '#b48cff', detail: t('plays the selected clips backwards', 'reproduce los clips seleccionados al revés') }, () => setClip('reverse', !picked()?.reverse));
@@ -833,10 +833,10 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const fitButton = toolButton({ icon: ICONS.fit, name: t('Show the whole arrangement', 'Ver todo el arreglo'), detail: t('fits every clip in view', 'ajusta el zoom para ver todos los clips'), key: 'F', keys: ['f'], color: '#e6e1da' }, fit);
   // One row of tools in groups: pointer tools, cut/copy/delete, clip effects, history, zoom, add.
   const tools = node('div', 'pl-tools');
-  const toolGroups = [[pencilButton, selectButton, slipButton, sliceButton], [split, duplicate, remove], [muteClip, reverseClip, crossfade], [undo, redo], [gridButton, zoomOut, zoomIn, fitButton], [importButton, addTrack]];
+  const toolGroups = [[pencilButton, selectButton, stretchEdgeButton, slipButton, sliceButton], [split, duplicate, remove], [muteClip, reverseClip, crossfade], [undo, redo], [gridButton, zoomOut, zoomIn, fitButton], [importButton, addTrack]];
   for (const group of toolGroups.slice(1)) group[0].classList.add('pl-tool-group');
   tools.append(...toolGroups.flat());
-  inspector.append(clipVolume.wrap, pitch.wrap, speed.wrap, stretchModeButton, stretchEdgeButton, detailsButton, tools, clipDetails);
+  inspector.append(clipVolume.wrap, pitch.wrap, speed.wrap, stretchModeButton, detailsButton, tools, clipDetails);
   let zoomFrame = 0, zoomTarget = null, zoomAnchor = null;
   function zoomAround(x, factor) {
     if (!(factor > 0) || !Number.isFinite(factor)) return;
