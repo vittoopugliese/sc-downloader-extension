@@ -40,13 +40,12 @@ const { chromium } = require('playwright');
     assert.equal(await monitor.evaluate(element => element.tabIndex), -1);
     assert.equal(await monitor.evaluate(element => getComputedStyle(element).cursor), 'auto');
     assert.equal(await monitor.locator(':scope > *').count(), 1);
-    // Last header row: a wide sample shelf followed by a compact spectrum.
+    // Second header row: the compact spectrum sits right after the editing tools.
     const box = await monitor.boundingBox(), slot = await page.locator('.output-monitor-slot').boundingBox();
     const tempo = await page.locator('.workspace-header .stem-tempo').boundingBox();
-    const controls = await page.locator('.workspace-header .pl-library').boundingBox();
-    assert.deepEqual([box.x, box.width, box.height], [slot.x, slot.width, 32], 'The spectrum occupies exactly one control row');
-    assert.ok(box.width <= 200 && controls.width > 700, 'The library uses the remaining width beside the compact spectrum');
-    assert.equal(box.y, controls.y, 'Spectrum and sounds share the last row');
+    const tools = await page.locator('.workspace-header .pl-tools').boundingBox();
+    assert.deepEqual([box.x, box.width, box.height], [slot.x, slot.width, 30], 'The spectrum occupies exactly one control row');
+    assert.ok(box.width <= 200 && box.x >= tools.x + tools.width && box.x - tools.x - tools.width <= 12, 'The spectrum follows the tools');
     assert.ok(box.y >= tempo.y + tempo.height, 'The spectrum sits below the transport');
     assert.ok((await page.locator('.preset-menu').boundingBox()).width <= 150, 'The project dropdown does not stretch');
     const markup = await monitor.evaluate(element => element.outerHTML);
@@ -66,7 +65,7 @@ const { chromium } = require('playwright');
     await page.locator('.pl-clip').waitFor();
     await page.locator('#play').click();
     await page.waitForTimeout(800);
-    const sample = page.locator('.workspace-header .pl-shelf button').first();
+    const sample = page.locator('.pl-hbar-corner .pl-shelf button').first();
     assert.ok(await sample.evaluate(e => Number(e.style.getPropertyValue('--sample-level'))) > .4, 'Playing audio lights its library border');
     assert.equal(await sample.evaluate(e => getComputedStyle(e, '::after').boxShadow), 'none', 'The level strip has no glow');
     assert.equal(await sample.evaluate(e => getComputedStyle(e, '::before').content), 'none', 'No reactive border overlay remains');
@@ -256,7 +255,7 @@ const { chromium } = require('playwright');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(100);
     const mobileBox = await monitor.boundingBox(), mobileSlot = await page.locator('.output-monitor-slot').boundingBox();
-    assert.ok(mobileBox.height >= 32);
+    assert.ok(mobileBox.height >= 30);
     assert.ok(Math.abs(mobileBox.width - mobileSlot.width) < 1 && mobileBox.width <= 200, 'The spectrum stays compact on mobile');
     assert.ok(mobileBox.x >= 0 && mobileBox.x + mobileBox.width <= 390, 'Compact spectrum fits on mobile');
     await monitor.click(); assert.deepEqual(await monitor.boundingBox(), mobileBox);
@@ -270,21 +269,21 @@ const { chromium } = require('playwright');
       await page.setViewportSize({ width, height: 1000 });
       const layout = await page.evaluate(() => {
         const rect = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
-        return { header: rect('.workspace-header'), monitor: rect('#output-monitor'), library: rect('.pl-library'), project: rect('.preset-menu'), transport: rect('.daw-transport'), load: rect('.preset-toolbar'), windows: rect('.daw-windows-bottom'), topWindows: rect('.daw-windows-top'), inspector: rect('.pl-inspector'), knob: rect('.pl-inspector .ui-knob-dial'), overflow: document.documentElement.scrollWidth > innerWidth };
+        return { header: rect('.workspace-header'), monitor: rect('#output-monitor'), library: rect('.pl-library'), playlist: rect('#playlist'), tools: rect('.pl-tools'), scrollbar: rect('.pl-hbar-row'), project: rect('.preset-menu'), transport: rect('.daw-transport'), load: rect('.preset-toolbar'), windows: rect('.daw-windows-bottom'), topWindows: rect('.daw-windows-top'), inspector: rect('.pl-inspector'), knob: rect('.pl-inspector .ui-knob-dial'), overflow: document.documentElement.scrollWidth > innerWidth };
       });
       assert.equal(layout.overflow, false, `No horizontal page overflow at ${width}px`);
-      assert.equal(layout.monitor.height, 32, `Spectrum keeps one-row height at ${width}px`);
+      assert.equal(layout.monitor.height, 30, `Spectrum keeps one-row height at ${width}px`);
       assert.ok(layout.monitor.width <= 200 && layout.project.width <= 150, `Project and spectrum stay compact at ${width}px`);
-      assert.ok(layout.library.x >= layout.header.x && layout.library.right <= layout.header.right, `Audio library fits the header at ${width}px`);
+      assert.ok(layout.library.x >= layout.playlist.x && layout.library.right <= layout.playlist.right && layout.library.y >= layout.scrollbar.y, `The used sounds sit beside the playlist scrollbar at ${width}px`);
       if (width >= 1200) {
-        assert.equal(layout.monitor.y, layout.library.y, 'Last row contains sounds and spectrum');
+        assert.ok(Math.abs(layout.monitor.y + layout.monitor.height / 2 - layout.tools.y - layout.tools.height / 2) < 2, 'The spectrum shares the tools row');
         assert.equal(layout.transport.y, layout.load.y, 'Play follows the project controls on the first row');
         assert.ok(layout.transport.x >= layout.load.right, 'Play is to the right of the project controls');
         assert.ok(layout.transport.x - layout.load.right <= 12, 'Play immediately follows the project controls without an expanding gap');
         assert.equal(layout.windows.x, layout.topWindows.x, 'Editors align below the other orange windows');
         assert.ok(layout.windows.y >= layout.inspector.y && layout.windows.bottom <= layout.inspector.bottom, 'Editors fit beside the compact tools');
         assert.equal(layout.knob.width, 22, 'Clip knobs are smaller');
-        assert.ok(layout.inspector.height < 45 && layout.monitor.y >= layout.inspector.bottom && layout.header.height < 150, `Only three compact rows at ${width}px`);
+        assert.ok(layout.inspector.height < 45 && layout.header.height < 100, `Only two compact rows at ${width}px`);
       }
     }
     assert.deepEqual(errors, []);

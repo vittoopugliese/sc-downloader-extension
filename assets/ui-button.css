@@ -4,7 +4,7 @@
    aria-pressed=true. */
 button.ui-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex-shrink:0;box-sizing:border-box;height:var(--ui-button-height,32px);min-height:0;margin:0;padding:0 11px;border:1px solid transparent;border-radius:6px;font:700 11px/1 Arial,Helvetica,sans-serif;letter-spacing:.2px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s;-webkit-user-select:none;user-select:none}
 button.ui-btn--icon{width:var(--ui-button-width,34px);padding:0}
-button.ui-btn--tool{width:var(--ui-button-width,32px);height:calc(var(--ui-button-height,32px) - 2px);padding:0}
+button.ui-btn--tool{width:var(--ui-button-width,32px);height:var(--ui-button-tool-height,calc(var(--ui-button-height,32px) - 2px));padding:0}
 .ui-btn .ui-btn-icon{width:18px;height:18px;flex-shrink:0;pointer-events:none}
 .ui-btn--text .ui-btn-icon{width:15px;height:15px}
 .ui-btn-label{overflow:hidden;text-overflow:ellipsis}

@@ -44,18 +44,19 @@ const { chromium } = require('playwright');
     await page.locator('#stem-presets-menu .row-menu-row').nth(1).click();
     await chooser; // The second option opens the file picker.
     await page.keyboard.press('Escape');
-    // Tooltips sit below the pin; the redundant shortcuts popup is gone.
+    // Tooltips sit beside the pin on the first row; the redundant shortcuts popup is gone.
     const headerEnd = await page.locator('#header-pin').evaluate(pin => [pin, pin.nextElementSibling]
       .map(e => [e.getAttribute('aria-label'), e.classList.contains('ui-btn--ghost')]));
     assert.deepEqual(headerEnd, [['Pin header', true], ['Toggle tooltips', true]]);
     assert.equal(await page.locator('.pl-help').count(), 0);
     const pinBox = await page.locator('#header-pin').boundingBox(), tipsBox = await page.locator('.tooltips-toggle').boundingBox();
-    assert.equal(pinBox.x, tipsBox.x); assert.ok(tipsBox.y >= pinBox.y + pinBox.height);
+    assert.equal(pinBox.y, tipsBox.y); assert.ok(tipsBox.x >= pinBox.x + pinBox.width);
+    assert.ok(pinBox.y < (await page.locator('.pl-tools').boundingBox()).y, 'Pin and tooltips share the first row');
     const headerButtons = await page.locator('.workspace-header button').evaluateAll(buttons => buttons.filter(button => !button.closest('.row-menu-list') && !button.classList.contains('ui-knob-dial')).map(button => ({ id: button.id, shared: button.classList.contains('ui-btn'), width: button.offsetWidth, height: button.offsetHeight, tool: button.classList.contains('ui-btn--tool'), icon: button.classList.contains('ui-btn--icon'), iconSize: button.querySelector('.ui-btn-icon')?.getBoundingClientRect().width })));
     assert.ok(headerButtons.every(button => button.shared), 'Every header button uses the shared component, including the project dropdown');
     for (const button of headerButtons.filter(button => button.width && (button.icon || button.tool))) {
-      assert.equal(button.width, 28, `${button.id}: shared width`);
-      assert.equal(button.height, button.tool ? 30 : 32, `${button.id}: tools are only 2px shorter`);
+      assert.equal(button.width, 30, `${button.id}: shared width`);
+      assert.equal(button.height, 30, `${button.id}: every header button is 30x30`);
       assert.equal(button.iconSize, 18, `${button.id}: icons retain the same size`);
     }
     const nativeTitles = await page.evaluate(() => [...document.querySelectorAll('main [title], dialog [title]')]
@@ -76,7 +77,7 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('#header-pin').getAttribute('title'), null, 'No native title replaces it');
     await page.locator('.tooltips-toggle').click();
     assert.equal(await page.evaluate(() => localStorage.getItem('scdl.tooltips.enabled')), 'true');
-    assert.equal(await page.getByRole('spinbutton', { name: 'BPM', exact: true }).evaluate(e => e.getBoundingClientRect().height), 32);
+    assert.equal(await page.getByRole('spinbutton', { name: 'BPM', exact: true }).evaluate(e => e.getBoundingClientRect().height), 30, 'BPM matches the 30px header buttons');
     { // BPM is a drag number like FL Studio's: 4 px up is +1, whole numbers only; one drag is one undo step.
       const bpm = page.getByRole('spinbutton', { name: 'BPM', exact: true }), box = await bpm.boundingBox();
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down();
@@ -96,7 +97,7 @@ const { chromium } = require('playwright');
     const dials = await inspector.locator('.ui-knob-dial').evaluateAll(nodes => nodes.map(e => ({ width: e.offsetWidth, height: e.offsetHeight, radius: getComputedStyle(e).borderRadius })));
     assert.ok(dials.length > 0 && dials.every(d => d.width === d.height && d.radius === '50%'));
     assert.equal(await page.locator('#playlist').evaluate(e => e.firstElementChild.className), 'pl-scroll', 'Playlist starts at the ruler');
-    assert.equal(await page.locator('.workspace-header .pl-library').count(), 1, 'The sample library lives in the header');
+    assert.equal(await page.locator('#playlist .pl-hbar-corner > .pl-library').count(), 1, 'The sample library sits beside the playlist scrollbar');
     // Moved controls keep keyboard ownership, and one key press runs exactly once.
     const snap = inspector.locator('.pl-grid-snap');
     await snap.focus(); await page.keyboard.press('g');

@@ -60,8 +60,15 @@
 .pl-hbar-row{display:flex;border:1px solid var(--pl-edge);border-top:0;border-radius:0 0 10px 10px;background:var(--pl-head-bg);overflow:hidden}
 .pl-hbar-row[hidden]{display:none}
 .pl-scroll:has(+.pl-hbar-row[hidden]){border-radius:0 0 10px 10px}
-.pl-hbar-corner{flex:0 0 var(--pl-head);border-right:1px solid var(--pl-edge)}
-.pl-hbar{flex:1 1 auto;min-width:0;height:14px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:#5a554f transparent}
+.pl-hbar-corner{flex:0 0 var(--pl-head);min-width:0;border-right:1px solid var(--pl-edge)}
+.pl-hbar{flex:1 1 auto;align-self:center;min-width:0;height:14px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:#5a554f transparent}
+.pl-hbar.is-idle{visibility:hidden}
+/* The used sounds scroll sideways in the corner under the channel heads. */
+.pl-hbar-corner>.pl-library{gap:6px;min-height:0;height:100%;padding:4px 26px 4px 6px;border:0;background:transparent}
+.pl-hbar-corner .pl-shelf{gap:4px;padding:0;scrollbar-width:none}
+.pl-hbar-corner .pl-shelf::-webkit-scrollbar{display:none}
+.pl-hbar-corner .pl-shelf button{max-width:120px;height:24px;padding:0 8px;font-size:10px}
+.pl-hbar-corner .pl-busy{right:6px}
 .pl-hbar>div{height:1px}
 .pl-grid{position:relative;overflow:clip}
 .pl-wave-layer{position:absolute;z-index:3;pointer-events:none}

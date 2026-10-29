@@ -115,12 +115,13 @@ export function contextMenu(event, items) {
 // A host with its own play button passes `playButton: false`; `toolbarHost` mounts the
 // transport bar elsewhere: `toolbarStart` opens it, `tempoControls` follow the tempo controls and
 // `toolbarEnd` sits before the download button;
-// `inspectorHost` mounts the clip knobs and editing tools elsewhere; `libraryHost` moves
-// the sample shelf and its `inspectorControls`. Pattern library entries are owned by
+// `inspectorHost` mounts the clip knobs and editing tools elsewhere; the sample shelf and
+// its `inspectorControls` sit under the channel heads, beside the horizontal scrollbar, unless
+// `libraryHost` moves them. Pattern library entries are owned by
 // the host: their Duplicate/Delete go through `onPatternAction(action, assetId)`.
 // `onSeparate(clip)` adds "Extract stems…" to the menu of every audio clip; the host
 // separates it and hands the result back with `addStemTracks`.
-export function mountPlaylist({ container, windows = [], windowHome = null, toolbarHost = container, inspectorHost = container, libraryHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, masterEffects, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect, onRackSample, onSeparate, getUsedSampleIds }) {
+export function mountPlaylist({ container, windows = [], windowHome = null, toolbarHost = container, inspectorHost = container, libraryHost = null, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, masterEffects, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect, onRackSample, onSeparate, getUsedSampleIds }) {
   const es = document.documentElement.lang === 'es', t = (en, spanish) => es ? spanish : en;
   let state = emptyArrangement(), assets = new Map(), selected = null, extra = new Set(), zoom = 48, viewBpm = 120, snap = .5;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
@@ -903,12 +904,13 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   container.classList.add('playlist', 'pl-ui'); container.tabIndex = -1;
   // The timeline scrollbar spans only the lanes, not the channel headers.
   const hbarRow = node('div', 'pl-hbar-row'), hbar = node('div', 'pl-hbar'), hbarSize = node('div');
-  hbarRow.setAttribute('aria-hidden', 'true'); hbar.append(hbarSize); hbarRow.append(node('div', 'pl-hbar-corner'), hbar);
+  const hbarCorner = node('div', 'pl-hbar-corner');
+  hbar.setAttribute('aria-hidden', 'true'); hbar.append(hbarSize); hbarRow.append(hbarCorner, hbar);
   hbar.addEventListener('scroll', () => { if (scroll.scrollLeft !== hbar.scrollLeft) scroll.scrollLeft = hbar.scrollLeft; });
   scroll.addEventListener('scroll', () => { if (hbar.scrollLeft !== scroll.scrollLeft) hbar.scrollLeft = scroll.scrollLeft; });
   (toolbarHost === container ? container : toolbarHost).append(toolbar);
   inspectorHost.append(inspector);
-  libraryHost.append(library);
+  (libraryHost || hbarCorner).append(library);
   container.append(scroll, hbarRow);
 
   function travel(forward) {
@@ -1021,9 +1023,12 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   }
   function paint() {
     hbarSize.style.width = Math.max(0, scroll.scrollWidth - TRACK_HEAD) + 'px';
-    // The scrollbar row only shows when there are clips and something to scroll to.
+    // The scrollbar shows when there are clips and something to scroll to; its row also
+    // stays while the sample shelf beside it has sounds.
     const scrollable = state.clips.length + (state.automation?.length || 0) > 0 && scroll.scrollWidth > scroll.clientWidth + 1;
-    if (hbarRow.hidden === scrollable) hbarRow.hidden = !scrollable;
+    const showRow = scrollable || (!libraryHost && shelf.childElementCount > 0);
+    if (hbarRow.hidden === showRow) hbarRow.hidden = !showRow;
+    if (hbar.classList.contains('is-idle') === scrollable) hbar.classList.toggle('is-idle', !scrollable);
     if (hbar.scrollLeft !== scroll.scrollLeft) hbar.scrollLeft = scroll.scrollLeft;
     const rect = grid.getBoundingClientRect(), y = Math.max(0, -rect.top);
     const height = Math.max(1, Math.min(rect.height - y, innerHeight - Math.max(0, rect.top)));

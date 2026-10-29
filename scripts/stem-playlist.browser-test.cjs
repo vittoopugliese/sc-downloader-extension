@@ -78,7 +78,7 @@ const { chromium } = require('playwright');
     assert.equal(await inspector.locator('.pl-tools').evaluate(e => getComputedStyle(e).borderLeftWidth), '1px');
     assert.match(await transport.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundImage), /linear-gradient/);
     // Every header button shares one size.
-    assert.deepEqual([...new Set(await transport.locator('button.ui-btn--icon').evaluateAll(nodes => nodes.filter(n => n.offsetParent).map(n => n.offsetWidth + 'x' + n.offsetHeight)))], ['28x32']);
+    assert.deepEqual([...new Set(await transport.locator('button.ui-btn--icon').evaluateAll(nodes => nodes.filter(n => n.offsetParent).map(n => n.offsetWidth + 'x' + n.offsetHeight)))], ['30x30']);
     const ruler = playlist.locator('.pl-ruler'), band = playlist.locator('.pl-loop-band');
     assert.match(await ruler.getAttribute('data-scdl-tooltip'), /drag inside.*edges.*double-click/i);
     const dragRuler = async (from, to) => {
@@ -209,18 +209,18 @@ const { chromium } = require('playwright');
     await playlist.locator('.pl-hint').waitFor({ state: 'hidden', timeout: 12000 });
     // Right-click menus contain actions on the target; stretch settings stay beside the knobs.
     const menu = page.locator('.pl-menu');
-    await page.locator('.workspace-header .pl-shelf button', { hasText: 'tone.wav' }).first().click({ button: 'right' });
+    await page.locator('.pl-hbar-corner .pl-shelf button', { hasText: 'tone.wav' }).first().click({ button: 'right' });
     assert.deepEqual(await menu.locator('.pl-menu-label').allTextContents(), ['Extract stems…', 'Duplicate', 'Check unused sounds', 'Delete from project']);
     assert.equal(await menu.locator('.pl-menu-item.is-danger .pl-menu-label').textContent(), 'Delete from project');
     assert.equal(await menu.locator('.pl-menu-item svg').count(), 4);
     assert.equal(await menu.locator('.pl-menu-item.is-danger').evaluate(e => getComputedStyle(e).color), 'rgb(255, 107, 107)');
     await menu.getByRole('menuitem', { name: 'Duplicate' }).click();
     assert.equal(await menu.count(), 0, 'Choosing an item closes the menu');
-    const copy = page.locator('.workspace-header .pl-shelf button', { hasText: 'tone.wav (2)' });
+    const copy = page.locator('.pl-hbar-corner .pl-shelf button', { hasText: 'tone.wav (2)' });
     await copy.waitFor();
     await copy.click({ button: 'right' }); await menu.getByRole('menuitem', { name: 'Check unused sounds' }).click();
     assert.equal(await copy.locator('.pl-unused-label').textContent(), 'Unused', 'A library-only duplicate is marked in the real workspace');
-    assert.equal(await page.locator('.workspace-header .pl-shelf button.is-unused').count(), 1, 'The assigned original is still used');
+    assert.equal(await page.locator('.pl-hbar-corner .pl-shelf button.is-unused').count(), 1, 'The assigned original is still used');
     await copy.click({ button: 'right' }); await menu.getByRole('menuitem', { name: 'Delete from project' }).click();
     await page.locator('#channel-action-dialog [data-action=delete]').click();
     await copy.waitFor({ state: 'detached' });
@@ -302,14 +302,14 @@ const { chromium } = require('playwright');
     assert.ok(await rackTracks.count() >= 1, 'The track keeps its instrument without clips');
     // Deleting the sample from the project lets the instrument go; undo brings it back.
     await page.keyboard.press('F6');
-    await page.locator('.workspace-header .pl-shelf button', { hasText: 'tone.wav' }).first().click({ button: 'right' });
+    await page.locator('.pl-hbar-corner .pl-shelf button', { hasText: 'tone.wav' }).first().click({ button: 'right' });
     await menu.getByRole('menuitem', { name: 'Delete from project' }).click();
     await page.locator('#channel-action-dialog [data-action=delete]').click();
-    assert.equal(await page.locator('.workspace-header .pl-shelf button', { hasText: 'tone.wav' }).count(), 0);
+    assert.equal(await page.locator('.pl-hbar-corner .pl-shelf button', { hasText: 'tone.wav' }).count(), 0);
     assert.equal(await rackTracks.count(), 0, 'No track has an instrument any more');
     // No click on the timeline first: the playlist keeps its hotkeys after the menu closes.
     await page.keyboard.press('Control+z');
-    await page.locator('.workspace-header .pl-shelf button', { hasText: 'tone.wav' }).first().waitFor();
+    await page.locator('.pl-hbar-corner .pl-shelf button', { hasText: 'tone.wav' }).first().waitFor();
     assert.ok(await rackTracks.count() >= 1, 'Undo restores the sample and the instrument');
     assert.deepEqual(errors, []);
     console.log('Playlist browser test passed.', result);

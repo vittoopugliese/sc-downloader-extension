@@ -6,28 +6,28 @@ body{margin:0;-webkit-font-smoothing:antialiased}
 main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 /* Shared header: transport, project and stem meters, then clip controls and editing tools.
    Pinned (sticky at the top) unless the pin button turns it off. */
-.workspace-header{--ui-button-width:28px;--ui-button-height:32px;position:relative;z-index:50;isolation:isolate;border:1px solid #42403d;border-radius:12px;background:radial-gradient(ellipse at 12% 0,#ff70200c,transparent 65%),#202020;box-shadow:0 8px 30px #0002}
+.workspace-header{--ui-button-width:30px;--ui-button-height:30px;--ui-button-tool-height:30px;position:relative;z-index:50;isolation:isolate;border:1px solid #42403d;border-radius:12px;background:radial-gradient(ellipse at 12% 0,#ff70200c,transparent 65%),#202020;box-shadow:0 8px 30px #0002}
 .workspace-header[data-pinned=true]{position:sticky;top:0;box-shadow:0 10px 24px #000b}
 /* Stem-colored top edge, inside the border: the box minus its content area leaves a 2px
    band that follows the inner curve of the corners. */
 .workspace-header::before{content:'';position:absolute;z-index:1;inset:0;padding-top:2px;border-radius:11px;background:linear-gradient(90deg,var(--vocals) 0 25%,var(--drums) 25% 50%,var(--bass) 50% 75%,var(--other) 75%);opacity:.85;pointer-events:none;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
-/* Three desktop rows: project/transport/windows, tools/editors, wide sounds/spectrum. */
-.daw-deck{display:grid;grid-template-columns:minmax(300px,max-content) auto minmax(184px,1fr) auto auto;grid-template-areas:"start transport tempo pin wtop" "inspector inspector inspector info wbottom" "lower lower lower lower lower";align-items:center;gap:6px 4px;padding:8px 10px}
-.daw-lower{grid-area:lower;display:flex;align-items:center;gap:12px;min-width:0;padding-top:6px;border-top:1px solid #ffffff12}
-.daw-lower>.pl-library{order:-1;flex:1;min-width:0;min-height:32px;height:32px;padding:0 24px 0 0;border:0;background:transparent}
-.daw-lower .pl-busy{right:0}
-.daw-lower .pl-shelf{padding:0}
-.daw-deck>.pl-inspector{grid-area:inspector;min-width:0}
+/* Two desktop rows. Row one: project, transport, speed, pin and tooltips, windows. Row two:
+   the clip controls and tools, the spectrum right after them, then the editors. Every header
+   button is 30x30px. The sample shelf lives under the playlist, beside its scrollbar. */
+.daw-deck{display:grid;grid-template-columns:minmax(300px,max-content) auto minmax(184px,1fr) auto auto;grid-template-areas:"start transport tempo options wtop" "lower lower lower lower wbottom";align-items:center;gap:6px 4px;padding:8px 10px}
+.daw-lower{grid-area:lower;display:flex;align-items:center;gap:10px;min-width:0}
+.daw-lower>.pl-inspector{order:-1;flex:0 1 auto;min-width:0}
+/* Wide enough for the tools on one line: the spectrum gives way first. */
+@media(min-width:1200px){.daw-lower>.pl-inspector{flex-shrink:0}}
 .daw-deck .transport-bar,.daw-deck .pl-toolbar{display:contents}
-.daw-header-options{display:contents}
+.daw-header-options{grid-area:options;display:flex;gap:4px}
 .daw-deck .pl-spacer{display:none}
 .daw-start{grid-area:start;display:flex;align-items:center;gap:8px;min-width:0}
 .daw-transport{grid-area:transport;display:flex;align-items:center;gap:4px}
 .daw-deck .pl-time{min-width:75px;padding-inline:5px;font-size:13px}
-.daw-deck .stem-tempo{grid-area:tempo;min-width:0}
+.daw-deck .stem-tempo{grid-area:tempo;gap:4px;min-width:0}
+.daw-deck #stem-rate-value{width:auto;min-width:0;text-align:left}
 .daw-deck .stem-tempo .slider-wrap{flex:1;min-width:100px}
-.daw-deck .tooltips-toggle{grid-area:info}
-.daw-deck .header-pin{grid-area:pin}
 .daw-deck .daw-windows-top{grid-area:wtop}
 .daw-deck .daw-windows-bottom{grid-area:wbottom}
 .daw-windows{display:flex;gap:5px;margin-left:4px}
@@ -36,7 +36,7 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 .brand img,.brand sc-icon{object-fit:contain}
 /* The tagline is the title's tooltip. */
 /* A single control-height spectrum, independent of the inspector's height. */
-.output-monitor-slot{display:flex;flex:0 1 200px;max-width:200px;min-width:120px;height:32px}
+.output-monitor-slot{display:flex;flex:0 1 200px;max-width:200px;min-width:64px;height:30px}
 .output-monitor{position:relative;flex:1;min-width:0;border-radius:4px;overflow:hidden;contain:layout paint}
 .output-monitor-canvas{position:absolute;inset:0;display:block;width:100%;height:100%}
 .header-library{display:flex;align-items:center;gap:10px;flex:0 1 auto;min-width:0}
@@ -63,12 +63,10 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
   .daw-deck{display:flex;flex-wrap:wrap}
   .daw-start{flex:1 1 100%}
   .daw-transport{order:1}.daw-deck .stem-tempo{order:2}
-  .daw-deck .header-pin{order:3}
-  .daw-header-options{display:flex;flex-direction:column;gap:6px;order:3}
+  .daw-header-options{order:3}
   .daw-deck .daw-windows-top{order:4}
-  .daw-deck>.pl-inspector{flex:1 1 100%;order:5}
-  .daw-deck :is(.tooltips-toggle,.daw-windows-bottom){order:6}
-  .daw-lower{flex:1 1 100%;order:7}
+  .daw-lower{flex:1 1 100%;flex-wrap:wrap;order:5}
+  .daw-deck .daw-windows-bottom{order:6}
 }
 @media(max-width:600px){.output-monitor-slot{flex-basis:120px}}
 /* On phones and short windows the wrapped header is too tall to pin. */
@@ -365,7 +363,7 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 @media(max-width:600px){.transport-bar .pl-toolbar{gap:6px}.pl-toolbar .stem-tempo{flex:1 1 100%}}
 /* Time readout: only the number. BPM is a small drag number (three digits). */
 .transport-bar .pl-time{min-width:0;padding:0 2px;border:0;background:none;font-size:16px}
-.transport-bar .pl-field .ui-drag-number-value{height:32px}
+.transport-bar .pl-field .ui-drag-number-value{height:30px}
 /* Loaded track: small cover and title beside "Load audio from computer". */
 .source-mini{display:flex;align-items:center;gap:8px;min-width:0}
 .source-mini .source-cover{width:30px;height:30px;border-radius:5px}

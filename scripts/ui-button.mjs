@@ -5,8 +5,8 @@
 // cells of the playlist tool grid). A label without an icon is a text button; with an
 // icon it shows both. `pressed` (true/false) makes it a toggle with aria-pressed.
 // Static markup uses the same classes: class="ui-btn ui-btn--accent ui-btn--icon".
-// A host can set --ui-button-width/height for every button. Tool buttons keep their
-// icons unchanged and take exactly 2px off the shared height.
+// A host can set --ui-button-width/height for every button. Tool buttons take 2px off the
+// shared height unless the host sets --ui-button-tool-height.
 export function buttonClasses({ variant = 'neutral', size = 'icon' } = {}) {
   return ['ui-btn', `ui-btn--${variant}`, `ui-btn--${size}`];
 }
