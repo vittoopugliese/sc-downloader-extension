@@ -22,7 +22,7 @@ const { chromium } = require('playwright');
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     const origin = `http://127.0.0.1:${server.address().port}`;
     await page.goto(`${origin}/stems.html`);
-    await page.locator('#import-audio:not(:disabled)').waitFor();
+    await page.locator('#audio-file:not(:disabled)').waitFor({ state: 'attached' });
     await page.evaluate(async () => {
       const { mountPlaylist } = await import('./scripts/stem-playlist.mjs');
       const main = document.createElement('main'), container = document.createElement('div');

@@ -145,7 +145,7 @@ async function reopenExtract(page) {
     const warned = new Promise(resolve => page.once('dialog', dialog => { resolve(dialog.type()); dialog.accept(); }));
     await page.goto(url.replace('?job=test', ''));
     assert.equal(await warned, 'beforeunload');
-    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 2);
+    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 3);
     assert.equal(await page.locator('#stem-presets-menu .row-menu-row').first().textContent(), 'Empty project');
     await openProject(id);
     assert.equal(await modified(), false, 'An opened project has no changes');
@@ -175,7 +175,7 @@ async function reopenExtract(page) {
     assert.equal(new URL(page.url()).search, '');
     assert.equal(await page.locator('.pl-stem-head').count(), 0, 'The page starts empty');
     assert.equal((await stored(id)).record.settings.rate, .5, "Don't save leaves the stored project as it was");
-    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 2);
+    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 3);
     await openProject(id);
     // Select a different root and save the loaded audio there, retaining the DB copy.
     await page.locator('#preset-folder').click();
@@ -192,7 +192,7 @@ async function reopenExtract(page) {
       const names = []; for await (const name of directory.keys()) names.push(name); return names.sort();
     }, folderId), ['bass.wav', 'drums.wav', 'original.wav', 'other.wav', 'preset.json', `sample-${rackSampleId}.wav`, 'vocals.wav']);
     await page.reload();
-    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 2);
+    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 3);
     await openProject(folderId);
     await page.locator('.pl-stem-head').first().waitFor();
     assert.equal(await rackSample.getAttribute('data-channel'), rackSampleKey, 'Rack-only sample survives folder restoration');

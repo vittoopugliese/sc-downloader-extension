@@ -83,13 +83,11 @@ main>.eyebrow{margin-top:34px}
 h1{font-size:clamp(34px,5vw,58px);line-height:1.08;letter-spacing:-2.7px;max-width:730px;margin:18px 0 26px;font-weight:750}
 .track{font-weight:700;font-size:17px;overflow-wrap:anywhere;margin:3px 0}
 .muted{color:var(--muted);font-size:12px}
-.prepare{margin:22px 0;padding:23px;background:#202020;border:1px solid var(--line);border-radius:12px}
 .section-heading{display:flex;align-items:center;gap:10px;margin-bottom:16px}
 .section-heading h2{font-size:17px;letter-spacing:-.4px;margin:0}
 .step{display:grid;place-items:center;width:25px;height:25px;border:1px solid var(--line);border-radius:5px;font:10px ui-monospace,monospace;color:var(--muted)}
 .local-tag{display:flex;align-items:center;gap:5px;margin-left:auto;color:#a5bc91;font-size:10px}
 .local-tag .icon{width:14px;height:14px}
-.prepare>p{max-width:730px;margin:8px 0}
 .actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}
 button,.download{display:inline-flex;align-items:center;justify-content:center;gap:7px;font:600 12px/1.5 Arial,Helvetica,sans-serif;color:inherit;background:transparent;border:1px solid #484848;border-radius:6px;padding:10px 14px;cursor:pointer;text-decoration:none;white-space:nowrap;transition:background .15s,border-color .15s}
 button:hover,.download:hover{background:#383838}
@@ -102,8 +100,6 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
 [data-icon]{display:inline-flex}
 .utility-actions{display:flex;align-items:center;gap:7px;margin-left:auto;min-width:0}
 progress{width:100%;height:6px;margin-top:22px;accent-color:var(--orange)}
-#game-panel{margin-top:16px}
-#game-panel iframe{display:block;width:100%;max-width:300px;height:auto;aspect-ratio:2/3;margin:auto;border:0;border-radius:8px;background:#111}
 #audition{padding:24px;background:#202020;border:1px solid #3b3b3b;border-radius:12px}
 #mix-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start;margin-top:20px}
 #mix-tools>section{min-width:0;margin:0;overflow:hidden}
@@ -146,7 +142,7 @@ input[type=checkbox]{accent-color:var(--orange)}
 @media(max-width:600px){main{padding:20px 16px 30px}
 h1{letter-spacing:-1.4px;margin-bottom:22px}
 .edition{display:none}
-.prepare,#audition{padding:16px}
+#audition{padding:16px}
 .section-heading h2{font-size:15px}
 .local-tag{font-size:9px}
 .actions{gap:8px}
@@ -201,7 +197,6 @@ select:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
 .source-cover img,.source-cover sc-icon{width:100%;height:100%;object-fit:cover}
 #artwork-fallback{display:grid;place-items:center}
 #artwork-fallback .icon{width:24px;height:24px}
-.prepare{margin:0;padding:18px;border:0;background:transparent;border-radius:0}
 #audition{padding:16px 18px 18px;border:0;border-top:1px solid var(--line);background:transparent;border-radius:0}
 .section-heading{margin-bottom:12px}
 .actions{gap:7px;margin-top:14px}
@@ -220,7 +215,7 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .stem-volume>span{display:none}
 #original-waveform{margin-left:11px;margin-right:11px}
 .stem output{grid-column:auto;grid-row:auto;font:9px ui-monospace,monospace;text-align:center}
-@media(max-width:600px){.prepare,#audition{padding:14px}.stem{padding:8px;gap:6px}#original-waveform{margin-left:9px;margin-right:9px}}
+@media(max-width:600px){#audition{padding:14px}.stem{padding:8px;gap:6px}#original-waveform{margin-left:9px;margin-right:9px}}
 @media(max-width:380px){.stem h2{font-size:11px;gap:4px}.stem-actions{gap:3px}.stem-actions button,.stem .download{padding:4px 5px;font-size:9px}.stem .download .icon{width:12px;height:12px}.source-cover{width:52px;height:52px}}
 #import-dialog{width:min(480px,calc(100vw - 40px))}
 #import-name{box-sizing:border-box;width:100%;margin:8px 0 16px}
@@ -268,7 +263,6 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 
 /* One line: cover, title, Separate and utilities; transport, mix, speed and legend. */
 #audition{padding-top:12px}
-.prepare .utility-actions{margin-left:auto}
 
 .piano-scroll{max-width:100%;max-height:360px;overflow:auto;overscroll-behavior:contain;border:1px solid #444;border-radius:5px;background:#171717}
 .piano-sheet{--piano-steps:16;display:grid;grid-template-columns:46px minmax(0,1fr);grid-template-rows:24px 550px;min-width:calc(46px + var(--piano-steps)*26px)}
@@ -366,9 +360,6 @@ button,.download{gap:6px;font-size:11px;padding:8px 12px}
 .pl-toolbar .stem-tempo{flex:0 1 auto}
 .pl-toolbar .stem-tempo .slider-wrap{flex:0 1 200px;min-width:105px}
 .pl-toolbar #stem-rate-value{width:auto;min-width:6ch;font-size:12px}
-/* Without the game the separation section is empty: status and progress live in the header. */
-.prepare:has(> #game-panel[hidden]){display:none}
-.prepare{padding-bottom:12px}
 /* Before separation the audition row holds the original waveform; afterwards it is empty. */
 #audition:not(:has(> :not([hidden]))){display:none}
 @media(max-width:600px){.transport-bar .pl-toolbar{gap:6px}.pl-toolbar .stem-tempo{flex:1 1 100%}}

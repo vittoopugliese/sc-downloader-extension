@@ -46,7 +46,7 @@ const { chromium } = require('playwright');
         };
       });
       await page.goto(`${origin}/stems.html`);
-      await page.locator('#import-audio:not(:disabled)').waitFor();
+      await page.locator('#audio-file:not(:disabled)').waitFor({ state: 'attached' });
       assert.equal(await page.locator('html').getAttribute('lang'), locale);
       assert.ok((await page.locator('.keep-tone').getAttribute('data-scdl-tooltip')).toLowerCase().startsWith(tone.toLowerCase()), `${locale}: Keep Tone tooltip`);
       assert.equal(await page.locator('.record-section .tool-section-title').textContent(), record);

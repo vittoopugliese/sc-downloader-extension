@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { dropAudio } = require('./drop-audio.test-helper.cjs');
 
 // Channel rack and piano roll as FL Studio plugins: one focused track and pattern,
 // patterns as repeating playlist clips, project tempo from the playlist.
@@ -181,7 +182,7 @@ module.exports = async function verifyInstruments(page) {
   kick.write('RIFF'); kick.writeUInt32LE(kick.length - 8, 4); kick.write('WAVEfmt ', 8); kick.writeUInt32LE(16, 16); kick.writeUInt16LE(1, 20); kick.writeUInt16LE(1, 22);
   kick.writeUInt32LE(rate, 24); kick.writeUInt32LE(rate * 2, 28); kick.writeUInt16LE(2, 32); kick.writeUInt16LE(16, 34); kick.write('data', 36); kick.writeUInt32LE(rate * 2, 40);
   for (let i = 0; i < rate; i++) kick.writeInt16LE(Math.round(Math.sin(2 * Math.PI * 55 * i / rate) * 20000 * Math.exp(-i / rate * 3)), 44 + i * 2);
-  await page.locator('#transport input[type=file]').setInputFiles({ name: '808.wav', mimeType: 'audio/wav', buffer: kick });
+  await dropAudio(page, { name: '808.wav', mimeType: 'audio/wav', buffer: kick });
   await playlist.locator('.pl-shelf button', { hasText: '808.wav' }).waitFor();
 
   // Presets keep instruments, patterns and their clips.
@@ -228,7 +229,7 @@ module.exports = async function verifyInstruments(page) {
   await page.locator('#save-project').click({ modifiers: ['Shift'] }); await page.locator('#save-name').fill('Other');
   await page.locator('#save-confirm').click();
   await page.waitForFunction(id => document.querySelector('#stem-presets').value.startsWith('stem-') && document.querySelector('#stem-presets').value !== id, id);
-  await page.locator('#transport input[type=file]').setInputFiles({ name: 'unsaved.wav', mimeType: 'audio/wav', buffer: kick });
+  await dropAudio(page, { name: 'unsaved.wav', mimeType: 'audio/wav', buffer: kick });
   await playlist.locator('.pl-shelf button', { hasText: 'unsaved.wav' }).waitFor();
   await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click();
   await page.locator('#unsaved-discard').click();

@@ -1,5 +1,6 @@
 // Real audio/DOM coverage for the passive header spectrum and its render lifecycle.
 const assert = require('node:assert/strict');
+const { dropAudio } = require('./drop-audio.test-helper.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
@@ -32,7 +33,7 @@ const { chromium } = require('playwright');
     });
     const url = `http://127.0.0.1:${server.address().port}/stems.html`;
     await page.goto(url);
-    await page.locator('#import-audio:not(:disabled)').waitFor();
+    await page.locator('#audio-file:not(:disabled)').waitFor({ state: 'attached' });
     const monitor = page.locator('#output-monitor');
     assert.equal(await monitor.getAttribute('role'), 'img');
     assert.equal(await monitor.getAttribute('aria-label'), 'Espectro de frecuencias de salida');
@@ -54,14 +55,14 @@ const { chromium } = require('playwright');
     assert.equal(await monitor.evaluate(element => element.outerHTML), markup, 'Clicks do not change the passive spectrum');
     assert.equal(await page.evaluate(() => JSON.stringify(localStorage)), storage, 'Clicks write no preferences');
     assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'false');
-    await page.reload(); await page.locator('#import-audio:not(:disabled)').waitFor();
+    await page.reload(); await page.locator('#audio-file:not(:disabled)').waitFor({ state: 'attached' });
     assert.equal(await monitor.getAttribute('aria-label'), 'Espectro de frecuencias de salida');
 
     const { encodeWav } = await import('./stem-audio.mjs');
     const rate = 44100, duration = 12;
     const pcm = Float32Array.from({ length: rate * duration }, (_, i) =>
       .12 * (Math.sin(i * 2 * Math.PI * 110 / rate) + Math.sin(i * 2 * Math.PI * 160 / rate) + Math.sin(i * 2 * Math.PI * 1700 / rate)));
-    await page.locator('#transport input[type=file]').setInputFiles({ name: 'Spectrum tones.wav', mimeType: 'audio/wav', buffer: Buffer.from(encodeWav([pcm, pcm])) });
+    await dropAudio(page, { name: 'Spectrum tones.wav', mimeType: 'audio/wav', buffer: Buffer.from(encodeWav([pcm, pcm])) });
     await page.locator('.pl-clip').waitFor();
     await page.locator('#play').click();
     await page.waitForTimeout(800);
@@ -261,7 +262,7 @@ const { chromium } = require('playwright');
     await monitor.click(); assert.deepEqual(await monitor.boundingBox(), mobileBox);
     await page.locator('.workspace-header').screenshot({ path: path.join(root, 'test-results/output-monitor-mobile.png') });
     const retina = await browser.newPage({ deviceScaleFactor: 3, viewport: { width: 1440, height: 1000 } });
-    await retina.goto(url); await retina.locator('#import-audio:not(:disabled)').waitFor();
+    await retina.goto(url); await retina.locator('#audio-file:not(:disabled)').waitFor({ state: 'attached' });
     const retinaScale = await retina.locator('#output-monitor canvas').evaluate(canvas => canvas.width / canvas.getBoundingClientRect().width);
     assert.ok(retinaScale >= 3, 'The backing store preserves full density on 3x displays');
     await retina.close();
@@ -269,7 +270,7 @@ const { chromium } = require('playwright');
       await page.setViewportSize({ width, height: 1000 });
       const layout = await page.evaluate(() => {
         const rect = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
-        return { header: rect('.workspace-header'), monitor: rect('#output-monitor'), library: rect('.pl-library'), project: rect('.preset-menu'), transport: rect('.daw-transport'), load: rect('#import-audio'), windows: rect('.daw-windows-bottom'), topWindows: rect('.daw-windows-top'), inspector: rect('.pl-inspector'), knob: rect('.pl-inspector .ui-knob-dial'), overflow: document.documentElement.scrollWidth > innerWidth };
+        return { header: rect('.workspace-header'), monitor: rect('#output-monitor'), library: rect('.pl-library'), project: rect('.preset-menu'), transport: rect('.daw-transport'), load: rect('.preset-toolbar'), windows: rect('.daw-windows-bottom'), topWindows: rect('.daw-windows-top'), inspector: rect('.pl-inspector'), knob: rect('.pl-inspector .ui-knob-dial'), overflow: document.documentElement.scrollWidth > innerWidth };
       });
       assert.equal(layout.overflow, false, `No horizontal page overflow at ${width}px`);
       assert.equal(layout.monitor.height, 32, `Spectrum keeps one-row height at ${width}px`);
@@ -277,9 +278,9 @@ const { chromium } = require('playwright');
       assert.ok(layout.library.x >= layout.header.x && layout.library.right <= layout.header.right, `Audio library fits the header at ${width}px`);
       if (width >= 1200) {
         assert.equal(layout.monitor.y, layout.library.y, 'Last row contains sounds and spectrum');
-        assert.equal(layout.transport.y, layout.load.y, 'Play follows the import control on the first row');
-        assert.ok(layout.transport.x >= layout.load.right, 'Play is to the right of import');
-        assert.ok(layout.transport.x - layout.load.right <= 12, 'Play immediately follows import without an expanding gap');
+        assert.equal(layout.transport.y, layout.load.y, 'Play follows the project controls on the first row');
+        assert.ok(layout.transport.x >= layout.load.right, 'Play is to the right of the project controls');
+        assert.ok(layout.transport.x - layout.load.right <= 12, 'Play immediately follows the project controls without an expanding gap');
         assert.equal(layout.windows.x, layout.topWindows.x, 'Editors align below the other orange windows');
         assert.ok(layout.windows.y >= layout.inspector.y && layout.windows.bottom <= layout.inspector.bottom, 'Editors fit beside the compact tools');
         assert.equal(layout.knob.width, 22, 'Clip knobs are smaller');

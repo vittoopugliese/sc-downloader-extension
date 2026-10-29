@@ -1,4 +1,4 @@
-import { LIMITS, uid, clamp, emptyArrangement, newClip, clipDuration, clipRate, clipPitch, clipEnvelope, slipClip, resizeClips, crossfadeClips, arrangementEnd, snapTime, splitClip, clipsInRange, validateArrangement, needsStretch, trackAudible, loopSegments, retimeClips } from './stem-playlist-core.mjs';
+import { LIMITS, uid, clamp, emptyArrangement, newClip, clipDuration, clipRate, clipPitch, clipEnvelope, slipClip, resizeClips, arrangementEnd, snapTime, splitClip, clipsInRange, validateArrangement, needsStretch, trackAudible, loopSegments, retimeClips } from './stem-playlist-core.mjs';
 import { createPlaylistEngine, createStretchCache, prefetchStretches, renderArrangement } from './stem-playlist-audio.mjs';
 import { encodeWav } from './stem-audio.mjs';
 import { spectrumColor, spectrumNow, spectrumOf } from './stem-spectrum.mjs';
@@ -33,7 +33,7 @@ function groupColors(assets) {
   return colors;
 }
 // Semantic names from the shared icon catalog.
-const ICONS = Object.freeze({"pencil": "draw", "select": "select", "undo": "undo", "redo": "redo", "export": "export", "tapTempo": "tap-tempo", "metronome": "metronome", "separate": "layers", "browser": "browser", "addTrack": "add-track", "zoomOut": "zoom-out", "zoomIn": "zoom-in", "fit": "fit", "mute": "mute", "reverse": "reverse", "crossfade": "crossfade", "duplicate": "copy", "slice": "slice", "split": "cut", "trash": "trash", "check": "check", "keepLength": "keep-length", "resample": "resample", "moveTool": "move", "slipTool": "slip", "stretchTool": "stretch", "import": "upload", "tempoLoop": "tempo-loop"});
+const ICONS = Object.freeze({"pencil": "draw", "select": "select", "undo": "undo", "redo": "redo", "export": "export", "tapTempo": "tap-tempo", "metronome": "metronome", "separate": "layers", "browser": "browser", "addTrack": "add-track", "zoomOut": "zoom-out", "zoomIn": "zoom-in", "fit": "fit", "mute": "mute", "reverse": "reverse", "duplicate": "copy", "slice": "slice", "split": "cut", "trash": "trash", "check": "check", "keepLength": "keep-length", "resample": "resample", "moveTool": "move", "slipTool": "slip", "stretchTool": "stretch", "tempoLoop": "tempo-loop"});
 
 // Small context menu at the pointer. Items: { label, icon, shortcut, danger, checked,
 // disabled, title, action }, '-' for a separator, { heading }, or { choices: [{ label, icon,
@@ -354,10 +354,6 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const stretchEdgeButton = toolButton({ icon: ICONS.stretchTool, name: t('Stretch edge', 'Estirar borde'), key: '3', keys: ['3', 'e'], color: '#ffd166',
     detail: t('drag either edge to stretch all selected clips with snap, using each clip’s Stretch / Resample setting; enables Follow tempo', 'arrastrá un borde para estirar todos los clips seleccionados con snap y el ajuste Stretch / Resample de cada clip; activa Seguir tempo') }, () => setTool('stretch'));
   stretchEdgeButton.classList.add('pl-stretch-tool');
-  const fileInput = node('input'); fileInput.type = 'file'; fileInput.accept = 'audio/*,.wav,.mp3,.flac,.m4a,.ogg'; fileInput.multiple = true; fileInput.hidden = true;
-  fileInput.onchange = safe(async () => { const files = [...fileInput.files]; fileInput.value = ''; await importSamples(files); });
-  const importButton = toolButton({ icon: ICONS.import, name: t('Import audio files', 'Importar archivos de audio'), key: 'I', keys: ['i'], color: '#ff7a2f',
-    detail: t('WAV, MP3, FLAC, M4A or OGG land at the playhead on the first free track. You can also drop them on a track.', 'WAV, MP3, FLAC, M4A u OGG se agregan en el cursor, en la primera pista libre. También podés soltarlos sobre una pista.') }, () => fileInput.click());
   // Sample browser (F8, or B on the Playlist): a tool window that docks into `windowHome`
   // like the others. Created on first use, or on load when it was left open; its drops go
   // through importSamples. It leads the orange window buttons of the transport bar; the host
@@ -423,7 +419,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     container.classList.toggle('is-slipping', !on && !selecting && editMode === 'slip'); container.classList.toggle('is-stretch-tool', !on && !selecting && editMode === 'stretch');
     paintSoon();
   }
-  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.wrap, tapButton, metronomeButton, fitTempo, ...tempoControls, node('span', 'pl-spacer'), ...toolbarEnd, windowGroup, exportButton, fileInput);
+  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.wrap, tapButton, metronomeButton, fitTempo, ...tempoControls, node('span', 'pl-spacer'), ...toolbarEnd, windowGroup, exportButton);
   const shelf = node('div', 'pl-shelf'); shelf.setAttribute('aria-label', t('Sample library', 'Biblioteca de samples'));
   const sampleMeterViews = new Map(), visibleSamples = new Set();
   const sampleMeterObserver = new IntersectionObserver(entries => {
@@ -583,7 +579,6 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   clipOptions.append(stretchModeButton, normalizeButton, followTempoButton);
   const muteClip = toolButton({ icon: ICONS.mute, name: t('Mute clip', 'Silenciar clip'), key: 'M', keys: ['m'], color: '#9aa3ad', detail: t('silences only the selected clips; the track keeps playing', 'calla solo los clips seleccionados; la pista sigue sonando') }, () => setClip('mute', !picked()?.mute));
   const reverseClip = toolButton({ icon: ICONS.reverse, name: t('Reverse', 'Invertir'), key: 'R', keys: ['r'], color: '#b48cff', detail: t('plays the selected clips backwards', 'reproduce los clips seleccionados al revés') }, () => setClip('reverse', !picked()?.reverse));
-  const crossfade = toolButton({ icon: ICONS.crossfade, name: t('Crossfade overlaps', 'Fundir superposiciones'), key: 'X', keys: ['x'], color: '#4fc3f7', detail: t('fades clips that overlap on the same track so the joins do not click', 'aplica fundidos a los clips que se pisan en la misma pista para que los cortes no hagan clic') }, () => commit(() => crossfadeClips(state.clips)));
   const duplicate = toolButton({ icon: ICONS.duplicate, name: t('Duplicate', 'Duplicar'), key: 'Ctrl+D', keys: ['ctrl+d'], color: '#66d17a', detail: t('repeats selected clips or the whole time range, including silence', 'repite los clips o el rango completo seleccionado, incluido el silencio') }, () => {
     if (selectedAutomation) { duplicateAutomation(selectedAutomation); return; }
     const selection = captureSelection(); if (selection) pasteSelection(selection, selection.end);
@@ -875,7 +870,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   // Selection-specific controls stay together, separated from arrangement-wide tools.
   const tools = node('div', 'pl-tools');
   tools.setAttribute('role', 'group'); tools.setAttribute('aria-label', t('General tools', 'Herramientas generales'));
-  const toolGroups = [[pencilButton, selectButton, stretchEdgeButton, slipButton, fadeButton, sliceButton], [crossfade, undo, redo], [gridButton, zoomOut, zoomIn, fitButton], [importButton, addTrack]];
+  const toolGroups = [[pencilButton, selectButton, stretchEdgeButton, slipButton, fadeButton, sliceButton], [undo, redo], [gridButton, zoomOut, zoomIn, fitButton, addTrack]];
   for (const group of toolGroups.slice(1)) group[0].classList.add('pl-tool-group');
   tools.append(...toolGroups.flat());
   clipOptions.append(muteClip, reverseClip, split, duplicate, remove);

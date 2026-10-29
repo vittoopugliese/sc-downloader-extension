@@ -232,7 +232,7 @@ async function reopenExtract(page) {
     const localPage = await context.newPage();
     localPage.on('pageerror', error => errors.push(error.message));
     await localPage.goto(`chrome-extension://${new URL(background.url()).host}/stems.html`);
-    await localPage.locator('#import-audio:not(:disabled)').waitFor();
+    await localPage.locator('#audio-file:not(:disabled)').waitFor({ state: 'attached' });
     await localPage.locator('#audio-file').setInputFiles({ name: 'Local fixture.wav', mimeType: 'audio/wav', buffer: wav });
     await localPage.locator('#import-dialog').waitFor();
     await localPage.locator('#import-confirm').click();

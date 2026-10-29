@@ -1,5 +1,6 @@
 // Workspace integration: real DOM/styles, deterministic audio and separation outputs.
 const assert = require('node:assert/strict');
+const { dropAudio } = require('./drop-audio.test-helper.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
@@ -31,10 +32,18 @@ const { chromium } = require('playwright');
       };
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html`);
-    await page.locator('#import-audio:not(:disabled)').waitFor();
+    await page.locator('#audio-file:not(:disabled)').waitFor({ state: 'attached' });
     assert.equal(await page.locator('.studio-card, .workspace-edition, #workspace-title, .pl-notes, #status').count(), 0);
-    // The game leads the top row of orange window buttons.
-    assert.equal(await page.locator('.daw-windows-top > :first-child').getAttribute('id'), 'toggle-game');
+    // The game, the import button and the shortcuts popup are gone; the brand reads SEIB.
+    assert.equal(await page.locator('#toggle-game, #game-panel, #import-audio, .prepare').count(), 0);
+    assert.equal(await page.locator('.workspace-header .brand span').textContent(), 'SEIB');
+    // The project menu starts a new project empty or from an imported file.
+    await page.locator('#stem-presets').click();
+    assert.deepEqual((await page.locator('#stem-presets-menu .row-menu-row').allTextContents()).slice(0, 2), ['Empty project', 'Empty project from imported audio']);
+    const chooser = page.waitForEvent('filechooser');
+    await page.locator('#stem-presets-menu .row-menu-row').nth(1).click();
+    await chooser; // The second option opens the file picker.
+    await page.keyboard.press('Escape');
     // Tooltips sit below the pin; the redundant shortcuts popup is gone.
     const headerEnd = await page.locator('#header-pin').evaluate(pin => [pin, pin.nextElementSibling]
       .map(e => [e.getAttribute('aria-label'), e.classList.contains('ui-btn--ghost')]));
@@ -127,7 +136,7 @@ const { chromium } = require('playwright');
     await page.locator('.ui-toast-title', { hasText: 'Temporary message' }).waitFor({ state: 'detached' });
     const { encodeWav } = await import('./stem-audio.mjs');
     const pcm = Float32Array.from({ length: 44100 }, (_, i) => Math.sin(i * 2 * Math.PI * 440 / 44100) * .2);
-    await page.locator('#transport input[type=file]').setInputFiles({ name: 'Library tone.wav', mimeType: 'audio/wav', buffer: Buffer.from(encodeWav([pcm, pcm])) });
+    await dropAudio(page, { name: 'Library tone.wav', mimeType: 'audio/wav', buffer: Buffer.from(encodeWav([pcm, pcm])) });
     await page.locator('.pl-clip').waitFor();
     const stretch = inspector.getByRole('button', { name: 'Stretch', exact: true });
     assert.equal(await stretch.evaluate(e => e.parentElement.previousElementSibling.classList.contains('ui-knob')), true, 'The Stretch toggle leads the clip options beside the knobs');

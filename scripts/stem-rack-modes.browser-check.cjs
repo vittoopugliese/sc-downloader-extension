@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { dropAudio } = require('./drop-audio.test-helper.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -12,7 +13,7 @@ module.exports = async function (page) {
   await rack.locator('.module-control').first().click();
   assert.equal(await rack.locator('.rack-overview').isVisible(), true);
   assert.equal(await rack.locator('.rack-channel').count(), 5);
-  await page.locator('#transport input[type=file]').setInputFiles([
+  await dropAudio(page, [
     { name: 'long-808.wav', mimeType: 'audio/wav', buffer: tone(55, 3) },
     { name: 'snare.wav', mimeType: 'audio/wav', buffer: tone(330, .5) },
   ]);

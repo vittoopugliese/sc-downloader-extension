@@ -23,8 +23,8 @@ const translations = {
     separationLabel: 'Separation', extract: 'Unpack your sound.', local: 'On-device',
     intro: 'Separate vocals, drums, bass and other instruments locally. Your audio stays in Chrome.',
     details: 'First use downloads a 166 MB model. Processing can take a few minutes and uses substantial memory. Up to 2 minutes, at original speed without effects.',
-    separate: 'Separate loop', cancel: 'Cancel', clearCache: 'Remove model', playGame: 'Play Lumberjack game', hideGame: 'Close Lumberjack game', gameTitle: 'Lumberjack game',
-    clearCacheTip: 'Remove model: deletes the 166 MB separation model from the browser cache to free space. Saved separations stay; the next separation downloads it again.', playTip: 'Play / pause the playlist (Space)', pauseTip: 'Pause the playlist (Space)', gameTip: 'Play Lumberjack while the stems are separated', transport: 'Transport',
+    separate: 'Separate loop', cancel: 'Cancel', clearCache: 'Remove model',
+    clearCacheTip: 'Remove model: deletes the 166 MB separation model from the browser cache to free space. Saved separations stay; the next separation downloads it again.', playTip: 'Play / pause the playlist (Space)', pauseTip: 'Pause the playlist (Space)', transport: 'Transport',
     listenCompareLabel: 'Listen and compare', listen: 'Find your mix.', play: 'Play', stop: 'Pause', original: 'Original', mix: 'Stem mix',
     lows: 'Lows', mids: 'Mids', highs: 'Highs', position: 'Position',
     ready: 'Ready. Separate this loop to compare the four stems.', preparing: 'Preparing the selected loop…', downloading: 'Downloading model',
@@ -41,8 +41,8 @@ const translations = {
     separationLabel: 'Separación', extract: 'Separá tu sonido.', local: 'En tu equipo',
     intro: 'Separá voz, batería, bajo y otros instrumentos localmente. Tu audio se queda en Chrome.',
     details: 'El primer uso descarga un modelo de 166 MB. El proceso puede tardar unos minutos y consume bastante memoria. Hasta 2 minutos, a velocidad original y sin efectos.',
-    separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Eliminar modelo', playGame: 'Jugar a Lumberjack', hideGame: 'Cerrar Lumberjack', gameTitle: 'Juego Lumberjack',
-    clearCacheTip: 'Eliminar modelo: borra de la caché del navegador el modelo de separación de 166 MB para liberar espacio. Las separaciones guardadas se conservan; la próxima separación lo vuelve a descargar.', playTip: 'Reproducir / pausar la playlist (Espacio)', pauseTip: 'Pausar la playlist (Espacio)', gameTip: 'Jugá a Lumberjack mientras se separan los stems', transport: 'Transporte',
+    separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Eliminar modelo',
+    clearCacheTip: 'Eliminar modelo: borra de la caché del navegador el modelo de separación de 166 MB para liberar espacio. Las separaciones guardadas se conservan; la próxima separación lo vuelve a descargar.', playTip: 'Reproducir / pausar la playlist (Espacio)', pauseTip: 'Pausar la playlist (Espacio)', transport: 'Transporte',
     listenCompareLabel: 'Escuchar y comparar', listen: 'Encontrá tu mezcla.', play: 'Reproducir', stop: 'Pausar', original: 'Original', mix: 'Mezcla de stems',
     lows: 'Graves', mids: 'Medios', highs: 'Agudos', position: 'Posición',
     ready: 'Listo. Separá este loop para comparar los cuatro stems.', preparing: 'Preparando el loop seleccionado…', downloading: 'Descargando modelo',
@@ -59,8 +59,8 @@ const translations = {
     separationLabel: 'Stem-Trennung', extract: 'Entfalte deinen Sound.', local: 'Auf diesem Gerät',
     intro: 'Trenne Gesang, Schlagzeug, Bass und andere Instrumente lokal. Dein Audio bleibt in Chrome.',
     details: 'Bei der ersten Verwendung wird ein 166-MB-Modell heruntergeladen. Die Verarbeitung kann einige Minuten dauern und benötigt viel Arbeitsspeicher. Bis zu 2 Minuten, in Originalgeschwindigkeit und ohne Effekte.',
-    separate: 'Loop trennen', cancel: 'Abbrechen', clearCache: 'Modell entfernen', playGame: 'Lumberjack spielen', hideGame: 'Lumberjack schließen', gameTitle: 'Lumberjack-Spiel',
-    clearCacheTip: 'Modell entfernen: löscht das 166-MB-Trennmodell aus dem Browser-Cache, um Platz zu schaffen. Gespeicherte Trennungen bleiben erhalten; die nächste Trennung lädt es erneut herunter.', playTip: 'Playlist abspielen / pausieren (Leertaste)', pauseTip: 'Playlist pausieren (Leertaste)', gameTip: 'Lumberjack spielen, während die Stems getrennt werden', transport: 'Transport',
+    separate: 'Loop trennen', cancel: 'Abbrechen', clearCache: 'Modell entfernen',
+    clearCacheTip: 'Modell entfernen: löscht das 166-MB-Trennmodell aus dem Browser-Cache, um Platz zu schaffen. Gespeicherte Trennungen bleiben erhalten; die nächste Trennung lädt es erneut herunter.', playTip: 'Playlist abspielen / pausieren (Leertaste)', pauseTip: 'Playlist pausieren (Leertaste)', transport: 'Transport',
     listenCompareLabel: 'Anhören und vergleichen', listen: 'Finde deinen Mix.', play: 'Abspielen', stop: 'Pausieren', original: 'Original', mix: 'Stem-Mix',
     lows: 'Bässe', mids: 'Mitten', highs: 'Höhen', position: 'Position',
     ready: 'Bereit. Trenne diesen Loop, um die vier Stems zu vergleichen.', preparing: 'Ausgewählter Loop wird vorbereitet…', downloading: 'Modell wird heruntergeladen',
@@ -77,8 +77,8 @@ const translations = {
     separationLabel: 'Separação', extract: 'Abra seu som.', local: 'Neste dispositivo',
     intro: 'Separe vocais, bateria, baixo e outros instrumentos localmente. Seu áudio permanece no Chrome.',
     details: 'No primeiro uso, um modelo de 166 MB será baixado. O processamento pode levar alguns minutos e usar bastante memória. Até 2 minutos, na velocidade original e sem efeitos.',
-    separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Remover modelo', playGame: 'Jogar Lumberjack', hideGame: 'Fechar Lumberjack', gameTitle: 'Jogo Lumberjack',
-    clearCacheTip: 'Remover modelo: apaga do cache do navegador o modelo de separação de 166 MB para liberar espaço. As separações salvas continuam; a próxima separação baixa o modelo de novo.', playTip: 'Reproduzir / pausar a playlist (Espaço)', pauseTip: 'Pausar a playlist (Espaço)', gameTip: 'Jogue Lumberjack enquanto os stems são separados', transport: 'Transporte',
+    separate: 'Separar loop', cancel: 'Cancelar', clearCache: 'Remover modelo',
+    clearCacheTip: 'Remover modelo: apaga do cache do navegador o modelo de separação de 166 MB para liberar espaço. As separações salvas continuam; a próxima separação baixa o modelo de novo.', playTip: 'Reproduzir / pausar a playlist (Espaço)', pauseTip: 'Pausar a playlist (Espaço)', transport: 'Transporte',
     listenCompareLabel: 'Ouvir e comparar', listen: 'Encontre sua mixagem.', play: 'Reproduzir', stop: 'Pausar', original: 'Original', mix: 'Mixagem de stems',
     lows: 'Graves', mids: 'Médios', highs: 'Agudos', position: 'Posição',
     ready: 'Tudo pronto. Separe este loop para comparar os quatro stems.', preparing: 'Preparando o loop selecionado…', downloading: 'Baixando modelo',
@@ -95,8 +95,8 @@ const translations = {
     separationLabel: 'Разделение', extract: 'Разберите звук на части.', local: 'На этом устройстве',
     intro: 'Разделяйте вокал, ударные, бас и другие инструменты локально. Аудио остается в Chrome.',
     details: 'При первом запуске загружается модель размером 166 МБ. Обработка может занять несколько минут и требует много памяти. До 2 минут, с исходной скоростью и без эффектов.',
-    separate: 'Разделить луп', cancel: 'Отменить', clearCache: 'Удалить модель', playGame: 'Играть в Lumberjack', hideGame: 'Закрыть Lumberjack', gameTitle: 'Игра Lumberjack',
-    clearCacheTip: 'Удалить модель: стирает из кэша браузера модель разделения на 166 МБ, чтобы освободить место. Сохранённые разделения остаются; при следующем разделении модель загрузится снова.', playTip: 'Воспроизвести / пауза плейлиста (Пробел)', pauseTip: 'Пауза плейлиста (Пробел)', gameTip: 'Играть в Lumberjack, пока стемы разделяются', transport: 'Транспорт',
+    separate: 'Разделить луп', cancel: 'Отменить', clearCache: 'Удалить модель',
+    clearCacheTip: 'Удалить модель: стирает из кэша браузера модель разделения на 166 МБ, чтобы освободить место. Сохранённые разделения остаются; при следующем разделении модель загрузится снова.', playTip: 'Воспроизвести / пауза плейлиста (Пробел)', pauseTip: 'Пауза плейлиста (Пробел)', transport: 'Транспорт',
     listenCompareLabel: 'Прослушать и сравнить', listen: 'Создайте свой микс.', play: 'Воспроизвести', stop: 'Пауза', original: 'Оригинал', mix: 'Микс стемов',
     lows: 'Низкие', mids: 'Средние', highs: 'Высокие', position: 'Позиция',
     ready: 'Готово. Разделите этот луп, чтобы сравнить четыре стема.', preparing: 'Подготовка выбранного лупа…', downloading: 'Загрузка модели',
@@ -124,7 +124,6 @@ document.querySelectorAll('[data-copy]').forEach(node => { node.textContent = te
 document.querySelectorAll('[data-copy-title]').forEach(node => { node.dataset.scdlTooltip = text(node.dataset.copyTitle); node.setAttribute('aria-label', node.dataset.scdlTooltip); });
 document.querySelectorAll('[data-copy-aria-label]').forEach(node => { node.setAttribute('aria-label', text(node.dataset.copyAriaLabel)); });
 const icon = name => globalThis.SCIcons.create(name, "icon");
-$('toggle-game').dataset.scdlTooltip = text('gameTip'); $('toggle-game').setAttribute('aria-label', text('playGame'));
 $('transport').setAttribute('aria-label', text('transport'));
 // Inside the shared buttons the icon takes the button's own size.
 document.querySelectorAll('[data-icon]').forEach(node => {
@@ -318,8 +317,8 @@ document.addEventListener('scdl:tooltips-changed', renderTooltipsToggle);
 window.addEventListener('storage', renderTooltipsToggle);
 const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('transport'), playButton: false, windows: WINDOWS, windowHome: $('mix-tools'),
   inspectorHost: document.querySelector('.daw-deck'), libraryHost: document.querySelector('.daw-lower'),
-  // One line: play, tempo and speed, then the game, the windows and the export.
-  toolbarStart: [$('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [tooltipsToggle, $('header-pin'), $('toggle-game')],
+  // One line: play, tempo and speed, then the windows and the export.
+  toolbarStart: [$('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [tooltipsToggle, $('header-pin')],
   // Right-click > Extract stems… on any audio clip opens the extraction window.
   onSeparate: target => openExtract(target),
   getUsedSampleIds: () => instruments.usedSampleIds(),
@@ -357,7 +356,7 @@ document.querySelector('.workspace-header .brand').dataset.scdlTooltip = 'Stem E
   };
   const windowButton = id => find(`.pl-window-tool[data-window="${id}"]`);
   group('daw-transport', '', [$('play'), find('.pl-time'), find('.pl-field'), find('.pl-tap'), find('.pl-metronome'), find('.pl-fit-tempo')]);
-  group('daw-windows daw-windows-top', say('Windows', 'Ventanas'), [$('toggle-game'), windowButton('browser'), windowButton('recorder'), find('.pl-export')]);
+  group('daw-windows daw-windows-top', say('Windows', 'Ventanas'), [windowButton('browser'), windowButton('recorder'), find('.pl-export')]);
   group('daw-windows daw-windows-bottom', say('Editors', 'Editores'), ['rack', 'piano', 'fx', 'eq'].map(windowButton));
   group('daw-header-options', say('Header options', 'Opciones del header'), [$('header-pin'), tooltipsToggle]);
   find('.pl-windows')?.remove();
@@ -560,8 +559,6 @@ channelRack.setCollapsed(false); pianoRoll.setCollapsed(false);
 }
 function revealAudition() {
   $('audition').hidden = false;
-  // With results, the source row also holds the transport: keep it to one line.
-  document.querySelector('.prepare').classList.add('has-results');
 }
 const localCopy = ({
   es: ['Cargar audio del equipo', 'Elegí un archivo y un fragmento de hasta 2 minutos.', 'Cargar fragmento', 'Nombre', 'Inicio (s)', 'Fin (s)', 'Cancelar', 'Leyendo audio…', 'No se pudo leer el audio. Probá otro archivo o un formato compatible con Chrome.', 'Elegí un rango válido de hasta 2 minutos dentro del archivo.', 'Elegí un audio del equipo o un proyecto guardado.'],
@@ -573,8 +570,6 @@ const localCopy = ({
 for (const [id, index] of Object.entries({ 'import-title': 2, 'import-confirm': 2,
   'import-name-label': 3, 'import-start-label': 4, 'import-end-label': 5, 'import-cancel': 6, 'import-range-hint': 1 })) $(id).textContent = localCopy[index];
 let importDraft = null;
-$('import-audio').dataset.scdlTooltip = localCopy[0]; $('import-audio').setAttribute('aria-label', localCopy[0]);
-$('import-audio').onclick = () => $('audio-file').click();
 $('audio-file').onchange = async event => {
   const file = event.target.files[0]; event.target.value = '';
   if (!file || busy || libraryOperating) return;
@@ -652,7 +647,9 @@ const settings = () => ({ ...instruments.snapshot(),
   original: { muted: !!playlist.track('original')?.mute, gain: playlist.track('original')?.gain ?? 1, removed: removeOriginal },
   rate, keepTone, stems: [...stemChoice], eq: mixOutput.snapshot().eq, fx: mixOutput.effectsSettings(), playlist: playlist.snapshot() });
 libraryUI = mountStemLibrary({ locale, report: status, canSave: () => !!info && !!original,
-  onOperation(value) { libraryOperating = value; extractDialog.setReady(!value && !busy && canSeparate()); $('import-audio').disabled = value || busy || !importReady; },
+  // "Empty project from imported audio" in the project menu: choose a file, then a segment.
+  onImport() { if (importReady && !busy && !libraryOperating) $('audio-file').click(); },
+  onOperation(value) { libraryOperating = value; extractDialog.setReady(!value && !busy && canSeparate()); $('audio-file').disabled = value || busy || !importReady; },
   // Imported samples go with the separation; their WAV is encoded only when stored.
   // Before separation a project holds the original alone.
   snapshot: () => {
@@ -1076,24 +1073,6 @@ async function renderJobLoop() {
 }
 // There is something to separate: audio in the session, or a loop still to render.
 const canSeparate = () => !!extractTarget?.buffer || !!original || (!!jobId && !info?.localFile);
-$('toggle-game').onclick = () => {
-  const panel = $('game-panel');
-  const open = panel.hidden;
-  if (open) {
-    const frame = document.createElement('iframe');
-    frame.title = text('gameTitle');
-    frame.src = 'https://tbot.xyz/lumber/';
-    frame.width = '300'; frame.height = '450';
-    panel.replaceChildren(frame);
-  } else {
-    panel.replaceChildren();
-  }
-  panel.hidden = !open;
-  $('toggle-game').setAttribute('aria-expanded', String(open));
-  setButtonContent($('toggle-game'), { icon: open ? 'close' : 'game' });
-  $('toggle-game').dataset.scdlTooltip = open ? text('hideGame') : text('gameTip');
-  $('toggle-game').setAttribute('aria-label', text(open ? 'hideGame' : 'playGame'));
-};
 async function clearModel() {
   try { await caches.delete(MODEL.cache); status(text('cleared'), 'success'); extractDialog.setMessage(text('cleared')); }
   catch (error) { console.error('[Stems cache]', error); status(text('cacheClearFailed'), 'error'); extractDialog.setMessage(text('cacheClearFailed')); }

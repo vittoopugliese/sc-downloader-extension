@@ -54,7 +54,7 @@ async function reopenExtract(page) {
       };
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html`);
-    await page.locator('#import-audio:not(:disabled)').waitFor();
+    await page.locator('#audio-file:not(:disabled)').waitFor({ state: 'attached' });
     assert.equal(await page.locator('#separate').isDisabled(), true);
     const upload = () => page.locator('#audio-file').setInputFiles({ name: 'My recording.wav', mimeType: 'audio/wav', buffer: wav });
     await upload(); await page.locator('#import-dialog').waitFor();
@@ -89,7 +89,7 @@ async function reopenExtract(page) {
       return (await (await StemPresets.current()).load(id)).record.settings.keepTone;
     }, id);
     await upload(); await page.locator('#import-dialog').waitFor(); await page.keyboard.press('Escape');
-    await page.locator('#import-audio:not(:disabled)').waitFor();
+    await page.locator('#audio-file:not(:disabled)').waitFor({ state: 'attached' });
     assert.equal(await page.locator('#stem-presets').evaluate(node => node.value), id);
     assert.equal(await page.locator('.pl-stem-head').count(), 5, 'The separation stays loaded');
     await page.locator('#audio-file').setInputFiles({ name: 'broken.mp3', mimeType: 'audio/mpeg', buffer: Buffer.from('broken') });
@@ -97,7 +97,7 @@ async function reopenExtract(page) {
     assert.equal(await page.locator('#stem-presets').evaluate(node => node.value), id);
     assert.equal(await page.locator('.pl-stem-head').count(), 5, 'The separation stays loaded');
     await page.reload();
-    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 2);
+    await page.waitForFunction(() => document.querySelectorAll('#stem-presets-menu .row-menu-row').length === 3);
     await page.locator('#stem-presets').click(); await page.locator(`#stem-presets-menu .row-menu-row[data-id="${id}"] .row-menu-load`).click(); await page.locator('.pl-stem-head').first().waitFor();
     assert.equal(await page.evaluate(() => inferences), 0);
     assert.equal(await page.locator('#stem-rate').inputValue(), '0.5');
@@ -111,7 +111,7 @@ async function reopenExtract(page) {
     }
     await upload(); await page.locator('#import-dialog').waitFor();
     await page.screenshot({ path: path.join(artifacts, 'import-mobile.png') });
-    await page.locator('#import-confirm').click(); await page.locator('#import-audio:not(:disabled)').waitFor();
+    await page.locator('#import-confirm').click(); await page.locator('#audio-file:not(:disabled)').waitFor({ state: 'attached' });
     assert.equal(await page.locator('#stem-presets').evaluate(node => node.value), '', 'New audio starts a new, unsaved project');
     assert.equal(await page.locator('#stem-rate').inputValue(), '1');
     assert.equal(await page.locator('.pl-stem-head:not([data-stem=original])').count(), 0, 'A new import clears the separated stems');

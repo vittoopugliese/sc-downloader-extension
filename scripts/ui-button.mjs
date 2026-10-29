@@ -1,6 +1,6 @@
 // The one button of the Stem Extractor (styles in assets/ui-button.css).
 //
-// Variants: 'accent' (orange, the Lumberjack look), 'neutral' (grey), 'ghost' (no frame).
+// Variants: 'accent' (orange), 'neutral' (grey), 'ghost' (no frame).
 // Sizes: 'icon' (34 × 32 square), 'text' (32 high, fits its label), 'tool' (the 32 × 30
 // cells of the playlist tool grid). A label without an icon is a text button; with an
 // icon it shows both. `pressed` (true/false) makes it a toggle with aria-pressed.

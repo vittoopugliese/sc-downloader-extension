@@ -1,5 +1,5 @@
 /* The one button of the Stem Extractor (scripts/ui-button.mjs). Every header control uses
-   it; the playlist tools use its 'tool' size. Variants: accent (the Lumberjack orange),
+   it; the playlist tools use its 'tool' size. Variants: accent (orange),
    neutral (grey) and ghost (no frame). An open window or an active toggle is
    aria-pressed=true. */
 button.ui-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex-shrink:0;box-sizing:border-box;height:var(--ui-button-height,32px);min-height:0;margin:0;padding:0 11px;border:1px solid transparent;border-radius:6px;font:700 11px/1 Arial,Helvetica,sans-serif;letter-spacing:.2px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s;-webkit-user-select:none;user-select:none}

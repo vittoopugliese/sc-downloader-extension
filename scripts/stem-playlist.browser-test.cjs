@@ -1,6 +1,7 @@
 // Playlist realtime engine in real Chromium: immediate playback, edits while
 // playing, worker stretch cache and an export that matches the playback path.
 const assert = require('node:assert/strict');
+const { dropAudio } = require('./drop-audio.test-helper.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
@@ -42,7 +43,7 @@ const { chromium } = require('playwright');
     // One workspace, including before source import.
     assert.equal(await page.locator('#tab-playlist').count(), 0);
     assert.equal(await playlist.isVisible(), true);
-    await transport.locator('input[type=file]').setInputFiles({ name: 'tone.wav', mimeType: 'audio/wav', buffer: wav });
+    await dropAudio(page, { name: 'tone.wav', mimeType: 'audio/wav', buffer: wav });
     await playlist.locator('.pl-clip').first().waitFor();
     // Import selects the drawing source immediately; no extra library click is needed.
     const initialLane = await playlist.locator('.pl-lane').first().boundingBox();
@@ -55,23 +56,25 @@ const { chromium } = require('playwright');
     // The transport bar lives in the header: the header play button is the only one.
     assert.equal(await page.locator('.pl-play').count(), 0);
     assert.equal(await transport.locator('#stem-rate').count(), 1, 'Speed sits next to the tempo controls');
-    for (const name of ['Import audio files', 'Sample browser', 'Add track', 'Export WAV']) {
+    for (const name of ['Sample browser', 'Add track', 'Export WAV']) {
       const host = name === 'Export WAV' || name === 'Sample browser' ? transport : inspector.locator('.pl-tools');
       const control = host.getByRole('button', { name, exact: true });
       assert.equal(await control.textContent(), '');
       assert.equal(await control.locator('svg').count(), 1);
       assert.match(await control.getAttribute('data-scdl-tooltip'), new RegExp('^' + name + (name === 'Export WAV' ? '' : ' \\([A-Z]\\d*\\)') + ': '));
     }
-    // Twenty editing actions, split between selected-clip actions and general tools.
+    // Import audio files and Crossfade overlaps are gone: the browser, drops and the Fade tool cover them.
+    for (const name of ['Import audio files', 'Crossfade overlaps']) assert.equal(await page.getByRole('button', { name, exact: true }).count(), 0);
+    // Nineteen editing actions, split between selected-clip actions and general tools.
     const tools = inspector.locator('.pl-tools > button, .pl-clip-options > .pl-key');
     // Stretch is an additional selection toggle with its own shortcut.
-    assert.equal(await tools.count(), 21);
+    assert.equal(await tools.count(), 19);
     assert.equal(await transport.locator('.pl-window-tool').count(), 6);
     assert.match(await transport.locator('.pl-window-tool').first().evaluate(e => getComputedStyle(e).backgroundImage), /linear-gradient/, 'Window buttons share the accent button');
     // All editing buttons share one compact row at this desktop width.
     const tops = await inspector.locator('.pl-clip-options > button, .pl-tools > button').evaluateAll(nodes => nodes.map(n => Math.round(n.getBoundingClientRect().top)));
     assert.equal(new Set(tops).size, 1);
-    assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 21);
+    assert.equal(await tools.evaluateAll(nodes => nodes.filter(n => n.getAttribute('aria-keyshortcuts')).length), 19);
     assert.equal(await inspector.locator('.pl-tools').evaluate(e => getComputedStyle(e).borderLeftWidth), '1px');
     assert.match(await transport.locator('.pl-export').evaluate(e => getComputedStyle(e).backgroundImage), /linear-gradient/);
     // Every header button shares one size.

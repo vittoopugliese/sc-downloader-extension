@@ -8,10 +8,10 @@ import { buttonClasses } from './ui-button.mjs';
 // * by its name); nothing is written until Save. Opening another project or an empty one
 // asks Save / Don't save / Cancel first, and closing the tab with changes shows Chrome's
 // "Leave site?" warning.
-const NEW = 'new-project';
+const NEW = 'new-project', NEW_IMPORT = 'new-project-import';
 const COPY = {
   en: {
-    saved: 'Projects', current: 'Choose project', newProject: 'Empty project', newTip: 'Start a new empty project (reloads the page)',
+    saved: 'Projects', current: 'Choose project', newProject: 'Empty project', newTip: 'Start a new empty project (reloads the page)', newImport: 'Empty project from imported audio', newImportTip: 'Choose an audio file from your computer and start a new project with it',
     save: 'Save project', saveKeys: 'Ctrl+S · Ctrl+Shift+S saves a copy with a new name', needAudio: 'Load audio first to save a project.',
     folder: 'Choose project folder', reset: 'Back to browser storage', browser: 'Browser storage', destination: 'Destination',
     saveTitle: 'Save project', confirm: 'Save', cancel: 'Cancel', name: 'Name', untitled: 'Untitled',
@@ -22,7 +22,7 @@ const COPY = {
     remove: 'Delete saved project', confirmRemove: 'Delete?', removed: 'Saved project deleted. The open session stays here.',
   },
   es: {
-    saved: 'Proyectos', current: 'Elegir proyecto', newProject: 'Proyecto vacío', newTip: 'Empezar un proyecto vacío nuevo (recarga la página)',
+    saved: 'Proyectos', current: 'Elegir proyecto', newProject: 'Proyecto vacío', newTip: 'Empezar un proyecto vacío nuevo (recarga la página)', newImport: 'Proyecto vacío desde audio importado', newImportTip: 'Elegí un archivo de audio del equipo y empezá un proyecto nuevo con él',
     save: 'Guardar proyecto', saveKeys: 'Ctrl+S · Ctrl+Shift+S guarda una copia con otro nombre', needAudio: 'Primero cargá un audio para guardar un proyecto.',
     folder: 'Elegir carpeta de proyectos', reset: 'Volver al almacenamiento del navegador', browser: 'Navegador', destination: 'Destino',
     saveTitle: 'Guardar proyecto', confirm: 'Guardar', cancel: 'Cancelar', name: 'Nombre', untitled: 'Sin título',
@@ -33,7 +33,7 @@ const COPY = {
     remove: 'Eliminar proyecto guardado', confirmRemove: '¿Eliminar?', removed: 'Proyecto guardado eliminado. La sesión abierta sigue acá.',
   },
   de: {
-    saved: 'Projekte', current: 'Projekt auswählen', newProject: 'Leeres Projekt', newTip: 'Ein neues leeres Projekt beginnen (lädt die Seite neu)',
+    saved: 'Projekte', current: 'Projekt auswählen', newProject: 'Leeres Projekt', newTip: 'Ein neues leeres Projekt beginnen (lädt die Seite neu)', newImport: 'Leeres Projekt aus importiertem Audio', newImportTip: 'Eine Audiodatei vom Computer wählen und damit ein neues Projekt beginnen',
     save: 'Projekt speichern', saveKeys: 'Strg+S · Strg+Umschalt+S speichert eine Kopie unter neuem Namen', needAudio: 'Lade zuerst Audio, um ein Projekt zu speichern.',
     folder: 'Projektordner auswählen', reset: 'Zurück zum Browserspeicher', browser: 'Browserspeicher', destination: 'Speicherort',
     saveTitle: 'Projekt speichern', confirm: 'Speichern', cancel: 'Abbrechen', name: 'Name', untitled: 'Ohne Titel',
@@ -44,7 +44,7 @@ const COPY = {
     remove: 'Gespeichertes Projekt löschen', confirmRemove: 'Löschen?', removed: 'Gespeichertes Projekt gelöscht. Die offene Sitzung bleibt erhalten.',
   },
   'pt-BR': {
-    saved: 'Projetos', current: 'Escolher projeto', newProject: 'Projeto vazio', newTip: 'Começar um novo projeto vazio (recarrega a página)',
+    saved: 'Projetos', current: 'Escolher projeto', newProject: 'Projeto vazio', newTip: 'Começar um novo projeto vazio (recarrega a página)', newImport: 'Projeto vazio com áudio importado', newImportTip: 'Escolha um arquivo de áudio do computador e comece um novo projeto com ele',
     save: 'Salvar projeto', saveKeys: 'Ctrl+S · Ctrl+Shift+S salva uma cópia com outro nome', needAudio: 'Carregue um áudio primeiro para salvar um projeto.',
     folder: 'Escolher pasta de projetos', reset: 'Voltar ao armazenamento do navegador', browser: 'Navegador', destination: 'Destino',
     saveTitle: 'Salvar projeto', confirm: 'Salvar', cancel: 'Cancelar', name: 'Nome', untitled: 'Sem título',
@@ -55,7 +55,7 @@ const COPY = {
     remove: 'Excluir projeto salvo', confirmRemove: 'Excluir?', removed: 'Projeto salvo excluído. A sessão aberta continua aqui.',
   },
   ru: {
-    saved: 'Проекты', current: 'Выбрать проект', newProject: 'Пустой проект', newTip: 'Начать новый пустой проект (страница перезагрузится)',
+    saved: 'Проекты', current: 'Выбрать проект', newProject: 'Пустой проект', newTip: 'Начать новый пустой проект (страница перезагрузится)', newImport: 'Пустой проект из импортированного аудио', newImportTip: 'Выберите аудиофайл на компьютере и начните с ним новый проект',
     save: 'Сохранить проект', saveKeys: 'Ctrl+S · Ctrl+Shift+S сохраняет копию под новым именем', needAudio: 'Сначала загрузите аудио, чтобы сохранить проект.',
     folder: 'Выбрать папку проектов', reset: 'Вернуться к хранилищу браузера', browser: 'Хранилище браузера', destination: 'Место сохранения',
     saveTitle: 'Сохранить проект', confirm: 'Сохранить', cancel: 'Отмена', name: 'Название', untitled: 'Без названия',
@@ -70,7 +70,7 @@ const sameAudio = (a, b) => !!a && !!b && a.length === b.length && a.every((blob
 
 // `snapshot()` → { info, settings, blobs: [original] | [original + 4 stems] | null, samples: [{ id, name, blob() }] };
 // `canSave()` says there is audio to save; `restore(data)` opens a loaded project.
-export function mountStemLibrary({ locale, snapshot, restore, report, onOperation, canSave }) {
+export function mountStemLibrary({ locale, snapshot, restore, report, onOperation, canSave, onImport }) {
   const copy = { ...COPY.en, ...(COPY[locale] || {}) };
   const $ = id => document.getElementById(id);
   const saveButton = $('save-project'), dialogs = mountProjectDialogs(copy);
@@ -81,7 +81,12 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
   let savedBlobs = null, stored = new Set();
   const presetMenu = createRowMenu({ className: 'preset-menu', label: copy.saved, placeholder: copy.current,
     deleteLabel: name => `${copy.remove}: ${name}`, confirm: copy.confirmRemove,
-    onSelect: id => { if (id === NEW) startEmpty(); else open(id); }, onDelete: id => remove(id) });
+    onSelect: id => {
+      if (id === NEW) startEmpty();
+      // The file picker opens inside the click; the import asks about unsaved changes later.
+      else if (id === NEW_IMPORT) { presetMenu.setValue(active?.id || null); if (!busy()) onImport?.(); }
+      else open(id);
+    }, onDelete: id => remove(id) });
   $('stem-presets').replaceWith(presetMenu.element);
   presetMenu.toggle.classList.add(...buttonClasses({ size: 'text' }));
   presetMenu.toggle.id = 'stem-presets'; presetMenu.menu.id = 'stem-presets-menu'; presetMenu.toggle.setAttribute('aria-controls', 'stem-presets-menu');
@@ -121,6 +126,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
   async function refresh() {
     records = await library.list();
     presetMenu.setItems([{ id: NEW, name: copy.newProject, title: copy.newTip, deletable: false, className: 'row-menu-new' },
+      { id: NEW_IMPORT, name: copy.newImport, title: copy.newImportTip, deletable: false, className: 'row-menu-new' },
       ...records.map(record => ({ id: record.id, name: record.title, title: `${record.title} · ${new Date(record.createdAt).toLocaleDateString(locale)}` }))]);
     presetMenu.setValue(active?.id || null);
     $('preset-reconnect').hidden = true;
