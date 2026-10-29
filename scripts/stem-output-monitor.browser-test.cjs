@@ -21,6 +21,9 @@ const { chromium } = require('playwright');
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(() => {
       window.monitorPaints = 0;
+      window.sampleMeterReads = 0;
+      const readSamples = AnalyserNode.prototype.getFloatTimeDomainData;
+      AnalyserNode.prototype.getFloatTimeDomainData = function (...args) { window.sampleMeterReads++; return readSamples.apply(this, args); };
       const fill = CanvasRenderingContext2D.prototype.fillRect;
       CanvasRenderingContext2D.prototype.fillRect = function (...args) {
         if (this.canvas.parentElement?.id === 'output-monitor' && args[0] === 0 && args[1] === 0) window.monitorPaints++;
@@ -36,13 +39,15 @@ const { chromium } = require('playwright');
     assert.equal(await monitor.evaluate(element => element.tabIndex), -1);
     assert.equal(await monitor.evaluate(element => getComputedStyle(element).cursor), 'auto');
     assert.equal(await monitor.locator(':scope > *').count(), 1);
-    // Second header row: the spectrum fills the space after the clip controls, up to the help button above it.
+    // Last header row: a wide sample shelf followed by a compact spectrum.
     const box = await monitor.boundingBox(), slot = await page.locator('.output-monitor-slot').boundingBox();
-    const tempo = await page.locator('.workspace-header .stem-tempo').boundingBox(), help = await page.locator('.workspace-header .pl-help').boundingBox();
-    const controls = await page.locator('.workspace-header .pl-inspector').boundingBox();
-    assert.deepEqual([box.x, box.width, box.height], [slot.x, slot.width, controls.height], 'The spectrum fills its slot, as tall as the clip controls');
-    assert.ok(Math.abs(box.x - controls.x - controls.width - 12) < 1 && Math.abs(box.x + box.width - help.x - help.width) < 1, `The spectrum spans from the clip controls to the help button: ${JSON.stringify({ box, controls, help })}`);
-    assert.ok(box.y >= tempo.y + tempo.height, 'The spectrum sits under the first row');
+    const tempo = await page.locator('.workspace-header .stem-tempo').boundingBox();
+    const controls = await page.locator('.workspace-header .pl-library').boundingBox();
+    assert.deepEqual([box.x, box.width, box.height], [slot.x, slot.width, 32], 'The spectrum occupies exactly one control row');
+    assert.ok(box.width <= 200 && controls.width > 700, 'The library uses the remaining width beside the compact spectrum');
+    assert.equal(box.y, controls.y, 'Spectrum and sounds share the last row');
+    assert.ok(box.y >= tempo.y + tempo.height, 'The spectrum sits below the transport');
+    assert.ok((await page.locator('.preset-menu').boundingBox()).width <= 150, 'The project dropdown does not stretch');
     const markup = await monitor.evaluate(element => element.outerHTML);
     const storage = await page.evaluate(() => JSON.stringify(localStorage));
     await monitor.click(); await monitor.dblclick();
@@ -60,6 +65,11 @@ const { chromium } = require('playwright');
     await page.locator('.pl-clip').waitFor();
     await page.locator('#play').click();
     await page.waitForTimeout(800);
+    const sample = page.locator('.workspace-header .pl-shelf button').first();
+    assert.ok(await sample.evaluate(e => Number(e.style.getPropertyValue('--sample-level'))) > .4, 'Playing audio lights its library border');
+    assert.equal(await sample.evaluate(e => getComputedStyle(e, '::after').boxShadow), 'none', 'The level strip has no glow');
+    assert.equal(await sample.evaluate(e => getComputedStyle(e, '::before').content), 'none', 'No reactive border overlay remains');
+    assert.equal(await sample.evaluate(e => getComputedStyle(e).borderLeftColor), 'rgb(69, 66, 62)', 'Even selected samples have a neutral frame; only the moving strip is colored');
     const pixels = await monitor.locator('canvas').evaluate(canvas => {
       const ctx = canvas.getContext('2d'), width = canvas.width, height = canvas.height;
       const rect = canvas.getBoundingClientRect(), scale = width / rect.width, scaleY = height / rect.height;
@@ -79,6 +89,7 @@ const { chromium } = require('playwright');
     assert.ok(pixels.scale >= 2, 'Canvas is supersampled even on a 1x display');
     fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
     await monitor.screenshot({ path: path.join(root, 'test-results/output-monitor-spectrum.png') });
+    await page.mouse.move(0, 0);
     await page.locator('.workspace-header').screenshot({ path: path.join(root, 'test-results/output-monitor-header.png') });
     async function measureCadence() {
       await page.evaluate(() => {
@@ -104,16 +115,78 @@ const { chromium } = require('playwright');
     await page.evaluate(() => { document.body.style.paddingBottom = '2000px'; window.scrollTo(0, 1500); });
     await page.waitForTimeout(200);
     const hiddenPaints = await page.evaluate(() => window.monitorPaints);
+    const hiddenReads = await page.evaluate(() => window.sampleMeterReads);
     await page.waitForTimeout(250);
     assert.equal(await page.evaluate(() => window.monitorPaints), hiddenPaints, 'No drawing outside viewport');
+    assert.equal(await page.evaluate(() => window.sampleMeterReads), hiddenReads, 'Invisible sample buttons do not read audio levels');
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(180);
     assert.ok(await page.evaluate(() => window.monitorPaints) > hiddenPaints);
     await page.locator('#play').click();
     await page.waitForTimeout(2200);
+    assert.equal(await sample.evaluate(e => Number(e.style.getPropertyValue('--sample-level'))), 0, 'The library border settles back to idle after pause');
     const idlePaints = await page.evaluate(() => window.monitorPaints);
+    const idleReads = await page.evaluate(() => window.sampleMeterReads);
     await page.waitForTimeout(350);
     assert.equal(await page.evaluate(() => window.monitorPaints), idlePaints, 'No animation loop after audio becomes idle');
+    assert.equal(await page.evaluate(() => window.sampleMeterReads), idleReads, 'Paused sample meters do not analyse audio');
+
+    // Real sample meters: independent sources, stereo phase, live faders, mute/solo and stop.
+    const sampleMeters = await page.evaluate(async () => {
+      const { createPlaylistEngine } = await import('./scripts/stem-playlist-audio.mjs');
+      const { emptyArrangement, newClip } = await import('./scripts/stem-playlist-core.mjs');
+      const context = new AudioContext({ sampleRate: 44100 }); await context.resume();
+      const makeAsset = (id, amplitude) => {
+        const buffer = context.createBuffer(2, 44100 * 2, 44100);
+        for (let c = 0; c < 2; c++) {
+          const data = buffer.getChannelData(c);
+          for (let i = 0; i < data.length; i++) data[i] = amplitude * Math.sin(i * 2 * Math.PI * 440 / 44100) * (c ? -1 : 1);
+        }
+        return { id, buffer };
+      };
+      const loud = makeAsset('loud', .3), quiet = makeAsset('quiet', .03), unused = makeAsset('unused', .6);
+      const assets = new Map([loud, quiet, unused].map(asset => [asset.id, asset]));
+      const engine = createPlaylistEngine({ context, output: context.destination, assets: () => assets,
+        cache: { has: () => true, lookup: () => null } });
+      const state = emptyArrangement(); state.clips = [newClip(loud, state.tracks[0].id), newClip(quiet, state.tracks[1].id)];
+      const transport = { rate: 1, loop: { start: 0, end: 2 } };
+      const read = async () => { await new Promise(resolve => setTimeout(resolve, 180)); return Object.fromEntries(engine.sampleLevels()); };
+      try {
+        engine.play(state, 0, transport); const initial = await read();
+        state.tracks[0].gain = .1; engine.update(state, transport); const attenuated = await read();
+        state.tracks[0].mute = true; engine.update(state, transport); const muted = await read();
+        state.tracks[0].mute = false; state.tracks[0].solo = true; engine.update(state, transport); const solo = await read();
+        state.tracks[0].solo = false; state.clips[0].mute = true; engine.update(state, transport); const clipMuted = await read();
+        state.clips[0].mute = false; state.clips[0].gain = .5; state.clips[0].normalizationGain = 2;
+        engine.update(state, transport); const normalized = await read();
+        // Measure the read/peak work on sixteen independent stereo sources during live playback.
+        state.tracks = Array.from({ length: 16 }, (_, i) => ({ id: `meter-track-${i}`, name: `Track ${i}`, gain: 1, mute: false, solo: false }));
+        state.clips = state.tracks.map((track, i) => {
+          const asset = makeAsset(`meter-sample-${i}`, .1); assets.set(asset.id, asset); return newClip(asset, track.id);
+        });
+        engine.play(state, 0, transport); await read();
+        const durations = [];
+        for (let i = 0; i < 90; i++) {
+          await new Promise(requestAnimationFrame);
+          const start = performance.now(); engine.sampleLevels(); durations.push(performance.now() - start);
+        }
+        durations.sort((a, b) => a - b);
+        const timing = { sources: 16, medianMs: durations[45], p95Ms: durations[85] };
+        const filtered = Object.keys(Object.fromEntries(engine.sampleLevels(new Set(['meter-sample-0']))));
+        engine.stop(); const stopped = await read();
+        return { initial, attenuated, muted, solo, clipMuted, normalized, stopped, timing, filtered };
+      } finally { engine.dispose(); await context.close(); }
+    });
+    assert.ok(Math.abs(sampleMeters.initial.loud - .3) < .01, 'Opposite-phase stereo still meters at its real peak');
+    assert.ok(Math.abs(sampleMeters.initial.quiet - .03) < .005, 'Quiet audio has its own lower level');
+    assert.equal(sampleMeters.initial.unused, undefined, 'Unused audio never lights up with another sample');
+    assert.ok(Math.abs(sampleMeters.attenuated.loud - .03) < .005, 'The live track fader scales the source meter');
+    assert.ok((sampleMeters.muted.loud || 0) < .0001 && sampleMeters.muted.quiet > .02, 'Mute extinguishes only its source');
+    assert.ok((sampleMeters.solo.quiet || 0) < .0001 && sampleMeters.solo.loud > .02, 'Solo extinguishes other channels');
+    assert.ok((sampleMeters.clipMuted.loud || 0) < .0001, 'Muted clips do not light their source');
+    assert.ok(Math.abs(sampleMeters.normalized.loud - .03) < .005, 'Clip gain and normalization feed the meter');
+    assert.deepEqual(sampleMeters.stopped, {}, 'Stopped playback returns no source activity');
+    assert.deepEqual(sampleMeters.filtered, ['meter-sample-0'], 'Only requested visible samples are analysed');
 
     // Measure actual changes in the drawn signal, including bass attack/release.
     // A repaint count alone cannot detect a delayed analysis window.
@@ -183,7 +256,7 @@ const { chromium } = require('playwright');
     await page.waitForTimeout(100);
     const mobileBox = await monitor.boundingBox(), mobileSlot = await page.locator('.output-monitor-slot').boundingBox();
     assert.ok(mobileBox.height >= 32);
-    assert.ok(Math.abs(mobileBox.width - mobileSlot.width) < 1 && Math.abs(mobileBox.y - mobileSlot.y) < 1, 'The spectrum takes its own full-width row');
+    assert.ok(Math.abs(mobileBox.width - mobileSlot.width) < 1 && mobileBox.width <= 200, 'The spectrum stays compact on mobile');
     assert.ok(mobileBox.x >= 0 && mobileBox.x + mobileBox.width <= 390, 'Compact spectrum fits on mobile');
     await monitor.click(); assert.deepEqual(await monitor.boundingBox(), mobileBox);
     await page.locator('.workspace-header').screenshot({ path: path.join(root, 'test-results/output-monitor-mobile.png') });
@@ -192,7 +265,28 @@ const { chromium } = require('playwright');
     const retinaScale = await retina.locator('#output-monitor canvas').evaluate(canvas => canvas.width / canvas.getBoundingClientRect().width);
     assert.ok(retinaScale >= 3, 'The backing store preserves full density on 3x displays');
     await retina.close();
+    for (const width of [1440, 1280, 1200, 1199, 1000, 800, 600, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const layout = await page.evaluate(() => {
+        const rect = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
+        return { header: rect('.workspace-header'), monitor: rect('#output-monitor'), library: rect('.pl-library'), project: rect('.preset-menu'), transport: rect('.daw-transport'), load: rect('#import-audio'), windows: rect('.daw-windows-bottom'), topWindows: rect('.daw-windows-top'), inspector: rect('.pl-inspector'), knob: rect('.pl-inspector .ui-knob-dial'), overflow: document.documentElement.scrollWidth > innerWidth };
+      });
+      assert.equal(layout.overflow, false, `No horizontal page overflow at ${width}px`);
+      assert.equal(layout.monitor.height, 32, `Spectrum keeps one-row height at ${width}px`);
+      assert.ok(layout.monitor.width <= 200 && layout.project.width <= 150, `Project and spectrum stay compact at ${width}px`);
+      assert.ok(layout.library.x >= layout.header.x && layout.library.right <= layout.header.right, `Audio library fits the header at ${width}px`);
+      if (width >= 1200) {
+        assert.equal(layout.monitor.y, layout.library.y, 'Last row contains sounds and spectrum');
+        assert.equal(layout.transport.y, layout.load.y, 'Play follows the import control on the first row');
+        assert.ok(layout.transport.x >= layout.load.right, 'Play is to the right of import');
+        assert.ok(layout.transport.x - layout.load.right <= 12, 'Play immediately follows import without an expanding gap');
+        assert.equal(layout.windows.x, layout.topWindows.x, 'Editors align below the other orange windows');
+        assert.ok(layout.windows.y >= layout.inspector.y && layout.windows.bottom <= layout.inspector.bottom, 'Editors fit beside the compact tools');
+        assert.equal(layout.knob.width, 22, 'Clip knobs are smaller');
+        assert.ok(layout.inspector.height < 45 && layout.monitor.y >= layout.inspector.bottom && layout.header.height < 150, `Only three compact rows at ${width}px`);
+      }
+    }
     assert.deepEqual(errors, []);
-    console.log(`Output spectrum checks passed. Tones: ${JSON.stringify(pixels)}; cadence: ${JSON.stringify(cadence)}; audition: ${JSON.stringify(audition)}.`);
+    console.log(`Output spectrum checks passed. Tones: ${JSON.stringify(pixels)}; cadence: ${JSON.stringify(cadence)}; audition: ${JSON.stringify(audition)}; sample meter cost: ${JSON.stringify(sampleMeters.timing)}.`);
   } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

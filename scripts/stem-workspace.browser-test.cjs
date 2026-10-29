@@ -35,10 +35,20 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('.studio-card, .workspace-edition, #workspace-title, .pl-notes, #status').count(), 0);
     // The game leads the top row of orange window buttons.
     assert.equal(await page.locator('.daw-windows-top > :first-child').getAttribute('id'), 'toggle-game');
-    // Help, tooltips and pin are ghost buttons, in that order; every tooltip is the shared one.
-    const headerEnd = await page.locator('#header-pin').evaluate(pin => [pin.previousElementSibling.previousElementSibling, pin.previousElementSibling, pin]
+    // Tooltips sit below the pin; the redundant shortcuts popup is gone.
+    const headerEnd = await page.locator('#header-pin').evaluate(pin => [pin, pin.nextElementSibling]
       .map(e => [e.getAttribute('aria-label'), e.classList.contains('ui-btn--ghost')]));
-    assert.deepEqual(headerEnd, [['Playlist shortcuts', true], ['Toggle tooltips', true], ['Pin header', true]]);
+    assert.deepEqual(headerEnd, [['Pin header', true], ['Toggle tooltips', true]]);
+    assert.equal(await page.locator('.pl-help').count(), 0);
+    const pinBox = await page.locator('#header-pin').boundingBox(), tipsBox = await page.locator('.tooltips-toggle').boundingBox();
+    assert.equal(pinBox.x, tipsBox.x); assert.ok(tipsBox.y >= pinBox.y + pinBox.height);
+    const headerButtons = await page.locator('.workspace-header button').evaluateAll(buttons => buttons.filter(button => !button.closest('.row-menu-list') && !button.classList.contains('ui-knob-dial')).map(button => ({ id: button.id, shared: button.classList.contains('ui-btn'), width: button.offsetWidth, height: button.offsetHeight, tool: button.classList.contains('ui-btn--tool'), icon: button.classList.contains('ui-btn--icon'), iconSize: button.querySelector('.ui-btn-icon')?.getBoundingClientRect().width })));
+    assert.ok(headerButtons.every(button => button.shared), 'Every header button uses the shared component, including the project dropdown');
+    for (const button of headerButtons.filter(button => button.width && (button.icon || button.tool))) {
+      assert.equal(button.width, 28, `${button.id}: shared width`);
+      assert.equal(button.height, button.tool ? 30 : 32, `${button.id}: tools are only 2px shorter`);
+      assert.equal(button.iconSize, 18, `${button.id}: icons retain the same size`);
+    }
     const nativeTitles = await page.evaluate(() => [...document.querySelectorAll('main [title], dialog [title]')]
       .filter(e => e.tagName !== 'IFRAME').map(e => e.className || e.id));
     assert.deepEqual(nativeTitles, [], 'Stem Extractor controls use data-scdl-tooltip, never a native title');
@@ -76,7 +86,8 @@ const { chromium } = require('playwright');
     const inspector = page.locator('.workspace-header .pl-inspector');
     const dials = await inspector.locator('.ui-knob-dial').evaluateAll(nodes => nodes.map(e => ({ width: e.offsetWidth, height: e.offsetHeight, radius: getComputedStyle(e).borderRadius })));
     assert.ok(dials.length > 0 && dials.every(d => d.width === d.height && d.radius === '50%'));
-    assert.equal(await page.locator('#playlist').evaluate(e => e.firstElementChild.className), 'pl-library', 'Playlist starts at the sample selector');
+    assert.equal(await page.locator('#playlist').evaluate(e => e.firstElementChild.className), 'pl-scroll', 'Playlist starts at the ruler');
+    assert.equal(await page.locator('.workspace-header .pl-library').count(), 1, 'The sample library lives in the header');
     // Moved controls keep keyboard ownership, and one key press runs exactly once.
     const snap = inspector.locator('.pl-grid-snap');
     await snap.focus(); await page.keyboard.press('g');
@@ -167,11 +178,11 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('.pl-clip').count(), beforeCancel, 'Cancelling keeps the existing arrangement');
     assert.equal(await page.locator('#extract-progress, #progress').count(), 0, 'Progress shows as the library spinner, not bars');
     // Stems separated together share one library color, apart from the source sample's.
-    const edge = name => page.locator('.pl-shelf button', { hasText: name }).first().evaluate(e => [getComputedStyle(e).borderLeftColor, getComputedStyle(e).borderLeftWidth]);
+    const edge = name => page.locator('.pl-shelf button', { hasText: name }).first().evaluate(e => [getComputedStyle(e, '::after').backgroundColor, getComputedStyle(e).borderLeftWidth]);
     const [drumsEdge, bassEdge, sourceEdge] = [await edge(/^Drums · Library tone/), await edge(/^Bass · Library tone/), await edge(/^Library tone\.wav$/)];
     assert.deepEqual(drumsEdge, bassEdge);
     assert.notEqual(drumsEdge[0], sourceEdge[0]);
-    assert.equal(drumsEdge[1], '2px');
+    assert.equal(drumsEdge[1], '1px', 'Only the neutral component frame remains; there is no colored base edge');
     // Remove source leaves only the stems: the sample and its clip leave the project; undo brings them back.
     await page.evaluate(() => { workerDelay = 30; });
     await page.locator('#extract-when').selectOption('delete');

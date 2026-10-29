@@ -6,47 +6,47 @@ body{margin:0;-webkit-font-smoothing:antialiased}
 main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 /* Shared header: transport, project and stem meters, then clip controls and editing tools.
    Pinned (sticky at the top) unless the pin button turns it off. */
-.workspace-header{position:relative;z-index:50;isolation:isolate;border:1px solid #42403d;border-radius:12px;background:radial-gradient(ellipse at 12% 0,#ff70200c,transparent 65%),#202020;box-shadow:0 8px 30px #0002}
+.workspace-header{--ui-button-width:28px;--ui-button-height:32px;position:relative;z-index:50;isolation:isolate;border:1px solid #42403d;border-radius:12px;background:radial-gradient(ellipse at 12% 0,#ff70200c,transparent 65%),#202020;box-shadow:0 8px 30px #0002}
 .workspace-header[data-pinned=true]{position:sticky;top:0;box-shadow:0 10px 24px #000b}
 /* Stem-colored top edge, inside the border: the box minus its content area leaves a 2px
    band that follows the inner curve of the corners. */
 .workspace-header::before{content:'';position:absolute;z-index:1;inset:0;padding-top:2px;border-radius:11px;background:linear-gradient(90deg,var(--vocals) 0 25%,var(--drums) 25% 50%,var(--bass) 50% 75%,var(--other) 75%);opacity:.85;pointer-events:none;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
-/* One deck of two rows. Row one: brand, cover, project menu, transport, speed, help, pin and
-   four tool windows. Row two: the clip controls (knobs, clip options and editing tools), then
-   the output spectrum filling the rest up to the help button, tooltips under the pin and the
-   four editors under the windows: no empty space at any width. The transport and the playlist
-   toolbar take no box: their groups (built in stems-page.mjs) are the grid items. */
-.daw-deck{display:grid;grid-template-columns:minmax(356px,1fr) repeat(5,auto);grid-template-areas:"start transport tempo help pin wtop" "lower lower lower lower info wbottom";align-items:center;gap:8px 6px;padding:8px 12px}
-.daw-lower{grid-area:lower;display:flex;align-items:stretch;gap:12px;min-width:0}
-.daw-lower>.pl-inspector{order:-1;flex:0 1 auto;min-width:0}
+/* Three desktop rows: project/transport/windows, tools/editors, wide sounds/spectrum. */
+.daw-deck{display:grid;grid-template-columns:minmax(300px,max-content) auto minmax(184px,1fr) auto auto;grid-template-areas:"start transport tempo pin wtop" "inspector inspector inspector info wbottom" "lower lower lower lower lower";align-items:center;gap:6px 4px;padding:8px 10px}
+.daw-lower{grid-area:lower;display:flex;align-items:center;gap:12px;min-width:0;padding-top:6px;border-top:1px solid #ffffff12}
+.daw-lower>.pl-library{order:-1;flex:1;min-width:0;min-height:32px;height:32px;padding:0 24px 0 0;border:0;background:transparent}
+.daw-lower .pl-busy{right:0}
+.daw-lower .pl-shelf{padding:0}
+.daw-deck>.pl-inspector{grid-area:inspector;min-width:0}
 .daw-deck .transport-bar,.daw-deck .pl-toolbar{display:contents}
+.daw-header-options{display:contents}
 .daw-deck .pl-spacer{display:none}
-.daw-start{grid-area:start;display:flex;align-items:center;gap:10px;min-width:0;margin-right:6px}
-.daw-transport{grid-area:transport;display:flex;align-items:center;gap:5px;margin-right:4px}
-.daw-deck .stem-tempo{grid-area:tempo}
-.daw-deck .pl-help{grid-area:help}
-.daw-deck .header-pin{grid-area:pin}
+.daw-start{grid-area:start;display:flex;align-items:center;gap:8px;min-width:0}
+.daw-transport{grid-area:transport;display:flex;align-items:center;gap:4px}
+.daw-deck .pl-time{min-width:75px;padding-inline:5px;font-size:13px}
+.daw-deck .stem-tempo{grid-area:tempo;min-width:0}
+.daw-deck .stem-tempo .slider-wrap{flex:1;min-width:100px}
 .daw-deck .tooltips-toggle{grid-area:info}
+.daw-deck .header-pin{grid-area:pin}
+.daw-deck .daw-windows-top{grid-area:wtop}
+.daw-deck .daw-windows-bottom{grid-area:wbottom}
 .daw-windows{display:flex;gap:5px;margin-left:4px}
-.daw-windows-top{grid-area:wtop}
-.daw-windows-bottom{grid-area:wbottom}
-.header-pin .ui-btn-icon{width:16px;height:16px}
 /* Hint panel, as in FL: the loaded track, then status and progress messages. */
 .brand{display:flex;flex:0 0 auto;align-items:center;gap:8px;font-size:15px;font-weight:800;letter-spacing:.2px;cursor:default}
 .brand img,.brand sc-icon{object-fit:contain}
 /* The tagline is the title's tooltip. */
-/* The spectrum takes the height of the clip controls beside it. */
-.output-monitor-slot{display:flex;flex:1 1 200px;min-width:160px;min-height:32px}
+/* A single control-height spectrum, independent of the inspector's height. */
+.output-monitor-slot{display:flex;flex:0 1 200px;max-width:200px;min-width:120px;height:32px}
 .output-monitor{position:relative;flex:1;min-width:0;border-radius:4px;overflow:hidden;contain:layout paint}
 .output-monitor-canvas{position:absolute;inset:0;display:block;width:100%;height:100%}
-.header-library{display:flex;align-items:center;gap:10px;flex:1 1 auto;min-width:0;max-width:440px}
+.header-library{display:flex;align-items:center;gap:10px;flex:0 1 auto;min-width:0}
 .header-library .preset-toolbar{flex:1;min-width:0}
 .preset-toolbar{display:flex;gap:6px;min-width:0}
 .preset-toolbar select{flex:1;min-width:0;width:0;height:32px;padding:0 8px;border:1px solid #45423e;border-radius:6px;background:#242321;color:var(--ink);font:11px Arial,Helvetica,sans-serif;cursor:pointer}
 .preset-toolbar select:disabled{opacity:.4;cursor:not-allowed}
 /* Saved projects: the shared row menu, styled like the old select; half its old width. */
-.preset-toolbar .preset-menu{flex:1 1 240px;width:240px;min-width:110px}
-.workspace-header .preset-toolbar .row-menu-toggle{flex:1;width:100%;min-width:0;height:32px;padding:0 8px;border:1px solid #45423e;border-radius:6px;background:#242321;color:var(--ink);font:11px Arial,Helvetica,sans-serif}
+.preset-toolbar .preset-menu{flex:0 1 150px;width:150px;min-width:110px}
+.workspace-header .preset-toolbar .row-menu-toggle{flex:1;width:100%;min-width:0;padding-inline:8px;font-weight:400}
 .workspace-header .preset-toolbar .row-menu-toggle:disabled{opacity:.4;cursor:not-allowed}
 /* Saved separation rows: names start at the left; the delete cross shows on hover. */
 .workspace-header .preset-toolbar .row-menu-list button{display:block;width:auto;height:auto;flex-shrink:1;padding:3px 8px;border:0;background:transparent;text-align:left}
@@ -54,26 +54,23 @@ main{max-width:1294px;margin:auto;padding:28px 40px 40px}
 .workspace-header .preset-toolbar .row-menu-list .row-menu-delete{display:grid;place-items:center;flex:0 0 26px;padding:0}
 .workspace-header .preset-toolbar .row-menu-list .row-menu-delete sc-icon{width:11px;height:11px}
 .workspace-header .preset-toolbar .row-menu-list .row-menu-delete.is-armed{flex:0 0 auto;padding:3px 8px;background:#4a2020}
-.preset-toolbar .ui-btn-icon{width:16px;height:16px}
 /* Save lights up while the open project has unsaved changes. */
 .workspace-header #save-project.has-changes{border-color:var(--orange);color:#ffad80}
 .workspace-header #preset-folder.has-custom-folder{border-color:var(--orange);background:#42291d;color:#ffad80}
 #preset-reconnect{justify-self:start;white-space:normal}
-/* Row one needs about 1200px of header for an unsqueezed speed slider; narrower windows wrap
-   the deck in reading order. */
-@media(max-width:1279px){
-  .daw-deck{display:flex;flex-wrap:wrap;align-items:center}
-  .daw-start{flex:1 1 100%;margin:0}
-  .daw-transport,.daw-windows{margin:0}
-  .daw-transport{order:1}.daw-deck .stem-tempo{order:2}.daw-deck :is(.pl-help,.tooltips-toggle,.header-pin){order:3}.daw-windows{order:4}
-  .daw-lower{flex:1 1 100%;order:10}
+/* Narrow screens retain the same reading order without widening the page. */
+@media(max-width:1199px){
+  .daw-deck{display:flex;flex-wrap:wrap}
+  .daw-start{flex:1 1 100%}
+  .daw-transport{order:1}.daw-deck .stem-tempo{order:2}
+  .daw-deck .header-pin{order:3}
+  .daw-header-options{display:flex;flex-direction:column;gap:6px;order:3}
+  .daw-deck .daw-windows-top{order:4}
+  .daw-deck>.pl-inspector{flex:1 1 100%;order:5}
+  .daw-deck :is(.tooltips-toggle,.daw-windows-bottom){order:6}
+  .daw-lower{flex:1 1 100%;order:7}
 }
-/* Narrower than the clip controls plus a usable spectrum: the spectrum gets its own line. */
-@media(max-width:980px){
-  .daw-lower{flex-wrap:wrap;gap:8px}
-  .daw-lower>.output-monitor-slot{flex:1 1 100%;height:32px}
-  .daw-lower>.pl-inspector{order:1;flex:1 1 100%}
-}
+@media(max-width:600px){.output-monitor-slot{flex-basis:120px}}
 /* On phones and short windows the wrapped header is too tall to pin. */
 @media(max-width:600px),(max-height:480px){
   .workspace-header[data-pinned=true]{position:relative}

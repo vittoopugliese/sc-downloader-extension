@@ -19,8 +19,7 @@
 </head>
 <body>
   <main>
-    <!-- Shared header: one two-row deck (project, transport, speed, output spectrum and the tool
-         windows); playlist controls mount as its last row. Layout in assets/stems.css. -->
+    <!-- Shared deck: project/transport, editing controls, then the wide library and spectrum. -->
     <header class="workspace-header" aria-label="Seib" data-pinned="true">
       <div class="daw-deck">
         <div class="daw-start">
@@ -28,15 +27,9 @@
           <div class="source-mini"><div class="source-cover"><img id="artwork" alt="" referrerpolicy="no-referrer" hidden><span id="artwork-fallback" data-icon="music"></span></div></div>
           <div id="track" class="header-library">
             <div class="preset-toolbar"><select id="stem-presets" disabled></select><button id="save-project" class="ui-btn ui-btn--neutral ui-btn--icon" type="button" aria-keyshortcuts="Control+S" disabled><span data-icon="save"></span></button><button id="preset-folder" class="ui-btn ui-btn--neutral ui-btn--icon" type="button" disabled><sc-icon name="folder" class="ui-btn-icon" aria-hidden="true"></sc-icon></button><button id="preset-reset" class="ui-btn ui-btn--neutral ui-btn--icon" type="button" hidden><sc-icon name="close" class="ui-btn-icon" aria-hidden="true"></sc-icon></button><button id="import-audio" class="ui-btn ui-btn--accent ui-btn--icon" type="button" disabled><span data-icon="upload"></span></button></div>
-            <button id="preset-reconnect" type="button" hidden></button>
+            <button id="preset-reconnect" class="ui-btn ui-btn--neutral ui-btn--text" type="button" hidden></button>
           </div>
         </div>
-        <!-- Every header button is the shared ui-btn (scripts/ui-button.mjs, assets/ui-button.css). -->
-        <div id="transport" class="transport-bar" role="toolbar" aria-label="Transport"><button id="play" class="ui-btn ui-btn--accent ui-btn--icon" type="button" aria-label="Play" aria-pressed="false" data-scdl-tooltip="Play"><span data-icon="play"></span></button>
-        <div class="stem-tempo" role="group" aria-label="Playback speed"><div class="slider-wrap"><div class="limits" aria-hidden="true"><span>0.1x</span><span>3x</span></div><span class="range-label" aria-hidden="true">Tone &amp; Velocity</span><input id="stem-rate" class="slider" type="range" min="0.1" max="3" step="0.0125" value="1" aria-label="Playback speed"></div><label class="keep-tone" data-scdl-tooltip="Keep tone: change playback speed without changing the pitch."><input id="stem-keep-tone" type="checkbox" aria-label="Keep tone"></label><output id="stem-rate-value" for="stem-rate">1.000x</output></div>
-        <button id="header-pin" class="header-pin ui-btn ui-btn--ghost ui-btn--icon" type="button" aria-pressed="true"><span data-icon="pin"></span></button>
-        <button id="toggle-game" class="ui-btn ui-btn--accent ui-btn--icon" type="button" aria-expanded="false" aria-controls="game-panel"><span data-icon="game"></span></button></div>
-        <!-- Second row: the playlist's clip controls mount here (stems-page.mjs), beside the spectrum. -->
         <div class="daw-lower">
           <div class="output-monitor-slot">
             <div id="output-monitor" class="output-monitor" role="img">
@@ -44,6 +37,11 @@
             </div>
           </div>
         </div>
+        <!-- Every header button is the shared ui-btn (scripts/ui-button.mjs, assets/ui-button.css). -->
+        <div id="transport" class="transport-bar" role="toolbar" aria-label="Transport"><button id="play" class="ui-btn ui-btn--accent ui-btn--icon" type="button" aria-label="Play" aria-pressed="false" data-scdl-tooltip="Play"><span data-icon="play"></span></button>
+        <div class="stem-tempo" role="group" aria-label="Playback speed"><div class="slider-wrap"><div class="limits" aria-hidden="true"><span>0.1x</span><span>3x</span></div><span class="range-label" aria-hidden="true">Tone &amp; Velocity</span><input id="stem-rate" class="slider" type="range" min="0.1" max="3" step="0.0125" value="1" aria-label="Playback speed"></div><label class="keep-tone" data-scdl-tooltip="Keep tone: change playback speed without changing the pitch."><input id="stem-keep-tone" type="checkbox" aria-label="Keep tone"></label><output id="stem-rate-value" for="stem-rate">1.000x</output></div>
+        <button id="header-pin" class="header-pin ui-btn ui-btn--ghost ui-btn--icon" type="button" aria-pressed="true"><span data-icon="pin"></span></button>
+        <button id="toggle-game" class="ui-btn ui-btn--accent ui-btn--icon" type="button" aria-expanded="false" aria-controls="game-panel"><span data-icon="game"></span></button></div>
         <input id="audio-file" type="file" accept="audio/*,.wav,.mp3,.flac,.m4a,.ogg,.aac,.aif,.aiff" hidden>
       </div>
     </header>

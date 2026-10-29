@@ -310,14 +310,14 @@ setButtonContent($('clear-cache'), { icon: 'trash', label: text('clearCache') })
 $('clear-cache').dataset.scdlTooltip = text('clearCacheTip'); $('clear-cache').setAttribute('aria-label', text('clearCache'));
 $('separate').dataset.scdlTooltip = text('details');
 // Tooltips on/off for the extension's pages (fast-tooltips.js); Player Tools has its own
-// switch on SoundCloud. Ghost, beside the playlist help and the header pin.
+// switch on SoundCloud. Ghost, directly below the header pin.
 const tooltipsToggle = createButton({ icon: 'info', title: pt('Toggle tooltips'), variant: 'ghost', className: 'tooltips-toggle', pressed: globalThis.SCTooltips?.isEnabled() ?? true,
   onClick: () => globalThis.SCTooltips?.setEnabled(!globalThis.SCTooltips.isEnabled()) });
 const renderTooltipsToggle = () => tooltipsToggle.setAttribute('aria-pressed', String(globalThis.SCTooltips?.isEnabled() ?? true));
 document.addEventListener('scdl:tooltips-changed', renderTooltipsToggle);
 window.addEventListener('storage', renderTooltipsToggle);
 const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('transport'), playButton: false, windows: WINDOWS, windowHome: $('mix-tools'),
-  inspectorHost: document.querySelector('.daw-lower'),
+  inspectorHost: document.querySelector('.daw-deck'), libraryHost: document.querySelector('.daw-lower'),
   // One line: play, tempo and speed, then the game, the windows and the export.
   toolbarStart: [$('play')], tempoControls: [document.querySelector('.stem-tempo')], toolbarEnd: [tooltipsToggle, $('header-pin'), $('toggle-game')],
   // Right-click > Extract stems… on any audio clip opens the extraction window.
@@ -345,8 +345,8 @@ const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('trans
 // Pin: the header stays at the top while scrolling, or scrolls away with the page.
 const header = document.querySelector('.workspace-header'), pin = $('header-pin');
 document.querySelector('.workspace-header .brand').dataset.scdlTooltip = 'Stem Extractor In Browser';
-// Header deck (stems.css): the transport and the window buttons in groups that the grid
-// places in two rows. They stay inside the playlist toolbar, so its hotkeys keep working
+// Header deck (stems.css): transport and windows occupy the first row; the four editors
+// sit below the windows. They stay inside the playlist toolbar, so hotkeys keep working
 // after a click on any of them.
 {
   const bar = $('transport').querySelector('.pl-toolbar'), find = selector => bar.querySelector(selector);
@@ -359,6 +359,7 @@ document.querySelector('.workspace-header .brand').dataset.scdlTooltip = 'Stem E
   group('daw-transport', '', [$('play'), find('.pl-time'), find('.pl-field'), find('.pl-tap'), find('.pl-metronome'), find('.pl-fit-tempo')]);
   group('daw-windows daw-windows-top', say('Windows', 'Ventanas'), [$('toggle-game'), windowButton('browser'), windowButton('recorder'), find('.pl-export')]);
   group('daw-windows daw-windows-bottom', say('Editors', 'Editores'), ['rack', 'piano', 'fx', 'eq'].map(windowButton));
+  group('daw-header-options', say('Header options', 'Opciones del header'), [$('header-pin'), tooltipsToggle]);
   find('.pl-windows')?.remove();
 }
 function setPinned(pinned) {

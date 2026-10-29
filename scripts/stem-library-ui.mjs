@@ -1,6 +1,7 @@
 import { StemPresets } from './stem-presets.mjs';
 import { createRowMenu } from './stem-row-menu.mjs';
 import { mountProjectDialogs } from './stem-project-dialog.mjs';
+import { buttonClasses } from './ui-button.mjs';
 
 // Saved projects, saved by hand like FL Studio: Save (Ctrl+S) writes the open project and
 // Ctrl+Shift+S saves a copy under a new name. Edits only mark the project as modified (the
@@ -82,6 +83,7 @@ export function mountStemLibrary({ locale, snapshot, restore, report, onOperatio
     deleteLabel: name => `${copy.remove}: ${name}`, confirm: copy.confirmRemove,
     onSelect: id => { if (id === NEW) startEmpty(); else open(id); }, onDelete: id => remove(id) });
   $('stem-presets').replaceWith(presetMenu.element);
+  presetMenu.toggle.classList.add(...buttonClasses({ size: 'text' }));
   presetMenu.toggle.id = 'stem-presets'; presetMenu.menu.id = 'stem-presets-menu'; presetMenu.toggle.setAttribute('aria-controls', 'stem-presets-menu');
   $('preset-folder').ariaLabel = copy.folder;
   $('preset-reset').dataset.scdlTooltip = $('preset-reset').ariaLabel = copy.reset;

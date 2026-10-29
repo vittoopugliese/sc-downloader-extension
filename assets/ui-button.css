@@ -2,9 +2,9 @@
    it; the playlist tools use its 'tool' size. Variants: accent (the Lumberjack orange),
    neutral (grey) and ghost (no frame). An open window or an active toggle is
    aria-pressed=true. */
-button.ui-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex-shrink:0;box-sizing:border-box;height:32px;min-height:0;margin:0;padding:0 11px;border:1px solid transparent;border-radius:6px;font:700 11px/1 Arial,Helvetica,sans-serif;letter-spacing:.2px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s;-webkit-user-select:none;user-select:none}
-button.ui-btn--icon{width:34px;padding:0}
-button.ui-btn--tool{width:32px;height:30px;padding:0}
+button.ui-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex-shrink:0;box-sizing:border-box;height:var(--ui-button-height,32px);min-height:0;margin:0;padding:0 11px;border:1px solid transparent;border-radius:6px;font:700 11px/1 Arial,Helvetica,sans-serif;letter-spacing:.2px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s;-webkit-user-select:none;user-select:none}
+button.ui-btn--icon{width:var(--ui-button-width,34px);padding:0}
+button.ui-btn--tool{width:var(--ui-button-width,32px);height:calc(var(--ui-button-height,32px) - 2px);padding:0}
 .ui-btn .ui-btn-icon{width:18px;height:18px;flex-shrink:0;pointer-events:none}
 .ui-btn--text .ui-btn-icon{width:15px;height:15px}
 .ui-btn-label{overflow:hidden;text-overflow:ellipsis}
@@ -19,7 +19,7 @@ button.ui-btn--accent[aria-pressed=true]{border-color:#ffd2b3;background:linear-
 /* Neutral: dark grey, orange when pressed. */
 button.ui-btn--neutral{border-color:#45423e;background:#242321;color:#ece8e2;box-shadow:none}
 button.ui-btn--neutral:hover:enabled{border-color:#897564;background:#35312b}
-button.ui-btn--neutral[aria-pressed=true]{border-color:var(--orange,#ff5500);background:#42291d;color:#ffad80}
+button.ui-btn--neutral[aria-pressed=true]{border-color:var(--ui-button-active-border,var(--orange,#ff5500));background:#42291d;color:#ffad80}
 
 /* Ghost: no frame until hovered. */
 button.ui-btn--ghost{border-color:transparent;background:transparent;color:#8d8781;box-shadow:none}

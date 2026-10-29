@@ -144,6 +144,8 @@ test('engine edits replace only the edited clip; untouched clips keep sounding',
   const context = Object.assign(Object.create(AudioContext.prototype), {
     currentTime: 1,
     createGain: () => ({ gain: param(), connect: node => node, disconnect() {} }),
+    createChannelSplitter: () => ({ connect() {}, disconnect() {} }),
+    createAnalyser: () => ({ getFloatTimeDomainData(data) { data.fill(0); }, disconnect() {} }),
     createBufferSource() {
       const source = { playbackRate: { value: 1 }, connect: node => node, disconnect() {}, addEventListener() {},
         start: (when, offset) => starts.push({ buffer: source.buffer, when, offset }), stop: at => stops.push({ buffer: source.buffer, at }) };
@@ -156,8 +158,8 @@ test('engine edits replace only the edited clip; untouched clips keep sounding',
   const state = { version: 1, bpm: 120, tracks: [{ id: 't1', gain: 1 }, { id: 't2', gain: 1 }],
     clips: [clip(0, 8, { id: 'x', asset: 'a', track: 't1' }), clip(0, 8, { id: 'y', asset: 'b', track: 't2' })] };
   const transport = { rate: 1, loop: { start: 0, end: 8 } };
-  engine.play(state, 0, transport);
   try {
+  engine.play(state, 0, transport);
   assert.equal(starts.length, 2);
   context.currentTime = 2;
   // Ten trims of clip x while both play: only x is replaced.
@@ -172,5 +174,5 @@ test('engine edits replace only the edited clip; untouched clips keep sounding',
   assert.equal(starts.length, 12);
   engine.update(state, { ...transport, rate: 1.5 });
   assert.equal(starts.length, 14);
-  } finally { engine.stop(); }
+  } finally { engine.dispose(); }
 });

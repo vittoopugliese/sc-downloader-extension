@@ -9,7 +9,7 @@
 @media(max-width:600px){#mixer{margin-top:18px;padding:12px}}
 
 .pl-ui{--pl-head:165px;--pl-edge:#3b3b3b;--pl-panel:#292929;--pl-head-bg:#202020;--pl-night:#191919;--pl-muted:#b8b3ad}
-/* The workspace playlist starts at the sample shelf; its controls live in the header. */
+/* The workspace playlist starts at the ruler; its library and controls live in the header. */
 .playlist{padding:0 18px 18px}
 .pl-ui button,.pl-ui select,.pl-ui input{font:11px Arial,Helvetica,sans-serif}
 /* Plain playlist buttons (track mute/solo, library chips). Toolbar and tool buttons are the
@@ -37,7 +37,7 @@
 .pl-field input[type=number]{width:61px}.pl-field input[type=checkbox]{accent-color:var(--orange)}
 .pl-field input[type=number],.pl-ui select{height:28px;padding:4px;border:1px solid #45423e;border-radius:5px;background:var(--pl-night);color:#ece8e2}
 .pl-library{position:relative;display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 40px 6px 12px;border-inline:1px solid var(--pl-edge);border-top:1px solid #ffffff0d;background:var(--pl-head-bg)}
-.pl-shelf{display:flex;flex:1 1 auto;gap:6px;min-width:0;padding:2px 0;overflow-x:auto;overflow-y:hidden;color:#97938e;font-size:11px;scrollbar-width:thin;scrollbar-color:#4a4642 transparent}
+.pl-shelf{--ui-button-active-border:#45423e;display:flex;flex:1 1 auto;gap:6px;min-width:0;padding:2px 0;overflow-x:auto;overflow-y:hidden;color:#97938e;font-size:11px;scrollbar-width:thin;scrollbar-color:#4a4642 transparent}
 .pl-shelf:empty{display:none}
 /* Stretch spinner: absolute inside the right padding the library row always keeps, so it never covers the shelf or shifts layout. */
 .pl-busy{position:absolute;top:50%;right:12px;width:16px;height:16px;margin-top:-8px;border:2px solid #ffad8040;border-top-color:#ffad80;border-radius:50%;pointer-events:none;animation:pl-spin .8s linear infinite}
@@ -45,10 +45,11 @@
 @keyframes pl-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.pl-busy{animation-duration:2.4s}}
 .pl-shelf>span{align-self:center}
-/* The left edge carries the sample's group color: stems separated together share it. */
-.pl-shelf button{max-width:180px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:grab}
-.pl-ui .pl-shelf button:not(.ui-btn){border-left:2px solid var(--group-color,var(--orange))}
-.pl-ui .pl-shelf button:not(.ui-btn):is(:hover,[aria-pressed=true]){border-left-color:var(--group-color,var(--orange))}
+/* The moving strip carries the group color: stems separated together share it. */
+.pl-shelf button{position:relative;max-width:180px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:grab}
+/* Only the rising bright strip follows each sample's signal, with a short release.
+   Silence leaves only the neutral frame; selection uses the shared background and text. */
+.pl-shelf button::after{content:'';position:absolute;left:0;bottom:0;width:3px;height:100%;background:var(--group-color,var(--orange));transform:scaleY(var(--sample-level,0));transform-origin:bottom;pointer-events:none}
 .pl-ui .pl-shelf button.is-unused{box-shadow:inset 0 0 0 1px #ffd166;background:#3b321f}
 .pl-shelf button:has(.pl-unused-label){display:inline-flex;align-items:center}
 .pl-sample-name{overflow:hidden;text-overflow:ellipsis}
@@ -117,6 +118,7 @@
 .playlist.is-slicing .pl-lane,.playlist.is-slicing .pl-clip,.playlist.is-slicing .pl-edge{cursor:var(--sc-cursor-slice,crosshair)}
 .playlist.is-slicing .pl-edge:hover{background:none}
 .pl-inspector{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:10px 12px;border:1px solid var(--pl-edge);border-radius:10px 10px 0 0;background:var(--pl-panel)}
+.pl-selection-controls{display:flex;align-items:center;flex-wrap:wrap;gap:4px;min-width:0}
 /* A partial highlight distinguishes clips with different Stretch settings. */
 .pl-clip-options{display:flex;align-items:center;gap:4px}
 .pl-clip-options [aria-pressed=mixed]{border-color:#b48cff;box-shadow:inset 0 -2px #b48cff}
@@ -134,22 +136,20 @@
 .pl-inspector .ui-knob{--knob-size:26px;--knob-tick-top:2.5px;--knob-tick-height:7px;--knob-tick-origin:9.5px;gap:3px;width:54px;min-width:0}
 .pl-inspector .ui-knob-label{font-size:7px;white-space:nowrap}
 .pl-inspector .ui-knob-value{font-size:8px}
-/* In the stems header the clip controls share the second row with the output spectrum, with
-   no card: the four knobs span two lines, and the 23 buttons (clip options, then the tools)
-   fill two lines of twelve beside them. Group starts get a thin divider instead of a gap, so
-   the lines stay aligned. */
-.workspace-header .pl-inspector{display:grid;grid-template-columns:repeat(4,56px) repeat(12,32px);grid-auto-rows:30px;align-items:center;gap:6px 4px;padding:0;border:0;border-radius:0;background:transparent}
-.workspace-header .pl-inspector .pl-clip-options,.workspace-header .pl-inspector .pl-tools{display:contents}
-.workspace-header .pl-inspector>.ui-knob{position:relative;grid-row:span 2;width:56px}
-.workspace-header .pl-inspector>.ui-knob+.ui-knob::before{content:'';position:absolute;left:-3px;top:12px;bottom:8px;width:1px;background:#ffffff0a;pointer-events:none}
-.workspace-header .pl-inspector>.ui-knob:nth-child(4){margin-right:8px}
-.workspace-header .pl-inspector :is(.pl-clip-options,.pl-tools)>*{width:32px;min-width:0;height:30px;padding:0}
-.workspace-header .pl-inspector .pl-tools .pl-tool-group{position:relative;margin-left:0}
-.workspace-header .pl-inspector .pl-tool-group::before,.workspace-header .pl-inspector .pl-tools>:first-child::before{content:'';position:absolute;left:-3px;top:5px;bottom:5px;width:1px;background:#ffffff1f;pointer-events:none}
-.workspace-header .pl-inspector .pl-tools>:first-child{position:relative}
-.workspace-header~.playlist>.pl-library{border-top:1px solid var(--pl-edge);border-radius:10px 10px 0 0}
-/* Narrow windows and phones: the knobs and buttons wrap. */
-@media(max-width:800px){.workspace-header .pl-inspector{display:flex;flex-wrap:wrap}.workspace-header .pl-inspector>.ui-knob{margin-right:0}}
+/* One editing line at desktop widths. The fine divider separates selected-clip actions
+   from general tools; at smaller widths the two groups wrap as distinct rows. */
+.workspace-header .pl-inspector{gap:6px 8px;padding:0;border:0;border-radius:0;background:transparent}
+.workspace-header .pl-inspector .ui-knob{--knob-size:22px;--knob-tick-top:2px;--knob-tick-height:6px;--knob-tick-origin:8px;gap:2px;width:38px}
+.workspace-header .pl-inspector .ui-knob-label{font-size:6.5px;letter-spacing:0;line-height:1}
+.workspace-header .pl-inspector .ui-knob-value{line-height:1}
+.workspace-header .pl-selection-controls{gap:2px}
+.workspace-header .pl-clip-options{margin-left:4px;gap:3px;flex-wrap:wrap}
+.workspace-header .pl-tools{gap:3px;margin-left:0;padding:3px 0 3px 8px;border-left:1px solid #ffffff26;flex-wrap:wrap;overflow:visible}
+.workspace-header .pl-tools .pl-tool-group{position:relative;margin-left:5px}
+.workspace-header .pl-tool-group::before{content:'';position:absolute;left:-5px;top:5px;bottom:5px;width:1px;background:#ffffff15;pointer-events:none}
+.workspace-header~.playlist>.pl-scroll{border-radius:10px 10px 0 0}
+@media(max-width:1199px){.workspace-header .pl-tools{flex:1 1 100%;padding:7px 0 0;border-left:0;border-top:1px solid #ffffff26}}
+@media(max-width:600px){.workspace-header .pl-clip-options{margin-left:0;flex-basis:100%}}
 /* Window buttons are accent ui-btns; an open window stays pressed. */
 .pl-windows{display:inline-flex;align-items:center;gap:5px}
 /* Hotkey flash: an overlay in the button's color whose opacity is animated from JS. */

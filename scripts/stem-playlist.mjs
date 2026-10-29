@@ -115,12 +115,12 @@ export function contextMenu(event, items) {
 // A host with its own play button passes `playButton: false`; `toolbarHost` mounts the
 // transport bar elsewhere: `toolbarStart` opens it, `tempoControls` follow the tempo controls and
 // `toolbarEnd` sits before the download button;
-// `inspectorHost` mounts the clip knobs and editing tools elsewhere; `inspectorControls`
-// share the library row. Pattern library entries are owned by
+// `inspectorHost` mounts the clip knobs and editing tools elsewhere; `libraryHost` moves
+// the sample shelf and its `inspectorControls`. Pattern library entries are owned by
 // the host: their Duplicate/Delete go through `onPatternAction(action, assetId)`.
 // `onSeparate(clip)` adds "Extract stems…" to the menu of every audio clip; the host
 // separates it and hands the result back with `addStemTracks`.
-export function mountPlaylist({ container, windows = [], windowHome = null, toolbarHost = container, inspectorHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, masterEffects, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect, onRackSample, onSeparate, getUsedSampleIds }) {
+export function mountPlaylist({ container, windows = [], windowHome = null, toolbarHost = container, inspectorHost = container, libraryHost = container, toolbarStart = [], toolbarEnd = [], tempoControls = [], inspectorControls = [], playButton = true, onPatternAction, audio, masterEq, masterFx, masterEffects, channel, onChange, onTransport, onViewChange, onLoopChange, onSelect, onRackSample, onSeparate, getUsedSampleIds }) {
   const es = document.documentElement.lang === 'es', t = (en, spanish) => es ? spanish : en;
   let state = emptyArrangement(), assets = new Map(), selected = null, extra = new Set(), zoom = 48, viewBpm = 120, snap = .5;
   let history = [], future = [], position = 0, ownContext, engine = null, engineIO = null, exporting = null;
@@ -187,7 +187,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     renderBusy();
   } });
   renderBusy();
-  function renderPlay(active) { if (!play) return; play.replaceChildren(globalThis.SCIcons.create(active ? 'pause' : 'play')); play.setAttribute('aria-pressed', String(active)); }
+  function renderPlay(active) { if (!play) return; setButtonContent(play, { icon: active ? 'pause' : 'play' }); play.setAttribute('aria-pressed', String(active)); }
   function stop(reset = false) {
     const was = playing(), at = engine?.stop(); metronome.stop();
     position = reset ? marker : at ?? position;
@@ -423,16 +423,26 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     container.classList.toggle('is-slipping', !on && !selecting && editMode === 'slip'); container.classList.toggle('is-stretch-tool', !on && !selecting && editMode === 'stretch');
     paintSoon();
   }
-  const help = iconButton('help', t('Playlist shortcuts', 'Atajos de la playlist'), () => showHint(), { variant: 'ghost' });
-  help.classList.add('pl-help');
-  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.wrap, tapButton, metronomeButton, fitTempo, ...tempoControls, node('span', 'pl-spacer'), help, ...toolbarEnd, windowGroup, exportButton, fileInput);
+  toolbar.append(...toolbarStart, ...[play, time].filter(Boolean), tempo.wrap, tapButton, metronomeButton, fitTempo, ...tempoControls, node('span', 'pl-spacer'), ...toolbarEnd, windowGroup, exportButton, fileInput);
   const shelf = node('div', 'pl-shelf'); shelf.setAttribute('aria-label', t('Sample library', 'Biblioteca de samples'));
+  const sampleMeterViews = new Map(), visibleSamples = new Set();
+  const sampleMeterObserver = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      const id = entry.target.dataset.asset, view = sampleMeterViews.get(id);
+      if (view?.element !== entry.target) continue;
+      if (entry.isIntersecting) visibleSamples.add(id);
+      else {
+        visibleSamples.delete(id); view.level = 0;
+        if (view.drawn !== '0') { view.element.style.setProperty('--sample-level', '0'); view.drawn = '0'; }
+      }
+    }
+  });
   shelf.dataset.scdlTooltip = t('Library: click to select for drawing, double-click to add at the cursor, drag onto a track. Right-click for more.', 'Biblioteca: clic para elegir qué dibujar, doble clic para agregar en el cursor, arrastrá a una pista. Clic derecho para más.');
   shelf.addEventListener('wheel', event => {
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || shelf.scrollWidth <= shelf.clientWidth) return;
     event.preventDefault(); shelf.scrollLeft += event.deltaY;
   }, { passive: false });
-  const library = node('div', 'pl-library');
+  const library = node('div', 'pl-library pl-ui');
   const scroll = node('div', 'pl-scroll'); scroll.tabIndex = 0; scroll.setAttribute('aria-label', t('Playlist timeline', 'Línea de tiempo de la playlist'));
   const grid = node('div', 'pl-grid'); scroll.append(grid);
   const waveCanvas = node('canvas', 'pl-wave-layer'); waveCanvas.setAttribute('aria-hidden', 'true'); grid.append(waveCanvas);
@@ -562,10 +572,10 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const normalizeButton = iconButton('waveform', t('Normalize audio', 'Normalizar audio'), () => {
     const enable = !chosen().every(clip => clip.normalizationGain !== undefined);
     commit(() => { for (const clip of chosen()) { if (enable) clip.normalizationGain = normalizationGain(assets.get(clip.asset).buffer); else delete clip.normalizationGain; } });
-  });
+  }, { size: 'tool' });
   normalizeButton.classList.add('pl-normalize');
   normalizeButton.dataset.scdlTooltip = t('Normalize: source peak to −1 dBFS, preserving stereo balance. Reversible; volume and effects apply afterwards.', 'Normalizar: pico del sample a −1 dBFS conservando el balance estéreo. Reversible; volumen y efectos se aplican después.');
-  const followTempoButton = iconButton('tempo-loop', t('Follow tempo', 'Seguir tempo'), () => setClip('tempoLock', !chosen().every(clip => clip.tempoLock)));
+  const followTempoButton = iconButton('tempo-loop', t('Follow tempo', 'Seguir tempo'), () => setClip('tempoLock', !chosen().every(clip => clip.tempoLock)), { size: 'tool' });
   followTempoButton.classList.add('pl-follow-tempo');
   followTempoButton.dataset.scdlTooltip = t('Follow tempo: anchor this clip to the current BPM and keep its length in beats when BPM changes. Does not detect the sample tempo.', 'Seguir tempo: vincula el clip al BPM actual y conserva su duración en tiempos al cambiar el BPM. No detecta el tempo del sample.');
   const clipOptions = node('div', 'pl-clip-options');
@@ -862,12 +872,17 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const zoomOut = toolButton({ icon: ICONS.zoomOut, name: t('Zoom out', 'Alejar'), detail: wheelHint, key: '-', keys: ['-', '_'], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1 / 1.5));
   const zoomIn = toolButton({ icon: ICONS.zoomIn, name: t('Zoom in', 'Acercar'), detail: wheelHint, key: '+', keys: ['+', '='], color: '#e6e1da', repeat: true }, () => zoomAround((scroll.clientWidth - TRACK_HEAD) / 2, 1.5));
   const fitButton = toolButton({ icon: ICONS.fit, name: t('Show the whole arrangement', 'Ver todo el arreglo'), detail: t('fits every clip in view', 'ajusta el zoom para ver todos los clips'), key: 'F', keys: ['f'], color: '#e6e1da' }, fit);
-  // One row of tools in groups: pointer tools, cut/copy/delete, clip effects, history, zoom, add.
+  // Selection-specific controls stay together, separated from arrangement-wide tools.
   const tools = node('div', 'pl-tools');
-  const toolGroups = [[pencilButton, selectButton, stretchEdgeButton, slipButton, fadeButton, sliceButton], [split, duplicate, remove], [muteClip, reverseClip, crossfade], [undo, redo], [gridButton, zoomOut, zoomIn, fitButton], [importButton, addTrack]];
+  tools.setAttribute('role', 'group'); tools.setAttribute('aria-label', t('General tools', 'Herramientas generales'));
+  const toolGroups = [[pencilButton, selectButton, stretchEdgeButton, slipButton, fadeButton, sliceButton], [crossfade, undo, redo], [gridButton, zoomOut, zoomIn, fitButton], [importButton, addTrack]];
   for (const group of toolGroups.slice(1)) group[0].classList.add('pl-tool-group');
   tools.append(...toolGroups.flat());
-  inspector.append(clipVolume.wrap, pitch.wrap, fine.wrap, speed.wrap, clipOptions, tools);
+  clipOptions.append(muteClip, reverseClip, split, duplicate, remove);
+  const selectionControls = node('div', 'pl-selection-controls');
+  selectionControls.setAttribute('role', 'group'); selectionControls.setAttribute('aria-label', t('Selected clips', 'Clips seleccionados'));
+  selectionControls.append(clipVolume.wrap, pitch.wrap, fine.wrap, speed.wrap, clipOptions);
+  inspector.append(selectionControls, tools);
   let zoomFrame = 0, zoomTarget = null, zoomAnchor = null;
   function zoomAround(x, factor) {
     if (!(factor > 0) || !Number.isFinite(factor)) return;
@@ -890,11 +905,6 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     if (pan) { scroll.scrollLeft += event.deltaX || event.deltaY; return; }
     zoomAround(event.clientX - scroll.getBoundingClientRect().left - TRACK_HEAD, Math.exp(-clamp(event.deltaY, -200, 200) * .002));
   }, { passive: false });
-  // Help stays available in the header without automatically covering the timeline.
-  const hintText = t('P / 1: draw, move and trim · 2: slip audio · 3 / E: stretch either edge · 6: drag edges or fade handles to fade in/out; double-click a handle to reset; Esc cancels a drag · Q: select time, including silence · Ctrl+C/V: copy/paste audio · Ctrl+D: duplicate selection · Stretch beside the knobs: on preserves pitch, off resamples (H toggles, 4 on, 5 off) · Normalize, Follow tempo and fine pitch are beside Stretch · Right-click channel volume or FX Mix: create automation · Double-click an envelope to add points; right-click points for Linear/Hold/Delete · G: grid beside zoom · Alt bypasses snap · Space plays · S splits · C slices · B/F8 opens samples · drag on the ruler to loop. 16 lanes / 5 minutes.', 'P / 1: dibujar, mover y recortar · 2: deslizar audio · 3 / E: estirar un borde · 6: arrastrá bordes o marcas para editar fades; doble clic en una marca para resetear; Esc cancela el arrastre · Q: seleccionar tiempo, incluido el silencio · Ctrl+C/V: copiar/pegar audio · Ctrl+D: duplicar selección · Stretch junto a las perillas: activado conserva pitch, desactivado usa Resample (H alterna, 4 activa, 5 desactiva) · Normalizar, Seguir tempo y pitch fino están junto a Stretch · Clic derecho en volumen del canal o Mix de FX: crear automatización · Doble clic en la curva agrega puntos; clic derecho en un punto ofrece Lineal/Escalón/Eliminar · G: grilla junto al zoom · Alt omite snap · Espacio reproduce · S corta · C activa corte · B/F8 abre samples · arrastrá en la regla para crear un loop. 16 carriles / 5 minutos.');
-  function showHint() {
-    toast({ id: 'playlist-hint', variant: 'info', title: t('Playlist shortcuts', 'Atajos de la playlist'), message: hintText, duration: 12000 });
-  }
   container.classList.add('playlist', 'pl-ui'); container.tabIndex = -1;
   // The timeline scrollbar spans only the lanes, not the channel headers.
   const hbarRow = node('div', 'pl-hbar-row'), hbar = node('div', 'pl-hbar'), hbarSize = node('div');
@@ -903,7 +913,8 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   scroll.addEventListener('scroll', () => { if (hbar.scrollLeft !== scroll.scrollLeft) hbar.scrollLeft = scroll.scrollLeft; });
   (toolbarHost === container ? container : toolbarHost).append(toolbar);
   inspectorHost.append(inspector);
-  container.append(library, scroll, hbarRow);
+  libraryHost.append(library);
+  container.append(scroll, hbarRow);
 
   function travel(forward) {
     const from = forward ? future : history, to = forward ? history : future;
@@ -1139,18 +1150,21 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     const shelfAssets = [...assets.values()];
     const nextShelf = shelfAssets.map(a => a.id + ':' + a.name + ':' + (a.group || '')).join('|');
     if (nextShelf !== shelfKey) {
+      sampleMeterObserver.disconnect(); sampleMeterViews.clear(); visibleSamples.clear();
       shelfKey = nextShelf; keepFocus(shelf); shelf.replaceChildren();
       const colors = groupColors(shelfAssets);
       for (const asset of shelfAssets) {
-        const b = button(asset.name, t('Click to draw this sample · double-click: add at cursor · drag onto a track', 'Clic para dibujar este sample · doble clic: agregar en el cursor · arrastrá a una pista'), () => {
+        const b = createButton({ label: asset.name, title: t('Click to draw this sample · double-click: add at cursor · drag onto a track', 'Clic para dibujar este sample · doble clic: agregar en el cursor · arrastrá a una pista'), onClick: () => {
           pick(null); drawSource = newClip(asset, activeTrack || firstUserTrack()); setTool('draw'); updateSelection(); scroll.focus({ preventScroll: true });
-        });
+        } });
         b.ondblclick = () => placeDrawSource(activeTrack || firstUserTrack(), position);
         b.replaceChildren(node('span', 'pl-sample-name', asset.name));
         b.classList.toggle('is-pattern', !!asset.pattern); b.dataset.asset = asset.id;
         if (colors.has(asset.id)) b.style.setProperty('--group-color', colors.get(asset.id));
         b.draggable = true; b.ondragstart = event => event.dataTransfer.setData('application/x-stem-sample', asset.id);
         b.oncontextmenu = event => shelfMenu(event, asset); shelf.append(b);
+        sampleMeterViews.set(asset.id, { element: b, level: 0, drawn: '0' });
+        sampleMeterObserver.observe(b);
       }
     }
     refreshSampleUsage(); updateSelection(); if (paintNow) paint(); onViewChange?.();
@@ -1535,7 +1549,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   // Keys reach the playlist while it is the last place the user worked in, even when the
   // focused element went away (a deleted clip, a closed menu): focus then sits on <body>.
   let owned = false;
-  const keyRoots = [container, toolbar, inspector].filter((root, i, roots) => !roots.some((other, j) => i !== j && other.contains(root)));
+  const keyRoots = [container, toolbar, inspector, library].filter((root, i, roots) => !roots.some((other, j) => i !== j && other.contains(root)));
   const owns = target => keyRoots.some(root => root.contains(target));
   const claim = event => {
     const target = event.target;
@@ -1574,9 +1588,25 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
     else if (combo === 'ctrl+a') { event.preventDefault(); timeSelection = null; selected = state.clips[0]?.id ?? null; extra = new Set(state.clips.slice(1).map(c => c.id)); updateSelection(); }
     else if (combo === 't') { event.preventDefault(); if (!event.repeat) tapTempo(); }
   }
-  function animate() {
+  let meterTime = 0;
+  function animate(timestamp = performance.now()) {
     const at = now(); time.textContent = clock(at);
     const head = grid.querySelector('.pl-playhead'); if (head) head.style.left = `${TRACK_HEAD + at * zoom}px`;
+    if (!document.hidden && visibleSamples.size) {
+      const levels = playing() ? engine?.sampleLevels(visibleSamples) : null;
+      const decay = Math.exp(-Math.min(100, timestamp - meterTime) / 110);
+      for (const id of visibleSamples) {
+        const view = sampleMeterViews.get(id);
+        const peak = levels?.get(id) || 0;
+        if (!peak && !view.level) continue;
+        const target = peak > .004 ? Math.min(1, Math.max(0, (20 * Math.log10(peak) + 48) / 48)) : 0;
+        const level = Math.max(target, view.level * decay);
+        view.level = level < .005 ? 0 : level;
+        const value = level < .005 ? '0' : level.toFixed(3);
+        if (value !== view.drawn) { view.element.style.setProperty('--sample-level', value); view.drawn = value; }
+      }
+    }
+    meterTime = timestamp;
     frame = requestAnimationFrame(animate);
   }
   draw(); animate();
@@ -1735,7 +1765,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
       return done;
     },
     dispose() {
-      disposed = true; exporting?.abort(); metronome.stop(); engine?.dispose(); cache.dispose(); viewObserver.disconnect(); sampleBrowser?.dispose();
+      disposed = true; exporting?.abort(); metronome.stop(); engine?.dispose(); cache.dispose(); viewObserver.disconnect(); sampleMeterObserver.disconnect(); sampleMeterViews.clear(); visibleSamples.clear(); sampleBrowser?.dispose();
       actionDialog.dispose(); for (const view of automationViews.values()) view.editor.dispose(); automationViews.clear();
       document.removeEventListener('keydown', onWindowKey); document.removeEventListener('keydown', onPageKey); document.removeEventListener('keyup', onPageKey); document.removeEventListener('pointerdown', claim, true); document.removeEventListener('focusin', claim, true); cancelAnimationFrame(frame); cancelAnimationFrame(zoomFrame); cancelAnimationFrame(paintFrame); window.removeEventListener('scroll', paintSoon); clearTimeout(rateTimer); ownContext?.close();
     },

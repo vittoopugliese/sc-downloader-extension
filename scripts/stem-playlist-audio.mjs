@@ -208,6 +208,7 @@ function createTonePool(context, onReady) {
 // Edits replace only the clips that changed: untouched clips keep sounding.
 export function createPlaylistEngine({ context, output, cache, assets, onEnded, onError, masterEffects }) {
   const master = context.createGain(), tracks = new Map(), live = new Set();
+  const sampleMeters = new Map(), levels = new Map();
   master.connect(output);
   let session = null, signature = '', timer = 0;
   const tones = createTonePool(context, () => {});
@@ -233,6 +234,47 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     return bus;
   }
   const trackGain = id => trackBus(id).input;
+  // One transparent route per sample/channel. Meter the clip signal (including fades,
+  // normalization and stretching) before channel FX, scaled by the live channel fader.
+  // Separate L/R taps keep out-of-phase stereo from disappearing in a mono analyser.
+  function sampleInput(clip) {
+    let meters = sampleMeters.get(clip.track);
+    if (!meters) sampleMeters.set(clip.track, meters = new Map());
+    let meter = meters.get(clip.asset);
+    if (!meter) {
+      const input = context.createGain(), splitter = context.createChannelSplitter(2);
+      input.connect(trackGain(clip.track)); input.connect(splitter);
+      const channels = [0, 1].map(channel => {
+        const analyser = context.createAnalyser(); analyser.fftSize = 512;
+        splitter.connect(analyser, channel);
+        return { analyser, data: new Float32Array(512) };
+      });
+      meter = { input, splitter, channels }; meters.set(clip.asset, meter);
+    }
+    return meter.input;
+  }
+  function disposeMeter(meter) {
+    meter.input.disconnect(); meter.splitter.disconnect();
+    for (const { analyser } of meter.channels) analyser.disconnect();
+  }
+  function sampleLevels(visible = null) {
+    levels.clear();
+    if (!session || context.state !== 'running') return levels;
+    for (const [trackId, meters] of sampleMeters) {
+      const gain = Math.abs(tracks.get(trackId)?.gain.gain.value || 0);
+      if (gain < .00001) continue;
+      for (const [assetId, meter] of meters) {
+        if (visible && !visible.has(assetId)) continue;
+        let peak = 0;
+        for (const { analyser, data } of meter.channels) {
+          analyser.getFloatTimeDomainData(data);
+          for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
+        }
+        levels.set(assetId, Math.max(levels.get(assetId) || 0, peak * gain));
+      }
+    }
+    return levels;
+  }
   function mixTracks(state) {
     for (const track of state.tracks) {
       if (track.kind === 'automation') continue;
@@ -242,6 +284,10 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
       bus.fx.apply(track.fx);
     }
     const ids = new Set(state.tracks.filter(track => track.kind !== 'automation').map(track => track.id));
+    for (const [id, meters] of sampleMeters) {
+      for (const [assetId, meter] of meters) if (!ids.has(id) || !assets().has(assetId)) { disposeMeter(meter); meters.delete(assetId); }
+      if (!meters.size) sampleMeters.delete(id);
+    }
     for (const [id, bus] of tracks) if (!ids.has(id)) { bus.fx.dispose(); bus.eq?.dispose(); bus.gain.disconnect(); tracks.delete(id); }
   }
   function clearAutomation(state = session?.state) {
@@ -298,7 +344,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
   // The source plays at the clip's speed; the processor moves the pitch back by the same
   // ratio and applies the clip's own pitch.
   function startLive(owner, clip, asset, when, offset, limit) {
-    const latency = tones.latency(), tone = tones.take(2 ** (clipPitch(clip) / 12) / clip.speed, trackGain(clip.track));
+    const latency = tones.latency(), tone = tones.take(2 ** (clipPitch(clip) / 12) / clip.speed, sampleInput(clip));
     if (!tone) return false;
     const node = startClip(context, tone.node, clip, asset, null, when - latency, offset, { rate: owner.rate, limit });
     if (!node) { tone.release(); return true; }
@@ -322,7 +368,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
       if (session !== owner) return;
       const stretched = stretch ? cache.lookup(clip, asset) : null;
       if (stretch && !stretched) return;
-      const node = startClip(context, trackGain(clip.track), clip, asset, stretched, when, offset, { rate: owner.rate, limit });
+      const node = startClip(context, sampleInput(clip), clip, asset, stretched, when, offset, { rate: owner.rate, limit });
       if (node) track(node, clip.id);
     };
     if (!stretch || cache.has(clip, asset)) start();
@@ -432,7 +478,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
       if (!patch(state, transport)) { begin(state, now(), transport, true); return; }
       signature = next;
     },
-    stop, now,
+    stop, now, sampleLevels,
     recordingClock: () => session && ({ context, zero: session.ctxStart }),
     playing: () => !!session,
     // Mixer state (faders, mute/solo, track EQ) applies while stopped too.
@@ -441,7 +487,7 @@ export function createPlaylistEngine({ context, output, cache, assets, onEnded, 
     trackInput: id => trackBus(id).input,
     trackGraph: id => tracks.get(id)?.eq || null,
     trackEffects: id => tracks.get(id)?.fx || null,
-    dispose() { stop(); tones.dispose(); master.disconnect(); for (const bus of tracks.values()) { bus.fx.dispose(); bus.eq?.dispose(); bus.gain.disconnect(); } tracks.clear(); },
+    dispose() { stop(); tones.dispose(); master.disconnect(); for (const meters of sampleMeters.values()) for (const meter of meters.values()) disposeMeter(meter); sampleMeters.clear(); levels.clear(); for (const bus of tracks.values()) { bus.fx.dispose(); bus.eq?.dispose(); bus.gain.disconnect(); } tracks.clear(); },
   };
 }
 
