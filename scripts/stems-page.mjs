@@ -344,8 +344,8 @@ const playlist = mountPlaylist({ container: $('playlist'), toolbarHost: $('trans
 // Pin: the header stays at the top while scrolling, or scrolls away with the page.
 const header = document.querySelector('.workspace-header'), pin = $('header-pin');
 document.querySelector('.workspace-header .brand').dataset.scdlTooltip = 'Stem Extractor In Browser';
-// Header deck (stems.css): transport and windows occupy the first row; the four editors
-// sit below the windows. They stay inside the playlist toolbar, so hotkeys keep working
+// Header deck (stems.css): transport, every window button and the pin and tooltips toggles
+// occupy the first row; the clip controls, tools and spectrum fill the second. They stay inside the playlist toolbar, so hotkeys keep working
 // after a click on any of them.
 {
   const bar = $('transport').querySelector('.pl-toolbar'), find = selector => bar.querySelector(selector);
@@ -356,9 +356,8 @@ document.querySelector('.workspace-header .brand').dataset.scdlTooltip = 'Stem E
   };
   const windowButton = id => find(`.pl-window-tool[data-window="${id}"]`);
   group('daw-transport', '', [$('play'), find('.pl-time'), find('.pl-field'), find('.pl-tap'), find('.pl-metronome'), find('.pl-fit-tempo')]);
-  group('daw-windows daw-windows-top', say('Windows', 'Ventanas'), [windowButton('browser'), windowButton('recorder'), find('.pl-export')]);
-  group('daw-windows daw-windows-bottom', say('Editors', 'Editores'), ['rack', 'piano', 'fx', 'eq'].map(windowButton));
-  group('daw-header-options', say('Header options', 'Opciones del header'), [$('header-pin'), tooltipsToggle]);
+  const windows = group('daw-windows', say('Windows', 'Ventanas'), [windowButton('browser'), windowButton('recorder'), find('.pl-export'), ...['rack', 'piano', 'fx', 'eq'].map(windowButton)]);
+  windows.append(group('daw-header-options', say('Header options', 'Opciones del header'), [$('header-pin'), tooltipsToggle]));
   find('.pl-windows')?.remove();
 }
 function setPinned(pinned) {

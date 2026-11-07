@@ -2,13 +2,14 @@
 // Styles live in assets/ui-knob.css. Vertical drag (Shift for fine), arrows (Shift for
 // coarse), Home/End, double-click resets. onInput runs while dragging; onCommit once, with
 // the previous value. `size` is 'md' (32 px) or 'sm' (24 px); `inline` puts the value beside
-// the dial and keeps the label for screen readers only.
+// the dial and keeps the label for screen readers only. `short` is a shorter visible label;
+// the full `label` stays the accessible name and the tooltip.
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-export function createKnob({ label, min, max, step, coarse, value, reset, format, log = false, hint = '', size = 'md', inline = false, onInput, onCommit }) {
+export function createKnob({ label, min, max, step, coarse, value, reset, format, log = false, hint = '', size = 'md', inline = false, short = '', onInput, onCommit }) {
   const wrap = document.createElement('div'), dial = document.createElement('button'), caption = document.createElement('span'), output = document.createElement('output');
   wrap.className = `ui-knob ui-knob--${size}${inline ? ' ui-knob--inline' : ''}`;
-  caption.className = 'ui-knob-label'; caption.textContent = label; output.className = 'ui-knob-value';
+  caption.className = 'ui-knob-label'; caption.textContent = short || label; output.className = 'ui-knob-value';
   dial.type = 'button'; dial.className = 'ui-knob-dial'; dial.setAttribute('role', 'slider'); dial.setAttribute('aria-label', label);
   dial.setAttribute('aria-valuemin', String(min)); dial.setAttribute('aria-valuemax', String(max)); dial.setAttribute('aria-orientation', 'vertical');
   const unit = v => log ? Math.log(v / min) / Math.log(max / min) : (v - min) / (max - min);

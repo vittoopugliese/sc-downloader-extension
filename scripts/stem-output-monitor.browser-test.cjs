@@ -40,12 +40,14 @@ const { chromium } = require('playwright');
     assert.equal(await monitor.evaluate(element => element.tabIndex), -1);
     assert.equal(await monitor.evaluate(element => getComputedStyle(element).cursor), 'auto');
     assert.equal(await monitor.locator(':scope > *').count(), 1);
-    // Second header row: the compact spectrum sits right after the editing tools.
+    // Second header row: the spectrum follows the editing tools and fills the rest of the row.
     const box = await monitor.boundingBox(), slot = await page.locator('.output-monitor-slot').boundingBox();
     const tempo = await page.locator('.workspace-header .stem-tempo').boundingBox();
     const tools = await page.locator('.workspace-header .pl-tools').boundingBox();
     assert.deepEqual([box.x, box.width, box.height], [slot.x, slot.width, 30], 'The spectrum occupies exactly one control row');
-    assert.ok(box.width <= 200 && box.x >= tools.x + tools.width && box.x - tools.x - tools.width <= 12, 'The spectrum follows the tools');
+    const deck = await page.locator('.daw-deck').boundingBox();
+    assert.ok(box.x >= tools.x + tools.width && box.x - tools.x - tools.width <= 12, 'The spectrum follows the tools');
+    assert.ok(Math.abs(deck.x + deck.width - 10 - box.x - box.width) < 2, 'The spectrum fills the rest of the row');
     assert.ok(box.y >= tempo.y + tempo.height, 'The spectrum sits below the transport');
     assert.ok((await page.locator('.preset-menu').boundingBox()).width <= 150, 'The project dropdown does not stretch');
     const markup = await monitor.evaluate(element => element.outerHTML);
@@ -256,7 +258,7 @@ const { chromium } = require('playwright');
     await page.waitForTimeout(100);
     const mobileBox = await monitor.boundingBox(), mobileSlot = await page.locator('.output-monitor-slot').boundingBox();
     assert.ok(mobileBox.height >= 30);
-    assert.ok(Math.abs(mobileBox.width - mobileSlot.width) < 1 && mobileBox.width <= 200, 'The spectrum stays compact on mobile');
+    assert.ok(Math.abs(mobileBox.width - mobileSlot.width) < 1, 'The spectrum fills its slot on mobile');
     assert.ok(mobileBox.x >= 0 && mobileBox.x + mobileBox.width <= 390, 'Compact spectrum fits on mobile');
     await monitor.click(); assert.deepEqual(await monitor.boundingBox(), mobileBox);
     await page.locator('.workspace-header').screenshot({ path: path.join(root, 'test-results/output-monitor-mobile.png') });
@@ -269,19 +271,19 @@ const { chromium } = require('playwright');
       await page.setViewportSize({ width, height: 1000 });
       const layout = await page.evaluate(() => {
         const rect = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
-        return { header: rect('.workspace-header'), monitor: rect('#output-monitor'), library: rect('.pl-library'), playlist: rect('#playlist'), tools: rect('.pl-tools'), scrollbar: rect('.pl-hbar-row'), project: rect('.preset-menu'), transport: rect('.daw-transport'), load: rect('.preset-toolbar'), windows: rect('.daw-windows-bottom'), topWindows: rect('.daw-windows-top'), inspector: rect('.pl-inspector'), knob: rect('.pl-inspector .ui-knob-dial'), overflow: document.documentElement.scrollWidth > innerWidth };
+        return { header: rect('.workspace-header'), monitor: rect('#output-monitor'), library: rect('.pl-library'), playlist: rect('#playlist'), tools: rect('.pl-tools'), scrollbar: rect('.pl-hbar-row'), project: rect('.preset-menu'), transport: rect('.daw-transport'), load: rect('.preset-toolbar'), windows: rect('.daw-windows'), inspector: rect('.pl-inspector'), knob: rect('.pl-inspector .ui-knob-dial'), overflow: document.documentElement.scrollWidth > innerWidth };
       });
       assert.equal(layout.overflow, false, `No horizontal page overflow at ${width}px`);
       assert.equal(layout.monitor.height, 30, `Spectrum keeps one-row height at ${width}px`);
-      assert.ok(layout.monitor.width <= 200 && layout.project.width <= 150, `Project and spectrum stay compact at ${width}px`);
+      assert.ok(layout.project.width <= 150, `The project dropdown stays compact at ${width}px`);
       assert.ok(layout.library.x >= layout.playlist.x && layout.library.right <= layout.playlist.right && layout.library.y >= layout.scrollbar.y, `The used sounds sit beside the playlist scrollbar at ${width}px`);
       if (width >= 1200) {
         assert.ok(Math.abs(layout.monitor.y + layout.monitor.height / 2 - layout.tools.y - layout.tools.height / 2) < 2, 'The spectrum shares the tools row');
         assert.equal(layout.transport.y, layout.load.y, 'Play follows the project controls on the first row');
         assert.ok(layout.transport.x >= layout.load.right, 'Play is to the right of the project controls');
         assert.ok(layout.transport.x - layout.load.right <= 12, 'Play immediately follows the project controls without an expanding gap');
-        assert.equal(layout.windows.x, layout.topWindows.x, 'Editors align below the other orange windows');
-        assert.ok(layout.windows.y >= layout.inspector.y && layout.windows.bottom <= layout.inspector.bottom, 'Editors fit beside the compact tools');
+        assert.ok(Math.abs(layout.windows.y + layout.windows.height / 2 - layout.transport.y - layout.transport.height / 2) < 2, 'Every window button and header option shares the transport row');
+        assert.ok(Math.abs(layout.windows.right - layout.monitor.right) < 2, 'The spectrum reaches the end of the button row');
         assert.equal(layout.knob.width, 22, 'Clip knobs are smaller');
         assert.ok(layout.inspector.height < 45 && layout.header.height < 100, `Only two compact rows at ${width}px`);
       }

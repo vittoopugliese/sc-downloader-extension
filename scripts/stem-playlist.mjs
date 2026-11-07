@@ -239,7 +239,7 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   function flash(control) {
     try { control.animate([{ opacity: .85 }, { opacity: 0 }], { duration: 300, easing: 'ease-out', pseudoElement: '::after' }); } catch { /* no pseudo-element animations */ }
   }
-  function toolButton({ icon, name, detail = '', key, keys, color, repeat = false, variant = 'neutral', size = 'tool' }, action) {
+  function toolButton({ icon, name, detail = '', key, keys, color, repeat = false, variant = 'ghost', size = 'tool' }, action) {
     const control = iconButton(icon, name, () => { flash(control); action(); }, { variant, size });
     control.dataset.scdlTooltip = `${name} (${key})${detail ? ': ' + detail : ''}`;
     control.setAttribute('aria-keyshortcuts', key.replace('Ctrl', 'Control').replace('Del', 'Delete').replace('Supr', 'Delete'));
@@ -562,17 +562,17 @@ export function mountPlaylist({ container, windows = [], windowHome = null, tool
   const signed = v => `${v > 0 ? '+' : ''}${Number(v.toFixed(2))}`;
   const resetHint = t('drag, or double-click to reset', 'arrastrá, o doble clic para resetear');
   // Clip volume sits before the track volume: the track knob is the channel's master.
-  const clipVolume = createKnob({ label: t('Volume', 'Volumen'), min: 0, max: 200, step: 1, coarse: 10, value: 100, reset: 100, hint: `${t('volume of this clip only; the track volume still applies on top', 'volumen solo de este clip; el volumen de la pista se aplica encima')} · ${resetHint}`, format: v => `${v}%`, onCommit: v => setClip('gain', v / 100) });
+  const clipVolume = createKnob({ label: t('Volume', 'Volumen'), short: 'Vol', min: 0, max: 200, step: 1, coarse: 10, value: 100, reset: 100, hint: `${t('volume of this clip only; the track volume still applies on top', 'volumen solo de este clip; el volumen de la pista se aplica encima')} · ${resetHint}`, format: v => `${v}%`, onCommit: v => setClip('gain', v / 100) });
   const pitch = createKnob({ label: 'Pitch', min: -24, max: 24, step: 1, coarse: 12, value: 0, reset: 0, hint: `${t('transposes the clip in semitones', 'transpone el clip en semitonos')} · ${resetHint}`, format: v => `${signed(v)} st`, onCommit: v => setClip('pitch', v) });
-  const fine = createKnob({ label: t('Fine pitch', 'Pitch fino'), min: -100, max: 100, step: 1, coarse: 10, value: 0, reset: 0, hint: `${t('fine tuning in cents (100 = 1 semitone)', 'afinación fina en cents (100 = 1 semitono)')} · ${resetHint}`, format: v => `${signed(v)} ct`, onCommit: v => setClip('cents', v) });
-  const speed = createKnob({ label: t('Speed', 'Velocidad'), min: .25, max: 4, step: .01, coarse: .25, value: 1, reset: 1, log: true, hint: `${t('speed of this clip only', 'velocidad solo de este clip')} · ${resetHint}`, format: v => `${v.toFixed(2)}×`, onCommit: v => setClip('speed', v) });
+  const fine = createKnob({ label: t('Fine pitch', 'Pitch fino'), short: t('Fine', 'Fino'), min: -100, max: 100, step: 1, coarse: 10, value: 0, reset: 0, hint: `${t('fine tuning in cents (100 = 1 semitone)', 'afinación fina en cents (100 = 1 semitono)')} · ${resetHint}`, format: v => `${signed(v)} ct`, onCommit: v => setClip('cents', v) });
+  const speed = createKnob({ label: t('Speed', 'Velocidad'), short: t('Speed', 'Vel'), min: .25, max: 4, step: .01, coarse: .25, value: 1, reset: 1, log: true, hint: `${t('speed of this clip only', 'velocidad solo de este clip')} · ${resetHint}`, format: v => `${v.toFixed(2)}×`, onCommit: v => setClip('speed', v) });
   const normalizeButton = iconButton('waveform', t('Normalize audio', 'Normalizar audio'), () => {
     const enable = !chosen().every(clip => clip.normalizationGain !== undefined);
     commit(() => { for (const clip of chosen()) { if (enable) clip.normalizationGain = normalizationGain(assets.get(clip.asset).buffer); else delete clip.normalizationGain; } });
-  }, { size: 'tool' });
+  }, { variant: 'ghost', size: 'tool' });
   normalizeButton.classList.add('pl-normalize');
   normalizeButton.dataset.scdlTooltip = t('Normalize: source peak to −1 dBFS, preserving stereo balance. Reversible; volume and effects apply afterwards.', 'Normalizar: pico del sample a −1 dBFS conservando el balance estéreo. Reversible; volumen y efectos se aplican después.');
-  const followTempoButton = iconButton('tempo-loop', t('Follow tempo', 'Seguir tempo'), () => setClip('tempoLock', !chosen().every(clip => clip.tempoLock)), { size: 'tool' });
+  const followTempoButton = iconButton('tempo-loop', t('Follow tempo', 'Seguir tempo'), () => setClip('tempoLock', !chosen().every(clip => clip.tempoLock)), { variant: 'ghost', size: 'tool' });
   followTempoButton.classList.add('pl-follow-tempo');
   followTempoButton.dataset.scdlTooltip = t('Follow tempo: anchor this clip to the current BPM and keep its length in beats when BPM changes. Does not detect the sample tempo.', 'Seguir tempo: vincula el clip al BPM actual y conserva su duración en tiempos al cambiar el BPM. No detecta el tempo del sample.');
   const clipOptions = node('div', 'pl-clip-options');

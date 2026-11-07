@@ -146,9 +146,12 @@
 /* One editing line at desktop widths. The fine divider separates selected-clip actions
    from general tools; at smaller widths the two groups wrap as distinct rows. */
 .workspace-header .pl-inspector{gap:6px 8px;padding:0;border:0;border-radius:0;background:transparent}
-.workspace-header .pl-inspector .ui-knob{--knob-size:22px;--knob-tick-top:2px;--knob-tick-height:6px;--knob-tick-origin:8px;gap:2px;width:38px}
-.workspace-header .pl-inspector .ui-knob-label{font-size:6.5px;letter-spacing:0;line-height:1}
-.workspace-header .pl-inspector .ui-knob-value{line-height:1}
+/* Header knobs: the label reads upward beside the dial and the value sits below it, so
+   the row is one dial plus one value line high. */
+.workspace-header .pl-inspector .ui-knob{--knob-size:22px;--knob-tick-top:2px;--knob-tick-height:6px;--knob-tick-origin:8px;grid-template-columns:auto 26px;grid-template-areas:"label dial" ". value";align-items:center;gap:2px 1px;width:auto}
+.workspace-header .pl-inspector .ui-knob-label{grid-area:label;writing-mode:vertical-rl;transform:rotate(180deg);font-size:6.5px;letter-spacing:.5px;line-height:1}
+.workspace-header .pl-inspector .ui-knob-dial{grid-area:dial}
+.workspace-header .pl-inspector .ui-knob-value{grid-area:value;line-height:1;white-space:nowrap}
 .workspace-header .pl-selection-controls{gap:2px}
 .workspace-header .pl-clip-options{margin-left:4px;gap:3px;flex-wrap:wrap}
 .workspace-header .pl-tools{gap:3px;margin-left:0;padding:3px 0 3px 8px;border-left:1px solid #ffffff26;flex-wrap:wrap;overflow:visible}
