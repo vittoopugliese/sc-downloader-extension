@@ -61,5 +61,14 @@
     ru: ['Использовать в Player Tools','Передача в Player Tools…','Трек загружен в SoundCloud · Player Tools готов','Трек выбран. Нажми Play в нижнем плеере SoundCloud.','Не удалось запустить трек в SoundCloud. Повтори попытку или закрой Explorer и запусти его на странице трека.']
   };
   nativeKeys.forEach((key,i)=>{dictionary[key]=(nativeCopy[language] || nativeCopy.en)[i];});
+  const shuffleKeys = ['shuffle','shuffleOn','shuffleOff','nextTrack'];
+  const shuffleCopy = {
+    en: ['Shuffle','Shuffle on · the next track is random','Shuffle off · the next track follows the grid','Next track'],
+    es: ['Aleatorio','Aleatorio activado · el próximo track es al azar','Aleatorio desactivado · el próximo track sigue la grilla','Siguiente track'],
+    pt_BR: ['Aleatório','Aleatório ativado · a próxima faixa é aleatória','Aleatório desativado · a próxima faixa segue a grade','Próxima faixa'],
+    de: ['Zufall','Zufall an · der nächste Track ist zufällig','Zufall aus · der nächste Track folgt dem Raster','Nächster Track'],
+    ru: ['Случайно','Случайный порядок включён','Случайный порядок выключен · следующий трек по сетке','Следующий трек']
+  };
+  shuffleKeys.forEach((key,i)=>{dictionary[key]=(shuffleCopy[language] || shuffleCopy.en)[i];});
   root.SCLikesText = key => dictionary[key] || dictionary['network-error'];
 })(globalThis);

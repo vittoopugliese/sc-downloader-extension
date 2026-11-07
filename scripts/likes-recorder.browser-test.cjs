@@ -62,7 +62,7 @@ const widgetHtml = `<!doctype html><script>
         },
       } };
     });
-    for (const file of ['likes-explorer-i18n.js', 'soundcloud-likes-locator.js', 'likes-player.js', 'soundcloud-playback.js',
+    for (const file of ['icons.js', 'likes-explorer-i18n.js', 'soundcloud-likes-locator.js', 'likes-player.js', 'soundcloud-playback.js',
       'player-tools-i18n.js', 'record-core.js', 'record-ui.js', 'widget-record-source.js', 'likes-explorer.js']) {
       await page.addScriptTag({ path: path.join(__dirname, file) });
     }
@@ -84,7 +84,9 @@ const widgetHtml = `<!doctype html><script>
     });
     assert.ok(box.pill.top >= box.actions.bottom, 'the pill sits under the buttons');
     assert.ok(box.pill.width >= box.detail.width - 24, 'the pill takes the full width');
-    assert.ok(box.stage.height >= 56 && box.stage.height <= 70, `compact waveform (${box.stage.height}px)`);
+    assert.ok(box.stage.height >= 20 && box.stage.height <= 28, `mini waveform (${box.stage.height}px)`);
+    assert.ok(box.pill.height <= 34, `one-line recorder (${box.pill.height}px)`);
+    assert.ok(box.detail.height <= 125, `compact detail (${box.detail.height}px)`);
     assert.equal(await ui('.record-send').textContent(), 'Enviar al Stem Extractor', 'Spanish copy');
     assert.equal(await ui('.record-send').isDisabled(), true);
     assert.equal(await ui('.open-track').count(), 0);

@@ -48,7 +48,7 @@ const widgetHtml = `<!doctype html><button id="play">Play</button><script>
         },
       }};
     });
-    for (const file of ['likes-explorer-i18n.js', 'soundcloud-likes-locator.js', 'likes-player.js', 'soundcloud-playback.js', 'likes-explorer.js']) await page.addScriptTag({ path: path.join(__dirname, file) });
+    for (const file of ['icons.js', 'likes-explorer-i18n.js', 'soundcloud-likes-locator.js', 'likes-player.js', 'soundcloud-playback.js', 'likes-explorer.js']) await page.addScriptTag({ path: path.join(__dirname, file) });
     const ui = selector => page.locator(`#scdl-likes-explorer ${selector}`);
     const state = value => page.waitForFunction(value => document.querySelector('#scdl-likes-explorer')?.shadowRoot.querySelector('.player-inline')?.dataset.state === value, value);
     const selectTrack = async id => { await ui(`.card[data-id="${id}"] .card-main`).click(); };
@@ -69,7 +69,7 @@ const widgetHtml = `<!doctype html><button id="play">Play</button><script>
     assert.equal(await ui('iframe').count(), 1);
     assert.equal(await ui('.detail .detail-media iframe').count(), 1, 'the iframe replaces the internal title/artwork');
     assert.equal(await ui('.detail-summary').isVisible(), false);
-    assert.equal((await ui('iframe').boundingBox()).height, 80);
+    assert.equal((await ui('iframe').boundingBox()).height, 68);
     const originalFrame = widget();
     await ui('.toolbar input').fill('Other');
     await page.waitForFunction(() => calls.some(call => call.type === 'QUERY_LIKES' && call.query === 'Other'));
@@ -77,19 +77,42 @@ const widgetHtml = `<!doctype html><button id="play">Play</button><script>
     assert.equal(await ui('.detail-summary').isVisible(), true);
     assert.equal(await ui('.player-inline').isVisible(), false);
     assert.equal(widget(), originalFrame, 'selecting another track never reloads the current audio');
-    assert.equal(await ui('.detail-play').innerText(), '▶ Reproducir');
+    assert.match(await ui('.detail-play').innerText(), /Reproducir/);
     assert.equal(await page.evaluate(() => calls.filter(call=>call.type==='PLAY_LIKED_TRACK').length), 1);
     await ui('.detail-play').click(); await state('playing');
     assert.match(await ui('iframe').getAttribute('src'), /tracks%2F2/);
     assert.equal(await ui('.toolbar input').inputValue(), 'Other');
     assert.equal(await ui('iframe').count(), 1, 'one live player after changing tracks');
-    const finishedFrame = widget();
-    const playsBeforeFinish = await page.evaluate(() => calls.filter(call=>call.type==='PLAY_LIKED_TRACK').length);
+    const src = () => ui('iframe').getAttribute('src');
+    const trackOf = async () => (await src()).match(/tracks%2F(\d+)/)[1];
+    // Finish moves to the next cell of the grid the track was started from.
     await widget().evaluate(() => emit('finish'));
-    await state('ended');
-    assert.equal(widget(), finishedFrame);
-    assert.equal(await page.evaluate(() => calls.filter(call=>call.type==='PLAY_LIKED_TRACK').length), playsBeforeFinish, 'finish never starts another track');
-    await ui('.detail-play').click(); await state('playing');
+    await page.waitForFunction(() => /tracks%2F4\b/.test(document.querySelector('#scdl-likes-explorer').shadowRoot.querySelector('iframe')?.src || ''));
+    await state('playing');
+    assert.equal(await ui('iframe').count(), 1, 'auto-advance keeps one live player');
+    assert.equal(await ui('.card.selected').getAttribute('data-id'), '4', 'the selection follows the playing track');
+    assert.equal(await ui('.player-inline').isVisible(), true);
+    // Shuffle picks another track from the same results.
+    assert.equal(await ui('.shuffle-toggle').getAttribute('aria-pressed'), 'false');
+    await ui('.shuffle-toggle').click();
+    assert.equal(await ui('.shuffle-toggle').getAttribute('aria-pressed'), 'true');
+    for (let n = 0; n < 3; n++) {
+      const before = await trackOf();
+      await widget().evaluate(() => emit('finish'));
+      await page.waitForFunction(before => { const m = (document.querySelector('#scdl-likes-explorer').shadowRoot.querySelector('iframe')?.src || '').match(/tracks%2F(\d+)/); return m && m[1] !== before; }, before);
+      await state('playing');
+      const id = Number(await trackOf());
+      assert.equal(id % 2, 0, 'shuffle stays inside the "Other" results');
+      assert.notEqual(String(id), before);
+    }
+    await ui('.shuffle-toggle').click();
+    assert.equal(await ui('.shuffle-toggle').getAttribute('aria-pressed'), 'false');
+    // Next skips at once, in grid order now that shuffle is off.
+    const beforeNext = Number(await trackOf());
+    await ui('.next-track').click();
+    await page.waitForFunction(id => (document.querySelector('#scdl-likes-explorer').shadowRoot.querySelector('iframe')?.src || '').includes(`tracks%2F${id}&`), beforeNext + 2);
+    await state('playing');
+    assert.equal(await ui('iframe').count(), 1, 'Next keeps one live player');
     await ui('.detail-play').click(); await state('paused');
     await widget().evaluate(() => emit('playProgress',{currentPosition:1500}));
     assert.equal(await ui('.player-inline').getAttribute('data-state'), 'paused', 'late progress must not undo pause');
@@ -150,7 +173,7 @@ const widgetHtml = `<!doctype html><button id="play">Play</button><script>
         const box = await ui(selector).boundingBox();
         assert.ok(box.x >= 0 && box.x + box.width <= width, `${selector} fits ${width}px`);
       }
-      assert.equal((await ui('iframe').boundingBox()).height, 80);
+      assert.equal((await ui('iframe').boundingBox()).height, 68);
       assert.equal(await ui('.detail-summary').isVisible(), false);
       if (width === 390) await page.screenshot({ path: 'test-results/likes-playback-mobile.png' });
     }
@@ -181,6 +204,6 @@ const widgetHtml = `<!doctype html><button id="play">Play</button><script>
     assert.equal(await widget().evaluate(()=>commands.includes('play')),false);
     await page.evaluate(()=>timeoutPlayer.destroy());
     assert.equal(await page.locator('#timeout-widget iframe').count(),0);
-    console.log('Likes playback: select-then-play only, compact inline widget, no automatic advance, autoplay fallback, stale requests, origin checks, new-tab intent, persistent audio and responsive layout passed.');
+    console.log('Likes playback: select-then-play only, compact inline widget, auto-advance through the grid, shuffle, autoplay fallback, stale requests, origin checks, new-tab intent, persistent audio and responsive layout passed.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

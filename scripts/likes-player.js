@@ -5,7 +5,7 @@
   // No remote JavaScript executes in the extension. The visible iframe remains
   // usable when the browser requires a direct click to start playback.
   const ORIGIN = 'https://w.soundcloud.com';
-  function create({ container, title, onState, onFinish, readyTimeout = 15000, playTimeout = 4000 }) {
+  function create({ container, title, onState, onFinish, height = 80, readyTimeout = 15000, playTimeout = 4000 }) {
     let frame, ready = false, wantsPlay = false, played = false, phase = 'idle';
     let readyTimer, playTimer;
     function state(next) { phase = next; onState(next); }
@@ -51,9 +51,10 @@
         clearTimers(); frame?.remove(); ready = false; wantsPlay = true; played = false;
         frame = document.createElement('iframe');
         frame.title = `${title}: ${item.title}`;
-        // Keep the widget's 100px layout intact, scaled to an 80px inline player.
-        frame.width = '125%'; frame.height = '100';
-        frame.style.cssText = 'display:block;width:125%;height:100px;border:0;transform:scale(.8);transform-origin:top left';
+        // Keep the widget's 100px layout intact, scaled down to `height` px.
+        const scale = height / 100, width = `${(100 / scale).toFixed(3)}%`;
+        frame.width = width; frame.height = '100';
+        frame.style.cssText = `display:block;width:${width};height:100px;border:0;transform:scale(${scale});transform-origin:top left`;
         frame.allow = 'autoplay'; frame.setAttribute('scrolling', 'no');
         const url = new URL('/player/', ORIGIN);
         url.search = new URLSearchParams({ url: `https://api.soundcloud.com/tracks/${item.itemId}`, auto_play: 'false',

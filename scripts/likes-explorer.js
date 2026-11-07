@@ -14,6 +14,9 @@
   let highlightId = null, anchorPixelOffset = 0;
   let selectedContext, player, detailSummary, playerInline, playerStatus, playerWidget;
   let nowTrack = null, playContext = null, playPhase = 'idle', playEpoch = 0;
+  // The results a playback started from, so the next track comes from the same grid.
+  let playQueue = null, shuffle = false, shuffleButton, nextButton, advancing = false;
+  const SHUFFLE_KEY = 'likesExplorerShuffle', MAX_AUTO_SKIPS = 3, PLAYER_HEIGHT = 68;
   let nativeTrack = null, nativeContext = null, nativePhase = 'idle', nativeEpoch = 0, nativeRequest, nativeStatus;
   // Mini recorder: captures the widget iframe and hands the take to the Stem Extractor.
   let recordSlot = null, recordUI = null, recordSource = null, recordSend = null, recordTrack = null, recordSending = false;
@@ -164,9 +167,12 @@
     const current = !!nowTrack && selected?.itemId === nowTrack.itemId && selectedContext?.collectionId === playContext?.collectionId;
     if (control) {
       const playing = current && playPhase === 'playing';
-      control.replaceChildren(globalThis.SCIcons.create(playing ? 'pause' : 'play'), document.createTextNode(' ' + text(playing ? 'pause' : 'play')));
+      const label = text(playing ? 'pause' : 'play');
+      control.replaceChildren(globalThis.SCIcons.create(playing ? 'pause' : 'play'), el('span','sr-only',label));
+      control.title = label;
       control.disabled = current && playPhase === 'loading';
     }
+    if (nextButton) nextButton.disabled = !nowTrack || !playQueue || advancing;
     if (playerInline) {
       playerInline.hidden = !current;
       detailSummary.hidden = current;
@@ -193,7 +199,9 @@
     const recorder = SCRecord.create({ source: recordSource, maxSeconds: RECORD_SECONDS, onChange: () => recordUI?.render() });
     recordSend = el('button','record-send'); recordSend.type = 'button'; recordSend.disabled = true;
     recordSend.innerHTML = '<sc-icon name="place" aria-hidden="true"></sc-icon>';
-    recordSend.append(document.createTextNode(pt('Send to Stem Extractor')));
+    // Icon only in the mini recorder; the label stays for screen readers and the tooltip.
+    recordSend.append(el('span','sr-only',pt('Send to Stem Extractor')));
+    recordSend.title = pt('Send to Stem Extractor');
     recordSend.addEventListener('click', () => sendRecording().catch(error => {
       console.error('[Likes recorder]', error);
       if (status) status.textContent = error.localized ? error.message : pt('Could not send the recording to the Stem Extractor.');
@@ -256,27 +264,37 @@
   }
   function stopPlayback() {
     cancelNativePlayback(true);
-    playEpoch++; player?.destroy(); player = null; nowTrack = playContext = null;
+    playEpoch++; player?.destroy(); player = null; nowTrack = playContext = playQueue = null;
     recordSource?.interrupt();
     playPhase = 'idle';
     for (const card of cardNodes.values()) updateCardPlayback(card);
     updateDetailPlayback();
   }
-  async function playTrack(item, context) {
+  async function playTrack(item, context, queue) {
     if (!context) return;
     cancelNativePlayback();
-    if (nowTrack?.itemId === item.itemId && playContext?.collectionId === context.collectionId && player && !['error','loading'].includes(playPhase)) {
+    if (nowTrack?.itemId === item.itemId && playContext?.collectionId === context.collectionId && player && !['error','loading','ended'].includes(playPhase)) {
       if (playPhase === 'playing') player.pause(); else player.play();
       return;
     }
     const seq = ++playEpoch;
     player?.destroy(); player = null; recordSource?.interrupt();
     nowTrack = item; playContext = { ...context };
+    // A manual play starts a new queue from the grid on screen.
+    playQueue = queue || { query, period: filter, played: new Set(), skips: 0 };
+    playQueue.played.add(item.itemId);
     playerState('loading');
     try {
       const result = await send('PLAY_LIKED_TRACK',{...context,trackId:item.itemId});
       if (seq !== playEpoch) return;
-      player = SCLikesPlayer.create({container:playerWidget,title:text('listen'),onState:playerState,onFinish:()=>{}});
+      const onState = phase => {
+        playerState(phase);
+        if (seq !== playEpoch) return;
+        if (phase === 'playing') playQueue.skips = 0;
+        // Skip tracks the widget cannot play during auto-advance, but stop after a few in a row.
+        else if (phase === 'error' && queue && playQueue.skips < MAX_AUTO_SKIPS) { playQueue.skips++; playNext(seq); }
+      };
+      player = SCLikesPlayer.create({container:playerWidget,title:text('listen'),height:PLAYER_HEIGHT,onState,onFinish:()=>playNext(seq)});
       player.load(result.item);
       recordTrack = { ...result.item, artworkUrl: item.artworkUrl };
       updateRecorder();
@@ -284,6 +302,61 @@
       if (seq !== playEpoch) return;
       playerState('error'); showError(error);
     }
+  }
+  // Finds the track after `from` in the queue's results: the next grid cell, or a random one.
+  async function nextInQueue(from, context, queue) {
+    const ask = payload => send('QUERY_LIKES', { ...context, query: queue.query, period: queue.period, limit: 1, ...payload });
+    const position = await ask({ trackId: from.itemId });
+    const total = position.matchingCount;
+    if (shuffle && total > 1) {
+      if (queue.played.size >= total) queue.played = new Set([from.itemId]);
+      for (let tries = 0; tries < 8; tries++) {
+        let index = Math.floor(Math.random() * total);
+        if (index === position.anchor) index = (index + 1) % total;
+        const item = (await ask({ offset: index })).items[0];
+        // After a few collisions, accept a repeat instead of querying forever.
+        if (item && (!queue.played.has(item.itemId) || tries === 7)) return { item, index };
+      }
+      return null;
+    }
+    const index = position.anchor + 1;
+    if (position.anchor < 0 || index >= total) return null;
+    const item = (await ask({ offset: index })).items[0];
+    return item ? { item, index } : null;
+  }
+  async function playNext(seq) {
+    if (seq !== playEpoch || !nowTrack || !playContext || !playQueue) return;
+    const from = nowTrack, queue = playQueue;
+    // Use the current library generation when the queue's collection is still on screen.
+    const context = { ...playContext, generation: playContext.collectionId === collectionId && generation ? generation : playContext.generation };
+    if (advancing) return;
+    advancing = true; updateDetailPlayback();
+    try {
+      const next = await nextInQueue(from, context, queue);
+      if (seq !== playEpoch || !next) return;
+      if (detail && selected?.itemId === from.itemId) { select(next.item, context); reveal(next.index, queue); }
+      await playTrack(next.item, context, queue);
+    } catch (error) { if (seq === playEpoch) showError(error); }
+    finally { advancing = false; updateDetailPlayback(); }
+  }
+  // The Next button skips now, with the same rule as the end of a track.
+  function skipTrack() { if (nowTrack && playQueue) return playNext(playEpoch); }
+  // Scrolls the grid to the new track when the grid still shows the queue's results.
+  function reveal(index, queue) {
+    if (!opened || !viewport || query !== queue.query || filter !== queue.period) return;
+    const d = dimensions(), top = Math.floor(index / d.columns) * d.height;
+    if (top < viewport.scrollTop || top + d.height > viewport.scrollTop + viewport.clientHeight) viewport.scrollTop = Math.max(0, top - d.height);
+  }
+  function setShuffle(value) {
+    shuffle = !!value;
+    if (!shuffleButton) return;
+    shuffleButton.setAttribute('aria-pressed', String(shuffle));
+    shuffleButton.title = text(shuffle ? 'shuffleOn' : 'shuffleOff');
+    shuffleButton.setAttribute('aria-label', text('shuffle'));
+  }
+  function toggleShuffle() {
+    setShuffle(!shuffle);
+    chrome.storage?.local?.set({ [SHUFFLE_KEY]: shuffle })?.catch(() => {});
   }
   function updateNativePlayback() {
     const control = detail?.querySelector('.native-play');
@@ -335,11 +408,20 @@
     playerInline.append(playerWidget,playerStatus); media.append(detailSummary,playerInline);
     nativeStatus = el('div','native-status'); nativeStatus.hidden = true; nativeStatus.setAttribute('role','status'); media.append(nativeStatus);
     const actions = el('div','detail-actions');
-    actions.append(button(text('play'),()=>playTrack(selected,selectedContext),'accent detail-play','play'));
-    const locateButton = button('',()=>locate(selected),'small locate-action');
+    // Top row: transport (play, next, shuffle). Bottom row: tools (locate, Player Tools).
+    actions.append(button('',()=>playTrack(selected,selectedContext),'icon-action accent detail-play'));
+    nextButton = button('',skipTrack,'icon-action next-track');
+    nextButton.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M5 4.5v15l11-7.5zM17 4.5h2.5v15H17z"/></svg>';
+    nextButton.title = text('nextTrack'); nextButton.setAttribute('aria-label',text('nextTrack')); nextButton.disabled = true;
+    actions.append(nextButton);
+    shuffleButton = button('',toggleShuffle,'icon-action shuffle-toggle');
+    shuffleButton.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>';
+    setShuffle(shuffle); actions.append(shuffleButton);
+    chrome.storage?.local?.get(SHUFFLE_KEY)?.then(value => setShuffle(value?.[SHUFFLE_KEY])).catch(() => {});
+    const locateButton = button('',()=>locate(selected),'icon-action locate-action');
     const locateIcon = globalThis.SCIcons.create('locate','locate-icon');
     locateButton.append(locateIcon); locateButton.title = text('locate'); locateButton.setAttribute('aria-label',text('locate')); actions.append(locateButton);
-    const nativePlay = button('',()=>playNativeTrack(selected,selectedContext),'small native-play');
+    const nativePlay = button('',()=>playNativeTrack(selected,selectedContext),'icon-action native-play');
     nativePlay.title = text('nativePlay'); nativePlay.setAttribute('aria-label',text('nativePlay'));
     nativePlay.innerHTML = '<sc-icon name="play-pattern" style="--icon-size:18px" aria-hidden="true"></sc-icon>';
     actions.append(nativePlay);
@@ -479,6 +561,7 @@
   const CSS = `
     .detail .native-play{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:28px;padding:4px;background:#70d6cb;color:#102d2a;border-color:#70d6cb}.detail .native-play:hover{background:#93e6dd;border-color:#93e6dd}.detail .native-play[aria-busy="true"]{opacity:.65}.native-status{padding-top:5px;font-size:10px;line-height:1.4;color:#93e6dd;overflow-wrap:anywhere}
     .card.is-playing{border-color:#e99b74}
+    .detail .shuffle-toggle{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:28px;padding:4px;color:#98928c}.detail .shuffle-toggle[aria-pressed="true"]{color:#221b17;background:#e99b74;border-color:#e99b74}.detail .shuffle-toggle[aria-pressed="true"]:hover{background:#f1ad8a;border-color:#f1ad8a}
     .detail{flex-wrap:wrap}.record-slot{flex:0 0 100%;min-width:0}.record-slot .record-section{border-color:#ffffff1f}
     .record-slot .record-section button.record-send{display:inline-flex;align-items:center;gap:4px;min-height:25px;padding:3px 8px;border:1px solid #70d6cb;border-radius:5px;background:#70d6cb;color:#102d2a;font:600 10px system-ui,sans-serif}
     .record-slot .record-section button.record-send:hover:not(:disabled){background:#93e6dd;border-color:#93e6dd}.record-slot .record-section button.record-send:disabled{opacity:.4;cursor:default}
@@ -491,8 +574,25 @@
     *{box-sizing:border-box} [hidden]{display:none!important} button,input,select{font:inherit}button{cursor:pointer;color:inherit;border:1px solid #ffffff15;background:#ffffff06;border-radius:8px;padding:7px 10px;transition:background .15s,border-color .15s}button:hover{background:#ffffff12;border-color:#ffffff38}button:focus-visible,input:focus-visible,select:focus-visible,.viewport:focus-visible{outline:2px solid #ff996a;outline-offset:2px}button:disabled{opacity:.4}input,select{color:inherit;background:#141416;border:1px solid #ffffff15;border-radius:8px;padding:9px;min-width:0}h2,h3,p{margin:0}h2{font-size:25px;line-height:1.2;letter-spacing:-.7px}h3{font-size:14px}p{color:#a9a5a1}strong{font-weight:550} .launch{pointer-events:auto;position:absolute;right:12px;top:45%;background:#202023ed;color:#d9d4cf;box-shadow:0 4px 20px #0003;padding:11px 12px;border-radius:14px 5px 5px 14px;font-size:12px}
     .shell{pointer-events:auto;position:absolute;top:var(--top);bottom:var(--bottom);right:12px;z-index:2;display:flex;max-width:calc(100vw - 24px);filter:drop-shadow(0 20px 35px #0005);isolation:isolate}.main{pointer-events:auto;position:relative;z-index:2;width:720px;max-width:calc(100vw - 24px);display:flex;flex-direction:column;min-height:0;background:#1b1b1e;border:1px solid #ffffff1f;border-radius:14px;overflow:hidden;isolation:isolate}.eyebrow{font-size:9px;letter-spacing:2px;color:#c39379;font-weight:600}.close{border:0;background:transparent;font-size:22px;line-height:1;padding:3px 6px;color:#aaa;flex:0 0 auto}.cross-icon{display:block;width:15px;height:15px}.toolbar{pointer-events:auto;position:relative;z-index:3;padding:9px 10px 7px;border-bottom:1px solid #ffffff0b;background:#1b1b1e}.toolbar-line{pointer-events:auto;position:relative;z-index:4;display:flex;align-items:center;gap:5px}.search-wrap{position:relative;z-index:5;flex:1;min-width:130px}.toolbar input,.toolbar button,.toolbar select{pointer-events:auto;position:relative;z-index:6}.toolbar input{width:100%;height:28px;padding:7px 29px 7px 9px;font-size:10px}.search-close{position:absolute;top:50%;right:3px;transform:translateY(-50%);width:24px;height:24px;padding:0;font-size:16px}.toolbar select{width:98px;height:28px;flex:0 0 auto;font-size:9px;padding:6px}.status{display:block;min-height:12px;margin-top:4px;color:#96918b;font-size:8px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.small{padding:4px 7px;min-width:28px;min-height:28px}.action-button{display:inline-flex;align-items:center;justify-content:center;gap:4px;height:28px;padding:4px 7px}.icon-only{width:28px;padding:0}.action-icon{font-size:12px;line-height:1}.sync{width:28px;padding:0;overflow:hidden;font-size:9px;white-space:nowrap}.action-spinner{display:none;width:10px;height:10px;border:2px solid #ffffff35;border-top-color:#f1a078;border-radius:50%;animation:spin .7s linear infinite}.sync.is-loading .action-icon,.sync.is-running .action-icon{display:none}.sync.is-loading .action-spinner,.sync.is-running .action-spinner{display:inline-block}@keyframes spin{to{transform:rotate(360deg)}}.viewport{pointer-events:auto;position:relative;z-index:2;flex:1;min-height:80px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#55514d transparent;padding-top:6px;background:#1b1b1e}.canvas{position:relative}.card{position:absolute;overflow:hidden;border-radius:7px;padding:3px;background:transparent;border:1px solid transparent}.card:hover{background:#ffffff05;border-color:#ffffff12}.card.selected{background:#ff915710;border-color:#ffffff55}.card-main{padding:0;border:0;background:none!important;display:block;width:100%;text-align:left}.cover{position:relative;display:block;aspect-ratio:1;background:linear-gradient(140deg,hsl(var(--hue) 23% 28%),hsl(var(--hue) 18% 13%));border-radius:5px;overflow:hidden}.cover-mark{position:absolute;inset:0;display:grid;place-items:center;font-size:24px;color:#ffffff30}.cover img,.cover sc-icon{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.card-copy{display:block;padding:4px 1px 0;min-width:0}.card-copy strong,.artist{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:10px;line-height:1.15}.artist{font-size:9px;color:#98928c;margin-top:2px}.empty{padding:40px 28px;text-align:center;max-width:420px;margin:auto}.empty p{font-size:12px;margin:12px 0 22px;line-height:1.7}.hero-mark{font-size:55px;color:#db9574;margin-bottom:12px}.accent{background:#e99b74!important;color:#221b17!important;border-color:#e99b74!important;font-weight:600;font-size:11px;padding:9px 13px}.detail{pointer-events:auto;position:relative;z-index:3;display:flex;gap:7px;align-items:center;border-top:1px solid #ffffff12;padding:8px 10px;background:#252326}.detail-actions{display:flex;align-items:center;gap:7px;flex:0 0 auto;pointer-events:auto}.detail>.cover{width:34px;height:34px;flex-shrink:0}.detail-copy{flex:1;min-width:0;font-size:11px}.detail-copy>*{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.detail-copy span{font-size:10px;color:#aaa}.detail .accent{font-size:10px;max-width:110px;padding:6px}.detail .small{padding:4px;min-width:24px}.detail .status{flex:0 1 auto;min-width:0;margin:0}.back-results{margin:6px 10px 0;text-align:left;font-size:10px;color:#e8a581;border:0}.settings{padding:18px;overflow:auto;max-height:55%;background:#242326;border-bottom:1px solid #ffffff15}.settings p{font-size:12px;margin:8px 0 12px}.settings button{font-size:11px;margin:4px}.settings h3:not(:first-child){margin-top:16px}.danger{color:#efa699}.gate{padding:20px 10px}.gate h2{margin:12px 0}.gate p{line-height:1.7}.shell:has(.gate) .settings{max-height:none}
     .toolbar{border-top:1px solid #ffffff12;border-bottom:0}.toolbar .search-close{position:absolute;z-index:7}.toolbar-icon{display:block;width:16px;height:16px;filter:invert(1)}.card.selected{border-color:#ff915755}.detail{border-top:1px solid #ffffff12}.detail .accent{display:inline-flex;align-items:center;justify-content:center;max-width:none;white-space:nowrap;line-height:1}.locate-action{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;padding:4px}.locate-icon{display:block;width:16px;height:16px;filter:invert(1)}
+    /* Compact detail: the player, the actions and the mini recorder use little height, so the grid keeps its room. */
+    .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+    .detail{gap:6px 8px;padding:6px 8px}.detail .detail-actions{gap:4px}
+    .detail.has-player .detail-actions{display:grid;grid-template-columns:repeat(3,26px);grid-auto-rows:26px;gap:4px}
+    .detail .detail-actions .icon-action{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 26px;width:26px;height:26px;min-width:0;min-height:0;padding:0;border-radius:6px;font-size:12px;line-height:1}
+    .detail .detail-actions .native-play{background:transparent;border-color:#70d6cb55;color:#93e6dd}.detail .detail-actions .native-play:hover{background:#70d6cb22;border-color:#70d6cb}
+    .detail .detail-actions .next-track{color:#d9d4cf}
+    .player-widget{height:68px}.player-status{padding:2px 0 0;font-size:9px}.native-status{padding-top:2px;font-size:9px}
+    .record-slot .record-pill{display:flex;align-items:center;gap:4px;padding:3px;border-radius:7px;background:#19191b;border-color:#ffffff14}
+    .record-slot .record-pill .record-bar{display:contents}
+    .record-slot .record-pill .record-body{order:1;flex:1;min-width:0;padding:0}
+    .record-slot .record-pill .record-status{order:2;margin:0 3px 0 1px}.record-slot .record-pill .record-time{font-size:9px}
+    .record-slot .record-pill .record-stage{height:24px;border-radius:5px;border-color:#ffffff14}
+    .record-slot .record-pill .record-empty{font-size:9px;white-space:nowrap;overflow:hidden}
+    .record-slot .record-pill .record-notice{inset:0;padding:0 6px;border-radius:0;font-size:9px;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .record-slot .record-section button:not(.tool-section-toggle){min-height:24px;height:24px;padding:0 7px;font-size:9px}
+    .record-slot .record-section button.record-stop,.record-slot .record-section button.record-play,.record-slot .record-section button.record-download,.record-slot .record-section button.record-send{width:24px;min-width:24px;padding:0}
     @media(max-width:759px){.main{width:720px;max-width:calc(100vw - 24px)}.detail-copy{min-width:80px}.toolbar select{width:92px}}
-    @media(max-width:480px){.toolbar-line{flex-wrap:wrap}.search-wrap{flex-basis:100%}.toolbar select{flex:1;width:auto;min-width:0}.detail .status{display:none}.detail-copy{min-width:0}.detail.has-player{flex-wrap:wrap}.detail.has-player .detail-media{flex-basis:100%}.detail.has-player .detail-actions{margin-left:auto}}
+    @media(max-width:480px){.toolbar-line{flex-wrap:wrap}.search-wrap{flex-basis:100%}.toolbar select{flex:1;width:auto;min-width:0}.detail .status{display:none}.detail-copy{min-width:0}}
     @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}.action-spinner{animation:none!important}}
   `;
   setInterval(route,500); window.addEventListener('popstate',route); window.addEventListener('resize',layout); route();

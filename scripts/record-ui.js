@@ -138,17 +138,19 @@
       }
       painter.setTransform(dpr, 0, 0, dpr, 0, 0);
       painter.fillStyle = "#3e494d"; painter.fillRect(0, 0, width, height);
-      const state = recorder.snapshot(), mid = (height + 16) / 2, scale = (height - 24) / 2;
+      // Short strips (the Likes Explorer mini recorder) drop the time ruler to keep room for the wave.
+      const ruler = height >= 48 ? 16 : 0;
+      const state = recorder.snapshot(), mid = (height + ruler) / 2, scale = (height - ruler - (ruler ? 8 : 4)) / 2;
       canvas.classList.toggle("is-zoomed", zoom > 1);
       const range = windowRange(state);
-      painter.fillStyle = "#303a3e"; painter.fillRect(0, 0, width, 16);
+      painter.fillStyle = "#303a3e"; if (ruler) painter.fillRect(0, 0, width, ruler);
       painter.strokeStyle = "#657170"; painter.lineWidth = .5;
       painter.beginPath(); painter.moveTo(0, mid); painter.lineTo(width, mid); painter.stroke();
       painter.fillStyle = "#acbcb9"; painter.font = "8px ui-monospace,monospace";
       for (let i = 0; i < 4; i++) {
         const x = i * width / 4;
-        painter.fillText(state.frames ? `${(range.start + range.span * i / 4).toFixed(2)}s` : pt("LIVE"), x + 4, 11);
-        painter.fillStyle = "#a1b4af18"; painter.fillRect(x, 16, 1, height - 16); painter.fillStyle = "#acbcb9";
+        if (ruler) painter.fillText(state.frames ? `${(range.start + range.span * i / 4).toFixed(2)}s` : pt("LIVE"), x + 4, 11);
+        painter.fillStyle = "#a1b4af18"; painter.fillRect(x, ruler, 1, height - ruler); painter.fillStyle = "#acbcb9";
       }
       painter.strokeStyle = "#d1e6df"; painter.lineWidth = 1;
       painter.beginPath();
@@ -183,7 +185,7 @@
       const pos = state.state === "recording" ? state.duration : recorder.position();
       if (state.frames) {
         const x = (pos - range.start) / range.span * width;
-        if (x >= 0 && x <= width) { painter.fillStyle = state.state === "recording" ? "#ff7770" : "#ffb66f"; painter.fillRect(Math.min(width - 1, x), 16, 1, height - 16); }
+        if (x >= 0 && x <= width) { painter.fillStyle = state.state === "recording" ? "#ff7770" : "#ffb66f"; painter.fillRect(Math.min(width - 1, x), ruler, 1, height - ruler); }
       }
       find("empty").hidden = Boolean(state.frames) || (liveReady && live.some(value => Math.abs(value) > .002));
       find("time").textContent = time(state.state === "playing" ? pos : state.duration);
