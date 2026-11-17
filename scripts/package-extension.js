@@ -8,7 +8,7 @@ const root = path.resolve(__dirname,'..');
 require('./build-icons.cjs').build(root, { check: true });
 const edition = process.env.PACKAGE_EDITION || 'full';
 if (!['full', 'tools'].includes(edition)) throw new Error('PACKAGE_EDITION must be "full" or "tools".');
-const zipBaseName = edition === 'tools' ? 'soundcloud-player-tools' : 'soundcloud-track-downloader';
+const zipBaseName = edition === 'tools' ? 'seib-stem-extractor' : 'soundcloud-track-downloader';
 // The tools edition is the separate Player Tools listing: downloader hidden, track downloads off.
 const editionSwitches = [
   ['scripts/release-config.js', 'const DOWNLOADER_ENABLED = true;', 'const DOWNLOADER_ENABLED = false;'],

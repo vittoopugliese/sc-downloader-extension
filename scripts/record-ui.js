@@ -245,7 +245,7 @@
       try {
         const url = URL.createObjectURL(recorder.exportWav());
         const link = document.createElement("a"); link.href = url;
-        link.download = `SoundCloud-sample-${new Date().toISOString().replace(/[:.]/g, "-")}.wav`;
+        link.download = `SEIB-sample-${new Date().toISOString().replace(/[:.]/g, "-")}.wav`;
         section.append(link); link.click(); link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 60000);
       } catch (error) { report(error); }

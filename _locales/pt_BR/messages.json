@@ -1,7 +1,8 @@
 {
-  "help_hero_title": { "message": "Seu estúdio no SoundCloud" },
-  "help_hero_tagline": { "message": "Desacelere, faça loops, samples e separe qualquer faixa, direto no player." },
-  "help_open_soundcloud": { "message": "Abrir SoundCloud" },
+  "help_hero_title": { "message": "Separe qualquer música" },
+  "help_hero_tagline": { "message": "Voz, bateria, baixo e outros, separados no seu dispositivo. Depois desacelere, faça loops e samples no YouTube e no SoundCloud." },
+  "help_open_soundcloud": { "message": "SoundCloud" },
+  "help_open_youtube": { "message": "YouTube" },
   "help_open_stems": { "message": "Separador de stems" },
   "help_tab_stems": { "message": "Stems" },
   "help_tab_likes": { "message": "Likes" },

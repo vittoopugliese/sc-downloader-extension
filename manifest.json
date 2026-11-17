@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "minimum_chrome_version": "116",
-  "name": "SoundCloud Player Tools, Stem Extractor & Likes Explorer",
-  "description": "Speed, loops, sampler pads, FX, EQ, recorder and on-device stem separation for SoundCloud, plus a private Likes Explorer.",
+  "name": "SEIB – Stem Extractor & Player Tools",
+  "description": "Split songs into vocals, drums, bass and more on your device. Speed, loops, pads, FX and EQ on YouTube and SoundCloud.",
   "default_locale": "en",
-  "version": "2026.10.15",
+  "version": "2026.11.17",
   "permissions": [
     "cookies",
     "tabs",
@@ -35,11 +35,15 @@
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
+      "16": "assets/icon16.png",
+      "32": "assets/icon32.png",
       "48": "assets/icon48.png",
       "128": "assets/icon128.png"
     }
   },
   "icons": {
+    "16": "assets/icon16.png",
+    "32": "assets/icon32.png",
     "48": "assets/icon48.png",
     "128": "assets/icon128.png"
   },

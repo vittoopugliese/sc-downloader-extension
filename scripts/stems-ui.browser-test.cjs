@@ -64,7 +64,7 @@ const { chromium } = require('playwright');
     await page.goto(`http://127.0.0.1:${server.address().port}/stems.html?job=fixture`);
     await page.waitForFunction(() => document.querySelector('#artwork').naturalWidth > 0);
     assert.equal(await page.locator('html').getAttribute('lang'), 'es');
-    assert.equal(await page.title(), 'Separador de stems · Player Tools');
+    assert.equal(await page.title(), 'SEIB · Separador de stems');
     assert.equal(await page.locator('#audition').getAttribute('aria-label'), 'Escuchar y comparar');
     assert.equal(await page.locator('#clear-cache').getAttribute('aria-label'), 'Eliminar modelo');
     assert.match(await page.locator('#clear-cache').getAttribute('data-scdl-tooltip'), /^Eliminar modelo: borra .*166 MB/);

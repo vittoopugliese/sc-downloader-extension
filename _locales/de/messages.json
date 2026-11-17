@@ -1,7 +1,8 @@
 {
-  "help_hero_title": { "message": "Dein SoundCloud-Studio" },
-  "help_hero_tagline": { "message": "Verlangsamen, loopen, sampeln und jeden Track zerlegen, direkt im Player." },
-  "help_open_soundcloud": { "message": "SoundCloud öffnen" },
+  "help_hero_title": { "message": "Zerlege jeden Song" },
+  "help_hero_tagline": { "message": "Gesang, Drums, Bass und Rest, getrennt auf deinem Gerät. Dann verlangsamen, loopen und sampeln auf YouTube und SoundCloud." },
+  "help_open_soundcloud": { "message": "SoundCloud" },
+  "help_open_youtube": { "message": "YouTube" },
   "help_open_stems": { "message": "Stem-Extraktor" },
   "help_tab_stems": { "message": "Stems" },
   "help_tab_likes": { "message": "Likes" },

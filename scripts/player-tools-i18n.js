@@ -135,7 +135,7 @@ Could not record audio.¦No se pudo grabar el audio.¦Audio konnte nicht aufgeno
 Start a new take (replaces this sample)¦Iniciar otra toma (reemplaza esta muestra)¦Neue Aufnahme starten (ersetzt dieses Sample)¦Iniciar nova tomada (substitui esta amostra)¦Начать новую запись (заменяет этот сэмпл)
 Record the final mix¦Grabar la mezcla final¦Finalen Mix aufnehmen¦Gravar a mixagem final¦Записать итоговый микс
 Recorder has been closed.¦La grabadora está cerrada.¦Die Aufnahme wurde geschlossen.¦O gravador foi fechado.¦Модуль записи закрыт.
-Reload SoundCloud to enable Record.¦Recargá SoundCloud para activar la grabadora.¦Lade SoundCloud neu, um die Aufnahme zu aktivieren.¦Recarregue o SoundCloud para ativar o gravador.¦Перезагрузите SoundCloud, чтобы включить запись.
+Reload the page to enable Record.¦Recargá la página para activar la grabadora.¦Lade die Seite neu, um die Aufnahme zu aktivieren.¦Recarregue a página para ativar o gravador.¦Перезагрузите страницу, чтобы включить запись.
 5-minute limit reached. Your sample is ready.¦Se alcanzó el límite de 5 minutos. Tu muestra está lista.¦Das Limit von 5 Minuten ist erreicht. Dein Sample ist fertig.¦Limite de 5 minutos atingido. Sua amostra está pronta.¦Достигнут лимит 5 минут. Ваш сэмпл готов.
 $1-minute limit reached. Your sample is ready.¦Se alcanzó el límite de $1 minutos. Tu muestra está lista.¦Das Limit von $1 Minuten ist erreicht. Dein Sample ist fertig.¦Limite de $1 minutos atingido. Sua amostra está pronta.¦Достигнут лимит $1 мин. Ваш сэмпл готов.
 Press play on the player to record.¦Dale play al reproductor para grabar.¦Starte den Player, um aufzunehmen.¦Dê play no player para gravar.¦Запустите плеер, чтобы записывать.
@@ -349,7 +349,7 @@ Rec¦Grabar¦Aufn.¦Gravar¦Зап.
 Invalid parametric EQ settings.¦Ajustes de EQ paramétrico no válidos.¦Ungültige Einstellungen des parametrischen EQ.¦Ajustes de EQ paramétrico inválidos.¦Неверные настройки параметрического EQ.
 Invalid rendered loop audio.¦Audio del loop procesado no válido.¦Ungültiges gerendertes Loop-Audio.¦Áudio do loop processado inválido.¦Неверное аудио обработанного лупа.
 The rendered loop is incomplete.¦El loop procesado está incompleto.¦Der gerenderte Loop ist unvollständig.¦O loop processado está incompleto.¦Обработанный луп неполный.
-Reload SoundCloud to enable the equalizer.¦Recargá SoundCloud para activar el ecualizador.¦Lade SoundCloud neu, um den Equalizer zu aktivieren.¦Recarregue o SoundCloud para ativar o equalizador.¦Перезагрузите SoundCloud для включения эквалайзера.
+Reload the page to enable the equalizer.¦Recargá la página para activar el ecualizador.¦Lade die Seite neu, um den Equalizer zu aktivieren.¦Recarregue a página para ativar o equalizador.¦Перезагрузите страницу для включения эквалайзера.
 This loop is too large to save as a pad sample.¦El loop es demasiado grande para guardarlo en un pad.¦Dieser Loop ist zu groß für ein Pad-Sample.¦O loop é grande demais para salvar em um pad.¦Луп слишком большой для сохранения на пэд.
 Flanger¦Flanger¦Flanger¦Flanger¦Флэнжер
 Phaser¦Phaser¦Phaser¦Phaser¦Фэйзер
@@ -374,7 +374,7 @@ Preparing loop for pad $1…¦Preparando loop para el pad $1…¦Loop für Pad $
 Loop saved to pad $1.¦Loop guardado en el pad $1.¦Loop auf Pad $1 gespeichert.¦Loop salvo no pad $1.¦Луп сохранён на пэд $1.
 Could not connect this audio player.¦No se pudo conectar este reproductor.¦Audioplayer konnte nicht verbunden werden.¦Não foi possível conectar este player.¦Не удалось подключить аудиоплеер.
 Web Audio is unavailable in this browser.¦Web Audio no está disponible en este navegador.¦Web Audio ist in diesem Browser nicht verfügbar.¦Web Audio não está disponível neste navegador.¦Web Audio недоступен в этом браузере.
-The SoundCloud stream does not allow live audio effects.¦Este stream de SoundCloud no admite efectos en vivo.¦Dieser SoundCloud-Stream erlaubt keine Live-Effekte.¦Este stream do SoundCloud não permite efeitos ao vivo.¦Этот поток SoundCloud не поддерживает эффекты в реальном времени.
+This stream does not allow live audio effects.¦Este stream no admite efectos en vivo.¦Dieser Stream erlaubt keine Live-Effekte.¦Este stream não permite efeitos ao vivo.¦Этот поток не поддерживает эффекты в реальном времени.
 Could not initialize live audio effects.¦No se pudieron iniciar los efectos en vivo.¦Live-Effekte konnten nicht initialisiert werden.¦Não foi possível iniciar os efeitos ao vivo.¦Не удалось запустить эффекты в реальном времени.
 Could not change playback speed. Reload YouTube and retry.¦No se pudo cambiar la velocidad. Recargá YouTube y volvé a intentarlo.¦Die Geschwindigkeit konnte nicht geändert werden. Lade YouTube neu und versuche es erneut.¦Não foi possível mudar a velocidade. Recarregue o YouTube e tente de novo.¦Не удалось изменить скорость. Перезагрузите YouTube и повторите.
 The waveform fills in as the video plays. Red: bass | Green: mids | Blue: treble¦La forma de onda se completa mientras suena el video. Rojo: graves | Verde: medios | Azul: agudos¦Die Wellenform füllt sich, während das Video läuft. Rot: Bässe | Grün: Mitten | Blau: Höhen¦A forma de onda se completa enquanto o vídeo toca. Vermelho: graves | Verde: médios | Azul: agudos¦Волна заполняется во время воспроизведения. Красный: низы | Зелёный: середина | Синий: верха

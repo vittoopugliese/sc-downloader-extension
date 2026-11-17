@@ -1,7 +1,8 @@
 {
-  "help_hero_title": { "message": "Tu estudio en SoundCloud" },
-  "help_hero_tagline": { "message": "Bajá la velocidad, loopeá, sampleá y separá cualquier track, dentro del reproductor." },
-  "help_open_soundcloud": { "message": "Abrir SoundCloud" },
+  "help_hero_title": { "message": "Separá cualquier tema" },
+  "help_hero_tagline": { "message": "Voz, batería, bajo y otros, separados en tu dispositivo. Después bajale la velocidad, loopealo y samplealo en YouTube y SoundCloud." },
+  "help_open_soundcloud": { "message": "SoundCloud" },
+  "help_open_youtube": { "message": "YouTube" },
   "help_open_stems": { "message": "Separador de stems" },
   "help_tab_stems": { "message": "Stems" },
   "help_tab_likes": { "message": "Likes" },

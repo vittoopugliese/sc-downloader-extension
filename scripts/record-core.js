@@ -89,7 +89,7 @@
           return;
         }
         const url = moduleUrl || document.documentElement.getAttribute("data-scdl-extension-record-worklet-url");
-        if (!url) throw new Error(pt("Reload SoundCloud to enable Record."));
+        if (!url) throw new Error(pt("Reload the page to enable Record."));
         context = new AudioContext({ sampleRate: 48000 });
         input = context.createGain();
         input.channelCount = 2; input.channelCountMode = "explicit";

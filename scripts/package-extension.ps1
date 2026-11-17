@@ -16,7 +16,7 @@ $manifest = Get-Content -Raw -Encoding utf8 $manifestPath | ConvertFrom-Json
 $version = $manifest.version
 $distributionRoot = Join-Path $projectRoot $OutputDirectory
 $stagingRoot = Join-Path $distributionRoot "extension-staging"
-$zipBaseName = if ($Edition -eq "tools") { "soundcloud-player-tools" } else { "soundcloud-track-downloader" }
+$zipBaseName = if ($Edition -eq "tools") { "seib-stem-extractor" } else { "soundcloud-track-downloader" }
 $zipPath = Join-Path $distributionRoot "$zipBaseName-$version.zip"
 
 # This is an allow-list, deliberately separate from the development scripts in
@@ -35,6 +35,8 @@ $packageItems = @(
     "assets/ui-toast.css",
     "assets/icon-cursors.css",
     "assets/likes-player.css",
+    "assets/icon16.png",
+    "assets/icon32.png",
     "assets/icon48.png",
     "assets/icon128.png",
     "assets/LooperPlayerToolkit.png",

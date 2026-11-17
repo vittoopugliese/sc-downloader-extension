@@ -1,7 +1,8 @@
 {
-  "help_hero_title": { "message": "Your SoundCloud studio" },
-  "help_hero_tagline": { "message": "Slow down, loop, sample and split any track, right inside the player." },
-  "help_open_soundcloud": { "message": "Open SoundCloud" },
+  "help_hero_title": { "message": "Split any song" },
+  "help_hero_tagline": { "message": "Vocals, drums, bass and other, separated on your device. Then slow down, loop and sample it on YouTube and SoundCloud." },
+  "help_open_soundcloud": { "message": "SoundCloud" },
+  "help_open_youtube": { "message": "YouTube" },
   "help_open_stems": { "message": "Stem Extractor" },
   "help_tab_stems": { "message": "Stems" },
   "help_tab_likes": { "message": "Likes" },

@@ -1,7 +1,8 @@
 {
-  "help_hero_title": { "message": "Твоя студия в SoundCloud" },
-  "help_hero_tagline": { "message": "Замедляй, зацикливай, сэмплируй и разделяй любой трек прямо в плеере." },
-  "help_open_soundcloud": { "message": "Открыть SoundCloud" },
+  "help_hero_title": { "message": "Разделите любую песню" },
+  "help_hero_tagline": { "message": "Вокал, ударные, бас и остальное — разделение прямо на вашем устройстве. Затем замедляйте, зацикливайте и сэмплируйте на YouTube и SoundCloud." },
+  "help_open_soundcloud": { "message": "SoundCloud" },
+  "help_open_youtube": { "message": "YouTube" },
   "help_open_stems": { "message": "Разделение на стемы" },
   "help_tab_stems": { "message": "Стемы" },
   "help_tab_likes": { "message": "Лайки" },

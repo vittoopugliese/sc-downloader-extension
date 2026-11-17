@@ -19,7 +19,7 @@ import { mountOutputMonitor } from './stem-output-monitor.mjs';
 
 const translations = {
   en: {
-    pageTitle: 'Stem Extractor · Player Tools', workspace: 'Separate. Mix. Make it yours.', experimental: 'Experimental', selected: 'SELECTED LOOP',
+    pageTitle: 'SEIB · Stem Extractor', workspace: 'Separate. Mix. Make it yours.', experimental: 'Experimental', selected: 'SELECTED LOOP',
     separationLabel: 'Separation', extract: 'Unpack your sound.', local: 'On-device',
     intro: 'Separate vocals, drums, bass and other instruments locally. Your audio stays in Chrome.',
     details: 'First use downloads a 166 MB model. Processing can take a few minutes and uses substantial memory. Up to 2 minutes, at original speed without effects.',
@@ -37,7 +37,7 @@ const translations = {
     tooLong: 'The rendered loop exceeds 2 minutes.', clipTooLong: 'Trim the clip to 2 minutes or less to separate it.', cacheClearFailed: 'The cached model could not be removed.', playbackFailed: 'Audio playback could not start.', loop: 'Loop',
   },
   es: {
-    pageTitle: 'Separador de stems · Player Tools', workspace: 'Separá. Mezclá. Hacelo tuyo.', experimental: 'Experimental', selected: 'LOOP SELECCIONADO',
+    pageTitle: 'SEIB · Separador de stems', workspace: 'Separá. Mezclá. Hacelo tuyo.', experimental: 'Experimental', selected: 'LOOP SELECCIONADO',
     separationLabel: 'Separación', extract: 'Separá tu sonido.', local: 'En tu equipo',
     intro: 'Separá voz, batería, bajo y otros instrumentos localmente. Tu audio se queda en Chrome.',
     details: 'El primer uso descarga un modelo de 166 MB. El proceso puede tardar unos minutos y consume bastante memoria. Hasta 2 minutos, a velocidad original y sin efectos.',
@@ -55,7 +55,7 @@ const translations = {
     tooLong: 'El loop procesado supera los 2 minutos.', clipTooLong: 'Recortá el clip a 2 minutos o menos para separarlo.', cacheClearFailed: 'No se pudo eliminar el modelo de la caché.', playbackFailed: 'No se pudo iniciar la reproducción.', loop: 'Loop',
   },
   de: {
-    pageTitle: 'Stem-Extraktor · Player Tools', workspace: 'Trennen. Mischen. Deinen Sound finden.', experimental: 'Experimentell', selected: 'AUSGEWÄHLTER LOOP',
+    pageTitle: 'SEIB · Stem-Extraktor', workspace: 'Trennen. Mischen. Deinen Sound finden.', experimental: 'Experimentell', selected: 'AUSGEWÄHLTER LOOP',
     separationLabel: 'Stem-Trennung', extract: 'Entfalte deinen Sound.', local: 'Auf diesem Gerät',
     intro: 'Trenne Gesang, Schlagzeug, Bass und andere Instrumente lokal. Dein Audio bleibt in Chrome.',
     details: 'Bei der ersten Verwendung wird ein 166-MB-Modell heruntergeladen. Die Verarbeitung kann einige Minuten dauern und benötigt viel Arbeitsspeicher. Bis zu 2 Minuten, in Originalgeschwindigkeit und ohne Effekte.',
@@ -73,7 +73,7 @@ const translations = {
     tooLong: 'Der gerenderte Loop ist länger als 2 Minuten.', cacheClearFailed: 'Das Modell konnte nicht aus dem Cache entfernt werden.', playbackFailed: 'Die Audiowiedergabe konnte nicht gestartet werden.', loop: 'Loop',
   },
   'pt-BR': {
-    pageTitle: 'Separador de stems · Player Tools', workspace: 'Separe. Misture. Crie seu som.', experimental: 'Experimental', selected: 'LOOP SELECIONADO',
+    pageTitle: 'SEIB · Separador de stems', workspace: 'Separe. Misture. Crie seu som.', experimental: 'Experimental', selected: 'LOOP SELECIONADO',
     separationLabel: 'Separação', extract: 'Abra seu som.', local: 'Neste dispositivo',
     intro: 'Separe vocais, bateria, baixo e outros instrumentos localmente. Seu áudio permanece no Chrome.',
     details: 'No primeiro uso, um modelo de 166 MB será baixado. O processamento pode levar alguns minutos e usar bastante memória. Até 2 minutos, na velocidade original e sem efeitos.',
@@ -91,7 +91,7 @@ const translations = {
     tooLong: 'O loop renderizado excede 2 minutos.', cacheClearFailed: 'Não foi possível remover o modelo do cache.', playbackFailed: 'Não foi possível iniciar a reprodução.', loop: 'Loop',
   },
   ru: {
-    pageTitle: 'Разделение на стемы · Player Tools', workspace: 'Разделяйте. Микшируйте. Создавайте своё.', experimental: 'Экспериментальная функция', selected: 'ВЫБРАННЫЙ ЛУП',
+    pageTitle: 'SEIB · Разделение на стемы', workspace: 'Разделяйте. Микшируйте. Создавайте своё.', experimental: 'Экспериментальная функция', selected: 'ВЫБРАННЫЙ ЛУП',
     separationLabel: 'Разделение', extract: 'Разберите звук на части.', local: 'На этом устройстве',
     intro: 'Разделяйте вокал, ударные, бас и другие инструменты локально. Аудио остается в Chrome.',
     details: 'При первом запуске загружается модель размером 166 МБ. Обработка может занять несколько минут и требует много памяти. До 2 минут, с исходной скоростью и без эффектов.',
@@ -637,7 +637,7 @@ async function loadRecording() {
   const decoded = await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(await response.arrayBuffer());
   if (!decoded.length || decoded.duration > MAX_SECONDS + 1 / SAMPLE_RATE) throw localizedError('tooLong');
   const channels = [0, Math.min(1, decoded.numberOfChannels - 1)].map(channel => decoded.getChannelData(channel).slice());
-  loadLocalAudio(audioBuffer(channels), { title: result.title || 'SoundCloud recording', artist: result.artist || '',
+  loadLocalAudio(audioBuffer(channels), { title: result.title || 'Recording', artist: result.artist || '',
     artworkUrl: result.artworkUrl || '', durationMs: decoded.duration * 1000,
     trimRange: { startMs: 0, endMs: decoded.duration * 1000 }, recording: { trackUrl: result.trackUrl || '' } });
 }

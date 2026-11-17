@@ -59,7 +59,7 @@
 
   function insertEqualizer(context) {
     const route = outputRoute(context);
-    if (!nativeConnect || !globalThis.SCParametricEQ) throw new Error("Reload SoundCloud to enable the equalizer.");
+    if (!nativeConnect || !globalThis.SCParametricEQ) throw new Error("Reload the page to enable the equalizer.");
     if (route.eq) return route.eq;
     const eq = globalThis.SCParametricEQ.createGraph(context, { analyse: true });
     const moved = [];
@@ -803,7 +803,7 @@
         !["anonymous", "use-credentials"].includes(target.crossOrigin)
       ) {
         available = false;
-        reason = "The SoundCloud stream does not allow live audio effects.";
+        reason = "This stream does not allow live audio effects.";
         onAvailabilityChange(false, new Error(reason));
         return false;
       }
