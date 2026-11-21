@@ -46,9 +46,10 @@
     }
     window.addEventListener('message', receive);
     return {
-      load(item) {
+      // `autoplay: false` mounts the widget paused, so the next track is ready before it is needed.
+      load(item, { autoplay = true } = {}) {
         if (!/^\d+$/.test(String(item.itemId))) throw new Error('Invalid widget track');
-        clearTimers(); frame?.remove(); ready = false; wantsPlay = true; played = false;
+        clearTimers(); frame?.remove(); ready = false; wantsPlay = autoplay; played = false;
         frame = document.createElement('iframe');
         frame.title = `${title}: ${item.title}`;
         // Keep the widget's 100px layout intact, scaled down to `height` px.
@@ -63,9 +64,15 @@
         frame.src = url.href;
         container.replaceChildren(frame);
         state('loading');
-        readyTimer = setTimeout(() => { if (!ready) { wantsPlay = false; state('error'); } }, readyTimeout);
+        // A paused preload has no time limit; play() starts the ready timeout instead.
+        if (autoplay) readyTimer = setTimeout(() => { if (!ready) { wantsPlay = false; state('error'); } }, readyTimeout);
       },
-      play() { wantsPlay = true; if (ready) { post('play'); awaitingPlay(); } },
+      play() {
+        wantsPlay = true;
+        if (ready) { post('play'); awaitingPlay(); }
+        else if (frame) { clearTimeout(readyTimer); readyTimer = setTimeout(() => { if (!ready) { wantsPlay = false; state('error'); } }, readyTimeout); }
+      },
+      phase() { return phase; },
       pause() { wantsPlay = false; clearTimeout(playTimer); if (ready) post('pause'); state('paused'); },
       // The Explorer recorder talks to widget-record-tap.js through this iframe.
       frame() { return frame || null; },

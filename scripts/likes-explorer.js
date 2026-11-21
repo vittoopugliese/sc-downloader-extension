@@ -16,6 +16,8 @@
   let nowTrack = null, playContext = null, playPhase = 'idle', playEpoch = 0;
   // The results a playback started from, so the next track comes from the same grid.
   let playQueue = null, shuffle = false, shuffleButton, nextButton, advancing = false;
+  // The next track's widget, mounted paused and hidden while the current one plays.
+  let playerSlot = null, preload = null, preparingFor = null;
   const SHUFFLE_KEY = 'likesExplorerShuffle', MAX_AUTO_SKIPS = 3, PLAYER_HEIGHT = 68;
   let nativeTrack = null, nativeContext = null, nativePhase = 'idle', nativeEpoch = 0, nativeRequest, nativeStatus;
   // Mini recorder: captures the widget iframe and hands the take to the Stem Extractor.
@@ -262,9 +264,72 @@
       native?.click();
     }
   }
+  // Each widget lives in its own slot so a preloaded one can sit hidden under the visible one.
+  function mountPlayer(handlers, hidden) {
+    const slot = el('div', hidden ? 'player-slot is-preload' : 'player-slot');
+    if (hidden) slot.setAttribute('aria-hidden', 'true');
+    playerWidget.append(slot);
+    const widget = SCLikesPlayer.create({ container: slot, title: text('listen'), height: PLAYER_HEIGHT,
+      onState: phase => handlers.onState(phase), onFinish: () => handlers.onFinish() });
+    return { widget, slot, handlers };
+  }
+  function destroyPlayer() {
+    player?.destroy(); playerSlot?.remove(); player = playerSlot = null;
+  }
+  function dropPreload() {
+    preload?.widget.destroy(); preload?.slot.remove(); preload = null; preparingFor = null;
+  }
+  function trackHandlers(seq, queue) {
+    return {
+      onState: phase => {
+        playerState(phase);
+        if (seq !== playEpoch) return;
+        if (phase === 'playing') { playQueue.skips = 0; prepareNext(seq); }
+        // Skip tracks the widget cannot play during auto-advance, but stop after a few in a row.
+        else if (phase === 'error' && queue && playQueue.skips < MAX_AUTO_SKIPS) { playQueue.skips++; playNext(seq); }
+      },
+      onFinish: () => playNext(seq),
+    };
+  }
+  // Picks the next track while this one plays and mounts its widget paused, so Next and
+  // auto-advance only have to press play.
+  async function prepareNext(seq) {
+    const from = nowTrack, queue = playQueue;
+    if (!from || !queue || !playContext || preload?.fromId === from.itemId || preparingFor === from.itemId) return;
+    dropPreload(); preparingFor = from.itemId;
+    const context = { ...playContext, generation: playContext.collectionId === collectionId && generation ? generation : playContext.generation };
+    const stale = () => seq !== playEpoch || preparingFor !== from.itemId;
+    try {
+      const next = await nextInQueue(from, context, queue);
+      if (stale() || !next) return;
+      const result = await send('PLAY_LIKED_TRACK', { ...context, trackId: next.item.itemId });
+      if (stale()) return;
+      const handlers = { onState: phase => { if (phase === 'error' && preload?.handlers === handlers) dropPreload(); }, onFinish() {} };
+      const mounted = mountPlayer(handlers, true);
+      preload = { ...mounted, seq, fromId: from.itemId, queue, shuffle, context, next, result };
+      mounted.widget.load(result.item, { autoplay: false });
+    } catch { /* playNext falls back to loading the next track itself. */ }
+    finally { if (preparingFor === from.itemId && !preload) preparingFor = null; }
+  }
+  // Shows the preloaded widget in place of the current one and starts it.
+  function promotePreload(ready) {
+    preload = null; preparingFor = null;
+    const seq = ++playEpoch;
+    destroyPlayer(); recordSource?.interrupt();
+    nowTrack = ready.next.item; playContext = { ...ready.context }; playQueue = ready.queue;
+    playQueue.played.add(nowTrack.itemId);
+    player = ready.widget; playerSlot = ready.slot;
+    playerSlot.classList.remove('is-preload'); playerSlot.removeAttribute('aria-hidden');
+    Object.assign(ready.handlers, trackHandlers(seq, ready.queue));
+    playerState('loading');
+    player.play();
+    recordTrack = { ...ready.result.item, artworkUrl: nowTrack.artworkUrl };
+    updateRecorder();
+  }
   function stopPlayback() {
     cancelNativePlayback(true);
-    playEpoch++; player?.destroy(); player = null; nowTrack = playContext = playQueue = null;
+    dropPreload();
+    playEpoch++; destroyPlayer(); nowTrack = playContext = playQueue = null;
     recordSource?.interrupt();
     playPhase = 'idle';
     for (const card of cardNodes.values()) updateCardPlayback(card);
@@ -278,7 +343,7 @@
       return;
     }
     const seq = ++playEpoch;
-    player?.destroy(); player = null; recordSource?.interrupt();
+    dropPreload(); destroyPlayer(); recordSource?.interrupt();
     nowTrack = item; playContext = { ...context };
     // A manual play starts a new queue from the grid on screen.
     playQueue = queue || { query, period: filter, played: new Set(), skips: 0 };
@@ -287,14 +352,8 @@
     try {
       const result = await send('PLAY_LIKED_TRACK',{...context,trackId:item.itemId});
       if (seq !== playEpoch) return;
-      const onState = phase => {
-        playerState(phase);
-        if (seq !== playEpoch) return;
-        if (phase === 'playing') playQueue.skips = 0;
-        // Skip tracks the widget cannot play during auto-advance, but stop after a few in a row.
-        else if (phase === 'error' && queue && playQueue.skips < MAX_AUTO_SKIPS) { playQueue.skips++; playNext(seq); }
-      };
-      player = SCLikesPlayer.create({container:playerWidget,title:text('listen'),height:PLAYER_HEIGHT,onState,onFinish:()=>playNext(seq)});
+      const mounted = mountPlayer(trackHandlers(seq, queue), false);
+      player = mounted.widget; playerSlot = mounted.slot;
       player.load(result.item);
       recordTrack = { ...result.item, artworkUrl: item.artworkUrl };
       updateRecorder();
@@ -332,6 +391,13 @@
     if (advancing) return;
     advancing = true; updateDetailPlayback();
     try {
+      const ready = preload;
+      if (ready && ready.seq === seq && ready.fromId === from.itemId && ready.queue === queue && ready.shuffle === shuffle) {
+        if (detail && selected?.itemId === from.itemId) { select(ready.next.item, context); reveal(ready.next.index, queue); }
+        promotePreload(ready);
+        return;
+      }
+      dropPreload();
       const next = await nextInQueue(from, context, queue);
       if (seq !== playEpoch || !next) return;
       if (detail && selected?.itemId === from.itemId) { select(next.item, context); reveal(next.index, queue); }
@@ -357,6 +423,9 @@
   function toggleShuffle() {
     setShuffle(!shuffle);
     chrome.storage?.local?.set({ [SHUFFLE_KEY]: shuffle })?.catch(() => {});
+    // The preloaded track was picked under the old mode.
+    dropPreload();
+    if (playPhase === 'playing') prepareNext(playEpoch);
   }
   function updateNativePlayback() {
     const control = detail?.querySelector('.native-play');
@@ -383,7 +452,7 @@
     nativeTrack = item; nativeContext = { ...context }; nativePhase = 'loading';
     // Cancel pending preview authorization as well as pausing a mounted widget.
     // The iframe stays mounted so its position and controls remain available.
-    playEpoch++; player?.pause();
+    playEpoch++; player?.pause(); dropPreload();
     if (!player && playPhase === 'loading') playerState('paused');
     updateNativePlayback(); persist();
     try {
@@ -567,7 +636,7 @@
     .record-slot .record-section button.record-send:hover:not(:disabled){background:#93e6dd;border-color:#93e6dd}.record-slot .record-section button.record-send:disabled{opacity:.4;cursor:default}
     .record-send sc-icon{width:12px;height:12px;}
     .detail-media{flex:1;min-width:0}.detail-summary{display:flex;align-items:center;gap:7px;min-width:0}.detail-summary>.cover{width:34px;height:34px;flex-shrink:0}
-    .player-inline{min-width:0;overflow:hidden;border-radius:5px}.player-widget{height:80px;background:#2c2c2c}.player-widget:empty{height:0}
+    .player-inline{min-width:0;overflow:hidden;border-radius:5px}.player-widget{position:relative;height:80px;background:#2c2c2c}.player-widget:empty{height:0}.player-slot{height:100%}.player-slot.is-preload{position:absolute;inset:0;visibility:hidden;pointer-events:none}
     .player-status{padding:4px 0;color:#bdb6af;font-size:10px;line-height:1.4}.player-inline[data-state="error"] .player-status,.player-inline[data-state="needs-play"] .player-status{color:#ffd0a9}.detail.has-player>.status{display:none}
     :host{all:initial;--top:60px;--bottom:88px;font:13px/1.45 system-ui,-apple-system,sans-serif;color:#ece9e4;position:fixed;inset:0;z-index:2147483647;isolation:isolate;contain:paint;pointer-events:none;color-scheme:dark}
     .teleport-overlay{pointer-events:auto;position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.2);cursor:pointer;text-align:center}.teleport-message{display:flex;flex-direction:column;align-items:center;gap:9px;max-width:360px;padding:24px 28px;border:1px solid #ffffff30;border-radius:16px;background:#17171bd9;box-shadow:0 12px 40px #0008;color:#fff}.teleport-icon{width:58px;height:58px;filter:invert(1)}.teleport-message strong{font-size:18px;font-weight:700}.teleport-message span{font-size:12px;line-height:1.5;color:#e4e0dc}.teleport-overlay:focus-visible{outline:2px solid #ff996a;outline-offset:-4px}
